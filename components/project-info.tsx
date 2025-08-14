@@ -1,0 +1,45 @@
+import { Button } from "@/components/ui/button"
+import { Heart, Share, Bookmark } from "lucide-react"
+
+export function ProjectInfo() {
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="text-sm text-gray-500">Projects &gt; House &gt; Villa</div>
+        <button className="text-sm text-gray-500 hover:text-gray-700 underline">Report this listing</button>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm">
+          <Heart className="w-4 h-4 mr-2" />
+          Like
+        </Button>
+        <Button variant="outline" size="sm">
+          <Share className="w-4 h-4 mr-2" />
+          Share
+        </Button>
+        <Button variant="outline" size="sm">
+          <Bookmark className="w-4 h-4 mr-2" />
+          Save
+        </Button>
+      </div>
+
+      {/* Project title and description */}
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold text-black">Villa upgrade</h1>
+        <h2 className="text-xl text-gray-600">Contemporary Villa in Nijmegen</h2>
+        <p className="text-sm text-gray-500">Sponsored in 1999</p>
+
+        <p className="text-gray-700 leading-relaxed">
+          De omgeving van de villa is zeer dichtbij de uitgaansgebied, maar elementen is het eenvoudig te het een groot
+          compleet tijdens het rustige, lichte bouwstijl en de vrijetijds activiteiten zijn voor de volledige in...
+        </p>
+
+        <Button variant="link" className="p-0 text-blue-600">
+          Show more
+        </Button>
+      </div>
+    </div>
+  )
+}
