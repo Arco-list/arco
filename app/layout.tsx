@@ -1,9 +1,15 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
+import { Poppins } from "next/font/google"
 import "./globals.css"
 import { ScrollToTop } from "@/components/scroll-to-top"
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "v0 App",
@@ -17,17 +23,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <style>{`
-html {
-  font-family: ${GeistSans.style.fontFamily};
-  --font-sans: ${GeistSans.variable};
-  --font-mono: ${GeistMono.variable};
-}
-        `}</style>
-      </head>
-      <body>
+    <html lang="en" className={poppins.variable}>
+      <body className={poppins.className}>
         <ScrollToTop />
         {children}
       </body>

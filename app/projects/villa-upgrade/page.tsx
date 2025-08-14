@@ -19,7 +19,7 @@ export default function VillaUpgradePage() {
           <ProjectGallery />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start py-8">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-8">
             <ProjectInfo />
