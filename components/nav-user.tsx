@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronsUpDown, CreditCard, LogOut } from "lucide-react"
+import { ChevronsUpDown, CreditCard, LogOut, Bookmark, Users } from "lucide-react"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -65,6 +65,18 @@ export function NavUser({ user }: Props) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings?tab=saved-professionals">
+                  <Users />
+                  Saved professionals
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings?tab=saved-projects">
+                  <Bookmark />
+                  Saved projects
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/admin/settings">
                   <CreditCard />

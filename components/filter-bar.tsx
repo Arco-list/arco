@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   Filter,
   ChevronDown,
@@ -15,7 +15,6 @@ import {
   Plus,
   Mountain,
   Flower,
-  PocketIcon as Pool,
   ChefHat,
   Building2,
   Sparkles,
@@ -24,39 +23,144 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { FiltersModal } from "./filters-modal"
+import { projectStyles, buildingTypesByCategory } from "@/lib/csv-data"
+import { useFilters } from "@/contexts/filter-context"
 
 const categories = [
-  { icon: Home, label: "Townhouse" },
-  { icon: Bath, label: "Bathroom" },
+  { icon: Home, label: "House" },
   { icon: Building, label: "Villa" },
-  { icon: Waves, label: "Sauna" },
-  { icon: TreePine, label: "Garden house" },
-  { icon: Barn, label: "Farm" },
-  { icon: House, label: "Bungalow" },
-  { icon: Plus, label: "Extension" },
-  { icon: Mountain, label: "Chalet" },
-  { icon: Flower, label: "Garden" },
-  { icon: Pool, label: "Outdoor pool" },
-  { icon: ChefHat, label: "Kitchen" },
   { icon: Building2, label: "Apartment" },
-  { icon: Sparkles, label: "Jacuzzi" },
+  { icon: Barn, label: "Warehouse" },
+  { icon: Building, label: "Office Building" },
+  { icon: House, label: "Retail Space" },
+  { icon: Plus, label: "Mixed-Use Development" },
+  { icon: Mountain, label: "Industrial Facility" },
+  { icon: TreePine, label: "Business Park" },
+  { icon: Waves, label: "Commercial Plaza" },
+  { icon: Bath, label: "Manufacturing Plant" },
+  { icon: ChefHat, label: "Distribution Center" },
+  { icon: Sparkles, label: "Residential Complex" },
+  { icon: Flower, label: "Green Building" },
 ]
 
 export function FilterBar() {
+  const {
+    selectedTypes,
+    selectedStyles,
+    selectedLocation,
+    setSelectedTypes,
+    setSelectedStyles,
+    setSelectedLocation,
+    hasActiveFilters,
+  } = useFilters()
+
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [expandedSections, setExpandedSections] = useState<string[]>([])
-  const [selectedStyles, setSelectedStyles] = useState<string[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<string>("")
   const [locationSearch, setLocationSearch] = useState<string>("")
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(true)
+
+  const typeDropdownRef = useRef<HTMLDivElement>(null)
+  const styleDropdownRef = useRef<HTMLDivElement>(null)
+  const locationDropdownRef = useRef<HTMLDivElement>(null)
+  const carouselRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        typeDropdownRef.current &&
+        !typeDropdownRef.current.contains(event.target as Node) &&
+        styleDropdownRef.current &&
+        !styleDropdownRef.current.contains(event.target as Node) &&
+        locationDropdownRef.current &&
+        !locationDropdownRef.current.contains(event.target as Node)
+      ) {
+        setActiveDropdown(null)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
+
+  useEffect(() => {
+    const updateScrollButtons = () => {
+      if (carouselRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current
+        setCanScrollLeft(scrollLeft > 0)
+        setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1)
+      }
+    }
+
+    const carousel = carouselRef.current
+    if (carousel) {
+      carousel.addEventListener("scroll", updateScrollButtons)
+      updateScrollButtons()
+
+      return () => carousel.removeEventListener("scroll", updateScrollButtons)
+    }
+  }, [])
+
+  const scrollCarousel = (direction: "left" | "right") => {
+    if (carouselRef.current) {
+      const scrollAmount = 200
+      const newScrollLeft =
+        direction === "left"
+          ? carouselRef.current.scrollLeft - scrollAmount
+          : carouselRef.current.scrollLeft + scrollAmount
+
+      carouselRef.current.scrollTo({
+        left: newScrollLeft,
+        behavior: "smooth",
+      })
+    }
+  }
+
+  const toggleCategoryFilter = (categoryLabel: string) => {
+    const isSelected = selectedTypes.includes(categoryLabel)
+    if (isSelected) {
+      setSelectedTypes(selectedTypes.filter((type) => type !== categoryLabel))
+    } else {
+      setSelectedTypes([...selectedTypes, categoryLabel])
+    }
+  }
 
   const toggleTypeDropdown = () => {
     setActiveDropdown(activeDropdown === "type" ? null : "type")
   }
 
   const toggleTypeSelection = (type: string) => {
-    setSelectedTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]))
+    setSelectedTypes(selectedTypes.includes(type) ? selectedTypes.filter((t) => t !== type) : [...selectedTypes, type])
+  }
+
+  const toggleCategorySelection = (category: string) => {
+    const categoryTypes = buildingTypesByCategory[category]
+    const allSelected = categoryTypes.every((type) => selectedTypes.includes(type))
+
+    if (allSelected) {
+      setSelectedTypes(selectedTypes.filter((type) => !categoryTypes.includes(type)))
+    } else {
+      const newTypes = [...selectedTypes]
+      categoryTypes.forEach((type) => {
+        if (!newTypes.includes(type)) {
+          newTypes.push(type)
+        }
+      })
+      setSelectedTypes(newTypes)
+    }
+  }
+
+  const isCategorySelected = (category: string) => {
+    const categoryTypes = buildingTypesByCategory[category]
+    return categoryTypes.every((type) => selectedTypes.includes(type))
+  }
+
+  const isCategoryPartiallySelected = (category: string) => {
+    const categoryTypes = buildingTypesByCategory[category]
+    return categoryTypes.some((type) => selectedTypes.includes(type)) && !isCategorySelected(category)
   }
 
   const toggleSection = (section: string) => {
@@ -72,7 +176,9 @@ export function FilterBar() {
   }
 
   const toggleStyleSelection = (style: string) => {
-    setSelectedStyles((prev) => (prev.includes(style) ? prev.filter((s) => s !== style) : [...prev, style]))
+    setSelectedStyles(
+      selectedStyles.includes(style) ? selectedStyles.filter((s) => s !== style) : [...selectedStyles, style],
+    )
   }
 
   const clearStyleFilters = () => {
@@ -113,15 +219,28 @@ export function FilterBar() {
     location.toLowerCase().includes(locationSearch.toLowerCase()),
   )
 
+  const typeOptions = Object.entries(buildingTypesByCategory).map(([category, types]) => ({
+    name: category,
+    items: types,
+  }))
+
+  const getButtonClassName = (hasSelection: boolean) => {
+    return `flex items-center gap-2 whitespace-nowrap ${
+      hasSelection
+        ? "border-red-500 text-red-600 bg-red-50 hover:bg-red-100"
+        : "bg-transparent border-gray-300 hover:border-gray-400"
+    }`
+  }
+
   return (
     <div className="w-full border-b border-gray-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 md:px-[0]">
+      <div className="mx-auto max-w-7xl px-4">
         <div className="flex items-center gap-4 py-4">
           {/* Filters Button */}
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center gap-2 whitespace-nowrap bg-transparent"
+            className={getButtonClassName(hasActiveFilters())}
             onClick={() => setIsFiltersModalOpen(true)}
           >
             <Filter className="h-4 w-4" />
@@ -129,91 +248,41 @@ export function FilterBar() {
           </Button>
 
           {/* Type Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={typeDropdownRef}>
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center gap-2 whitespace-nowrap bg-transparent"
+              className={getButtonClassName(selectedTypes.length > 0)}
               onClick={toggleTypeDropdown}
             >
               Type
               <ChevronDown className="h-4 w-4" />
             </Button>
 
-            {/* Type Dropdown Menu */}
             {activeDropdown === "type" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="p-4">
-                  {/* House section with expandable sub-types */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="propertyType"
-                          className="h-4 w-4"
-                          checked={selectedTypes.includes("House")}
-                          onChange={() => toggleTypeSelection("House")}
-                        />
-                        <span className="text-sm">House</span>
-                      </label>
-                      <button
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-                        onClick={() => toggleSection("House")}
-                      >
-                        View all
-                        {expandedSections.includes("House") ? (
-                          <ChevronUp className="h-3 w-3" />
-                        ) : (
-                          <ChevronDown className="h-3 w-3" />
-                        )}
-                      </button>
-                    </div>
-
-                    {/* House sub-types - only shown when expanded */}
-                    {expandedSections.includes("House") && (
-                      <div className="ml-7 space-y-3">
-                        {["Townhouse", "Villa", "Farm", "Bungalow", "Extension", "Chalet", "Apartment"].map((type) => (
-                          <label key={type} className="flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="propertyType"
-                              className="h-4 w-4"
-                              checked={selectedTypes.includes(type)}
-                              onChange={() => toggleTypeSelection(type)}
-                            />
-                            <span className="text-sm text-gray-600">{type}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Expandable sections */}
-                  <div className="mt-4 space-y-3">
-                    {[
-                      { name: "Kitchen & Living", items: ["Modern Kitchen", "Open Living", "Dining Area"] },
-                      { name: "Bed & Bath", items: ["Master Bedroom", "Guest Room", "Bathroom"] },
-                      { name: "Outdoor", items: ["Garden", "Patio", "Pool Area"] },
-                      { name: "Other", items: ["Garage", "Storage", "Basement"] },
-                    ].map((section) => (
+                    {typeOptions.map((section) => (
                       <div key={section.name}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between mb-2">
                           <label className="flex items-center gap-3 cursor-pointer">
                             <input
-                              type="radio"
-                              name="propertyType"
-                              className="h-4 w-4"
-                              checked={selectedTypes.includes(section.name)}
-                              onChange={() => toggleTypeSelection(section.name)}
+                              type="checkbox"
+                              className="h-4 w-4 rounded"
+                              checked={isCategorySelected(section.name)}
+                              ref={(el) => {
+                                if (el) el.indeterminate = isCategoryPartiallySelected(section.name)
+                              }}
+                              onChange={() => toggleCategorySelection(section.name)}
                             />
-                            <span className="text-sm">{section.name}</span>
+                            <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
                           </label>
                           <button
                             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
                             onClick={() => toggleSection(section.name)}
                           >
-                            View all
+                            {expandedSections.includes(section.name) ? "Show less" : "View all"}
                             {expandedSections.includes(section.name) ? (
                               <ChevronUp className="h-3 w-3" />
                             ) : (
@@ -222,27 +291,25 @@ export function FilterBar() {
                           </button>
                         </div>
 
-                        {expandedSections.includes(section.name) && (
-                          <div className="ml-7 mt-2 space-y-2">
-                            {section.items.map((item) => (
+                        <div className="ml-6 space-y-2">
+                          {section.items
+                            .slice(0, expandedSections.includes(section.name) ? undefined : 3)
+                            .map((item) => (
                               <label key={item} className="flex items-center gap-3 cursor-pointer">
                                 <input
-                                  type="radio"
-                                  name="propertyType"
-                                  className="h-4 w-4"
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded"
                                   checked={selectedTypes.includes(item)}
                                   onChange={() => toggleTypeSelection(item)}
                                 />
                                 <span className="text-sm text-gray-600">{item}</span>
                               </label>
                             ))}
-                          </div>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Action buttons */}
                   <div className="mt-6 flex gap-3">
                     <Button variant="outline" size="sm" onClick={clearFilters} className="flex-1 bg-transparent">
                       Clear filter
@@ -261,39 +328,22 @@ export function FilterBar() {
           </div>
 
           {/* Style Dropdown */}
-          <div className="relative">
+          <div className="relative" ref={styleDropdownRef}>
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center gap-2 whitespace-nowrap bg-transparent"
+              className={getButtonClassName(selectedStyles.length > 0)}
               onClick={toggleStyleDropdown}
             >
               Style
               <ChevronDown className="h-4 w-4" />
             </Button>
 
-            {/* Style Dropdown Menu */}
             {activeDropdown === "style" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="p-4">
-                  {/* Style options */}
                   <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {[
-                      "Bohemian",
-                      "Coastal",
-                      "Contemporary",
-                      "Farmhouse",
-                      "Industrial",
-                      "Mediterranean",
-                      "Mid-Century Modern",
-                      "Minimalist",
-                      "Modern",
-                      "Rustic",
-                      "Scandinavian",
-                      "Traditional",
-                      "Transitional",
-                      "Urban Modern",
-                    ].map((style) => (
+                    {projectStyles.map((style) => (
                       <label key={style} className="flex items-center gap-3 cursor-pointer">
                         <input
                           type="checkbox"
@@ -306,7 +356,6 @@ export function FilterBar() {
                     ))}
                   </div>
 
-                  {/* Action buttons */}
                   <div className="mt-6 flex gap-3">
                     <Button variant="outline" size="sm" onClick={clearStyleFilters} className="flex-1 bg-transparent">
                       Clear filter
@@ -324,22 +373,20 @@ export function FilterBar() {
             )}
           </div>
 
-          <div className="relative">
+          <div className="relative" ref={locationDropdownRef}>
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center gap-2 whitespace-nowrap bg-transparent"
+              className={getButtonClassName(selectedLocation !== "")}
               onClick={toggleLocationDropdown}
             >
               {selectedLocation || "Location"}
               <ChevronDown className="h-4 w-4" />
             </Button>
 
-            {/* Location Dropdown Menu */}
             {activeDropdown === "location" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="p-4">
-                  {/* Search input */}
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <input
@@ -351,7 +398,6 @@ export function FilterBar() {
                     />
                   </div>
 
-                  {/* Location options */}
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {filteredLocations.length > 0 ? (
                       filteredLocations.map((location) => (
@@ -368,7 +414,6 @@ export function FilterBar() {
                     )}
                   </div>
 
-                  {/* Action buttons */}
                   <div className="mt-4 flex gap-3">
                     <Button variant="outline" size="sm" onClick={clearLocationFilter} className="flex-1 bg-transparent">
                       Clear filter
@@ -386,20 +431,32 @@ export function FilterBar() {
             )}
           </div>
 
-          {/* Scroll Left Button */}
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollLeft ? "opacity-50 cursor-not-allowed" : ""}`}
+            onClick={() => scrollCarousel("left")}
+            disabled={!canScrollLeft}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          {/* Categories - Scrollable */}
           <div className="flex-1 overflow-hidden">
-            <div className="flex gap-6 overflow-x-auto scrollbar-hide">
+            <div
+              ref={carouselRef}
+              className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
               {categories.map((category, index) => {
                 const IconComponent = category.icon
+                const isSelected = selectedTypes.includes(category.label)
                 return (
                   <button
                     key={index}
-                    className="flex flex-col items-center gap-2 whitespace-nowrap py-2 text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
+                    onClick={() => toggleCategoryFilter(category.label)}
+                    className={`flex flex-col items-center gap-2 whitespace-nowrap py-2 transition-colors flex-shrink-0 ${
+                      isSelected ? "text-red-600 border-b-2 border-red-600" : "text-gray-600 hover:text-gray-900"
+                    }`}
                   >
                     <IconComponent className="h-5 w-5" />
                     <span className="text-xs font-medium">{category.label}</span>
@@ -409,8 +466,13 @@ export function FilterBar() {
             </div>
           </div>
 
-          {/* Scroll Right Button */}
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
+            onClick={() => scrollCarousel("right")}
+            disabled={!canScrollRight}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

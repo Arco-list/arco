@@ -30,6 +30,7 @@ import {
 } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { z } from "zod"
+import { csvData } from "@/lib/csv-data"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -182,10 +183,63 @@ const columns: ColumnDef<z.infer<typeof professionalSchema>>[] = [
   },
 ]
 
+const sampleData: z.infer<typeof professionalSchema>[] = [
+  {
+    id: 1,
+    name: "Sarah Johnson",
+    profilePicture: "/placeholder.svg?height=40&width=40",
+    categories: [csvData.professionalCategories[0], csvData.professionalCategories[4]], // Architect, Landscape Architect
+    projectCount: 24,
+    rating: 4.8,
+    location: "Amsterdam",
+    status: "Active",
+  },
+  {
+    id: 2,
+    name: "Michael Chen",
+    profilePicture: "/placeholder.svg?height=40&width=40",
+    categories: [csvData.professionalCategories[3], csvData.professionalCategories[5]], // Engineer, Project Manager
+    projectCount: 18,
+    rating: 4.9,
+    location: "Rotterdam",
+    status: "Active",
+  },
+  {
+    id: 3,
+    name: "Emma Williams",
+    profilePicture: "/placeholder.svg?height=40&width=40",
+    categories: [csvData.professionalCategories[1], csvData.professionalCategories[6]], // Interior Designer, Consultant
+    projectCount: 31,
+    rating: 4.7,
+    location: "Utrecht",
+    status: "Pending",
+  },
+  {
+    id: 4,
+    name: "David Rodriguez",
+    profilePicture: "/placeholder.svg?height=40&width=40",
+    categories: [csvData.professionalCategories[2], csvData.professionalCategories[7]], // Contractor, Specialist
+    projectCount: 42,
+    rating: 4.6,
+    location: "The Hague",
+    status: "Active",
+  },
+  {
+    id: 5,
+    name: "Lisa Anderson",
+    profilePicture: "/placeholder.svg?height=40&width=40",
+    categories: [csvData.professionalCategories[8], csvData.professionalCategories[9]], // Surveyor, Planning Consultant
+    projectCount: 15,
+    rating: 4.5,
+    location: "Eindhoven",
+    status: "Inactive",
+  },
+]
+
 export function ProfessionalsDataTable({
-  data: initialData,
+  data: initialData = sampleData,
 }: {
-  data: z.infer<typeof professionalSchema>[]
+  data?: z.infer<typeof professionalSchema>[]
 }) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})

@@ -1,12 +1,25 @@
+"use client"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Heart, Share, Bookmark } from "lucide-react"
+import { ReportModal } from "./report-modal"
+import { ShareModal } from "./share-modal"
 
 export function ProjectInfo() {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-500">Projects &gt; House &gt; Villa</div>
-        <button className="text-sm text-gray-500 hover:text-gray-700 underline">Report this listing</button>
+        <button
+          className="text-sm text-gray-500 hover:text-gray-700 underline"
+          onClick={() => setIsReportModalOpen(true)}
+        >
+          Report this listing
+        </button>
       </div>
 
       {/* Action buttons */}
@@ -15,7 +28,7 @@ export function ProjectInfo() {
           <Heart className="w-4 h-4 mr-2" />
           Like
         </Button>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
           <Share className="w-4 h-4 mr-2" />
           Share
         </Button>
@@ -40,6 +53,16 @@ export function ProjectInfo() {
           Show more
         </Button>
       </div>
+
+      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="project" />
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        title="Villa upgrade"
+        subtitle="Contemporary Villa in Nijmegen"
+        imageUrl="/placeholder.svg?height=64&width=64"
+        shareUrl={typeof window !== "undefined" ? window.location.href : ""}
+      />
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRef } from "react"
+import Link from "next/link"
 
 const categories = [
   {
@@ -63,8 +64,9 @@ export function ProjectCategories() {
           style={{ scrollSnapType: "x mandatory" }}
         >
           {categories.map((category, index) => (
-            <div
+            <Link
               key={index}
+              href={`/projects?features=${encodeURIComponent(category.title)}`}
               className="group cursor-pointer flex-none w-64 md:w-auto"
               style={{ scrollSnapAlign: "start" }}
             >
@@ -77,7 +79,7 @@ export function ProjectCategories() {
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                 <h3 className="absolute bottom-4 left-4 text-white text-lg font-semibold">{category.title}</h3>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

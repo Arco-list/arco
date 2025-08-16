@@ -22,17 +22,17 @@ interface PlanFeature {
 
 const planFeatures: PlanFeature[] = [
   {
-    type: "Financial data",
+    type: "Project Management",
     features: [
       {
-        name: "Open/High/Low/Close",
+        name: "Basic project listings",
         free: true,
         startup: true,
         team: true,
         enterprise: true,
       },
       {
-        name: "Price-volume difference indicator	",
+        name: "Photo galleries & virtual tours",
         free: true,
         startup: true,
         team: true,
@@ -41,31 +41,31 @@ const planFeatures: PlanFeature[] = [
     ],
   },
   {
-    type: "On-chain data",
+    type: "Professional Network",
     features: [
       {
-        name: "Network growth",
+        name: "Connect with architects",
         free: true,
         startup: false,
         team: true,
         enterprise: true,
       },
       {
-        name: "Average token age consumed",
+        name: "Professional verification",
         free: true,
         startup: false,
         team: true,
         enterprise: true,
       },
       {
-        name: "Exchange flow",
+        name: "Direct messaging",
         free: false,
         startup: false,
         team: true,
         enterprise: true,
       },
       {
-        name: "Total ERC20 exchange funds flow",
+        name: "Priority project matching",
         free: false,
         startup: false,
         team: true,
@@ -74,24 +74,24 @@ const planFeatures: PlanFeature[] = [
     ],
   },
   {
-    type: "Social data",
+    type: "Analytics & Insights",
     features: [
       {
-        name: "Dev activity",
+        name: "Project performance metrics",
         free: false,
         startup: true,
         team: false,
         enterprise: true,
       },
       {
-        name: "Topic search",
+        name: "Market trend analysis",
         free: true,
         startup: true,
         team: true,
         enterprise: true,
       },
       {
-        name: "Relative social dominance",
+        name: "Custom reporting",
         free: true,
         startup: true,
         team: false,
@@ -105,13 +105,15 @@ export function PricingSection() {
   return (
     <>
       {/* Pricing */}
-      <div className="container mx-auto px-4 md:px-6 2xl:max-w-[1400px] py-24 lg:py-32">
+      <div className="max-w-7xl mx-auto w-full px-4 md:px-6 py-24 lg:py-32">
         {/* Title */}
         <div className="max-w-2xl mx-auto text-center mb-10 lg:mb-14">
           <h2 className="scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight transition-colors first:mt-0">
             Pricing
           </h2>
-          <p className="mt-1 text-muted-foreground">Whatever your status, our offers evolve according to your needs.</p>
+          <p className="mt-1 text-muted-foreground">
+            Choose the perfect plan for your architectural projects and professional needs.
+          </p>
         </div>
         {/* End Title */}
         {/* Switch */}
@@ -157,21 +159,21 @@ export function PricingSection() {
               <ul className="mt-7 space-y-2.5 text-sm">
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">1 user</span>
+                  <span className="text-muted-foreground">1 project listing</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Plan features</span>
+                  <span className="text-muted-foreground">Basic photo gallery</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Product support</span>
+                  <span className="text-muted-foreground">Community support</span>
                 </li>
               </ul>
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant={"outline"}>
-                Sign up
+                Get Started
               </Button>
             </CardFooter>
           </Card>
@@ -180,61 +182,61 @@ export function PricingSection() {
           <Card className="border-primary flex flex-col">
             <CardHeader className="text-center pb-2">
               <Badge className="uppercase w-max self-center mb-3">Most popular</Badge>
-              <CardTitle className="!mb-7">Startup</CardTitle>
+              <CardTitle className="!mb-7">Professional</CardTitle>
               <span className="font-bold text-5xl">£39</span>
             </CardHeader>
             <CardDescription className="text-center w-11/12 mx-auto">
-              All the basics for starting a new business
+              Perfect for individual architects and designers
             </CardDescription>
             <CardContent className="flex-1">
               <ul className="mt-7 space-y-2.5 text-sm">
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">2 user</span>
+                  <span className="text-muted-foreground">10 project listings</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Plan features</span>
+                  <span className="text-muted-foreground">Virtual tours</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Product support</span>
+                  <span className="text-muted-foreground">Priority support</span>
                 </li>
               </ul>
             </CardContent>
             <CardFooter>
-              <Button className="w-full">Sign up</Button>
+              <Button className="w-full">Get Started</Button>
             </CardFooter>
           </Card>
           {/* End Card */}
           {/* Card */}
           <Card className="flex flex-col">
             <CardHeader className="text-center pb-2">
-              <CardTitle className="mb-7">Team</CardTitle>
+              <CardTitle className="mb-7">Studio</CardTitle>
               <span className="font-bold text-5xl">£89</span>
             </CardHeader>
             <CardDescription className="text-center  w-11/12 mx-auto">
-              Everything you need for a growing business
+              Ideal for growing architecture studios
             </CardDescription>
             <CardContent className="flex-1">
               <ul className="mt-7 space-y-2.5 text-sm">
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">5 user</span>
+                  <span className="text-muted-foreground">50 project listings</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Plan features</span>
+                  <span className="text-muted-foreground">Team collaboration</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Product support</span>
+                  <span className="text-muted-foreground">Analytics dashboard</span>
                 </li>
               </ul>
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant={"outline"}>
-                Sign up
+                Get Started
               </Button>
             </CardFooter>
           </Card>
@@ -243,30 +245,30 @@ export function PricingSection() {
           <Card className="flex flex-col">
             <CardHeader className="text-center pb-2">
               <CardTitle className="mb-7">Enterprise</CardTitle>
-              <span className="font-bold text-5xl">149</span>
+              <span className="font-bold text-5xl">£149</span>
             </CardHeader>
             <CardDescription className="text-center  w-11/12 mx-auto">
-              Advanced features for scaling your business
+              For large firms and enterprise clients
             </CardDescription>
             <CardContent>
               <ul className="mt-7 space-y-2.5 text-sm">
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">10 user</span>
+                  <span className="text-muted-foreground">Unlimited projects</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Plan features</span>
+                  <span className="text-muted-foreground">Custom branding</span>
                 </li>
                 <li className="flex space-x-2">
                   <CheckIcon className="flex-shrink-0 mt-0.5 h-4 w-4" />
-                  <span className="text-muted-foreground">Product support</span>
+                  <span className="text-muted-foreground">Dedicated support</span>
                 </li>
               </ul>
             </CardContent>
             <CardFooter>
               <Button className="w-full" variant={"outline"}>
-                Sign up
+                Contact Sales
               </Button>
             </CardFooter>
           </Card>
@@ -284,8 +286,8 @@ export function PricingSection() {
               <TableRow className="bg-muted hover:bg-muted">
                 <TableHead className="w-3/12 text-primary">Plans</TableHead>
                 <TableHead className="w-2/12 text-primary text-lg font-medium text-center">Free</TableHead>
-                <TableHead className="w-2/12 text-primary text-lg font-medium text-center">Startup</TableHead>
-                <TableHead className="w-2/12 text-primary text-lg font-medium text-center">Team</TableHead>
+                <TableHead className="w-2/12 text-primary text-lg font-medium text-center">Professional</TableHead>
+                <TableHead className="w-2/12 text-primary text-lg font-medium text-center">Studio</TableHead>
                 <TableHead className="w-2/12 text-primary text-lg font-medium text-center">Enterprise</TableHead>
               </TableRow>
             </TableHeader>
@@ -356,7 +358,7 @@ export function PricingSection() {
             </section>
             <section>
               <div className="mb-4">
-                <h4 className="text-xl font-medium">Startup</h4>
+                <h4 className="text-xl font-medium">Professional</h4>
               </div>
               <Table>
                 <TableBody>
@@ -382,7 +384,7 @@ export function PricingSection() {
             </section>
             <section>
               <div className="mb-4">
-                <h4 className="text-xl font-medium">Team</h4>
+                <h4 className="text-xl font-medium">Studio</h4>
               </div>
               <Table>
                 <TableBody>

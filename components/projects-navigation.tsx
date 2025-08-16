@@ -11,7 +11,7 @@ export function ProjectsNavigation({ activeTab }: ProjectsNavigationProps) {
   return (
     <div className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 md:px-[0]">
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-8 px-8">
           <Link
             href="/projects"
             className={cn(

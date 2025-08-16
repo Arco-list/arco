@@ -1,3 +1,5 @@
+import Link from "next/link"
+
 const projectTypes = [
   {
     title: "Villa",
@@ -33,7 +35,11 @@ export function ProjectTypes() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {projectTypes.map((type, index) => (
-            <div key={index} className="group cursor-pointer">
+            <Link
+              key={index}
+              href={`/projects?type=${encodeURIComponent(type.title)}`}
+              className="group cursor-pointer"
+            >
               <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3">
                 <img
                   src={type.image || "/placeholder.svg"}
@@ -43,7 +49,7 @@ export function ProjectTypes() {
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                 <h3 className="absolute bottom-4 left-4 text-white text-lg font-semibold">{type.title}</h3>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

@@ -1,17 +1,30 @@
+"use client"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Share, Bookmark, Star } from "lucide-react"
+import { ReportModal } from "./report-modal"
+import { ShareModal } from "./share-modal"
 
 export function ProfessionalInfo({ professionalData }: { professionalData: any }) {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="text-sm text-gray-500">Professionals &gt; Amsterdam &gt; Architecture &gt; Architect</div>
-        <button className="text-sm text-gray-500 hover:text-gray-700 underline">Report this listing</button>
+        <button
+          className="text-sm text-gray-500 hover:text-gray-700 underline"
+          onClick={() => setIsReportModalOpen(true)}
+        >
+          Report this listing
+        </button>
       </div>
 
       {/* Action buttons */}
       <div className="flex gap-2">
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
           <Share className="w-4 h-4 mr-2" />
           Share
         </Button>
@@ -72,6 +85,16 @@ export function ProfessionalInfo({ professionalData }: { professionalData: any }
           </div>
         </div>
       </div>
+
+      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        title={professionalData.name}
+        subtitle={professionalData.title}
+        imageUrl="/placeholder.svg?height=64&width=64"
+        shareUrl={typeof window !== "undefined" ? window.location.href : ""}
+      />
     </div>
   )
 }

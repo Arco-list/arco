@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { csvData, projectStyles, locationFeatures } from "@/lib/csv-data"
 
 export default function NewProjectPage() {
   const [currentStep, setCurrentStep] = useState(1)
@@ -55,33 +56,18 @@ export default function NewProjectPage() {
       { value: "institutional", label: "Institutional" },
       { value: "mixed-use", label: "Mixed Use" },
     ],
-    projectType: [
-      { value: "new-construction", label: "New Construction" },
-      { value: "renovation", label: "Renovation" },
-      { value: "extension", label: "Extension" },
-      { value: "restoration", label: "Restoration" },
-      { value: "interior-design", label: "Interior Design" },
-    ],
-    buildingType: [
-      { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment" },
-      { value: "villa", label: "Villa" },
-      { value: "office", label: "Office" },
-      { value: "retail", label: "Retail" },
-      { value: "warehouse", label: "Warehouse" },
-      { value: "hotel", label: "Hotel" },
-      { value: "other", label: "Other" },
-    ],
-    projectStyle: [
-      { value: "modern", label: "Modern" },
-      { value: "contemporary", label: "Contemporary" },
-      { value: "traditional", label: "Traditional" },
-      { value: "minimalist", label: "Minimalist" },
-      { value: "industrial", label: "Industrial" },
-      { value: "scandinavian", label: "Scandinavian" },
-      { value: "mediterranean", label: "Mediterranean" },
-      { value: "eclectic", label: "Eclectic" },
-    ],
+    projectType: csvData.listingTypes.map((type) => ({
+      value: type.toLowerCase().replace(/\s+/g, "-"),
+      label: type,
+    })),
+    buildingType: csvData.listingTypes.map((type) => ({
+      value: type.toLowerCase().replace(/\s+/g, "-"),
+      label: type,
+    })),
+    projectStyle: projectStyles.map((style) => ({
+      value: style.toLowerCase().replace(/\s+/g, "-"),
+      label: style,
+    })),
     size: [
       { value: "compact", label: "Compact" },
       { value: "medium", label: "Medium" },
@@ -98,32 +84,17 @@ export default function NewProjectPage() {
     ],
   }
 
-  const locationFeatures = [
-    { value: "lakefront", label: "Lakefront", icon: Waves },
-    { value: "amazing-views", label: "Amazing views", icon: Eye },
-    { value: "city-view", label: "City view", icon: Building },
-    { value: "countryside", label: "Countryside", icon: Trees },
-    { value: "golfing", label: "Golfing", icon: Golf },
-    { value: "ski-resort", label: "Ski resort", icon: Snowflake },
-    { value: "waterfront", label: "Waterfront", icon: Waves },
-    { value: "beach", label: "Beach", icon: Beach },
-    { value: "coastal", label: "Coastal", icon: Anchor },
-    { value: "forest", label: "Forest", icon: TreePine },
-    { value: "mountains", label: "Mountains", icon: Mountain },
-  ]
+  const locationFeaturesData = locationFeatures.map((feature, index) => ({
+    value: feature.toLowerCase().replace(/\s+/g, "-"),
+    label: feature,
+    icon: [Waves, Eye, Building, Trees, Golf, Snowflake, Waves, Beach, Anchor, TreePine, Mountain][index % 11],
+  }))
 
-  const materialFeatures = [
-    { value: "metal-constructions", label: "Metal constructions", icon: Zap },
-    { value: "stucco-walls", label: "Stucco walls", icon: Square },
-    { value: "glass-facades", label: "Glass facades", icon: Square },
-    { value: "slate-roof", label: "Slate roof", icon: Roof },
-    { value: "bamboo", label: "Bamboo", icon: Bamboo },
-    { value: "natural-stone", label: "Natural Stone", icon: Stone },
-    { value: "exposed-brick", label: "Exposed brick", icon: Brick },
-    { value: "reclaimed-wood", label: "Reclaimed wood", icon: Layers },
-    { value: "thatched-roof", label: "Thatched roof", icon: Home },
-    { value: "exposed-concrete", label: "Exposed concrete", icon: Square },
-  ]
+  const materialFeaturesData = csvData.features.map((feature, index) => ({
+    value: feature.toLowerCase().replace(/\s+/g, "-"),
+    label: feature,
+    icon: [Zap, Square, Square, Roof, Bamboo, Stone, Brick, Layers, Home, Square][index % 10],
+  }))
 
   const handleDropdownSelect = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value })
@@ -378,7 +349,7 @@ export default function NewProjectPage() {
                 {/* Location Features */}
                 <CheckboxGrid
                   title="Location features"
-                  items={locationFeatures}
+                  items={locationFeaturesData}
                   selectedValues={formData.locationFeatures}
                   onChange={(value) => handleCheckboxChange("locationFeatures", value)}
                 />
@@ -386,7 +357,7 @@ export default function NewProjectPage() {
                 {/* Material Features */}
                 <CheckboxGrid
                   title="Material features"
-                  items={materialFeatures}
+                  items={materialFeaturesData}
                   selectedValues={formData.materialFeatures}
                   onChange={(value) => handleCheckboxChange("materialFeatures", value)}
                 />
@@ -653,13 +624,13 @@ function NewProjectHeader() {
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
             >
               Questions?
             </a>
 
             {/* Save and Exit button */}
-            <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors">
+            <button className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors">
               Save and Exit
             </button>
           </div>

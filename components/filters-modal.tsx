@@ -2,6 +2,8 @@
 import { useState } from "react"
 import { X, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { csvData, projectStyles, locationFeatures, buildingTypesByCategory } from "@/lib/csv-data"
+import { useFilters } from "@/contexts/filter-context"
 
 interface FiltersModalProps {
   isOpen: boolean
@@ -9,8 +11,16 @@ interface FiltersModalProps {
 }
 
 export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
-  const [selectedProjectTypes, setSelectedProjectTypes] = useState<string[]>([])
-  const [selectedStyles, setSelectedStyles] = useState<string[]>([])
+  const {
+    selectedTypes,
+    selectedStyles,
+    selectedFeatures,
+    setSelectedTypes,
+    setSelectedStyles,
+    setSelectedFeatures,
+    clearAllFilters: clearContextFilters,
+  } = useFilters()
+
   const [selectedBuildingTypes, setSelectedBuildingTypes] = useState<string[]>([])
   const [selectedLocationFeatures, setSelectedLocationFeatures] = useState<string[]>([])
   const [selectedBuildingFeatures, setSelectedBuildingFeatures] = useState<string[]>([])
@@ -20,23 +30,52 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   const [projectYear, setProjectYear] = useState([1800, 2025])
   const [buildingYear, setBuildingYear] = useState([1800, 2025])
 
-  const [expandedSections, setExpandedSections] = useState<string[]>([])
+  const [expandedProjectTypes, setExpandedProjectTypes] = useState<string[]>([])
   const [showAllStyles, setShowAllStyles] = useState(false)
   const [showAllLocationFeatures, setShowAllLocationFeatures] = useState(false)
   const [showAllBuildingFeatures, setShowAllBuildingFeatures] = useState(false)
   const [showAllMaterialFeatures, setShowAllMaterialFeatures] = useState(false)
+  const [showAllBuildingTypes, setShowAllBuildingTypes] = useState(false)
 
   const toggleSelection = (item: string, selectedItems: string[], setSelectedItems: (items: string[]) => void) => {
     setSelectedItems(selectedItems.includes(item) ? selectedItems.filter((i) => i !== item) : [...selectedItems, item])
   }
 
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
+  const toggleCategorySelection = (category: string) => {
+    const categoryTypes = buildingTypesByCategory[category]
+    const allSelected = categoryTypes.every((type) => selectedTypes.includes(type))
+
+    if (allSelected) {
+      // Deselect all types in this category
+      setSelectedTypes(selectedTypes.filter((type) => !categoryTypes.includes(type)))
+    } else {
+      // Select all types in this category
+      const newTypes = [...selectedTypes]
+      categoryTypes.forEach((type) => {
+        if (!newTypes.includes(type)) {
+          newTypes.push(type)
+        }
+      })
+      setSelectedTypes(newTypes)
+    }
+  }
+
+  const isCategorySelected = (category: string) => {
+    const categoryTypes = buildingTypesByCategory[category]
+    return categoryTypes.every((type) => selectedTypes.includes(type))
+  }
+
+  const isCategoryPartiallySelected = (category: string) => {
+    const categoryTypes = buildingTypesByCategory[category]
+    return categoryTypes.some((type) => selectedTypes.includes(type)) && !isCategorySelected(category)
+  }
+
+  const toggleProjectTypeExpansion = (type: string) => {
+    setExpandedProjectTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]))
   }
 
   const clearAllFilters = () => {
-    setSelectedProjectTypes([])
-    setSelectedStyles([])
+    clearContextFilters()
     setSelectedBuildingTypes([])
     setSelectedLocationFeatures([])
     setSelectedBuildingFeatures([])
@@ -46,6 +85,44 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
     setProjectYear([1800, 2025])
     setBuildingYear([1800, 2025])
   }
+
+  const applyFilters = () => {
+    // Combine all feature selections into the features array
+    const allFeatures = [
+      ...selectedBuildingTypes,
+      ...selectedLocationFeatures,
+      ...selectedBuildingFeatures,
+      ...selectedMaterialFeatures,
+      ...selectedSizes,
+      ...selectedBudgets,
+    ]
+    setSelectedFeatures(allFeatures)
+    onClose()
+  }
+
+  const materialFeatures = csvData.features.filter(
+    (feature) =>
+      feature.toLowerCase().includes("metal") ||
+      feature.toLowerCase().includes("stone") ||
+      feature.toLowerCase().includes("wood") ||
+      feature.toLowerCase().includes("glass") ||
+      feature.toLowerCase().includes("brick") ||
+      feature.toLowerCase().includes("concrete") ||
+      feature.toLowerCase().includes("steel") ||
+      feature.toLowerCase().includes("bamboo") ||
+      feature.toLowerCase().includes("stucco"),
+  )
+
+  const buildingFeatures = csvData.features.filter(
+    (feature) =>
+      feature.toLowerCase().includes("heating") ||
+      feature.toLowerCase().includes("solar") ||
+      feature.toLowerCase().includes("smart") ||
+      feature.toLowerCase().includes("insulation") ||
+      feature.toLowerCase().includes("glazing") ||
+      feature.toLowerCase().includes("ventilation") ||
+      feature.toLowerCase().includes("roof"),
+  )
 
   if (!isOpen) return null
 
@@ -62,41 +139,50 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* Project Type */}
+          {/* Building Types */}
           <div>
-            <h3 className="text-base font-medium mb-3">Project Type</h3>
-            <div className="space-y-3">
-              {[
-                { name: "House", hasViewAll: true },
-                { name: "Kitchen & Living", hasViewAll: true },
-                { name: "Bed & Bath", hasViewAll: true },
-                { name: "Outdoor", hasViewAll: true },
-                { name: "Other", hasViewAll: true },
-              ].map((type) => (
-                <div key={type.name} className="flex items-center justify-between">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="projectType"
-                      className="h-4 w-4"
-                      checked={selectedProjectTypes.includes(type.name)}
-                      onChange={() => toggleSelection(type.name, selectedProjectTypes, setSelectedProjectTypes)}
-                    />
-                    <span className="text-sm">{type.name}</span>
-                  </label>
-                  {type.hasViewAll && (
+            <h3 className="text-base font-medium mb-3">Building Types</h3>
+            <div className="space-y-4">
+              {Object.entries(buildingTypesByCategory).map(([category, types]) => (
+                <div key={category}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded"
+                        checked={isCategorySelected(category)}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isCategoryPartiallySelected(category)
+                        }}
+                        onChange={() => toggleCategorySelection(category)}
+                      />
+                      <h4 className="text-sm font-medium text-gray-700">{category}</h4>
+                    </label>
                     <button
                       className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-                      onClick={() => toggleSection(type.name)}
+                      onClick={() => toggleProjectTypeExpansion(category)}
                     >
-                      View all
-                      {expandedSections.includes(type.name) ? (
+                      {expandedProjectTypes.includes(category) ? "Show less" : "View all"}
+                      {expandedProjectTypes.includes(category) ? (
                         <ChevronUp className="h-3 w-3" />
                       ) : (
                         <ChevronDown className="h-3 w-3" />
                       )}
                     </button>
-                  )}
+                  </div>
+                  <div className="space-y-2 ml-6">
+                    {types.slice(0, expandedProjectTypes.includes(category) ? undefined : 3).map((type) => (
+                      <label key={type} className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded"
+                          checked={selectedTypes.includes(type)}
+                          onChange={() => toggleSelection(type, selectedTypes, setSelectedTypes)}
+                        />
+                        <span className="text-sm">{type}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -104,63 +190,104 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
           {/* Style */}
           <div>
-            <h3 className="text-base font-medium mb-3">Style</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-medium">Style</h3>
+              <button
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                onClick={() => setShowAllStyles(!showAllStyles)}
+              >
+                {showAllStyles ? "Show less" : "View all"}
+                {showAllStyles ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+            </div>
+            <div className="space-y-3">
+              {projectStyles.slice(0, showAllStyles ? undefined : 6).map((style) => (
+                <label key={style} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded"
+                    checked={selectedStyles.includes(style)}
+                    onChange={() => toggleSelection(style, selectedStyles, setSelectedStyles)}
+                  />
+                  <span className="text-sm">{style}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Location feature */}
+          <div>
+            <h3 className="text-base font-medium mb-3">Location feature</h3>
             <div className="grid grid-cols-2 gap-3">
-              {[
-                "Bohemian",
-                "Coastal",
-                "Contemporary",
-                "Farmhouse",
-                "Industrial",
-                "Mediterranean",
-                "Mid-Century Modern",
-                "Minimalist",
-                "Modern",
-                "Rustic",
-                "Scandinavian",
-                "Traditional",
-              ]
-                .slice(0, showAllStyles ? undefined : 12)
-                .map((style) => (
-                  <label key={style} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded"
-                      checked={selectedStyles.includes(style)}
-                      onChange={() => toggleSelection(style, selectedStyles, setSelectedStyles)}
-                    />
-                    <span className="text-sm">{style}</span>
-                  </label>
-                ))}
-              {!showAllStyles && (
-                <>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded"
-                      checked={selectedStyles.includes("Transitional")}
-                      onChange={() => toggleSelection("Transitional", selectedStyles, setSelectedStyles)}
-                    />
-                    <span className="text-sm">Transitional</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded"
-                      checked={selectedStyles.includes("Urban Modern")}
-                      onChange={() => toggleSelection("Urban Modern", selectedStyles, setSelectedStyles)}
-                    />
-                    <span className="text-sm">Urban Modern</span>
-                  </label>
-                </>
-              )}
+              {locationFeatures.slice(0, showAllLocationFeatures ? undefined : 6).map((feature) => (
+                <label key={feature} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded"
+                    checked={selectedLocationFeatures.includes(feature)}
+                    onChange={() => toggleSelection(feature, selectedLocationFeatures, setSelectedLocationFeatures)}
+                  />
+                  <span className="text-sm">{feature}</span>
+                </label>
+              ))}
             </div>
             <button
               className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
-              onClick={() => setShowAllStyles(!showAllStyles)}
+              onClick={() => setShowAllLocationFeatures(!showAllLocationFeatures)}
             >
-              Show all
+              {showAllLocationFeatures ? "Show less" : "Show all"}
             </button>
+          </div>
+
+          {/* Building feature */}
+          <div>
+            <h3 className="text-base font-medium mb-3">Building feature</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {buildingFeatures.slice(0, showAllBuildingFeatures ? undefined : 6).map((feature) => (
+                <label key={feature} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded"
+                    checked={selectedBuildingFeatures.includes(feature)}
+                    onChange={() => toggleSelection(feature, selectedBuildingFeatures, setSelectedBuildingFeatures)}
+                  />
+                  <span className="text-sm">{feature}</span>
+                </label>
+              ))}
+            </div>
+            <button
+              className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
+              onClick={() => setShowAllBuildingFeatures(!showAllBuildingFeatures)}
+            >
+              {showAllBuildingFeatures ? "Show less" : "Show all"}
+            </button>
+          </div>
+
+          {/* Material feature */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-medium">Material feature</h3>
+              <button
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                onClick={() => setShowAllMaterialFeatures(!showAllMaterialFeatures)}
+              >
+                {showAllMaterialFeatures ? "Show less" : "View all"}
+                {showAllMaterialFeatures ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </button>
+            </div>
+            <div className="space-y-3">
+              {materialFeatures.slice(0, showAllMaterialFeatures ? undefined : 6).map((material) => (
+                <label key={material} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded"
+                    checked={selectedMaterialFeatures.includes(material)}
+                    onChange={() => toggleSelection(material, selectedMaterialFeatures, setSelectedMaterialFeatures)}
+                  />
+                  <span className="text-sm">{material}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
           {/* Building type */}
@@ -179,85 +306,6 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                 </label>
               ))}
             </div>
-          </div>
-
-          {/* Location feature */}
-          <div>
-            <h3 className="text-base font-medium mb-3">Location feature</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {["Lakefront", "Waterfront", "Amazing views", "Beach", "City view", "Coastal"].map((feature) => (
-                <label key={feature} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded"
-                    checked={selectedLocationFeatures.includes(feature)}
-                    onChange={() => toggleSelection(feature, selectedLocationFeatures, setSelectedLocationFeatures)}
-                  />
-                  <span className="text-sm">{feature}</span>
-                </label>
-              ))}
-            </div>
-            <button
-              className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
-              onClick={() => setShowAllLocationFeatures(!showAllLocationFeatures)}
-            >
-              Show all
-            </button>
-          </div>
-
-          {/* Building feature */}
-          <div>
-            <h3 className="text-base font-medium mb-3">Building feature</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {["Home office", "Living room", "Porch", "Hall", "Bedroom", "Cinema"].map((feature) => (
-                <label key={feature} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded"
-                    checked={selectedBuildingFeatures.includes(feature)}
-                    onChange={() => toggleSelection(feature, selectedBuildingFeatures, setSelectedBuildingFeatures)}
-                  />
-                  <span className="text-sm">{feature}</span>
-                </label>
-              ))}
-            </div>
-            <button
-              className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
-              onClick={() => setShowAllBuildingFeatures(!showAllBuildingFeatures)}
-            >
-              Show all
-            </button>
-          </div>
-
-          {/* Material feature */}
-          <div>
-            <h3 className="text-base font-medium mb-3">Material feature</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                "Metal constructions",
-                "Natural Stone",
-                "Stucco walls",
-                "Exposed brick",
-                "Glass facades",
-                "Reclaimed wood",
-              ].map((material) => (
-                <label key={material} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded"
-                    checked={selectedMaterialFeatures.includes(material)}
-                    onChange={() => toggleSelection(material, selectedMaterialFeatures, setSelectedMaterialFeatures)}
-                  />
-                  <span className="text-sm">{material}</span>
-                </label>
-              ))}
-            </div>
-            <button
-              className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
-              onClick={() => setShowAllMaterialFeatures(!showAllMaterialFeatures)}
-            >
-              Show all
-            </button>
           </div>
 
           {/* Size */}
@@ -340,7 +388,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
           <Button variant="outline" onClick={clearAllFilters} className="flex-1 bg-transparent">
             Clear filters
           </Button>
-          <Button onClick={onClose} className="flex-1 bg-black text-white hover:bg-gray-800">
+          <Button onClick={applyFilters} className="flex-1 bg-black text-white hover:bg-gray-800">
             Show projects
           </Button>
         </div>

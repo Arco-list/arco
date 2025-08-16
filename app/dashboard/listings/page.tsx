@@ -3,7 +3,7 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, X, Check } from "lucide-react"
+import { MoreHorizontal, X, Check, ChevronDown } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
@@ -14,7 +14,11 @@ export default function DashboardListingsPage() {
   const [coverPhotoModalOpen, setCoverPhotoModalOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<any>(null)
   const [selectedStatus, setSelectedStatus] = useState("")
-  const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<number>(4) // Default to middle photo
+  const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<number>(4)
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
+  const [sortBy, setSortBy] = useState("newest")
+  const [filterBy, setFilterBy] = useState("all")
   const router = useRouter()
 
   const projects = [
@@ -25,6 +29,7 @@ export default function DashboardListingsPage() {
       status: "Listed",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-green-100 text-green-800",
+      createdAt: "2024-01-15",
     },
     {
       id: 2,
@@ -33,6 +38,7 @@ export default function DashboardListingsPage() {
       status: "Listed",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-green-100 text-green-800",
+      createdAt: "2024-01-10",
     },
     {
       id: 3,
@@ -41,6 +47,7 @@ export default function DashboardListingsPage() {
       status: "Listed",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-green-100 text-green-800",
+      createdAt: "2024-01-20",
     },
     {
       id: 4,
@@ -49,6 +56,7 @@ export default function DashboardListingsPage() {
       status: "Listed",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-green-100 text-green-800",
+      createdAt: "2024-01-05",
     },
     {
       id: 5,
@@ -57,6 +65,7 @@ export default function DashboardListingsPage() {
       status: "Listed",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-green-100 text-green-800",
+      createdAt: "2024-01-25",
     },
     {
       id: 6,
@@ -65,6 +74,7 @@ export default function DashboardListingsPage() {
       status: "Invited",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-blue-100 text-blue-800",
+      createdAt: "2024-01-12",
     },
     {
       id: 7,
@@ -73,6 +83,7 @@ export default function DashboardListingsPage() {
       status: "In progress",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-yellow-100 text-yellow-800",
+      createdAt: "2024-01-18",
     },
     {
       id: 8,
@@ -81,8 +92,49 @@ export default function DashboardListingsPage() {
       status: "Unlisted",
       image: "/placeholder.svg?height=200&width=300",
       statusColor: "bg-gray-100 text-gray-800",
+      createdAt: "2024-01-08",
     },
   ]
+
+  const sortOptions = [
+    { value: "newest", label: "Newest first" },
+    { value: "oldest", label: "Oldest first" },
+    { value: "title", label: "Title A-Z" },
+    { value: "status", label: "Status" },
+  ]
+
+  const filterOptions = [
+    { value: "all", label: "All projects" },
+    { value: "Listed", label: "Listed" },
+    { value: "Unlisted", label: "Unlisted" },
+    { value: "Invited", label: "Invited" },
+    { value: "In progress", label: "In progress" },
+  ]
+
+  const getSortedAndFilteredProjects = () => {
+    let filtered = projects
+
+    if (filterBy !== "all") {
+      filtered = projects.filter((project) => project.status === filterBy)
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "newest":
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        case "oldest":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        case "title":
+          return a.title.localeCompare(b.title)
+        case "status":
+          return a.status.localeCompare(b.status)
+        default:
+          return 0
+      }
+    })
+
+    return sorted
+  }
 
   const handleUpdateStatus = (project: any) => {
     setSelectedProject(project)
@@ -114,6 +166,16 @@ export default function DashboardListingsPage() {
     router.push(`/dashboard/edit/${project.id}`)
   }
 
+  const handleSortChange = (value: string) => {
+    setSortBy(value)
+    setSortDropdownOpen(false)
+  }
+
+  const handleFilterChange = (value: string) => {
+    setFilterBy(value)
+    setFilterDropdownOpen(false)
+  }
+
   const statusOptions = [
     {
       value: "Live on page",
@@ -140,20 +202,70 @@ export default function DashboardListingsPage() {
     url: "/placeholder.svg?height=200&width=300",
   }))
 
+  const displayedProjects = getSortedAndFilteredProjects()
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-0">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Your projects</h1>
+          <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
           <div className="flex gap-3">
-            <Button variant="outline" size="default">
-              Sort
-            </Button>
-            <Button variant="outline" size="default">
-              Filter
-            </Button>
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                className="flex items-center gap-2"
+              >
+                Sort
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+              {sortDropdownOpen && (
+                <div className="absolute right-0 top-12 bg-white rounded-lg shadow-lg border py-2 w-48 z-10">
+                  {sortOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleSortChange(option.value)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
+                        sortBy === option.value ? "text-blue-600 bg-blue-50" : "text-gray-700"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+                className="flex items-center gap-2"
+              >
+                Filter
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+              {filterDropdownOpen && (
+                <div className="absolute right-0 top-12 bg-white rounded-lg shadow-lg border py-2 w-48 z-10">
+                  {filterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleFilterChange(option.value)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
+                        filterBy === option.value ? "text-blue-600 bg-blue-50" : "text-gray-700"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Button asChild size="default">
               <Link href="/new-project">Add project</Link>
             </Button>
@@ -161,7 +273,7 @@ export default function DashboardListingsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {projects.map((project) => (
+          {displayedProjects.map((project) => (
             <div
               key={project.id}
               className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"

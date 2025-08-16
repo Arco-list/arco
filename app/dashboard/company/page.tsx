@@ -77,7 +77,7 @@ export default function DashboardCompanyPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-0">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Left Sidebar */}
           <div className="lg:col-span-1">
@@ -126,7 +126,7 @@ export default function DashboardCompanyPage() {
               <div className="space-y-8">
                 {/* Header */}
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
+                  <h1 className="text-xl font-medium text-gray-900">Profile</h1>
                   <p className="text-gray-600 mt-1">Description</p>
                 </div>
 
@@ -153,7 +153,7 @@ export default function DashboardCompanyPage() {
 
                 {/* Company Information */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Company information</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-6">Company information</h3>
                   <div className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Company name</label>
@@ -172,7 +172,7 @@ export default function DashboardCompanyPage() {
 
                 {/* Contact Information */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Contact information</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-6">Contact information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Domain</label>
@@ -218,7 +218,7 @@ export default function DashboardCompanyPage() {
 
                 {/* Services and Features */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Services and features</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-6">Services and features</h3>
                   <div className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Primary service</label>
@@ -248,7 +248,7 @@ export default function DashboardCompanyPage() {
 
                 {/* Custom Domain */}
                 <Card className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Custom domain</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-6">Custom domain</h3>
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <div className="flex">
@@ -292,7 +292,7 @@ export default function DashboardCompanyPage() {
               <div className="space-y-8">
                 {/* Header */}
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Photos</h1>
+                  <h1 className="text-xl font-medium text-gray-900">Photos</h1>
                   <p className="text-gray-600 mt-1">
                     Add 5 photos that are displayed at the top of your company page. The cover photo is displayed in
                     search results.

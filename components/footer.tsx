@@ -2,9 +2,9 @@ import { Instagram, Linkedin, Twitter } from "lucide-react"
 import Link from "next/link"
 
 const footerLinks = {
-  Products: ["Projects", "Professionals", "Products"],
-  "For Business": ["List with us", "Pricing", "Partner"],
-  Arco: ["About", "Blog", "Help center"],
+  Products: ["Projects", "Professionals"], // Removed "Products" from the Products array
+  "For Business": ["List with us", "Pricing"], // Removed "Partner" from "For Business"
+  Arco: ["About", "Help center"], // Removed "Blog" from "Arco"
 }
 
 export function Footer() {
@@ -50,6 +50,14 @@ export function Footer() {
                       </Link>
                     ) : link === "Help center" ? (
                       <Link href="/help-center" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        {link}
+                      </Link>
+                    ) : link === "Professionals" ? (
+                      <Link href="/professionals" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        {link}
+                      </Link>
+                    ) : link === "List with us" ? (
+                      <Link href="/list-with-us" className="text-gray-600 hover:text-gray-900 transition-colors">
                         {link}
                       </Link>
                     ) : (

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { MoreHorizontal, ChevronLeft, ChevronRight, ArrowLeft, Share, Heart } from "lucide-react"
+import { MoreHorizontal, ChevronLeft, ChevronRight, XIcon, Share, Heart } from "lucide-react"
 import { useState } from "react"
 
 export function ProjectGallery() {
@@ -169,8 +169,8 @@ export function ProjectGallery() {
                 className="text-white hover:bg-white/10"
                 onClick={() => setIsModalOpen(false)}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
+                <XIcon className="w-4 h-4 mr-2" />
+                Close
               </Button>
 
               <div className="text-white font-medium">

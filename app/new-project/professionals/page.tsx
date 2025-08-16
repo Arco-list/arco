@@ -265,7 +265,7 @@ export default function AddProfessionalsPage() {
       <AddProfessionalsHeader />
 
       {/* Progress indicator */}
-      <div className="container mx-auto px-4 py-4 max-w-4xl">
+      <div className="container mx-auto px-4 py-4 max-w-4xl my-16 mb-[]">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">
@@ -541,12 +541,12 @@ function AddProfessionalsHeader() {
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-700 hover:text-gray-900 font-medium transition-colors"
+              className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
             >
               Questions?
             </a>
 
-            <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors">
+            <button className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors">
               Save and Exit
             </button>
           </div>
