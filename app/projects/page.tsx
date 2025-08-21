@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { FilterBar } from "@/components/filter-bar"
@@ -5,7 +6,7 @@ import { ProjectsGrid } from "@/components/projects-grid"
 import { ProjectsNavigation } from "@/components/projects-navigation"
 import { FilterProvider } from "@/contexts/filter-context"
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   return (
     <FilterProvider>
       <div className="min-h-screen flex flex-col">
@@ -20,5 +21,13 @@ export default function ProjectsPage() {
         <Footer />
       </div>
     </FilterProvider>
+  )
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <ProjectsPageContent />
+    </Suspense>
   )
 }

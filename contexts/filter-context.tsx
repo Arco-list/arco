@@ -1,5 +1,5 @@
 "use client"
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useRef, Suspense, type ReactNode } from "react"
 import { useSearchParams } from "next/navigation"
 
 interface FilterContextType {
@@ -18,7 +18,7 @@ interface FilterContextType {
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined)
 
-export function FilterProvider({ children }: { children: ReactNode }) {
+function FilterProviderInner({ children }: { children: ReactNode }) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [selectedStyles, setSelectedStyles] = useState<string[]>([])
   const [selectedLocation, setSelectedLocation] = useState<string>("")
@@ -99,6 +99,14 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </FilterContext.Provider>
+  )
+}
+
+export function FilterProvider({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<div>Loading filters...</div>}>
+      <FilterProviderInner>{children}</FilterProviderInner>
+    </Suspense>
   )
 }
 
