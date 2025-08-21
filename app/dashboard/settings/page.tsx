@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
@@ -64,7 +64,7 @@ const savedProfessionals = [
   },
 ]
 
-export default function DashboardSettings() {
+function DashboardSettingsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialTab = searchParams.get("tab") || "saved-projects"
@@ -336,5 +336,13 @@ export default function DashboardSettings() {
 
       <Footer />
     </div>
+  )
+}
+
+export default function DashboardSettings() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <DashboardSettingsContent />
+    </Suspense>
   )
 }
