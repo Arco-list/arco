@@ -1,0 +1,256 @@
+# Arco Platform Database Setup
+
+This directory contains the complete database schema and migrations for the Arco platform - a professional services marketplace connecting clients with architects, interior designers, contractors, and other construction professionals.
+
+## 📋 Overview
+
+The database schema is designed to support:
+- **User Management**: Built on Supabase Auth with extended profiles
+- **Professional Profiles**: Service providers with specialties, ratings, and portfolios
+- **Project Management**: Client project listings with photos and applications
+- **Reviews & Messaging**: User interactions and communication
+- **Search & Discovery**: Optimized for filtering and search functionality
+
+## 🚀 Quick Start
+
+### Option 1: Using Supabase Dashboard (Recommended)
+
+1. Open your [Supabase Dashboard](https://supabase.com/dashboard)
+2. Navigate to SQL Editor
+3. Execute the migration files in order (001 through 008)
+4. Enable Realtime for tables you need live updates for
+
+### Option 2: Using Supabase CLI
+
+```bash
+# Initialize Supabase (if not already done)
+supabase init
+
+# Link to your project
+supabase link --project-ref YOUR_PROJECT_REF
+
+# Run migrations
+supabase db push
+```
+
+## 📁 Migration Files
+
+Execute these SQL files **in order** in your Supabase SQL Editor:
+
+1. **001_create_core_enums_and_types.sql**
+   - Core enum types (user_type, project_status, etc.)
+   - Foundation data types
+
+2. **002_create_profiles_table.sql**
+   - Extended user profiles linking to auth.users
+   - Automatic profile creation trigger
+   - User type management
+
+3. **003_create_companies_and_professionals.sql**
+   - Company information and management
+   - Professional profiles with ratings
+   - Automatic rating aggregation system
+
+4. **004_create_projects_and_photos.sql**
+   - Project listings and metadata
+   - Photo management with ordering
+   - Project applications workflow
+
+5. **005_create_categorization_system.sql**
+   - Service categories and specialties
+   - Professional-category relationships
+   - Pre-populated category data
+
+6. **006_create_user_interactions.sql**
+   - Review and rating system
+   - Project-based messaging
+   - Saved items (projects/professionals)
+   - Notification system
+
+7. **007_implement_rls_policies.sql**
+   - Comprehensive Row Level Security
+   - User permission management
+   - Data access control
+
+8. **008_performance_optimizations.sql**
+   - Performance indexes
+   - Materialized views for fast queries
+   - Search functions
+   - Analytics capabilities
+
+## 🔐 Security Features
+
+### Row Level Security (RLS)
+All tables have RLS policies that ensure:
+- Users can only access their own private data
+- Public data is available to anonymous users
+- Proper permissions for professional-client interactions
+
+### Key Security Measures
+- **Profile Protection**: Users can only modify their own profiles
+- **Project Privacy**: Draft projects are private, published projects are public
+- **Message Security**: Only participants can read messages
+- **Review Integrity**: Only clients who worked with professionals can review them
+
+## 📊 Key Database Features
+
+### User System
+- **auth.users**: Supabase built-in authentication
+- **profiles**: Extended user data with type (client/professional/admin)
+- **companies**: Professional organization profiles
+
+### Professional System
+- **professionals**: Service provider profiles
+- **professional_specialties**: Many-to-many with categories
+- **professional_ratings**: Aggregated rating data (auto-updated)
+
+### Project System
+- **projects**: Client project listings
+- **project_photos**: Multiple photos with primary designation
+- **project_applications**: Professional applications to projects
+
+### Interaction System
+- **reviews**: Multi-dimensional rating system
+- **messages**: Project-based communication
+- **saved_projects/professionals**: User bookmarks
+- **notifications**: System notifications
+
+## 🔍 Search & Performance
+
+### Optimized Queries
+- **Materialized Views**: Pre-computed data for fast listings
+  - `mv_professional_summary`: Optimized professional data
+  - `mv_project_summary`: Optimized project data
+
+### Search Functions
+- `search_professionals()`: Filter by location, specialty, rating, etc.
+- `search_projects()`: Filter by category, budget, features, etc.
+- Full-text search on titles and descriptions
+
+### Performance Features
+- **Composite Indexes**: Optimized for common query patterns
+- **GIN Indexes**: Fast array and full-text search
+- **Materialized Views**: Pre-computed aggregations
+- **Automatic Refresh**: Triggers update views when data changes
+
+## 💾 Data Types & Enums
+
+### Core Enums
+```sql
+user_type: 'client' | 'professional' | 'admin'
+project_status: 'draft' | 'published' | 'in_progress' | 'completed' | 'archived'
+application_status: 'pending' | 'accepted' | 'rejected'
+project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
+```
+
+### Key Array Fields
+- **projects.style_preferences**: ['Contemporary', 'Modern', 'Traditional']
+- **projects.features**: ['Swimming Pool', 'Garden', 'Smart Home']
+- **professionals.services_offered**: ['Design', 'Construction', 'Consultation']
+- **professionals.languages_spoken**: ['Dutch', 'English', 'German']
+
+## 🔧 Maintenance Functions
+
+### Materialized View Refresh
+```sql
+-- Refresh individual views
+SELECT public.refresh_professional_summary();
+SELECT public.refresh_project_summary();
+
+-- Refresh all views
+SELECT public.refresh_all_materialized_views();
+```
+
+### Platform Statistics
+```sql
+-- Get platform-wide stats
+SELECT * FROM public.get_platform_stats();
+```
+
+## 📱 Frontend Integration
+
+### Key Views for UI Components
+- **v_professional_cards**: Optimized data for professional listings
+- **v_project_cards**: Optimized data for project galleries
+
+### Common Queries
+
+#### Get Professional Listings
+```sql
+SELECT * FROM public.search_professionals(
+  search_query := 'architect',
+  location_filter := 'Amsterdam',
+  verified_only := true,
+  limit_count := 20
+);
+```
+
+#### Get Project Listings
+```sql
+SELECT * FROM public.search_projects(
+  location_filter := 'Utrecht',
+  category_filter := 'uuid-of-architecture-category',
+  featured_only := false,
+  limit_count := 12
+);
+```
+
+#### Get User's Saved Items
+```sql
+-- Saved projects
+SELECT p.* FROM public.saved_projects sp
+JOIN public.mv_project_summary p ON sp.project_id = p.id
+WHERE sp.user_id = auth.uid()
+ORDER BY sp.created_at DESC;
+
+-- Saved professionals
+SELECT p.* FROM public.saved_professionals sp
+JOIN public.mv_professional_summary p ON sp.professional_id = p.id
+WHERE sp.user_id = auth.uid()
+ORDER BY sp.created_at DESC;
+```
+
+## 🌐 Realtime Configuration
+
+Enable realtime for tables where you need live updates:
+
+```sql
+-- Enable realtime for messages (chat functionality)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+
+-- Enable realtime for notifications
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
+
+-- Enable realtime for project applications
+ALTER PUBLICATION supabase_realtime ADD TABLE public.project_applications;
+```
+
+## 🚨 Important Notes
+
+1. **Run migrations in order**: The files are numbered and must be executed sequentially
+2. **Backup first**: Always backup your database before running migrations
+3. **Test thoroughly**: Test all functionality after migration
+4. **Monitor performance**: Watch query performance and refresh materialized views as needed
+5. **Update access tokens**: Make sure your Supabase access tokens are configured properly
+
+## 📞 Support
+
+For questions about the database schema or implementation:
+1. Check the comments in SQL files for detailed explanations
+2. Review the RLS policies for security implementation details
+3. Examine the materialized views for optimized query patterns
+
+## 🔄 Future Enhancements
+
+The schema is designed to be extensible. Consider these additions as your platform grows:
+- **Payment Integration**: Add tables for transactions and billing
+- **Advanced Analytics**: More detailed tracking and reporting
+- **Multi-language Support**: Localized content tables
+- **Advanced Matching**: AI-powered professional-project matching
+- **File Management**: Integration with Supabase Storage for documents
+
+---
+
+**Generated with [Claude Code](https://claude.ai/code)**
+
+*Last updated: [Generated on database implementation]*
