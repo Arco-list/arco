@@ -1,6 +1,6 @@
 "use client"
 import { useState, useMemo } from "react"
-import { Heart, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Heart, ChevronDown, ChevronLeft, ChevronRight, X, ThumbsUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useFilters } from "@/contexts/filter-context"
@@ -285,7 +285,7 @@ export function ProjectsGrid() {
           )}
 
           {/* Projects Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {getCurrentPageProjects().map((project) => (
               <Link
                 key={project.id}
@@ -296,7 +296,7 @@ export function ProjectsGrid() {
                   <img
                     src={project.image || "/placeholder.svg"}
                     alt={project.title}
-                    className="h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
 
                   <button
@@ -315,14 +315,13 @@ export function ProjectsGrid() {
                   </button>
                 </div>
 
-                <div className="mt-3 flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{project.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{project.location}</p>
-                  </div>
-                  <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
-                    <Heart className="h-3 w-3" />
-                    <span>{project.likes}</span>
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">{project.title}</h3>
+                    <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <ThumbsUp className="h-3 w-3" />
+                      <span>{project.likes}</span>
+                    </div>
                   </div>
                 </div>
               </Link>

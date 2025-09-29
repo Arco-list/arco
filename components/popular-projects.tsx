@@ -8,39 +8,33 @@ import { useRef } from "react"
 const projects = [
   {
     title: "Wellness room",
-    image: "/placeholder.svg?height=300&width=400",
+    image: "/placeholder.svg?height=300&width=300",
     liked: false,
     href: "#",
   },
   {
     title: "Paradise by the pool",
-    image: "/placeholder.svg?height=300&width=400",
+    image: "/placeholder.svg?height=300&width=300",
     liked: false,
     href: "#",
   },
   {
     title: "Floating pool garden",
-    image: "/placeholder.svg?height=300&width=400",
+    image: "/placeholder.svg?height=300&width=300",
     liked: false,
     href: "#",
   },
   {
     title: "Villa Mel",
-    image: "/placeholder.svg?height=300&width=400",
+    image: "/placeholder.svg?height=300&width=300",
     liked: false,
     href: "#",
   },
   {
     title: "Villa upgrade",
-    image: "/placeholder.svg?height=300&width=400",
+    image: "/placeholder.svg?height=300&width=300",
     liked: false,
-    href: "/projects/villa-upgrade", // Added link to villa upgrade project page
-  },
-  {
-    title: "Farm transformation",
-    image: "/placeholder.svg?height=300&width=400",
-    liked: false,
-    href: "#",
+    href: "/projects/villa-upgrade",
   },
 ]
 
@@ -76,7 +70,7 @@ export function PopularProjects() {
 
         <div
           ref={scrollRef}
-          className="flex gap-6 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-6 md:overflow-visible"
+          className="flex gap-6 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-5 md:gap-6 md:overflow-visible"
           style={{ scrollSnapType: "x mandatory" }}
         >
           {projects.map((project, index) => (
@@ -86,7 +80,7 @@ export function PopularProjects() {
               className="group cursor-pointer flex-none w-80 md:w-auto"
               style={{ scrollSnapAlign: "start" }}
             >
-              <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3">
+              <div className="relative aspect-square rounded-lg overflow-hidden mb-3">
                 <img
                   src={project.image || "/placeholder.svg"}
                   alt={project.title}
@@ -96,7 +90,7 @@ export function PopularProjects() {
                   size="sm"
                   variant="ghost"
                   className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-white text-gray-600 hover:text-red-500"
-                  onClick={(e) => e.preventDefault()} // Prevent navigation when clicking heart
+                  onClick={(e) => e.preventDefault()}
                 >
                   <Heart className="h-4 w-4" />
                 </Button>

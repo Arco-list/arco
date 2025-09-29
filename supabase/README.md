@@ -22,7 +22,7 @@ The database schema is designed to support:
 
 ### Option 2: Using Supabase CLI
 
-```bash
+\`\`\`bash
 # Initialize Supabase (if not already done)
 supabase init
 
@@ -31,7 +31,7 @@ supabase link --project-ref YOUR_PROJECT_REF
 
 # Run migrations
 supabase db push
-```
+\`\`\`
 
 ## 📁 Migration Files
 
@@ -136,12 +136,12 @@ All tables have RLS policies that ensure:
 ## 💾 Data Types & Enums
 
 ### Core Enums
-```sql
+\`\`\`sql
 user_type: 'client' | 'professional' | 'admin'
 project_status: 'draft' | 'published' | 'in_progress' | 'completed' | 'archived'
 application_status: 'pending' | 'accepted' | 'rejected'
 project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
-```
+\`\`\`
 
 ### Key Array Fields
 - **projects.style_preferences**: ['Contemporary', 'Modern', 'Traditional']
@@ -152,20 +152,20 @@ project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
 ## 🔧 Maintenance Functions
 
 ### Materialized View Refresh
-```sql
+\`\`\`sql
 -- Refresh individual views
 SELECT public.refresh_professional_summary();
 SELECT public.refresh_project_summary();
 
 -- Refresh all views
 SELECT public.refresh_all_materialized_views();
-```
+\`\`\`
 
 ### Platform Statistics
-```sql
+\`\`\`sql
 -- Get platform-wide stats
 SELECT * FROM public.get_platform_stats();
-```
+\`\`\`
 
 ## 📱 Frontend Integration
 
@@ -176,27 +176,27 @@ SELECT * FROM public.get_platform_stats();
 ### Common Queries
 
 #### Get Professional Listings
-```sql
+\`\`\`sql
 SELECT * FROM public.search_professionals(
   search_query := 'architect',
   location_filter := 'Amsterdam',
   verified_only := true,
   limit_count := 20
 );
-```
+\`\`\`
 
 #### Get Project Listings
-```sql
+\`\`\`sql
 SELECT * FROM public.search_projects(
   location_filter := 'Utrecht',
   category_filter := 'uuid-of-architecture-category',
   featured_only := false,
   limit_count := 12
 );
-```
+\`\`\`
 
 #### Get User's Saved Items
-```sql
+\`\`\`sql
 -- Saved projects
 SELECT p.* FROM public.saved_projects sp
 JOIN public.mv_project_summary p ON sp.project_id = p.id
@@ -208,13 +208,13 @@ SELECT p.* FROM public.saved_professionals sp
 JOIN public.mv_professional_summary p ON sp.professional_id = p.id
 WHERE sp.user_id = auth.uid()
 ORDER BY sp.created_at DESC;
-```
+\`\`\`
 
 ## 🌐 Realtime Configuration
 
 Enable realtime for tables where you need live updates:
 
-```sql
+\`\`\`sql
 -- Enable realtime for messages (chat functionality)
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 
@@ -223,7 +223,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
 
 -- Enable realtime for project applications
 ALTER PUBLICATION supabase_realtime ADD TABLE public.project_applications;
-```
+\`\`\`
 
 ## 🚨 Important Notes
 

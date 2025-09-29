@@ -44,7 +44,7 @@ export function HeroSection() {
   }
 
   return (
-    <section className="relative h-[70vh] flex items-center justify-center overflow-hidden">
+    <section className="relative h-[50vh] flex items-end justify-start overflow-hidden">
       {/* Hero Image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-in-out"
@@ -56,9 +56,9 @@ export function HeroSection() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 text-white px-4 md:px-8 max-w-7xl mx-auto w-full">
+      <div className="relative z-10 text-white px-4 md:px-8 max-w-7xl mx-auto w-full pb-8">
         <div className="max-w-2xl">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight mb-8 transition-opacity duration-500 min-h-[200px] md:min-h-[300px] lg:min-h-[350px] flex items-center">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight transition-opacity duration-500">
             {currentProject.title}
           </h1>
         </div>

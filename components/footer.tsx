@@ -18,9 +18,9 @@ export function Footer() {
               className="mb-6 block hover:opacity-80 transition-opacity" // updated hover effect to match header
             >
               <img
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/design-mode-images/Arco%20Logo%20Large%20%281%29-aJeGJEgxeyF8NSayjRepsrq6ZTfTth.svg"
                 alt="Arco Logo"
-                className="h-8 w-auto" // replaced text logo with SVG image
+                className="h-4 w-auto" // reduced logo height from h-8 to h-4 (50% smaller)
               />
             </Link>
             <div className="flex gap-4">

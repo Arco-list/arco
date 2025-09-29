@@ -14,7 +14,7 @@ This is a Next.js 15 project built with v0.app, featuring a responsive landing p
 
 ## Development Commands
 
-```bash
+\`\`\`bash
 # Start development server
 pnpm dev
 # or
@@ -28,7 +28,7 @@ pnpm lint
 
 # Start production server
 pnpm start
-```
+\`\`\`
 
 **Note:** TypeScript and ESLint errors are currently ignored during builds (`ignoreBuildErrors: true`, `ignoreDuringBuilds: true`) to facilitate rapid prototyping.
 
@@ -147,12 +147,12 @@ This project uses Supabase as the backend database with a comprehensive schema f
 - **Review Integrity**: Only clients who worked with professionals can review
 
 #### Key Data Types & Enums
-```sql
+\`\`\`sql
 user_type: 'client' | 'professional' | 'admin'
 project_status: 'draft' | 'published' | 'in_progress' | 'completed' | 'archived'
 application_status: 'pending' | 'accepted' | 'rejected'
 project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
-```
+\`\`\`
 
 #### Database Connection
 - **Project URL**: Use `mcp__supabase__get_project_url` to get the API endpoint
@@ -166,7 +166,7 @@ All 9 migrations successfully applied:
 - 009: Cleanup of unnecessary view abstractions
 
 #### Usage Patterns
-```sql
+\`\`\`sql
 -- Get professional listings
 SELECT * FROM public.search_professionals(
   search_query := 'architect',
@@ -184,4 +184,4 @@ SELECT * FROM public.search_projects(
 
 -- Refresh materialized views
 SELECT public.refresh_all_materialized_views();
-```
+\`\`\`

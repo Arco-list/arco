@@ -47,7 +47,7 @@ export function ProjectTypes() {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
-                <h3 className="absolute bottom-4 left-4 text-white text-lg font-semibold">{type.title}</h3>
+                <h3 className="absolute bottom-4 left-4 text-white font-semibold text-2xl">{type.title}</h3>
               </div>
             </Link>
           ))}
