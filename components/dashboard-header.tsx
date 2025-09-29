@@ -3,13 +3,59 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Menu } from "lucide-react"
-import { useState } from "react"
+import { useState, useTransition, useEffect, useRef } from "react"
+import { toast } from "sonner"
+
+import { signOutAction } from "@/app/(auth)/actions"
+import { useAuth } from "@/contexts/auth-context"
 
 export function DashboardHeader() {
   const pathname = usePathname()
+  const { session, profile } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isSigningOut, startSignOutTransition] = useTransition()
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const isActive = (path: string) => pathname === path
+
+  // Get user name from profile or session metadata
+  const sessionMetadata = session?.user?.user_metadata ?? {}
+  const metadataFirstName =
+    typeof sessionMetadata.first_name === "string"
+      ? sessionMetadata.first_name
+      : typeof sessionMetadata.firstName === "string"
+        ? sessionMetadata.firstName
+        : undefined
+  const derivedFirstName = (profile?.first_name || metadataFirstName)?.toString().trim()
+  const fallbackName = session?.user?.email ? session.user.email.split("@")[0] : undefined
+  const rawMenuLabel = derivedFirstName || fallbackName
+  const menuLabel = rawMenuLabel && rawMenuLabel.trim().length > 0 ? rawMenuLabel.trim() : "Menu"
+
+  const handleSignOut = () => {
+    startSignOutTransition(async () => {
+      const result = await signOutAction()
+
+      if (result?.error) {
+        toast.error("Unable to sign out", { description: result.error.message })
+        return
+      }
+
+      toast.success("Signed out")
+      setIsMenuOpen(false)
+      window.location.href = "/"
+    })
+  }
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   return (
     <header className="border-b border-gray-200 px-4 py-4 md:px-8">
@@ -41,13 +87,13 @@ export function DashboardHeader() {
           </Link>
         </nav>
 
-        <div className="flex items-center relative">
+        <div className="flex items-center relative" ref={menuRef}>
           <button
             className="flex items-center space-x-3 px-3 py-2 hover:bg-gray-100 rounded-full transition-colors border border-black"
             aria-label="Open menu"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
-            <span className="text-sm font-medium text-black">John</span>
+            <span className="text-sm font-medium text-black">{menuLabel}</span>
             <Menu className="h-5 w-5" />
           </button>
 
@@ -102,6 +148,23 @@ export function DashboardHeader() {
                 >
                   Settings
                 </Link>
+                <div className="border-t border-gray-100"></div>
+                <Link
+                  href="/"
+                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Back to Home
+                </Link>
+                <div className="border-t border-gray-100"></div>
+                <button
+                  type="button"
+                  className="block w-full px-4 py-3 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                >
+                  {isSigningOut ? "Signing out..." : "Sign out"}
+                </button>
               </div>
             </div>
           )}
