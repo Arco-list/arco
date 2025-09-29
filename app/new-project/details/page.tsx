@@ -611,7 +611,7 @@ function NewProjectHeader() {
           {/* Logo on the left */}
           <div className="flex-shrink-0">
             <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/design-mode-images/Arco%20Logo%20Large%20%281%29-aJeGJEgxeyF8NSayjRepsrq6ZTfTth.svg"
+              src="/images/design-mode/Arco%20Logo%20Large%20%281%29(1).svg"
               alt="Arco"
               className="h-6"
             />

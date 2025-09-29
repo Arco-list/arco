@@ -63,7 +63,7 @@ export function DashboardHeader() {
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <Link href="/" className="hover:opacity-80 transition-opacity">
           <img
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/design-mode-images/Arco%20Logo%20Large%20%281%29-aJeGJEgxeyF8NSayjRepsrq6ZTfTth.svg"
+            src="/images/design-mode/Arco%20Logo%20Large%20%281%29(1).svg"
             alt="Arco Logo"
             className="h-6 w-auto"
           />

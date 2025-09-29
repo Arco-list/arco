@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, Upload, Palette, ChevronLeft, ChevronRight } from "lucide-react"
 import { useState } from "react"
+import Link from "next/link"
 
 export default function ListWithUsPage() {
   const [currentTestimonial, setCurrentTestimonial] = useState(0)
@@ -64,8 +65,8 @@ export default function ListWithUsPage() {
                 <br />
                 homeowners
               </h1>
-              <Button className="bg-white text-black hover:bg-gray-100 px-8 py-3 text-lg font-medium">
-                Get started
+              <Button asChild className="bg-white text-black hover:bg-gray-100 px-8 py-3 text-lg font-medium">
+                <Link href="/create-company">Get started</Link>
               </Button>
             </div>
           </div>
@@ -282,7 +283,9 @@ export default function ListWithUsPage() {
               Inspire professionals to build beautiful and showcase their portfolios to homeowners in search of
               realizing their dream.
             </p>
-            <Button className="bg-white text-black hover:bg-gray-100 px-8 py-3 text-lg font-medium">Get started</Button>
+            <Button asChild className="bg-white text-black hover:bg-gray-100 px-8 py-3 text-lg font-medium">
+              <Link href="/create-company">Get started</Link>
+            </Button>
           </div>
         </section>
       </main>
