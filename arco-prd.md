@@ -185,6 +185,7 @@ Acceptance Criteria
 ## Project Detail
 **Component Path**: `app/projects/[id]/page.tsx` (project detail page)
 
+**Gallery Component**: `components/project-gallery.tsx` (multi-image header with modal trigger)
 
 ![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%203.png)
 
@@ -237,6 +238,8 @@ Functional Requirements:
 
 ### Images Overview Modal
 
+**Component Path**: `components/grouped-pictures-modal.tsx` (image gallery modal with lightbox)
+
 ![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%205.png)
 
 Functional Requirements
@@ -272,6 +275,8 @@ Acceptance Criteria
 - Given the Images Header displays, when a user clicks any image or View all photos (N), then open Images Overview (modal).
 
 ### Share
+
+**Component Path**: `components/share-modal.tsx` (project share modal)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516748111-8859b43.png?alt=media&token=9a082b7a-1e04-4175-afb7-384a8c474094)
 
@@ -366,6 +371,8 @@ Acceptance Criteria
 
 ### Login
 
+**Component Path**: `app/login/page.tsx` (login page) + `components/login1.tsx` (login form component)
+
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516767016-9zhirlj.png?alt=media&token=086c2ff0-d9ac-4666-94b7-23be4301894e)
 
 Acceptance Criteria
@@ -374,6 +381,8 @@ Acceptance Criteria
 - Given valid credentials or a successful sign up, when auth completes, then return the user to the exact pre-auth context and complete the pending action automatically (e.g., the Like is applied, Save toggled, Review composer opens).
 
 ### Sign Up
+
+**Component Path**: `app/signup/page.tsx` (signup page) + `components/signup1.tsx` (signup form component)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516769641-xrtl6rm.png?alt=media&token=60d41246-d3c2-43f0-b79a-49463a0e4b66)
 

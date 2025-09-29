@@ -33,6 +33,39 @@ supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 \`\`\`
 
+## 🔑 Auth Environment Configuration
+
+Supabase Auth requires a consistent set of environment variables locally and in deployment (e.g., Vercel). Copy the values from the Supabase dashboard **Project Settings → API** page and keep them in sync with your `.env.local` file.
+
+| Variable | Scope | Source | Local target | Notes |
+| --- | --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Client & server | Supabase `Project URL` | `.env.local` | Exposed to the browser; must match the Supabase project URL. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client | Supabase `anon public` key | `.env.local` | Public key required for browser authentication flows. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Supabase `service_role` key | `.env.local` | Never expose to the client; used by server actions that need elevated RLS access. |
+
+### Sync workflow
+
+1. In Supabase, open **Project Settings → API** and copy the three values above.
+2. Create or update `.env.local` at the repo root:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL="..."
+   NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
+   SUPABASE_SERVICE_ROLE_KEY="..."
+   ```
+3. Restart the Next.js dev server after edits so the environment variables reload.
+4. Mirror the same values in your deployment provider (e.g., Vercel) to keep runtime environments aligned.
+5. Do not commit `.env.local`; rely on dashboard-managed secrets for shared environments.
+
+## 🧩 Generating Typed Clients
+
+Run the Supabase CLI against your hosted project to keep `lib/supabase/types.ts` in sync with the database schema:
+
+```bash
+pnpm supabase gen types typescript --project-id <your-project-ref> --schema public > lib/supabase/types.ts
+```
+
+The project reference is visible in the Supabase dashboard under **Project Settings → General**. Regenerate the file after any migration or schema change so both `lib/supabase/browser.ts` and `lib/supabase/server.ts` share the latest `Database` types.
+
 ## 📁 Migration Files
 
 Execute these SQL files **in order** in your Supabase SQL Editor:

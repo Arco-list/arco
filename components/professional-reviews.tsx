@@ -299,7 +299,7 @@ export function ProfessionalReviews() {
               <div className="mb-6">
                 <h3 className="font-medium text-gray-900 mb-2">Rate your experience in these areas</h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  You've provided an overall rating. Let them know what they did great and where they can improve.
+                  You’ve provided an overall rating. Let them know what they did great and where they can improve.
                 </p>
 
                 <div className="space-y-4">

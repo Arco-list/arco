@@ -342,7 +342,7 @@ export default function AddProfessionalsPage() {
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">Invite professionals</h1>
                 <p className="text-gray-600 text-lg leading-relaxed">
-                  We'll email them to invite when you published the project
+                  We’ll email them to invite when you published the project
                 </p>
               </div>
               <button className="w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors">
@@ -426,7 +426,7 @@ export default function AddProfessionalsPage() {
         {currentStep === 4 && (
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-left max-w-2xl">
-              <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">Yeah! It's time to publish</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">Yeah! It’s time to publish</h1>
               <p className="text-gray-600 text-lg leading-relaxed mb-8">This is what homeowners will see</p>
 
               <div className="relative">
