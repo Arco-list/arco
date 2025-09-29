@@ -1,8 +1,8 @@
 Deploy to pre-production environment (preview) and update static URL.
 
-```bash
+\`\`\`bash
 cd app && npx vercel --yes && DEPLOYMENT_URL=$(npx vercel ls | head -1) && npx vercel alias $DEPLOYMENT_URL verkehrsguru-tinkso.vercel.app && echo "✅ Pre-production deployed: https://verkehrsguru-tinkso.vercel.app"
-```
+\`\`\`
 
 **What this does:**
 
@@ -25,13 +25,13 @@ cd app && npx vercel --yes && DEPLOYMENT_URL=$(npx vercel ls | head -1) && npx v
 
 If deployment fails with wrong project, ensure correct `.vercel/project.json`:
 
-```json
+\`\`\`json
 {"projectId":"prj_zV2e3op7X3NnlsUiJoP2agdugo6L","orgId":"team_2BGzRTqeeJ0PefqwYrMXj4Ev"}
-```
+\`\`\`
 
 **Commands to fix project linking:**
 
-```bash
+\`\`\`bash
 # Remove incorrect link
 rm -rf .vercel
 
@@ -41,7 +41,7 @@ echo '{"projectId":"prj_zV2e3op7X3NnlsUiJoP2agdugo6L","orgId":"team_2BGzRTqeeJ0P
 
 # Deploy to correct project
 npx vercel --yes
-```
+\`\`\`
 
 ## Environment Details
 
@@ -65,7 +65,7 @@ npx vercel --yes
 
 After deployment, you can verify with:
 
-```bash
+\`\`\`bash
 # Check deployment status
 npx vercel ls | head -5
 
@@ -78,7 +78,7 @@ npx vercel projects ls --scope=tinkso | grep verkehrsguru
 # Test endpoints
 curl https://verkehrsguru-tinkso.vercel.app/
 curl https://verkehrsguru.tinkso.fr/
-```
+\`\`\`
 
 ## Notes
 

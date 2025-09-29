@@ -1,8 +1,8 @@
 Deploy to production environment.
 
-```bash
+\`\`\`bash
 cd app && npx vercel --prod && echo "✅ Production deployed: https://verkehrsguru.tinkso.fr"
-```
+\`\`\`
 
 **What this does:**
 
@@ -33,7 +33,7 @@ cd app && npx vercel --prod && echo "✅ Production deployed: https://verkehrsgu
 
 After deployment, you can verify with:
 
-```bash
+\`\`\`bash
 # Check deployment status
 npx vercel ls | head -3
 
@@ -43,7 +43,7 @@ npx vercel alias ls | grep verkehrsguru
 # Test endpoints
 curl https://verkehrsguru-tinkso.vercel.app/api/health
 curl https://verkehrsguru.tinkso.fr/api/health
-```
+\`\`\`
 
 ## Notes
 

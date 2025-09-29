@@ -66,13 +66,13 @@ export function NavUser({ user }: Props) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings?tab=saved-professionals">
+                <Link href="/homeowner?tab=saved-professionals">
                   <Users />
                   Saved professionals
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings?tab=saved-projects">
+                <Link href="/homeowner?tab=saved-projects">
                   <Bookmark />
                   Saved projects
                 </Link>

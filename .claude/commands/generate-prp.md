@@ -46,14 +46,14 @@ Using PRPs/templates/prp_base.md as template:
 
 ### Validation Gates (Must be Executable) eg for python
 
-```bash
+\`\`\`bash
 # Syntax/Style
 ruff check --fix && mypy .
 
 # Unit Tests
 uv run pytest tests/ -v
 
-```
+\`\`\`
 
 **_ CRITICAL AFTER YOU ARE DONE RESEARCHING AND EXPLORING THE CODEBASE BEFORE YOU START WRITING THE PRP _**
 

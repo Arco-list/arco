@@ -47,11 +47,11 @@ Supabase Auth requires a consistent set of environment variables locally and in 
 
 1. In Supabase, open **Project Settings → API** and copy the three values above.
 2. Create or update `.env.local` at the repo root:
-   ```env
+   \`\`\`env
    NEXT_PUBLIC_SUPABASE_URL="..."
    NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
    SUPABASE_SERVICE_ROLE_KEY="..."
-   ```
+   \`\`\`
 3. Restart the Next.js dev server after edits so the environment variables reload.
 4. Mirror the same values in your deployment provider (e.g., Vercel) to keep runtime environments aligned.
 5. Do not commit `.env.local`; rely on dashboard-managed secrets for shared environments.
@@ -60,9 +60,9 @@ Supabase Auth requires a consistent set of environment variables locally and in 
 
 Run the Supabase CLI against your hosted project to keep `lib/supabase/types.ts` in sync with the database schema:
 
-```bash
+\`\`\`bash
 pnpm supabase gen types typescript --project-id <your-project-ref> --schema public > lib/supabase/types.ts
-```
+\`\`\`
 
 The project reference is visible in the Supabase dashboard under **Project Settings → General**. Regenerate the file after any migration or schema change so both `lib/supabase/browser.ts` and `lib/supabase/server.ts` share the latest `Database` types.
 

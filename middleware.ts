@@ -1,18 +1,22 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { NextResponse, type NextRequest } from "next/server"
+import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
-import type { Database } from '@/lib/supabase/types';
+import type { Database } from "@/lib/supabase/types"
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({ request: { headers: request.headers } });
+  const response = NextResponse.next({ request: { headers: request.headers } })
 
-  const supabase = createMiddlewareClient<Database>({ req: request, res: response });
+  if (request.nextUrl.pathname.startsWith("/homeowner")) {
+    return response
+  }
 
-  await supabase.auth.getSession();
+  const supabase = createMiddlewareClient<Database>({ req: request, res: response })
 
-  return response;
+  await supabase.auth.getSession()
+
+  return response
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-};
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+}

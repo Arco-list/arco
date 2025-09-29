@@ -208,7 +208,7 @@ export default function DashboardListingsPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-0">
+      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-0">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
           <div className="flex gap-3">

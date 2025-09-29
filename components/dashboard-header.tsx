@@ -17,6 +17,7 @@ export function DashboardHeader() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const isActive = (path: string) => pathname === path
+  const isHomeownerPage = pathname === "/homeowner"
 
   // Get user name from profile or session metadata
   const sessionMetadata = session?.user?.user_metadata ?? {}
@@ -68,24 +69,26 @@ export function DashboardHeader() {
           />
         </Link>
 
-        <nav className="hidden md:flex items-center space-x-8">
-          <Link
-            href="/dashboard/listings"
-            className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-              isActive("/dashboard/listings") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
-            }`}
-          >
-            Listings
-          </Link>
-          <Link
-            href="/dashboard/company"
-            className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-              isActive("/dashboard/company") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
-            }`}
-          >
-            Company
-          </Link>
-        </nav>
+        {!isHomeownerPage && (
+          <nav className="hidden md:flex items-center space-x-8">
+            <Link
+              href="/dashboard/listings"
+              className={`text-sm font-medium transition-colors hover:text-gray-600 ${
+                isActive("/dashboard/listings") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+              }`}
+            >
+              Listings
+            </Link>
+            <Link
+              href="/dashboard/company"
+              className={`text-sm font-medium transition-colors hover:text-gray-600 ${
+                isActive("/dashboard/company") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+              }`}
+            >
+              Company
+            </Link>
+          </nav>
+        )}
 
         <div className="flex items-center relative" ref={menuRef}>
           <button
@@ -97,65 +100,88 @@ export function DashboardHeader() {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Mobile menu */}
           {isMenuOpen && (
-            <div className="absolute right-0 top-16 z-50 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+            <div className="absolute right-0 top-16 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
               <div className="py-1">
-                <Link
-                  href="/dashboard/listings"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Listings
-                </Link>
-                <div className="border-t border-gray-100"></div>
-                <Link
-                  href="/dashboard/company"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Company
-                </Link>
-                <div className="border-t border-gray-100"></div>
-                <Link
-                  href="/new-project"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Add Project
-                </Link>
-                <div className="border-t border-gray-100"></div>
-                <Link
-                  href="/dashboard/settings?tab=saved-projects"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Saved Projects
-                </Link>
-                <div className="border-t border-gray-100"></div>
-                <Link
-                  href="/dashboard/settings?tab=saved-professionals"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Saved Professionals
-                </Link>
-                <div className="border-t border-gray-100"></div>
-                <Link
-                  href="/dashboard/settings"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Settings
-                </Link>
-                <div className="border-t border-gray-100"></div>
-                <Link
-                  href="/"
-                  className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Back to Home
-                </Link>
+                {isHomeownerPage ? (
+                  <>
+                    {/* Homeowner Dashboard Menu */}
+                    <Link
+                      href="/dashboard/listings"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Professional Dashboard
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/homeowner?tab=saved-projects"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Saved Projects
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/homeowner?tab=saved-professionals"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Saved Professionals
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/homeowner?tab=settings"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Settings
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    {/* Professional Dashboard Menu */}
+                    <Link
+                      href="/homeowner"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Homeowner Dashboard
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/dashboard/listings"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Listings
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/dashboard/company"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Company
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/new-project"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Add Project
+                    </Link>
+                    <div className="border-t border-gray-100"></div>
+                    <Link
+                      href="/dashboard/settings"
+                      className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Settings
+                    </Link>
+                  </>
+                )}
                 <div className="border-t border-gray-100"></div>
                 <button
                   type="button"
