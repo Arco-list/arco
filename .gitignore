@@ -28,5 +28,4 @@ next-env.d.ts
 
 .mcp.json
 
-.claude
-.codex
+implementation

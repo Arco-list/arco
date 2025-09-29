@@ -2,7 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Poppins } from "next/font/google"
 import "./globals.css"
-import { ScrollToTop } from "@/components/scroll-to-top"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { RootProviders } from "@/components/root-providers"
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -17,16 +18,20 @@ export const metadata: Metadata = {
   generator: "v0.app",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
   return (
     <html lang="en" className={poppins.variable}>
       <body className={poppins.className}>
-        <ScrollToTop />
-        {children}
+        <RootProviders initialSession={session}>{children}</RootProviders>
       </body>
     </html>
   )

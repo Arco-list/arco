@@ -152,7 +152,7 @@ export default function ListWithUsPage() {
                 </div>
                 <h2 className="text-3xl md:text-4xl font-bold mb-6 text-gray-900">Create a stunning portfolio</h2>
                 <p className="text-lg text-gray-600 leading-relaxed">
-                  Shine whenever & build yours—whether it's during the day, in the evening, or on weekends.
+                  Shine whenever & build yours—whether it’s during the day, in the evening, or on weekends.
                 </p>
               </div>
               <div className="flex justify-center">
@@ -199,7 +199,7 @@ export default function ListWithUsPage() {
               <h3 className="text-xl font-bold mb-2 text-gray-900">{testimonials[currentTestimonial].name}</h3>
               <p className="text-gray-600 mb-6">{testimonials[currentTestimonial].company}</p>
               <blockquote className="text-lg text-gray-700 italic leading-relaxed">
-                "{testimonials[currentTestimonial].quote}"
+                &ldquo;{testimonials[currentTestimonial].quote}&rdquo;
               </blockquote>
 
               <button
@@ -237,8 +237,8 @@ export default function ListWithUsPage() {
                 </div>
                 <h3 className="text-xl font-bold mb-4 text-gray-900">Sign up</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Shine whenever & build yours—whether it's during the day, in the evening, or on weekends. Once you
-                  sign up, you have full control over your schedule, timing your work around your life and your clients'
+                  Shine whenever & build yours—whether it’s during the day, in the evening, or on weekends. Once you
+                  sign up, you have full control over your schedule, timing your work around your life and your clients’
                   needs.
                 </p>
               </div>
@@ -258,7 +258,7 @@ export default function ListWithUsPage() {
                 </div>
                 <h3 className="text-xl font-bold mb-4 text-gray-900">Create portfolio</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Stay safe on the road with Ora's additional insurance coverage and 24/7 roadside assistance. We've got
+                  Stay safe on the road with Ora’s additional insurance coverage and 24/7 roadside assistance. We’ve got
                   every trip covered at every step.
                 </p>
               </div>
