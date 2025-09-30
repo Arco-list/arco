@@ -92,9 +92,16 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
         });
       }
 
-      setSession(sessionData.session ?? null);
+      const sanitizedSession = sessionData.session
+        ? ({
+            ...sessionData.session,
+            user: userData.user ?? sessionData.session.user,
+          } as Session)
+        : null;
+
+      setSession(sanitizedSession);
       setUser(userData.user ?? null);
-      await fetchProfile(userData.user?.id ?? sessionData.session?.user?.id);
+      await fetchProfile(userData.user?.id ?? null);
       if (!isMountedRef.current) return;
       setIsLoading(false);
     };
@@ -110,12 +117,20 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
       void (async () => {
         const { data: userData } = await supabase.auth.getUser();
         if (!isMountedRef.current) return;
+
+        const sanitizedSession = newSession
+          ? ({
+              ...newSession,
+              user: userData.user ?? newSession.user,
+            } as Session)
+          : null;
+
+        setSession(sanitizedSession);
         setUser(userData.user ?? null);
-        await fetchProfile(userData.user?.id ?? newSession?.user?.id);
+        await fetchProfile(userData.user?.id ?? null);
         router.refresh();
       })();
     });
@@ -137,9 +152,17 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
           supabase.auth.getSession(),
           supabase.auth.getUser(),
         ]);
-        setSession(sessionData.session ?? null);
+
+        const sanitizedSession = sessionData.session
+          ? ({
+              ...sessionData.session,
+              user: userData.user ?? sessionData.session.user,
+            } as Session)
+          : null;
+
+        setSession(sanitizedSession);
         setUser(userData.user ?? null);
-        await fetchProfile(userData.user?.id ?? sessionData.session?.user?.id);
+        await fetchProfile(userData.user?.id ?? null);
       },
       refreshProfile: async () => {
         await fetchProfile(user?.id ?? session?.user?.id);

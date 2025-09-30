@@ -572,8 +572,8 @@ export type Database = {
           applied_at?: string | null
           cover_letter?: string | null
           created_at?: string | null
-          estimated_duration?: string | null
           id?: string
+          estimated_duration?: string | null
           portfolio_items?: string[] | null
           professional_id?: string
           project_id?: string
@@ -914,6 +914,63 @@ export type Database = {
           },
         ]
       }
+      project_taxonomy_options: {
+        Row: {
+          budget_level:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          metadata: Json | null
+          name: string
+          size_max_sqm: number | null
+          size_min_sqm: number | null
+          slug: string
+          sort_order: number | null
+          taxonomy_type: Database["public"]["Enums"]["project_taxonomy_type"]
+          updated_at: string | null
+        }
+        Insert: {
+          budget_level?:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name: string
+          size_max_sqm?: number | null
+          size_min_sqm?: number | null
+          slug: string
+          sort_order?: number | null
+          taxonomy_type: Database["public"]["Enums"]["project_taxonomy_type"]
+          updated_at?: string | null
+        }
+        Update: {
+          budget_level?:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name?: string
+          size_max_sqm?: number | null
+          size_min_sqm?: number | null
+          slug?: string
+          sort_order?: number | null
+          taxonomy_type?: Database["public"]["Enums"]["project_taxonomy_type"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           address_city: string | null
@@ -1184,6 +1241,49 @@ export type Database = {
           },
         ]
       }
+      saved_projects: {
+        Row: {
+          created_at: string | null
+          notes: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          notes?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          notes?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_projects_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       mv_professional_summary: {
@@ -1407,6 +1507,13 @@ export type Database = {
         | "in_progress"
         | "completed"
         | "archived"
+      project_taxonomy_type:
+        | "project_style"
+        | "building_type"
+        | "location_feature"
+        | "material_feature"
+        | "size_range"
+        | "budget_tier"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1550,6 +1657,14 @@ export const Constants = {
         "in_progress",
         "completed",
         "archived",
+      ],
+      project_taxonomy_type: [
+        "project_style",
+        "building_type",
+        "location_feature",
+        "material_feature",
+        "size_range",
+        "budget_tier",
       ],
     },
   },

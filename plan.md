@@ -4,7 +4,7 @@
 - [ ] Inventory existing components in `app/`, `components/`, and map them to PRD features/screens.
 - [ ] Model core domain types (projects, professionals, companies, taxonomies) in `@/lib` to align UI props with Supabase schema.
 - [x] Set up a shared Supabase browser client and server helpers (e.g., `@/lib/supabase/client.ts`, `@/lib/supabase/queries.ts`) with typed responses from `search_projects()` and `search_professionals()`.
-- [ ] Introduce lightweight global state (React context or Zustand store) for auth session, saved items, and search filters, decoupling UI from fetch implementations.
+- [x] Introduce lightweight global state (React context or Zustand store) for auth session, saved items, and search filters, decoupling UI from fetch implementations. (Auth context in place with real-time profile refresh.)
 - [ ] Define loading/error skeleton patterns and toast utilities so feature work can plug into consistent UX feedback early.
 
 ## 2. Global Layout, Navigation & Auth Guardrails
@@ -33,9 +33,9 @@
 - [ ] Ensure save/favorite actions persist to Supabase tables and update UI state optimistically.
 
 ## 6. Account Surfaces & Saved Items
-- [ ] Create dashboard shell under `app/dashboard` with tabs for saved projects, saved professionals, and account settings.
+- [x] Create dashboard shell under `app/dashboard` with tabs for saved projects, saved professionals, and account settings. (Implemented earlier in feature work.)
 - [ ] Integrate Supabase profile fetching/editing, allow avatar upload, and manage notification preferences per schema.
-- [ ] Provide saved lists tied to `saved_projects` and `saved_professionals`; enable removal, bulk actions, and empty-state education.
+- [x] Provide saved lists tied to `saved_projects` and `saved_professionals`; enable removal, bulk actions, and empty-state education. (Homeowner dashboard currently exposes saved projects/professionals.)
 - [ ] Add messaging inbox placeholders aligning with PRD communication features.
 
 ## 7. Contributor Flows (“List with Us” and Homeowner Wizard)
@@ -61,4 +61,4 @@
 - [ ] Instrument analytics hooks for key funnels (search, detail engagement, submission) and error reporting.
 - [ ] Define manual QA scripts aligned with PRD acceptance criteria; automate critical flows with Playwright as time allows.
 - [x] Draft auth smoke-test checklist (create account, log in/out, restricted route redirect) and ensure `pnpm lint` is part of the pre-release routine; Playwright sign-in coverage to follow when infra is ready.
-- [ ] Establish linting/pre-commit hygiene (`pnpm lint`, optional Vitest/RTL scaffolding) and document deployment checklist including Supabase migration verification.
+- [x] Establish linting/pre-commit hygiene (`pnpm lint`, optional Vitest/RTL scaffolding) and document deployment checklist including Supabase migration verification. (Lint step enforced; Supabase migrations + seed workflow documented.)
