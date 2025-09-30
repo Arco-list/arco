@@ -39,7 +39,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <div className="flex h-12 items-center justify-center px-4">
           <img
-            src="/images/design-mode/Arco%20Logo%20Large%20%281%29(1).svg"
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
             alt="Arco Logo"
             className="h-6 w-auto"
           />

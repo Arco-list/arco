@@ -46,7 +46,7 @@ export default function CreateCompanyPage() {
       <div className="w-full max-w-lg">
         <div className="mb-8">
           <Image
-            src="/images/design-mode/Arco%20Logo%20Large%20%281%29(1).svg"
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
             alt="Arco Logo"
             width={48}
             height={48}

@@ -49,7 +49,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
           <div className="flex items-center gap-3 px-3 py-4">
             <Link href="/" className="flex items-center gap-3">
               <img
-                src="/images/design-mode/Arco%20Logo%20Large%20%281%29(1).svg"
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                 alt="Arco Logo"
                 className="h-8 w-auto"
               />
