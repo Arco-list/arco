@@ -24,9 +24,17 @@ export default async function RootLayout({
   children: React.ReactNode
 }>) {
   const supabase = await createServerSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  const [{ data: sessionData }, { data: userData }] = await Promise.all([
+    supabase.auth.getSession(),
+    supabase.auth.getUser(),
+  ])
+
+  const session = sessionData.session
+    ? {
+        ...sessionData.session,
+        user: userData.user ?? sessionData.session.user,
+      }
+    : null
 
   return (
     <html lang="en" className={poppins.variable}>

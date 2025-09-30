@@ -2,13 +2,17 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Upload } from "lucide-react"
 import Image from "next/image"
+
+import { createCompanyAction } from "./actions"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function CreateCompanyPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -17,6 +21,22 @@ export default function CreateCompanyPage() {
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [primaryService, setPrimaryService] = useState("")
+  const [formError, setFormError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+  const { session, profile, refreshProfile } = useAuth()
+
+  useEffect(() => {
+    if (!session) {
+      router.replace("/login?redirectTo=/create-company")
+      return
+    }
+
+    const userTypes = profile?.user_types ?? []
+    if (Array.isArray(userTypes) && userTypes.includes("professional")) {
+      router.replace("/dashboard/listings")
+    }
+  }, [profile?.user_types, router, session])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -31,13 +51,24 @@ export default function CreateCompanyPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle form submission
-    console.log("[v0] Form submitted:", {
-      companyName,
-      domain,
-      email,
-      phone,
-      primaryService,
+    setFormError(null)
+
+    startTransition(() => {
+      void createCompanyAction({
+        companyName,
+        domain,
+        email,
+        phone,
+        primaryService: primaryService || undefined,
+      }).then((result) => {
+        if (result.success) {
+          void refreshProfile()
+          router.push("/dashboard/listings")
+          router.refresh()
+        } else {
+          setFormError(result.error ?? "We couldn't save your company details. Please try again.")
+        }
+      })
     })
   }
 
@@ -157,21 +188,27 @@ export default function CreateCompanyPage() {
                 <SelectValue placeholder="Select company services" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="architecture">Architecture</SelectItem>
-                <SelectItem value="interior-design">Interior Design</SelectItem>
-                <SelectItem value="construction">Construction</SelectItem>
-                <SelectItem value="landscaping">Landscaping</SelectItem>
-                <SelectItem value="renovation">Renovation</SelectItem>
-                <SelectItem value="consulting">Consulting</SelectItem>
+                <SelectItem value="design-planning-architecture">Architecture</SelectItem>
+                <SelectItem value="design-planning-interior-design">Interior design</SelectItem>
+                <SelectItem value="design-planning-garden-design">Garden design</SelectItem>
+                <SelectItem value="construction-general-contractor">General contractor</SelectItem>
+                <SelectItem value="construction-kitchen">Kitchen</SelectItem>
+                <SelectItem value="construction-tiles-and-stone">Tiles and stone</SelectItem>
+                <SelectItem value="systems-lighting">Lighting</SelectItem>
+                <SelectItem value="systems-electrical-systems">Electrical systems</SelectItem>
+                <SelectItem value="finishing-interior-styling">Interior styling</SelectItem>
+                <SelectItem value="outdoor-garden">Garden</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-500">Additional services can be added later</p>
           </div>
 
+          {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+
           {/* Submit Button */}
           <div className="flex justify-end pt-4">
-            <Button type="submit" className="bg-black text-white hover:bg-gray-800 px-8">
-              Next
+            <Button type="submit" className="bg-black text-white hover:bg-gray-800 px-8" disabled={isPending}>
+              {isPending ? "Saving..." : "Next"}
             </Button>
           </div>
         </form>

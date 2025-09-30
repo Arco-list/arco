@@ -16,6 +16,8 @@
 
 **Recommendation:** Implement 3 new tables and 12 new columns before starting project wizard development.
 
+**Key Constraint:** Only professional accounts are allowed to list projects; the Create Company flow must promote homeowners to professionals before exposing the wizard.
+
 ---
 
 ## 🔴 CRITICAL GAPS - Must Implement
@@ -223,7 +225,7 @@ CREATE INDEX idx_project_professionals_email ON project_professionals(invited_em
 COMMENT ON TABLE project_professionals IS 'Professionals invited to or associated with completed projects';
 ```
 
-**Impact:** HIGH - Wizard Step 9-10 (Professionals) cannot be built without this.
+**Impact:** HIGH - Wizard Step 9-10 (Professionals) cannot be built without this. Listing creation is restricted to professional accounts, so a homeowner must complete Create Company first.
 
 > **Create Company Flow Dependency:** When a homeowner completes the "Create Company" onboarding, persist the "professional" user type to `profiles.user_types`. Without this flag the UI will keep redirecting them back to `/homeowner`, even if invitations are stored.
 
@@ -453,10 +455,10 @@ ADD COLUMN thumbnail_sizes JSONB; -- Store all generated sizes
 ### New Enums: 1
 1. ✅ `professional_project_status` - For professional invitation workflow
 
-### Existing Tables That Work: 11
-- ✅ `profiles` - User data is sufficient
+### Existing Tables That Work (with seeding): 11
+- ✅ `profiles` - User data is sufficient (ensure Create Company sets `professional` type)
 - ✅ `companies` - Company info sufficient
-- ✅ `categories` - Taxonomy system ready
+- ✅ `categories` - Taxonomy system ready but needs seed data (see below)
 - ✅ `project_categories` - Junction table works
 - ✅ `project_photos` - Base structure good (needs columns)
 - ✅ `saved_projects` - Favoriting ready
@@ -464,7 +466,88 @@ ADD COLUMN thumbnail_sizes JSONB; -- Store all generated sizes
 - ✅ `messages` - Messaging ready
 - ✅ `notifications` - Notifications ready
 - ✅ `project_applications` - Application flow ready (different from invitations)
-- ✅ `professional_specialties` - Professional categories ready
+- ✅ `professional_specialties` - Professional categories ready once seeded
+
+---
+
+## 📦 Seed Data Requirements (run post-migration)
+
+Prepare SQL (or Supabase seed scripts) to insert the following baseline taxonomy values immediately after Phase 1 migrations deploy:
+
+**Professional categories & services**
+
+| Category | Service |
+| --- | --- |
+| Design & Planning | Architecture |
+| Design & Planning | Interior design |
+| Design & Planning | Garden design |
+| Construction | General contractor |
+| Construction | Roof |
+| Construction | Tiles and stone |
+| Construction | Kitchen |
+| Construction | Stairs |
+| Construction | Elevator |
+| Construction | Windows |
+| Construction | Bathroom |
+| Construction | Swimming pool |
+| Construction | Welness |
+| Construction | Doors |
+| Systems | Lighting |
+| Systems | Electrical systems |
+| Systems | Security systems |
+| Systems | Domotica |
+| Finishing | Interior fit-out |
+| Finishing | Fireplace |
+| Finishing | Interior styling |
+| Finishing | Painting |
+| Finishing | Decoration and carpentry |
+| Finishing | Indoor plants |
+| Finishing | Floor |
+| Finishing | Furniture |
+| Finishing | Art |
+| Outdoor | Outdoor lighting |
+| Outdoor | Garden |
+| Outdoor | Garden house |
+| Outdoor | Outdoor furniture |
+| Outdoor | Fencing and gates |
+
+**Project categories, sub-types, and metadata**
+
+| Category | Sub-type | Listing type? | Building feature? |
+| --- | --- | --- | --- |
+| House | Villa | Yes | No |
+| House | House | Yes | No |
+| House | Apartment | Yes | No |
+| House | Chalet | Yes | No |
+| House | Bungalow | Yes | No |
+| House | Farm | Yes | No |
+| House | Extension | Yes | No |
+| Kitchen & Living | Kitchen | Yes | Yes |
+| Kitchen & Living | Living room | No | Yes |
+| Kitchen & Living | Dining room | No | Yes |
+| Kitchen & Living | Sunroom | No | Yes |
+| Bed & Bath | Bathroom | Yes | Yes |
+| Bed & Bath | Bedroom | No | Yes |
+| Bed & Bath | Indoor Pool | No | Yes |
+| Bed & Bath | Jacuzzi | Yes | Yes |
+| Bed & Bath | Sauna | Yes | Yes |
+| Bed & Bath | Steam room | No | Yes |
+| Outdoor | Garden | Yes | Yes |
+| Outdoor | Outdoor pool | Yes | Yes |
+| Outdoor | Garden house | Yes | Yes |
+| Outdoor | Outdoor kitchen | No | Yes |
+| Outdoor | Garage | No | Yes |
+| Outdoor | Porch | No | Yes |
+| Other | Hall | No | Yes |
+| Other | Home office | No | Yes |
+| Other | Bar | No | Yes |
+| Other | Cinema | No | Yes |
+| Other | Gym | No | Yes |
+| Other | Game room | No | Yes |
+| Other | Kids room | No | Yes |
+| Other | Wine cellar | No | Yes |
+
+Store the additional columns (`listing_type`, `is_building_feature`) wherever the taxonomy lives (e.g., extended `categories` table or a new lookup table) so the wizard can enforce PRD rules.
 
 ---
 
@@ -475,9 +558,11 @@ ADD COLUMN thumbnail_sizes JSONB; -- Store all generated sizes
 2. Add `feature_id` to `project_photos`
 3. Add location fields to `projects`
 4. Create `project_professionals` table
+5. Wire Create Company flow to set `professional` user type (unlock project wizard)
+6. Seed taxonomy tables (professional categories/services, project categories/sub-types)
 
 **Estimated Development Time:** 2-3 hours
-**Blocks:** All Photo Tour steps, Professional invitation steps, Location step
+**Blocks:** All Photo Tour steps, Professional invitation steps, Location step, baseline taxonomy required for dropdowns
 
 ---
 
@@ -511,8 +596,9 @@ _All items in this phase are optional improvements that can be deferred until af
 2. **Create migration files** for Phase 1 (critical blockers)
 3. **Update TypeScript types** using `mcp__supabase__generate_typescript_types`
 4. **Test migrations** on development environment
-5. **Wire the Create Company flow** so it persists `professional` in `profiles.user_types` (unblocks the professional dashboard gating recently added)
-6. **Begin wizard development** once Phase 1 migrations are deployed
+5. **Wire the Create Company flow** so it persists `professional` in `profiles.user_types` and surfaces the project wizard only for professional users
+6. **Seed taxonomy data** (professional categories/services, project categories/sub-types) immediately after Phase 1 migrations so dropdowns work out of the box (see Seed Data Requirements section)
+7. **Begin wizard development** once Phase 1 migrations are deployed and seed data is in place
 
 ### Migration Sequence:
 ```bash
@@ -544,6 +630,7 @@ _All items in this phase are optional improvements that can be deferred until af
 ### Application Code Impact:
 - 🔴 HIGH: Photo upload/management code must be rewritten to use features
 - 🔴 HIGH: Project creation wizard must handle new schema
+- 🔴 HIGH: Access control must gate the wizard to `professional` profiles only (Create Company promotion required)
 - 🟡 MEDIUM: Project listing queries must join with features
 - 🟡 MEDIUM: Professional invitation workflow is new functionality
 - 🟢 LOW: Existing project display can remain mostly unchanged
@@ -554,7 +641,7 @@ _All items in this phase are optional improvements that can be deferred until af
 
 **Database Readiness:** 75% complete for project CRUD workflows
 
-**Critical Path:** Implement 4 critical changes (project_features table, feature_id column, location fields, project_professionals table) before starting wizard development, and make sure the Create Company onboarding sets the `professional` user type so new professionals can reach the dashboard.
+**Critical Path:** Implement 4 critical changes (project_features table, feature_id column, location fields, project_professionals table) before starting wizard development, wire Create Company so it sets the `professional` user type (only professionals can access the wizard), and seed the category/service taxonomy required by the PRD.
 
 **Timeline Estimate:**
 - Phase 1 migrations: 2-3 hours
