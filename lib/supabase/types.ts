@@ -657,11 +657,118 @@ export type Database = {
           },
         ]
       }
+      project_category_attributes: {
+        Row: {
+          category_id: string
+          created_at: string
+          is_building_feature: boolean
+          is_listable: boolean
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          is_building_feature?: boolean
+          is_listable?: boolean
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          is_building_feature?: boolean
+          is_listable?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_category_attributes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: true
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_features: {
+        Row: {
+          category_id: string | null
+          cover_photo_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_building_default: boolean
+          is_highlighted: boolean
+          name: string
+          order_index: number
+          project_id: string
+          tagline: string | null
+          updated_at: string
+        }
+        Insert: {
+          category_id?: string | null
+          cover_photo_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_building_default?: boolean
+          is_highlighted?: boolean
+          name: string
+          order_index?: number
+          project_id: string
+          tagline?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string | null
+          cover_photo_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_building_default?: boolean
+          is_highlighted?: boolean
+          name?: string
+          order_index?: number
+          project_id?: string
+          tagline?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_features_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_features_cover_photo_id_fkey"
+            columns: ["cover_photo_id"]
+            isOneToOne: false
+            referencedRelation: "project_photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_features_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_features_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_photos: {
         Row: {
           alt_text: string | null
           caption: string | null
           created_at: string | null
+          feature_id: string | null
           file_size: number | null
           height: number | null
           id: string
@@ -677,6 +784,7 @@ export type Database = {
           alt_text?: string | null
           caption?: string | null
           created_at?: string | null
+          feature_id?: string | null
           file_size?: number | null
           height?: number | null
           id?: string
@@ -692,6 +800,7 @@ export type Database = {
           alt_text?: string | null
           caption?: string | null
           created_at?: string | null
+          feature_id?: string | null
           file_size?: number | null
           height?: number | null
           id?: string
@@ -704,6 +813,13 @@ export type Database = {
           width?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_photos_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "project_features"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_photos_project_id_fkey"
             columns: ["project_id"]
@@ -720,8 +836,92 @@ export type Database = {
           },
         ]
       }
+      project_professionals: {
+        Row: {
+          created_at: string
+          id: string
+          invited_at: string
+          invited_email: string
+          invited_service_category_id: string | null
+          is_project_owner: boolean
+          professional_id: string | null
+          project_id: string
+          responded_at: string | null
+          status: Database["public"]["Enums"]["professional_project_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_at?: string
+          invited_email: string
+          invited_service_category_id?: string | null
+          is_project_owner?: boolean
+          professional_id?: string | null
+          project_id: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["professional_project_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_at?: string
+          invited_email?: string
+          invited_service_category_id?: string | null
+          is_project_owner?: boolean
+          professional_id?: string | null
+          project_id?: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["professional_project_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_professionals_invited_service_category_id_fkey"
+            columns: ["invited_service_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
+          address_city: string | null
+          address_country: string | null
+          address_formatted: string | null
+          address_postal_code: string | null
+          address_region: string | null
+          address_street: string | null
           budget_level:
             | Database["public"]["Enums"]["project_budget_level"]
             | null
@@ -736,13 +936,16 @@ export type Database = {
           features: string[] | null
           id: string
           is_featured: boolean | null
+          latitude: number | null
           likes_count: number | null
           location: string | null
+          longitude: number | null
           project_size: string | null
           project_type: string | null
           project_year: number | null
           seo_description: string | null
           seo_title: string | null
+          share_exact_location: boolean
           slug: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -752,6 +955,12 @@ export type Database = {
           views_count: number | null
         }
         Insert: {
+          address_city?: string | null
+          address_country?: string | null
+          address_formatted?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           budget_level?:
             | Database["public"]["Enums"]["project_budget_level"]
             | null
@@ -766,13 +975,16 @@ export type Database = {
           features?: string[] | null
           id?: string
           is_featured?: boolean | null
+          latitude?: number | null
           likes_count?: number | null
           location?: string | null
+          longitude?: number | null
           project_size?: string | null
           project_type?: string | null
           project_year?: number | null
           seo_description?: string | null
           seo_title?: string | null
+          share_exact_location?: boolean
           slug?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
@@ -782,6 +994,12 @@ export type Database = {
           views_count?: number | null
         }
         Update: {
+          address_city?: string | null
+          address_country?: string | null
+          address_formatted?: string | null
+          address_postal_code?: string | null
+          address_region?: string | null
+          address_street?: string | null
           budget_level?:
             | Database["public"]["Enums"]["project_budget_level"]
             | null
@@ -796,13 +1014,16 @@ export type Database = {
           features?: string[] | null
           id?: string
           is_featured?: boolean | null
+          latitude?: number | null
           likes_count?: number | null
           location?: string | null
+          longitude?: number | null
           project_size?: string | null
           project_type?: string | null
           project_year?: number | null
           seo_description?: string | null
           seo_title?: string | null
+          share_exact_location?: boolean
           slug?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
@@ -956,49 +1177,6 @@ export type Database = {
           },
           {
             foreignKeyName: "saved_professionals_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      saved_projects: {
-        Row: {
-          created_at: string | null
-          notes: string | null
-          project_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          notes?: string | null
-          project_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          notes?: string | null
-          project_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saved_projects_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "mv_project_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saved_projects_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saved_projects_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1215,6 +1393,13 @@ export type Database = {
     }
     Enums: {
       application_status: "pending" | "accepted" | "rejected"
+      professional_project_status:
+        | "invited"
+        | "listed"
+        | "live_on_page"
+        | "unlisted"
+        | "rejected"
+        | "removed"
       project_budget_level: "budget" | "mid_range" | "premium" | "luxury"
       project_status:
         | "draft"
@@ -1350,6 +1535,14 @@ export const Constants = {
   public: {
     Enums: {
       application_status: ["pending", "accepted", "rejected"],
+      professional_project_status: [
+        "invited",
+        "listed",
+        "live_on_page",
+        "unlisted",
+        "rejected",
+        "removed",
+      ],
       project_budget_level: ["budget", "mid_range", "premium", "luxury"],
       project_status: [
         "draft",
@@ -1361,39 +1554,3 @@ export const Constants = {
     },
   },
 } as const
-
-// Additional type helpers for user types
-export type UserType = 'client' | 'professional' | 'admin';
-
-export type UserProfile = Tables<'profiles'> & {
-  user_types: UserType[];
-};
-
-// Helper type guards for user types
-export const isClient = (userTypes: string[] | null): boolean =>
-  userTypes?.includes('client') ?? false;
-
-export const isProfessional = (userTypes: string[] | null): boolean =>
-  userTypes?.includes('professional') ?? false;
-
-export const isAdmin = (userTypes: string[] | null): boolean =>
-  userTypes?.includes('admin') ?? false;
-
-export const hasUserType = (userTypes: string[] | null, type: UserType): boolean =>
-  userTypes?.includes(type) ?? false;
-
-// Helper function to add user type
-export const addUserType = (currentTypes: string[] | null, newType: UserType): UserType[] => {
-  const types = currentTypes || ['client'];
-  if (!types.includes(newType)) {
-    return [...types, newType] as UserType[];
-  }
-  return types as UserType[];
-};
-
-// Helper function to remove user type
-export const removeUserType = (currentTypes: string[] | null, typeToRemove: UserType): UserType[] => {
-  const types = currentTypes || ['client'];
-  const filtered = types.filter(type => type !== typeToRemove);
-  return filtered.length > 0 ? filtered as UserType[] : ['client'];
-};

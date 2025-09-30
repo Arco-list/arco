@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Share, Bookmark, ChevronLeft, ChevronRight, X } from "lucide-react"
@@ -34,12 +34,17 @@ export function GroupedPicturesModal({
   const [isSaved, setIsSaved] = useState(false)
 
   // Flatten all images for lightbox navigation
-  const allImages = imageGroups.flatMap((group) =>
-    group.images.map((image) => ({
-      ...image,
-      category: group.category,
-    })),
+  const allImages = useMemo(
+    () =>
+      imageGroups.flatMap((group) =>
+        group.images.map((image) => ({
+          ...image,
+          category: group.category,
+        })),
+      ),
+    [imageGroups],
   )
+  const totalImages = allImages.length
 
   const handleImageClick = (groupIndex: number, imageIndex: number) => {
     // Calculate the global index for the clicked image
@@ -53,13 +58,15 @@ export function GroupedPicturesModal({
     setIsLightboxOpen(true)
   }
 
-  const nextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % allImages.length)
-  }
+  const nextImage = useCallback(() => {
+    if (totalImages === 0) return
+    setCurrentImageIndex((prev) => (prev + 1) % totalImages)
+  }, [totalImages])
 
-  const prevImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length)
-  }
+  const prevImage = useCallback(() => {
+    if (totalImages === 0) return
+    setCurrentImageIndex((prev) => (prev - 1 + totalImages) % totalImages)
+  }, [totalImages])
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -110,7 +117,7 @@ export function GroupedPicturesModal({
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, isLightboxOpen])
+  }, [isOpen, isLightboxOpen, nextImage, onClose, prevImage])
 
   return (
     <>

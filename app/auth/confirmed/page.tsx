@@ -52,7 +52,7 @@ export default async function EmailConfirmedPage({ searchParams }: EmailConfirme
             </div>
 
             <div className="mt-8 p-4 bg-muted/50 rounded-lg">
-              <h2 className="text-sm font-medium text-foreground mb-2">What's next?</h2>
+              <h2 className="text-sm font-medium text-foreground mb-2">What&apos;s next?</h2>
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• Complete your profile to get started</li>
                 <li>• Browse available projects and professionals</li>

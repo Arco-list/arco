@@ -40,6 +40,7 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
   const [session, setSession] = useState<Session | null>(initialSession);
   const [isLoading, setIsLoading] = useState<boolean>(!initialSession);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<User | null>(initialSession?.user ?? null);
   const isMountedRef = useRef(true);
 
   const fetchProfile = useCallback(
@@ -71,18 +72,29 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
 
     const hydrateSession = async () => {
       setIsLoading(true);
-      const { data, error } = await supabase.auth.getSession();
+      const [{ data: sessionData, error: sessionError }, { data: userData, error: userError }] =
+        await Promise.all([
+          supabase.auth.getSession(),
+          supabase.auth.getUser(),
+        ]);
 
       if (!isMountedRef.current) return;
 
-      if (error) {
+      if (sessionError) {
         toast.error("Could not load session", {
-          description: error.message,
+          description: sessionError.message,
         });
       }
 
-      setSession(data.session);
-      await fetchProfile(data.session?.user?.id);
+      if (userError) {
+        toast.error("Could not verify user", {
+          description: userError.message,
+        });
+      }
+
+      setSession(sessionData.session ?? null);
+      setUser(userData.user ?? null);
+      await fetchProfile(userData.user?.id ?? sessionData.session?.user?.id);
       if (!isMountedRef.current) return;
       setIsLoading(false);
     };
@@ -99,8 +111,13 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
-      void fetchProfile(newSession?.user?.id);
-      router.refresh();
+      void (async () => {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!isMountedRef.current) return;
+        setUser(userData.user ?? null);
+        await fetchProfile(userData.user?.id ?? newSession?.user?.id);
+        router.refresh();
+      })();
     });
 
     return () => {
@@ -112,19 +129,23 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
     () => ({
       supabase,
       session,
-      user: session?.user ?? null,
+      user,
       profile,
       isLoading,
       refreshSession: async () => {
-        const { data } = await supabase.auth.getSession();
-        setSession(data.session);
-        await fetchProfile(data.session?.user?.id);
+        const [{ data: sessionData }, { data: userData }] = await Promise.all([
+          supabase.auth.getSession(),
+          supabase.auth.getUser(),
+        ]);
+        setSession(sessionData.session ?? null);
+        setUser(userData.user ?? null);
+        await fetchProfile(userData.user?.id ?? sessionData.session?.user?.id);
       },
       refreshProfile: async () => {
-        await fetchProfile(session?.user?.id);
+        await fetchProfile(user?.id ?? session?.user?.id);
       },
     }),
-    [fetchProfile, isLoading, profile, session, supabase]
+    [fetchProfile, isLoading, profile, session, supabase, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

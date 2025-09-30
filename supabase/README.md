@@ -111,6 +111,27 @@ Execute these SQL files **in order** in your Supabase SQL Editor:
    - Search functions
    - Analytics capabilities
 
+9. **009_remove_unnecessary_views.sql**
+   - Cleans up legacy materialized views
+   - Simplifies analytics footprint
+
+10. **010_create_project_features_table.sql**
+    - Introduces `project_features` for photo tour grouping
+    - Adds ordering/highlight metadata and triggers
+
+11. **011_add_feature_id_to_project_photos.sql**
+    - Links each photo to an optional feature via `feature_id`
+    - Preps the photo tour drag/drop experience
+
+12. **012_add_location_fields_to_projects.sql**
+    - Stores structured address data, lat/lng, and privacy toggle
+    - Adds a spatial index for map queries
+
+13. **013_create_project_professionals_table.sql**
+    - Creates `project_professionals` with invitation status enum
+    - Tracks which professionals are listed/live/unlisted per project
+    - Enables RLS + updated_at trigger
+
 ## 🔐 Security Features
 
 ### Row Level Security (RLS)
@@ -158,6 +179,44 @@ All tables have RLS policies that ensure:
 ### Search Functions
 - `search_professionals()`: Filter by location, specialty, rating, etc.
 - `search_projects()`: Filter by category, budget, features, etc.
+
+## 🌱 Seed Scripts
+
+Located in `supabase/seed`. Run them after the Phase 1 migrations to populate dropdowns the wizard depends on.
+
+### 001_seed_professional_taxonomy.sql
+
+- Inserts the Design & Planning / Construction / Systems / Finishing / Outdoor categories
+- Adds each professional service as a child category (idempotent upserts via slug)
+- Safe to re-run — updates names and keeps entries active
+
+### 002_seed_project_taxonomy.sql
+
+- Ensures a `project_category_attributes` helper table exists
+- Populates project categories (House, Kitchen & Living, etc.) and their sub-types
+- Flags whether each sub-type is listable and/or a building feature
+- Re-runnable without duplication
+
+### How to Apply Seeds
+
+```bash
+# assuming you have supabase CLI linked
+supabase db remote commit              # optional: snapshot current state
+supabase db push                       # applies pending migrations (010–013)
+psql "$SUPABASE_DB_URL" -f supabase/seed/001_seed_professional_taxonomy.sql
+psql "$SUPABASE_DB_URL" -f supabase/seed/002_seed_project_taxonomy.sql
+
+# or, using Supabase SQL Editor
+# 1. Paste the contents of each seed file and run.
+```
+
+After seeding:
+
+1. `SELECT slug, name FROM categories WHERE parent_id IS NULL ORDER BY sort_order;`
+2. Spot-check child categories and attributes (`SELECT * FROM project_category_attributes LIMIT 5;`).
+3. Regenerate types: `pnpm supabase gen types typescript ...` so `lib/supabase/types.ts` picks up new columns.
+
+🚨 **Reminder:** Only professional accounts can create listings. Ensure the Create Company onboarding sets `profiles.user_types` to include `professional` before exposing the wizard.
 - Full-text search on titles and descriptions
 
 ### Performance Features
