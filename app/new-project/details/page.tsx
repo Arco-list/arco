@@ -99,19 +99,11 @@ declare global {
   }
 }
 
-const DEFAULT_LOCATION = {
-  address: "Dam Square, 1012 JS Amsterdam, Netherlands",
-  city: "Amsterdam",
-  region: "North Holland",
-  latitude: 52.3727598,
-  longitude: 4.8936041,
-}
-
 const DEFAULT_MAP_CENTER = {
-  lat: DEFAULT_LOCATION.latitude,
-  lng: DEFAULT_LOCATION.longitude,
+  lat: 52.3727598,
+  lng: 4.8936041,
 }
-const DEFAULT_MAP_ZOOM = 15
+const DEFAULT_MAP_ZOOM = 12
 
 const extractCityAndRegion = (
   components: Array<{ long_name: string; short_name: string; types: string[] }> = [],
@@ -500,11 +492,11 @@ export default function NewProjectPage() {
     buildingYear: "",
     projectTitle: "",
     projectDescription: "",
-    address: DEFAULT_LOCATION.address,
-    latitude: DEFAULT_LOCATION.latitude,
-    longitude: DEFAULT_LOCATION.longitude,
-    city: DEFAULT_LOCATION.city,
-    region: DEFAULT_LOCATION.region,
+    address: "",
+    latitude: null,
+    longitude: null,
+    city: "",
+    region: "",
     shareExactLocation: false,
   })
 
@@ -523,7 +515,7 @@ export default function NewProjectPage() {
     }
   }, [formData, initializing])
 
-  const [addressInputValue, setAddressInputValue] = useState(DEFAULT_LOCATION.address)
+  const [addressInputValue, setAddressInputValue] = useState("")
   const [isMapsApiLoaded, setIsMapsApiLoaded] = useState(false)
   const [mapsError, setMapsError] = useState<string | null>(null)
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
@@ -635,11 +627,11 @@ export default function NewProjectPage() {
         buildingYear: project.building_year ? String(project.building_year) : "",
         projectTitle: project.title ?? "",
         projectDescription: project.description ?? "",
-        address: project.address_formatted ?? DEFAULT_LOCATION.address,
-        latitude: project.latitude ?? DEFAULT_LOCATION.latitude,
-        longitude: project.longitude ?? DEFAULT_LOCATION.longitude,
-        city: project.address_city ?? DEFAULT_LOCATION.city,
-        region: project.address_region ?? DEFAULT_LOCATION.region,
+        address: project.address_formatted ?? "",
+        latitude: project.latitude ?? null,
+        longitude: project.longitude ?? null,
+        city: project.address_city ?? "",
+        region: project.address_region ?? "",
         shareExactLocation: project.share_exact_location ?? false,
       }
 

@@ -2,24 +2,15 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useRef } from "react"
+import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProjectHighlights() {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { highlights } = useProjectPreview()
 
-  const highlights = [
-    {
-      title: "Living room",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      title: "Bedroom",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-    {
-      title: "Bathroom",
-      image: "/placeholder.svg?height=200&width=300",
-    },
-  ]
+  if (highlights.length === 0) {
+    return null
+  }
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -60,14 +51,15 @@ export function ProjectHighlights() {
         className="flex gap-4 overflow-x-auto scrollbar-hide pb-2"
         style={{ scrollSnapType: "x mandatory" }}
       >
-        {highlights.map((highlight, index) => (
-          <div key={index} className="flex-none w-80 space-y-2" style={{ scrollSnapAlign: "start" }}>
+        {highlights.map((highlight) => (
+          <div key={highlight.id} className="flex-none w-80 space-y-2" style={{ scrollSnapAlign: "start" }}>
             <img
-              src={highlight.image || "/placeholder.svg"}
+              src={highlight.imageUrl || "/placeholder.svg"}
               alt={highlight.title}
               className="w-full h-48 object-cover rounded-lg hover:scale-105 transition-transform duration-300"
             />
             <p className="text-sm font-medium text-gray-900">{highlight.title}</p>
+            {highlight.description && <p className="text-xs text-gray-600">{highlight.description}</p>}
           </div>
         ))}
       </div>

@@ -1,5 +1,17 @@
 import { notFound } from "next/navigation"
 
+import { Header } from "@/components/header"
+import { ProjectGallery } from "@/components/project-gallery"
+import { ProjectInfo } from "@/components/project-info"
+import { ProfessionalsSidebar } from "@/components/professionals-sidebar"
+import { ProjectHighlights } from "@/components/project-highlights"
+import { ProjectFeatures } from "@/components/project-features"
+import { ProfessionalsSection } from "@/components/professionals-section"
+import { ProjectDetails } from "@/components/project-details"
+import { MapSection } from "@/components/map-section"
+import { SimilarProjects } from "@/components/similar-projects"
+import { Footer } from "@/components/footer"
+import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 
@@ -37,23 +49,11 @@ type ProjectProfessionalRow = Tables<"project_professionals">
 type ProjectCategoryRow = Tables<"project_categories">
 type CategoryRow = Tables<"categories">
 type TaxonomyOptionRow = Tables<"project_taxonomy_options">
+type ProjectSummaryRow = Tables<"mv_project_summary">
 
 type PageProps = {
   params: { slug: string }
   searchParams?: { [key: string]: string | string[] | undefined }
-}
-
-type FeaturePreview = {
-  id: string
-  name: string
-  description: string | null
-  photos: Array<{ id: string; url: string }>
-}
-
-type ServicePreview = {
-  id: string
-  name: string
-  invites: Array<{ id: string; email: string; status: string }>
 }
 
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
@@ -63,7 +63,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     supabase
       .from("projects")
       .select(
-        "id, client_id, title, description, status, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, latitude, longitude, slug, created_at, updated_at",
+        "id, client_id, title, description, status, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, slug, created_at, updated_at",
       )
       .eq("slug", params.slug)
       .maybeSingle(),
@@ -112,7 +112,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         .order("order_index", { ascending: true, nullsFirst: false }),
       supabase
         .from("project_features")
-        .select("id, name, description, is_building_default, order_index")
+        .select("id, name, description, is_building_default, order_index, category_id, tagline, is_highlighted")
         .eq("project_id", project.id)
         .order("order_index", { ascending: true, nullsFirst: false }),
       supabase
@@ -151,6 +151,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   serviceSelections.forEach((row) => {
     if (isUuid(row.service_category_id)) {
       categoryIds.add(row.service_category_id)
+    }
+  })
+
+  features.forEach((feature) => {
+    if (isUuid(feature.category_id)) {
+      categoryIds.add(feature.category_id)
     }
   })
 
@@ -217,29 +223,20 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
 
   const coverPhoto = photos.find((photo) => photo.is_primary) ?? (photos.length > 0 ? photos[0] : null)
-  const secondaryPhotos = photos.filter((photo) => photo.id !== coverPhoto?.id).slice(0, 4)
+  const secondaryPhotos = photos.filter((photo) => photo.id !== coverPhoto?.id)
 
-  const photosByFeature = photos.reduce<Map<string, Array<{ id: string; url: string }>>>((acc, photo) => {
+  const photosByFeature = photos.reduce<Map<string, Array<{ id: string; url: string; caption: string | null }>>>((acc, photo) => {
     if (!photo.feature_id) {
       return acc
     }
     if (!acc.has(photo.feature_id)) {
       acc.set(photo.feature_id, [])
     }
-    acc.get(photo.feature_id)!.push({ id: photo.id, url: photo.url })
+    acc.get(photo.feature_id)!.push({ id: photo.id, url: photo.url, caption: photo.caption ?? null })
     return acc
   }, new Map())
 
-  const featurePreviews: FeaturePreview[] = features
-    .filter((feature) => !feature.is_building_default)
-    .map((feature) => ({
-      id: feature.id,
-      name: feature.name,
-      description: feature.description,
-      photos: photosByFeature.get(feature.id) ?? [],
-    }))
-
-  const servicePreviews: ServicePreview[] = serviceSelections.map((selection) => {
+  const servicePreviews = serviceSelections.map((selection) => {
     const name =
       categoryMap.get(selection.service_category_id)?.name ??
       (isUuid(selection.service_category_id) ? "Unnamed service" : selection.service_category_id)
@@ -249,7 +246,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .map((invite) => ({
         id: invite.id,
         email: invite.invited_email,
-        status: invite.status,
+        status: capitalizeStatus(invite.status),
       }))
 
     return {
@@ -263,303 +260,288 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const createdAt = formatDate(project.created_at)
   const updatedAt = formatDate(project.updated_at)
 
+  const breadcrumbs = ["Projects"]
+  if (primaryCategoryName) {
+    breadcrumbs.push(primaryCategoryName)
+  }
+
+  if (secondaryCategoryName) {
+    secondaryCategoryName
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .forEach((value) => {
+        if (!breadcrumbs.includes(value)) {
+          breadcrumbs.push(value)
+        }
+      })
+  }
+
+  if (projectTypeLabel && !breadcrumbs.includes(projectTypeLabel)) {
+    breadcrumbs.push(projectTypeLabel)
+  }
+
+  const metaDetails = [
+    { label: "Category", value: primaryCategoryName ?? "" },
+    { label: "Project type", value: projectTypeLabel },
+    { label: "Style", value: styleLabel },
+    { label: "Building type", value: buildingTypeLabel },
+    { label: "Project size", value: projectSizeLabel },
+    { label: "Budget", value: project.budget_level ?? "" },
+    { label: "Project year", value: project.project_year ? String(project.project_year) : "" },
+    { label: "Building year", value: project.building_year ? String(project.building_year) : "" },
+    { label: "Photos", value: photos.length ? String(photos.length) : "" },
+    { label: "Created", value: createdAt ?? "" },
+    { label: "Updated", value: updatedAt ?? "" },
+  ].filter((detail) => detail.value !== null && detail.value !== undefined && detail.value !== "")
+
+  const featureGroupsMap = new Map<string, { id: string; name: string; items: Array<{ id: string; label: string }> }>()
+
+  features.forEach((feature) => {
+    const groupId = feature.category_id ?? (feature.is_building_default ? "building-default" : "additional")
+    const fallbackName = feature.is_building_default ? "Building" : "Additional"
+    const name = feature.category_id
+      ? categoryMap.get(feature.category_id)?.name ?? fallbackName
+      : fallbackName
+
+    if (!featureGroupsMap.has(groupId)) {
+      featureGroupsMap.set(groupId, {
+        id: groupId,
+        name,
+        items: [],
+      })
+    }
+
+    featureGroupsMap.get(groupId)!.items.push({ id: feature.id, label: feature.name })
+  })
+
+  const featureGroups = Array.from(featureGroupsMap.values()).filter((group) => group.items.length > 0)
+
+  const highlightFeatures = features
+    .filter((feature) => feature.is_highlighted || (photosByFeature.get(feature.id)?.length ?? 0) > 0)
+    .slice(0, 6)
+
+  const highlights = highlightFeatures.map((feature) => {
+    const photo = photosByFeature.get(feature.id)?.[0]
+    return {
+      id: feature.id,
+      title: feature.name,
+      imageUrl: photo?.url ?? coverPhoto?.url ?? "/placeholder.svg?height=200&width=300",
+      description: feature.tagline ?? feature.description,
+    }
+  })
+
+  const heroGroups = features
+    .map((feature) => ({ feature, photos: photosByFeature.get(feature.id) ?? [] }))
+    .filter(({ photos }) => photos.length > 0)
+    .map(({ feature, photos }) => ({
+      id: feature.id,
+      title: feature.name,
+      description: feature.description ?? feature.tagline,
+      photos: photos.map((photo, index) => ({
+        id: photo.id,
+        url: photo.url,
+        alt: photo.caption ?? feature.name,
+        isPrimary: index === 0,
+      })),
+    }))
+
+  const professionalServices = servicePreviews.map((service) => ({
+    id: service.id,
+    name: service.name,
+    invites: service.invites.map((invite) => ({
+      id: invite.id,
+      email: invite.email,
+      status: invite.status,
+    })),
+  }))
+
+  const professionalsSummary = professionalServices
+    .flatMap((service) =>
+      service.invites.map((invite) => ({
+        id: `${service.id}-${invite.id}`,
+        name: invite.email,
+        badge: service.name,
+      })),
+    )
+    .slice(0, 3)
+
+  const SIMILAR_LIMIT = 6
+  const similarProjects: ProjectPreviewData["similarProjects"] = []
+  const seenSimilarIds = new Set<string>()
+
+  const similarFilters: Array<{
+    primaryCategory?: string | null
+    projectType?: string | null
+    buildingType?: string | null
+  }> = []
+
+  if (primaryCategoryName && projectTypeLabel) {
+    similarFilters.push({ primaryCategory: primaryCategoryName, projectType: projectTypeLabel })
+  }
+
+  if (primaryCategoryName && buildingTypeLabel) {
+    similarFilters.push({ primaryCategory: primaryCategoryName, buildingType: buildingTypeLabel })
+  }
+
+  if (primaryCategoryName) {
+    similarFilters.push({ primaryCategory: primaryCategoryName })
+  }
+
+  if (projectTypeLabel) {
+    similarFilters.push({ projectType: projectTypeLabel })
+  }
+
+  for (const filter of similarFilters) {
+    const remaining = SIMILAR_LIMIT - similarProjects.length
+    if (remaining <= 0) {
+      break
+    }
+
+    const { primaryCategory, projectType, buildingType } = filter
+    if (!primaryCategory && !projectType && !buildingType) {
+      continue
+    }
+
+    let query = supabase
+      .from("mv_project_summary")
+      .select(
+        "id, slug, title, location, likes_count, primary_photo_url, project_type, primary_category, building_type, created_at",
+      )
+      .neq("id", project.id)
+      .eq("status", "published")
+
+    if (primaryCategory) {
+      query = query.eq("primary_category", primaryCategory)
+    }
+
+    if (projectType) {
+      query = query.eq("project_type", projectType)
+    }
+
+    if (buildingType) {
+      query = query.eq("building_type", buildingType)
+    }
+
+    const { data } = await query
+      .order("likes_count", { ascending: false, nullsLast: false })
+      .order("created_at", { ascending: false, nullsLast: false })
+      .limit(remaining)
+
+    ;(data as ProjectSummaryRow[] | null)?.forEach((row) => {
+      if (!row.id || seenSimilarIds.has(row.id) || !row.slug) {
+        return
+      }
+
+      seenSimilarIds.add(row.id)
+      similarProjects.push({
+        id: row.id,
+        title: row.title ?? "Untitled project",
+        location: row.location,
+        imageUrl: row.primary_photo_url,
+        likes: row.likes_count ?? undefined,
+        href: row.slug ? `/projects/${row.slug}` : null,
+      })
+    })
+
+    if (similarProjects.length >= SIMILAR_LIMIT) {
+      break
+    }
+  }
+
+  const previewData: ProjectPreviewData = {
+    hero: {
+      coverPhoto: coverPhoto
+        ? {
+            id: coverPhoto.id,
+            url: coverPhoto.url,
+            alt: coverPhoto.caption ?? "Project cover",
+            isPrimary: true,
+          }
+        : null,
+      secondaryPhotos: secondaryPhotos.map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+        alt: photo.caption ?? "Project photo",
+        isPrimary: photo.is_primary ?? false,
+      })),
+      groups: heroGroups,
+    },
+    info: {
+      breadcrumbs,
+      title: project.title ?? "Untitled project",
+      subtitle: [styleLabel, projectTypeLabel].filter(Boolean).join(" • ") || null,
+      sponsoredLabel: project.project_year ? `Sponsored in ${project.project_year}` : null,
+      descriptionHtml: project.description,
+      descriptionPlain: descriptionText,
+    },
+    statusBadge: capitalizeStatus(project.status),
+    locationLabel,
+    metaDetails,
+    highlights,
+    featureGroups,
+    professionalServices,
+    professionalsSummary,
+    location: {
+      city: project.address_city,
+      region: project.address_region,
+      shareExact: project.share_exact_location ?? false,
+    },
+    similarProjects,
+    shareImageUrl: coverPhoto?.url ?? null,
+    shareUrl: `/projects/${project.slug}`,
+  }
+
   return (
-    <div className="min-h-screen bg-white">
-      {canPreview && <PreviewBanner />}
+    <ProjectPreviewProvider value={previewData}>
+      <div className="min-h-screen bg-white">
+        {canPreview && <PreviewBanner />}
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-12">
-        <HeroGallery coverPhoto={coverPhoto} secondaryPhotos={secondaryPhotos} />
+        <Header />
 
-        <ProjectHeader
-          title={project.title ?? "Untitled project"}
-          subtitle={[styleLabel, projectTypeLabel].filter(Boolean).join(" • ")}
-          location={locationLabel}
-          category={primaryCategoryName}
-          secondaryCategory={secondaryCategoryName}
-          status={project.status}
-        />
-
-        <DetailsSection
-          details={{
-            buildingType: buildingTypeLabel,
-            size: projectSizeLabel,
-            budget: project.budget_level,
-            projectYear: project.project_year,
-            buildingYear: project.building_year,
-            createdAt,
-            updatedAt,
-            photoCount: photos.length,
-          }}
-        />
-
-        {descriptionText && <DescriptionSection description={project.description ?? descriptionText} />}
-
-        <ServicesSection services={servicePreviews} />
-
-        <FeaturesSection features={featurePreviews} />
-
-        <LocationSection
-          city={project.address_city}
-          region={project.address_region}
-          shareExactLocation={project.share_exact_location ?? false}
-        />
-      </main>
-    </div>
-  )
-}
-
-function HeroGallery({
-  coverPhoto,
-  secondaryPhotos,
-}: {
-  coverPhoto: ProjectPhotoRow | null
-  secondaryPhotos: ProjectPhotoRow[]
-}) {
-  return (
-    <section className="grid gap-4 md:grid-cols-2">
-      <div className="h-[340px] w-full overflow-hidden rounded-lg bg-gray-100 md:row-span-2">
-        {coverPhoto ? (
-          <img src={coverPhoto.url} alt="Project cover" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-gray-400">
-            <ShieldPlaceholder />
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 lg:px-0">
+          <div className="mb-8">
+            <ProjectGallery />
           </div>
-        )}
-      </div>
 
-      {secondaryPhotos.slice(0, 2).map((photo) => (
-        <div key={photo.id} className="h-[160px] overflow-hidden rounded-lg bg-gray-100">
-          <img src={photo.url} alt={photo.caption ?? "Project photo"} className="h-full w-full object-cover" />
-        </div>
-      ))}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start py-8">
+            <div className="lg:col-span-2 space-y-8">
+              <ProjectInfo />
+              <ProjectHighlights />
+              <ProjectFeatures />
+              <ProfessionalsSection />
+              <ProjectDetails />
+              <MapSection />
+            </div>
 
-      {secondaryPhotos.slice(2, 4).map((photo) => (
-        <div key={photo.id} className="h-[160px] overflow-hidden rounded-lg bg-gray-100">
-          <img src={photo.url} alt={photo.caption ?? "Project photo"} className="h-full w-full object-cover" />
-        </div>
-      ))}
-    </section>
-  )
-}
-
-function ProjectHeader({
-  title,
-  subtitle,
-  location,
-  category,
-  secondaryCategory,
-  status,
-}: {
-  title: string
-  subtitle: string
-  location: string
-  category: string | null
-  secondaryCategory: string | null
-  status: string
-}) {
-  return (
-    <section className="space-y-4">
-      <div className="text-sm text-gray-500">
-        Projects
-        {category ? (
-          <>
-            <span className="mx-1">/</span>
-            {category}
-          </>
-        ) : null}
-        {secondaryCategory ? (
-          <>
-            <span className="mx-1">/</span>
-            {secondaryCategory}
-          </>
-        ) : null}
-      </div>
-      <div className="space-y-2">
-        <h1 className="text-4xl font-semibold text-gray-900">{title}</h1>
-        {subtitle && <p className="text-lg text-gray-600">{subtitle}</p>}
-        {location && <p className="text-sm text-gray-500">{location}</p>}
-      </div>
-      <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 px-4 py-1 text-xs font-medium uppercase tracking-wide text-gray-700">
-        {capitalizeStatus(status)}
-      </div>
-    </section>
-  )
-}
-
-function DetailsSection({
-  details,
-}: {
-  details: {
-    buildingType: string | null
-    size: string | null
-    budget: ProjectRow["budget_level"] | null
-    projectYear: number | null
-    buildingYear: number | null
-    createdAt: string | null
-    updatedAt: string | null
-    photoCount: number
-  }
-}) {
-  const items = [
-    { label: "Building type", value: details.buildingType },
-    { label: "Project size", value: details.size },
-    { label: "Budget", value: details.budget },
-    { label: "Project year", value: details.projectYear },
-    { label: "Building year", value: details.buildingYear },
-    { label: "Photos", value: details.photoCount > 0 ? details.photoCount : null },
-    { label: "Created", value: details.createdAt },
-    { label: "Updated", value: details.updatedAt },
-  ].filter((item) => item.value !== null && item.value !== "")
-
-  if (items.length === 0) {
-    return null
-  }
-
-  return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">Project overview</h2>
-      <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {items.map((item) => (
-          <div key={item.label} className="space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <dt className="text-xs uppercase tracking-wide text-gray-500">{item.label}</dt>
-            <dd className="text-sm font-medium text-gray-900">{item.value as string}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  )
-}
-
-function DescriptionSection({ description }: { description: string }) {
-  return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">About this project</h2>
-      <div className="prose max-w-none text-gray-700" dangerouslySetInnerHTML={{ __html: description }} />
-    </section>
-  )
-}
-
-function FeaturesSection({ features }: { features: FeaturePreview[] }) {
-  if (features.length === 0) {
-    return null
-  }
-
-  return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">Spaces & features</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        {features.map((feature) => (
-          <div key={feature.id} className="overflow-hidden rounded-lg border border-gray-200">
-            {feature.photos[0] ? (
-              <img src={feature.photos[0].url} alt={feature.name} className="h-48 w-full object-cover" />
-            ) : (
-              <div className="flex h-48 w-full items-center justify-center bg-gray-100 text-gray-400">
-                <ShieldPlaceholder />
-              </div>
-            )}
-            <div className="space-y-2 p-4">
-              <h3 className="text-lg font-medium text-gray-900">{feature.name}</h3>
-              {feature.description && <p className="text-sm text-gray-600">{feature.description}</p>}
-              {feature.photos.length > 1 && (
-                <p className="text-xs text-gray-500">Includes {feature.photos.length} photos</p>
-              )}
+            <div className="lg:col-span-1">
+              <ProfessionalsSidebar />
             </div>
           </div>
-        ))}
-      </div>
-    </section>
-  )
-}
+        </main>
 
-function ServicesSection({ services }: { services: ServicePreview[] }) {
-  if (services.length === 0) {
-    return null
-  }
-
-  return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold text-gray-900">Professionals involved</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        {services.map((service) => (
-          <div key={service.id} className="space-y-3 rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-base font-semibold text-gray-900">{service.name}</p>
-              <span className="text-xs uppercase tracking-wide text-gray-500">
-                {service.invites.length} invite{service.invites.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            {service.invites.length > 0 ? (
-              <ul className="space-y-2 text-sm text-gray-600">
-                {service.invites.map((invite) => (
-                  <li key={invite.id} className="flex items-center justify-between">
-                    <span>{invite.email}</span>
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-                      {capitalizeStatus(invite.status)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-500">No professionals invited yet.</p>
-            )}
+        <div className="w-full bg-white py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-[0]">
+            <SimilarProjects />
           </div>
-        ))}
-      </div>
-    </section>
-  )
-}
+        </div>
 
-function LocationSection({
-  city,
-  region,
-  shareExactLocation,
-}: {
-  city: string | null
-  region: string | null
-  shareExactLocation: boolean
-}) {
-  if (!city && !region) {
-    return null
-  }
-
-  return (
-    <section className="space-y-3">
-      <h2 className="text-xl font-semibold text-gray-900">Location</h2>
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-        <p>{[city, region].filter(Boolean).join(", ")}</p>
-        {!shareExactLocation && (
-          <p className="mt-1 text-xs text-gray-500">Exact address hidden until homeowner approves sharing.</p>
-        )}
+        <Footer />
       </div>
-    </section>
+    </ProjectPreviewProvider>
   )
 }
 
 function PreviewBanner() {
   return (
     <div className="bg-amber-500/10 py-3 text-sm text-amber-900">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-center px-4">
         <p className="font-medium">
-          You’re viewing a private preview. Only you and the Arco review team can see this page until the project is
+          You&rsquo;re viewing a private preview. Only you and the Arco review team can see this page until the project is
           published.
         </p>
       </div>
     </div>
-  )
-}
-
-function ShieldPlaceholder() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      className="h-10 w-10"
-    >
-      <path d="M12 3l8 4v5c0 5-3.5 9.74-8 11-4.5-1.26-8-6-8-11V7l8-4z" />
-    </svg>
   )
 }
 

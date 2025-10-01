@@ -1,24 +1,15 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProfessionalsSidebar() {
-  const professionals = [
-    {
-      name: "Teus van den Berg Aannemers & Timmerwerken B.V.",
-      type: "Visit",
-      color: "bg-red-500",
-    },
-    {
-      name: "Visser In- en Exterieur",
-      type: "Visit",
-      color: "bg-red-500",
-    },
-    {
-      name: "FX Domotica",
-      type: "Visit",
-      color: "bg-red-500",
-    },
-  ]
+  const { professionalServices } = useProjectPreview()
+
+  if (professionalServices.length === 0) {
+    return null
+  }
 
   return (
     <div className="space-y-4">
@@ -26,14 +17,25 @@ export function ProfessionalsSidebar() {
         <h3 className="text-lg font-semibold">Professionals who built it</h3>
 
         <div className="space-y-4">
-          {professionals.map((professional, index) => (
-            <div key={index} className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">{professional.name}</p>
-              </div>
-              <Button size="sm" className={`${professional.color} text-white hover:opacity-90`}>
-                {professional.type}
-              </Button>
+          {professionalServices.map((service) => (
+            <div key={service.id} className="space-y-2">
+              <p className="text-sm font-semibold text-gray-900">{service.name}</p>
+              {service.invites.length > 0 ? (
+                <ul className="space-y-1 text-xs text-gray-600">
+                  {service.invites.map((invite) => (
+                    <li key={invite.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">
+                        {invite.name ?? invite.email ?? "Pending invite"}
+                      </span>
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700">
+                        {invite.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-gray-500">No invites yet</p>
+              )}
             </div>
           ))}
         </div>

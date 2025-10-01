@@ -1,75 +1,80 @@
 "use client"
-import { useState, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Heart, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { useProjectPreview } from "@/contexts/project-preview-context"
 
 interface Project {
-  id: number
+  id: string
   title: string
   location: string
   image: string
   likes: number
   isLiked: boolean
-  slug?: string
+  href?: string | null
 }
 
 export function SimilarProjects() {
+  const { similarProjects } = useProjectPreview()
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: 1,
-      title: "Paradise by the pool",
-      location: "Modern Villa in Amsterdam",
-      image: "/placeholder.svg?height=300&width=400",
-      likes: 24,
-      isLiked: false,
-    },
-    {
-      id: 2,
-      title: "Villa upgrade",
-      location: "Contemporary Villa in Nijmegen",
-      image: "/placeholder.svg?height=300&width=400",
-      likes: 18,
-      isLiked: true,
-      slug: "villa-upgrade",
-    },
-    {
-      id: 3,
-      title: "Farm transformation",
-      location: "Renovated Farmhouse in Utrecht",
-      image: "/placeholder.svg?height=300&width=400",
-      likes: 31,
-      isLiked: false,
-    },
-    {
-      id: 4,
-      title: "Villa Mel",
-      location: "Luxury Villa in Rotterdam",
-      image: "/placeholder.svg?height=300&width=400",
-      likes: 42,
-      isLiked: false,
-    },
-    {
-      id: 5,
-      title: "Wellness retreat",
-      location: "Spa House in Zandvoort",
-      image: "/placeholder.svg?height=300&width=400",
-      likes: 15,
-      isLiked: true,
-    },
-    {
-      id: 6,
-      title: "Garden house",
-      location: "Modern Garden House in Haarlem",
-      image: "/placeholder.svg?height=300&width=400",
-      likes: 28,
-      isLiked: false,
-    },
-  ])
+  const fallbackProjects: Project[] = useMemo(
+    () => [
+      {
+        id: "fallback-1",
+        title: "Paradise by the pool",
+        location: "Modern Villa in Amsterdam",
+        image: "/placeholder.svg?height=300&width=400",
+        likes: 24,
+        isLiked: false,
+        href: null,
+      },
+      {
+        id: "fallback-2",
+        title: "Villa upgrade",
+        location: "Contemporary Villa in Nijmegen",
+        image: "/placeholder.svg?height=300&width=400",
+        likes: 18,
+        isLiked: true,
+        href: "/projects/villa-upgrade",
+      },
+      {
+        id: "fallback-3",
+        title: "Farm transformation",
+        location: "Renovated Farmhouse in Utrecht",
+        image: "/placeholder.svg?height=300&width=400",
+        likes: 31,
+        isLiked: false,
+        href: null,
+      },
+    ],
+    [],
+  )
 
-  const toggleLike = (projectId: number) => {
+  const initialProjects = useMemo<Project[]>(() => {
+    if (!similarProjects || similarProjects.length === 0) {
+      return fallbackProjects
+    }
+
+    return similarProjects.map((project) => ({
+      id: project.id,
+      title: project.title,
+      location: project.location ?? "",
+      image: project.imageUrl ?? "/placeholder.svg?height=300&width=400",
+      likes: project.likes ?? 0,
+      isLiked: project.isLiked ?? false,
+      href: project.href ?? null,
+    }))
+  }, [fallbackProjects, similarProjects])
+
+  const [projects, setProjects] = useState<Project[]>(initialProjects)
+
+  useEffect(() => {
+    setProjects(initialProjects)
+  }, [initialProjects])
+
+  const toggleLike = (projectId: string) => {
     setProjects((prev) =>
       prev.map((project) =>
         project.id === projectId
@@ -117,7 +122,7 @@ export function SimilarProjects() {
         {projects.map((project) => (
           <Link
             key={project.id}
-            href={project.slug ? `/projects/${project.slug}` : "#"}
+            href={project.href ?? "#"}
             className="group cursor-pointer flex-shrink-0 w-80"
           >
             <div className="relative overflow-hidden rounded-lg bg-gray-100">
