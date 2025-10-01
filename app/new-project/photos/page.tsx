@@ -1839,35 +1839,23 @@ export default function PhotoTourPage() {
     setModalUploadErrors([])
 
     try {
-      if (added.length > 0) {
-        const { error: assignError } = await supabase
-          .from("project_photos")
-          .update({ feature_id: featureDbId })
-          .in("id", added)
+      // Use transactional RPC for atomic photo assignment
+      const { data, error } = await supabase.rpc("assign_feature_photos", {
+        p_project_id: projectId,
+        p_feature_id: featureDbId,
+        p_add_photo_ids: added.length > 0 ? added : null,
+        p_remove_photo_ids: removed.length > 0 ? removed : null,
+        p_fallback_feature_id: fallbackDbId,
+        p_cover_photo_id: nextCoverCandidate,
+      })
 
-        if (assignError) {
-          throw assignError
-        }
+      if (error) {
+        throw error
       }
 
-      if (removed.length > 0) {
-        const { error: unassignError } = await supabase
-          .from("project_photos")
-          .update({ feature_id: fallbackDbId })
-          .in("id", removed)
-
-        if (unassignError) {
-          throw unassignError
-        }
-      }
-
-      const { error: coverError } = await supabase
-        .from("project_features")
-        .update({ cover_photo_id: nextCoverCandidate })
-        .eq("id", featureDbId)
-
-      if (coverError) {
-        throw coverError
+      // Log successful transaction result
+      if (data) {
+        console.log("Photo assignment completed:", data)
       }
 
       setFeaturePhotos((prev) => {
