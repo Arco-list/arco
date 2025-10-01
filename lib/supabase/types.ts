@@ -836,6 +836,52 @@ export type Database = {
           },
         ]
       }
+      project_professional_services: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          service_category_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          service_category_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          service_category_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_professional_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professional_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professional_services_service_category_id_fkey"
+            columns: ["service_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_professionals: {
         Row: {
           created_at: string

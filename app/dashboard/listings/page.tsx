@@ -4,11 +4,12 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { MoreHorizontal, X, Check } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Database, Enums } from "@/lib/supabase/types"
+import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
 
 type ProjectStatus = Enums<"project_status">
 
@@ -17,6 +18,9 @@ type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
     url: string
     is_primary: boolean | null
     order_index: number | null
+  }[] | null
+  project_professionals: {
+    is_project_owner: boolean
   }[] | null
 }
 
@@ -36,6 +40,9 @@ type ListingProject = {
   subtitle: string
   coverImageUrl: string
   createdAt: string
+  role: "owner" | "contributor"
+  projectType: string
+  projectYear: number | null
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -55,6 +62,9 @@ const STATUS_CONFIG: Record<
   archived: { label: "Unlisted", chipClass: "bg-slate-200 text-slate-700" },
 }
 
+const CURRENT_YEAR = new Date().getFullYear()
+const MIN_YEAR = 2000
+
 export default function DashboardListingsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
@@ -66,6 +76,14 @@ export default function DashboardListingsPage() {
   const [projects, setProjects] = useState<ListingProject[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [filters, setFilters] = useState<FilterState>({
+    keyword: "",
+    statuses: [],
+    roles: [],
+    yearFrom: MIN_YEAR,
+    yearTo: CURRENT_YEAR,
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -89,7 +107,7 @@ export default function DashboardListingsPage() {
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id, title, status, project_type, style_preferences, address_city, address_region, created_at, project_photos(url, is_primary, order_index)"
+          "id, title, status, project_type, style_preferences, address_city, address_region, created_at, project_year, client_id, project_photos(url, is_primary, order_index), project_professionals(is_project_owner)"
         )
         .eq("client_id", authData.user.id)
         .order("updated_at", { ascending: false })
@@ -183,6 +201,11 @@ export default function DashboardListingsPage() {
           .filter(Boolean)
           .join(" ") || "Add more project details"
 
+        // Determine role: owner if client_id matches, otherwise check project_professionals
+        const isOwner = project.client_id === authData.user.id
+        const isProjectOwner = project.project_professionals?.some((pp) => pp.is_project_owner) ?? false
+        const role: "owner" | "contributor" = isOwner ? "owner" : isProjectOwner ? "owner" : "contributor"
+
         return {
           id: project.id,
           title: project.title,
@@ -192,6 +215,9 @@ export default function DashboardListingsPage() {
           subtitle,
           coverImageUrl,
           createdAt: project.created_at ?? new Date().toISOString(),
+          role,
+          projectType: projectTypeLabel,
+          projectYear: project.project_year,
         }
       })
 
@@ -243,6 +269,78 @@ export default function DashboardListingsPage() {
     }
   }
 
+  // Client-side filtering with debouncing
+  const filteredProjects = useMemo(() => {
+    let result = projects
+
+    // Keyword filter (title and project type)
+    if (filters.keyword.trim()) {
+      const keyword = filters.keyword.toLowerCase()
+      result = result.filter(
+        (p) => p.title.toLowerCase().includes(keyword) || p.projectType.toLowerCase().includes(keyword)
+      )
+    }
+
+    // Status filter
+    if (filters.statuses.length > 0) {
+      result = result.filter((p) => filters.statuses.includes(p.status))
+    }
+
+    // Role filter
+    if (filters.roles.length > 0) {
+      result = result.filter((p) => filters.roles.includes(p.role))
+    }
+
+    // Year range filter
+    if (filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR) {
+      result = result.filter((p) => {
+        if (!p.projectYear) return false
+        return p.projectYear >= filters.yearFrom && p.projectYear <= filters.yearTo
+      })
+    }
+
+    return result
+  }, [projects, filters])
+
+  const hasActiveFilters =
+    filters.keyword !== "" ||
+    filters.statuses.length > 0 ||
+    filters.roles.length > 0 ||
+    filters.yearFrom !== MIN_YEAR ||
+    filters.yearTo !== CURRENT_YEAR
+
+  const handleApplyFilters = useCallback((newFilters: FilterState) => {
+    setFilters(newFilters)
+  }, [])
+
+  const handleRemoveFilter = useCallback((filterType: string, value?: string) => {
+    setFilters((prev) => {
+      if (filterType === "keyword") {
+        return { ...prev, keyword: "" }
+      }
+      if (filterType === "status" && value) {
+        return { ...prev, statuses: prev.statuses.filter((s) => s !== value) }
+      }
+      if (filterType === "role" && value) {
+        return { ...prev, roles: prev.roles.filter((r) => r !== value) }
+      }
+      if (filterType === "year") {
+        return { ...prev, yearFrom: MIN_YEAR, yearTo: CURRENT_YEAR }
+      }
+      return prev
+    })
+  }, [])
+
+  const handleClearAllFilters = useCallback(() => {
+    setFilters({
+      keyword: "",
+      statuses: [],
+      roles: [],
+      yearFrom: MIN_YEAR,
+      yearTo: CURRENT_YEAR,
+    })
+  }, [])
+
   const statusOptions = [
     {
       value: "Live on page",
@@ -269,7 +367,7 @@ export default function DashboardListingsPage() {
     url: "/placeholder.svg",
   }))
 
-  const displayedProjects = projects
+  const displayedProjects = filteredProjects
   const hasProjects = projects.length > 0
 
   return (
@@ -277,24 +375,85 @@ export default function DashboardListingsPage() {
       <DashboardHeader />
 
       <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-0">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage the listings you are creating and publishing on Arco.
-            </p>
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Manage the listings you are creating and publishing on Arco.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => setIsFilterOpen(true)}
+                className={hasActiveFilters ? "border-red-500 text-red-600 bg-red-50" : ""}
+              >
+                Filter
+                {hasActiveFilters && (
+                  <span className="ml-2 px-1.5 py-0.5 text-xs font-medium bg-red-600 text-white rounded-full">
+                    {filters.statuses.length + filters.roles.length + (filters.keyword ? 1 : 0) + (filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR ? 1 : 0)}
+                  </span>
+                )}
+              </Button>
+              <Button asChild>
+                <Link href="/new-project/details">Add project</Link>
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" size="default" disabled>
-              Sort (coming soon)
-            </Button>
-            <Button variant="outline" size="default" disabled>
-              Filter (coming soon)
-            </Button>
-            <Button asChild>
-              <Link href="/new-project/details">Add project</Link>
-            </Button>
-          </div>
+
+          {/* Filter Chips */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              {filters.keyword && (
+                <button
+                  onClick={() => handleRemoveFilter("keyword")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                >
+                  <span>&ldquo;{filters.keyword}&rdquo;</span>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+              {filters.statuses.map((status) => (
+                <button
+                  key={status}
+                  onClick={() => handleRemoveFilter("status", status)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                >
+                  <span>{STATUS_CONFIG[status].label}</span>
+                  <X className="h-3 w-3" />
+                </button>
+              ))}
+              {filters.roles.map((role) => (
+                <button
+                  key={role}
+                  onClick={() => handleRemoveFilter("role", role)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                >
+                  <span>{role === "owner" ? "Project owner" : "Contributor"}</span>
+                  <X className="h-3 w-3" />
+                </button>
+              ))}
+              {(filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR) && (
+                <button
+                  onClick={() => handleRemoveFilter("year")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                >
+                  <span>
+                    {filters.yearFrom}-{filters.yearTo}
+                  </span>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+              <button
+                onClick={handleClearAllFilters}
+                className="text-sm text-gray-600 hover:text-gray-900 underline ml-2"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         {loadError && (
@@ -500,6 +659,13 @@ export default function DashboardListingsPage() {
       )}
 
       <Footer />
+
+      <DashboardListingsFilter
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        onApply={handleApplyFilters}
+        currentFilters={filters}
+      />
     </div>
   )
 }
