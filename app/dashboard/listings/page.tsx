@@ -3,7 +3,7 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, X, Check } from "lucide-react"
+import { MoreHorizontal, X, Check, Shield, AlertTriangle } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
@@ -11,6 +11,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Database, Enums } from "@/lib/supabase/types"
 import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
 import { toast } from "sonner"
+import { useTableRLSValidation } from "@/hooks/useRLSValidation"
 
 type ProjectStatus = Enums<"project_status">
 
@@ -37,6 +38,7 @@ type ListingProject = {
   role: "owner" | "contributor"
   projectType: string
   projectYear: number | null
+  hasMetadataError?: boolean // Track projects with failed metadata resolution
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -61,6 +63,12 @@ const MIN_YEAR = 2000
 
 export default function DashboardListingsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+
+  // SECURITY: Validate RLS policies are enforced
+  const { isSecure: isRLSSecure, loading: rlsLoading } = useTableRLSValidation("projects", {
+    enabled: process.env.NODE_ENV === "development", // Enable in dev, optional in prod
+  })
+
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [statusModalOpen, setStatusModalOpen] = useState(false)
   const [coverPhotoModalOpen, setCoverPhotoModalOpen] = useState(false)
@@ -70,6 +78,9 @@ export default function DashboardListingsPage() {
   const [projects, setProjects] = useState<ListingProject[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [projectsWithErrors, setProjectsWithErrors] = useState<Set<string>>(new Set())
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<FilterState>({
     keyword: "",
@@ -161,6 +172,7 @@ export default function DashboardListingsPage() {
       )
 
       let metadataLoadFailed = false
+      const failedStyleIds = new Set<string>()
 
       // Only fetch styles (categories already JOINed)
       if (missingStyleOptionIds.length > 0) {
@@ -172,6 +184,8 @@ export default function DashboardListingsPage() {
         if (stylesError) {
           metadataLoadFailed = true
           console.error("Failed to resolve style labels", { error: stylesError })
+          // Track which style IDs failed to resolve
+          missingStyleOptionIds.forEach((id) => failedStyleIds.add(id))
         } else {
           stylesData?.forEach((row) => {
             if (row.id && row.name) {
@@ -189,12 +203,15 @@ export default function DashboardListingsPage() {
         }
       }
 
+      // Persistent metadata error state (not dismissible via toast)
       if (metadataLoadFailed && isActive && !metadataErrorShown) {
         metadataErrorShown = true
-        toast.error("We couldn't load project metadata", {
-          description: "Refresh the page to try again.",
+        const errorMessage = "Some project details couldn't be loaded. This may affect how projects are displayed."
+        setMetadataError(errorMessage)
+        toast.error("Metadata loading failed", {
+          description: "Some project details may be missing. Use the retry button to try again.",
+          duration: 5000,
         })
-        setLoadError((prev) => prev ?? "Some project details may be missing. Refresh to retry metadata loading.")
       }
 
       const styleMap = taxonomyCache.styles
@@ -483,6 +500,24 @@ export default function DashboardListingsPage() {
             </div>
           )}
         </div>
+
+        {/* SECURITY: RLS Validation Warning */}
+        {!rlsLoading && !isRLSSecure && (
+          <div className="mb-6 rounded-lg border border-red-600 bg-red-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-900 mb-1">
+                  Security Warning: RLS Policy Not Enforced
+                </h3>
+                <p className="text-sm text-red-700">
+                  Row-Level Security validation failed for the projects table. This may allow
+                  unauthorized access to project data. Contact your administrator immediately.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {loadError && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
