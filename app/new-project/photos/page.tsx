@@ -77,6 +77,13 @@ const BUILDING_FEATURE_ID = "building-default"
 const ADDITIONAL_FEATURE_ID = "additional-photos"
 const OVERLAY_CLASSES = "modal-overlay fixed inset-0 flex items-center justify-center z-50 p-4"
 
+// Security: Allowlist of safe image extensions
+const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png"])
+const MIME_TO_EXTENSION: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+}
+
 const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
   attic: Home,
   balcony: Home,
@@ -505,17 +512,31 @@ export default function PhotoTourPage() {
     }))
   }
 
-  const generateUploadId = () => {
+  const generateUploadId = (): string => {
+    // Primary: Use crypto.randomUUID() (secure, standard)
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
       return crypto.randomUUID()
     }
 
-    // Fallback UUID v4 generator (not cryptographically strong but keeps shape)
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
-      const rand = (Math.random() * 16) | 0
-      const value = char === "x" ? rand : (rand & 0x3) | 0x8
-      return value.toString(16)
-    })
+    // Secondary: Use crypto.getRandomValues() (secure fallback)
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+      // RFC 4122 v4 UUID with cryptographically secure random values
+      const bytes = new Uint8Array(16)
+      crypto.getRandomValues(bytes)
+
+      // Set version (4) and variant bits
+      bytes[6] = (bytes[6] & 0x0f) | 0x40 // Version 4
+      bytes[8] = (bytes[8] & 0x3f) | 0x80 // Variant 10
+
+      // Convert to UUID string format
+      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+    }
+
+    // Tertiary: Fail gracefully with error
+    throw new Error(
+      "Secure UUID generation not available. Please use a modern browser (Chrome 92+, Firefox 95+, Safari 15.4+, Edge 92+).",
+    )
   }
 
   const readFileAsDataURL = (file: File): Promise<string> =>
@@ -607,7 +628,12 @@ export default function PhotoTourPage() {
           continue
         }
 
-        const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg"
+        // Security: Validate extension against allowlist and use MIME type as source of truth
+        const fileExtension = file.name.split(".").pop()?.toLowerCase() ?? ""
+        const extension = ALLOWED_EXTENSIONS.has(fileExtension)
+          ? fileExtension
+          : MIME_TO_EXTENSION[file.type] ?? "jpg"
+
         const photoId = generateUploadId()
         const storagePath = `${projectId}/${photoId}.${extension}`
 
