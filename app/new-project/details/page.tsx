@@ -31,14 +31,14 @@ import {
   Wind,
   Zap,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import type { Tables } from "@/lib/supabase/types"
+import type { Enums, Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
 
 type DropdownOption = {
   value: string
@@ -51,6 +51,9 @@ type CategoryWithAttributes = Tables<"categories"> & {
 }
 
 type ProjectTaxonomyOption = Tables<"project_taxonomy_options">
+
+type ProjectStatus = Enums<"project_status">
+type ProjectBudgetLevel = Enums<"project_budget_level">
 
 type FormState = {
   category: string
@@ -345,6 +348,9 @@ const parseYearValue = (value: string) => {
   return Number.isNaN(numeric) ? null : numeric
 }
 
+const isUuid = (value?: string | null): value is string =>
+  Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
+
 const generateYearErrorMessages = (
   state: FormState,
   { treatEmptyAsError = false }: { treatEmptyAsError?: boolean } = {},
@@ -445,6 +451,17 @@ const sortFeatureOptions = (options: FeatureOption[]) => {
 
 export default function NewProjectPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [userId, setUserId] = useState<string | null>(null)
+  const [projectId, setProjectId] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [initializing, setInitializing] = useState(true)
+  const [isDirty, setIsDirty] = useState(false)
+  const saveInFlightRef = useRef(false)
+  const formDataRef = useRef<FormState | null>(null)
   const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(true)
   const [taxonomyError, setTaxonomyError] = useState<string | null>(null)
   const [categoryOptions, setCategoryOptions] = useState<DropdownOption[]>([])
@@ -491,6 +508,21 @@ export default function NewProjectPage() {
     shareExactLocation: false,
   })
 
+  const prevFormDataRef = useRef(formData)
+  useEffect(() => {
+    formDataRef.current = formData
+
+    if (initializing) {
+      prevFormDataRef.current = formData
+      return
+    }
+
+    if (prevFormDataRef.current !== formData) {
+      setIsDirty(true)
+      prevFormDataRef.current = formData
+    }
+  }, [formData, initializing])
+
   const [addressInputValue, setAddressInputValue] = useState(DEFAULT_LOCATION.address)
   const [isMapsApiLoaded, setIsMapsApiLoaded] = useState(false)
   const [mapsError, setMapsError] = useState<string | null>(null)
@@ -502,8 +534,308 @@ export default function NewProjectPage() {
   const geocoderRef = useRef<any>(null)
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
-  const router = useRouter()
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+  const projectIdFromParams = useMemo(() => searchParams.get("projectId"), [searchParams])
+
+  useEffect(() => {
+    if (!userId) {
+      return
+    }
+
+    if (!projectIdFromParams) {
+      setInitializing(false)
+      return
+    }
+
+    let cancelled = false
+
+    const hydrateProject = async () => {
+      setInitializing(true)
+      setSaveError(null)
+
+      const { data: project, error } = await supabase
+        .from("projects")
+        .select(
+          "id, client_id, title, description, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, address_country, address_postal_code, address_street, latitude, longitude, share_exact_location, updated_at, status",
+        )
+        .eq("id", projectIdFromParams)
+        .maybeSingle()
+
+      if (cancelled) {
+        return
+      }
+
+      if (error || !project || project.client_id !== userId) {
+        setInitializing(false)
+        if (error) {
+          setSaveError(error.message)
+        }
+        return
+      }
+
+      setProjectId(project.id)
+      setLastSavedAt(project.updated_at ? new Date(project.updated_at) : new Date())
+
+      const [
+        { data: categoryRows, error: categoryError },
+        { data: selectionRows, error: selectionError },
+      ] = await Promise.all([
+        supabase
+          .from("project_categories")
+          .select("category_id, is_primary")
+          .eq("project_id", project.id),
+        supabase
+          .from("project_taxonomy_selections")
+          .select("taxonomy_option_id")
+          .eq("project_id", project.id),
+      ])
+
+      if ((categoryError || selectionError) && !cancelled) {
+        setSaveError(categoryError?.message ?? selectionError?.message ?? null)
+      }
+
+      let locationSelections: string[] = []
+      let materialSelections: string[] = []
+
+      const taxonomyIds = (selectionRows ?? []).map((selection) => selection.taxonomy_option_id)
+      if (taxonomyIds.length > 0) {
+        const { data: taxonomyRows, error: taxonomyError } = await supabase
+          .from("project_taxonomy_options")
+          .select("id, taxonomy_type")
+          .in("id", taxonomyIds)
+
+        if (!cancelled && taxonomyRows) {
+          locationSelections = taxonomyRows
+            .filter((row) => row.taxonomy_type === "location_feature")
+            .map((row) => row.id)
+          materialSelections = taxonomyRows
+            .filter((row) => row.taxonomy_type === "material_feature")
+            .map((row) => row.id)
+        }
+
+        if (!cancelled && taxonomyError) {
+          setSaveError(taxonomyError.message)
+        }
+      }
+
+      const primaryCategoryId = categoryRows?.find((row) => row.is_primary)?.category_id ?? ""
+      const parentCategoryId = categoryRows?.find((row) => !row.is_primary)?.category_id ?? ""
+
+      const hydratedState: FormState = {
+        category: parentCategoryId || project.project_type || "",
+        projectType: primaryCategoryId || project.project_type || "",
+        buildingType: project.building_type ?? "",
+        projectStyle: project.style_preferences?.[0] ?? "",
+        locationFeatures: locationSelections,
+        materialFeatures: materialSelections,
+        size: project.project_size ?? "",
+        budget: (project.budget_level as ProjectBudgetLevel | null) ?? "",
+        yearBuilt: project.project_year ? String(project.project_year) : "",
+        buildingYear: project.building_year ? String(project.building_year) : "",
+        projectTitle: project.title ?? "",
+        projectDescription: project.description ?? "",
+        address: project.address_formatted ?? DEFAULT_LOCATION.address,
+        latitude: project.latitude ?? DEFAULT_LOCATION.latitude,
+        longitude: project.longitude ?? DEFAULT_LOCATION.longitude,
+        city: project.address_city ?? DEFAULT_LOCATION.city,
+        region: project.address_region ?? DEFAULT_LOCATION.region,
+        shareExactLocation: project.share_exact_location ?? false,
+      }
+
+      setFormData(hydratedState)
+      setIsDirty(false)
+      setInitializing(false)
+    }
+
+    hydrateProject()
+
+    return () => {
+      cancelled = true
+    }
+  }, [projectIdFromParams, supabase, userId])
+  useEffect(() => {
+    let cancelled = false
+
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser()
+      if (cancelled) {
+        return
+      }
+
+      if (error) {
+        setSaveError(error.message)
+        return
+      }
+
+      setUserId(data.user?.id ?? null)
+    }
+
+    loadUser()
+
+    return () => {
+      cancelled = true
+    }
+  }, [supabase])
+
+  const saveDraft = useCallback(
+    async ({ status = "draft" as ProjectStatus }: { status?: ProjectStatus } = {}) => {
+      if (saveInFlightRef.current || initializing) {
+        return projectId
+      }
+
+      const snapshot = formDataRef.current
+      if (!snapshot) {
+        return projectId
+      }
+
+      if (!userId) {
+        setSaveError("You need to be signed in to save your project.")
+        return projectId
+      }
+
+      saveInFlightRef.current = true
+      setIsSaving(true)
+      setSaveError(null)
+
+      const trimmedTitle = snapshot.projectTitle.trim()
+      const effectiveTitle = trimmedTitle.length >= 3 ? trimmedTitle : "Untitled project"
+      const { parsedYearBuilt, parsedBuildingYear } = generateYearErrorMessages(snapshot, {
+        treatEmptyAsError: false,
+      })
+
+      const projectPayload: TablesInsert<"projects"> = {
+        client_id: userId,
+        title: effectiveTitle,
+        description: snapshot.projectDescription || null,
+        status,
+        project_type: snapshot.projectType || null,
+        building_type: snapshot.buildingType || null,
+        project_size: snapshot.size || null,
+        budget_level: (snapshot.budget || null) as ProjectBudgetLevel | null,
+        project_year: parsedYearBuilt,
+        building_year: parsedBuildingYear,
+        style_preferences: snapshot.projectStyle ? [snapshot.projectStyle] : null,
+        address_formatted: snapshot.address || null,
+        address_city: snapshot.city || null,
+        address_region: snapshot.region || null,
+        latitude: snapshot.latitude,
+        longitude: snapshot.longitude,
+        share_exact_location: snapshot.shareExactLocation,
+        location:
+          snapshot.city || snapshot.region
+            ? [snapshot.city, snapshot.region].filter(Boolean).join(", ")
+            : snapshot.address || null,
+      }
+
+      try {
+        let nextProjectId = projectId
+
+        if (!nextProjectId) {
+          const { data, error } = await supabase
+            .from("projects")
+            .insert([projectPayload])
+            .select("id")
+            .single()
+
+          if (error || !data) {
+            throw error ?? new Error("Unable to create project draft.")
+          }
+
+          nextProjectId = data.id
+          setProjectId(data.id)
+
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href)
+            url.searchParams.set("projectId", data.id)
+            router.replace(`${url.pathname}?${url.searchParams.toString()}`)
+          }
+        } else {
+          const { client_id: _clientId, ...rest } = projectPayload
+          const projectUpdatePayload: TablesUpdate<"projects"> = rest
+
+          const { error } = await supabase.from("projects").update(projectUpdatePayload).eq("id", nextProjectId)
+          if (error) {
+            throw error
+          }
+        }
+
+        const categoryRows: { category_id: string; is_primary: boolean }[] = []
+        if (snapshot.projectType && isUuid(snapshot.projectType)) {
+          categoryRows.push({ category_id: snapshot.projectType, is_primary: true })
+        }
+        if (snapshot.category && isUuid(snapshot.category)) {
+          categoryRows.push({ category_id: snapshot.category, is_primary: false })
+        }
+
+        const { error: deleteCategoriesError } = await supabase
+          .from("project_categories")
+          .delete()
+          .eq("project_id", nextProjectId)
+
+        if (deleteCategoriesError) {
+          throw deleteCategoriesError
+        }
+        if (categoryRows.length) {
+          const { error: insertCategoriesError } = await supabase
+            .from("project_categories")
+            .insert(categoryRows.map((row) => ({ ...row, project_id: nextProjectId })))
+
+          if (insertCategoriesError) {
+            throw insertCategoriesError
+          }
+        }
+
+        const taxonomySelectionIds = Array.from(
+          new Set(
+            [
+              ...snapshot.locationFeatures.filter((value) => isUuid(value)),
+              ...snapshot.materialFeatures.filter((value) => isUuid(value)),
+            ],
+          ),
+        )
+
+        const { error: deleteSelectionsError } = await supabase
+          .from("project_taxonomy_selections")
+          .delete()
+          .eq("project_id", nextProjectId)
+
+        if (deleteSelectionsError) {
+          throw deleteSelectionsError
+        }
+        if (taxonomySelectionIds.length) {
+          const selectionRows = taxonomySelectionIds.map((id) => ({
+            project_id: nextProjectId!,
+            taxonomy_option_id: id,
+          }))
+
+          const { error: insertSelectionsError } = await supabase
+            .from("project_taxonomy_selections")
+            .insert(selectionRows)
+
+          if (insertSelectionsError) {
+            throw insertSelectionsError
+          }
+        }
+
+        setIsDirty(false)
+        setLastSavedAt(new Date())
+        return nextProjectId
+      } catch (error) {
+        console.error("Failed to save project draft", error)
+        if (error instanceof Error) {
+          setSaveError(error.message)
+        } else {
+          setSaveError("Something went wrong while saving. Please try again.")
+        }
+        return null
+      } finally {
+        saveInFlightRef.current = false
+        setIsSaving(false)
+      }
+    },
+    [initializing, projectId, router, supabase, userId],
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -717,6 +1049,49 @@ export default function NewProjectPage() {
       setIsMapsApiLoaded(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (initializing || !isDirty) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      void saveDraft()
+    }, 30_000)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [initializing, isDirty, saveDraft])
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) {
+        return
+      }
+
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [isDirty])
+
+  const lastSavedLabel = useMemo(() => {
+    if (isSaving) {
+      return "Saving..."
+    }
+    if (!lastSavedAt) {
+      return "Not saved yet"
+    }
+
+    return `Saved ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+  }, [isSaving, lastSavedAt])
 
   const projectTypeOptions =
     formData.category && projectTypeOptionsByCategory[formData.category]
@@ -1260,23 +1635,49 @@ export default function NewProjectPage() {
     (currentStep === 5 &&
       (!formData.address.trim() || formData.latitude === null || formData.longitude === null))
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    if (isSaving) {
+      return
+    }
+
     if (!validateStep(currentStep)) {
       return
     }
 
+    const savedProjectId = await saveDraft()
+
     if (currentStep < 5) {
-      setCurrentStep(currentStep + 1)
+      if (savedProjectId || projectId) {
+        setCurrentStep((prev) => Math.min(prev + 1, 5))
+      }
+      return
+    }
+
+    if (savedProjectId) {
+      router.push(`/new-project/photos?projectId=${savedProjectId}`)
     } else {
-      console.log("Form submitted with data:", formData)
-      router.push("/new-project/photos")
+      setSaveError("We couldn't save your progress. Please try again before continuing.")
     }
   }
 
   const handleBack = () => {
     if (currentStep > 1) {
+      void saveDraft()
       setCurrentStep(currentStep - 1)
     }
+  }
+
+  const handleSaveAndExit = async () => {
+    if (isSaving) {
+      return
+    }
+
+    const savedProjectId = await saveDraft({ status: "draft" })
+    if (!savedProjectId) {
+      return
+    }
+
+    router.push("/dashboard/listings")
   }
 
   const CustomDropdown = ({
@@ -1430,11 +1831,20 @@ export default function NewProjectPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <NewProjectHeader />
+      <NewProjectHeader isSaving={isSaving} onSaveAndExit={() => void handleSaveAndExit()} />
       <main className="container mx-auto px-4 py-16 max-w-4xl pb-32">
         <div className="text-left">
+          {saveError && (
+            <div className="mb-8 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {saveError}
+            </div>
+          )}
           <div className="mb-12">
-            <ProgressIndicator currentStep={currentStep} totalSteps={5} />
+            <ProgressIndicator
+              currentStep={currentStep}
+              totalSteps={5}
+              statusLabel={lastSavedLabel}
+            />
           </div>
 
           {currentStep === 1 && (
@@ -1909,20 +2319,20 @@ export default function NewProjectPage() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
         <div className="container mx-auto max-w-4xl">
-          <div className="flex gap-4">
-            <button
-              onClick={handleBack}
-              className="flex-1 bg-white text-gray-900 py-3 px-6 rounded-md font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={isNextDisabled}
-              className="flex-1 bg-gray-900 text-white py-3 px-6 rounded-md font-medium hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {currentStep === 5 ? "Complete" : "Next"}
-            </button>
+      <div className="flex gap-4">
+        <button
+          onClick={handleBack}
+          className="flex-1 bg-white text-gray-900 py-3 px-6 rounded-md font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
+        >
+          Back
+        </button>
+        <button
+          onClick={() => void handleNext()}
+          disabled={isNextDisabled || isSaving}
+          className="flex-1 bg-gray-900 text-white py-3 px-6 rounded-md font-medium hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        >
+          {isSaving ? "Saving..." : currentStep === 5 ? "Complete" : "Next"}
+        </button>
           </div>
         </div>
       </div>
@@ -1930,9 +2340,22 @@ export default function NewProjectPage() {
   )
 }
 
-function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
+function ProgressIndicator({
+  currentStep,
+  totalSteps,
+  statusLabel,
+}: {
+  currentStep: number
+  totalSteps: number
+  statusLabel?: string
+}) {
   return (
     <div className="w-full">
+      {statusLabel && (
+        <div className="mb-2">
+          <span className="text-sm text-gray-500">{statusLabel}</span>
+        </div>
+      )}
       {/* Step counter */}
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm font-medium text-gray-900">
@@ -1952,7 +2375,13 @@ function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; t
   )
 }
 
-function NewProjectHeader() {
+function NewProjectHeader({
+  isSaving,
+  onSaveAndExit,
+}: {
+  isSaving: boolean
+  onSaveAndExit: () => void
+}) {
   return (
     <header className="bg-white border-b border-gray-200">
       <div className="container mx-auto px-4">
@@ -1978,9 +2407,13 @@ function NewProjectHeader() {
               Questions?
             </a>
 
-            {/* Save and Exit button */}
-            <button className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              Save and Exit
+            <button
+              onClick={onSaveAndExit}
+              disabled={isSaving}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+              aria-busy={isSaving}
+            >
+              {isSaving ? "Saving..." : "Save and Exit"}
             </button>
           </div>
         </div>

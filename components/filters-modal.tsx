@@ -127,7 +127,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-20 bg-[rgba(0,0,0,0.5)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
         {/* Fixed Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">

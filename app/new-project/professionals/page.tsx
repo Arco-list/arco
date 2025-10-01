@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 
+const MODAL_OVERLAY_CLASSES = "modal-overlay fixed inset-0 flex items-center justify-center z-50 p-4"
+
 export default function AddProfessionalsPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const totalSteps = 4 // Updated total steps to 4 to include final publish step
@@ -452,7 +454,7 @@ export default function AddProfessionalsPage() {
       </main>
 
       {showInviteModal && (
-        <div className="fixed inset-0 bg-gray-900/20 flex items-center justify-center z-50 p-4">
+        <div className={MODAL_OVERLAY_CLASSES}>
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Invite Professional</h3>

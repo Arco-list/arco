@@ -971,6 +971,55 @@ export type Database = {
         }
         Relationships: []
       }
+      project_taxonomy_selections: {
+        Row: {
+          created_at: string
+          id: string
+          notes: Json | null
+          project_id: string
+          taxonomy_option_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: Json | null
+          project_id: string
+          taxonomy_option_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: Json | null
+          project_id?: string
+          taxonomy_option_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_taxonomy_selections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_taxonomy_selections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_taxonomy_selections_taxonomy_option_id_fkey"
+            columns: ["taxonomy_option_id"]
+            isOneToOne: false
+            referencedRelation: "project_taxonomy_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           address_city: string | null

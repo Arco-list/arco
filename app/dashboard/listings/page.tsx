@@ -3,147 +3,219 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, X, Check, ChevronDown } from "lucide-react"
-import { useState } from "react"
+import { MoreHorizontal, X, Check } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import type { Database, Enums } from "@/lib/supabase/types"
+
+type ProjectStatus = Enums<"project_status">
+
+type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
+  project_photos: {
+    url: string
+    is_primary: boolean | null
+    order_index: number | null
+  }[] | null
+}
+
+type CategoryRow = Pick<Database["public"]["Tables"]["categories"]["Row"], "id" | "name">
+
+type StyleOptionRow = Pick<
+  Database["public"]["Tables"]["project_taxonomy_options"]["Row"],
+  "id" | "name"
+>
+
+type ListingProject = {
+  id: string
+  title: string
+  status: ProjectStatus
+  statusLabel: string
+  statusChipClass: string
+  subtitle: string
+  coverImageUrl: string
+  createdAt: string
+}
+
+const isUuid = (value?: string | null): value is string =>
+  !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+
+const STATUS_CONFIG: Record<
+  ProjectStatus,
+  {
+    label: string
+    chipClass: string
+  }
+> = {
+  draft: { label: "In progress", chipClass: "bg-amber-100 text-amber-800" },
+  in_progress: { label: "In review", chipClass: "bg-blue-100 text-blue-800" },
+  published: { label: "Live on page", chipClass: "bg-green-100 text-green-800" },
+  completed: { label: "Listed", chipClass: "bg-emerald-100 text-emerald-800" },
+  archived: { label: "Unlisted", chipClass: "bg-slate-200 text-slate-700" },
+}
 
 export default function DashboardListingsPage() {
-  const [openDropdown, setOpenDropdown] = useState<number | null>(null)
+  const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const [statusModalOpen, setStatusModalOpen] = useState(false)
   const [coverPhotoModalOpen, setCoverPhotoModalOpen] = useState(false)
-  const [selectedProject, setSelectedProject] = useState<any>(null)
+  const [selectedProject, setSelectedProject] = useState<ListingProject | null>(null)
   const [selectedStatus, setSelectedStatus] = useState("")
   const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<number>(4)
-  const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
-  const [sortBy, setSortBy] = useState("newest")
-  const [filterBy, setFilterBy] = useState("all")
+  const [projects, setProjects] = useState<ListingProject[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const router = useRouter()
 
-  const projects = [
-    {
-      id: 1,
-      title: "Villa in Bussum",
-      subtitle: "Modern Villa in Bussum",
-      status: "Listed",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-green-100 text-green-800",
-      createdAt: "2024-01-15",
-    },
-    {
-      id: 2,
-      title: "Villa in Huizen",
-      subtitle: "Modern Villa in Huizen",
-      status: "Listed",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-green-100 text-green-800",
-      createdAt: "2024-01-10",
-    },
-    {
-      id: 3,
-      title: "Villa in Bussum",
-      subtitle: "Modern Villa in Bussum",
-      status: "Listed",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-green-100 text-green-800",
-      createdAt: "2024-01-20",
-    },
-    {
-      id: 4,
-      title: "Villa in Blaricum",
-      subtitle: "Modern Villa in Blaricum",
-      status: "Listed",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-green-100 text-green-800",
-      createdAt: "2024-01-05",
-    },
-    {
-      id: 5,
-      title: "Villa in Bussum",
-      subtitle: "Modern Villa in Bussum",
-      status: "Listed",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-green-100 text-green-800",
-      createdAt: "2024-01-25",
-    },
-    {
-      id: 6,
-      title: "Villa in Huizen",
-      subtitle: "Modern Villa in Huizen",
-      status: "Invited",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-blue-100 text-blue-800",
-      createdAt: "2024-01-12",
-    },
-    {
-      id: 7,
-      title: "Villa in Bussum",
-      subtitle: "Modern Villa in Bussum",
-      status: "In progress",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-yellow-100 text-yellow-800",
-      createdAt: "2024-01-18",
-    },
-    {
-      id: 8,
-      title: "Villa in Blaricum",
-      subtitle: "Modern Villa in Blaricum",
-      status: "Unlisted",
-      image: "/placeholder.svg?height=200&width=300",
-      statusColor: "bg-gray-100 text-gray-800",
-      createdAt: "2024-01-08",
-    },
-  ]
+  useEffect(() => {
+    let isActive = true
 
-  const sortOptions = [
-    { value: "newest", label: "Newest first" },
-    { value: "oldest", label: "Oldest first" },
-    { value: "title", label: "Title A-Z" },
-    { value: "status", label: "Status" },
-  ]
+    const loadProjects = async () => {
+      setIsLoading(true)
+      setLoadError(null)
 
-  const filterOptions = [
-    { value: "all", label: "All projects" },
-    { value: "Listed", label: "Listed" },
-    { value: "Unlisted", label: "Unlisted" },
-    { value: "Invited", label: "Invited" },
-    { value: "In progress", label: "In progress" },
-  ]
+      const { data: authData, error: authError } = await supabase.auth.getUser()
 
-  const getSortedAndFilteredProjects = () => {
-    let filtered = projects
+      if (!authData?.user || authError) {
+        if (isActive) {
+          setLoadError(authError?.message ?? "You need to be signed in to view your projects.")
+          setProjects([])
+          setIsLoading(false)
+        }
+        return
+      }
 
-    if (filterBy !== "all") {
-      filtered = projects.filter((project) => project.status === filterBy)
+      const { data, error } = await supabase
+        .from("projects")
+        .select(
+          "id, title, status, project_type, style_preferences, address_city, address_region, created_at, project_photos(url, is_primary, order_index)"
+        )
+        .eq("client_id", authData.user.id)
+        .order("updated_at", { ascending: false })
+
+      if (error) {
+        if (isActive) {
+          setLoadError(error.message)
+          setProjects([])
+          setIsLoading(false)
+        }
+        return
+      }
+
+      const projectRows = (data ?? []) as ProjectRow[]
+
+      const categoryIds = new Set<string>()
+      const styleOptionIds = new Set<string>()
+
+      projectRows.forEach((project) => {
+        if (isUuid(project.project_type)) {
+          categoryIds.add(project.project_type)
+        }
+
+        project.style_preferences?.forEach((value) => {
+          if (isUuid(value)) {
+            styleOptionIds.add(value)
+          }
+        })
+      })
+
+      const [categoryLookup, styleLookup] = await Promise.all([
+        categoryIds.size
+          ? supabase
+              .from("categories")
+              .select("id, name")
+              .in("id", Array.from(categoryIds))
+          : Promise.resolve({ data: [] as CategoryRow[], error: null }),
+        styleOptionIds.size
+          ? supabase
+              .from("project_taxonomy_options")
+              .select("id, name")
+              .in("id", Array.from(styleOptionIds))
+          : Promise.resolve({ data: [] as StyleOptionRow[], error: null }),
+      ])
+
+      if (categoryLookup.error || styleLookup.error) {
+        console.error("Failed to resolve taxonomy labels", {
+          categoryError: categoryLookup.error,
+          styleError: styleLookup.error,
+        })
+      }
+
+      const categoryMap = new Map<string, string>()
+      categoryLookup.data?.forEach((row) => {
+        categoryMap.set(row.id, row.name)
+      })
+
+      const styleMap = new Map<string, string>()
+      styleLookup.data?.forEach((row) => {
+        styleMap.set(row.id, row.name)
+      })
+
+      const normalized: ListingProject[] = projectRows.map((project) => {
+        const statusKey = project.status as ProjectStatus
+        const statusConfig = STATUS_CONFIG[statusKey] ?? {
+          label: statusKey,
+          chipClass: "bg-slate-200 text-slate-700",
+        }
+
+        const photos = project.project_photos ?? []
+        const primary = photos.find((photo) => photo.is_primary) ?? photos.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))[0]
+        const coverImageUrl = primary?.url ?? "/placeholder.svg"
+
+        const rawStyle = project.style_preferences?.[0] ?? null
+        const styleLabel = rawStyle
+          ? isUuid(rawStyle)
+            ? styleMap.get(rawStyle) ?? ""
+            : rawStyle
+          : ""
+
+        const projectTypeLabel = project.project_type
+          ? isUuid(project.project_type)
+            ? categoryMap.get(project.project_type) ?? ""
+            : project.project_type
+          : ""
+
+        const locationParts = [project.address_city, project.address_region].filter(Boolean).join(", ")
+        const subtitlePieces = [styleLabel, projectTypeLabel].filter(Boolean)
+        const styleType = subtitlePieces.join(" ")
+        const subtitle = [styleType, locationParts ? `in ${locationParts}` : null]
+          .filter(Boolean)
+          .join(" ") || "Add more project details"
+
+        return {
+          id: project.id,
+          title: project.title,
+          status: statusKey,
+          statusLabel: statusConfig.label,
+          statusChipClass: statusConfig.chipClass,
+          subtitle,
+          coverImageUrl,
+          createdAt: project.created_at ?? new Date().toISOString(),
+        }
+      })
+
+      if (isActive) {
+        setProjects(normalized)
+        setIsLoading(false)
+      }
     }
 
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        case "oldest":
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        case "title":
-          return a.title.localeCompare(b.title)
-        case "status":
-          return a.status.localeCompare(b.status)
-        default:
-          return 0
-      }
-    })
+    void loadProjects()
 
-    return sorted
-  }
+    return () => {
+      isActive = false
+    }
+  }, [supabase])
 
-  const handleUpdateStatus = (project: any) => {
+  const handleUpdateStatus = (project: ListingProject) => {
     setSelectedProject(project)
-    setSelectedStatus(project.status)
+    setSelectedStatus(project.statusLabel)
     setStatusModalOpen(true)
     setOpenDropdown(null)
   }
 
-  const handleEditCoverImage = (project: any) => {
+  const handleEditCoverImage = (project: ListingProject) => {
     setSelectedProject(project)
     setCoverPhotoModalOpen(true)
     setOpenDropdown(null)
@@ -161,19 +233,14 @@ export default function DashboardListingsPage() {
     setSelectedProject(null)
   }
 
-  const handleEditListing = (project: any) => {
+  const handleEditListing = (project: ListingProject) => {
     setOpenDropdown(null)
-    router.push(`/dashboard/edit/${project.id}`)
-  }
-
-  const handleSortChange = (value: string) => {
-    setSortBy(value)
-    setSortDropdownOpen(false)
-  }
-
-  const handleFilterChange = (value: string) => {
-    setFilterBy(value)
-    setFilterDropdownOpen(false)
+    // If project is draft (in progress), redirect to new-project flow
+    if (project.status === "draft") {
+      router.push(`/new-project/details?projectId=${project.id}`)
+    } else {
+      router.push(`/dashboard/edit/${project.id}`)
+    }
   }
 
   const statusOptions = [
@@ -199,94 +266,72 @@ export default function DashboardListingsPage() {
 
   const samplePhotos = Array.from({ length: 9 }, (_, i) => ({
     id: i,
-    url: "/placeholder.svg?height=200&width=300",
+    url: "/placeholder.svg",
   }))
 
-  const displayedProjects = getSortedAndFilteredProjects()
+  const displayedProjects = projects
+  const hasProjects = projects.length > 0
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
       <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-0">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
-          <div className="flex gap-3">
-            <div className="relative">
-              <Button
-                variant="outline"
-                size="default"
-                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-                className="flex items-center gap-2"
-              >
-                Sort
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-              {sortDropdownOpen && (
-                <div className="absolute right-0 top-12 bg-white rounded-lg shadow-lg border py-2 w-48 z-10">
-                  {sortOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleSortChange(option.value)}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                        sortBy === option.value ? "text-blue-600 bg-blue-50" : "text-gray-700"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <Button
-                variant="outline"
-                size="default"
-                onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-                className="flex items-center gap-2"
-              >
-                Filter
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-              {filterDropdownOpen && (
-                <div className="absolute right-0 top-12 bg-white rounded-lg shadow-lg border py-2 w-48 z-10">
-                  {filterOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleFilterChange(option.value)}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
-                        filterBy === option.value ? "text-blue-600 bg-blue-50" : "text-gray-700"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Button asChild size="default">
-              <Link href="/new-project">Add project</Link>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Manage the listings you are creating and publishing on Arco.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" size="default" disabled>
+              Sort (coming soon)
+            </Button>
+            <Button variant="outline" size="default" disabled>
+              Filter (coming soon)
+            </Button>
+            <Button asChild>
+              <Link href="/new-project/details">Add project</Link>
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {displayedProjects.map((project) => (
+        {loadError && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {loadError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-64 rounded-lg bg-white shadow-sm animate-pulse overflow-hidden">
+                <div className="h-40 bg-gray-200" />
+                <div className="p-4 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded" />
+                  <div className="h-3 bg-gray-100 rounded w-3/4" />
+                  <div className="h-3 bg-gray-100 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : hasProjects ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayedProjects.map((project) => (
             <div
               key={project.id}
               className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
             >
               <div className="relative">
                 <img
-                  src={project.image || "/placeholder.svg"}
+                  src={project.coverImageUrl}
                   alt={project.title}
                   className="w-full h-48 object-cover"
                 />
                 <div className="absolute top-3 left-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusColor}`}>
-                    {project.status}
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass}`}>
+                    {project.statusLabel}
                   </span>
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
@@ -325,14 +370,31 @@ export default function DashboardListingsPage() {
               </div>
               <div className="p-4">
                 <h3 className="font-medium text-gray-900">{project.title}</h3>
+                <p className="text-sm text-gray-500 mt-1">{project.subtitle}</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  Created on {new Date(project.createdAt).toLocaleDateString()}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
+            <h2 className="text-lg font-medium text-gray-900">Add your first project</h2>
+            <p className="text-sm text-gray-500 mt-2">
+              Kick off your first listing to showcase your work and connect with professionals.
+            </p>
+            <div className="mt-6">
+              <Button asChild>
+                <Link href="/new-project/details">Create a project</Link>
+              </Button>
+            </div>
+          </div>
+        )}
       </main>
 
       {statusModalOpen && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Listing status</h2>
@@ -343,7 +405,7 @@ export default function DashboardListingsPage() {
 
             <div className="flex items-center gap-3 mb-6">
               <img
-                src={selectedProject.image || "/placeholder.svg"}
+                src={selectedProject.coverImageUrl}
                 alt={selectedProject.title}
                 className="w-16 h-16 rounded-lg object-cover"
               />
@@ -397,7 +459,7 @@ export default function DashboardListingsPage() {
       )}
 
       {coverPhotoModalOpen && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Edit cover photo</h2>

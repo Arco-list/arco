@@ -87,42 +87,42 @@ export function DashboardHeader() {
               className="h-6 w-auto"
             />
           </Link>
+        </div>
 
-          {isHomeownerPage ? (
+        {isHomeownerPage ? (
+          <nav className="hidden md:flex items-center space-x-8">
+            <Link href="/projects" className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-600">
+              Projects
+            </Link>
+            <Link
+              href="/professionals"
+              className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-600"
+            >
+              Professionals
+            </Link>
+          </nav>
+        ) : (
+          hasProfessionalAccess && (
             <nav className="hidden md:flex items-center space-x-8">
-              <Link href="/projects" className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-600">
-                Projects
+              <Link
+                href="/dashboard/listings"
+                className={`text-sm font-medium transition-colors hover:text-gray-600 ${
+                  isActive("/dashboard/listings") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+                }`}
+              >
+                Listings
               </Link>
               <Link
-                href="/professionals"
-                className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-600"
+                href="/dashboard/company"
+                className={`text-sm font-medium transition-colors hover:text-gray-600 ${
+                  isActive("/dashboard/company") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+                }`}
               >
-                Professionals
+                Company
               </Link>
             </nav>
-          ) : (
-            hasProfessionalAccess && (
-              <nav className="hidden md:flex items-center space-x-8">
-                <Link
-                  href="/dashboard/listings"
-                  className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                    isActive("/dashboard/listings") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
-                  }`}
-                >
-                  Listings
-                </Link>
-                <Link
-                  href="/dashboard/company"
-                  className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                    isActive("/dashboard/company") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
-                  }`}
-                >
-                  Company
-                </Link>
-              </nav>
-            )
-          )}
-        </div>
+          )
+        )}
 
         {isHomeownerPage && (
           <div className="hidden md:block w-80">

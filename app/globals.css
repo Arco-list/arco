@@ -134,3 +134,7 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+.modal-overlay {
+  background-color: rgba(128, 128, 128, 0.65);
+}
