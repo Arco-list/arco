@@ -617,6 +617,9 @@ export default function PhotoTourPage() {
             cacheControl: "3600",
             upsert: false,
             contentType: file.type,
+            metadata: {
+              project_id: projectId,
+            },
           })
 
         if (uploadError) {

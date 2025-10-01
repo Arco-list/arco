@@ -4,12 +4,13 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { MoreHorizontal, X, Check } from "lucide-react"
-import { useEffect, useMemo, useState, useCallback } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Database, Enums } from "@/lib/supabase/types"
 import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
+import { toast } from "sonner"
 
 type ProjectStatus = Enums<"project_status">
 
@@ -23,13 +24,6 @@ type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
     is_project_owner: boolean
   }[] | null
 }
-
-type CategoryRow = Pick<Database["public"]["Tables"]["categories"]["Row"], "id" | "name">
-
-type StyleOptionRow = Pick<
-  Database["public"]["Tables"]["project_taxonomy_options"]["Row"],
-  "id" | "name"
->
 
 type ListingProject = {
   id: string
@@ -84,6 +78,13 @@ export default function DashboardListingsPage() {
     yearFrom: MIN_YEAR,
     yearTo: CURRENT_YEAR,
   })
+  const taxonomyCacheRef = useRef<{ categories: Map<string, string>; styles: Map<string, string> }>(
+    {
+      categories: new Map(),
+      styles: new Map(),
+    },
+  )
+  const metadataErrorShownRef = useRef(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -138,37 +139,62 @@ export default function DashboardListingsPage() {
         })
       })
 
-      const [categoryLookup, styleLookup] = await Promise.all([
-        categoryIds.size
-          ? supabase
-              .from("categories")
-              .select("id, name")
-              .in("id", Array.from(categoryIds))
-          : Promise.resolve({ data: [] as CategoryRow[], error: null }),
-        styleOptionIds.size
-          ? supabase
-              .from("project_taxonomy_options")
-              .select("id, name")
-              .in("id", Array.from(styleOptionIds))
-          : Promise.resolve({ data: [] as StyleOptionRow[], error: null }),
-      ])
+      const taxonomyCache = taxonomyCacheRef.current
+      const missingCategoryIds = Array.from(categoryIds).filter((id) => !taxonomyCache.categories.has(id))
+      const missingStyleOptionIds = Array.from(styleOptionIds).filter(
+        (id) => !taxonomyCache.styles.has(id),
+      )
 
-      if (categoryLookup.error || styleLookup.error) {
-        console.error("Failed to resolve taxonomy labels", {
-          categoryError: categoryLookup.error,
-          styleError: styleLookup.error,
-        })
+      let metadataLoadFailed = false
+
+      if (missingCategoryIds.length > 0) {
+        const { data, error } = await supabase
+          .from("categories")
+          .select("id, name")
+          .in("id", missingCategoryIds)
+
+        if (error) {
+          metadataLoadFailed = true
+          console.error("Failed to resolve category labels", { error })
+        } else {
+          data?.forEach((row) => {
+            if (row.id) {
+              taxonomyCache.categories.set(row.id, row.name ?? "")
+            }
+          })
+        }
       }
 
-      const categoryMap = new Map<string, string>()
-      categoryLookup.data?.forEach((row) => {
-        categoryMap.set(row.id, row.name)
-      })
+      if (missingStyleOptionIds.length > 0) {
+        const { data, error } = await supabase
+          .from("project_taxonomy_options")
+          .select("id, name")
+          .in("id", missingStyleOptionIds)
 
-      const styleMap = new Map<string, string>()
-      styleLookup.data?.forEach((row) => {
-        styleMap.set(row.id, row.name)
-      })
+        if (error) {
+          metadataLoadFailed = true
+          console.error("Failed to resolve style labels", { error })
+        } else {
+          data?.forEach((row) => {
+            if (row.id) {
+              taxonomyCache.styles.set(row.id, row.name ?? "")
+            }
+          })
+        }
+      }
+
+      if (metadataLoadFailed && isActive) {
+        if (!metadataErrorShownRef.current) {
+          metadataErrorShownRef.current = true
+          toast.error("We couldn't load project metadata", {
+            description: "Refresh the page to try again.",
+          })
+        }
+        setLoadError((prev) => prev ?? "Some project details may be missing. Refresh to retry metadata loading.")
+      }
+
+      const categoryMap = taxonomyCache.categories
+      const styleMap = taxonomyCache.styles
 
       const normalized: ListingProject[] = projectRows.map((project) => {
         const statusKey = project.status as ProjectStatus
@@ -178,7 +204,8 @@ export default function DashboardListingsPage() {
         }
 
         const photos = project.project_photos ?? []
-        const primary = photos.find((photo) => photo.is_primary) ?? photos.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))[0]
+        const sortedPhotos = photos.length > 0 ? [...photos].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) : []
+        const primary = photos.find((photo) => photo.is_primary) ?? sortedPhotos[0] ?? null
         const coverImageUrl = primary?.url ?? "/placeholder.svg"
 
         const rawStyle = project.style_preferences?.[0] ?? null

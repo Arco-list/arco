@@ -202,16 +202,40 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
       return
     }
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      toast.error("Misconfigured Supabase credentials", {
+        description: "Contact support to update your password.",
+      })
+      return
+    }
+
     setIsSavingPassword(true)
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: passwordForm.currentPassword,
+      const verifyResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          email: user.email,
+          password: passwordForm.currentPassword,
+        }),
       })
 
-      if (signInError) {
-        toast.error("Current password is incorrect")
+      if (!verifyResponse.ok) {
+        const payload = (await verifyResponse.json().catch(() => null)) as
+          | { error?: string; error_description?: string }
+          | null
+        const reason = payload?.error_description ?? payload?.error ?? "Current password is incorrect"
+        toast.error("Current password is incorrect", {
+          description: reason,
+        })
         return
       }
 
