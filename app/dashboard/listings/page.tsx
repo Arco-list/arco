@@ -100,18 +100,44 @@ export default function DashboardListingsPage() {
   const MAX_CACHE_SIZE = 100 // Reasonable limit for taxonomy options
   const router = useRouter()
 
+  // Track in-flight requests to prevent race conditions
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const requestIdRef = useRef(0)
+  const [retryTrigger, setRetryTrigger] = useState(0)
+
   useEffect(() => {
+    // RACE CONDITION FIX: Cancel any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
+    // Assign unique request ID for deduplication
+    const currentRequestId = ++requestIdRef.current
     let isActive = true
-    let metadataErrorShown = false // Move to effect scope to reset on each run
+    let metadataErrorShown = false
 
     const loadProjects = async () => {
+      // Check if request was already aborted
+      if (abortController.signal.aborted) {
+        return
+      }
+
       setIsLoading(true)
       setLoadError(null)
 
       const { data: authData, error: authError } = await supabase.auth.getUser()
 
+      // RACE CONDITION CHECK: Ensure this request is still valid
+      if (abortController.signal.aborted || !isActive) {
+        return
+      }
+
       if (!authData?.user || authError) {
-        if (isActive) {
+        if (isActive && !abortController.signal.aborted) {
           setLoadError(authError?.message ?? "You need to be signed in to view your projects.")
           setProjects([])
           setIsLoading(false)
@@ -143,8 +169,13 @@ export default function DashboardListingsPage() {
         .eq("client_id", authData.user.id)
         .order("updated_at", { ascending: false })
 
+      // RACE CONDITION CHECK: After async operation
+      if (abortController.signal.aborted || !isActive) {
+        return
+      }
+
       if (error) {
-        if (isActive) {
+        if (isActive && !abortController.signal.aborted) {
           setLoadError(error.message)
           setProjects([])
           setIsLoading(false)
@@ -176,10 +207,20 @@ export default function DashboardListingsPage() {
 
       // Only fetch styles (categories already JOINed)
       if (missingStyleOptionIds.length > 0) {
+        // RACE CONDITION CHECK: Before metadata fetch
+        if (abortController.signal.aborted || !isActive) {
+          return
+        }
+
         const { data: stylesData, error: stylesError } = await supabase
           .from("project_taxonomy_options")
           .select("id, name")
           .in("id", missingStyleOptionIds)
+
+        // RACE CONDITION CHECK: After metadata fetch
+        if (abortController.signal.aborted || !isActive) {
+          return
+        }
 
         if (stylesError) {
           metadataLoadFailed = true
@@ -204,7 +245,8 @@ export default function DashboardListingsPage() {
       }
 
       // Persistent metadata error state (not dismissible via toast)
-      if (metadataLoadFailed && isActive && !metadataErrorShown) {
+      // RACE CONDITION CHECK: Before showing toast
+      if (metadataLoadFailed && isActive && !metadataErrorShown && !abortController.signal.aborted) {
         metadataErrorShown = true
         const errorMessage = "Some project details couldn't be loaded. This may affect how projects are displayed."
         setMetadataError(errorMessage)
@@ -266,7 +308,8 @@ export default function DashboardListingsPage() {
         }
       })
 
-      if (isActive) {
+      // RACE CONDITION CHECK: Final state update with request ID verification
+      if (isActive && !abortController.signal.aborted && currentRequestId === requestIdRef.current) {
         setProjects(normalized)
         setIsLoading(false)
       }
@@ -274,10 +317,32 @@ export default function DashboardListingsPage() {
 
     void loadProjects()
 
+    // Cleanup function to abort request and mark as inactive
     return () => {
       isActive = false
+      abortController.abort()
     }
-  }, [supabase])
+  }, [supabase, retryTrigger])
+
+  // Retry mechanism for failed metadata loads
+  const handleRetryMetadata = useCallback(() => {
+    setIsRetrying(true)
+    setMetadataError(null)
+
+    // Clear the taxonomy cache to force refetch
+    taxonomyCacheRef.current = {
+      styles: new Map(),
+      accessOrder: [],
+    }
+
+    // Trigger useEffect to reload projects
+    setRetryTrigger((prev) => prev + 1)
+
+    // Reset retrying state after a delay
+    setTimeout(() => {
+      setIsRetrying(false)
+    }, 1000)
+  }, [])
 
   const handleUpdateStatus = (project: ListingProject) => {
     setSelectedProject(project)
