@@ -1094,6 +1094,7 @@ export type Database = {
           longitude: number | null
           project_size: string | null
           project_type: string | null
+          project_type_category_id: string | null
           project_year: number | null
           seo_description: string | null
           seo_title: string | null
@@ -1133,6 +1134,7 @@ export type Database = {
           longitude?: number | null
           project_size?: string | null
           project_type?: string | null
+          project_type_category_id?: string | null
           project_year?: number | null
           seo_description?: string | null
           seo_title?: string | null
@@ -1172,6 +1174,7 @@ export type Database = {
           longitude?: number | null
           project_size?: string | null
           project_type?: string | null
+          project_type_category_id?: string | null
           project_year?: number | null
           seo_description?: string | null
           seo_title?: string | null
@@ -1190,6 +1193,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_project_type_category_id_fkey"
+            columns: ["project_type_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
             referencedColumns: ["id"]
           },
         ]

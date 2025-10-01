@@ -73,6 +73,7 @@ const isUuid = (value?: string | null): value is string =>
 const MIN_PHOTOS_REQUIRED = 5
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MIN_IMAGE_WIDTH = 1200
+const MAX_FILES_PER_UPLOAD = 30 // Prevent bulk upload abuse
 const BUILDING_FEATURE_ID = "building-default"
 const ADDITIONAL_FEATURE_ID = "additional-photos"
 const OVERLAY_CLASSES = "modal-overlay fixed inset-0 flex items-center justify-center z-50 p-4"
@@ -567,6 +568,17 @@ export default function PhotoTourPage() {
   ) => {
     const fileArray = Array.from(files ?? [])
     if (fileArray.length === 0) {
+      return
+    }
+
+    // Security: Prevent bulk upload abuse
+    if (fileArray.length > MAX_FILES_PER_UPLOAD) {
+      const message = `You can upload a maximum of ${MAX_FILES_PER_UPLOAD} files at once.`
+      if (options.addToModalSelection) {
+        setModalUploadErrors([message])
+      } else {
+        setUploadErrors([message])
+      }
       return
     }
 

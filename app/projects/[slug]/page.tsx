@@ -13,6 +13,7 @@ import { SimilarProjects } from "@/components/similar-projects"
 import { Footer } from "@/components/footer"
 import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 
 const PREVIEW_PARAM = "preview"
@@ -66,17 +67,19 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     supabase
       .from("projects")
       .select(
-        "id, client_id, title, description, status, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, slug, created_at, updated_at",
+        "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, slug, created_at, updated_at",
       )
       .eq("slug", resolvedParams.slug)
       .maybeSingle(),
   ])
 
-  const project = projectResult.data as ProjectRow | null
+  const projectData = projectResult.data
 
-  if (projectResult.error || !project) {
+  if (projectResult.error || !isProjectRow(projectData)) {
     notFound()
   }
+
+  const project = projectData
 
   const previewRequested = Boolean(resolvedSearchParams?.[PREVIEW_PARAM])
   const isPublished = project.status === "published"
@@ -132,17 +135,21 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         .eq("project_id", project.id),
     ])
 
-  const photos = (photosResult.data ?? []) as ProjectPhotoRow[]
-  const features = (featuresResult.data ?? []) as ProjectFeatureRow[]
-  const serviceSelections = (serviceSelectionsResult.data ?? []) as ProjectProfessionalServiceRow[]
-  const invites = (invitesResult.data ?? []) as ProjectProfessionalRow[]
-  const projectCategories = (projectCategoriesResult.data ?? []) as ProjectCategoryRow[]
+  const photos: ProjectPhotoRow[] = photosResult.data ?? []
+  const features: ProjectFeatureRow[] = featuresResult.data ?? []
+  const serviceSelections: ProjectProfessionalServiceRow[] = serviceSelectionsResult.data ?? []
+  const invites: ProjectProfessionalRow[] = invitesResult.data ?? []
+  const projectCategories: ProjectCategoryRow[] = projectCategoriesResult.data ?? []
 
   const categoryIds = new Set<string>()
   const taxonomyIds = new Set<string>()
 
   if (isUuid(project.project_type)) {
     categoryIds.add(project.project_type)
+  }
+
+  if (isUuid(project.project_type_category_id)) {
+    categoryIds.add(project.project_type_category_id)
   }
 
   projectCategories.forEach((row) => {
@@ -182,13 +189,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           .from("categories")
           .select("id, name, slug, parent_id")
           .in("id", Array.from(categoryIds))
-      : Promise.resolve({ data: [] as CategoryRow[], error: null }),
+      : Promise.resolve<{ data: CategoryRow[]; error: null }>({ data: [], error: null }),
     taxonomyIds.size
       ? supabase
           .from("project_taxonomy_options")
           .select("id, name, taxonomy_type")
           .in("id", Array.from(taxonomyIds))
-      : Promise.resolve({ data: [] as TaxonomyOptionRow[], error: null }),
+      : Promise.resolve<{ data: TaxonomyOptionRow[]; error: null }>({ data: [], error: null }),
   ])
 
   const categoryMap = new Map<string, CategoryRow>()
@@ -219,9 +226,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     ? taxonomyMap.get(project.project_size)?.name ?? (isUuid(project.project_size) ? "" : project.project_size)
     : ""
 
-  const projectTypeLabel = project.project_type
-    ? categoryMap.get(project.project_type)?.name ?? (isUuid(project.project_type) ? "" : project.project_type)
-    : ""
+  const projectTypeCategoryId = project.project_type_category_id ?? (isUuid(project.project_type) ? project.project_type : null)
+  const projectTypeLabel =
+    (projectTypeCategoryId && categoryMap.get(projectTypeCategoryId)?.name) ||
+    (project.project_type && !isUuid(project.project_type) ? project.project_type : "")
 
   const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
 
@@ -431,7 +439,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .order("created_at", { ascending: false, nullsLast: false })
       .limit(remaining)
 
-    ;(data as ProjectSummaryRow[] | null)?.forEach((row) => {
+    const rows: ProjectSummaryRow[] = data ?? []
+
+    rows.forEach((row) => {
       if (!row.id || seenSimilarIds.has(row.id) || !row.slug) {
         return
       }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { AlertTriangle, Loader2, MailPlus, Plus, ShieldAlert, Trash2, X } from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 
 const TOTAL_STEPS = 4
@@ -122,15 +123,15 @@ export default function ProfessionalsPage() {
         return
       }
 
-      const { data: project, error: projectError } = await supabase
+      const { data: projectData, error: projectError } = await supabase
         .from("projects")
         .select(
-          "id, client_id, slug, title, description, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, updated_at, created_at, status",
+          "id, client_id, slug, title, description, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, updated_at, created_at, status",
         )
         .eq("id", projectIdFromParams)
         .maybeSingle()
 
-      if (projectError || !project || project.client_id !== authData.user.id) {
+      if (projectError || !isProjectRow(projectData) || projectData.client_id !== authData.user.id) {
         if (!cancelled) {
           setProjectLoadError(
             projectError?.message ?? "We couldn't find that project. Please start from Project Details.",
@@ -145,15 +146,15 @@ export default function ProfessionalsPage() {
         return
       }
 
-      setProjectId(project.id)
-      setProjectSlug(project.slug)
-      setProjectTitle(project.title ?? "")
+      setProjectId(projectData.id)
+      setProjectSlug(projectData.slug)
+      setProjectTitle(projectData.title ?? "")
 
       await Promise.all([
         loadServiceOptions(),
-        loadServiceSelections(project.id),
-        loadInvites(project.id),
-        loadPreviewData(project as ProjectRow),
+        loadServiceSelections(projectData.id),
+        loadInvites(projectData.id),
+        loadPreviewData(projectData),
       ])
 
       if (!cancelled) {
@@ -176,7 +177,7 @@ export default function ProfessionalsPage() {
         return
       }
 
-      const children = childRows as CategoriesRow[]
+      const children: CategoriesRow[] = childRows ?? []
 
       if (children.length === 0) {
         setServiceOptions(FALLBACK_SERVICE_OPTIONS)
@@ -194,13 +195,13 @@ export default function ProfessionalsPage() {
               .from("categories")
               .select("id, name, sort_order")
               .in("id", parentIds)
-          : Promise.resolve({ data: [] as CategoriesRow[], error: null }),
+          : Promise.resolve<{ data: CategoriesRow[]; error: null }>({ data: [], error: null }),
         childIds.length
           ? supabase
               .from("project_category_attributes")
               .select("category_id")
               .in("category_id", childIds)
-          : Promise.resolve({ data: [] as ProjectCategoryAttributeRow[], error: null }),
+          : Promise.resolve<{ data: ProjectCategoryAttributeRow[]; error: null }>({ data: [], error: null }),
       ])
 
       if (parentResult.error) {
@@ -269,11 +270,13 @@ export default function ProfessionalsPage() {
         return
       }
 
-      const selections = (data ?? []) as ProjectProfessionalServiceRow[]
+      const selections: ProjectProfessionalServiceRow[] = data ?? []
       setSelectedServiceIds(selections.map((row) => row.service_category_id))
     }
 
     const loadPreviewData = async (project: ProjectRow) => {
+      const projectTypeCategoryId = project.project_type_category_id ?? (isUuid(project.project_type) ? project.project_type : null)
+
       const [photoResult, styleResult, typeResult, sizeResult, buildingTypeResult] = await Promise.all([
         supabase
           .from("project_photos")
@@ -288,11 +291,11 @@ export default function ProfessionalsPage() {
               .eq("id", project.style_preferences[0] ?? "")
               .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
-        project.project_type && isUuid(project.project_type)
+        projectTypeCategoryId
           ? supabase
               .from("categories")
               .select("id, name")
-              .eq("id", project.project_type)
+              .eq("id", projectTypeCategoryId)
               .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
         project.project_size && isUuid(project.project_size)
@@ -311,27 +314,25 @@ export default function ProfessionalsPage() {
           : Promise.resolve({ data: null, error: null }),
       ])
 
-      const photos = (photoResult.data ?? []) as Array<{ id: string; url: string; is_primary: boolean | null }>
+      const photos = photoResult.data ?? []
       const coverPhoto =
         photos.find((photo) => Boolean(photo.is_primary)) ?? (photos.length > 0 ? photos[0] : null)
 
       const rawStyle = project.style_preferences?.[0] ?? ""
       const styleLabel =
-        (styleResult.data as { name?: string } | null)?.name ?? (rawStyle && !isUuid(rawStyle) ? rawStyle : "")
+        styleResult.data?.name ?? (rawStyle && !isUuid(rawStyle) ? rawStyle : "")
 
       const rawProjectType = project.project_type ?? ""
       const projectTypeLabel =
-        (typeResult.data as { name?: string } | null)?.name ??
-        (rawProjectType && !isUuid(rawProjectType) ? rawProjectType : "")
+        typeResult.data?.name ?? (rawProjectType && !isUuid(rawProjectType) ? rawProjectType : "")
 
       const rawSize = project.project_size ?? ""
       const sizeLabel =
-        (sizeResult.data as { name?: string } | null)?.name ?? (rawSize && !isUuid(rawSize) ? rawSize : "")
+        sizeResult.data?.name ?? (rawSize && !isUuid(rawSize) ? rawSize : "")
 
       const rawBuildingType = project.building_type ?? ""
       const buildingTypeLabel =
-        (buildingTypeResult.data as { name?: string } | null)?.name ??
-        (rawBuildingType && !isUuid(rawBuildingType) ? rawBuildingType : "")
+        buildingTypeResult.data?.name ?? (rawBuildingType && !isUuid(rawBuildingType) ? rawBuildingType : "")
 
       const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
 
@@ -393,9 +394,9 @@ export default function ProfessionalsPage() {
 
   const isBusy = isInitializing || isMutating || isSavingInvite
 
-  const selectedServiceNames = useMemo(() => {
+  const selectedServiceNames = useMemo<string[]>(() => {
     if (selectedServiceIds.length === 0) {
-      return [] as string[]
+      return []
     }
 
     const mapped = selectedServiceIds

@@ -117,13 +117,14 @@ export default function DashboardListingsPage() {
           title,
           status,
           project_type,
+          project_type_category_id,
           style_preferences,
           address_city,
           address_region,
           created_at,
           project_year,
           client_id,
-          categories!projects_project_type_fkey(name),
+          project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
           project_photos(url, is_primary, order_index),
           project_professionals(is_project_owner)
           `
@@ -141,7 +142,7 @@ export default function DashboardListingsPage() {
       }
 
       const projectRows = (data ?? []) as (ProjectRow & {
-        categories: { name: string | null } | null
+        project_type_category: { name: string | null } | null
       })[]
 
       // Collect style IDs that need resolution (styles can't be JOINed due to array column)
@@ -188,13 +189,11 @@ export default function DashboardListingsPage() {
         }
       }
 
-      if (metadataLoadFailed && isActive) {
-        if (!metadataErrorShown) {
-          metadataErrorShown = true
-          toast.error("We couldn't load project metadata", {
-            description: "Refresh the page to try again.",
-          })
-        }
+      if (metadataLoadFailed && isActive && !metadataErrorShown) {
+        metadataErrorShown = true
+        toast.error("We couldn't load project metadata", {
+          description: "Refresh the page to try again.",
+        })
         setLoadError((prev) => prev ?? "Some project details may be missing. Refresh to retry metadata loading.")
       }
 
@@ -219,8 +218,8 @@ export default function DashboardListingsPage() {
             : rawStyle
           : ""
 
-        // Use JOINed category name instead of UUID lookup
-        const projectTypeLabel = project.categories?.name ??
+        // Prefer the relational category label when available, otherwise fall back to legacy text
+        const projectTypeLabel = project.project_type_category?.name ??
           (project.project_type && !isUuid(project.project_type) ? project.project_type : "")
 
         const locationParts = [project.address_city, project.address_region].filter(Boolean).join(", ")

@@ -549,7 +549,7 @@ export default function NewProjectPage() {
       const { data: project, error } = await supabase
         .from("projects")
         .select(
-          "id, client_id, title, description, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, address_country, address_postal_code, address_street, latitude, longitude, share_exact_location, updated_at, status",
+          "id, client_id, title, description, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, address_country, address_postal_code, address_street, latitude, longitude, share_exact_location, updated_at, status",
         )
         .eq("id", projectIdFromParams)
         .maybeSingle()
@@ -614,9 +614,11 @@ export default function NewProjectPage() {
       const primaryCategoryId = categoryRows?.find((row) => row.is_primary)?.category_id ?? ""
       const parentCategoryId = categoryRows?.find((row) => !row.is_primary)?.category_id ?? ""
 
+      const projectTypeValue = project.project_type_category_id || project.project_type || ""
+
       const hydratedState: FormState = {
-        category: parentCategoryId || project.project_type || "",
-        projectType: primaryCategoryId || project.project_type || "",
+        category: parentCategoryId || projectTypeValue,
+        projectType: primaryCategoryId || projectTypeValue,
         buildingType: project.building_type ?? "",
         projectStyle: project.style_preferences?.[0] ?? "",
         locationFeatures: locationSelections,
@@ -702,6 +704,7 @@ export default function NewProjectPage() {
         description: snapshot.projectDescription || null,
         status,
         project_type: snapshot.projectType || null,
+        project_type_category_id: isUuid(snapshot.projectType) ? snapshot.projectType : null,
         building_type: snapshot.buildingType || null,
         project_size: snapshot.size || null,
         budget_level: (snapshot.budget || null) as ProjectBudgetLevel | null,

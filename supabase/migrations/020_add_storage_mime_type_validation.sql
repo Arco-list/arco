@@ -1,0 +1,32 @@
+-- Migration: Server-side MIME type validation for project-photos bucket
+-- Security: Prevent non-image file uploads (executables, scripts, etc.)
+--
+-- IMPORTANT: This migration requires manual configuration in Supabase Dashboard
+-- as bucket settings require superuser permissions not available in standard migrations.
+--
+-- TO APPLY MANUALLY IN SUPABASE DASHBOARD:
+-- 1. Go to Storage → Buckets → project-photos → Settings
+-- 2. Set "File size limit" to: 10485760 (10 MB)
+-- 3. Set "Allowed MIME types" to: image/jpeg, image/png
+-- 4. Ensure "Public" is enabled for read access
+--
+-- ALTERNATIVE: Apply via Supabase CLI with admin credentials:
+--   supabase storage update project-photos \
+--     --file-size-limit 10485760 \
+--     --allowed-mime-types 'image/jpeg,image/png' \
+--     --public
+--
+-- Client-side validation is already implemented in:
+-- - app/new-project/photos/page.tsx (lines 603-635)
+--
+-- Server-side enforcement adds defense-in-depth security:
+-- - Prevents malicious file uploads even if client validation is bypassed
+-- - Protects against XSS attacks via SVG or other file types
+-- - Prevents storage abuse with executable files
+--
+-- Created: 2025-10-01
+
+-- This migration file serves as documentation only
+-- No SQL commands to execute (requires superuser permissions)
+
+SELECT 1 WHERE false; -- No-op migration for tracking purposes
