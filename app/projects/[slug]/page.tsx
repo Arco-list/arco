@@ -57,6 +57,9 @@ type PageProps = {
 }
 
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
+  const resolvedParams = await params
+  const resolvedSearchParams = await searchParams
+
   const supabase = await createServerSupabaseClient()
   const [{ data: authData }, projectResult] = await Promise.all([
     supabase.auth.getUser(),
@@ -65,7 +68,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .select(
         "id, client_id, title, description, status, project_type, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, slug, created_at, updated_at",
       )
-      .eq("slug", params.slug)
+      .eq("slug", resolvedParams.slug)
       .maybeSingle(),
   ])
 
@@ -75,7 +78,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     notFound()
   }
 
-  const previewRequested = Boolean(searchParams?.[PREVIEW_PARAM])
+  const previewRequested = Boolean(resolvedSearchParams?.[PREVIEW_PARAM])
   const isPublished = project.status === "published"
   const user = authData?.user ?? null
 
