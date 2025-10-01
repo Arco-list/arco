@@ -271,6 +271,8 @@ export default function DashboardListingsPage() {
         const coverImageUrl = primary?.url ?? "/placeholder.svg"
 
         const rawStyle = project.style_preferences?.[0] ?? null
+        // Check if this project's style failed to resolve
+        const hasStyleError = !!(rawStyle && isUuid(rawStyle) && failedStyleIds.has(rawStyle))
         const styleLabel = rawStyle
           ? isUuid(rawStyle)
             ? styleMap.get(rawStyle) ?? ""
@@ -305,11 +307,17 @@ export default function DashboardListingsPage() {
           role,
           projectType: projectTypeLabel,
           projectYear: project.project_year,
+          hasMetadataError: hasStyleError, // Flag projects with failed metadata resolution
         }
       })
 
       // RACE CONDITION CHECK: Final state update with request ID verification
       if (isActive && !abortController.signal.aborted && currentRequestId === requestIdRef.current) {
+        // Track projects with metadata errors globally
+        const errorProjectIds = normalized
+          .filter((p) => p.hasMetadataError)
+          .map((p) => p.id)
+        setProjectsWithErrors(new Set(errorProjectIds))
         setProjects(normalized)
         setIsLoading(false)
       }
@@ -584,6 +592,39 @@ export default function DashboardListingsPage() {
           </div>
         )}
 
+        {/* ERROR HANDLING: Metadata Loading Error Banner with Retry */}
+        {metadataError && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1">
+                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                    Metadata Loading Error
+                  </h3>
+                  <p className="text-sm text-amber-700">
+                    {metadataError}
+                    {projectsWithErrors.size > 0 && (
+                      <span className="block mt-1">
+                        Affected projects: {projectsWithErrors.size}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetryMetadata}
+                disabled={isRetrying}
+                className="ml-4 border-amber-300 text-amber-900 hover:bg-amber-100"
+              >
+                {isRetrying ? "Retrying..." : "Retry"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {loadError && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {loadError}
@@ -616,10 +657,20 @@ export default function DashboardListingsPage() {
                   alt={project.title}
                   className="w-full h-48 object-cover"
                 />
-                <div className="absolute top-3 left-3">
+                <div className="absolute top-3 left-3 flex items-center gap-2">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass}`}>
                     {project.statusLabel}
                   </span>
+                  {/* ERROR HANDLING: Visual indicator for projects with missing metadata */}
+                  {project.hasMetadataError && (
+                    <span
+                      className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 flex items-center gap-1"
+                      title="Some project details couldn't be loaded"
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      <span>Incomplete</span>
+                    </span>
+                  )}
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   <span className="text-xs text-black bg-white px-2 py-1 rounded">Project owner</span>

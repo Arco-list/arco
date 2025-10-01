@@ -1,5 +1,11 @@
+import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "Learn how Arco collects, uses, and protects your personal information. Read our comprehensive privacy policy.",
+}
 
 export default function PrivacyPage() {
   return (

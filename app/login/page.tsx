@@ -1,9 +1,15 @@
 import Link from "next/link"
+import type { Metadata } from "next"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { LoginForm } from "@/components/auth/login-form"
 import { getFirstSearchParamValue, sanitizeRedirectPath } from "@/lib/auth-redirect"
+
+export const metadata: Metadata = {
+  title: "Log In",
+  description: "Sign in to your Arco account to manage your projects and connect with professionals.",
+}
 
 interface LoginPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>

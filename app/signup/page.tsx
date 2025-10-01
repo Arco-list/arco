@@ -1,9 +1,15 @@
 import Link from "next/link"
+import type { Metadata } from "next"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { SignupForm } from "@/components/auth/signup-form"
 import { getFirstSearchParamValue, sanitizeRedirectPath } from "@/lib/auth-redirect"
+
+export const metadata: Metadata = {
+  title: "Create Account",
+  description: "Join Arco to post projects, save favorites, and collaborate with architecture and design professionals.",
+}
 
 interface SignupPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>

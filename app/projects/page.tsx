@@ -1,10 +1,16 @@
 import { Suspense } from "react"
+import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { FilterBar } from "@/components/filter-bar"
 import { ProjectsGrid } from "@/components/projects-grid"
 import { ProjectsNavigation } from "@/components/projects-navigation"
 import { FilterProvider } from "@/contexts/filter-context"
+
+export const metadata: Metadata = {
+  title: "Browse Projects",
+  description: "Explore architecture and design projects from across the Netherlands. Find inspiration for your next renovation or building project.",
+}
 
 function ProjectsPageContent() {
   return (

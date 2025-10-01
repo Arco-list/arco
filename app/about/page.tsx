@@ -1,6 +1,12 @@
+import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { About3 } from "@/components/about3"
+
+export const metadata: Metadata = {
+  title: "About Us",
+  description: "Learn about Arco's mission to connect property owners with the best architecture and design professionals in the Netherlands.",
+}
 
 export default function AboutPage() {
   return (
