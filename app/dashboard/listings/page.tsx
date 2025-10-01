@@ -492,7 +492,7 @@ export default function DashboardListingsPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-0">
+      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-8 xl:px-12">
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>

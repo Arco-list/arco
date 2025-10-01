@@ -512,7 +512,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
         <Header />
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 lg:px-0">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8">
           <div className="mb-8">
             <ProjectGallery />
           </div>
