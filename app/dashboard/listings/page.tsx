@@ -78,17 +78,20 @@ export default function DashboardListingsPage() {
     yearFrom: MIN_YEAR,
     yearTo: CURRENT_YEAR,
   })
-  const taxonomyCacheRef = useRef<{ categories: Map<string, string>; styles: Map<string, string> }>(
-    {
-      categories: new Map(),
-      styles: new Map(),
-    },
-  )
-  const metadataErrorShownRef = useRef(false)
+  // LRU-style cache with size limit to prevent unbounded memory growth
+  const taxonomyCacheRef = useRef<{
+    styles: Map<string, string>
+    accessOrder: string[]
+  }>({
+    styles: new Map(),
+    accessOrder: [],
+  })
+  const MAX_CACHE_SIZE = 100 // Reasonable limit for taxonomy options
   const router = useRouter()
 
   useEffect(() => {
     let isActive = true
+    let metadataErrorShown = false // Move to effect scope to reset on each run
 
     const loadProjects = async () => {
       setIsLoading(true)
@@ -105,10 +108,25 @@ export default function DashboardListingsPage() {
         return
       }
 
+      // Single optimized query with JOINs to fetch projects with resolved labels
       const { data, error } = await supabase
         .from("projects")
         .select(
-          "id, title, status, project_type, style_preferences, address_city, address_region, created_at, project_year, client_id, project_photos(url, is_primary, order_index), project_professionals(is_project_owner)"
+          `
+          id,
+          title,
+          status,
+          project_type,
+          style_preferences,
+          address_city,
+          address_region,
+          created_at,
+          project_year,
+          client_id,
+          categories!projects_project_type_fkey(name),
+          project_photos(url, is_primary, order_index),
+          project_professionals(is_project_owner)
+          `
         )
         .eq("client_id", authData.user.id)
         .order("updated_at", { ascending: false })
@@ -122,16 +140,13 @@ export default function DashboardListingsPage() {
         return
       }
 
-      const projectRows = (data ?? []) as ProjectRow[]
+      const projectRows = (data ?? []) as (ProjectRow & {
+        categories: { name: string | null } | null
+      })[]
 
-      const categoryIds = new Set<string>()
+      // Collect style IDs that need resolution (styles can't be JOINed due to array column)
       const styleOptionIds = new Set<string>()
-
       projectRows.forEach((project) => {
-        if (isUuid(project.project_type)) {
-          categoryIds.add(project.project_type)
-        }
-
         project.style_preferences?.forEach((value) => {
           if (isUuid(value)) {
             styleOptionIds.add(value)
@@ -140,52 +155,42 @@ export default function DashboardListingsPage() {
       })
 
       const taxonomyCache = taxonomyCacheRef.current
-      const missingCategoryIds = Array.from(categoryIds).filter((id) => !taxonomyCache.categories.has(id))
       const missingStyleOptionIds = Array.from(styleOptionIds).filter(
         (id) => !taxonomyCache.styles.has(id),
       )
 
       let metadataLoadFailed = false
 
-      if (missingCategoryIds.length > 0) {
-        const { data, error } = await supabase
-          .from("categories")
-          .select("id, name")
-          .in("id", missingCategoryIds)
-
-        if (error) {
-          metadataLoadFailed = true
-          console.error("Failed to resolve category labels", { error })
-        } else {
-          data?.forEach((row) => {
-            if (row.id) {
-              taxonomyCache.categories.set(row.id, row.name ?? "")
-            }
-          })
-        }
-      }
-
+      // Only fetch styles (categories already JOINed)
       if (missingStyleOptionIds.length > 0) {
-        const { data, error } = await supabase
+        const { data: stylesData, error: stylesError } = await supabase
           .from("project_taxonomy_options")
           .select("id, name")
           .in("id", missingStyleOptionIds)
 
-        if (error) {
+        if (stylesError) {
           metadataLoadFailed = true
-          console.error("Failed to resolve style labels", { error })
+          console.error("Failed to resolve style labels", { error: stylesError })
         } else {
-          data?.forEach((row) => {
-            if (row.id) {
-              taxonomyCache.styles.set(row.id, row.name ?? "")
+          stylesData?.forEach((row) => {
+            if (row.id && row.name) {
+              // LRU cache eviction: remove oldest entry if cache is full
+              if (taxonomyCache.styles.size >= MAX_CACHE_SIZE) {
+                const oldestKey = taxonomyCache.accessOrder.shift()
+                if (oldestKey) {
+                  taxonomyCache.styles.delete(oldestKey)
+                }
+              }
+              taxonomyCache.styles.set(row.id, row.name)
+              taxonomyCache.accessOrder.push(row.id)
             }
           })
         }
       }
 
       if (metadataLoadFailed && isActive) {
-        if (!metadataErrorShownRef.current) {
-          metadataErrorShownRef.current = true
+        if (!metadataErrorShown) {
+          metadataErrorShown = true
           toast.error("We couldn't load project metadata", {
             description: "Refresh the page to try again.",
           })
@@ -193,7 +198,6 @@ export default function DashboardListingsPage() {
         setLoadError((prev) => prev ?? "Some project details may be missing. Refresh to retry metadata loading.")
       }
 
-      const categoryMap = taxonomyCache.categories
       const styleMap = taxonomyCache.styles
 
       const normalized: ListingProject[] = projectRows.map((project) => {
@@ -215,11 +219,9 @@ export default function DashboardListingsPage() {
             : rawStyle
           : ""
 
-        const projectTypeLabel = project.project_type
-          ? isUuid(project.project_type)
-            ? categoryMap.get(project.project_type) ?? ""
-            : project.project_type
-          : ""
+        // Use JOINed category name instead of UUID lookup
+        const projectTypeLabel = project.categories?.name ??
+          (project.project_type && !isUuid(project.project_type) ? project.project_type : "")
 
         const locationParts = [project.address_city, project.address_region].filter(Boolean).join(", ")
         const subtitlePieces = [styleLabel, projectTypeLabel].filter(Boolean)
