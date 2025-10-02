@@ -3,45 +3,32 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Bath, Building, Sofa, Waves, Bed, MapPin, Mountain } from "lucide-react"
+import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProjectFeatures() {
   const [showModal, setShowModal] = useState(false)
+  const { featureGroups } = useProjectPreview()
 
-  const features = [
-    { icon: Bath, label: "Bathroom" },
-    { icon: Building, label: "Building" },
-    { icon: Sofa, label: "Living room" },
-    { icon: Waves, label: "Outdoor pool" },
-    { icon: Bed, label: "Bedroom" },
-    { icon: MapPin, label: "Countryside" },
-    { icon: Mountain, label: "Natural Stone" },
-  ]
-
-  const modalFeatures = {
-    location: [{ icon: MapPin, label: "Countryside" }],
-    building: [
-      { icon: Bath, label: "Bathroom" },
-      { icon: Bed, label: "Bedroom" },
-      { icon: Building, label: "Building" },
-      { icon: Sofa, label: "Living room" },
-      { icon: Waves, label: "Outdoor pool" },
-    ],
-    materials: [{ icon: Mountain, label: "Natural Stone" }],
+  if (featureGroups.length === 0) {
+    return null
   }
+
+  const featuredList = featureGroups.flatMap((group) => group.items.slice(0, 2)).slice(0, 6)
 
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold text-black">Features</h2>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {features.map((feature, index) => (
-          <div key={index} className="flex items-center gap-3">
-            <feature.icon className="w-5 h-5 text-gray-600" />
-            <span className="text-gray-900">{feature.label}</span>
-          </div>
-        ))}
-      </div>
+      {featuredList.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {featuredList.map((feature) => (
+            <div key={feature.id} className="flex items-center gap-3">
+              <span className="h-2 w-2 rounded-full bg-gray-400" aria-hidden="true" />
+              <span className="text-gray-900">{feature.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
         Show all features
@@ -54,44 +41,19 @@ export function ProjectFeatures() {
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Location Section */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Location</h3>
-              <div className="space-y-3">
-                {modalFeatures.location.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <feature.icon className="w-5 h-5 text-gray-600" />
-                    <span className="text-gray-900 underline">{feature.label}</span>
-                  </div>
-                ))}
+            {featureGroups.map((group) => (
+              <div key={group.id}>
+                <h3 className="text-sm font-medium text-gray-900 mb-3">{group.name}</h3>
+                <div className="space-y-3">
+                  {group.items.map((feature) => (
+                    <div key={feature.id} className="flex items-center gap-3">
+                      <span className="h-2 w-2 rounded-full bg-gray-400" aria-hidden="true" />
+                      <span className="text-gray-900 underline">{feature.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            {/* Building Section */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Building</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {modalFeatures.building.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <feature.icon className="w-5 h-5 text-gray-600" />
-                    <span className="text-gray-900 underline">{feature.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Materials Section */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Materials</h3>
-              <div className="space-y-3">
-                {modalFeatures.materials.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <feature.icon className="w-5 h-5 text-gray-600" />
-                    <span className="text-gray-900 underline">{feature.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         </DialogContent>
       </Dialog>

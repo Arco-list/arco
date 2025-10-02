@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 
 import { ScrollToTop } from "@/components/scroll-to-top";
 import { AuthProvider } from "@/contexts/auth-context";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export interface RootProvidersProps {
   children: ReactNode;
@@ -14,10 +15,12 @@ export interface RootProvidersProps {
 
 export const RootProviders = ({ children, initialSession }: RootProvidersProps) => {
   return (
-    <AuthProvider initialSession={initialSession}>
-      <ScrollToTop />
-      {children}
-      <Toaster richColors position="top-right" />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider initialSession={initialSession}>
+        <ScrollToTop />
+        {children}
+        <Toaster richColors position="top-right" />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };

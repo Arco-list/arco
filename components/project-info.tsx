@@ -5,16 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Heart, Share, Bookmark } from "lucide-react"
 import { ReportModal } from "./report-modal"
 import { ShareModal } from "./share-modal"
+import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProjectInfo() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const { info, statusBadge, locationLabel, shareImageUrl, shareUrl } = useProjectPreview()
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="text-sm text-gray-500">Projects &gt; House &gt; Villa</div>
+          <div className="text-sm text-gray-500">
+            {info.breadcrumbs.length > 0 ? info.breadcrumbs.join(" > ") : "Projects"}
+          </div>
 
           {/* Action buttons - moved to same row as breadcrumbs */}
           <div className="flex gap-2">
@@ -43,14 +47,17 @@ export function ProjectInfo() {
 
       {/* Project title and description */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-black">Villa upgrade</h1>
-        <h2 className="text-xl text-gray-600">Contemporary Villa in Nijmegen</h2>
-        <p className="text-sm text-gray-500">Sponsored in 1999</p>
+        <h1 className="text-3xl font-bold text-black">{info.title}</h1>
+        {info.subtitle && <h2 className="text-xl text-gray-600">{info.subtitle}</h2>}
+        {(info.sponsoredLabel || statusBadge || locationLabel) && (
+          <p className="text-sm text-gray-500">
+            {[info.sponsoredLabel, statusBadge, locationLabel].filter(Boolean).join(" • ")}
+          </p>
+        )}
 
-        <p className="text-gray-700 leading-relaxed">
-          De omgeving van de villa is zeer dichtbij de uitgaansgebied, maar elementen is het eenvoudig te het een groot
-          compleet tijdens het rustige, lichte bouwstijl en de vrijetijds activiteiten zijn voor de volledige in...
-        </p>
+        {info.descriptionPlain && (
+          <p className="text-gray-700 leading-relaxed">{info.descriptionPlain}</p>
+        )}
 
         <Button variant="link" className="p-0 text-blue-600">
           Show more
@@ -61,10 +68,10 @@ export function ProjectInfo() {
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
-        title="Villa upgrade"
-        subtitle="Contemporary Villa in Nijmegen"
-        imageUrl="/placeholder.svg?height=64&width=64"
-        shareUrl={typeof window !== "undefined" ? window.location.href : ""}
+        title={info.title}
+        subtitle={info.subtitle ?? ""}
+        imageUrl={shareImageUrl ?? "/placeholder.svg?height=64&width=64"}
+        shareUrl={typeof window !== "undefined" ? window.location.href : shareUrl ?? ""}
       />
     </div>
   )

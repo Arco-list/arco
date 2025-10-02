@@ -1,10 +1,16 @@
 import Link from "next/link"
+import type { Metadata } from "next"
 import { CheckCircle } from "lucide-react"
 
 import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { getFirstSearchParamValue, resolveRedirectPath } from "@/lib/auth-redirect"
+
+export const metadata: Metadata = {
+  title: "Email Confirmed",
+  description: "Your email has been successfully verified. Welcome to Arco!",
+}
 
 interface EmailConfirmedPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>

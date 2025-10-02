@@ -1,5 +1,11 @@
+import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "Read Arco's terms of service. Understand your rights and responsibilities when using our platform to connect with professionals.",
+}
 
 export default function TermsPage() {
   return (

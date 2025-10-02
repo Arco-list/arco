@@ -1,10 +1,16 @@
 import Link from "next/link"
+import type { Metadata } from "next"
 import { MailCheck } from "lucide-react"
 
 import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
 import { getFirstSearchParamValue, resolveRedirectPath } from "@/lib/auth-redirect"
 import { emailSchema } from "@/lib/supabase/auth-validation"
+
+export const metadata: Metadata = {
+  title: "Check Your Email",
+  description: "Please check your email to confirm your Arco account registration.",
+}
 
 interface SignupConfirmPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>

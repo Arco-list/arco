@@ -13,9 +13,20 @@ const poppins = Poppins({
 })
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
-  generator: "v0.app",
+  title: {
+    default: "Arco - Connect with Architecture & Design Professionals",
+    template: "%s | Arco",
+  },
+  description: "Find and collaborate with top architecture, interior design, and construction professionals in the Netherlands. Post projects, browse portfolios, and bring your vision to life.",
+  keywords: [
+    "architecture",
+    "interior design",
+    "construction",
+    "professionals",
+    "Netherlands",
+    "renovation",
+    "building projects",
+  ],
 }
 
 export default async function RootLayout({

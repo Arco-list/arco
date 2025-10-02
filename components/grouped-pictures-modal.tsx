@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Share, Bookmark, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { toast } from "sonner"
@@ -123,8 +123,12 @@ export function GroupedPicturesModal({
     <>
       {/* Main Modal */}
       <Dialog open={isOpen && !isLightboxOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-none w-full h-full max-h-screen p-0 bg-white border-none overflow-hidden">
-          <div className="flex flex-col h-full max-h-screen">
+        <DialogContent
+          showCloseButton={false}
+          className="!max-w-none !w-screen !h-screen p-0 bg-white border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
+        >
+          <DialogTitle className="sr-only">{title}</DialogTitle>
+          <div className="flex flex-col w-full h-screen">
             {/* Header */}
             <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-100 flex-shrink-0">
               <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={onClose}>
@@ -215,8 +219,12 @@ export function GroupedPicturesModal({
 
       {/* Lightbox Modal */}
       <Dialog open={isLightboxOpen} onOpenChange={setIsLightboxOpen}>
-        <DialogContent className="max-w-none w-full h-full max-h-screen p-0 bg-black border-none overflow-hidden">
-          <div className="relative w-full h-full flex flex-col">
+        <DialogContent
+          showCloseButton={false}
+          className="!max-w-none !w-screen !h-screen p-0 bg-black border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
+        >
+          <DialogTitle className="sr-only">{`${title} lightbox`}</DialogTitle>
+          <div className="relative w-full h-screen flex flex-col">
             {/* Lightbox Header */}
             <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 md:p-6 bg-gradient-to-b from-black/90 to-transparent">
               <Button

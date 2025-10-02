@@ -572,8 +572,8 @@ export type Database = {
           applied_at?: string | null
           cover_letter?: string | null
           created_at?: string | null
-          estimated_duration?: string | null
           id?: string
+          estimated_duration?: string | null
           portfolio_items?: string[] | null
           professional_id?: string
           project_id?: string
@@ -836,6 +836,52 @@ export type Database = {
           },
         ]
       }
+      project_professional_services: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          service_category_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          service_category_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          service_category_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_professional_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professional_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professional_services_service_category_id_fkey"
+            columns: ["service_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_professionals: {
         Row: {
           created_at: string
@@ -914,6 +960,112 @@ export type Database = {
           },
         ]
       }
+      project_taxonomy_options: {
+        Row: {
+          budget_level:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          metadata: Json | null
+          name: string
+          size_max_sqm: number | null
+          size_min_sqm: number | null
+          slug: string
+          sort_order: number | null
+          taxonomy_type: Database["public"]["Enums"]["project_taxonomy_type"]
+          updated_at: string | null
+        }
+        Insert: {
+          budget_level?:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name: string
+          size_max_sqm?: number | null
+          size_min_sqm?: number | null
+          slug: string
+          sort_order?: number | null
+          taxonomy_type: Database["public"]["Enums"]["project_taxonomy_type"]
+          updated_at?: string | null
+        }
+        Update: {
+          budget_level?:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name?: string
+          size_max_sqm?: number | null
+          size_min_sqm?: number | null
+          slug?: string
+          sort_order?: number | null
+          taxonomy_type?: Database["public"]["Enums"]["project_taxonomy_type"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      project_taxonomy_selections: {
+        Row: {
+          created_at: string
+          id: string
+          notes: Json | null
+          project_id: string
+          taxonomy_option_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: Json | null
+          project_id: string
+          taxonomy_option_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: Json | null
+          project_id?: string
+          taxonomy_option_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_taxonomy_selections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_taxonomy_selections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_taxonomy_selections_taxonomy_option_id_fkey"
+            columns: ["taxonomy_option_id"]
+            isOneToOne: false
+            referencedRelation: "project_taxonomy_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           address_city: string | null
@@ -942,6 +1094,7 @@ export type Database = {
           longitude: number | null
           project_size: string | null
           project_type: string | null
+          project_type_category_id: string | null
           project_year: number | null
           seo_description: string | null
           seo_title: string | null
@@ -981,6 +1134,7 @@ export type Database = {
           longitude?: number | null
           project_size?: string | null
           project_type?: string | null
+          project_type_category_id?: string | null
           project_year?: number | null
           seo_description?: string | null
           seo_title?: string | null
@@ -1020,6 +1174,7 @@ export type Database = {
           longitude?: number | null
           project_size?: string | null
           project_type?: string | null
+          project_type_category_id?: string | null
           project_year?: number | null
           seo_description?: string | null
           seo_title?: string | null
@@ -1038,6 +1193,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_project_type_category_id_fkey"
+            columns: ["project_type_category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
             referencedColumns: ["id"]
           },
         ]
@@ -1177,6 +1339,49 @@ export type Database = {
           },
           {
             foreignKeyName: "saved_professionals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_projects: {
+        Row: {
+          created_at: string | null
+          notes: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          notes?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          notes?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_projects_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1407,6 +1612,13 @@ export type Database = {
         | "in_progress"
         | "completed"
         | "archived"
+      project_taxonomy_type:
+        | "project_style"
+        | "building_type"
+        | "location_feature"
+        | "material_feature"
+        | "size_range"
+        | "budget_tier"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1550,6 +1762,14 @@ export const Constants = {
         "in_progress",
         "completed",
         "archived",
+      ],
+      project_taxonomy_type: [
+        "project_style",
+        "building_type",
+        "location_feature",
+        "material_feature",
+        "size_range",
+        "budget_tier",
       ],
     },
   },

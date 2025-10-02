@@ -3,10 +3,10 @@
 # Functionality by Screen
 
 ## ✅ Landing
+
 **Component Path**: `app/page.tsx` (landing page)
 
-
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516719958-afzrgyz.png?alt=media&token=2c2a8499-46d3-453a-9ba2-61a02d81c361)
 
@@ -28,84 +28,80 @@ Acceptance Criteria
 - Given an unauthenticated visitor loads the site, when the header renders, then show nav items Projects, Professionals, Log In/Sign Up (and hide Saved projects/Saved professionals/Account/Sign out), List with Us (Switch to company when an authenticated professional visitor loads the side), Help center.
 - Given the hero Search bar has non-empty input, when the user presses Enter or clicks the Search CTA, then navigate to Discover (Projects tab) with the query applied and visible in the Discover search field.
 - Professional categories and services
-    
-    
-    | Professional Category | Professional Service |
-    | --- | --- |
-    | Design & Planning | Architecture |
-    | Design & Planning | Interior design |
-    | Design & Planning | Garden design |
-    | Construction | General contractor |
-    | Construction | Roof |
-    | Construction | Tiles and stone |
-    | Construction | Kitchen |
-    | Construction | Stairs |
-    | Construction | Elevator |
-    | Construction | Windows |
-    | Construction | Bathroom |
-    | Construction | Swimming pool |
-    | Construction | Welness |
-    | Construction | Doors |
-    | Systems | Lighting |
-    | Systems | Electrical systems |
-    | Systems | Security systems |
-    | Systems | Domotica |
-    | Finishing | Interior fit-out |
-    | Finishing | Fireplace |
-    | Finishing | Interior styling |
-    | Finishing | Painting |
-    | Finishing | Decoration and carpentry |
-    | Finishing | Indoor plants |
-    | Finishing | Floor |
-    | Finishing | Furniture |
-    | Finishing | Art |
-    | Outdoor | Outdoor lighting |
-    | Outdoor | Garden |
-    | Outdoor | Garden house |
-    | Outdoor | Outdoor furniture |
-    | Outdoor | Fencing and gates |
+  | Professional Category | Professional Service     |
+  | --------------------- | ------------------------ |
+  | Design & Planning     | Architecture             |
+  | Design & Planning     | Interior design          |
+  | Design & Planning     | Garden design            |
+  | Construction          | General contractor       |
+  | Construction          | Roof                     |
+  | Construction          | Tiles and stone          |
+  | Construction          | Kitchen                  |
+  | Construction          | Stairs                   |
+  | Construction          | Elevator                 |
+  | Construction          | Windows                  |
+  | Construction          | Bathroom                 |
+  | Construction          | Swimming pool            |
+  | Construction          | Welness                  |
+  | Construction          | Doors                    |
+  | Systems               | Lighting                 |
+  | Systems               | Electrical systems       |
+  | Systems               | Security systems         |
+  | Systems               | Domotica                 |
+  | Finishing             | Interior fit-out         |
+  | Finishing             | Fireplace                |
+  | Finishing             | Interior styling         |
+  | Finishing             | Painting                 |
+  | Finishing             | Decoration and carpentry |
+  | Finishing             | Indoor plants            |
+  | Finishing             | Floor                    |
+  | Finishing             | Furniture                |
+  | Finishing             | Art                      |
+  | Outdoor               | Outdoor lighting         |
+  | Outdoor               | Garden                   |
+  | Outdoor               | Garden house             |
+  | Outdoor               | Outdoor furniture        |
+  | Outdoor               | Fencing and gates        |
 - Project categories and types
-    
-    
-    | Project Type | Project Sub-type | Listing type | Building feature |
-    | --- | --- | --- | --- |
-    | House | Villa | Yes | No |
-    | House | House | Yes | No |
-    | House | Apartment | Yes | No |
-    | House | Chalet | Yes | No |
-    | House | Bungalow | Yes | No |
-    | House | Farm | Yes | No |
-    | House | Extension | Yes | No |
-    | Kitchen & Living | Kitchen | Yes | Yes |
-    | Kitchen & Living | Living room | No | Yes |
-    | Kitchen & Living | Dining room | No | Yes |
-    | Kitchen & Living | Sunroom | No | Yes |
-    | Bed & Bath | Bathroom | Yes | Yes |
-    | Bed & Bath | Bedroom | No | Yes |
-    | Bed & Bath | Indoor Pool | No | Yes |
-    | Bed & Bath | Jacuzzi | Yes | Yes |
-    | Bed & Bath | Sauna | Yes | Yes |
-    | Bed & Bath | Steam room | No | Yes |
-    | Outdoor | Garden | Yes | Yes |
-    | Outdoor | Outdoor pool | Yes | Yes |
-    | Outdoor | Garden house | Yes | Yes |
-    | Outdoor | Outdoor kitchen | No | Yes |
-    | Outdoor | Garage | No | Yes |
-    | Outdoor | Porch | No | Yes |
-    | Other | Hall | No | Yes |
-    | Other | Home office | No | Yes |
-    | Other | Bar | No | Yes |
-    | Other | Cinema | No | Yes |
-    | Other | Gym | No | Yes |
-    | Other | Game room | No | Yes |
-    | Other | Kids room | No | Yes |
-    | Other | Wine cellar | No | Yes |
+  | Project Type     | Project Sub-type | Listing type | Building feature |
+  | ---------------- | ---------------- | ------------ | ---------------- |
+  | House            | Villa            | Yes          | No               |
+  | House            | House            | Yes          | No               |
+  | House            | Apartment        | Yes          | No               |
+  | House            | Chalet           | Yes          | No               |
+  | House            | Bungalow         | Yes          | No               |
+  | House            | Farm             | Yes          | No               |
+  | House            | Extension        | Yes          | No               |
+  | Kitchen & Living | Kitchen          | Yes          | Yes              |
+  | Kitchen & Living | Living room      | No           | Yes              |
+  | Kitchen & Living | Dining room      | No           | Yes              |
+  | Kitchen & Living | Sunroom          | No           | Yes              |
+  | Bed & Bath       | Bathroom         | Yes          | Yes              |
+  | Bed & Bath       | Bedroom          | No           | Yes              |
+  | Bed & Bath       | Indoor Pool      | No           | Yes              |
+  | Bed & Bath       | Jacuzzi          | Yes          | Yes              |
+  | Bed & Bath       | Sauna            | Yes          | Yes              |
+  | Bed & Bath       | Steam room       | No           | Yes              |
+  | Outdoor          | Garden           | Yes          | Yes              |
+  | Outdoor          | Outdoor pool     | Yes          | Yes              |
+  | Outdoor          | Garden house     | Yes          | Yes              |
+  | Outdoor          | Outdoor kitchen  | No           | Yes              |
+  | Outdoor          | Garage           | No           | Yes              |
+  | Outdoor          | Porch            | No           | Yes              |
+  | Other            | Hall             | No           | Yes              |
+  | Other            | Home office      | No           | Yes              |
+  | Other            | Bar              | No           | Yes              |
+  | Other            | Cinema           | No           | Yes              |
+  | Other            | Gym              | No           | Yes              |
+  | Other            | Game room        | No           | Yes              |
+  | Other            | Kids room        | No           | Yes              |
+  | Other            | Wine cellar      | No           | Yes              |
 
 ## ✅ Discover
+
 **Component Path**: `app/discover/page.tsx` (discover page with tabs)
 
-
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%201.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%201.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516725751-73nzm2k.png?alt=media&token=a89470bf-ff8e-44ce-becf-d20d4707529a)
 
@@ -114,10 +110,10 @@ Functional Requirements
 - Visitors and Registered users can browse Projects and Professionals using a two-tab layout.
 
 ### Projects
+
 **Component Path**: `app/discover/projects/page.tsx` (projects tab component)
 
-
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%201.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%201.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516729138-12zzwl1.png?alt=media&token=83d0e1d8-48bc-4a75-9334-5e8bceea2143)
 
@@ -156,10 +152,10 @@ Acceptance Criteria
 - Given the page renders, when breadcrumbs are built, then show Projects > {Location} > {Type} > {Sub-type} > {Title} with ancestor crumbs linking to Discover pre-filtered; long labels truncate with tooltip.
 
 ### Professionals
+
 **Component Path**: `app/discover/professionals/page.tsx` (professionals tab component)
 
-
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%202.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%202.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516733048-5nmlrax.png?alt=media&token=0f1ae852-6d62-40de-a4bf-185cc8b763cf)
 
@@ -183,17 +179,18 @@ Acceptance Criteria
 - Given the Professionals tab is selected, when the page renders, then provide keyword search over Company Name, Services with debounce.
 
 ## Project Detail
+
 **Component Path**: `app/projects/[id]/page.tsx` (project detail page)
 
 **Gallery Component**: `components/project-gallery.tsx` (multi-image header with modal trigger)
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%203.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%203.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516737335-h82lwoc.png?alt=media&token=b8daf627-e80b-44e1-b1b0-6e149e3cc5db)
 
 Functional Requirements
 
-- 
+-
 - User can click the link 'Back to search' above the Multi-Image header to go back to the search results (previous page)
 - User can navigate projects from the search results through previous and next project buttons. When the user didn't use a search to op the Project Detail page, the navigation buttons are hidden.
 - User can view a Multi-Image Header (shows the first 5 uploaded images on desktop; swipeable on mobile).
@@ -203,10 +200,10 @@ Functional Requirements
 - User can click Share to open the Share modal
 - User can read Title, [Style] [sub-type] in [location], [Building type] in [Project Year], and the Overview rich-text.
 - User can view the Professionals section on the right of the page, differentiating professionals with and without a company page (subscription)
-    - **With company page:** company name, professional type, # of projects (clickable) and 'Visit' button
-        - The # of projects link takes the user to the Professionals Detail Page and scrolls to the 'Projects' section on the page
-        - The Visit button opens the Professional Detail Page
-    - **Without company page:** only company name and professional type are shown without links
+  - **With company page:** company name, professional type, # of projects (clickable) and 'Visit' button
+    - The # of projects link takes the user to the Professionals Detail Page and scrolls to the 'Projects' section on the page
+    - The Visit button opens the Professional Detail Page
+  - **Without company page:** only company name and professional type are shown without links
 - User can view the Highlights Section (Building Feature Image + Building Feature Name + Building Feature Description). Clicking a card will open the Image Overview Model and scroll to the respective building feature.
 - User can view Features metadata block showing the building features with an icon. Clicking a feature will open the Image Overview Model and scroll to the respective building feature.
 - User can view the Professionals Carrousel with company cards (professional image + company name + rating + number of reviews + professional type + number of projects); clicking a card navigates to the Professional Detail Page. The carrousel only include companies with a company page.
@@ -226,21 +223,21 @@ Acceptance Criteria
 
 ### Professionals Popup
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%204.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%204.png>)
 
 Functional Requirements:
 
 - User can view professionals that contributed to the project
 - **With company page:** company name, professional type, # of projects (clickable) and 'Visit' button
-    - The # of projects link takes the user to the Professionals Detail Page and scrolls to the 'Projects' section on the page
-    - The Visit button opens the Professionals Detail Page
+  - The # of projects link takes the user to the Professionals Detail Page and scrolls to the 'Projects' section on the page
+  - The Visit button opens the Professionals Detail Page
 - **Without company page:** only company name and professional type are shown without links.
 
 ### Images Overview Modal
 
 **Component Path**: `components/grouped-pictures-modal.tsx` (image gallery modal with lightbox)
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%205.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%205.png>)
 
 Functional Requirements
 
@@ -249,13 +246,13 @@ Functional Requirements
 - User can click Share to open the Share modal.
 - User can click Save to save the project
 - Images are grouped per building feature, showing feature name and description
-    - When a building feature does not have any photos, the name and description are not shown
+  - When a building feature does not have any photos, the name and description are not shown
 - When the user clicks a Highlighted feature on the project detail page, the image overview model is opened and scrolled to the respective building feature.
 - When the user clicks an individual photo the image detail model is opened
 
 ### Image Detail Modal
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%206.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%206.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516745110-5ruzrk1.png?alt=media&token=b649f02b-85c8-40a9-9fab-43ef58f4f8a0)
 
@@ -287,10 +284,10 @@ Functional Requirements
 - User can click share buttons: copy link, e-mail, message, WhatsApp, Messenger, Facebook, Twitter and embed.
 
 ## Professional Detail (Company Page)
+
 **Component Path**: `app/professionals/[id]/page.tsx` (professional detail page)
 
-
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%207.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%207.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516749870-73duizp.png?alt=media&token=132f61d3-4e9b-48eb-9cf6-6e19b24471b7)
 
@@ -329,8 +326,8 @@ Functional Requirements
 - User can click 'Contact Professional' to open an email client or contact modal.
 
 ### Write Review
-**Component Path**: `components/professional/WriteReviewModal.tsx` (review form modal)
 
+**Component Path**: `components/professional/WriteReviewModal.tsx` (review form modal)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516757604-ob6w568.png?alt=media&token=8a78a0eb-3512-4c5c-b1aa-41c331084138)
 
@@ -353,11 +350,11 @@ Acceptance Criteria
 - User can see number of reviews in the Reviews sub-title.
 - User can sort reviews by Most recent, Highest rated, Lowest rated
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%208.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%208.png>)
 
 ## Auth
-**Component Path**: `components/auth/AuthModal.tsx` (authentication modal)
 
+**Component Path**: `components/auth/AuthModal.tsx` (authentication modal)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516760740-vr5rlrv.png?alt=media&token=67b217de-14a9-441f-b6f8-dc516d6bddf4)
 
@@ -394,12 +391,12 @@ Acceptance Criteria
 **Verification**
 
 ## Homeowner Portal
-**Component Path**: `app/dashboard/page.tsx` (user dashboard layout)
 
+**Component Path**: `app/dashboard/page.tsx` (user dashboard layout)
 
 Functional Requirements
 
-- User that is logged-in as Homeowner user manage their projects, Saved professionals and Settings here. The sidebar order is:  Saved Projects → Saved Professionals → Account Settings
+- User that is logged-in as Homeowner user manage their projects, Saved professionals and Settings here. The sidebar order is: Saved Projects → Saved Professionals → Account Settings
 - The header in the Homeowner Portal is the same as the homepage (Logo, Projects, Professionals, Search, List with us, hamburger menu).
 
 ### Saved Projects
@@ -412,7 +409,7 @@ Functional Requirements
 - User can view saved projects as cards (image, title, [Style] [Sub-Type] in [Location], number of likes).
 - User can click a card to open the public Project Detail page.
 - User can unfavorite a project via the heart icon; system will remove the card with a fade animation.
-- 
+-
 - System will display an empty-state illustration if no items are saved.
 
 Acceptance Criteria
@@ -456,7 +453,7 @@ Acceptance Criteria
 
 ### Company details
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%209.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%209.png>)
 
 Functional Requirements
 
@@ -467,8 +464,8 @@ Functional Requirements
 - When the user clicks 'Create company' the user will navigate to the Professional Portal
 
 ## Professional Portal
-**Component Path**: `app/dashboard/professional/page.tsx` (professional dashboard layout)
 
+**Component Path**: `app/dashboard/professional/page.tsx` (professional dashboard layout)
 
 - User that is logged-in and also has a Professional account, a Role Switcher appears in the header to toggle between Homeowner and Professional Dashboard modes (state persists across sessions).
 - On the Professional Dashboard the header is updated, consisting of Logo, Listings, Company and Hamburger menu.
@@ -476,7 +473,7 @@ Functional Requirements
 
 ### Listings
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2010.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2010.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516771921-i714cox.png?alt=media&token=c8192cc4-369f-479b-bfdf-9ad5864e1b93)
 
@@ -485,27 +482,25 @@ Functional Requirements
 - User can view a list a project card (Add your first project with 'Add project' button) when there are no projects under Listings
 - User can view all personal projects in a through project cards with image, Title, Status (In Progress · In Review · Invited · Live on page · Listed · Unlisted · Rejected), Role (Project owner · Contributor), Actions.
 - User can click Add Project to launch the List a Project Wizard.
-- 
-- 
-- User can click a card or click the 'Edit listing' link in the Action menu to open the  Listing Editor page if the Role is Project Owner and the Status is Live on Page, Listed or Unlisted; drafts still open the List a Project Wizard.
+-
+-
+- User can click a card or click the 'Edit listing' link in the Action menu to open the Listing Editor page if the Role is Project Owner and the Status is Live on Page, Listed or Unlisted; drafts still open the List a Project Wizard.
 - User can filter by Status, Role, Year;
 - User can search by Title or Sub-type via the keyword Search box under FIlter menu.
-- User can click the Status label on the project card or the 'Update status' link in the Action menu  to open the Listing Status Popup. When the status is In Progress  user is navigated to the List a Project Wizard. When the status is Rejected the Listing Rejected popup is displayed.
+- User can click the Status label on the project card or the 'Update status' link in the Action menu to open the Listing Status Popup. When the status is In Progress user is navigated to the List a Project Wizard. When the status is Rejected the Listing Rejected popup is displayed.
 - User can click the 'Edit cover image' link in the Action menu to open the Cover Photo Popup
 - User can delete a listing through the Listing Status Popup (Delete action) after confirmation; system will soft-delete and refresh the table.
 - System will color-code status chips and auto-refresh the list when a wizard save occurs.
 - Listing statuses
-    
-    
-    | Status | Description | Image click - listing owner | Image click - not listing owner |
-    | --- | --- | --- | --- |
-    | ● In progress | Listing is in edit mode | List a project flow. | n/a |
-    | ● In review | List a project flow is completed and has to be accepted by an admin. | List a project flow. | n/a |
-    | ● Invited | Company is invited by project owner. | n/a | Status pop-up |
-    | ● Live on page | Project is live on the company page | Edit listing | Status pop-up |
-    | ● Listed | Professional is listed on project page. | Edit listing | Status pop-up |
-    | ● Unlisted | Project is not listed on company page and professional is not listed on project page.  | Edit listing | Status pop-up |
-    | ● Rejected | The listing is rejected by an admin | Rejected pop-up | n/a |
+  | Status         | Description                                                                           | Image click - listing owner | Image click - not listing owner |
+  | -------------- | ------------------------------------------------------------------------------------- | --------------------------- | ------------------------------- |
+  | ● In progress  | Listing is in edit mode                                                               | List a project flow.        | n/a                             |
+  | ● In review    | List a project flow is completed and has to be accepted by an admin.                  | List a project flow.        | n/a                             |
+  | ● Invited      | Company is invited by project owner.                                                  | n/a                         | Status pop-up                   |
+  | ● Live on page | Project is live on the company page                                                   | Edit listing                | Status pop-up                   |
+  | ● Listed       | Professional is listed on project page.                                               | Edit listing                | Status pop-up                   |
+  | ● Unlisted     | Project is not listed on company page and professional is not listed on project page. | Edit listing                | Status pop-up                   |
+  | ● Rejected     | The listing is rejected by an admin                                                   | Rejected pop-up             | n/a                             |
 
 Acceptance Criteria
 
@@ -514,7 +509,7 @@ Acceptance Criteria
 
 ### Listing status
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2011.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2011.png>)
 
 Functional Requirements
 
@@ -524,7 +519,7 @@ Functional Requirements
 
 ### Listing rejected
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2012.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2012.png>)
 
 Functional Requirements
 
@@ -535,17 +530,17 @@ Functional Requirements
 
 ### Cover photo
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2013.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2013.png>)
 
 Functional Requirements
 
 - User can select a photo from the project images that will be displayed in the your project section and as image on the company page when the project is added
 
 ## Listing Editor
+
 **Component Path**: `components/dashboard/ListingEditor.tsx` (inline project editor drawer)
 
-
-- 
+-
 - User can navigate Photo tour, Professionals, Details and Location tabs on a menu on the left. On Mobile users can navigate through a hamburger menu left of the page title.
 - User can see Status label above the navigation links on the left. Clicking the Status label will open the Listing Status Popup
 - User can click Save Changes; system will apply edits to the live listing immediately.
@@ -561,7 +556,7 @@ Acceptance Criteria
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516786951-p41ukg0.png?alt=media&token=39c359da-491b-4a3b-a666-287ef62064ab)
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2014.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2014.png>)
 
 Functional Requirements:
 
@@ -573,20 +568,20 @@ Functional Requirements:
 
 ### Add feature
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2015.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2015.png>)
 
 - User can see selected features and add or remove a feature by checking or unchecking a feature card.
 
 ### Add photo
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2016.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2016.png>)
 
 - User can see an overview of all uploaded photos and select one or multiple uploaded photos by checking the images
 - User can browse or drag and drop more images to the uploaded photo section.
 
 ### Room editor
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2017.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2017.png>)
 
 - User can see the feature cards on a panel on the left with image and feature
 - User can see an overview of images that are located under the specific feature. The first image has the tag ‘Cover photo’
@@ -603,32 +598,32 @@ Functional Requirements:
 - Users can see the professionals that are added in the List a Project Wizard
 - When no professional is invited the ‘Invite Professional’ button is displayed taking the user to the Add Professional Popup
 - When a professional is added the user will see:
-    - Email - when company domain is not used in a company account
-    - Company name - when company domain is used in a company account
-    - Status
-        - Listing owner (grey) - always the first block. This is the company name and primary type of the company that created the listing
-        - Invite sent (orange) - listing status is 'Invited'
-        - Listed (green) - listing status of the company is 'Listed' or 'Live on page'
-        - Unlisted (grey) - listing status of the company is 'Unlisted'
-        - Removed (red) - company removed the listing
+  - Email - when company domain is not used in a company account
+  - Company name - when company domain is used in a company account
+  - Status
+    - Listing owner (grey) - always the first block. This is the company name and primary type of the company that created the listing
+    - Invite sent (orange) - listing status is 'Invited'
+    - Listed (green) - listing status of the company is 'Listed' or 'Live on page'
+    - Unlisted (grey) - listing status of the company is 'Unlisted'
+    - Removed (red) - company removed the listing
 - Users can add a professional type by clicking the Add button (plus icon) taking the user to the Add Professional Service Popup
 
 ### Add professional
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2018.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2018.png>)
 
 - User can add email for the selected professional service
 - User can remove the professional service
 
 ### Add professional Service
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2019.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2019.png>)
 
 - User can select and de-select professional service’s. The action will the professional cards on the professionals page
 
 ### Details
 
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2020.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2020.png>)
 
 - User can update listing details
 
@@ -640,8 +635,8 @@ Functional Requirements:
 - User can set a toggle to share the exact location of the project.
 
 ## List a Project — Wizard
-**Component Path**: `components/project/ProjectWizard.tsx` (multi-step project creation wizard)
 
+**Component Path**: `components/project/ProjectWizard.tsx` (multi-step project creation wizard)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516774379-vf2k6dw.png?alt=media&token=57241659-ed77-450e-af9c-5c266102a8ad)
 
@@ -681,7 +676,7 @@ Functional Requirements
 
 - All four selections (Category, Project type, Building type, Project style) are required before Next.
 - User selects Project category, i.e. House, Bed & Bath (required).
-- User selects Project type, i.e. Villa, Apartment, Kitchen  (required). The results filter based on the Project category selected.
+- User selects Project type, i.e. Villa, Apartment, Kitchen (required). The results filter based on the Project category selected.
 - User selects Building type, i.e. New built, Renovated, Interior designed (required).
 - User selects Project style, i.e. Modern (required).
 
@@ -689,7 +684,7 @@ Acceptance Criteria
 
 - Next is disabled until Project Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -721,7 +716,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -755,7 +750,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -787,7 +782,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -819,7 +814,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -854,7 +849,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -879,7 +874,7 @@ Acceptance Criteria
 
 Functional Requirements
 
-- Show features sorted by Xano.sort; default Building first; Additional photos last.
+- Show features sorted by .sort; default Building first; Additional photos last.
 - Each feature shows Select photos; opens Select Photos popup.
 - Add photos & Add features open their popups.
 - Display available features (e.g., Bedroom, Bathroom) as selectable tiles with icons from taxonomy; multi-select allowed.
@@ -889,7 +884,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -923,7 +918,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -958,7 +953,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -987,7 +982,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1016,7 +1011,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1041,7 +1036,7 @@ Acceptance Criteria
 
 Functional Requirements
 
-- Display professional services from Xano with icons, sorted by the 'sort' column.
+- Display professional services from with icons, sorted by the 'sort' column.
 - Users select one or more services via tiles (multi-select). Selection persists on Back/Save & Exit.
 - Next navigates to Invite Professionals; no minimum selection required.
 
@@ -1049,7 +1044,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1083,7 +1078,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1116,7 +1111,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1147,7 +1142,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1180,7 +1175,7 @@ Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1277,10 +1272,10 @@ Functional Requirements
 - System will visually indicate the cover photo with a label or marker.
 
 ## List With Us
+
 **Component Path**: `app/list-with-us/page.tsx` (professional signup landing page)
 
-
-![image.png](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2021.png)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2021.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516818412-de5ylz8.png?alt=media&token=54154d17-1d6b-4587-ab66-cb9cea6eedb1)
 
@@ -1292,20 +1287,20 @@ Functional Requirements
 - Users can scroll through 4 benefits with a visual
 - Users can click through testimonials
 - Users can scroll through how to list your project
-- 
-- 
+-
+-
 
 Acceptance Criteria
 
 - Given a user clicks Company Setup, when activated, then open the Professional Signup popup and set focus to the first field; closing the popup returns focus to the CTA.
 
-### 
+###
 
-- 
+-
 
 ## Admin Portal
-**Component Path**: `app/admin/page.tsx` (admin dashboard layout)
 
+**Component Path**: `app/admin/page.tsx` (admin dashboard layout)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516828917-psf7pev.png?alt=media&token=96ecef49-2812-4aac-84ce-aa575fba7b82)
 
@@ -1410,7 +1405,7 @@ Acceptance Criteria
 
 ## Discover projects from the Landing page (F-01)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480528f0be721370f2c17.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480528f0be721370f2c17.csv>)
 
 Acceptance Criteria
 
@@ -1419,7 +1414,7 @@ Acceptance Criteria
 
 ## Search & filter projects (keyword + facets) (F-02)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480f08b03e8175cc2f7d9.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480f08b03e8175cc2f7d9.csv>)
 
 Acceptance Criteria
 
@@ -1427,7 +1422,7 @@ Acceptance Criteria
 
 ## Sort project results (popularity/newest) (F-03)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480be8aa7c85ec36349fe.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480be8aa7c85ec36349fe.csv>)
 
 Acceptance Criteria
 
@@ -1435,7 +1430,7 @@ Acceptance Criteria
 
 ## Open a project detail (F-04)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480dbb2aee64821d87225.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480dbb2aee64821d87225.csv>)
 
 Acceptance Criteria
 
@@ -1443,7 +1438,7 @@ Acceptance Criteria
 
 ## View project image gallery (lightbox) (F-05)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480e48531ea2f5534af62.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480e48531ea2f5534af62.csv>)
 
 Acceptance Criteria
 
@@ -1451,7 +1446,7 @@ Acceptance Criteria
 
 ## Navigate to related projects (F-06)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4803192b3d666c040a2ee.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4803192b3d666c040a2ee.csv>)
 
 Acceptance Criteria
 
@@ -1459,7 +1454,7 @@ Acceptance Criteria
 
 ## Jump to professionals from a project (F-07)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480dea7ddc46c6a6d3b0d.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480dea7ddc46c6a6d3b0d.csv>)
 
 Acceptance Criteria
 
@@ -1467,7 +1462,7 @@ Acceptance Criteria
 
 ## Browse the professionals directory (F-08)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4801393e4c610ecee33cb.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4801393e4c610ecee33cb.csv>)
 
 Acceptance Criteria
 
@@ -1475,11 +1470,11 @@ Acceptance Criteria
 
 ## Share a project (F-09)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480a882f5efd2c028d2be.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480a882f5efd2c028d2be.csv>)
 
 ## Save/Like prompts sign-up (from anonymous) (F-10)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4808e9db0d29550648ed2.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4808e9db0d29550648ed2.csv>)
 
 Acceptance Criteria
 
@@ -1487,7 +1482,7 @@ Acceptance Criteria
 
 ## Create an account (sign up) (F-11)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48091a007e4a3ffcb7d11.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48091a007e4a3ffcb7d11.csv>)
 
 Acceptance Criteria
 
@@ -1495,7 +1490,7 @@ Acceptance Criteria
 
 ## Log in / Log out (F-12)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480db92b4e6b5214da78f.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480db92b4e6b5214da78f.csv>)
 
 Acceptance Criteria
 
@@ -1503,7 +1498,7 @@ Acceptance Criteria
 
 ## Save (favorite) a project (F-13)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480859563c4f36e3ebde4.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480859563c4f36e3ebde4.csv>)
 
 Acceptance Criteria
 
@@ -1511,7 +1506,7 @@ Acceptance Criteria
 
 ## Save (favorite) a professional (F-14)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48036bf63f1388628424a.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48036bf63f1388628424a.csv>)
 
 Acceptance Criteria
 
@@ -1519,7 +1514,7 @@ Acceptance Criteria
 
 ## View & manage Saved Projects (F-15)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48091b8d1f67684619f06.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48091b8d1f67684619f06.csv>)
 
 Acceptance Criteria
 
@@ -1527,7 +1522,7 @@ Acceptance Criteria
 
 ## View & manage Saved Professionals (F-16)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480e6bb8fc0a39ac1556e.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480e6bb8fc0a39ac1556e.csv>)
 
 Acceptance Criteria
 
@@ -1535,7 +1530,7 @@ Acceptance Criteria
 
 ## Edit profile & change password (F-17)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48016bc77f505b2bd85fd.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48016bc77f505b2bd85fd.csv>)
 
 Acceptance Criteria
 
@@ -1543,7 +1538,7 @@ Acceptance Criteria
 
 ## Start “List with Us” (F-18)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480ab8fa6e44ccb5cf10b.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480ab8fa6e44ccb5cf10b.csv>)
 
 Acceptance Criteria
 
@@ -1551,7 +1546,7 @@ Acceptance Criteria
 
 ## Admin — Create a new project (multi-step) (F-19)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480f6a54af41c673eb1a8.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480f6a54af41c673eb1a8.csv>)
 
 Acceptance Criteria
 
@@ -1559,7 +1554,7 @@ Acceptance Criteria
 
 ## Admin — Edit an existing project (F-20)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480f7889cd847e6bffb09.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480f7889cd847e6bffb09.csv>)
 
 Acceptance Criteria
 
@@ -1567,7 +1562,7 @@ Acceptance Criteria
 
 ## Admin — Manage Featured projects (F-21)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4807babe5e64aababb352.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e4807babe5e64aababb352.csv>)
 
 Acceptance Criteria
 
@@ -1575,7 +1570,7 @@ Acceptance Criteria
 
 ## Admin — Manage professionals (F-22)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480458a84d0e5503b9015.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480458a84d0e5503b9015.csv>)
 
 Acceptance Criteria
 
@@ -1583,21 +1578,21 @@ Acceptance Criteria
 
 ## Admin — Manage taxonomies (F-23)
 
-| Step | Description | Mockup |
-| --- | --- | --- |
-| 1 | Admin opens Taxonomies. | Taxonomies |
-| 2 | Admin adds a Type/Sub-type or renames an existing item. | Taxonomies |
+| Step | Description                                             | Mockup     |
+| ---- | ------------------------------------------------------- | ---------- |
+| 1    | Admin opens Taxonomies.                                 | Taxonomies |
+| 2    | Admin adds a Type/Sub-type or renames an existing item. | Taxonomies |
 
 ## Admin — Moderate “List with Us” submissions (F-24)
 
-| Step | Description | Mockup |
-| --- | --- | --- |
-| 1 | Admin opens Submissions/Leads. | Submissions / Leads |
-| 2 | Admin clicks Approve or Reject/Archive with optional note. | Submissions / Leads |
+| Step | Description                                                | Mockup              |
+| ---- | ---------------------------------------------------------- | ------------------- |
+| 1    | Admin opens Submissions/Leads.                             | Submissions / Leads |
+| 2    | Admin clicks Approve or Reject/Archive with optional note. | Submissions / Leads |
 
 ## Admin — Invite and manage admin users (F-25)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480288e81fc35663deaff.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480288e81fc35663deaff.csv>)
 
 Acceptance Criteria
 
@@ -1605,13 +1600,13 @@ Acceptance Criteria
 
 ## Homeowner — List a new project (multi-step wizard) (F-26)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48095a826f51d00353ea6.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48095a826f51d00353ea6.csv>)
 
 Acceptance Criteria
 
 - Next is disabled until Category, Project type, Building type, and Project style are selected.
 - All dropdown options are sourced from Taxonomies (sorted) and allow searching/filtering.
-- Feature groups populate from Xano Taxonomies with icons and are sorted by 'sort'.
+- Feature groups populate from Taxonomies with icons and are sorted by 'sort'.
 - At least one selection is required in each group; show inline error if none selected.
 - Year fields must be 4 digits and within configurable bounds (e.g., 1800–current year).
 - Building year must be less than or equal to Year built; show inline error otherwise.
@@ -1632,7 +1627,7 @@ Acceptance Criteria
 
 ## Homeowner — Manage an existing project listing (F-27)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48032a4aecbf07103980a.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48032a4aecbf07103980a.csv>)
 
 Acceptance Criteria
 
@@ -1640,7 +1635,7 @@ Acceptance Criteria
 
 ## Professional — Edit company profile & settings (F-28)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48071a271df9c4c758534.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e48071a271df9c4c758534.csv>)
 
 Acceptance Criteria
 
@@ -1648,7 +1643,7 @@ Acceptance Criteria
 
 ## Professional — Manage company photos (F-29)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480c29198cf9f6434ef1f.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480c29198cf9f6434ef1f.csv>)
 
 Acceptance Criteria
 
@@ -1656,7 +1651,7 @@ Acceptance Criteria
 
 ## Professional — Manage company status (F-30)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480648610cfa9f53ee22d.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480648610cfa9f53ee22d.csv>)
 
 Acceptance Criteria
 
@@ -1664,7 +1659,7 @@ Acceptance Criteria
 
 ## User — Write a review for a professional (F-31)
 
-[Untitled](Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480b78435cb77c22e247d.csv)
+[Untitled](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/Untitled%2027af3c0385e480b78435cb77c22e247d.csv>)
 
 Acceptance Criteria
 
@@ -1672,10 +1667,10 @@ Acceptance Criteria
 
 ## Admin — Moderate reviews (F-32)
 
-| Step | Description | Mockup |
-| --- | --- | --- |
-| 1 | Admin navigates to the Reviews & Abuse Reports page. | Reviews & Abuse Reports |
-| 2 | Admin clicks Approve/Reject on a review in the queue. | Reviews & Abuse Reports |
+| Step | Description                                           | Mockup                  |
+| ---- | ----------------------------------------------------- | ----------------------- |
+| 1    | Admin navigates to the Reviews & Abuse Reports page.  | Reviews & Abuse Reports |
+| 2    | Admin clicks Approve/Reject on a review in the queue. | Reviews & Abuse Reports |
 
 share or save the project
 
