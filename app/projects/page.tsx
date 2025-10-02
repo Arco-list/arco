@@ -6,6 +6,7 @@ import { FilterBar } from "@/components/filter-bar"
 import { ProjectsGrid } from "@/components/projects-grid"
 import { ProjectsNavigation } from "@/components/projects-navigation"
 import { FilterProvider } from "@/contexts/filter-context"
+import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 
 export const metadata: Metadata = {
   title: "Browse Projects",
@@ -14,19 +15,21 @@ export const metadata: Metadata = {
 
 function ProjectsPageContent() {
   return (
-    <FilterProvider>
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <ProjectsNavigation activeTab="projects" />
-        <FilterBar />
+    <FilterErrorBoundary>
+      <FilterProvider>
+        <div className="min-h-screen flex flex-col">
+          <Header />
+          <ProjectsNavigation activeTab="projects" />
+          <FilterBar />
 
-        <main className="flex-1 bg-white">
-          <ProjectsGrid />
-        </main>
+          <main className="flex-1 bg-white">
+            <ProjectsGrid />
+          </main>
 
-        <Footer />
-      </div>
-    </FilterProvider>
+          <Footer />
+        </div>
+      </FilterProvider>
+    </FilterErrorBoundary>
   )
 }
 

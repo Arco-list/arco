@@ -105,6 +105,23 @@ const DEFAULT_MAP_CENTER = {
 }
 const DEFAULT_MAP_ZOOM = 12
 
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+
+const createDraftSlug = (title: string) => {
+  const base = slugify(title) || "project"
+  const timestamp = Date.now().toString(36)
+  const randomSuffix =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+      : Math.random().toString(36).slice(2, 14)
+  return `${base}-${timestamp}${randomSuffix}`
+}
+
 const extractCityAndRegion = (
   components: Array<{ long_name: string; short_name: string; types: string[] }> = [],
 ) => {
@@ -727,23 +744,44 @@ export default function NewProjectPage() {
         let nextProjectId = projectId
 
         if (!nextProjectId) {
-          const { data, error } = await supabase
-            .from("projects")
-            .insert([projectPayload])
-            .select("id")
-            .single()
+          const MAX_SLUG_ATTEMPTS = 5
+          let attempts = 0
+          let inserted = false
 
-          if (error || !data) {
-            throw error ?? new Error("Unable to create project draft.")
+          while (!inserted && attempts < MAX_SLUG_ATTEMPTS) {
+            const insertPayload: TablesInsert<"projects"> = {
+              ...projectPayload,
+              slug: createDraftSlug(effectiveTitle),
+            }
+
+            const { data, error } = await supabase
+              .from("projects")
+              .insert([insertPayload])
+              .select("id")
+              .single()
+
+            if (!error && data) {
+              nextProjectId = data.id
+              setProjectId(data.id)
+              inserted = true
+
+              if (typeof window !== "undefined") {
+                const url = new URL(window.location.href)
+                url.searchParams.set("projectId", data.id)
+                router.replace(`${url.pathname}?${url.searchParams.toString()}`)
+              }
+            } else if (error && "code" in error && error.code === "23505") {
+              attempts += 1
+              if (attempts >= MAX_SLUG_ATTEMPTS) {
+                throw error
+              }
+            } else {
+              throw error ?? new Error("Unable to create project draft.")
+            }
           }
 
-          nextProjectId = data.id
-          setProjectId(data.id)
-
-          if (typeof window !== "undefined") {
-            const url = new URL(window.location.href)
-            url.searchParams.set("projectId", data.id)
-            router.replace(`${url.pathname}?${url.searchParams.toString()}`)
+          if (!inserted || !nextProjectId) {
+            throw new Error("Unable to create project draft after retries.")
           }
         } else {
           const { client_id: _clientId, ...rest } = projectPayload
