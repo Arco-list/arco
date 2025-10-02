@@ -11,11 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
+import type { AuthError, Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 import type { Database, UserProfile } from "@/lib/supabase/types";
+import { buildSession } from "@/lib/auth-utils";
 
 type AuthContextValue = {
   supabase: SupabaseClient<Database>;
@@ -28,6 +29,24 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+const isExpectedAuthMissingError = (error: AuthError | null) => {
+  if (!error) {
+    return false;
+  }
+
+  if (error.code === "AuthSessionMissingError" || error.name === "AuthSessionMissingError") {
+    return true;
+  }
+
+  const normalizedMessage = error.message?.toLowerCase() ?? "";
+
+  return (
+    normalizedMessage.includes("auth session missing") ||
+    normalizedMessage.includes("auth session or user missing") ||
+    normalizedMessage.includes("session not found")
+  );
+};
 
 export interface AuthProviderProps {
   children: ReactNode;
@@ -80,24 +99,19 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
 
       if (!isMountedRef.current) return;
 
-      if (sessionError) {
+      if (sessionError && !isExpectedAuthMissingError(sessionError)) {
         toast.error("Could not load session", {
           description: sessionError.message,
         });
       }
 
-      if (userError) {
+      if (userError && !isExpectedAuthMissingError(userError)) {
         toast.error("Could not verify user", {
           description: userError.message,
         });
       }
 
-      const sanitizedSession = sessionData.session
-        ? ({
-            ...sessionData.session,
-            user: userData.user ?? sessionData.session.user,
-          } as Session)
-        : null;
+      const sanitizedSession = buildSession(sessionData.session ?? null, userData.user ?? null);
 
       setSession(sanitizedSession);
       setUser(userData.user ?? null);
@@ -121,12 +135,7 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
         const { data: userData } = await supabase.auth.getUser();
         if (!isMountedRef.current) return;
 
-        const sanitizedSession = newSession
-          ? ({
-              ...newSession,
-              user: userData.user ?? newSession.user,
-            } as Session)
-          : null;
+        const sanitizedSession = buildSession(newSession ?? null, userData.user ?? null);
 
         setSession(sanitizedSession);
         setUser(userData.user ?? null);
@@ -153,19 +162,14 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
           supabase.auth.getUser(),
         ]);
 
-        const sanitizedSession = sessionData.session
-          ? ({
-              ...sessionData.session,
-              user: userData.user ?? sessionData.session.user,
-            } as Session)
-          : null;
+        const sanitizedSession = buildSession(sessionData.session ?? null, userData.user ?? null);
 
         setSession(sanitizedSession);
         setUser(userData.user ?? null);
         await fetchProfile(userData.user?.id ?? null);
       },
       refreshProfile: async () => {
-        await fetchProfile(user?.id ?? session?.user?.id);
+        await fetchProfile(user?.id ?? null);
       },
     }),
     [fetchProfile, isLoading, profile, session, supabase, user]

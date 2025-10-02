@@ -1,10 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 
-import type { Database, TablesInsert } from '@/lib/supabase/types';
+import { createRouteHandlerSupabaseClient } from '@/lib/supabase/server';
 import { resolveRedirectPath } from '@/lib/auth-redirect';
-import { logger, sanitizeForLogging } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -20,7 +18,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (code) {
-    const supabase = createRouteHandlerClient<Database>({ cookies });
+    const supabase = await createRouteHandlerSupabaseClient();
 
     try {
       logger.auth('callback', 'Exchanging code for session', { callbackId });

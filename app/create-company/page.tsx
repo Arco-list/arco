@@ -24,10 +24,10 @@ export default function CreateCompanyPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
-  const { session, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
 
   useEffect(() => {
-    if (!session) {
+    if (!user) {
       router.replace("/login?redirectTo=/create-company")
       return
     }
@@ -36,7 +36,7 @@ export default function CreateCompanyPage() {
     if (Array.isArray(userTypes) && userTypes.includes("professional")) {
       router.replace("/dashboard/listings")
     }
-  }, [profile?.user_types, router, session])
+  }, [profile?.user_types, router, user])
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

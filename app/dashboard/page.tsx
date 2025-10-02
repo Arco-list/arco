@@ -7,12 +7,12 @@ import { useAuth } from "@/contexts/auth-context"
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { profile, session, isLoading } = useAuth()
+  const { profile, user, isLoading } = useAuth()
 
   useEffect(() => {
     if (isLoading) return
 
-    const sessionMetadata = session?.user?.user_metadata ?? {}
+    const sessionMetadata = user?.user_metadata ?? {}
     const metadataUserTypes = Array.isArray(sessionMetadata.user_types)
       ? (sessionMetadata.user_types as string[])
       : typeof sessionMetadata.user_types === "string"
@@ -22,7 +22,7 @@ export default function DashboardPage() {
     const hasProfessionalAccess = userTypes?.includes("professional") ?? false
 
     router.replace(hasProfessionalAccess ? "/dashboard/listings" : "/homeowner")
-  }, [isLoading, profile, router, session])
+  }, [isLoading, profile, router, user])
 
   return null
 }
