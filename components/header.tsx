@@ -107,21 +107,19 @@ export function Header({ transparent = false }: HeaderProps) {
               />
             </Link>
 
-            <div className="hidden items-center space-x-6 md:flex">
-              {pathname !== "/projects" && (
+            {pathname !== "/projects" && pathname !== "/professionals" && (
+              <div className="hidden items-center space-x-6 md:flex">
                 <Link href="/projects" className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}>
                   Projects
                 </Link>
-              )}
-              {pathname !== "/professionals" && (
                 <Link
                   href="/professionals"
                   className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
                 >
                   Professionals
                 </Link>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="absolute left-1/2 hidden w-80 -translate-x-1/2 transform md:block">

@@ -2,7 +2,7 @@
 
 # Functionality by Screen
 
-## ✅ Landing
+## Landing
 
 **Component Path**: `app/page.tsx` (landing page)
 
@@ -27,6 +27,7 @@ Acceptance Criteria
 
 - Given an unauthenticated visitor loads the site, when the header renders, then show nav items Projects, Professionals, Log In/Sign Up (and hide Saved projects/Saved professionals/Account/Sign out), List with Us (Switch to company when an authenticated professional visitor loads the side), Help center.
 - Given the hero Search bar has non-empty input, when the user presses Enter or clicks the Search CTA, then navigate to Discover (Projects tab) with the query applied and visible in the Discover search field.
+- User can navigate cards in a carrousel using the navigation buttons (left/right) to refresh all the cards in the carrousel. On mobile the carrousel can be navigated through a swipe.
 - Professional categories and services
   | Professional Category | Professional Service     |
   | --------------------- | ------------------------ |
@@ -62,7 +63,7 @@ Acceptance Criteria
   | Outdoor               | Garden house             |
   | Outdoor               | Outdoor furniture        |
   | Outdoor               | Fencing and gates        |
-- Project categories and types
+- Project typescategories and sub-types
   | Project Type     | Project Sub-type | Listing type | Building feature |
   | ---------------- | ---------------- | ------------ | ---------------- |
   | House            | Villa            | Yes          | No               |
@@ -97,7 +98,7 @@ Acceptance Criteria
   | Other            | Kids room        | No           | Yes              |
   | Other            | Wine cellar      | No           | Yes              |
 
-## ✅ Discover
+## Discover
 
 **Component Path**: `app/discover/page.tsx` (discover page with tabs)
 
@@ -129,7 +130,7 @@ Functional Requirements
 - User can click the Save/Favorite (heart) on a card (unauth → Login > Sign Up, then return to context).
 - User can click Like (thumb up with number of likes below the image) on a card to like the project (unauth → Login > Sign Up, then return to context).
 - System will lazy-load more results on scroll (infinite load) and show skeleton loaders while fetching.
-- User can apply filters by Project Category and Project Type (single-select).
+- User can apply filters by Project Type or Project Sub-Type (single-select). The project sub-types that are qualified as 'Listing type' in the Project types and sub-types table will be displayed in he Type filter menu. Users can expand the project type to see underlying project sub-types.
 - User can apply filters by Style (multi-select), e.g. Contemporary, Farmhouse, Modern, Scandinavian
 - User can apply filters by Building Type (multi-select), e.g. Interior Designed, New built, Renovated
 - User can apply filters by Location (multi-select), e.g., Waterfront, Mountain, Urban, Coastal.
@@ -177,6 +178,7 @@ Functional Requirements
 Acceptance Criteria
 
 - Given the Professionals tab is selected, when the page renders, then provide keyword search over Company Name, Services with debounce.
+- Only professionals with a Plus plan are displayed in the search results.
 
 ## Project Detail
 
@@ -190,7 +192,6 @@ Acceptance Criteria
 
 Functional Requirements
 
--
 - User can click the link 'Back to search' above the Multi-Image header to go back to the search results (previous page)
 - User can navigate projects from the search results through previous and next project buttons. When the user didn't use a search to op the Project Detail page, the navigation buttons are hidden.
 - User can view a Multi-Image Header (shows the first 5 uploaded images on desktop; swipeable on mobile).
@@ -199,14 +200,12 @@ Functional Requirements
 - User can click Save/Favorite (heart) (unauth → Login > Sign Up, then return and complete the save).
 - User can click Share to open the Share modal
 - User can read Title, [Style] [sub-type] in [location], [Building type] in [Project Year], and the Overview rich-text.
-- User can view the Professionals section on the right of the page, differentiating professionals with and without a company page (subscription)
-  - **With company page:** company name, professional type, # of projects (clickable) and 'Visit' button
-    - The # of projects link takes the user to the Professionals Detail Page and scrolls to the 'Projects' section on the page
-    - The Visit button opens the Professional Detail Page
-  - **Without company page:** only company name and professional type are shown without links
+- User can view the Professionals section on the right of the page with company name, professional type, # of projects (clickable) and 'Visit' button. The Visit button opens the Professional Detail Page
+  -
+  -
 - User can view the Highlights Section (Building Feature Image + Building Feature Name + Building Feature Description). Clicking a card will open the Image Overview Model and scroll to the respective building feature.
 - User can view Features metadata block showing the building features with an icon. Clicking a feature will open the Image Overview Model and scroll to the respective building feature.
-- User can view the Professionals Carrousel with company cards (professional image + company name + rating + number of reviews + professional type + number of projects); clicking a card navigates to the Professional Detail Page. The carrousel only include companies with a company page.
+- User can view the Professionals Carrousel with company cards (professional image + company name + rating + number of reviews + professional type + number of projects); clicking a card navigates to the Professional Detail Page. The carrousel shows professionals with a paid subscription first.
 - User can click the 'Show all professionals' button below the Professionals Carrousel opening the Professionals Popup
 - User can view metadata blocks: Category (i.e. House), Type (i.e. Villa), Style (i.e. Modern), Project type (i.e. New Built), Size (i.e. expansive), Budget (i.e. Luxury), Project year, Building year, Materials (i.e. Exposed brick, natural stone), Location (i.e. Forrest, Countryside)
 - User can scroll to Similar Projects (carousel) with Project Cards (Image, Title, number of likes) and click a card to open that Project Detail.
@@ -227,7 +226,7 @@ Acceptance Criteria
 
 Functional Requirements:
 
-- User can view professionals that contributed to the project
+- User can view professionals that contributed to the project with company name, professional type, # of projects (clickable) and 'Visit' button. The Visit button opens the Professional Detail Page
 - **With company page:** company name, professional type, # of projects (clickable) and 'Visit' button
   - The # of projects link takes the user to the Professionals Detail Page and scrolls to the 'Projects' section on the page
   - The Visit button opens the Professionals Detail Page
@@ -482,8 +481,6 @@ Functional Requirements
 - User can view a list a project card (Add your first project with 'Add project' button) when there are no projects under Listings
 - User can view all personal projects in a through project cards with image, Title, Status (In Progress · In Review · Invited · Live on page · Listed · Unlisted · Rejected), Role (Project owner · Contributor), Actions.
 - User can click Add Project to launch the List a Project Wizard.
--
--
 - User can click a card or click the 'Edit listing' link in the Action menu to open the Listing Editor page if the Role is Project Owner and the Status is Live on Page, Listed or Unlisted; drafts still open the List a Project Wizard.
 - User can filter by Status, Role, Year;
 - User can search by Title or Sub-type via the keyword Search box under FIlter menu.
@@ -538,9 +535,6 @@ Functional Requirements
 
 ## Listing Editor
 
-**Component Path**: `components/dashboard/ListingEditor.tsx` (inline project editor drawer)
-
--
 - User can navigate Photo tour, Professionals, Details and Location tabs on a menu on the left. On Mobile users can navigate through a hamburger menu left of the page title.
 - User can see Status label above the navigation links on the left. Clicking the Status label will open the Listing Status Popup
 - User can click Save Changes; system will apply edits to the live listing immediately.
@@ -593,6 +587,8 @@ Functional Requirements:
 
 ### Professionals
 
+**Component Path**: `app/discover/professionals/page.tsx` (professionals tab component)
+
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516786956-xuo43pn.png?alt=media&token=7ab63e26-c819-458c-8e65-3c2f8f6727c1)
 
 - Users can see the professionals that are added in the List a Project Wizard
@@ -635,8 +631,6 @@ Functional Requirements:
 - User can set a toggle to share the exact location of the project.
 
 ## List a Project — Wizard
-
-**Component Path**: `components/project/ProjectWizard.tsx` (multi-step project creation wizard)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516774379-vf2k6dw.png?alt=media&token=57241659-ed77-450e-af9c-5c266102a8ad)
 
@@ -913,6 +907,7 @@ Functional Requirements
 - Floating action button '+' opens menu: 'Add photos' (global upload) and 'Add feature' (open Add Features popup).
 - Only features with photos will be published; show this message above the grid.
 - Complete button finishes the Photo Tour section; remain enabled when overall photo minimum is met.
+- The first card in the photo tour is 'Building' when the project type is 'House'. This section is to add generic photos from the building that can't be associated with a specific feature in the project, like a Kitchen or Bathroom.
 
 Acceptance Criteria
 
@@ -1219,14 +1214,14 @@ Acceptance Criteria
 
 Functional Requirements
 
-- User can view and change company status:
-- User can unlisted links to the Plans page with an upgrade banner.
+- User can view and change company status by clicking the listing button opening the Company Status Popup
+- User can open theunlisted links to the Plans page with an upgrade banner that is visible for users that are on the Basic plan.
 - User can listed links to the company page in a new screen.
 - User can deactivated links to the bottom of the Profile page where the company can be activated.
 - System will display the correct status (Unlisted, Listed, Deactivated) based on the company’s subscription and account state.
 - System will update the status immediately after a change (no refresh required).
-- User can see an upgrade banner if their plan does not include a company page.
-- System will hide the upgrade banner once a plan with a company page is active.
+- User can see an upgrade banner if their plan does is Basicnot include a company page.
+- System will hide the upgrade banner once there is no option to upgrade.a plan with a company page is active.
 - User can upload and update the company logo.
 - System will validate logo file format (JPG, PNG, SVG) and size limits.
 - User can update the company name.
@@ -1251,6 +1246,14 @@ Acceptance Criteria
 - Given a user drags an image thumbnail to a new position, then the new order must be persisted immediately and reflected on the public Company Page.
 - Given a user clicks Deactivate and confirms the action, then the company status must be set to Deactivated and the public page must become inaccessible.
 
+### Company status popup
+
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2021.png>)
+
+Functional Requirements
+
+- User can select Listed or Unlisted
+
 ### Company Listings
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756598375198-screencapture-v0-arco-git-preview-tinkso-vercel-app-dashboard-listings-2025-08-30-18_59_11.png?alt=media&token=1e718bc2-c0c0-4f61-b966-1cbef897cc4f)
@@ -1271,11 +1274,30 @@ Functional Requirements
 - User can view which photo is currently set as cover.
 - System will visually indicate the cover photo with a label or marker.
 
+## Plans
+
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2022.png>)
+
+Functional Requiremnts
+
+- Users can navigate to Plans from the hamburger menu or the banner on the Company page
+- Users can toggle Monthly and Yearly pricing, which updates the price for the plan and adds the discount tag for yearly plans (20% off)
+- When a user is not logged in with a company account the Basic plan table shows the button ‘Sign up’ (color button) and the Plus table shows the button ‘Get Started’ (outlined button). Both links that the user to the company signup page.
+- When a company user is logged and the active plan is Basic, this plan has the tag ‘Active’ (outlined non-clickable button). The Plus plan has the button ‘Upgrade’ (color button)
+- When a company user is logged and the active plan is Plus, this plan has the tag ‘Active’ (outlined non-clickable button). The Basic plan has no tag.
+- Users can click 'Manage Subscription' opening the Stripe Subscription page. Downgrading is only possible through the Stripe Subscription page, not via the Plans table.
+- The hamburger menu shows 'Upgrade plan' in red when the user is on a free plan and 'Plans' in black when the user is on a paid plan.
+
+Acceptance Criteria
+
+- When a user has a Basic plan the Professional is not displayed in search result on the Professional Discover page.
+- Companies with a paid plan are placed above companies with a free plan on the Project Detail Page in the Professionals sections.
+- When a user has a Basic plan up to 3 projects can be active, which is the total of the projects with the Status Live on page or Listed.
+- Plans can be managed through Stripe
+
 ## List With Us
 
-**Component Path**: `app/list-with-us/page.tsx` (professional signup landing page)
-
-![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2021.png>)
+![image.png](<Arco%20full%20PRD%20(Niek)%2027af3c0385e480b793b9f3de996d4838/image%2023.png>)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516818412-de5ylz8.png?alt=media&token=54154d17-1d6b-4587-ab66-cb9cea6eedb1)
 
@@ -1287,20 +1309,12 @@ Functional Requirements
 - Users can scroll through 4 benefits with a visual
 - Users can click through testimonials
 - Users can scroll through how to list your project
--
--
 
 Acceptance Criteria
 
 - Given a user clicks Company Setup, when activated, then open the Professional Signup popup and set focus to the first field; closing the popup returns focus to the CTA.
 
-###
-
--
-
 ## Admin Portal
-
-**Component Path**: `app/admin/page.tsx` (admin dashboard layout)
 
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516828917-psf7pev.png?alt=media&token=96ecef49-2812-4aac-84ce-aa575fba7b82)
 
@@ -1324,19 +1338,24 @@ Functional Requirements
 
 ### Projects
 
+**Component Path**: `app/discover/projects/page.tsx` (projects tab component)
+
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516835731-mdrvp2w.png?alt=media&token=a15a2dc4-8c9a-4085-8290-47abd22eeeb5)
 
 Functional Requirements
 
-- User can view a table of all projects with columns Featured (toggle), Project Title, Sub-type, Features, Year, Created On.
-- User can view a table of all projects with columns Featured (toggle), Project Title, Sub-type, Features (pill list), Year, Created On.
+- User can view a table of all projects with columns Featured (toggle), Project Title, Sub-type, Status (i.e. In Progress, In review, Live)Features, Images (displaying the number of images), Year, Project location, Created On.
 - User can click the Featured toggle in any row; system will immediately add/remove that project from the Home/Discover “Featured Projects” carousel, update the toggle icon, and persist the change.
+- User can filter results by the columns Project Title, Images, Project location, Created On
 - User can click the SEO View toggle (top right) to switch the table to columns Slug, Meta Title, Meta Description, SEO Status; clicking again returns to the main view.
-- User can filter projects by Location (multi-select country/state), Feature tags, Style, Category, Date Created (range picker).
+- User can filter projects by Location (multi-select country/state), Feature tags, Style, Project TypeCategory, Project Sub-Type, Date Created (range picker).
 - User can type in a search box to search project Title, Slug, or Features (debounced, case-insensitive).
-- User can click any project row (title link) to open the Project Detail admin preview in a new tab.
+- User can click any project row (title link) to open the Project Detail Pageadmin preview in a new tab.
 - User can click Create Project (primary button above table) to open the Create/Edit Project wizard on Step 1.
-- User can click the Edit icon in a row to open that project in the wizard, landing on the last-saved step.
+- User can click the kebab menu to access the links 'Edit', 'Change owner', 'Delete'.
+- User can click the Edit linkicon in the kebab menu in a row to open that project in the Listing Editor or List a project Wizard when the project status is In Progress.the wizard, landing on the last-saved step.
+- User can click the Change owner link in the kebab menu to change the owner of a project by selecting a different professional user.
+- User can click the Delete in the kebab menu to delete a project.
 - System will show a badge count of projects currently filtered, remember column widths, and export the table to CSV via the overflow menu.
 
 Acceptance Criteria
@@ -1351,13 +1370,16 @@ Acceptance Criteria
 
 ### Professionals
 
+**Component Path**: `app/discover/professionals/page.tsx` (professionals tab component)
+
 ![Mockup](https://firebasestorage.googleapis.com/v0/b/prd-explorer.firebasestorage.app/o/mockups%2F1756516840967-iitgfht.png?alt=media&token=740d6df9-3a67-4473-a34e-0c6d8f7675fc)
 
 Functional Requirements
 
-- User can view professionals in a table with columns for Company Name, Status, Projects Linked, and Plan Tier.
+- User can view professionals in a table with columns for Company Name, Rating, Location, Status (Listed, Unlisted, Not claimed, Deactivated), Projects Linked, and Plan Tier.
+- When a Company has the status Not Claimed the Professional is invited to a project by another professional, but not yet linked to a user. The name displays the domain (example.com) that is invited.
 - User can view professionals in a table with Company Name, Status (Active / Inactive), Projects Linked (#), Plan Tier.
-- User can filter by Status, Plan Tier, or keyword search (name, domain).
+- User can filter by Status, Plan Tier, Location, Professional Services or keyword search (name, domain).
 - User can click Create Professional to open a modal with fields Company Name, Logo, Website, Contact Email, Services (multi-select).
 - User can edit a professional in a side panel; system will reflect changes instantly on the public Company Page.
 - User can deactivate/reactivate a profile; system will hide/show the Company Page and unlink it from Discover results.

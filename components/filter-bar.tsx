@@ -1,5 +1,5 @@
 "use client"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo, type ComponentType } from "react"
 import {
   Filter,
   ChevronDown,
@@ -10,9 +10,9 @@ import {
   Building,
   Waves,
   TreePine,
-  BuildingIcon as Barn,
+  Building as BuildingOutline,
   HomeIcon as House,
-  Plus,
+  LayoutGrid,
   Mountain,
   Flower,
   ChefHat,
@@ -20,28 +20,25 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  Landmark,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { FiltersModal } from "./filters-modal"
-import { projectStyles, buildingTypesByCategory } from "@/lib/csv-data"
 import { useFilters } from "@/contexts/filter-context"
 
-const categories = [
-  { icon: Home, label: "House" },
-  { icon: Building, label: "Villa" },
-  { icon: Building2, label: "Apartment" },
-  { icon: Barn, label: "Warehouse" },
-  { icon: Building, label: "Office Building" },
-  { icon: House, label: "Retail Space" },
-  { icon: Plus, label: "Mixed-Use Development" },
-  { icon: Mountain, label: "Industrial Facility" },
-  { icon: TreePine, label: "Business Park" },
-  { icon: Waves, label: "Commercial Plaza" },
-  { icon: Bath, label: "Manufacturing Plant" },
-  { icon: ChefHat, label: "Distribution Center" },
-  { icon: Sparkles, label: "Residential Complex" },
-  { icon: Flower, label: "Green Building" },
-]
+const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+  house: Home,
+  "kitchen-living": ChefHat,
+  "bed-bath": Bath,
+  outdoor: TreePine,
+  other: Sparkles,
+  residential: House,
+  commercial: Building,
+  renovation: BuildingOutline,
+  "new-construction": Building2,
+}
+
+const DEFAULT_CATEGORY_ICON = LayoutGrid
 
 export function FilterBar() {
   const {
@@ -52,7 +49,14 @@ export function FilterBar() {
     setSelectedStyles,
     setSelectedLocation,
     hasActiveFilters,
+    taxonomy,
   } = useFilters()
+
+  const {
+    categories: taxonomyCategories,
+    taxonomyOptions,
+    isLoading: taxonomyLoading,
+  } = taxonomy
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [expandedSections, setExpandedSections] = useState<string[]>([])
@@ -119,48 +123,97 @@ export function FilterBar() {
     }
   }
 
-  const toggleCategoryFilter = (categoryLabel: string) => {
-    const isSelected = selectedTypes.includes(categoryLabel)
-    if (isSelected) {
-      setSelectedTypes(selectedTypes.filter((type) => type !== categoryLabel))
-    } else {
-      setSelectedTypes([...selectedTypes, categoryLabel])
-    }
-  }
-
   const toggleTypeDropdown = () => {
+    if (taxonomyLoading && topLevelCategories.length === 0) {
+      return
+    }
     setActiveDropdown(activeDropdown === "type" ? null : "type")
   }
 
-  const toggleTypeSelection = (type: string) => {
-    setSelectedTypes(selectedTypes.includes(type) ? selectedTypes.filter((t) => t !== type) : [...selectedTypes, type])
+  const toggleTypeSelection = (typeId: string) => {
+    setSelectedTypes((prev) =>
+      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId],
+    )
   }
 
-  const toggleCategorySelection = (category: string) => {
-    const categoryTypes = buildingTypesByCategory[category]
-    const allSelected = categoryTypes.every((type) => selectedTypes.includes(type))
+  const topLevelCategories = useMemo(
+    () => taxonomyCategories.filter((category) => category.parent_id === null),
+    [taxonomyCategories],
+  )
 
-    if (allSelected) {
-      setSelectedTypes(selectedTypes.filter((type) => !categoryTypes.includes(type)))
-    } else {
-      const newTypes = [...selectedTypes]
-      categoryTypes.forEach((type) => {
-        if (!newTypes.includes(type)) {
-          newTypes.push(type)
+  const childCategoriesByParent = useMemo(() => {
+    const map = new Map<string, typeof taxonomyCategories>
+    taxonomyCategories.forEach((category) => {
+      if (!category.parent_id) return
+      const siblings = map.get(category.parent_id) ?? []
+      siblings.push(category)
+      map.set(category.parent_id, siblings)
+    })
+    return map
+  }, [taxonomyCategories])
+
+  const typeOptions = useMemo(() => {
+    return topLevelCategories
+      .map((category) => {
+        const children = childCategoriesByParent.get(category.id) ?? []
+
+        const listableChildren = children
+          .filter((item) => item.project_category_attributes?.is_listable)
+          .sort((a, b) => {
+            const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER
+            const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER
+            if (orderA !== orderB) return orderA - orderB
+            return a.name.localeCompare(b.name)
+          })
+
+        const itemsSource = [
+          ...(category.project_category_attributes?.is_listable ? [category] : []),
+          ...listableChildren,
+        ]
+
+        if (itemsSource.length === 0) {
+          return null
+        }
+
+        return {
+          id: category.id ?? category.slug ?? category.name,
+          name: category.name,
+          items: itemsSource.map((item, index) => ({
+            id: item.id ?? item.slug ?? `${item.name}-${index}`,
+            name: item.name,
+          })),
         }
       })
-      setSelectedTypes(newTypes)
+      .filter((section): section is { id: string; name: string; items: { id: string; name: string }[] } => section !== null)
+  }, [childCategoriesByParent, topLevelCategories])
+
+  const typeOptionsMap = useMemo(() => new Map(typeOptions.map((option) => [option.id, option])), [typeOptions])
+
+  const toggleCategorySelection = (parentCategoryId: string) => {
+    const section = typeOptionsMap.get(parentCategoryId)
+    if (!section) return
+    const candidateIds = section.items.map((item) => item.id)
+    const allSelected = candidateIds.every((id) => selectedTypes.includes(id))
+
+    if (allSelected) {
+      setSelectedTypes(selectedTypes.filter((type) => !candidateIds.includes(type)))
+    } else {
+      const nextTypes = new Set(selectedTypes)
+      candidateIds.forEach((id) => nextTypes.add(id))
+      setSelectedTypes(Array.from(nextTypes))
     }
   }
 
-  const isCategorySelected = (category: string) => {
-    const categoryTypes = buildingTypesByCategory[category]
-    return categoryTypes.every((type) => selectedTypes.includes(type))
+  const isCategorySelected = (parentCategoryId: string) => {
+    const section = typeOptionsMap.get(parentCategoryId)
+    if (!section || section.items.length === 0) return false
+    return section.items.every((item) => selectedTypes.includes(item.id))
   }
 
-  const isCategoryPartiallySelected = (category: string) => {
-    const categoryTypes = buildingTypesByCategory[category]
-    return categoryTypes.some((type) => selectedTypes.includes(type)) && !isCategorySelected(category)
+  const isCategoryPartiallySelected = (parentCategoryId: string) => {
+    const section = typeOptionsMap.get(parentCategoryId)
+    if (!section) return false
+    return section.items.some((item) => selectedTypes.includes(item.id)) && !isCategorySelected(parentCategoryId)
   }
 
   const toggleSection = (section: string) => {
@@ -175,9 +228,9 @@ export function FilterBar() {
     setActiveDropdown(activeDropdown === "style" ? null : "style")
   }
 
-  const toggleStyleSelection = (style: string) => {
-    setSelectedStyles(
-      selectedStyles.includes(style) ? selectedStyles.filter((s) => s !== style) : [...selectedStyles, style],
+  const toggleStyleSelection = (styleValue: string) => {
+    setSelectedStyles((prev) =>
+      prev.includes(styleValue) ? prev.filter((s) => s !== styleValue) : [...prev, styleValue],
     )
   }
 
@@ -219,10 +272,7 @@ export function FilterBar() {
     location.toLowerCase().includes(locationSearch.toLowerCase()),
   )
 
-  const typeOptions = Object.entries(buildingTypesByCategory).map(([category, types]) => ({
-    name: category,
-    items: types,
-  }))
+  const projectStyles = taxonomyOptions.project_style ?? []
 
   const getButtonClassName = (hasSelection: boolean) => {
     return `flex items-center gap-2 whitespace-nowrap ${
@@ -254,6 +304,7 @@ export function FilterBar() {
               size="sm"
               className={getButtonClassName(selectedTypes.length > 0)}
               onClick={toggleTypeDropdown}
+              disabled={taxonomyLoading && topLevelCategories.length === 0}
             >
               Type
               <ChevronDown className="h-4 w-4" />
@@ -264,26 +315,26 @@ export function FilterBar() {
                 <div className="p-4">
                   <div className="space-y-3">
                     {typeOptions.map((section) => (
-                      <div key={section.name}>
+                      <div key={section.id}>
                         <div className="flex items-center justify-between mb-2">
                           <label className="flex items-center gap-3 cursor-pointer">
                             <input
                               type="checkbox"
                               className="h-4 w-4 rounded"
-                              checked={isCategorySelected(section.name)}
+                              checked={isCategorySelected(section.id)}
                               ref={(el) => {
-                                if (el) el.indeterminate = isCategoryPartiallySelected(section.name)
+                                if (el) el.indeterminate = isCategoryPartiallySelected(section.id)
                               }}
-                              onChange={() => toggleCategorySelection(section.name)}
+                              onChange={() => toggleCategorySelection(section.id)}
                             />
                             <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
                           </label>
                           <button
                             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-                            onClick={() => toggleSection(section.name)}
+                            onClick={() => toggleSection(section.id)}
                           >
-                            {expandedSections.includes(section.name) ? "Show less" : "View all"}
-                            {expandedSections.includes(section.name) ? (
+                            {expandedSections.includes(section.id) ? "Show less" : "View all"}
+                            {expandedSections.includes(section.id) ? (
                               <ChevronUp className="h-3 w-3" />
                             ) : (
                               <ChevronDown className="h-3 w-3" />
@@ -293,18 +344,21 @@ export function FilterBar() {
 
                         <div className="ml-6 space-y-2">
                           {section.items
-                            .slice(0, expandedSections.includes(section.name) ? undefined : 3)
-                            .map((item) => (
-                              <label key={item} className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 rounded"
-                                  checked={selectedTypes.includes(item)}
-                                  onChange={() => toggleTypeSelection(item)}
-                                />
-                                <span className="text-sm text-gray-600">{item}</span>
-                              </label>
-                            ))}
+                            .slice(0, expandedSections.includes(section.id) ? undefined : 3)
+                            .map((item) => {
+                              const itemValue = item.id ?? item.name
+                              return (
+                                <label key={itemValue} className="flex items-center gap-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded"
+                                  checked={selectedTypes.includes(itemValue)}
+                                  onChange={() => toggleTypeSelection(itemValue)}
+                                  />
+                                  <span className="text-sm text-gray-600">{item.name}</span>
+                                </label>
+                              )
+                            })}
                         </div>
                       </div>
                     ))}
@@ -343,17 +397,20 @@ export function FilterBar() {
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="p-4">
                   <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {projectStyles.map((style) => (
-                      <label key={style} className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300"
-                          checked={selectedStyles.includes(style)}
-                          onChange={() => toggleStyleSelection(style)}
-                        />
-                        <span className="text-sm">{style}</span>
-                      </label>
-                    ))}
+                    {projectStyles.map((style) => {
+                      const value = style.id ?? style.slug ?? style.name
+                      return (
+                        <label key={value} className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300"
+                            checked={selectedStyles.includes(value)}
+                            onChange={() => toggleStyleSelection(value)}
+                          />
+                          <span className="text-sm">{style.name}</span>
+                        </label>
+                      )
+                    })}
                   </div>
 
                   <div className="mt-6 flex gap-3">
@@ -447,19 +504,19 @@ export function FilterBar() {
               className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-              {categories.map((category, index) => {
-                const IconComponent = category.icon
-                const isSelected = selectedTypes.includes(category.label)
+              {topLevelCategories.map((category) => {
+                const IconComponent = CATEGORY_ICON_MAP[category.slug ?? ""] ?? DEFAULT_CATEGORY_ICON
+                const isSelected = isCategorySelected(category.id) || isCategoryPartiallySelected(category.id)
                 return (
                   <button
-                    key={index}
-                    onClick={() => toggleCategoryFilter(category.label)}
+                    key={category.id}
+                    onClick={() => toggleCategorySelection(category.id)}
                     className={`flex flex-col items-center gap-2 whitespace-nowrap py-2 transition-colors flex-shrink-0 ${
                       isSelected ? "text-red-600 border-b-2 border-red-600" : "text-gray-600 hover:text-gray-900"
                     }`}
                   >
                     <IconComponent className="h-5 w-5" />
-                    <span className="text-xs font-medium">{category.label}</span>
+                    <span className="text-xs font-medium">{category.name}</span>
                   </button>
                 )
               })}

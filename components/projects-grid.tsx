@@ -1,251 +1,128 @@
 "use client"
-import { useState, useMemo } from "react"
-import { Heart, ChevronDown, ChevronLeft, ChevronRight, X, ThumbsUp } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useMemo, useState } from "react"
+import { Heart, ChevronDown, ChevronRight, ThumbsUp, X } from "lucide-react"
 import Link from "next/link"
+
+import { Button } from "@/components/ui/button"
 import { useFilters } from "@/contexts/filter-context"
+import { useProjectsQuery } from "@/hooks/use-projects-query"
 
-interface Project {
-  id: number
-  title: string
-  location: string
-  image: string
-  likes: number
-  isLiked: boolean
-  slug?: string
-  type: string
-  style: string[]
-  features: string[]
-}
+const sortOptions = ["Most recent", "Most liked", "Alphabetical"] as const
 
-const mockProjects: Project[] = [
-  {
-    id: 0,
-    title: "Villa upgrade",
-    location: "Contemporary Villa in Nijmegen",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 12,
-    isLiked: false,
-    slug: "villa-upgrade",
-    type: "Villa",
-    style: ["Contemporary", "Modern"],
-    features: ["Swimming Pool", "Garden", "Garage"],
-  },
-  {
-    id: 1,
-    title: "Modern Garden house in Vinkeveense Plassen",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 0,
-    isLiked: false,
-    type: "House",
-    style: ["Modern", "Rustic"],
-    features: ["Garden", "Terrace"],
-  },
-  {
-    id: 2,
-    title: "Contemporary Villa in Nijmegen",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 1,
-    isLiked: false,
-    type: "Villa",
-    style: ["Contemporary"],
-    features: ["Swimming Pool", "Modern Kitchen"],
-  },
-  {
-    id: 3,
-    title: "Minimalist Apartment in Amsterdam",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 5,
-    isLiked: true,
-    type: "Apartment",
-    style: ["Minimalist", "Modern"],
-    features: ["Balcony", "City View"],
-  },
-  {
-    id: 4,
-    title: "Industrial Loft in Rotterdam",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 3,
-    isLiked: false,
-    type: "Loft",
-    style: ["Industrial"],
-    features: ["High Ceilings", "Exposed Brick"],
-  },
-  {
-    id: 5,
-    title: "Coastal House in Zandvoort",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 8,
-    isLiked: false,
-    type: "House",
-    style: ["Beach", "Coastal"],
-    features: ["Ocean View", "Deck"],
-  },
-  {
-    id: 6,
-    title: "Traditional Farmhouse in Utrecht",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 2,
-    isLiked: true,
-    type: "Farmhouse",
-    style: ["Traditional", "Rustic"],
-    features: ["Large Garden", "Barn"],
-  },
-]
+type SortOption = (typeof sortOptions)[number]
 
 export function ProjectsGrid() {
-  const { selectedTypes, selectedStyles, selectedLocation, selectedFeatures, removeFilter, hasActiveFilters } =
-    useFilters()
+  const filterContext = useFilters()
+  const { removeFilter, taxonomy } = filterContext
+  const { projects, total, isLoading, error, hasMore, loadMore } = useProjectsQuery({ pageSize: 12 })
 
-  const [projects, setProjects] = useState<Project[]>(mockProjects)
-  const [sortBy, setSortBy] = useState("Best match")
-  const [currentPage, setCurrentPage] = useState(1)
+  const [sortBy, setSortBy] = useState<SortOption>("Most recent")
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
 
-  const projectsPerPage = 6
-  const sortOptions = ["Best match", "Most recent", "Most liked", "Alphabetical"]
-
-  const filteredProjects = useMemo(() => {
-    return projects.filter((project) => {
-      // Filter by type
-      if (
-        selectedTypes.length > 0 &&
-        !selectedTypes.some((type) => project.type.toLowerCase().includes(type.toLowerCase()))
-      ) {
-        return false
-      }
-
-      // Filter by style
-      if (
-        selectedStyles.length > 0 &&
-        !selectedStyles.some((style) => project.style.some((s) => s.toLowerCase().includes(style.toLowerCase())))
-      ) {
-        return false
-      }
-
-      // Filter by location
-      if (selectedLocation && !project.location.toLowerCase().includes(selectedLocation.toLowerCase())) {
-        return false
-      }
-
-      // Filter by features
-      if (
-        selectedFeatures.length > 0 &&
-        !selectedFeatures.some((feature) =>
-          project.features.some((f) => f.toLowerCase().includes(feature.toLowerCase())),
-        )
-      ) {
-        return false
-      }
-
-      return true
-    })
-  }, [projects, selectedTypes, selectedStyles, selectedLocation, selectedFeatures])
-
-  const getPageTitle = () => {
-    if (selectedTypes.length > 0) {
-      const primaryType = selectedTypes[0]
-      const pluralType = primaryType.endsWith("s") ? primaryType : `${primaryType}s`
-
-      // Include style in the title if selected
-      if (selectedStyles.length > 0) {
-        const primaryStyle = selectedStyles[0]
-        return selectedLocation
-          ? `${primaryStyle} ${pluralType} in ${selectedLocation}`
-          : `${primaryStyle} ${pluralType} in all locations`
-      }
-
-      return selectedLocation ? `${pluralType} in ${selectedLocation}` : `${pluralType} in all locations`
+  const sortedProjects = useMemo(() => {
+    const next = [...projects]
+    switch (sortBy) {
+      case "Most liked":
+        return next.sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0))
+      case "Alphabetical":
+        return next.sort((a, b) => (a.title ?? "").localeCompare(b.title ?? ""))
+      case "Most recent":
+      default:
+        return next.sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
     }
-    return selectedLocation ? `Projects in ${selectedLocation}` : "Projects in all locations"
-  }
+  }, [projects, sortBy])
 
-  const getActiveFilterTags = () => {
+  const taxonomyLabelMap = useMemo(() => {
+    const map = new Map<string, string>()
+    taxonomy.categories.forEach((category) => {
+      if (category.slug) {
+        map.set(category.slug, category.name)
+      }
+      map.set(category.name, category.name)
+      map.set(category.id, category.name)
+    })
+    Object.values(taxonomy.taxonomyOptions).forEach((group) => {
+      group?.forEach((option) => {
+        if (option.slug) map.set(option.slug, option.name)
+        if (option.id) map.set(option.id, option.name)
+        if (option.budget_level) map.set(option.budget_level, option.name)
+        map.set(option.name, option.name)
+      })
+    })
+    return map
+  }, [taxonomy.categories, taxonomy.taxonomyOptions])
+
+  const activeFilterTags = useMemo(() => {
     const tags: Array<{ type: string; value: string; label: string }> = []
-
-    selectedTypes.forEach((type) => {
-      tags.push({ type: "type", value: type, label: `Type: ${type}` })
-    })
-
-    selectedStyles.forEach((style) => {
-      tags.push({ type: "style", value: style, label: style })
-    })
-
-    if (selectedLocation) {
-      tags.push({ type: "location", value: selectedLocation, label: selectedLocation })
-    }
-
-    selectedFeatures.forEach((feature) => {
-      tags.push({ type: "feature", value: feature, label: feature })
-    })
-
-    return tags
-  }
-
-  const totalPages = Math.ceil(filteredProjects.length / projectsPerPage)
-
-  const toggleLike = (projectId: number) => {
-    setProjects((prev) =>
-      prev.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              isLiked: !project.isLiked,
-              likes: project.isLiked ? project.likes - 1 : project.likes + 1,
-            }
-          : project,
-      ),
+    filterContext.selectedTypes.forEach((type) =>
+      tags.push({ type: "type", value: type, label: `Type: ${taxonomyLabelMap.get(type) ?? type}` }),
     )
-  }
-
-  const handleSort = (option: string) => {
-    setSortBy(option)
-    setIsSortDropdownOpen(false)
-
-    const sorted = [...projects].sort((a, b) => {
-      switch (option) {
-        case "Most recent":
-          return b.id - a.id
-        case "Most liked":
-          return b.likes - a.likes
-        case "Alphabetical":
-          return a.title.localeCompare(b.title)
-        default:
-          return 0
-      }
-    })
-
-    setProjects(sorted)
-  }
-
-  const getCurrentPageProjects = () => {
-    const startIndex = (currentPage - 1) * projectsPerPage
-    const endIndex = startIndex + projectsPerPage
-    return filteredProjects.slice(startIndex, endIndex)
-  }
-
-  const activeFilterTags = getActiveFilterTags()
+    filterContext.selectedStyles.forEach((style) =>
+      tags.push({ type: "style", value: style, label: taxonomyLabelMap.get(style) ?? style }),
+    )
+    if (filterContext.selectedLocation) {
+      tags.push({ type: "location", value: filterContext.selectedLocation, label: filterContext.selectedLocation })
+    }
+    filterContext.selectedLocationFeatures.forEach((feature) =>
+      tags.push({ type: "locationFeature", value: feature, label: taxonomyLabelMap.get(feature) ?? feature }),
+    )
+    filterContext.selectedBuildingFeatures.forEach((feature) =>
+      tags.push({ type: "buildingFeature", value: feature, label: taxonomyLabelMap.get(feature) ?? feature }),
+    )
+    filterContext.selectedMaterialFeatures.forEach((feature) =>
+      tags.push({ type: "materialFeature", value: feature, label: taxonomyLabelMap.get(feature) ?? feature }),
+    )
+    filterContext.selectedBuildingTypes.forEach((type) =>
+      tags.push({ type: "buildingType", value: type, label: `Building: ${taxonomyLabelMap.get(type) ?? type}` }),
+    )
+    filterContext.selectedSizes.forEach((size) =>
+      tags.push({ type: "size", value: size, label: `Size: ${taxonomyLabelMap.get(size) ?? size}` }),
+    )
+    filterContext.selectedBudgets.forEach((budget) =>
+      tags.push({ type: "budget", value: budget, label: taxonomyLabelMap.get(budget) ?? budget }),
+    )
+    if (filterContext.projectYearRange.some((value) => value !== null)) {
+      const [min, max] = filterContext.projectYearRange
+      tags.push({ type: "projectYear", value: "projectYear", label: `Project year ≤ ${max ?? "any"}` })
+    }
+    if (filterContext.buildingYearRange.some((value) => value !== null)) {
+      const [min, max] = filterContext.buildingYearRange
+      tags.push({ type: "buildingYear", value: "buildingYear", label: `Building year ≤ ${max ?? "any"}` })
+    }
+    return tags
+  }, [
+    filterContext.buildingYearRange,
+    filterContext.projectYearRange,
+    filterContext.selectedBuildingFeatures,
+    filterContext.selectedBuildingTypes,
+    filterContext.selectedBudgets,
+    filterContext.selectedLocation,
+    filterContext.selectedLocationFeatures,
+    filterContext.selectedMaterialFeatures,
+    filterContext.selectedSizes,
+    filterContext.selectedStyles,
+    filterContext.selectedTypes,
+    taxonomyLabelMap,
+  ])
 
   return (
     <div className="w-full bg-white">
       <div className="px-4 md:px-8">
         <div className="max-w-7xl mx-auto py-8">
-          {/* Header with dynamic title and sort */}
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-medium text-gray-900">{getPageTitle()}</h1>
+            <div>
+              <h1 className="text-xl font-medium text-gray-900">
+                {total > 0 ? `${total} projects` : "Projects"}
+              </h1>
+              <p className="text-sm text-gray-500">Results update automatically as you adjust filters.</p>
+            </div>
 
             <div className="relative">
               <Button
                 variant="ghost"
                 size="sm"
                 className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
+                onClick={() => setIsSortDropdownOpen((open) => !open)}
               >
                 Sort: {sortBy}
                 <ChevronDown className="h-4 w-4" />
@@ -258,7 +135,10 @@ export function ProjectsGrid() {
                       <button
                         key={option}
                         className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        onClick={() => handleSort(option)}
+                        onClick={() => {
+                          setSortBy(option)
+                          setIsSortDropdownOpen(false)
+                        }}
                       >
                         {option}
                       </button>
@@ -284,115 +164,60 @@ export function ProjectsGrid() {
             </div>
           )}
 
-          {/* Projects Grid */}
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 text-red-600 px-4 py-3 mb-6">
+              {error}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {getCurrentPageProjects().map((project) => (
-              <Link
-                key={project.id}
-                href={project.slug ? `/projects/${project.slug}` : "#"}
-                className="group cursor-pointer"
-              >
+            {sortedProjects.map((project) => (
+              <Link key={project.id} href={project.slug ? `/projects/${project.slug}` : "#"} className="group cursor-pointer">
                 <div className="relative overflow-hidden rounded-lg bg-gray-100">
                   <img
-                    src={project.image || "/placeholder.svg"}
-                    alt={project.title}
+                    src={project.primary_photo_url || "/placeholder.svg"}
+                    alt={project.title ?? "Project"}
                     className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
-
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      toggleLike(project.id)
+                    onClick={(event) => {
+                      event.preventDefault()
                     }}
                     className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
                   >
-                    <Heart
-                      className={`h-4 w-4 ${
-                        project.isLiked ? "fill-red-500 text-red-500" : "text-gray-600 hover:text-red-500"
-                      }`}
-                    />
+                    <Heart className="h-4 w-4 text-gray-600" />
                   </button>
                 </div>
-
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">{project.title}</h3>
                     <div className="flex items-center gap-1 text-sm text-gray-500">
                       <ThumbsUp className="h-3 w-3" />
-                      <span>{project.likes}</span>
+                      <span>{project.likes_count ?? 0}</span>
                     </div>
                   </div>
+                  <p className="text-xs text-gray-500 line-clamp-1">{project.location || "Location unavailable"}</p>
                 </div>
               </Link>
             ))}
+
+            {isLoading && (
+              <div className="col-span-full flex justify-center py-12">
+                <p className="text-sm text-gray-500">Loading projects…</p>
+              </div>
+            )}
           </div>
 
-          {/* Show message if no projects found */}
-          {filteredProjects.length === 0 && (
+          {!isLoading && sortedProjects.length === 0 && !error && (
             <div className="text-center py-12">
               <p className="text-gray-500">No projects found matching your filters.</p>
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="p-2"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Previous
-              </Button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 p-0 text-sm ${
-                      currentPage === page
-                        ? "bg-black text-white hover:bg-gray-800"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    {page}
-                  </Button>
-                ))}
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Next
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="p-2"
-              >
+          {hasMore && (
+            <div className="flex justify-center">
+              <Button onClick={loadMore} disabled={isLoading} variant="ghost" className="flex items-center gap-2">
+                Load more
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
