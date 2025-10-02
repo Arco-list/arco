@@ -105,6 +105,19 @@ const DEFAULT_MAP_CENTER = {
 }
 const DEFAULT_MAP_ZOOM = 12
 
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+
+const createDraftSlug = (title: string) => {
+  const base = slugify(title) || "project"
+  const randomSuffix = Math.random().toString(36).slice(2, 8)
+  return `${base}-${randomSuffix}`
+}
+
 const extractCityAndRegion = (
   components: Array<{ long_name: string; short_name: string; types: string[] }> = [],
 ) => {
@@ -727,9 +740,14 @@ export default function NewProjectPage() {
         let nextProjectId = projectId
 
         if (!nextProjectId) {
+          const insertPayload: TablesInsert<"projects"> = {
+            ...projectPayload,
+            slug: createDraftSlug(effectiveTitle),
+          }
+
           const { data, error } = await supabase
             .from("projects")
-            .insert([projectPayload])
+            .insert([insertPayload])
             .select("id")
             .single()
 
