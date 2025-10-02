@@ -78,9 +78,8 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
       }
 
       router.push(destination);
-      if (!sessionRefreshed) {
-        router.refresh();
-      }
+      // Trigger a revalidation so server components pick up the latest auth state
+      router.refresh();
 
       onSuccess?.();
     });
