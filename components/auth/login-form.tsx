@@ -66,17 +66,19 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
       const destination = resolveRedirectPath(sanitizedRedirect);
       form.reset({ email: values.email, password: "", redirectTo: sanitizedRedirect ?? "" });
 
+      let sessionRefreshed = true;
       try {
         await refreshSession();
       } catch (error) {
         console.error("Failed to refresh session after sign-in:", error);
-        toast.error("Could not refresh your session", {
-          description: "Please try signing in again.",
+        sessionRefreshed = false;
+        toast.warning("Signed in, but we're still syncing your session", {
+          description: "If the dashboard looks stale, refresh the page.",
         });
-        return;
       }
 
       router.push(destination);
+      // Trigger a revalidation so server components pick up the latest auth state
       router.refresh();
 
       onSuccess?.();

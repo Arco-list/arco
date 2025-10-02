@@ -4,18 +4,18 @@ import { createBrowserClient } from "@supabase/ssr";
 
 import type { Database } from "./types";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.");
+}
+
 let browserClient: ReturnType<typeof createBrowserClient<Database>> | undefined;
 
 export const getBrowserSupabaseClient = () => {
   if (!browserClient) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!url || !anonKey) {
-      throw new Error("Missing Supabase environment variables.");
-    }
-
-    browserClient = createBrowserClient<Database>(url, anonKey);
+    browserClient = createBrowserClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 
   return browserClient;
