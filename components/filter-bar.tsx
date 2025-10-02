@@ -21,6 +21,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Landmark,
+  Castle,
+  Armchair,
+  UtensilsCrossed,
+  Sun,
+  BedDouble,
+  Flame,
+  Cloud,
+  Sprout,
+  Expand,
+  Car,
+  DoorOpen,
+  Laptop,
+  Wine,
+  Film,
+  Dumbbell,
+  Gamepad2,
+  Baby,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { FiltersModal } from "./filters-modal"
@@ -39,6 +56,55 @@ const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: string }>> =
 }
 
 const DEFAULT_CATEGORY_ICON = LayoutGrid
+
+const SUBTYPE_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+  "house-villa": Castle,
+  "house-house": Home,
+  "house-apartment": Building2,
+  "house-chalet": Mountain,
+  "house-bungalow": House,
+  "house-farm": Sprout,
+  "house-extension": Expand,
+  "kitchen-living-kitchen": ChefHat,
+  "kitchen-living-living-room": Armchair,
+  "kitchen-living-dining-room": UtensilsCrossed,
+  "kitchen-living-sunroom": Sun,
+  "bed-bath-bathroom": Bath,
+  "bed-bath-bedroom": BedDouble,
+  "bed-bath-indoor-pool": Waves,
+  "bed-bath-jacuzzi": Waves,
+  "bed-bath-sauna": Flame,
+  "bed-bath-steam-room": Cloud,
+  "outdoor-garden": TreePine,
+  "outdoor-outdoor-pool": Waves,
+  "outdoor-garden-house": House,
+  "outdoor-outdoor-kitchen": UtensilsCrossed,
+  "outdoor-garage": Car,
+  "outdoor-porch": DoorOpen,
+  "other-hall": Landmark,
+  "other-home-office": Laptop,
+  "other-bar": Wine,
+  "other-cinema": Film,
+  "other-gym": Dumbbell,
+  "other-game-room": Gamepad2,
+  "other-kids-room": Baby,
+  "other-wine-cellar": Wine,
+}
+
+interface TypeOptionItem {
+  id: string
+  name: string
+  slug?: string
+  parentId: string | null
+  parentSlug?: string
+}
+
+interface TypeOptionSection {
+  id: string
+  name: string
+  slug?: string
+  items: TypeOptionItem[]
+}
 
 export function FilterBar() {
   const {
@@ -152,42 +218,70 @@ export function FilterBar() {
     return map
   }, [taxonomyCategories])
 
-  const typeOptions = useMemo(() => {
-    return topLevelCategories
-      .map((category) => {
-        const children = childCategoriesByParent.get(category.id) ?? []
+  const typeOptions = useMemo<TypeOptionSection[]>(() => {
+    const sections: TypeOptionSection[] = []
 
-        const listableChildren = children
-          .filter((item) => item.project_category_attributes?.is_listable)
-          .sort((a, b) => {
-            const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER
-            const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER
-            if (orderA !== orderB) return orderA - orderB
-            return a.name.localeCompare(b.name)
-          })
+    topLevelCategories.forEach((category) => {
+      const children = childCategoriesByParent.get(category.id) ?? []
 
-        const itemsSource = [
-          ...(category.project_category_attributes?.is_listable ? [category] : []),
-          ...listableChildren,
-        ]
+      const listableChildren = children
+        .filter((item) => item.project_category_attributes?.is_listable)
+        .sort((a, b) => {
+          const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER
+          const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER
+          if (orderA !== orderB) return orderA - orderB
+          return a.name.localeCompare(b.name)
+        })
 
-        if (itemsSource.length === 0) {
-          return null
-        }
+      const itemsSource = [
+        ...(category.project_category_attributes?.is_listable ? [category] : []),
+        ...listableChildren,
+      ]
 
-        return {
-          id: category.id ?? category.slug ?? category.name,
-          name: category.name,
-          items: itemsSource.map((item, index) => ({
-            id: item.id ?? item.slug ?? `${item.name}-${index}`,
-            name: item.name,
-          })),
-        }
+      if (itemsSource.length === 0) {
+        return
+      }
+
+      const sectionId = category.id ?? category.slug ?? category.name
+      const sectionSlug = category.slug ?? undefined
+
+      sections.push({
+        id: sectionId,
+        name: category.name,
+        slug: sectionSlug,
+        items: itemsSource.map((item, index) => ({
+          id: item.id ?? item.slug ?? `${item.name}-${index}`,
+          name: item.name,
+          slug: item.slug ?? undefined,
+          parentId: item.parent_id ?? (item.id === category.id ? null : category.id ?? null),
+          parentSlug: sectionSlug,
+        })),
       })
-      .filter((section): section is { id: string; name: string; items: { id: string; name: string }[] } => section !== null)
+    })
+
+    return sections
   }, [childCategoriesByParent, topLevelCategories])
 
   const typeOptionsMap = useMemo(() => new Map(typeOptions.map((option) => [option.id, option])), [typeOptions])
+
+  const quickFilterItems = useMemo(() => {
+    const seen = new Set<string>()
+    const items: TypeOptionItem[] = []
+
+    typeOptions.forEach((section) => {
+      const hasChildItems = section.items.some((item) => item.parentId !== null)
+
+      section.items.forEach((item) => {
+        const shouldInclude = item.parentId !== null || !hasChildItems
+        if (shouldInclude && !seen.has(item.id)) {
+          items.push(item)
+          seen.add(item.id)
+        }
+      })
+    })
+
+    return items
+  }, [typeOptions])
 
   const toggleCategorySelection = (parentCategoryId: string) => {
     const section = typeOptionsMap.get(parentCategoryId)
@@ -504,19 +598,21 @@ export function FilterBar() {
               className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-              {topLevelCategories.map((category) => {
-                const IconComponent = CATEGORY_ICON_MAP[category.slug ?? ""] ?? DEFAULT_CATEGORY_ICON
-                const isSelected = isCategorySelected(category.id) || isCategoryPartiallySelected(category.id)
+              {quickFilterItems.map((item) => {
+                const iconKey = item.slug ?? item.parentSlug ?? ""
+                const IconComponent =
+                  SUBTYPE_ICON_MAP[iconKey] ?? CATEGORY_ICON_MAP[item.parentSlug ?? ""] ?? DEFAULT_CATEGORY_ICON
+                const isSelected = selectedTypes.includes(item.id)
                 return (
                   <button
-                    key={category.id}
-                    onClick={() => toggleCategorySelection(category.id)}
+                    key={item.id}
+                    onClick={() => toggleTypeSelection(item.id)}
                     className={`flex flex-col items-center gap-2 whitespace-nowrap py-2 transition-colors flex-shrink-0 ${
                       isSelected ? "text-red-600 border-b-2 border-red-600" : "text-gray-600 hover:text-gray-900"
                     }`}
                   >
                     <IconComponent className="h-5 w-5" />
-                    <span className="text-xs font-medium">{category.name}</span>
+                    <span className="text-xs font-medium">{item.name}</span>
                   </button>
                 )
               })}
