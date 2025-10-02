@@ -6,6 +6,8 @@ import type { Tables } from "@/lib/supabase/types"
 
 import { useFilters } from "@/contexts/filter-context"
 
+const escapeIlikePattern = (value: string) => value.replace(/[%_\\]/g, "\\$&")
+
 interface UseProjectsQueryOptions {
   pageSize?: number
 }
@@ -100,7 +102,7 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
       }
 
       if (filters.location) {
-        query = query.ilike("location", `%${filters.location}%`)
+        query = query.ilike("location", `%${escapeIlikePattern(filters.location)}%`)
       }
 
       if (filters.features.length > 0) {
