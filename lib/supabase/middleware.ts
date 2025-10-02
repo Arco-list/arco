@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { User } from "@supabase/supabase-js";
 
 import type { Database } from "./types";
 
@@ -53,7 +54,16 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const requiresAuth = PROTECTED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-  let authenticatedUser: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] | null = null;
+  if (!requiresAuth) {
+    try {
+      await supabase.auth.getSession();
+    } catch (error) {
+      console.error("Middleware session refresh failed:", error);
+    }
+    return response;
+  }
+
+  let authenticatedUser: User | null = null;
 
   try {
     const { data, error } = await supabase.auth.getUser();
@@ -66,7 +76,7 @@ export async function updateSession(request: NextRequest) {
     authenticatedUser = null;
   }
 
-  if (requiresAuth && !authenticatedUser) {
+  if (!authenticatedUser) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirectTo", `${pathname}${request.nextUrl.search}`);
