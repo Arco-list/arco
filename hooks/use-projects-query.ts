@@ -6,11 +6,37 @@ import type { Tables } from "@/lib/supabase/types"
 
 import { useFilters } from "@/contexts/filter-context"
 
-const escapeIlikePattern = (value: string) => value.replace(/[%_\\]/g, "\\$&")
+const buildTypeTokenSet = (categories: Tables<"categories">[]): Set<string> => {
+  const tokens = new Set<string>()
+
+  const register = (value?: string | null) => {
+    if (!value) return
+    tokens.add(value)
+    tokens.add(value.toLowerCase())
+  }
+
+  categories.forEach((category) => {
+    register(category.id)
+    register(category.slug)
+    register(category.name)
+  })
+
+  return tokens
+}
+
+const escapeIlikePattern = (value: string) =>
+  value
+    .normalize("NFC")
+    .replace(/\\/g, "\\\\")
+    .replace(/[%_]/g, "\\$&")
+    .replace(/'/g, "''")
 
 interface UseProjectsQueryOptions {
   pageSize?: number
 }
+
+const DEFAULT_PAGE_SIZE = 12
+const MAX_PAGE_SIZE = 100
 
 interface PaginatedProjects {
   data: Tables<"mv_project_summary">[]
@@ -27,7 +53,7 @@ interface UseProjectsQueryResult {
   refetch: () => Promise<void>
 }
 
-export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}): UseProjectsQueryResult {
+export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQueryOptions = {}): UseProjectsQueryResult {
   const {
     selectedTypes,
     selectedStyles,
@@ -41,6 +67,7 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
     selectedBudgets,
     projectYearRange,
     buildingYearRange,
+    taxonomy,
   } = useFilters()
 
   const [projects, setProjects] = useState<Tables<"mv_project_summary">[]>([])
@@ -50,9 +77,21 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
 
+  const validTypeTokens = useMemo(() => buildTypeTokenSet(taxonomy.categories), [taxonomy.categories])
+
+  const normalizedTypes = useMemo(() => {
+    if (taxonomy.categories.length === 0 || validTypeTokens.size === 0) {
+      return selectedTypes
+    }
+    return selectedTypes.filter((type) => {
+      if (!type) return false
+      return validTypeTokens.has(type) || validTypeTokens.has(type.toLowerCase())
+    })
+  }, [selectedTypes, taxonomy.categories, validTypeTokens])
+
   const filters = useMemo(
     () => ({
-      types: selectedTypes,
+      types: normalizedTypes,
       styles: selectedStyles,
       location: selectedLocation,
       features: selectedFeatures,
@@ -66,7 +105,7 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
       buildingYearRange,
     }),
     [
-      selectedTypes,
+      normalizedTypes,
       selectedStyles,
       selectedLocation,
       selectedFeatures,
@@ -81,11 +120,13 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
     ],
   )
 
+  const effectivePageSize = useMemo(() => Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE), [pageSize])
+
   const fetchProjects = useCallback(
     async (pageIndex: number): Promise<PaginatedProjects> => {
       const supabase = getBrowserSupabaseClient()
-      const from = pageIndex * pageSize
-      const to = from + pageSize - 1
+      const from = pageIndex * effectivePageSize
+      const to = from + effectivePageSize - 1
 
       let query = supabase
         .from("mv_project_summary")
@@ -144,7 +185,7 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
         total: count ?? 0,
       }
     },
-    [filters, pageSize],
+    [effectivePageSize, filters],
   )
 
   useEffect(() => {
@@ -192,14 +233,14 @@ export function useProjectsQuery({ pageSize = 12 }: UseProjectsQueryOptions = {}
       setProjects((prev) => [...prev, ...result.data])
       setPage(nextPage)
       setTotal(result.total)
-      setHasMore((nextPage + 1) * pageSize < result.total)
+      setHasMore((nextPage + 1) * effectivePageSize < result.total)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load more projects"
       setError(message)
     } finally {
       setIsLoading(false)
     }
-  }, [fetchProjects, hasMore, isLoading, page, pageSize])
+  }, [effectivePageSize, fetchProjects, hasMore, isLoading, page])
 
   const refetch = useCallback(async () => {
     setIsLoading(true)

@@ -5,6 +5,7 @@ import { FilterBar } from "@/components/filter-bar"
 import { ProfessionalsGrid } from "@/components/professionals-grid"
 import { ProjectsNavigation } from "@/components/projects-navigation"
 import { FilterProvider } from "@/contexts/filter-context"
+import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 
 export const metadata: Metadata = {
   title: "Browse Professionals",
@@ -16,12 +17,14 @@ export default function ProfessionalsPage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <ProjectsNavigation activeTab="professionals" />
-      <FilterProvider>
-        <FilterBar />
-        <main className="flex-1 bg-white">
-          <ProfessionalsGrid />
-        </main>
-      </FilterProvider>
+      <FilterErrorBoundary>
+        <FilterProvider>
+          <FilterBar />
+          <main className="flex-1 bg-white">
+            <ProfessionalsGrid />
+          </main>
+        </FilterProvider>
+      </FilterErrorBoundary>
       <Footer />
     </div>
   )

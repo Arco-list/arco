@@ -1,95 +1,10 @@
 "use client"
-import { useState, useRef, useEffect, useMemo, type ComponentType } from "react"
-import {
-  Filter,
-  ChevronDown,
-  ChevronUp,
-  Search,
-  Home,
-  Bath,
-  Building,
-  Waves,
-  TreePine,
-  Building as BuildingOutline,
-  HomeIcon as House,
-  LayoutGrid,
-  Mountain,
-  Flower,
-  ChefHat,
-  Building2,
-  Sparkles,
-  ChevronLeft,
-  ChevronRight,
-  Landmark,
-  Castle,
-  Armchair,
-  UtensilsCrossed,
-  Sun,
-  BedDouble,
-  Flame,
-  Cloud,
-  Sprout,
-  Expand,
-  Car,
-  DoorOpen,
-  Laptop,
-  Wine,
-  Film,
-  Dumbbell,
-  Gamepad2,
-  Baby,
-} from "lucide-react"
+import { useState, useRef, useEffect, useMemo } from "react"
+import { Filter, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { FiltersModal } from "./filters-modal"
 import { useFilters } from "@/contexts/filter-context"
-
-const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  house: Home,
-  "kitchen-living": ChefHat,
-  "bed-bath": Bath,
-  outdoor: TreePine,
-  other: Sparkles,
-  residential: House,
-  commercial: Building,
-  renovation: BuildingOutline,
-  "new-construction": Building2,
-}
-
-const DEFAULT_CATEGORY_ICON = LayoutGrid
-
-const SUBTYPE_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
-  "house-villa": Castle,
-  "house-house": Home,
-  "house-apartment": Building2,
-  "house-chalet": Mountain,
-  "house-bungalow": House,
-  "house-farm": Sprout,
-  "house-extension": Expand,
-  "kitchen-living-kitchen": ChefHat,
-  "kitchen-living-living-room": Armchair,
-  "kitchen-living-dining-room": UtensilsCrossed,
-  "kitchen-living-sunroom": Sun,
-  "bed-bath-bathroom": Bath,
-  "bed-bath-bedroom": BedDouble,
-  "bed-bath-indoor-pool": Waves,
-  "bed-bath-jacuzzi": Waves,
-  "bed-bath-sauna": Flame,
-  "bed-bath-steam-room": Cloud,
-  "outdoor-garden": TreePine,
-  "outdoor-outdoor-pool": Waves,
-  "outdoor-garden-house": House,
-  "outdoor-outdoor-kitchen": UtensilsCrossed,
-  "outdoor-garage": Car,
-  "outdoor-porch": DoorOpen,
-  "other-hall": Landmark,
-  "other-home-office": Laptop,
-  "other-bar": Wine,
-  "other-cinema": Film,
-  "other-gym": Dumbbell,
-  "other-game-room": Gamepad2,
-  "other-kids-room": Baby,
-  "other-wine-cellar": Wine,
-}
+import { CATEGORY_ICON_MAP, DEFAULT_CATEGORY_ICON, SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 
 interface TypeOptionItem {
   id: string
@@ -197,9 +112,10 @@ export function FilterBar() {
   }
 
   const toggleTypeSelection = (typeId: string) => {
-    setSelectedTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId],
-    )
+    const next = selectedTypes.includes(typeId)
+      ? selectedTypes.filter((t) => t !== typeId)
+      : [...selectedTypes, typeId]
+    setSelectedTypes(next)
   }
 
   const topLevelCategories = useMemo(
@@ -323,9 +239,10 @@ export function FilterBar() {
   }
 
   const toggleStyleSelection = (styleValue: string) => {
-    setSelectedStyles((prev) =>
-      prev.includes(styleValue) ? prev.filter((s) => s !== styleValue) : [...prev, styleValue],
-    )
+    const next = selectedStyles.includes(styleValue)
+      ? selectedStyles.filter((s) => s !== styleValue)
+      : [...selectedStyles, styleValue]
+    setSelectedStyles(next)
   }
 
   const clearStyleFilters = () => {
@@ -404,7 +321,17 @@ export function FilterBar() {
               <ChevronDown className="h-4 w-4" />
             </Button>
 
-            {activeDropdown === "type" && (
+            {taxonomyLoading && topLevelCategories.length === 0 && activeDropdown === "type" && (
+              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
+                <div className="p-4 space-y-3">
+                  <div className="h-4 w-32 animate-pulse rounded bg-gray-200" />
+                  <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
+                  <div className="h-4 w-28 animate-pulse rounded bg-gray-200" />
+                </div>
+              </div>
+            )}
+
+            {!taxonomyLoading && activeDropdown === "type" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="p-4">
                   <div className="space-y-3">

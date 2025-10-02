@@ -32,54 +32,34 @@ export function ProjectsGrid() {
     }
   }, [projects, sortBy])
 
-  const taxonomyLabelMap = useMemo(() => {
-    const map = new Map<string, string>()
-    taxonomy.categories.forEach((category) => {
-      if (category.slug) {
-        map.set(category.slug, category.name)
-      }
-      map.set(category.name, category.name)
-      map.set(category.id, category.name)
-    })
-    Object.values(taxonomy.taxonomyOptions).forEach((group) => {
-      group?.forEach((option) => {
-        if (option.slug) map.set(option.slug, option.name)
-        if (option.id) map.set(option.id, option.name)
-        if (option.budget_level) map.set(option.budget_level, option.name)
-        map.set(option.name, option.name)
-      })
-    })
-    return map
-  }, [taxonomy.categories, taxonomy.taxonomyOptions])
-
   const activeFilterTags = useMemo(() => {
     const tags: Array<{ type: string; value: string; label: string }> = []
     filterContext.selectedTypes.forEach((type) =>
-      tags.push({ type: "type", value: type, label: `Type: ${taxonomyLabelMap.get(type) ?? type}` }),
+      tags.push({ type: "type", value: type, label: `Type: ${filterContext.taxonomyLabelMap.get(type) ?? type}` }),
     )
     filterContext.selectedStyles.forEach((style) =>
-      tags.push({ type: "style", value: style, label: taxonomyLabelMap.get(style) ?? style }),
+      tags.push({ type: "style", value: style, label: filterContext.taxonomyLabelMap.get(style) ?? style }),
     )
     if (filterContext.selectedLocation) {
       tags.push({ type: "location", value: filterContext.selectedLocation, label: filterContext.selectedLocation })
     }
     filterContext.selectedLocationFeatures.forEach((feature) =>
-      tags.push({ type: "locationFeature", value: feature, label: taxonomyLabelMap.get(feature) ?? feature }),
+      tags.push({ type: "locationFeature", value: feature, label: filterContext.taxonomyLabelMap.get(feature) ?? feature }),
     )
     filterContext.selectedBuildingFeatures.forEach((feature) =>
-      tags.push({ type: "buildingFeature", value: feature, label: taxonomyLabelMap.get(feature) ?? feature }),
+      tags.push({ type: "buildingFeature", value: feature, label: filterContext.taxonomyLabelMap.get(feature) ?? feature }),
     )
     filterContext.selectedMaterialFeatures.forEach((feature) =>
-      tags.push({ type: "materialFeature", value: feature, label: taxonomyLabelMap.get(feature) ?? feature }),
+      tags.push({ type: "materialFeature", value: feature, label: filterContext.taxonomyLabelMap.get(feature) ?? feature }),
     )
     filterContext.selectedBuildingTypes.forEach((type) =>
-      tags.push({ type: "buildingType", value: type, label: `Building: ${taxonomyLabelMap.get(type) ?? type}` }),
+      tags.push({ type: "buildingType", value: type, label: `Building: ${filterContext.taxonomyLabelMap.get(type) ?? type}` }),
     )
     filterContext.selectedSizes.forEach((size) =>
-      tags.push({ type: "size", value: size, label: `Size: ${taxonomyLabelMap.get(size) ?? size}` }),
+      tags.push({ type: "size", value: size, label: `Size: ${filterContext.taxonomyLabelMap.get(size) ?? size}` }),
     )
     filterContext.selectedBudgets.forEach((budget) =>
-      tags.push({ type: "budget", value: budget, label: taxonomyLabelMap.get(budget) ?? budget }),
+      tags.push({ type: "budget", value: budget, label: filterContext.taxonomyLabelMap.get(budget) ?? budget }),
     )
     if (filterContext.projectYearRange.some((value) => value !== null)) {
       const [min, max] = filterContext.projectYearRange
@@ -102,7 +82,7 @@ export function ProjectsGrid() {
     filterContext.selectedSizes,
     filterContext.selectedStyles,
     filterContext.selectedTypes,
-    taxonomyLabelMap,
+    filterContext.taxonomyLabelMap,
   ])
 
   return (
