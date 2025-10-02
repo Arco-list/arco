@@ -12,6 +12,7 @@ import { signInWithPasswordSchema, type SignInWithPasswordInput } from "@/lib/su
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/contexts/auth-context";
 
 export interface LoginFormProps {
   redirectTo?: string;
@@ -22,6 +23,7 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
   const router = useRouter();
   const [isSubmitting, startTransition] = useTransition();
   const safeRedirectTo = sanitizeRedirectPath(redirectTo);
+  const { refreshSession } = useAuth();
 
   const form = useForm<SignInWithPasswordInput>({
     resolver: zodResolver(signInWithPasswordSchema),
@@ -63,9 +65,19 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
       toast.success("Signed in successfully");
       const destination = resolveRedirectPath(sanitizedRedirect);
       form.reset({ email: values.email, password: "", redirectTo: sanitizedRedirect ?? "" });
-      router.refresh();
+
+      try {
+        await refreshSession();
+      } catch (error) {
+        console.error("Failed to refresh session after sign-in:", error);
+        toast.error("Could not refresh your session", {
+          description: "Please try signing in again.",
+        });
+        return;
+      }
 
       router.push(destination);
+      router.refresh();
 
       onSuccess?.();
     });

@@ -1,16 +1,14 @@
-import 'server-only';
+import "server-only";
 
-import { cookies } from 'next/headers';
-import {
-  createRouteHandlerClient,
-  createServerActionClient,
-  createServerComponentClient,
-} from '@supabase/auth-helpers-nextjs';
-import { createClient } from '@supabase/supabase-js';
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
-import type { Database } from './types';
+import type { Database } from "./types";
 
-const getRequiredEnvVar = (key: 'NEXT_PUBLIC_SUPABASE_URL' | 'NEXT_PUBLIC_SUPABASE_ANON_KEY' | 'SUPABASE_SERVICE_ROLE_KEY') => {
+type EnvKey = "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY" | "SUPABASE_SERVICE_ROLE_KEY";
+
+const getRequiredEnvVar = (key: EnvKey) => {
   const value = process.env[key];
 
   if (!value) {
@@ -20,33 +18,44 @@ const getRequiredEnvVar = (key: 'NEXT_PUBLIC_SUPABASE_URL' | 'NEXT_PUBLIC_SUPABA
   return value;
 };
 
-export const createServerSupabaseClient = async () => {
+const createSupabaseClientWithCookies = async () => {
   const cookieStore = await cookies();
+  const url = getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
-  return createServerComponentClient<Database>({
-    cookies: () => cookieStore,
+  return createServerClient<Database>(url, anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch (error) {
+          console.warn("Failed to set authentication cookie:", error);
+        }
+      },
+    },
   });
+};
+
+export const createServerSupabaseClient = async () => {
+  return createSupabaseClientWithCookies();
 };
 
 export const createServerActionSupabaseClient = async () => {
-  const cookieStore = await cookies();
-
-  return createServerActionClient<Database>({
-    cookies: () => cookieStore,
-  });
+  return createSupabaseClientWithCookies();
 };
 
 export const createRouteHandlerSupabaseClient = async () => {
-  const cookieStore = await cookies();
-
-  return createRouteHandlerClient<Database>({
-    cookies: () => cookieStore,
-  });
+  return createSupabaseClientWithCookies();
 };
 
 export const createServiceRoleSupabaseClient = () => {
-  const url = getRequiredEnvVar('NEXT_PUBLIC_SUPABASE_URL');
-  const serviceRoleKey = getRequiredEnvVar('SUPABASE_SERVICE_ROLE_KEY');
+  const url = getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = getRequiredEnvVar("SUPABASE_SERVICE_ROLE_KEY");
 
   return createClient<Database>(url, serviceRoleKey, {
     auth: {

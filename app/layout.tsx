@@ -4,6 +4,7 @@ import { Poppins } from "next/font/google"
 import "./globals.css"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { RootProviders } from "@/components/root-providers"
+import { buildSession } from "@/lib/auth-utils"
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -40,12 +41,7 @@ export default async function RootLayout({
     supabase.auth.getUser(),
   ])
 
-  const session = sessionData.session
-    ? {
-        ...sessionData.session,
-        user: userData.user ?? sessionData.session.user,
-      }
-    : null
+  const session = buildSession(sessionData.session, userData.user)
 
   return (
     <html lang="en" className={poppins.variable}>

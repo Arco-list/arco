@@ -19,15 +19,15 @@ export interface HeaderProps {
 export function Header({ transparent = false }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { session, profile } = useAuth();
+  const { profile, user } = useAuth();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSigningOut, startSignOutTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const isLoggedIn = Boolean(session?.user);
-  const sessionMetadata = session?.user?.user_metadata ?? {};
+  const isLoggedIn = Boolean(user);
+  const sessionMetadata = user?.user_metadata ?? {};
   const metadataFirstName =
     typeof sessionMetadata.first_name === "string"
       ? sessionMetadata.first_name
@@ -35,7 +35,7 @@ export function Header({ transparent = false }: HeaderProps) {
         ? sessionMetadata.firstName
         : undefined;
   const derivedFirstName = (profile?.first_name || metadataFirstName)?.toString().trim();
-  const fallbackName = session?.user?.email ? session.user.email.split("@")[0] : undefined;
+  const fallbackName = user?.email ? user.email.split("@")[0] : undefined;
   const rawMenuLabel = derivedFirstName || fallbackName;
   const menuLabel = rawMenuLabel && rawMenuLabel.trim().length > 0 ? rawMenuLabel.trim() : "Menu";
   const isLoginPage = pathname === "/login";
