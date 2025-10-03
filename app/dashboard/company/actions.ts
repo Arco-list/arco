@@ -5,7 +5,8 @@ import { z } from "zod"
 
 import { randomUUID } from "node:crypto"
 import { Buffer } from "node:buffer"
-import DOMPurify from "isomorphic-dompurify"
+import { JSDOM } from "jsdom"
+import DOMPurify from "dompurify"
 
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger, sanitizeForLogging } from "@/lib/logger"
@@ -154,7 +155,12 @@ const validateImageFile = async (file: File): Promise<{ error?: string; sanitize
   if (file.type === "image/svg+xml") {
     try {
       const svgContent = await file.text()
-      const sanitizedSvg = DOMPurify.sanitize(svgContent, {
+
+      // Create a DOM window for DOMPurify in Node.js environment
+      const window = new JSDOM("").window
+      const purify = DOMPurify(window as unknown as Window)
+
+      const sanitizedSvg = purify.sanitize(svgContent, {
         USE_PROFILES: { svg: true, svgFilters: true },
         ADD_TAGS: ["use"],
         ADD_ATTR: ["target"],
