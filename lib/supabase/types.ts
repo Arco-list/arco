@@ -67,58 +67,85 @@ export type Database = {
       companies: {
         Row: {
           address: string | null
+          certificates: string[] | null
           city: string | null
           country: string | null
           created_at: string | null
           description: string | null
+          domain: string | null
           email: string | null
           founded_year: number | null
           id: string
+          languages: string[] | null
           is_verified: boolean | null
+          plan_expires_at: string | null
+          plan_tier: Database["public"]["Enums"]["company_plan_tier"]
           logo_url: string | null
           name: string
           owner_id: string
+          primary_service_id: string | null
           phone: string | null
+          services_offered: string[] | null
+          status: Database["public"]["Enums"]["company_status"]
           team_size_max: number | null
           team_size_min: number | null
+          upgrade_eligible: boolean
           updated_at: string | null
           website: string | null
         }
         Insert: {
           address?: string | null
+          certificates?: string[] | null
           city?: string | null
           country?: string | null
           created_at?: string | null
           description?: string | null
+          domain?: string | null
           email?: string | null
           founded_year?: number | null
           id?: string
+          languages?: string[] | null
           is_verified?: boolean | null
+          plan_expires_at?: string | null
+          plan_tier?: Database["public"]["Enums"]["company_plan_tier"]
           logo_url?: string | null
           name: string
           owner_id: string
+          primary_service_id?: string | null
           phone?: string | null
+          services_offered?: string[] | null
+          status?: Database["public"]["Enums"]["company_status"]
           team_size_max?: number | null
           team_size_min?: number | null
+          upgrade_eligible?: boolean
           updated_at?: string | null
           website?: string | null
         }
         Update: {
           address?: string | null
+          certificates?: string[] | null
           city?: string | null
           country?: string | null
           created_at?: string | null
           description?: string | null
+          domain?: string | null
           email?: string | null
           founded_year?: number | null
           id?: string
+          languages?: string[] | null
           is_verified?: boolean | null
+          plan_expires_at?: string | null
+          plan_tier?: Database["public"]["Enums"]["company_plan_tier"]
           logo_url?: string | null
           name?: string
           owner_id?: string
+          primary_service_id?: string | null
           phone?: string | null
+          services_offered?: string[] | null
+          status?: Database["public"]["Enums"]["company_status"]
           team_size_max?: number | null
           team_size_min?: number | null
+          upgrade_eligible?: boolean
           updated_at?: string | null
           website?: string | null
         }
@@ -128,6 +155,104 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "companies_primary_service_id_fkey"
+            columns: ["primary_service_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_photos: {
+        Row: {
+          alt_text: string | null
+          caption: string | null
+          company_id: string
+          created_at: string
+          file_size: number | null
+          height: number | null
+          id: string
+          is_cover: boolean
+          order_index: number
+          storage_path: string | null
+          updated_at: string
+          url: string
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          caption?: string | null
+          company_id: string
+          created_at?: string
+          file_size?: number | null
+          height?: number | null
+          id?: string
+          is_cover?: boolean
+          order_index?: number
+          storage_path?: string | null
+          updated_at?: string
+          url: string
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          caption?: string | null
+          company_id?: string
+          created_at?: string
+          file_size?: number | null
+          height?: number | null
+          id?: string
+          is_cover?: boolean
+          order_index?: number
+          storage_path?: string | null
+          updated_at?: string
+          url?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_photos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_social_links: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          platform: Database["public"]["Enums"]["company_social_platform"]
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          platform: Database["public"]["Enums"]["company_social_platform"]
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          platform?: Database["public"]["Enums"]["company_social_platform"]
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_social_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -1597,6 +1722,9 @@ export type Database = {
       }
     }
     Enums: {
+      company_plan_tier: "basic" | "plus"
+      company_social_platform: "facebook" | "instagram" | "linkedin" | "pinterest"
+      company_status: "unlisted" | "listed" | "deactivated"
       application_status: "pending" | "accepted" | "rejected"
       professional_project_status:
         | "invited"

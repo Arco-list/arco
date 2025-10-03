@@ -87,7 +87,7 @@ export default function DashboardListingsPage() {
   const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<number>(4)
   // TODO: Wire up real company plan tier when subscription data is available.
   const [companyPlan] = useState<"basic" | "plus">("basic")
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<ListingProject | null>(null)
   const [projects, setProjects] = useState<ListingProject[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -117,12 +117,6 @@ export default function DashboardListingsPage() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const requestIdRef = useRef(0)
   const [retryTrigger, setRetryTrigger] = useState(0)
-
-  useEffect(() => {
-    if (!statusModalOpen) {
-      setShowDeleteConfirm(false)
-    }
-  }, [statusModalOpen])
 
   useEffect(() => {
     // RACE CONDITION FIX: Cancel any in-flight requests
@@ -374,12 +368,16 @@ export default function DashboardListingsPage() {
   }, [])
 
   const handleUpdateStatus = (project: ListingProject) => {
+    if (project.status === "draft") {
+      router.push(`/new-project/details?projectId=${project.id}`)
+      return
+    }
+
     setSelectedProject(project)
     const initialStatus = isListingStatusValue(project.status) ? project.status : ""
     setSelectedStatus(initialStatus)
     setStatusModalOpen(true)
     setOpenDropdown(null)
-    setShowDeleteConfirm(false)
   }
 
   const handleEditCoverImage = (project: ListingProject) => {
@@ -392,7 +390,6 @@ export default function DashboardListingsPage() {
     if (!selectedProject || !selectedStatus) {
       setStatusModalOpen(false)
       setSelectedProject(null)
-      setShowDeleteConfirm(false)
       return
     }
 
@@ -400,7 +397,6 @@ export default function DashboardListingsPage() {
     setStatusModalOpen(false)
     setSelectedProject(null)
     setSelectedStatus("")
-    setShowDeleteConfirm(false)
   }
 
   const handleSaveCoverPhoto = () => {
@@ -409,15 +405,24 @@ export default function DashboardListingsPage() {
     setSelectedProject(null)
   }
 
-  const handleDeleteListing = () => {
-    if (!selectedProject) {
+  const handleDeleteListing = (project: ListingProject) => {
+    setPendingDeleteProject(project)
+    setStatusModalOpen(false)
+    setOpenDropdown(null)
+  }
+
+  const handleCancelDelete = () => {
+    setPendingDeleteProject(null)
+  }
+
+  const handleConfirmDelete = () => {
+    if (!pendingDeleteProject) {
       return
     }
 
-    console.log(`Deleting project ${selectedProject.id}`)
-    setShowDeleteConfirm(false)
-    setStatusModalOpen(false)
-    setSelectedProject(null)
+    console.log(`Deleting project ${pendingDeleteProject.id}`)
+    setPendingDeleteProject(null)
+    setSelectedProject((prev) => (prev?.id === pendingDeleteProject.id ? null : prev))
   }
 
   const handleEditListing = (project: ListingProject) => {
@@ -516,6 +521,8 @@ export default function DashboardListingsPage() {
   const limitReachedForNewActivation =
     companyPlan === "basic" && activeListingsExcludingSelected >= BASIC_ACTIVE_LIMIT && !isSelectedProjectActive
 
+  const isPendingAdminReview = selectedProject?.status === "in_progress"
+
   const handleApplyFilters = useCallback((newFilters: FilterState) => {
     setFilters(newFilters)
   }, [])
@@ -576,7 +583,8 @@ export default function DashboardListingsPage() {
     },
   ]
 
-  const isValidStatusSelection = statusOptions.some((option) => option.value === selectedStatus)
+  const isValidStatusSelection =
+    !isPendingAdminReview && statusOptions.some((option) => option.value === selectedStatus)
 
   const samplePhotos = Array.from({ length: 9 }, (_, i) => ({
     id: i,
@@ -799,6 +807,13 @@ export default function DashboardListingsPage() {
                         >
                           Edit listing
                         </button>
+                        <div className="border-t border-gray-100 my-1" />
+                        <button
+                          onClick={() => handleDeleteListing(project)}
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                        >
+                          Delete listing
+                        </button>
                       </div>
                     )}
                   </div>
@@ -810,6 +825,16 @@ export default function DashboardListingsPage() {
                 <p className="text-xs text-gray-400 mt-2">
                   Created on {new Date(project.createdAt).toLocaleDateString()}
                 </p>
+                {project.status === "in_progress" && (
+                  <div className="mt-4 rounded-md border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
+                    Awaiting Arco review. We&apos;ll email you as soon as the team approves this listing.
+                  </div>
+                )}
+                {project.status === "draft" && (
+                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    Continue the listing wizard to submit this project for review.
+                  </div>
+                )}
               </div>
             </div>
             ))}
@@ -862,11 +887,23 @@ export default function DashboardListingsPage() {
               </div>
             </div>
 
-            {limitReachedForNewActivation && (
+            {isPendingAdminReview && (
+              <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-5 text-sm text-blue-800">
+                <AlertTriangle className="h-5 w-5 mt-0.5 text-blue-600" />
+                <div>
+                  <p className="font-medium">Under review by the Arco team</p>
+                  <p className="text-blue-700">
+                    We&apos;ll email you once the review is complete. Status changes are disabled until approval.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {limitReachedForNewActivation && !isPendingAdminReview && (
               <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-5 text-sm text-amber-800">
                 <AlertTriangle className="h-5 w-5 mt-0.5" />
                 <div>
-                  <p className="font-medium">You’ve reached the Basic plan limit.</p>
+                  <p className="font-medium">You&apos;ve reached the Basic plan limit.</p>
                   <p className="text-amber-700">
                     Unlist another project or upgrade to Plus to set this listing live.
                   </p>
@@ -885,11 +922,14 @@ export default function DashboardListingsPage() {
                   wouldBeActive &&
                   activeListingsExcludingSelected >= BASIC_ACTIVE_LIMIT &&
                   !isSelectedProjectActive
-                const isDisabled = isPlusLocked || hitsActiveLimit
+                const isDisabled = isPlusLocked || hitsActiveLimit || isPendingAdminReview
+                const showUpgradeLink = isPlusLocked && !isPendingAdminReview
                 const description =
-                  requiresPlus && companyPlan !== "plus"
-                    ? "Upgrade to Plus to make this project searchable on Discover."
-                    : option.description
+                  isPendingAdminReview
+                    ? option.description
+                    : requiresPlus && companyPlan !== "plus"
+                        ? "Upgrade to Plus to make this project searchable on Discover."
+                        : option.description
 
                 return (
                   <label
@@ -929,7 +969,7 @@ export default function DashboardListingsPage() {
                           )}
                         </div>
                         <p className="text-sm text-gray-600">{description}</p>
-                        {isPlusLocked && (
+                        {showUpgradeLink && (
                           <div className="flex items-center gap-2 text-sm text-amber-700">
                             <AlertTriangle className="h-4 w-4" />
                             <span>Upgrade to Plus to unlock this status.</span>
@@ -942,7 +982,7 @@ export default function DashboardListingsPage() {
                           </div>
                         )}
                       </div>
-                      {isPlusLocked && (
+                      {showUpgradeLink && (
                         <Link
                           href="/dashboard/pricing"
                           className="text-sm font-semibold text-emerald-600 hover:text-emerald-700"
@@ -966,31 +1006,33 @@ export default function DashboardListingsPage() {
               </Button>
             </div>
 
-            <div className="mt-4 border-t border-gray-100 pt-4">
-              {showDeleteConfirm ? (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2 text-sm text-red-600">
-                    <AlertTriangle className="h-4 w-4 mt-0.5" />
-                    <p>Deleting this listing cannot be undone. The project will be removed from your dashboard.</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1">
-                      Keep listing
-                    </Button>
-                    <Button variant="destructive" onClick={handleDeleteListing} className="flex-1">
-                      Delete listing
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="w-full justify-start text-sm text-red-600 hover:text-red-700"
-                >
-                  Delete listing
-                </Button>
-              )}
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteProject && (
+        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 border border-red-100 shadow-lg">
+            <div className="flex items-start gap-3 mb-6">
+              <div className="rounded-full bg-red-50 p-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Delete listing?</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  This will remove <span className="font-medium">{pendingDeleteProject.title}</span> from your dashboard. You can
+                  always create the listing again later.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleCancelDelete} className="flex-1">
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDelete} className="flex-1">
+                Delete listing
+              </Button>
             </div>
           </div>
         </div>
