@@ -538,7 +538,9 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
     return { success: false, error: "You can upload up to 5 photos." }
   }
 
-  const orderIndex = existingPhotos?.length ?? 0
+  // Use max order_index + 1 to avoid gaps when photos are deleted
+  const maxOrderIndex = existingPhotos?.reduce((max, photo) => Math.max(max, photo.order_index), -1) ?? -1
+  const orderIndex = maxOrderIndex + 1
   const shouldBeCover = !existingPhotos?.some((photo) => photo.is_cover)
 
   const filename = sanitizeFilename(sanitizedFile.name)
