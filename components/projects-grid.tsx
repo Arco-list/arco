@@ -14,7 +14,7 @@ type SortOption = (typeof sortOptions)[number]
 export function ProjectsGrid() {
   const filterContext = useFilters()
   const { removeFilter, taxonomy } = filterContext
-  const { projects, total, isLoading, error, hasMore, loadMore } = useProjectsQuery({ pageSize: 12 })
+  const { projects, isLoading, error, hasMore, loadMore } = useProjectsQuery({ pageSize: 12 })
 
   const [sortBy, setSortBy] = useState<SortOption>("Most recent")
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
@@ -85,6 +85,23 @@ export function ProjectsGrid() {
     filterContext.taxonomyLabelMap,
   ])
 
+  const headingText = useMemo(() => {
+    const typeLabels = filterContext.selectedTypes
+      .map((type) => filterContext.taxonomyLabelMap.get(type) ?? type)
+      .filter(Boolean)
+
+    const typePart = (() => {
+      if (typeLabels.length === 0) return "Projects"
+      if (typeLabels.length === 1) return typeLabels[0]
+      if (typeLabels.length === 2) return `${typeLabels[0]} & ${typeLabels[1]}`
+      return `${typeLabels.slice(0, -1).join(", ")} & ${typeLabels[typeLabels.length - 1]}`
+    })()
+
+    const locationPart = filterContext.selectedLocation?.trim() || "all locations"
+
+    return `${typePart} in ${locationPart}`
+  }, [filterContext.selectedLocation, filterContext.selectedTypes, filterContext.taxonomyLabelMap])
+
   return (
     <div className="w-full bg-white">
       <div className="px-4 md:px-8">
@@ -92,9 +109,8 @@ export function ProjectsGrid() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-xl font-medium text-gray-900">
-                {total > 0 ? `${total} projects` : "Projects"}
+                {headingText}
               </h1>
-              <p className="text-sm text-gray-500">Results update automatically as you adjust filters.</p>
             </div>
 
             <div className="relative">
