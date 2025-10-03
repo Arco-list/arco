@@ -29,74 +29,74 @@ Acceptance Criteria
 - Given the hero Search bar has non-empty input, when the user presses Enter or clicks the Search CTA, then navigate to Discover (Projects tab) with the query applied and visible in the Discover search field.
 - User can navigate cards in a carrousel using the navigation buttons (left/right) to refresh all the cards in the carrousel. On mobile the carrousel can be navigated through a swipe.
 - Professional categories and services
-  | Professional Category | Professional Service     |
+  | Professional Category | Professional Service |
   | --------------------- | ------------------------ |
-  | Design & Planning     | Architecture             |
-  | Design & Planning     | Interior design          |
-  | Design & Planning     | Garden design            |
-  | Construction          | General contractor       |
-  | Construction          | Roof                     |
-  | Construction          | Tiles and stone          |
-  | Construction          | Kitchen                  |
-  | Construction          | Stairs                   |
-  | Construction          | Elevator                 |
-  | Construction          | Windows                  |
-  | Construction          | Bathroom                 |
-  | Construction          | Swimming pool            |
-  | Construction          | Welness                  |
-  | Construction          | Doors                    |
-  | Systems               | Lighting                 |
-  | Systems               | Electrical systems       |
-  | Systems               | Security systems         |
-  | Systems               | Domotica                 |
-  | Finishing             | Interior fit-out         |
-  | Finishing             | Fireplace                |
-  | Finishing             | Interior styling         |
-  | Finishing             | Painting                 |
-  | Finishing             | Decoration and carpentry |
-  | Finishing             | Indoor plants            |
-  | Finishing             | Floor                    |
-  | Finishing             | Furniture                |
-  | Finishing             | Art                      |
-  | Outdoor               | Outdoor lighting         |
-  | Outdoor               | Garden                   |
-  | Outdoor               | Garden house             |
-  | Outdoor               | Outdoor furniture        |
-  | Outdoor               | Fencing and gates        |
+  | Design & Planning | Architecture |
+  | Design & Planning | Interior design |
+  | Design & Planning | Garden design |
+  | Construction | General contractor |
+  | Construction | Roof |
+  | Construction | Tiles and stone |
+  | Construction | Kitchen |
+  | Construction | Stairs |
+  | Construction | Elevator |
+  | Construction | Windows |
+  | Construction | Bathroom |
+  | Construction | Swimming pool |
+  | Construction | Welness |
+  | Construction | Doors |
+  | Systems | Lighting |
+  | Systems | Electrical systems |
+  | Systems | Security systems |
+  | Systems | Domotica |
+  | Finishing | Interior fit-out |
+  | Finishing | Fireplace |
+  | Finishing | Interior styling |
+  | Finishing | Painting |
+  | Finishing | Decoration and carpentry |
+  | Finishing | Indoor plants |
+  | Finishing | Floor |
+  | Finishing | Furniture |
+  | Finishing | Art |
+  | Outdoor | Outdoor lighting |
+  | Outdoor | Garden |
+  | Outdoor | Garden house |
+  | Outdoor | Outdoor furniture |
+  | Outdoor | Fencing and gates |
 - Project typescategories and sub-types
-  | Project Type     | Project Sub-type | Listing type | Building feature |
+  | Project Type | Project Sub-type | Listing type | Building feature |
   | ---------------- | ---------------- | ------------ | ---------------- |
-  | House            | Villa            | Yes          | No               |
-  | House            | House            | Yes          | No               |
-  | House            | Apartment        | Yes          | No               |
-  | House            | Chalet           | Yes          | No               |
-  | House            | Bungalow         | Yes          | No               |
-  | House            | Farm             | Yes          | No               |
-  | House            | Extension        | Yes          | No               |
-  | Kitchen & Living | Kitchen          | Yes          | Yes              |
-  | Kitchen & Living | Living room      | No           | Yes              |
-  | Kitchen & Living | Dining room      | No           | Yes              |
-  | Kitchen & Living | Sunroom          | No           | Yes              |
-  | Bed & Bath       | Bathroom         | Yes          | Yes              |
-  | Bed & Bath       | Bedroom          | No           | Yes              |
-  | Bed & Bath       | Indoor Pool      | No           | Yes              |
-  | Bed & Bath       | Jacuzzi          | Yes          | Yes              |
-  | Bed & Bath       | Sauna            | Yes          | Yes              |
-  | Bed & Bath       | Steam room       | No           | Yes              |
-  | Outdoor          | Garden           | Yes          | Yes              |
-  | Outdoor          | Outdoor pool     | Yes          | Yes              |
-  | Outdoor          | Garden house     | Yes          | Yes              |
-  | Outdoor          | Outdoor kitchen  | No           | Yes              |
-  | Outdoor          | Garage           | No           | Yes              |
-  | Outdoor          | Porch            | No           | Yes              |
-  | Other            | Hall             | No           | Yes              |
-  | Other            | Home office      | No           | Yes              |
-  | Other            | Bar              | No           | Yes              |
-  | Other            | Cinema           | No           | Yes              |
-  | Other            | Gym              | No           | Yes              |
-  | Other            | Game room        | No           | Yes              |
-  | Other            | Kids room        | No           | Yes              |
-  | Other            | Wine cellar      | No           | Yes              |
+  | House | Villa | Yes | No |
+  | House | House | Yes | No |
+  | House | Apartment | Yes | No |
+  | House | Chalet | Yes | No |
+  | House | Bungalow | Yes | No |
+  | House | Farm | Yes | No |
+  | House | Extension | Yes | No |
+  | Kitchen & Living | Kitchen | Yes | Yes |
+  | Kitchen & Living | Living room | No | Yes |
+  | Kitchen & Living | Dining room | No | Yes |
+  | Kitchen & Living | Sunroom | No | Yes |
+  | Bed & Bath | Bathroom | Yes | Yes |
+  | Bed & Bath | Bedroom | No | Yes |
+  | Bed & Bath | Indoor Pool | No | Yes |
+  | Bed & Bath | Jacuzzi | Yes | Yes |
+  | Bed & Bath | Sauna | Yes | Yes |
+  | Bed & Bath | Steam room | No | Yes |
+  | Outdoor | Garden | Yes | Yes |
+  | Outdoor | Outdoor pool | Yes | Yes |
+  | Outdoor | Garden house | Yes | Yes |
+  | Outdoor | Outdoor kitchen | No | Yes |
+  | Outdoor | Garage | No | Yes |
+  | Outdoor | Porch | No | Yes |
+  | Other | Hall | No | Yes |
+  | Other | Home office | No | Yes |
+  | Other | Bar | No | Yes |
+  | Other | Cinema | No | Yes |
+  | Other | Gym | No | Yes |
+  | Other | Game room | No | Yes |
+  | Other | Kids room | No | Yes |
+  | Other | Wine cellar | No | Yes |
 
 ## Discover
 
@@ -200,8 +200,7 @@ Functional Requirements
 - User can click Save/Favorite (heart) (unauth → Login > Sign Up, then return and complete the save).
 - User can click Share to open the Share modal
 - User can read Title, [Style] [sub-type] in [location], [Building type] in [Project Year], and the Overview rich-text.
-- User can view the Professionals section on the right of the page with company name, professional type, # of projects (clickable) and 'Visit' button. The Visit button opens the Professional Detail Page
-  -
+- ## User can view the Professionals section on the right of the page with company name, professional type, # of projects (clickable) and 'Visit' button. The Visit button opens the Professional Detail Page
   -
 - User can view the Highlights Section (Building Feature Image + Building Feature Name + Building Feature Description). Clicking a card will open the Image Overview Model and scroll to the respective building feature.
 - User can view Features metadata block showing the building features with an icon. Clicking a feature will open the Image Overview Model and scroll to the respective building feature.
@@ -489,15 +488,15 @@ Functional Requirements
 - User can delete a listing through the Listing Status Popup (Delete action) after confirmation; system will soft-delete and refresh the table.
 - System will color-code status chips and auto-refresh the list when a wizard save occurs.
 - Listing statuses
-  | Status         | Description                                                                           | Image click - listing owner | Image click - not listing owner |
+  | Status | Description | Image click - listing owner | Image click - not listing owner |
   | -------------- | ------------------------------------------------------------------------------------- | --------------------------- | ------------------------------- |
-  | ● In progress  | Listing is in edit mode                                                               | List a project flow.        | n/a                             |
-  | ● In review    | List a project flow is completed and has to be accepted by an admin.                  | List a project flow.        | n/a                             |
-  | ● Invited      | Company is invited by project owner.                                                  | n/a                         | Status pop-up                   |
-  | ● Live on page | Project is live on the company page                                                   | Edit listing                | Status pop-up                   |
-  | ● Listed       | Professional is listed on project page.                                               | Edit listing                | Status pop-up                   |
-  | ● Unlisted     | Project is not listed on company page and professional is not listed on project page. | Edit listing                | Status pop-up                   |
-  | ● Rejected     | The listing is rejected by an admin                                                   | Rejected pop-up             | n/a                             |
+  | ● In progress | Listing is in edit mode | List a project flow. | n/a |
+  | ● In review | List a project flow is completed and has to be accepted by an admin. | List a project flow. | n/a |
+  | ● Invited | Company is invited by project owner. | n/a | Status pop-up |
+  | ● Live on page | Project is live on the company page | Edit listing | Status pop-up |
+  | ● Listed | Professional is listed on project page. | Edit listing | Status pop-up |
+  | ● Unlisted | Project is not listed on company page and professional is not listed on project page. | Edit listing | Status pop-up |
+  | ● Rejected | The listing is rejected by an admin | Rejected pop-up | n/a |
 
 Acceptance Criteria
 
@@ -1344,16 +1343,16 @@ Functional Requirements
 
 Functional Requirements
 
-- User can view a table of all projects with columns Featured (toggle), Project Title, Sub-type, Status (i.e. In Progress, In review, Live)Features, Images (displaying the number of images), Year, Project location, Created On.
+- User can view a table of all projects with columns Featured (toggle), Project Title, Sub-type, Status (i.e. In Progress, In review, Live), Images (displaying the number of images), , Project location, Created On.
 - User can click the Featured toggle in any row; system will immediately add/remove that project from the Home/Discover “Featured Projects” carousel, update the toggle icon, and persist the change.
 - User can filter results by the columns Project Title, Images, Project location, Created On
 - User can click the SEO View toggle (top right) to switch the table to columns Slug, Meta Title, Meta Description, SEO Status; clicking again returns to the main view.
-- User can filter projects by Location (multi-select country/state), Feature tags, Style, Project TypeCategory, Project Sub-Type, Date Created (range picker).
+- User can filter projects by Location (multi-select country/state), Feature tags, Style, Project Type, Project Sub-Type, Date Created (range picker).
 - User can type in a search box to search project Title, Slug, or Features (debounced, case-insensitive).
-- User can click any project row (title link) to open the Project Detail Pageadmin preview in a new tab.
+- User can click any project row (title link) to open the Project Detail Page a new tab.
 - User can click Create Project (primary button above table) to open the Create/Edit Project wizard on Step 1.
 - User can click the kebab menu to access the links 'Edit', 'Change owner', 'Delete'.
-- User can click the Edit linkicon in the kebab menu in a row to open that project in the Listing Editor or List a project Wizard when the project status is In Progress.the wizard, landing on the last-saved step.
+- User can click the Edit link in the kebab menu to open that project in the Listing Editor or List a project Wizard when the project status is In Progress.
 - User can click the Change owner link in the kebab menu to change the owner of a project by selecting a different professional user.
 - User can click the Delete in the kebab menu to delete a project.
 - System will show a badge count of projects currently filtered, remember column widths, and export the table to CSV via the overflow menu.
