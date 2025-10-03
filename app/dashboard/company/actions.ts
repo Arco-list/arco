@@ -8,13 +8,20 @@ import { Buffer } from "node:buffer"
 import { JSDOM } from "jsdom"
 import DOMPurify from "dompurify"
 
-import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
+
+import { createServerActionSupabaseClient } from "@/lib/supabase/server"
 import { logger, sanitizeForLogging } from "@/lib/logger"
 import type { Database } from "@/lib/supabase/types"
 import { checkRateLimit } from "@/lib/rate-limit"
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/svg+xml"]
+
+// Type guard for Error objects
+function isError(error: unknown): error is Error {
+  return error instanceof Error
+}
 
 const nameSchema = z
   .string({ required_error: "Company name is required" })
@@ -45,10 +52,42 @@ const contactSchema = z.object({
 })
 
 const socialSchema = z.object({
-  facebook: z.string().trim().url("Enter a valid URL").optional().or(z.literal("")),
-  instagram: z.string().trim().url("Enter a valid URL").optional().or(z.literal("")),
-  linkedin: z.string().trim().url("Enter a valid URL").optional().or(z.literal("")),
-  pinterest: z.string().trim().url("Enter a valid URL").optional().or(z.literal("")),
+  facebook: z
+    .string()
+    .trim()
+    .url("Enter a valid URL")
+    .refine((url) => url === "" || url.startsWith("http://") || url.startsWith("https://"), {
+      message: "URL must start with http:// or https://",
+    })
+    .optional()
+    .or(z.literal("")),
+  instagram: z
+    .string()
+    .trim()
+    .url("Enter a valid URL")
+    .refine((url) => url === "" || url.startsWith("http://") || url.startsWith("https://"), {
+      message: "URL must start with http:// or https://",
+    })
+    .optional()
+    .or(z.literal("")),
+  linkedin: z
+    .string()
+    .trim()
+    .url("Enter a valid URL")
+    .refine((url) => url === "" || url.startsWith("http://") || url.startsWith("https://"), {
+      message: "URL must start with http:// or https://",
+    })
+    .optional()
+    .or(z.literal("")),
+  pinterest: z
+    .string()
+    .trim()
+    .url("Enter a valid URL")
+    .refine((url) => url === "" || url.startsWith("http://") || url.startsWith("https://"), {
+      message: "URL must start with http:// or https://",
+    })
+    .optional()
+    .or(z.literal("")),
 })
 
 const servicesSchema = z.object({
@@ -174,7 +213,7 @@ const validateImageFile = async (file: File): Promise<{ error?: string; sanitize
 
       return { sanitizedFile }
     } catch (error) {
-      logger.error("svg-sanitization", "Failed to sanitize SVG file", { fileName: file.name }, error as Error)
+      logger.error("svg-sanitization", "Failed to sanitize SVG file", { fileName: file.name }, isError(error) ? error : new Error(String(error)))
       return { error: "Invalid SVG file." }
     }
   }
@@ -182,11 +221,11 @@ const validateImageFile = async (file: File): Promise<{ error?: string; sanitize
   return { sanitizedFile: file }
 }
 
-const uploadToStorage = async (path: string, file: File) => {
-  const serviceClient = createServiceRoleSupabaseClient()
+// Upload using the authenticated server-action client so bucket policies enforce ownership.
+const uploadToStorage = async (supabase: SupabaseClient<Database>, path: string, file: File) => {
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  const { error } = await serviceClient
+  const { error } = await supabase
     .storage
     .from("company-assets")
     .upload(path, buffer, {
@@ -201,11 +240,33 @@ const uploadToStorage = async (path: string, file: File) => {
   return { success: true as const }
 }
 
-const deleteFromStorage = async (path: string | null | undefined) => {
+// Guarded delete helper prevents removing objects outside of the caller's company scope.
+const deleteFromStorage = async (
+  supabase: SupabaseClient<Database>,
+  companyId: string,
+  path: string | null | undefined
+) => {
   if (!path) return
+  if (!path.startsWith(`${companyId}/`)) {
+    logger.warn(
+      "Blocked attempt to delete storage path outside company scope",
+      {
+        companyId,
+        path,
+      }
+    )
+    return
+  }
 
-  const serviceClient = createServiceRoleSupabaseClient()
-  await serviceClient.storage.from("company-assets").remove([path])
+  const { error } = await supabase.storage.from("company-assets").remove([path])
+
+  if (error) {
+    logger.warn(
+      "Failed to delete storage object",
+      { companyId, path, bucket: "company-assets" },
+      error
+    )
+  }
 }
 
 export async function updateCompanyProfileAction(input: { name: string; description?: string | null }): Promise<ActionResult> {
@@ -466,7 +527,11 @@ export async function uploadCompanyLogoAction(formData: FormData): Promise<Uploa
   const sanitizedFile = validation.sanitizedFile!
   const filename = sanitizeFilename(sanitizedFile.name)
   const path = `${company!.id}/logo/${Date.now()}-${filename}`
-  const uploadResult = await uploadToStorage(path, sanitizedFile)
+
+  // Store old logo path before uploading new one
+  const oldLogoPath = company!.logo_url ? extractStoragePathFromUrl(company!.logo_url) : null
+
+  const uploadResult = await uploadToStorage(supabase, path, sanitizedFile)
 
   if (!uploadResult.success) {
     return {
@@ -483,14 +548,28 @@ export async function uploadCompanyLogoAction(formData: FormData): Promise<Uploa
     .eq("id", company!.id)
 
   if (updateError) {
-    await deleteFromStorage(path)
+    // Cleanup newly uploaded file if database update fails
+    await deleteFromStorage(supabase, company!.id, path)
     return {
       success: false,
       error: updateError.message,
     }
   }
 
-  await deleteFromStorage(extractStoragePathFromUrl(company!.logo_url))
+  // Cleanup old logo after successful update (best effort, don't fail if cleanup fails)
+  if (oldLogoPath) {
+    try {
+      await deleteFromStorage(supabase, company!.id, oldLogoPath)
+    } catch (error) {
+      // Log but don't fail the operation if cleanup fails
+      logger.error(
+        "storage-cleanup",
+        "Failed to delete old logo after successful update",
+        { companyId: company!.id, oldPath: oldLogoPath },
+        isError(error) ? error : new Error(String(error))
+      )
+    }
+  }
 
   revalidatePath("/dashboard/company")
 
@@ -522,9 +601,7 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
   }
 
   const sanitizedFile = validation.sanitizedFile!
-  const serviceClient = createServiceRoleSupabaseClient()
-
-  const { data: existingPhotos, error: selectError } = await serviceClient
+  const { data: existingPhotos, error: selectError } = await supabase
     .from("company_photos")
     .select("id, order_index, is_cover")
     .eq("company_id", company!.id)
@@ -546,7 +623,7 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
   const filename = sanitizeFilename(sanitizedFile.name)
   const path = `${company!.id}/photos/${randomUUID()}-${filename}`
 
-  const uploadResult = await uploadToStorage(path, sanitizedFile)
+  const uploadResult = await uploadToStorage(supabase, path, sanitizedFile)
 
   if (!uploadResult.success) {
     return {
@@ -573,7 +650,7 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
     .single()
 
   if (insertError || !insertedPhoto) {
-    await deleteFromStorage(path)
+    await deleteFromStorage(supabase, company!.id, path)
     return {
       success: false,
       error: insertError?.message ?? "Could not save photo metadata.",
@@ -729,7 +806,7 @@ export async function deleteCompanyPhotoAction(input: z.infer<typeof photoIdSche
     }
   }
 
-  await deleteFromStorage(existingPhoto.storage_path)
+  await deleteFromStorage(supabase, company!.id, existingPhoto.storage_path)
   revalidatePath("/dashboard/company")
   return { success: true, nextCoverPhotoId }
 }

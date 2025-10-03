@@ -32,19 +32,27 @@ AS $$
 DECLARE
   photo_id uuid;
   idx int;
+  arr_length int;
 BEGIN
+  -- Validate array is not NULL or empty
+  arr_length := array_length(photo_ids, 1);
+
+  IF arr_length IS NULL OR arr_length = 0 THEN
+    RAISE EXCEPTION 'Photo IDs array cannot be empty';
+  END IF;
+
   -- Verify all photos belong to the company
   IF (
     SELECT COUNT(*)
     FROM company_photos
     WHERE id = ANY(photo_ids)
     AND company_id = company_id_param
-  ) != array_length(photo_ids, 1) THEN
+  ) != arr_length THEN
     RAISE EXCEPTION 'Invalid photo IDs for company';
   END IF;
 
   -- Update order indices atomically
-  FOR idx IN 1..array_length(photo_ids, 1) LOOP
+  FOR idx IN 1..arr_length LOOP
     photo_id := photo_ids[idx];
     UPDATE company_photos
     SET order_index = idx - 1
