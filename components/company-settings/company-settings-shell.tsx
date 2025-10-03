@@ -796,7 +796,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                     <p className="text-sm text-gray-600">Update how your business appears on your public company page.</p>
                   </div>
                   <div className="grid gap-6">
-                    <div>
+                    <div className="space-y-2">
                       <Label htmlFor="company-name">Company name</Label>
                       <Input
                         id="company-name"
@@ -804,7 +804,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                         onChange={(event) => setProfileState((prev) => ({ ...prev, name: event.target.value }))}
                       />
                     </div>
-                    <div>
+                    <div className="space-y-2">
                       <Label htmlFor="company-description">Description</Label>
                       <Textarea
                         id="company-description"

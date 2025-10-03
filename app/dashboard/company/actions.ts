@@ -5,10 +5,12 @@ import { z } from "zod"
 
 import { randomUUID } from "node:crypto"
 import { Buffer } from "node:buffer"
+import DOMPurify from "isomorphic-dompurify"
 
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger, sanitizeForLogging } from "@/lib/logger"
 import type { Database } from "@/lib/supabase/types"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/svg+xml"]
@@ -139,16 +141,39 @@ const extractStoragePathFromUrl = (url: string | null | undefined) => {
   }
 }
 
-const validateImageFile = (file: File) => {
+const validateImageFile = async (file: File): Promise<{ error?: string; sanitizedFile?: File }> => {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return "Only JPG, PNG, or SVG files are allowed."
+    return { error: "Only JPG, PNG, or SVG files are allowed." }
   }
 
   if (file.size > MAX_IMAGE_BYTES) {
-    return "Files must be 5MB or smaller."
+    return { error: "Files must be 5MB or smaller." }
   }
 
-  return null
+  // Sanitize SVG files to prevent XSS attacks
+  if (file.type === "image/svg+xml") {
+    try {
+      const svgContent = await file.text()
+      const sanitizedSvg = DOMPurify.sanitize(svgContent, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ["use"],
+        ADD_ATTR: ["target"],
+      })
+
+      // Create new sanitized file
+      const sanitizedFile = new File([sanitizedSvg], file.name, {
+        type: file.type,
+        lastModified: file.lastModified,
+      })
+
+      return { sanitizedFile }
+    } catch (error) {
+      logger.error("svg-sanitization", "Failed to sanitize SVG file", { fileName: file.name }, error as Error)
+      return { error: "Invalid SVG file." }
+    }
+  }
+
+  return { sanitizedFile: file }
 }
 
 const uploadToStorage = async (path: string, file: File) => {
@@ -409,10 +434,16 @@ export async function changeCompanyStatusAction(input: z.infer<typeof statusSche
 }
 
 export async function uploadCompanyLogoAction(formData: FormData): Promise<UploadActionResult> {
-  const { supabase, company, error } = await getCompanyContext()
+  const { supabase, company, user, error } = await getCompanyContext()
 
   if (error) {
     return { success: false, error }
+  }
+
+  // Rate limiting: 10 uploads per minute per user
+  const rateLimit = await checkRateLimit(`upload:logo:${user!.id}`)
+  if (!rateLimit.success) {
+    return { success: false, error: "Too many upload attempts. Please try again later." }
   }
 
   const file = formData.get("file")
@@ -421,14 +452,15 @@ export async function uploadCompanyLogoAction(formData: FormData): Promise<Uploa
     return { success: false, error: "Logo file is required." }
   }
 
-  const validationError = validateImageFile(file)
-  if (validationError) {
-    return { success: false, error: validationError }
+  const validation = await validateImageFile(file)
+  if (validation.error) {
+    return { success: false, error: validation.error }
   }
 
-  const filename = sanitizeFilename(file.name)
+  const sanitizedFile = validation.sanitizedFile!
+  const filename = sanitizeFilename(sanitizedFile.name)
   const path = `${company!.id}/logo/${Date.now()}-${filename}`
-  const uploadResult = await uploadToStorage(path, file)
+  const uploadResult = await uploadToStorage(path, sanitizedFile)
 
   if (!uploadResult.success) {
     return {
@@ -460,10 +492,16 @@ export async function uploadCompanyLogoAction(formData: FormData): Promise<Uploa
 }
 
 export async function uploadCompanyPhotoAction(formData: FormData): Promise<UploadActionResult> {
-  const { supabase, company, error } = await getCompanyContext()
+  const { supabase, company, user, error } = await getCompanyContext()
 
   if (error) {
     return { success: false, error }
+  }
+
+  // Rate limiting: 10 uploads per minute per user
+  const rateLimit = await checkRateLimit(`upload:photo:${user!.id}`)
+  if (!rateLimit.success) {
+    return { success: false, error: "Too many upload attempts. Please try again later." }
   }
 
   const file = formData.get("file")
@@ -472,11 +510,12 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
     return { success: false, error: "Photo file is required." }
   }
 
-  const validationError = validateImageFile(file)
-  if (validationError) {
-    return { success: false, error: validationError }
+  const validation = await validateImageFile(file)
+  if (validation.error) {
+    return { success: false, error: validation.error }
   }
 
+  const sanitizedFile = validation.sanitizedFile!
   const serviceClient = createServiceRoleSupabaseClient()
 
   const { data: existingPhotos, error: selectError } = await serviceClient
@@ -496,10 +535,10 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
   const orderIndex = existingPhotos?.length ?? 0
   const shouldBeCover = !existingPhotos?.some((photo) => photo.is_cover)
 
-  const filename = sanitizeFilename(file.name)
+  const filename = sanitizeFilename(sanitizedFile.name)
   const path = `${company!.id}/photos/${randomUUID()}-${filename}`
 
-  const uploadResult = await uploadToStorage(path, file)
+  const uploadResult = await uploadToStorage(path, sanitizedFile)
 
   if (!uploadResult.success) {
     return {
@@ -510,7 +549,7 @@ export async function uploadCompanyPhotoAction(formData: FormData): Promise<Uplo
 
   const publicUrl = buildPublicUrl(path)
 
-  const fileSize = Math.max(file.size, 1)
+  const fileSize = Math.max(sanitizedFile.size, 1)
 
   const { data: insertedPhoto, error: insertError } = await supabase
     .from("company_photos")
@@ -551,18 +590,15 @@ export async function reorderCompanyPhotosAction(input: z.infer<typeof photoOrde
     return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid ordering" }
   }
 
-  const updates = parsed.data.photoIds.map((photoId, index) => ({ id: photoId, order_index: index }))
+  // Use atomic function for reordering to prevent race conditions
+  const { error: reorderError } = await supabase.rpc("reorder_company_photos", {
+    photo_ids: parsed.data.photoIds,
+    company_id_param: company!.id,
+  })
 
-  for (const update of updates) {
-    const { error: updateError } = await supabase
-      .from("company_photos")
-      .update({ order_index: update.order_index })
-      .eq("id", update.id)
-      .eq("company_id", company!.id)
-
-    if (updateError) {
-      return { success: false, error: updateError.message }
-    }
+  if (reorderError) {
+    logger.db("rpc", "reorder_company_photos", "Failed to reorder photos", { companyId: company!.id }, reorderError)
+    return { success: false, error: reorderError.message }
   }
 
   revalidatePath("/dashboard/company")
