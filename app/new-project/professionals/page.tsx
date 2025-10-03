@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2, MailPlus, Plus, ShieldAlert, Trash2, X } from "
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
+import { toast } from "sonner"
 
 const TOTAL_STEPS = 4
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
@@ -427,13 +428,43 @@ export default function ProfessionalsPage() {
     setCurrentStep((step) => Math.max(1, step - 1))
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep((step) => Math.min(TOTAL_STEPS, step + 1))
       return
     }
 
-    router.push("/dashboard/listings")
+    if (!projectId) {
+      router.push("/dashboard/listings")
+      return
+    }
+
+    setMutationError(null)
+    setIsMutating(true)
+
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ status: "in_progress" })
+        .eq("id", projectId)
+
+      if (error) {
+        throw error
+      }
+
+      toast.success("Listing submitted for review", {
+        description: "The Arco team will review your project and notify you once it's approved.",
+      })
+
+      setIsMutating(false)
+      router.push("/dashboard/listings")
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "We couldn't submit your listing for review. Please try again."
+      setMutationError(message)
+      toast.error("Submission failed", { description: message })
+      setIsMutating(false)
+    }
   }
 
   const openInviteModal = (serviceId: string, invite?: InviteSummary) => {
@@ -826,7 +857,7 @@ function IntroStep({ isLoading }: { isLoading: boolean }) {
             <MailPlus className="h-16 w-16 text-gray-900" />
           </div>
           <h1 className="mb-4 text-3xl font-bold text-gray-900">Share who helped you realise it</h1>
-          <p className="text-lg text-gray-600">Add the professionals that contributed to your project and we’ll invite them once you publish.</p>
+          <p className="text-lg text-gray-600">Add the professionals that contributed to your project and we&apos;ll invite them once you publish.</p>
         </div>
       )}
     </div>
@@ -929,7 +960,7 @@ function InviteStep({
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="mb-2 text-3xl font-bold text-gray-900">Invite professionals</h1>
-          <p className="text-lg text-gray-600">We’ll email them once your project is published.</p>
+          <p className="text-lg text-gray-600">We&apos;ll email them once your project is published.</p>
         </div>
         <button
           onClick={goToServiceSelection}
@@ -1049,8 +1080,16 @@ function PreviewStep({
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-gray-900">Yeah! It’s time to preview</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Yeah! It&apos;s time to preview</h1>
         <p className="text-lg text-gray-600">Review everything before you invite the Arco team to approve it.</p>
+      </div>
+
+      <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+        <p className="font-medium text-blue-900">Ready to submit for review</p>
+        <p className="mt-1">
+          When you click <span className="font-semibold">Submit for review</span>, the Arco team checks your listing before it
+          goes live. You&apos;ll be notified once it&apos;s approved, and you can return here any time to make updates.
+        </p>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1161,7 +1200,7 @@ function FooterNavigation({
             disabled={isNextDisabled}
             className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {currentStep === totalSteps ? "Complete" : "Next"}
+            {currentStep === totalSteps ? "Submit for review" : "Next"}
           </button>
         </div>
       </div>

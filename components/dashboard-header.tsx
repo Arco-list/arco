@@ -283,6 +283,14 @@ export function DashboardHeader() {
                       </Link>
                       <div className="border-t border-gray-100"></div>
                       <Link
+                        href="/dashboard/pricing"
+                        className="block w-full px-4 py-3 text-left text-sm text-red-500 font-medium hover:bg-red-50 transition-colors"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Upgrade
+                      </Link>
+                      <div className="border-t border-gray-100"></div>
+                      <Link
                         href="/dashboard/settings"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         onClick={() => setIsMenuOpen(false)}
