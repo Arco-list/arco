@@ -174,8 +174,10 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       ? (statusDialogProject.status as ProjectStatusValue)
       : "draft"
 
-    setStatusSelection(normalizedStatus)
-    setStatusNote(normalizedStatus === "rejected" ? statusDialogProject.rejectionReason ?? "" : "")
+    startTransition(() => {
+      setStatusSelection(normalizedStatus)
+      setStatusNote(normalizedStatus === "rejected" ? statusDialogProject.rejectionReason ?? "" : "")
+    })
   }, [statusDialogProject])
 
   const activeFiltersCount = useMemo(() => {

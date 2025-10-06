@@ -23,3 +23,6 @@ ALTER TABLE public.projects
 COMMENT ON COLUMN public.projects.rejection_reason IS 'Admin-provided explanation when a project is set to rejected status.';
 COMMENT ON COLUMN public.projects.status_updated_at IS 'Timestamp of the last status change performed by an admin.';
 COMMENT ON COLUMN public.projects.status_updated_by IS 'Profile id of the user who performed the most recent status change.';
+
+-- Add index on status_updated_by for efficient joins
+CREATE INDEX IF NOT EXISTS idx_projects_status_updated_by ON public.projects(status_updated_by);
