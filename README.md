@@ -14,6 +14,7 @@ Any changes you make to your deployed app will be automatically pushed to this r
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth
 - **Deployment**: Vercel
+- **Package Manager**: pnpm
 
 ## Deployment
 
