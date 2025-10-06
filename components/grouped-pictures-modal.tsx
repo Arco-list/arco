@@ -3,7 +3,16 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Share, Bookmark, ChevronLeft, ChevronRight, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Share,
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react"
 import { toast } from "sonner"
 
 interface ImageGroup {
@@ -32,6 +41,7 @@ export function GroupedPicturesModal({
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
+  const [isZoomed, setIsZoomed] = useState(false)
 
   // Flatten all images for lightbox navigation
   const allImages = useMemo(
@@ -67,6 +77,14 @@ export function GroupedPicturesModal({
     if (totalImages === 0) return
     setCurrentImageIndex((prev) => (prev - 1 + totalImages) % totalImages)
   }, [totalImages])
+
+  const toggleZoom = useCallback(() => {
+    setIsZoomed((prev) => !prev)
+  }, [])
+
+  useEffect(() => {
+    setIsZoomed(false)
+  }, [isLightboxOpen, currentImageIndex])
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -111,13 +129,16 @@ export function GroupedPicturesModal({
           prevImage()
         } else if (e.key === "ArrowRight") {
           nextImage()
+        } else if (e.key === " ") {
+          e.preventDefault()
+          toggleZoom()
         }
       }
     }
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, isLightboxOpen, nextImage, onClose, prevImage])
+  }, [isOpen, isLightboxOpen, nextImage, onClose, prevImage, toggleZoom])
 
   return (
     <>
@@ -242,6 +263,24 @@ export function GroupedPicturesModal({
               </div>
 
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/10"
+                  onClick={toggleZoom}
+                >
+                  {isZoomed ? (
+                    <>
+                      <ZoomOut className="w-4 h-4 mr-2" />
+                      Zoom out
+                    </>
+                  ) : (
+                    <>
+                      <ZoomIn className="w-4 h-4 mr-2" />
+                      Zoom in
+                    </>
+                  )}
+                </Button>
                 <Button variant="ghost" size="sm" className="text-white hover:bg-white/10" onClick={handleShare}>
                   <Share className="w-4 h-4 mr-2" />
                   Share
@@ -259,12 +298,22 @@ export function GroupedPicturesModal({
             </div>
 
             {/* Image Display */}
-            <div className="flex-1 flex items-center justify-center p-8 md:p-16">
-              <img
-                src={allImages[currentImageIndex]?.src || "/placeholder.svg"}
-                alt={allImages[currentImageIndex]?.alt}
-                className="max-w-full max-h-full object-contain"
-              />
+            <div className="flex-1 flex items-center justify-center px-4 pb-12 pt-24 md:px-12 md:pt-28 md:pb-20">
+              <div className="relative max-h-full w-full overflow-hidden">
+                <img
+                  src={allImages[currentImageIndex]?.src || "/placeholder.svg"}
+                  alt={allImages[currentImageIndex]?.alt}
+                  className={`mx-auto block max-w-full object-contain transition-transform duration-300 ease-out ${
+                    isZoomed ? "cursor-zoom-out" : "cursor-zoom-in"
+                  }`}
+                  style={{
+                    maxHeight: isZoomed ? undefined : "calc(100vh - 9rem)",
+                    transform: isZoomed ? "scale(1.2)" : "scale(1)",
+                    transformOrigin: "center",
+                  }}
+                  onClick={toggleZoom}
+                />
+              </div>
             </div>
 
             {/* Navigation Arrows */}

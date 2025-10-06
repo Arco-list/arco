@@ -5,6 +5,7 @@ import { MoreHorizontal } from "lucide-react"
 import { useMemo, useState } from "react"
 import { GroupedPicturesModal } from "@/components/grouped-pictures-modal"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { cn } from "@/lib/utils"
 
 const PLACEHOLDER_IMAGE = {
   src: "/placeholder.svg",
@@ -84,68 +85,69 @@ export function ProjectGallery() {
     setIsModalOpen(true)
   }
 
+  const galleryIsInteractive = imageGroups.length > 0
+
   return (
     <div className="space-y-4">
       {/* Main gallery grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[50vh] min-h-[400px]">
-        {/* Large image */}
-        <div className={`md:row-span-2 ${imageGroups.length ? "cursor-pointer" : ""}`} onClick={openModal}>
+      <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:items-stretch">
+        <div
+          className={cn(
+            "group relative overflow-hidden rounded-xl bg-gray-100 transition-transform",
+            "aspect-[4/3] md:aspect-auto md:min-h-[420px] md:h-full",
+            galleryIsInteractive ? "cursor-pointer" : "cursor-default",
+          )}
+          onClick={galleryIsInteractive ? openModal : undefined}
+        >
           <img
             src={displayImages[0]?.src || PLACEHOLDER_IMAGE.src}
             alt={displayImages[0]?.alt || PLACEHOLDER_IMAGE.alt}
-            className="w-full h-full object-cover rounded-lg hover:opacity-90 transition-opacity"
+            className={cn(
+              "h-full w-full object-cover transition-transform duration-300 ease-out",
+              galleryIsInteractive && "group-hover:scale-105",
+            )}
           />
         </div>
 
-        {/* Top right images */}
-        <div className="grid grid-cols-2 gap-4 h-full">
-          <div className={`${imageGroups.length ? "cursor-pointer" : ""}`} onClick={openModal}>
-            <img
-              src={displayImages[1]?.src || PLACEHOLDER_IMAGE.src}
-              alt={displayImages[1]?.alt || PLACEHOLDER_IMAGE.alt}
-              className="w-full h-full object-cover rounded-lg hover:opacity-90 transition-opacity"
-            />
-          </div>
-          <div className={`${imageGroups.length ? "cursor-pointer" : ""}`} onClick={openModal}>
-            <img
-              src={displayImages[2]?.src || PLACEHOLDER_IMAGE.src}
-              alt={displayImages[2]?.alt || PLACEHOLDER_IMAGE.alt}
-              className="w-full h-full object-cover rounded-lg hover:opacity-90 transition-opacity"
-            />
-          </div>
-        </div>
+        <div className="grid grid-cols-2 gap-4 md:h-full md:min-h-[420px] md:grid-rows-[repeat(2,minmax(0,1fr))]">
+          {displayImages.slice(1, 5).map((image, index) => {
+            const resolvedImage = image ?? PLACEHOLDER_IMAGE
 
-        {/* Bottom right images */}
-        <div className="grid grid-cols-2 gap-4 h-full">
-          <div className={`${imageGroups.length ? "cursor-pointer" : ""}`} onClick={openModal}>
-            <img
-              src={displayImages[3]?.src || PLACEHOLDER_IMAGE.src}
-              alt={displayImages[3]?.alt || PLACEHOLDER_IMAGE.alt}
-              className="w-full h-full object-cover rounded-lg hover:opacity-90 transition-opacity"
-            />
-          </div>
-          <div className="relative">
-            <div className={`${imageGroups.length ? "cursor-pointer" : ""}`} onClick={openModal}>
-              <img
-                src={displayImages[4]?.src || PLACEHOLDER_IMAGE.src}
-                alt={displayImages[4]?.alt || PLACEHOLDER_IMAGE.alt}
-                className="w-full h-full object-cover rounded-lg hover:opacity-90 transition-opacity"
-              />
-            </div>
-            {imageGroups.length > 0 && (
-              <div className="absolute inset-0 bg-white bg-opacity-80 rounded-lg flex items-center justify-center">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="bg-black text-white hover:bg-gray-800"
-                  onClick={openModal}
-                >
-                  <MoreHorizontal className="w-4 h-4 mr-2" />
-                  Show all photos
-                </Button>
+            return (
+              <div
+                key={`gallery-tile-${index}`}
+                className={cn(
+                  "group relative overflow-hidden rounded-xl bg-gray-100",
+                  "aspect-square md:aspect-auto md:h-full",
+                  galleryIsInteractive ? "cursor-pointer" : "cursor-default",
+                )}
+                onClick={galleryIsInteractive ? openModal : undefined}
+              >
+                <img
+                  src={resolvedImage.src}
+                  alt={resolvedImage.alt}
+                  className={cn(
+                    "h-full w-full object-cover transition-transform duration-300 ease-out",
+                    galleryIsInteractive && "group-hover:scale-105",
+                  )}
+                />
+
+                {index === 3 && galleryIsInteractive && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-black text-white hover:bg-gray-800"
+                      onClick={openModal}
+                    >
+                      <MoreHorizontal className="mr-2 h-4 w-4" />
+                      Show all photos
+                    </Button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          })}
         </div>
       </div>
 
