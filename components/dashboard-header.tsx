@@ -18,7 +18,7 @@ export function DashboardHeader() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
 
-  const isActive = (path: string) => pathname === path
+  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
   const isHomeownerPage = pathname === "/homeowner"
 
   // Get user name from profile or session metadata
@@ -39,7 +39,9 @@ export function DashboardHeader() {
       ? [sessionMetadata.user_types]
       : null
   const userTypes = profile?.user_types ?? metadataUserTypes
-  const hasProfessionalAccess = userTypes?.includes("professional") ?? false
+  const isAdmin = userTypes?.includes("admin") ?? false
+  const hasProfessionalRole = userTypes?.includes("professional") ?? false
+  const canAccessProfessionalDashboard = isAdmin || hasProfessionalRole
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!searchQuery.trim()) {
@@ -102,8 +104,18 @@ export function DashboardHeader() {
             </Link>
           </nav>
         ) : (
-          hasProfessionalAccess && (
+          canAccessProfessionalDashboard && (
             <nav className="hidden md:flex items-center space-x-8">
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className={`text-sm font-medium transition-colors hover:text-gray-600 ${
+                    isActive("/admin") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+                  }`}
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/dashboard/listings"
                 className={`text-sm font-medium transition-colors hover:text-gray-600 ${
@@ -210,15 +222,15 @@ export function DashboardHeader() {
                       >
                         List with us
                       </Link>
-                      {hasProfessionalAccess && (
+                      {canAccessProfessionalDashboard && (
                         <>
                           <div className="border-t border-gray-100"></div>
                           <Link
-                            href="/dashboard/listings"
+                            href={isAdmin ? "/admin" : "/dashboard/listings"}
                             className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             onClick={() => setIsMenuOpen(false)}
                           >
-                            Professional Dashboard
+                            {isAdmin ? "Admin Dashboard" : "Professional Dashboard"}
                           </Link>
                         </>
                       )}
@@ -247,9 +259,21 @@ export function DashboardHeader() {
                         Settings
                       </Link>
                     </>
-                  ) : hasProfessionalAccess ? (
+                  ) : canAccessProfessionalDashboard ? (
                     <>
                       {/* Professional Dashboard Menu */}
+                      {isAdmin && (
+                        <>
+                          <Link
+                            href="/admin"
+                            className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            onClick={() => setIsMenuOpen(false)}
+                          >
+                            Admin
+                          </Link>
+                          <div className="border-t border-gray-100"></div>
+                        </>
+                      )}
                       <Link
                         href="/homeowner"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"

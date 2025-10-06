@@ -1,4 +1,4 @@
-const DEFAULT_REDIRECT_PATH = "/homeowner";
+const DEFAULT_REDIRECT_PATH = "/dashboard";
 
 const isRelativeUrl = (value: string) => {
   if (!value.startsWith("/")) return false;

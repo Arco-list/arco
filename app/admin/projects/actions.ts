@@ -61,9 +61,13 @@ export async function setProjectFeaturedAction(input: { projectId: string; featu
   return { success: true }
 }
 
-const statusSchema = z.enum(["draft", "in_progress", "published", "completed", "archived"])
+const statusSchema = z.enum(["draft", "in_progress", "published", "completed", "archived", "rejected"])
 
-export async function setProjectStatusAction(input: { projectId: string; status: z.infer<typeof statusSchema> }) {
+export async function setProjectStatusAction(input: {
+  projectId: string
+  status: z.infer<typeof statusSchema>
+  rejectionReason?: string | null
+}) {
   const idResult = projectIdSchema.safeParse(input.projectId)
   if (!idResult.success) {
     return { success: false, error: "Invalid project id" }
@@ -74,14 +78,26 @@ export async function setProjectStatusAction(input: { projectId: string; status:
     return { success: false, error: "Invalid status" }
   }
 
-  const { supabase, error } = await assertAdmin()
+  const trimmedReason = input.rejectionReason?.trim()
+  if (statusResult.data === "rejected" && (!trimmedReason || trimmedReason.length === 0)) {
+    return { success: false, error: "Rejection reason is required" }
+  }
+
+  const { supabase, user, error } = await assertAdmin()
   if (error) {
     return { success: false, error: error.message }
   }
 
+  const updatePayload: Record<string, unknown> = {
+    status: statusResult.data,
+    status_updated_at: new Date().toISOString(),
+    status_updated_by: user?.id ?? null,
+    rejection_reason: statusResult.data === "rejected" ? trimmedReason : null,
+  }
+
   const { error: updateError } = await supabase
     .from("projects")
-    .update({ status: statusResult.data })
+    .update(updatePayload)
     .eq("id", idResult.data)
 
   if (updateError) {

@@ -12,12 +12,20 @@ import { Separator } from "@/components/ui/separator"
 
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { AdminProjectsTable, type AdminProjectRow } from "@/components/admin-projects-table"
-import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import type { Tables } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
 
+type ProjectQueryRow = Tables<"projects"> & {
+  project_photos: Array<{ count: number | null }> | null
+  project_categories: Array<{ category_id: string | null; is_primary: boolean | null }> | null
+  client?: {
+    is_active: boolean | null
+  } | null
+}
+
 export default async function ProjectsPage() {
-  const supabase = await createServerSupabaseClient()
 
   const slugToLabel = (value: string | null) =>
     (value ?? "")
@@ -29,28 +37,25 @@ export default async function ProjectsPage() {
       .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
       .join(" ")
 
-  const { data, error } = await supabase
-    .from("mv_project_summary")
-    .select(
-      "id, title, slug, status, project_type, primary_category, style_preferences, features, project_year, created_at, is_featured, likes_count, location, photo_count"
-    )
-    .order("created_at", { ascending: false, nullsFirst: false })
-
-  if (error) {
-    console.error("Failed to load admin projects", error)
-  }
-
   const serviceSupabase = createServiceRoleSupabaseClient()
-  const [metaResult, categoriesResult, taxonomyResult] = await Promise.all([
-    serviceSupabase.from("projects").select("id, seo_title, seo_description"),
+
+  const [projectsResult, categoriesResult, taxonomyResult] = await Promise.all([
+    serviceSupabase
+      .from("projects")
+      .select(
+        `id, title, slug, status, project_type, project_type_category_id, style_preferences, features, project_year, created_at, is_featured, likes_count, location, project_size, building_type, seo_title, seo_description, status_updated_at, status_updated_by, rejection_reason, project_photos(count), project_categories(category_id,is_primary), client:profiles!projects_client_id_fkey(is_active)`
+      )
+      .order("created_at", { ascending: false, nullsFirst: false }),
     serviceSupabase.from("categories").select("id, name, slug"),
     serviceSupabase.from("project_taxonomy_options").select("id, name, slug"),
   ])
 
-  const { data: metaData, error: metaError } = metaResult
-  if (metaError) {
-    console.error("Failed to load project meta", metaError)
+  const { data: projectsDataRaw, error: projectsError } = projectsResult
+  if (projectsError) {
+    console.error("Failed to load admin projects", projectsError)
   }
+
+  const projectsData = (projectsDataRaw as ProjectQueryRow[] | null)?.filter((project) => project.client?.is_active ?? false) ?? []
 
   const { data: categoriesData, error: categoriesError } = categoriesResult
   if (categoriesError) {
@@ -61,10 +66,6 @@ export default async function ProjectsPage() {
   if (taxonomyError) {
     console.error("Failed to load project taxonomy options", taxonomyError)
   }
-
-  const metaMap = new Map(
-    (metaData ?? []).map((meta) => [meta.id, { seo_title: meta.seo_title, seo_description: meta.seo_description }])
-  )
 
   const normalizeKey = (value: string | null | undefined) => {
     const trimmed = value?.trim()
@@ -115,12 +116,14 @@ export default async function ProjectsPage() {
     return slugToLabel(original)
   }
 
-  const projects: AdminProjectRow[] = (data ?? []).map((project) => {
+  const projects: AdminProjectRow[] = projectsData.map((project) => {
     const id = project.id ?? ""
-    const meta = metaMap.get(id)
 
-    const seoTitle = meta?.seo_title ?? null
-    const seoDescription = meta?.seo_description ?? null
+    const seoTitle = project.seo_title ?? null
+    const seoDescription = project.seo_description ?? null
+    const statusUpdatedAt = project.status_updated_at ?? null
+    const statusUpdatedBy = project.status_updated_by ?? null
+    const rejectionReason = project.rejection_reason ?? null
 
     let seoStatus: string | null = null
     if (seoTitle && seoDescription) {
@@ -131,23 +134,27 @@ export default async function ProjectsPage() {
       seoStatus = "Missing"
     }
 
-    const featureLabels = (project.features ?? [])
+    const featureLabels = ((project.features as string[] | null) ?? [])
       .map((value) => resolveLabel(value))
       .filter((label): label is string => Boolean(label))
 
-    const styleLabels = (project.style_preferences ?? [])
+    const styleLabels = ((project.style_preferences as string[] | null) ?? [])
       .map((value) => resolveLabel(value))
       .filter((label): label is string => Boolean(label))
 
-    const primaryCategoryName = resolveLabel(project.primary_category) ?? slugToLabel(project.primary_category)
+    const primaryCategoryId = project.project_categories?.find((category) => category.is_primary)?.category_id ?? null
+    const primaryCategoryName = resolveLabel(primaryCategoryId) ?? slugToLabel(primaryCategoryId)
 
     const projectTypeName = resolveLabel(project.project_type) ?? slugToLabel(project.project_type)
+
+    const rawPhotoCount = project.project_photos?.[0]?.count ?? 0
+    const photoCount = typeof rawPhotoCount === "number" ? rawPhotoCount : Number(rawPhotoCount ?? 0)
 
     return {
       id,
       title: project.title ?? "Untitled project",
       slug: project.slug,
-      status: project.status ?? "draft",
+      status: (project.status ?? "draft") as AdminProjectRow["status"],
       projectType: projectTypeName,
       primaryCategory: primaryCategoryName,
       styles: styleLabels,
@@ -157,10 +164,13 @@ export default async function ProjectsPage() {
       isFeatured: project.is_featured,
       likesCount: project.likes_count,
       location: project.location,
-      imageCount: project.photo_count,
+      imageCount: photoCount,
       seoTitle,
       seoDescription,
       seoStatus,
+      statusUpdatedAt,
+      statusUpdatedBy,
+      rejectionReason,
     }
   })
 

@@ -1,14 +1,14 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
-import { format } from "date-fns"
+import { format, formatDistanceToNow } from "date-fns"
 import {
-  AlertTriangle,
-  Check,
-  Clock,
+  Ban,
+  CheckCircle,
   Eye,
   ExternalLink,
+  ListChecks,
   Globe,
   MoreHorizontal,
   Pencil,
@@ -56,30 +56,65 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+type ProjectStatusValue = "draft" | "in_progress" | "published" | "completed" | "archived" | "rejected"
 
-const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
-  draft: { label: "Draft", tone: "bg-slate-200 text-slate-700" },
+const STATUS_LABELS: Record<ProjectStatusValue, { label: string; tone: string }> = {
+  draft: { label: "In progress", tone: "bg-amber-100 text-amber-800" },
   in_progress: { label: "In review", tone: "bg-blue-100 text-blue-800" },
   published: { label: "Live", tone: "bg-green-100 text-green-800" },
   completed: { label: "Listed", tone: "bg-emerald-100 text-emerald-800" },
-  archived: { label: "Archived", tone: "bg-neutral-200 text-neutral-700" },
+  archived: { label: "Unlisted", tone: "bg-slate-200 text-slate-700" },
+  rejected: { label: "Rejected", tone: "bg-red-100 text-red-700" },
 }
+
+const STATUS_CHOICES: Array<{ value: ProjectStatusValue; label: string; description: string }> = [
+  {
+    value: "draft",
+    label: "In progress",
+    description: "Listing is still being prepared and is hidden from public pages.",
+  },
+  {
+    value: "in_progress",
+    label: "In review",
+    description: "Listing awaits admin review before it can go live.",
+  },
+  {
+    value: "published",
+    label: "Live",
+    description: "Listing is published and visible on the homeowner site.",
+  },
+  {
+    value: "completed",
+    label: "Listed",
+    description: "Listing appears on both the project and company pages as an active showcase.",
+  },
+  {
+    value: "archived",
+    label: "Unlisted",
+    description: "Listing remains in the account but is hidden from public discovery.",
+  },
+  {
+    value: "rejected",
+    label: "Rejected",
+    description: "Listing is rejected and the owner sees the provided reason.",
+  },
+]
+
+const STATUS_VALUES = STATUS_CHOICES.map((status) => status.value) as ProjectStatusValue[]
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
-  { value: "draft", label: "Draft" },
-  { value: "in_progress", label: "In review" },
-  { value: "published", label: "Live" },
-  { value: "completed", label: "Listed" },
-  { value: "archived", label: "Archived" },
+  ...STATUS_CHOICES.map((status) => ({ value: status.value, label: status.label })),
 ]
 
 export type AdminProjectRow = {
   id: string
   title: string
   slug: string | null
-  status: string
+  status: ProjectStatusValue
   projectType: string | null
   features: string[] | null
   projectYear: number | null
@@ -93,6 +128,9 @@ export type AdminProjectRow = {
   seoTitle?: string | null
   seoDescription?: string | null
   seoStatus?: string | null
+  statusUpdatedAt?: string | null
+  statusUpdatedBy?: string | null
+  rejectionReason?: string | null
 }
 
 interface AdminProjectsTableProps {
@@ -118,10 +156,27 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   const [isChangingOwner, startChangeOwnerTransition] = useTransition()
   const [deleteProject, setDeleteProject] = useState<AdminProjectRow | null>(null)
   const [isDeleting, startDeleteTransition] = useTransition()
+  const [statusDialogProject, setStatusDialogProject] = useState<AdminProjectRow | null>(null)
+  const [statusSelection, setStatusSelection] = useState<ProjectStatusValue>("draft")
+  const [statusNote, setStatusNote] = useState("")
   const [isPending, startTransition] = useTransition()
+  const [isApprovePending, startApproveTransition] = useTransition()
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
 
   const totalCount = projects.length
+
+  useEffect(() => {
+    if (!statusDialogProject) {
+      return
+    }
+
+    const normalizedStatus = STATUS_VALUES.includes(statusDialogProject.status as ProjectStatusValue)
+      ? (statusDialogProject.status as ProjectStatusValue)
+      : "draft"
+
+    setStatusSelection(normalizedStatus)
+    setStatusNote(normalizedStatus === "rejected" ? statusDialogProject.rejectionReason ?? "" : "")
+  }, [statusDialogProject])
 
   const activeFiltersCount = useMemo(() => {
     let count = 0
@@ -383,7 +438,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       const base = [
         project.title,
         project.slug ?? "",
-        project.status,
+        STATUS_LABELS[project.status]?.label ?? project.status,
         project.primaryCategory ?? "",
         project.projectType ?? "",
         project.location ?? "",
@@ -476,14 +531,58 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     })
   }
 
-  const handleStatusChange = (project: AdminProjectRow, nextStatus: string) => {
+  const closeStatusDialog = () => {
+    setStatusDialogProject(null)
+    setStatusSelection("draft")
+    setStatusNote("")
+  }
+
+  const handleApprove = (project: AdminProjectRow) => {
+    startApproveTransition(async () => {
+      const result = await setProjectStatusAction({ projectId: project.id, status: "published" })
+
+      if (!result.success) {
+        toast.error("Unable to approve project", { description: result.error })
+        return
+      }
+
+      toast.success("Project approved and set to Live")
+      setStatusDialogProject({ ...project, status: "published" })
+      setStatusSelection("published")
+      setStatusNote("")
+    })
+  }
+
+  const handleRejectShortcut = (project: AdminProjectRow) => {
+    setStatusDialogProject({ ...project, status: "rejected" })
+    setStatusSelection("rejected")
+    setStatusNote(project.rejectionReason ?? "")
+  }
+
+  const handleStatusSubmit = () => {
+    if (!statusDialogProject) {
+      return
+    }
+
+    if (statusSelection === "rejected" && statusNote.trim().length === 0) {
+      toast.error("Rejection reason is required")
+      return
+    }
+
     startTransition(async () => {
-      const result = await setProjectStatusAction({ projectId: project.id, status: nextStatus as any })
+      const result = await setProjectStatusAction({
+        projectId: statusDialogProject.id,
+        status: statusSelection,
+        rejectionReason: statusSelection === "rejected" ? statusNote.trim() : undefined,
+      })
+
       if (!result.success) {
         toast.error("Unable to update status", { description: result.error })
-      } else {
-        toast.success(`Status updated to ${STATUS_LABELS[nextStatus]?.label ?? nextStatus}`)
+        return
       }
+
+      toast.success(`Status updated to ${STATUS_LABELS[statusSelection].label}`)
+      closeStatusDialog()
     })
   }
 
@@ -595,8 +694,14 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                 const features = project.features ?? []
                 const featurePreview = features.slice(0, 5)
                 const remainingCount = Math.max(features.length - featurePreview.length, 0)
-                const statusInfo = STATUS_LABELS[project.status] ?? { label: project.status, tone: "bg-muted" }
+                const statusInfo = STATUS_LABELS[project.status] ?? {
+                  label: project.status,
+                  tone: "bg-muted",
+                }
                 const imageCount = project.imageCount ?? 0
+                const isPreviewMode = project.status === "draft" || project.status === "in_progress"
+                const previewSuffix = isPreviewMode ? "?preview=1" : ""
+                const projectHref = project.slug ? `/projects/${project.slug}${previewSuffix}` : "#"
 
                 const subTypeLabel = project.projectType || "Sub-type unavailable"
                 const locationLabel = project.location ?? "Location unknown"
@@ -607,7 +712,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                       <TableCell>
                         {project.slug ? (
                           <Link
-                            href={`/projects/${project.slug}`}
+                            href={projectHref}
                             target="_blank"
                             className="flex items-center gap-2 font-medium text-blue-600 hover:underline"
                           >
@@ -646,36 +751,55 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                               <span className="sr-only">Open actions</span>
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem asChild>
-                              <Link href={project.slug ? `/projects/${project.slug}` : "#"} target="_blank">
+                            {project.status === "in_progress" && (
+                              <>
+                                <DropdownMenuItem
+                                  onSelect={() => handleApprove(project)}
+                                  disabled={isApprovePending}
+                                >
+                                  <CheckCircle className="mr-2 h-4 w-4" /> Approve & publish
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleRejectShortcut(project)}>
+                                  <Ban className="mr-2 h-4 w-4 text-red-600" />
+                                  <span className="text-red-600">Reject</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                          <DropdownMenuItem asChild>
+                            <Link href={projectHref} target="_blank">
                                 <Eye className="mr-2 h-4 w-4" /> View live page
                               </Link>
+                          </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/new-project/details?projectId=${project.id}`}>
+                                <Pencil className="mr-2 h-4 w-4" /> Edit project
+                              </Link>
                             </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/new-project/details?projectId=${project.id}`}>
-                              <Pencil className="mr-2 h-4 w-4" /> Edit project
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setChangeOwnerProject(project)
-                              setChangeOwnerEmail("")
-                            }}
-                          >
-                            <UserCog className="mr-2 h-4 w-4" /> Change owner
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => setDeleteProject(project)}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete project
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => setStatusDialogProject(project)}>
+                              <ListChecks className="mr-2 h-4 w-4" /> Update status
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setChangeOwnerProject(project)
+                                setChangeOwnerEmail("")
+                              }}
+                            >
+                              <UserCog className="mr-2 h-4 w-4" /> Change owner
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setDeleteProject(project)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete project
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                   </TableRow>
                 )
                 }
@@ -742,11 +866,26 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                             <span className="sr-only">Open actions</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          {project.status === "in_progress" && (
+                            <>
+                              <DropdownMenuItem
+                                onSelect={() => handleApprove(project)}
+                                disabled={isApprovePending}
+                              >
+                                <CheckCircle className="mr-2 h-4 w-4" /> Approve & publish
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => handleRejectShortcut(project)}>
+                                <Ban className="mr-2 h-4 w-4 text-red-600" />
+                                <span className="text-red-600">Reject</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem asChild>
-                            <Link href={project.slug ? `/projects/${project.slug}` : "#"} target="_blank">
-                                <Eye className="mr-2 h-4 w-4" /> View live page
+                            <Link href={projectHref} target="_blank">
+                              <Eye className="mr-2 h-4 w-4" /> View live page
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
@@ -755,18 +894,12 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={() => handleStatusChange(project, "published")}>
-                            <Check className="mr-2 h-4 w-4" /> Mark as Live
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => handleStatusChange(project, "in_progress")}>
-                            <Clock className="mr-2 h-4 w-4" /> Send to review
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => handleStatusChange(project, "archived")}>
-                            <AlertTriangle className="mr-2 h-4 w-4" /> Archive
+                          <DropdownMenuItem onSelect={() => setStatusDialogProject(project)}>
+                            <ListChecks className="mr-2 h-4 w-4" /> Update status
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem asChild>
-                            <Link href={project.slug ? `/projects/${project.slug}` : "#"} target="_blank">
+                            <Link href={projectHref} target="_blank">
                               <ExternalLink className="mr-2 h-4 w-4" /> Open in new tab
                             </Link>
                           </DropdownMenuItem>
@@ -953,6 +1086,71 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
             </Button>
             <Button onClick={handleChangeOwnerSubmit} disabled={!changeOwnerEmail || isChangingOwner}>
               {isChangingOwner ? "Updating..." : "Change owner"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(statusDialogProject)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeStatusDialog()
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Update project status</DialogTitle>
+            <DialogDescription>
+              Choose how &ldquo;{statusDialogProject?.title ?? "this project"}&rdquo; should appear across the platform.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {statusDialogProject?.statusUpdatedAt && (
+              <p className="text-xs text-muted-foreground">
+                Last updated {formatDistanceToNow(new Date(statusDialogProject.statusUpdatedAt), { addSuffix: true })}
+              </p>
+            )}
+            <RadioGroup value={statusSelection} onValueChange={(value) => setStatusSelection(value as ProjectStatusValue)}>
+              {STATUS_CHOICES.map((choice) => (
+                <label
+                  key={choice.value}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
+                    statusSelection === choice.value ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary"
+                  )}
+                >
+                  <RadioGroupItem value={choice.value} className="mt-1" />
+                  <div className="space-y-1">
+                    <p className="font-medium leading-none">{choice.label}</p>
+                    <p className="text-sm text-muted-foreground">{choice.description}</p>
+                  </div>
+                </label>
+              ))}
+            </RadioGroup>
+            {statusSelection === "rejected" && (
+              <div className="space-y-2">
+                <Label htmlFor="status-rejection-reason">Rejection reason</Label>
+                <Textarea
+                  id="status-rejection-reason"
+                  value={statusNote}
+                  onChange={(event) => setStatusNote(event.target.value)}
+                  placeholder="Share why this listing is rejected. The professional sees this message."
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This note is emailed to the project owner and appears in their dashboard.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeStatusDialog}>
+              Cancel
+            </Button>
+            <Button onClick={handleStatusSubmit} disabled={isPending}>
+              {isPending ? "Updating..." : "Update status"}
             </Button>
           </DialogFooter>
         </DialogContent>
