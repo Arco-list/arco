@@ -88,6 +88,8 @@ export async function setProjectStatusAction(input: {
     return { success: false, error: error.message }
   }
 
+  const serviceClient = createServiceRoleSupabaseClient()
+
   const updatePayload: Record<string, unknown> = {
     status: statusResult.data,
     status_updated_at: new Date().toISOString(),
@@ -95,7 +97,7 @@ export async function setProjectStatusAction(input: {
     rejection_reason: statusResult.data === "rejected" ? trimmedReason : null,
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await serviceClient
     .from("projects")
     .update(updatePayload)
     .eq("id", idResult.data)

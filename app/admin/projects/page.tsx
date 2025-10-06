@@ -45,6 +45,7 @@ export default async function ProjectsPage() {
       .select(
         `id, title, slug, status, project_type, project_type_category_id, style_preferences, features, project_year, created_at, is_featured, likes_count, location, project_size, building_type, seo_title, seo_description, status_updated_at, status_updated_by, rejection_reason, project_photos(count), project_categories(category_id,is_primary), client:profiles!projects_client_id_fkey(is_active)`
       )
+      .eq("client.is_active", true)
       .order("created_at", { ascending: false, nullsFirst: false }),
     serviceSupabase.from("categories").select("id, name, slug"),
     serviceSupabase.from("project_taxonomy_options").select("id, name, slug"),
@@ -55,7 +56,7 @@ export default async function ProjectsPage() {
     console.error("Failed to load admin projects", projectsError)
   }
 
-  const projectsData = (projectsDataRaw as ProjectQueryRow[] | null)?.filter((project) => project.client?.is_active ?? false) ?? []
+  const projectsData = (projectsDataRaw as ProjectQueryRow[] | null) ?? []
 
   const { data: categoriesData, error: categoriesError } = categoriesResult
   if (categoriesError) {

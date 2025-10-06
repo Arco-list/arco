@@ -15,16 +15,8 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  const redirectToLogin = () => {
-    redirect(`/login?redirectTo=/admin`)
-  }
-
-  const redirectToDashboard = () => {
-    redirect(`/dashboard?unauthorized=admin`)
-  }
-
   if (!session?.user) {
-    redirectToLogin()
+    return redirect(`/login?redirectTo=/admin`)
   }
 
   const { data: profile, error } = await supabase
@@ -35,11 +27,11 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
 
   if (error) {
     console.error("Admin layout profile fetch failed", error)
-    redirectToDashboard()
+    return redirect(`/dashboard?unauthorized=admin`)
   }
 
   if (!isAdminUser(profile?.user_types)) {
-    redirectToDashboard()
+    return redirect(`/dashboard?unauthorized=admin`)
   }
 
   return <>{children}</>
