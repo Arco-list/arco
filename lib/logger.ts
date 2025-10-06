@@ -123,6 +123,21 @@ class Logger {
       this.info(message, dbContext);
     }
   }
+
+  // Convenience method for security operations
+  security(operation: string, message: string, context?: LogContext, error?: Error): void {
+    const securityContext = {
+      operation,
+      category: 'security',
+      ...context,
+    };
+
+    if (error) {
+      this.warn(message, securityContext, error);
+    } else {
+      this.warn(message, securityContext);
+    }
+  }
 }
 
 // Singleton logger instance
