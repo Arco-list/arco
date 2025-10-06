@@ -34,14 +34,14 @@ type AuthActionResult<TData> = {
   error?: AuthActionError;
 };
 
-const getBaseUrl = () => {
+const getBaseUrl = async () => {
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 
   if (envUrl) {
     return envUrl.replace(/\/$/, '');
   }
 
-  const headerList = headers();
+  const headerList = await headers();
   const forwardedProto = headerList.get('x-forwarded-proto');
   const protocol = forwardedProto?.split(',')[0]?.trim() || 'https';
   const forwardedHost = headerList.get('x-forwarded-host');
@@ -174,7 +174,7 @@ export const signUpAction = async (
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
 
   // Step 3: Setup redirect URLs
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
   const callbackUrl = `${baseUrl}/auth/callback`;
   const finalRedirectTo = resolveRedirectPath(rawRedirectTo);
   const emailRedirectTo = `${callbackUrl}?redirect_to=${encodeURIComponent(finalRedirectTo)}`;
@@ -331,7 +331,7 @@ export const signInWithOtpAction = async (
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
 
   // Create the full redirect URL with our auth callback
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
   const callbackUrl = `${baseUrl}/auth/callback`;
   const finalRedirectTo = resolveRedirectPath(rawRedirectTo);
   const emailRedirectTo = `${callbackUrl}?redirect_to=${encodeURIComponent(finalRedirectTo)}`;

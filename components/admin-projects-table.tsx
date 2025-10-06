@@ -885,7 +885,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                           )}
                           <DropdownMenuItem asChild>
                             <Link href={projectHref} target="_blank">
-                              <Eye className="mr-2 h-4 w-4" /> View live page
+                              <ExternalLink className="mr-2 h-4 w-4" /> View live page
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
@@ -896,12 +896,6 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onSelect={() => setStatusDialogProject(project)}>
                             <ListChecks className="mr-2 h-4 w-4" /> Update status
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem asChild>
-                            <Link href={projectHref} target="_blank">
-                              <ExternalLink className="mr-2 h-4 w-4" /> Open in new tab
-                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
