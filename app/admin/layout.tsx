@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("user_types")
-    .eq("id", session!.user.id)
+    .eq("id", session.user.id)
     .maybeSingle()
 
   if (error) {

@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
+import { logger } from "@/lib/logger"
 
 const projectIdSchema = z.string().uuid()
 
@@ -17,6 +18,10 @@ async function assertAdmin() {
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
+    logger.security("admin-auth", "Admin authentication failed", {
+      error: authError?.message,
+      hasUser: !!user,
+    })
     return { supabase, user: null, error: authError ?? new Error("Not authenticated") }
   }
 
@@ -27,6 +32,11 @@ async function assertAdmin() {
     .maybeSingle()
 
   if (profileError || !isAdminUser(profile?.user_types)) {
+    logger.security("admin-auth", "Admin authorization failed", {
+      userId: user.id,
+      userTypes: profile?.user_types,
+      error: profileError?.message,
+    })
     return {
       supabase,
       user,
@@ -88,8 +98,6 @@ export async function setProjectStatusAction(input: {
     return { success: false, error: error.message }
   }
 
-  const serviceClient = createServiceRoleSupabaseClient()
-
   const updatePayload: Record<string, unknown> = {
     status: statusResult.data,
     status_updated_at: new Date().toISOString(),
@@ -97,7 +105,7 @@ export async function setProjectStatusAction(input: {
     rejection_reason: statusResult.data === "rejected" ? trimmedReason : null,
   }
 
-  const { error: updateError } = await serviceClient
+  const { error: updateError } = await supabase
     .from("projects")
     .update(updatePayload)
     .eq("id", idResult.data)
