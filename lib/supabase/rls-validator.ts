@@ -122,7 +122,7 @@ export async function validateProjectRLS(
     // RLS should automatically filter results even without .eq("client_id", userId)
     const { data: allProjects, error: allError } = await supabase
       .from("projects")
-      .select("id, client_id")
+      .select("id, client_id, status")
       .limit(100)
 
     if (allError) {
@@ -137,9 +137,11 @@ export async function validateProjectRLS(
     }
 
     // SECURITY: All returned projects must belong to the authenticated user
-    const unauthorizedAccess = allProjects?.some(
-      (project) => project.client_id !== userId
-    )
+    const unauthorizedAccess = allProjects?.some((project) => {
+      const ownsProject = project.client_id === userId
+      const isPublicListing = project.status === "published"
+      return !ownsProject && !isPublicListing
+    })
 
     if (unauthorizedAccess) {
       return {

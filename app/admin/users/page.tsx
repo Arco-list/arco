@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
 import { UsersDataTable } from "@/components/users-data-table"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,6 +25,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
+import { AdminSidebar } from "@/components/admin-sidebar"
 
 // Sample user data
 const userData = [
@@ -89,7 +89,7 @@ export default function UsersPage() {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AdminSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">

@@ -28,3 +28,6 @@ export const buildSession = (rawSession: Session | null, verifiedUser: User | nu
     user: verifiedUser,
   }
 }
+
+export const isAdminUser = (userTypes?: string[] | null): boolean =>
+  Array.isArray(userTypes) && userTypes.includes("admin")

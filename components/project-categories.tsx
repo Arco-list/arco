@@ -5,30 +5,20 @@ import { Button } from "@/components/ui/button"
 import { useRef } from "react"
 import Link from "next/link"
 
-const categories = [
-  {
-    title: "House",
-    image: "/placeholder.svg?height=400&width=300",
-  },
-  {
-    title: "Kitchen & Living",
-    image: "/placeholder.svg?height=400&width=300",
-  },
-  {
-    title: "Bed & Bath",
-    image: "/placeholder.svg?height=400&width=300",
-  },
-  {
-    title: "Outdoor",
-    image: "/placeholder.svg?height=400&width=300",
-  },
-  {
-    title: "Other",
-    image: "/placeholder.svg?height=400&width=300",
-  },
-]
+const FALLBACK_IMAGE = "/placeholder.svg?height=400&width=300"
 
-export function ProjectCategories() {
+export interface ProjectCategoryCard {
+  id: string
+  title: string
+  href: string
+  imageUrl: string | null
+}
+
+interface ProjectCategoriesProps {
+  categories: ProjectCategoryCard[]
+}
+
+export function ProjectCategories({ categories }: ProjectCategoriesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const scrollLeft = () => {
@@ -41,6 +31,10 @@ export function ProjectCategories() {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: 320, behavior: "smooth" })
     }
+  }
+
+  if (categories.length === 0) {
+    return null
   }
 
   return (
@@ -63,16 +57,16 @@ export function ProjectCategories() {
           className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 md:grid md:grid-cols-3 lg:grid-cols-5 md:gap-4 md:overflow-visible"
           style={{ scrollSnapType: "x mandatory" }}
         >
-          {categories.map((category, index) => (
+          {categories.map((category) => (
             <Link
-              key={index}
-              href={`/projects?features=${encodeURIComponent(category.title)}`}
+              key={category.id}
+              href={category.href}
               className="group cursor-pointer flex-none w-64 md:w-auto"
               style={{ scrollSnapAlign: "start" }}
             >
               <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3">
                 <img
-                  src={category.image || "/placeholder.svg"}
+                  src={category.imageUrl || FALLBACK_IMAGE}
                   alt={category.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />

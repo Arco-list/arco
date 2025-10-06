@@ -1,83 +1,100 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronLeft, ChevronRight, Info } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import Link from "next/link"
+
 import { Button } from "@/components/ui/button"
 
-const heroProjects = [
-  {
-    id: 1,
-    title: "World's finest architectural constructions",
-    image: "/placeholder.svg?height=1080&width=1920",
-    caption: "Villa Ega, Marco van Veldhuizen",
-  },
-  {
-    id: 2,
-    title: "Contemporary living spaces",
-    image: "/placeholder.svg?height=1080&width=1920",
-    caption: "Paradise Villa, Amsterdam",
-  },
-  {
-    id: 3,
-    title: "Innovative architectural design",
-    image: "/placeholder.svg?height=1080&width=1920",
-    caption: "Villa Mel, Rotterdam",
-  },
-  {
-    id: 4,
-    title: "Luxury residential projects",
-    image: "/placeholder.svg?height=1080&width=1920",
-    caption: "Garden House, Utrecht",
-  },
-]
+const FALLBACK_IMAGE = "/placeholder.svg?height=1080&width=1920"
 
-export function HeroSection() {
+export interface HeroProject {
+  id: string
+  title: string
+  href: string
+  imageUrl: string | null
+  caption?: string | null
+}
+
+interface HeroSectionProps {
+  projects: HeroProject[]
+}
+
+export function HeroSection({ projects }: HeroSectionProps) {
   const [currentProjectIndex, setCurrentProjectIndex] = useState(0)
-  const currentProject = heroProjects[currentProjectIndex]
+
+  const safeProjects = useMemo(() => (projects.length > 0 ? projects : []), [projects])
+  const totalProjects = safeProjects.length
+  const currentProject = safeProjects[currentProjectIndex]
+
+  useEffect(() => {
+    if (totalProjects <= 1) return
+
+    const timer = window.setInterval(() => {
+      setCurrentProjectIndex((prev) => (prev + 1) % totalProjects)
+    }, 5000)
+
+    return () => window.clearInterval(timer)
+  }, [totalProjects])
+
+  useEffect(() => {
+    if (currentProjectIndex >= totalProjects && totalProjects > 0) {
+      setCurrentProjectIndex(0)
+    }
+  }, [currentProjectIndex, totalProjects])
+
+  if (!currentProject) {
+    return null
+  }
 
   const goToPrevious = () => {
-    setCurrentProjectIndex((prev) => (prev - 1 + heroProjects.length) % heroProjects.length)
+    setCurrentProjectIndex((prev) => (prev - 1 + totalProjects) % totalProjects)
   }
 
   const goToNext = () => {
-    setCurrentProjectIndex((prev) => (prev + 1) % heroProjects.length)
+    setCurrentProjectIndex((prev) => (prev + 1) % totalProjects)
   }
 
   return (
-    <section className="relative h-[50vh] flex items-end justify-start overflow-hidden">
-      {/* Hero Image */}
+    <section className="relative flex h-[50vh] items-end justify-start overflow-hidden">
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-in-out"
         style={{
-          backgroundImage: `url('${currentProject.image}')`,
+          backgroundImage: `url('${currentProject.imageUrl || FALLBACK_IMAGE}')`,
         }}
       >
-        <div className="absolute inset-0 bg-black/20" />
+        <div className="absolute inset-0 bg-black/35" />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 text-white px-4 md:px-8 max-w-7xl mx-auto w-full pb-8">
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-8 text-white md:px-8">
         <div className="max-w-2xl">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight transition-opacity duration-500">
-            {currentProject.title}
-          </h1>
+          <Link href={currentProject.href} className="inline-block transition-opacity hover:opacity-90">
+            <h1 className="text-4xl font-bold leading-tight md:text-6xl lg:text-7xl">
+              {currentProject.title}
+            </h1>
+          </Link>
+          {currentProject.caption ? (
+            <p className="mt-3 text-sm text-white/80 md:text-base">{currentProject.caption}</p>
+          ) : null}
         </div>
 
-        {/* Image Caption */}
-        <div className="absolute bottom-8 right-8 hidden md:flex items-center gap-2 text-sm text-white/80">
-          <span className="transition-opacity duration-500">{currentProject.caption}</span>
-          <Button size="sm" variant="ghost" className="p-1 h-6 w-6 text-white/60 hover:text-white">
-            <Info className="h-4 w-4" />
+        <div className="absolute bottom-8 right-4 hidden items-center gap-2 text-sm text-white/80 md:flex">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+            onClick={goToPrevious}
+            aria-label="Previous project"
+          >
+            <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            className="p-1 h-6 w-6 text-white/60 hover:text-white"
-            onClick={goToPrevious}
+            className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+            onClick={goToNext}
+            aria-label="Next project"
           >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" className="p-1 h-6 w-6 text-white/60 hover:text-white" onClick={goToNext}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

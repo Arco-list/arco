@@ -1,7 +1,12 @@
 "use client"
 
+import { useTransition } from "react"
+
 import { ChevronsUpDown, CreditCard, LogOut, Bookmark, Users } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { signOutAction } from "@/app/(auth)/actions"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -20,10 +25,27 @@ interface Props {
     email: string
     avatar: string
   }
+  showSavedLinks?: boolean
 }
 
-export function NavUser({ user }: Props) {
+export function NavUser({ user, showSavedLinks = true }: Props) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const [isSigningOut, startSignOutTransition] = useTransition()
+
+  const handleSignOut = () => {
+    startSignOutTransition(async () => {
+      const result = await signOutAction()
+
+      if (result?.error) {
+        toast.error("Unable to sign out", { description: result.error.message })
+        return
+      }
+
+      toast.success("Signed out")
+      router.refresh()
+    })
+  }
 
   return (
     <SidebarMenu>
@@ -65,18 +87,22 @@ export function NavUser({ user }: Props) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/homeowner?tab=saved-professionals">
-                  <Users />
-                  Saved professionals
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/homeowner?tab=saved-projects">
-                  <Bookmark />
-                  Saved projects
-                </Link>
-              </DropdownMenuItem>
+              {showSavedLinks && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link href="/homeowner?tab=saved-professionals">
+                      <Users />
+                      Saved professionals
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/homeowner?tab=saved-projects">
+                      <Bookmark />
+                      Saved projects
+                    </Link>
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuItem asChild>
                 <Link href="/admin/settings">
                   <CreditCard />
@@ -85,9 +111,15 @@ export function NavUser({ user }: Props) {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                handleSignOut()
+              }}
+              disabled={isSigningOut}
+            >
               <LogOut />
-              Log out
+              {isSigningOut ? "Signing out..." : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

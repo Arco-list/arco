@@ -1221,12 +1221,15 @@ export type Database = {
           project_type: string | null
           project_type_category_id: string | null
           project_year: number | null
+          rejection_reason: string | null
           seo_description: string | null
           seo_title: string | null
           share_exact_location: boolean
           slug: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
+          status_updated_at: string | null
+          status_updated_by: string | null
           style_preferences: string[] | null
           title: string
           updated_at: string | null
@@ -1261,12 +1264,15 @@ export type Database = {
           project_type?: string | null
           project_type_category_id?: string | null
           project_year?: number | null
+          rejection_reason?: string | null
           seo_description?: string | null
           seo_title?: string | null
           share_exact_location?: boolean
           slug?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
+          status_updated_at?: string | null
+          status_updated_by?: string | null
           style_preferences?: string[] | null
           title: string
           updated_at?: string | null
@@ -1301,12 +1307,15 @@ export type Database = {
           project_type?: string | null
           project_type_category_id?: string | null
           project_year?: number | null
+          rejection_reason?: string | null
           seo_description?: string | null
           seo_title?: string | null
           share_exact_location?: boolean
           slug?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
+          status_updated_at?: string | null
+          status_updated_by?: string | null
           style_preferences?: string[] | null
           title?: string
           updated_at?: string | null
@@ -1740,6 +1749,7 @@ export type Database = {
         | "in_progress"
         | "completed"
         | "archived"
+        | "rejected"
       project_taxonomy_type:
         | "project_style"
         | "building_type"
@@ -1890,6 +1900,7 @@ export const Constants = {
         "in_progress",
         "completed",
         "archived",
+        "rejected",
       ],
       project_taxonomy_type: [
         "project_style",

@@ -205,8 +205,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   ;(taxonomyResult.data ?? []).forEach((row) => taxonomyMap.set(row.id, row))
 
   const primaryCategoryRow = projectCategories.find((row) => row.is_primary)
-  const primaryCategoryName =
-    (primaryCategoryRow && categoryMap.get(primaryCategoryRow.category_id)?.name) || null
+  const primaryCategoryEntity = primaryCategoryRow ? categoryMap.get(primaryCategoryRow.category_id) : null
+  const primaryCategoryName = primaryCategoryEntity?.name ?? null
+  const primaryCategorySlug = primaryCategoryEntity?.slug ?? null
 
   const secondaryCategoryName = projectCategories
     .filter((row) => !row.is_primary)
@@ -230,6 +231,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const projectTypeLabel =
     (projectTypeCategoryId && categoryMap.get(projectTypeCategoryId)?.name) ||
     (project.project_type && !isUuid(project.project_type) ? project.project_type : "")
+  const projectTypeId = project.project_type ?? null
+
+  const buildingTypeId = project.building_type ?? null
 
   const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
 
@@ -382,25 +386,29 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const seenSimilarIds = new Set<string>()
 
   const similarFilters: Array<{
-    primaryCategory?: string | null
-    projectType?: string | null
-    buildingType?: string | null
+    primaryCategorySlug?: string | null
+    projectTypeId?: string | null
+    buildingTypeId?: string | null
   }> = []
 
-  if (primaryCategoryName && projectTypeLabel) {
-    similarFilters.push({ primaryCategory: primaryCategoryName, projectType: projectTypeLabel })
+  if (primaryCategorySlug && projectTypeId) {
+    similarFilters.push({ primaryCategorySlug, projectTypeId })
   }
 
-  if (primaryCategoryName && buildingTypeLabel) {
-    similarFilters.push({ primaryCategory: primaryCategoryName, buildingType: buildingTypeLabel })
+  if (primaryCategorySlug && buildingTypeId) {
+    similarFilters.push({ primaryCategorySlug, buildingTypeId })
   }
 
-  if (primaryCategoryName) {
-    similarFilters.push({ primaryCategory: primaryCategoryName })
+  if (primaryCategorySlug) {
+    similarFilters.push({ primaryCategorySlug })
   }
 
-  if (projectTypeLabel) {
-    similarFilters.push({ projectType: projectTypeLabel })
+  if (projectTypeId) {
+    similarFilters.push({ projectTypeId })
+  }
+
+  if (buildingTypeId) {
+    similarFilters.push({ buildingTypeId })
   }
 
   for (const filter of similarFilters) {
@@ -409,8 +417,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       break
     }
 
-    const { primaryCategory, projectType, buildingType } = filter
-    if (!primaryCategory && !projectType && !buildingType) {
+    const { primaryCategorySlug: primarySlug, projectTypeId: typeId, buildingTypeId: buildId } = filter
+    if (!primarySlug && !typeId && !buildId) {
       continue
     }
 
@@ -422,16 +430,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .neq("id", project.id)
       .eq("status", "published")
 
-    if (primaryCategory) {
-      query = query.eq("primary_category", primaryCategory)
+    if (primarySlug) {
+      query = query.eq("primary_category_slug", primarySlug)
     }
 
-    if (projectType) {
-      query = query.eq("project_type", projectType)
+    if (typeId) {
+      query = query.eq("project_type", typeId)
     }
 
-    if (buildingType) {
-      query = query.eq("building_type", buildingType)
+    if (buildId) {
+      query = query.eq("building_type", buildId)
     }
 
     const { data } = await query

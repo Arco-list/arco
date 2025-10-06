@@ -19,42 +19,9 @@ export function SimilarProjects() {
   const { similarProjects } = useProjectPreview()
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const fallbackProjects: Project[] = useMemo(
-    () => [
-      {
-        id: "fallback-1",
-        title: "Paradise by the pool",
-        location: "Modern Villa in Amsterdam",
-        image: "/placeholder.svg?height=300&width=400",
-        likes: 24,
-        isLiked: false,
-        href: null,
-      },
-      {
-        id: "fallback-2",
-        title: "Villa upgrade",
-        location: "Contemporary Villa in Nijmegen",
-        image: "/placeholder.svg?height=300&width=400",
-        likes: 18,
-        isLiked: true,
-        href: "/projects/villa-upgrade",
-      },
-      {
-        id: "fallback-3",
-        title: "Farm transformation",
-        location: "Renovated Farmhouse in Utrecht",
-        image: "/placeholder.svg?height=300&width=400",
-        likes: 31,
-        isLiked: false,
-        href: null,
-      },
-    ],
-    [],
-  )
-
   const initialProjects = useMemo<Project[]>(() => {
     if (!similarProjects || similarProjects.length === 0) {
-      return fallbackProjects
+      return []
     }
 
     return similarProjects.map((project) => ({
@@ -66,7 +33,7 @@ export function SimilarProjects() {
       isLiked: project.isLiked ?? false,
       href: project.href ?? null,
     }))
-  }, [fallbackProjects, similarProjects])
+  }, [similarProjects])
 
   const [projects, setProjects] = useState<Project[]>(initialProjects)
 
@@ -98,6 +65,10 @@ export function SimilarProjects() {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: 320, behavior: "smooth" })
     }
+  }
+
+  if (projects.length === 0) {
+    return null
   }
 
   return (

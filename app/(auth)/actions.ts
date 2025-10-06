@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import type { Session, User } from '@supabase/supabase-js';
 import type { TablesInsert } from '@/lib/supabase/types';
 
@@ -31,6 +32,27 @@ type AuthSessionPayload = {
 type AuthActionResult<TData> = {
   data?: TData;
   error?: AuthActionError;
+};
+
+const getBaseUrl = async () => {
+  const envUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  const headerList = await headers();
+  const forwardedProto = headerList.get('x-forwarded-proto');
+  const protocol = forwardedProto?.split(',')[0]?.trim() || 'https';
+  const forwardedHost = headerList.get('x-forwarded-host');
+  const host =
+    forwardedHost?.split(',')[0]?.trim() || headerList.get('host')?.split(',')[0]?.trim();
+
+  if (host) {
+    return `${protocol}://${host}`.replace(/\/$/, '');
+  }
+
+  return 'http://localhost:3000';
 };
 
 const normalizeError = (error: { message: string; code?: string } | null): AuthActionError | undefined => {
@@ -152,7 +174,7 @@ export const signUpAction = async (
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
 
   // Step 3: Setup redirect URLs
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = await getBaseUrl();
   const callbackUrl = `${baseUrl}/auth/callback`;
   const finalRedirectTo = resolveRedirectPath(rawRedirectTo);
   const emailRedirectTo = `${callbackUrl}?redirect_to=${encodeURIComponent(finalRedirectTo)}`;
@@ -309,7 +331,7 @@ export const signInWithOtpAction = async (
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
 
   // Create the full redirect URL with our auth callback
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = await getBaseUrl();
   const callbackUrl = `${baseUrl}/auth/callback`;
   const finalRedirectTo = resolveRedirectPath(rawRedirectTo);
   const emailRedirectTo = `${callbackUrl}?redirect_to=${encodeURIComponent(finalRedirectTo)}`;

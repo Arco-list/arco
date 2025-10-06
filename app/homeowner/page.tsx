@@ -9,6 +9,7 @@ import { AccountSettingsForm } from "@/components/account-settings-form"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAuth } from "@/contexts/auth-context"
 
 const savedProjects = [
   {
@@ -63,6 +64,7 @@ const savedProfessionals = [
 function HomeownerContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { profile, user, isLoading } = useAuth()
   const initialTab = searchParams.get("tab") || "saved-projects"
   const [activeTab, setActiveTab] = useState(initialTab)
 
@@ -75,6 +77,22 @@ function HomeownerContent() {
       setActiveTab(tabParam)
     }
   }, [searchParams])
+
+  const sessionMetadata = user?.user_metadata ?? {}
+  const metadataUserTypes = Array.isArray(sessionMetadata.user_types)
+    ? (sessionMetadata.user_types as string[])
+    : typeof sessionMetadata.user_types === "string"
+      ? [sessionMetadata.user_types]
+      : null
+  const userTypes = profile?.user_types ?? metadataUserTypes
+  const isAdmin = userTypes?.includes("admin") ?? false
+
+  useEffect(() => {
+    if (isLoading) return
+    if (!isAdmin) return
+
+    router.replace("/admin")
+  }, [isAdmin, isLoading, router])
 
   const unsaveProject = (projectId: number) => {
     setUserSavedProjects((prev) => prev.filter((project) => project.id !== projectId))
@@ -90,6 +108,7 @@ function HomeownerContent() {
   }
 
   return (
+    isAdmin ? null : (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
@@ -210,6 +229,7 @@ function HomeownerContent() {
 
       <Footer />
     </div>
+    )
   )
 }
 
