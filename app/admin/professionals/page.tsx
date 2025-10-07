@@ -1,21 +1,4 @@
-"use client"
-
-import { useState } from "react"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { ProfessionalsDataTable } from "@/components/professionals-data-table"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Plus } from "lucide-react"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -25,72 +8,190 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AdminSidebar } from "@/components/admin-sidebar"
+import { AdminProfessionalsCompaniesTable } from "@/components/admin-professionals-companies-table"
+import { AdminProfessionalInvitesTable } from "@/components/admin-professional-invites-table"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import type { Database, Tables } from "@/lib/supabase/types"
+import { logger } from "@/lib/logger"
 
-// Sample professionals data
-const professionalsData = [
-  {
-    id: 1,
-    name: "FX Domotica",
-    profilePicture: "/placeholder.svg?height=40&width=40",
-    categories: ["Smart Home", "Automation", "Security"],
-    projectCount: 12,
-    rating: 4.8,
-    location: "Amsterdam",
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Green Garden Solutions",
-    profilePicture: "/placeholder.svg?height=40&width=40",
-    categories: ["Landscaping", "Garden Design"],
-    projectCount: 8,
-    rating: 4.6,
-    location: "Utrecht",
-    status: "Active",
-  },
-  {
-    id: 3,
-    name: "Modern Kitchen Co",
-    profilePicture: "/placeholder.svg?height=40&width=40",
-    categories: ["Kitchen Design", "Interior"],
-    projectCount: 15,
-    rating: 4.9,
-    location: "Rotterdam",
-    status: "Active",
-  },
-  {
-    id: 4,
-    name: "Elite Bathrooms",
-    profilePicture: "/placeholder.svg?height=40&width=40",
-    categories: ["Bathroom Design", "Plumbing"],
-    projectCount: 6,
-    rating: 4.5,
-    location: "The Hague",
-    status: "Pending",
-  },
-  {
-    id: 5,
-    name: "Solar Energy Pro",
-    profilePicture: "/placeholder.svg?height=40&width=40",
-    categories: ["Solar Panels", "Energy", "Sustainability"],
-    projectCount: 20,
-    rating: 4.7,
-    location: "Eindhoven",
-    status: "Active",
-  },
-]
+export const dynamic = "force-dynamic"
 
-export default function ProfessionalsPage() {
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState("")
+type CompanyRow = {
+  id: string
+  name: string
+  location: string | null
+  city: string | null
+  country: string | null
+  planTier: Database["public"]["Enums"]["company_plan_tier"]
+  status: Database["public"]["Enums"]["company_status"]
+  isVerified: boolean
+  projectsLinked: number
+  professionalCount: number
+  averageRating: number | null
+  totalReviews: number
+  domain: string | null
+  logoUrl: string | null
+  website: string | null
+  contactEmail: string | null
+  servicesOffered: string[]
+}
 
-  const handleInviteProfessional = () => {
-    // Handle invite logic here
-    console.log("Inviting professional:", inviteEmail)
-    setInviteEmail("")
-    setIsInviteModalOpen(false)
+type ServiceOption = {
+  id: string
+  name: string
+}
+
+type InviteRow = {
+  id: string
+  invitedEmail: string
+  invitedAt: string | null
+  status: Database["public"]["Enums"]["professional_project_status"]
+  projectTitle: string | null
+  projectStatus: Database["public"]["Enums"]["project_status"] | null
+  respondedAt: string | null
+}
+
+type AdminCompanyMetricsRow = {
+  company_id: string
+  professional_count: number
+  projects_linked: number
+  average_rating: number | null
+  total_reviews: number
+}
+
+type ProjectInviteRow = Pick<Tables<"project_professionals">, "id" | "invited_email" | "invited_at" | "responded_at" | "status"> & {
+  project: Pick<Tables<"projects">, "title" | "status"> | null
+}
+
+async function loadAdminProfessionalsData() {
+  const supabase = await createServerSupabaseClient()
+
+  const [companiesQuery, metricsQuery, invitesQuery, servicesQuery] = await Promise.all([
+    supabase
+      .from("companies")
+      .select(
+        "id, name, status, plan_tier, city, country, is_verified, domain, logo_url, website, email, services_offered"
+      ),
+    supabase
+      .from("admin_company_professional_metrics")
+      .select("company_id, professional_count, projects_linked, average_rating, total_reviews"),
+    supabase
+      .from("project_professionals")
+      .select("id, invited_email, invited_at, responded_at, status, project:projects(title, status)")
+      .is("professional_id", null),
+    supabase.from("categories").select("id, name").eq("is_active", true).order("name", { ascending: true }),
+  ])
+
+  // Check for query errors
+  if (companiesQuery.error) {
+    logger.error("Failed to load companies", { table: "companies" }, companiesQuery.error)
+    throw new Error("Failed to load companies data")
   }
+
+  if (invitesQuery.error) {
+    logger.error("Failed to load invites", { table: "project_professionals" }, invitesQuery.error)
+    throw new Error("Failed to load invites data")
+  }
+
+  if (metricsQuery.error) {
+    logger.error(
+      "Failed to load company metrics",
+      { view: "admin_company_professional_metrics" },
+      metricsQuery.error
+    )
+    throw new Error("Failed to load company metrics")
+  }
+
+  if (servicesQuery.error) {
+    logger.error("Failed to load services", { table: "categories" }, servicesQuery.error)
+    throw new Error("Failed to load services data")
+  }
+
+  const companies = (companiesQuery.data ?? []).filter((company): company is Tables<"companies"> => Boolean(company?.id))
+
+  const metrics = (metricsQuery.data ?? []).filter(
+    (row): row is AdminCompanyMetricsRow => Boolean(row?.company_id)
+  )
+
+  const projectInvites = (invitesQuery.data ?? []).filter(
+    (row): row is ProjectInviteRow => Boolean(row?.id)
+  )
+
+  const servicesOptions: ServiceOption[] = (servicesQuery.data ?? [])
+    .filter((service): service is { id: string; name: string } => Boolean(service?.id && service?.name))
+    .map((service) => ({ id: service.id, name: service.name }))
+
+  const metricsByCompany = new Map<string, AdminCompanyMetricsRow>()
+  metrics.forEach((row) => {
+    metricsByCompany.set(row.company_id, {
+      ...row,
+      professional_count: typeof row.professional_count === "number" ? row.professional_count : 0,
+      projects_linked: typeof row.projects_linked === "number" ? row.projects_linked : 0,
+      total_reviews: typeof row.total_reviews === "number" ? row.total_reviews : 0,
+      average_rating:
+        typeof row.average_rating === "number"
+          ? Number(Number(row.average_rating).toFixed(2))
+          : null,
+    })
+  })
+
+  const companiesRows: CompanyRow[] = companies.map((company) => {
+    const metric = metricsByCompany.get(company.id)
+
+    const projectsLinked = metric?.projects_linked ?? 0
+    const professionalCount = metric?.professional_count ?? 0
+    const averageRating = metric?.average_rating ?? null
+    const totalReviews = metric?.total_reviews ?? 0
+
+    const locationPieces = [company.city, company.country].filter(Boolean)
+    const location = locationPieces.length > 0 ? locationPieces.join(", ") : null
+
+    return {
+      id: company.id,
+      name: company.name,
+      location,
+      city: company.city ?? null,
+      country: company.country ?? null,
+      planTier: company.plan_tier,
+      status: company.status,
+      isVerified: Boolean(company.is_verified),
+      projectsLinked,
+      professionalCount,
+      averageRating,
+      totalReviews,
+      domain: company.domain ?? null,
+      logoUrl: company.logo_url ?? null,
+      website: company.website ?? null,
+      contactEmail: company.email ?? null,
+      servicesOffered: Array.isArray(company.services_offered)
+        ? company.services_offered.filter((value): value is string => typeof value === "string")
+        : [],
+    }
+  })
+
+  const inviteRows: InviteRow[] = projectInvites
+    .map((row) => ({
+      id: row.id,
+      invitedEmail: row.invited_email,
+      invitedAt: row.invited_at,
+      status: row.status,
+      projectTitle: row.project?.title ?? null,
+      projectStatus: row.project?.status ?? null,
+      respondedAt: row.responded_at ?? null,
+    }))
+    .sort((a, b) => {
+      const aDate = a.invitedAt ? new Date(a.invitedAt).getTime() : 0
+      const bDate = b.invitedAt ? new Date(b.invitedAt).getTime() : 0
+      return bDate - aDate
+    })
+
+  return { companiesRows, inviteRows, servicesOptions }
+}
+
+export default async function AdminProfessionalsPage() {
+  const { companiesRows, inviteRows, servicesOptions } = await loadAdminProfessionalsData()
 
   return (
     <SidebarProvider>
@@ -112,56 +213,23 @@ export default function ProfessionalsPage() {
               </BreadcrumbList>
             </Breadcrumb>
           </div>
-          <div className="ml-auto px-4">
-            <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add professional
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Invite Professional</DialogTitle>
-                  <DialogDescription>
-                    Send an invitation to a new professional. They will receive an email with instructions to set up
-                    their account and create their profile.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="email" className="text-right">
-                      Email
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="professional@example.com"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right text-sm text-muted-foreground">Role</Label>
-                    <div className="col-span-3 text-sm">Professional (Fixed)</div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsInviteModalOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleInviteProfessional} disabled={!inviteEmail}>
-                    Send Invitation
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
         </header>
         <Separator className="w-full" />
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-[10x]">
-          <ProfessionalsDataTable data={professionalsData} />
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <Tabs defaultValue="companies" className="flex h-full flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 px-1">
+              <TabsList>
+                <TabsTrigger value="companies">Companies</TabsTrigger>
+                <TabsTrigger value="invites">Invites</TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value="companies" className="flex-1">
+              <AdminProfessionalsCompaniesTable companies={companiesRows} serviceOptions={servicesOptions} />
+            </TabsContent>
+            <TabsContent value="invites" className="flex-1">
+              <AdminProfessionalInvitesTable invites={inviteRows} />
+            </TabsContent>
+          </Tabs>
         </div>
       </SidebarInset>
     </SidebarProvider>

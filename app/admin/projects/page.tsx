@@ -43,7 +43,7 @@ export default async function ProjectsPage() {
     serviceSupabase
       .from("projects")
       .select(
-        `id, title, slug, status, project_type, project_type_category_id, style_preferences, features, project_year, created_at, is_featured, likes_count, location, project_size, building_type, seo_title, seo_description, status_updated_at, status_updated_by, rejection_reason, project_photos(count), project_categories(category_id,is_primary), client:profiles!projects_client_id_fkey(is_active)`
+        `id, title, slug, status, project_type, project_type_category_id, style_preferences, features, project_year, created_at, is_featured, likes_count, location, address_formatted, address_city, address_region, share_exact_location, project_size, building_type, seo_title, seo_description, status_updated_at, status_updated_by, rejection_reason, project_photos(count), project_categories(category_id,is_primary), client:profiles!projects_client_id_fkey(is_active)`
       )
       .eq("client.is_active", true)
       .order("created_at", { ascending: false, nullsFirst: false }),
@@ -125,6 +125,13 @@ export default async function ProjectsPage() {
     const statusUpdatedAt = project.status_updated_at ?? null
     const statusUpdatedBy = project.status_updated_by ?? null
     const rejectionReason = project.rejection_reason ?? null
+    const addressCity = project.address_city ?? null
+    const addressRegion = project.address_region ?? null
+    const cityRegionLabel = [addressCity, addressRegion].filter(Boolean).join(", ") || null
+    const addressFormatted = project.address_formatted ? project.address_formatted.trim() : null
+    const locationSummaryRaw = cityRegionLabel ?? project.location ?? addressFormatted ?? null
+    const locationSummary = locationSummaryRaw ? locationSummaryRaw.trim() : null
+    const shareExactLocation = project.share_exact_location ?? false
 
     let seoStatus: string | null = null
     if (seoTitle && seoDescription) {
@@ -164,7 +171,9 @@ export default async function ProjectsPage() {
       createdAt: project.created_at,
       isFeatured: project.is_featured,
       likesCount: project.likes_count,
-      location: project.location,
+      location: locationSummary,
+      addressFormatted,
+      shareExactLocation,
       imageCount: photoCount,
       seoTitle,
       seoDescription,

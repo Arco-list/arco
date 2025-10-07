@@ -231,7 +231,7 @@ async function loadLandingData() {
       }
     })
 
-  const projectTypes: ProjectTypeCard[] = listableChildCategories.slice(0, 6).map((type) => {
+  const projectTypes: ProjectTypeCard[] = listableChildCategories.slice(0, 5).map((type) => {
     const representativeProject = representativeProjectMap.get(type.id)
     return {
       id: type.id,

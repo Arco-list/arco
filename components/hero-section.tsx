@@ -21,38 +21,39 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ projects }: HeroSectionProps) {
-  const [currentProjectIndex, setCurrentProjectIndex] = useState(0)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   const safeProjects = useMemo(() => (projects.length > 0 ? projects : []), [projects])
   const totalProjects = safeProjects.length
-  const currentProject = safeProjects[currentProjectIndex]
+  const currentImage = safeProjects[currentImageIndex]
+  const heroTitle = safeProjects[0]?.title
 
   useEffect(() => {
     if (totalProjects <= 1) return
 
     const timer = window.setInterval(() => {
-      setCurrentProjectIndex((prev) => (prev + 1) % totalProjects)
+      setCurrentImageIndex((prev) => (prev + 1) % totalProjects)
     }, 5000)
 
     return () => window.clearInterval(timer)
   }, [totalProjects])
 
   useEffect(() => {
-    if (currentProjectIndex >= totalProjects && totalProjects > 0) {
-      setCurrentProjectIndex(0)
+    if (currentImageIndex >= totalProjects && totalProjects > 0) {
+      setCurrentImageIndex(0)
     }
-  }, [currentProjectIndex, totalProjects])
+  }, [currentImageIndex, totalProjects])
 
-  if (!currentProject) {
+  if (!currentImage) {
     return null
   }
 
   const goToPrevious = () => {
-    setCurrentProjectIndex((prev) => (prev - 1 + totalProjects) % totalProjects)
+    setCurrentImageIndex((prev) => (prev - 1 + totalProjects) % totalProjects)
   }
 
   const goToNext = () => {
-    setCurrentProjectIndex((prev) => (prev + 1) % totalProjects)
+    setCurrentImageIndex((prev) => (prev + 1) % totalProjects)
   }
 
   return (
@@ -60,7 +61,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-in-out"
         style={{
-          backgroundImage: `url('${currentProject.imageUrl || FALLBACK_IMAGE}')`,
+          backgroundImage: `url('${currentImage.imageUrl || FALLBACK_IMAGE}')`,
         }}
       >
         <div className="absolute inset-0 bg-black/35" />
@@ -68,23 +69,21 @@ export function HeroSection({ projects }: HeroSectionProps) {
 
       <div className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-8 text-white md:px-8">
         <div className="max-w-2xl">
-          <Link href={currentProject.href} className="inline-block transition-opacity hover:opacity-90">
-            <h1 className="text-4xl font-bold leading-tight md:text-6xl lg:text-7xl">
-              {currentProject.title}
-            </h1>
-          </Link>
-          {currentProject.caption ? (
-            <p className="mt-3 text-sm text-white/80 md:text-base">{currentProject.caption}</p>
-          ) : null}
+          <h1 className="text-4xl font-bold leading-tight md:text-6xl lg:text-7xl">
+            {heroTitle}
+          </h1>
         </div>
 
-        <div className="absolute bottom-8 right-4 hidden items-center gap-2 text-sm text-white/80 md:flex">
+        <div className="absolute bottom-8 right-4 hidden items-center gap-3 text-sm text-white/80 md:flex md:right-8">
+          {currentImage.caption ? (
+            <span className="text-sm font-medium text-white/90">{currentImage.caption}</span>
+          ) : null}
           <Button
             size="sm"
             variant="ghost"
             className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
             onClick={goToPrevious}
-            aria-label="Previous project"
+            aria-label="Previous image"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -93,7 +92,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
             variant="ghost"
             className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
             onClick={goToNext}
-            aria-label="Next project"
+            aria-label="Next image"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

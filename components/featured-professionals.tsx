@@ -119,8 +119,7 @@ export function FeaturedProfessionals() {
                 <h3 className="text-lg font-medium text-gray-900 group-hover:text-gray-600 transition-colors">
                   {professional.name}
                 </h3>
-                <p className="text-sm text-gray-600">{professional.title}</p>
-                <p className="text-sm text-gray-500">{professional.location}</p>
+                <p className="text-sm text-gray-600">{professional.title} in {professional.location}</p>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1">
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />

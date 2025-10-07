@@ -72,12 +72,7 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
-                <div className="absolute bottom-4 left-4 text-white">
-                  <h3 className="text-lg font-semibold mb-1">{category.title}</h3>
-                  {category.countLabel ? (
-                    <p className="text-sm text-white/90">{category.countLabel}</p>
-                  ) : null}
-                </div>
+                <h3 className="absolute bottom-4 left-4 text-white font-semibold text-3xl">{category.title}</h3>
               </div>
             </Link>
           ))}

@@ -67,7 +67,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     supabase
       .from("projects")
       .select(
-        "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, slug, created_at, updated_at",
+        "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, slug, created_at, updated_at",
       )
       .eq("slug", resolvedParams.slug)
       .maybeSingle(),
@@ -108,6 +108,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     notFound()
   }
 
+  const canViewInviteDetails = isOwner || isAdmin
+
   const [photosResult, featuresResult, serviceSelectionsResult, projectCategoriesResult, invitesResult] =
     await Promise.all([
       supabase
@@ -129,10 +131,19 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         .from("project_categories")
         .select("category_id, is_primary")
         .eq("project_id", project.id),
-      supabase
-        .from("project_professionals")
-        .select("id, invited_email, invited_service_category_id, status")
-        .eq("project_id", project.id),
+      canViewInviteDetails
+        ? supabase
+            .from("project_professionals")
+            .select("id, invited_email, invited_service_category_id, status")
+            .eq("project_id", project.id)
+        : Promise.resolve({
+            data: [] as ProjectProfessionalRow[],
+            error: null,
+            status: 200,
+            statusText: "OK",
+            count: null,
+            body: [] as ProjectProfessionalRow[],
+          }),
     ])
 
   const photos: ProjectPhotoRow[] = photosResult.data ?? []
@@ -189,13 +200,27 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           .from("categories")
           .select("id, name, slug, parent_id")
           .in("id", Array.from(categoryIds))
-      : Promise.resolve<{ data: CategoryRow[]; error: null }>({ data: [], error: null }),
+      : Promise.resolve({
+          data: [] as CategoryRow[],
+          error: null,
+          status: 200,
+          statusText: "OK",
+          count: null,
+          body: [] as CategoryRow[],
+        }),
     taxonomyIds.size
       ? supabase
           .from("project_taxonomy_options")
           .select("id, name, taxonomy_type")
           .in("id", Array.from(taxonomyIds))
-      : Promise.resolve<{ data: TaxonomyOptionRow[]; error: null }>({ data: [], error: null }),
+      : Promise.resolve({
+          data: [] as TaxonomyOptionRow[],
+          error: null,
+          status: 200,
+          statusText: "OK",
+          count: null,
+          body: [] as TaxonomyOptionRow[],
+        }),
   ])
 
   const categoryMap = new Map<string, CategoryRow>()
@@ -236,6 +261,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const buildingTypeId = project.building_type ?? null
 
   const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
+  const locationSummaryRaw = locationLabel || project.location || project.address_formatted || null
+  const locationSummary = locationSummaryRaw ? locationSummaryRaw.trim() : null
+  const canViewExactLocation = (project.share_exact_location ?? false) || isOwner || isAdmin
+
+  const normalizeCoordinate = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) {
+      return null
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null
+    }
+
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const latitude = normalizeCoordinate(project.latitude)
+  const longitude = normalizeCoordinate(project.longitude)
 
   const coverPhoto = photos.find((photo) => photo.is_primary) ?? (photos.length > 0 ? photos[0] : null)
   const secondaryPhotos = photos.filter((photo) => photo.id !== coverPhoto?.id)
@@ -256,13 +300,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       categoryMap.get(selection.service_category_id)?.name ??
       (isUuid(selection.service_category_id) ? "Unnamed service" : selection.service_category_id)
 
-    const relatedInvites = invites
-      .filter((invite) => invite.invited_service_category_id === selection.service_category_id)
-      .map((invite) => ({
-        id: invite.id,
-        email: invite.invited_email,
-        status: capitalizeStatus(invite.status),
-      }))
+    const serviceInvites = invites.filter(
+      (invite) => invite.invited_service_category_id === selection.service_category_id,
+    )
+
+    const relatedInvites = canViewInviteDetails
+      ? serviceInvites.map((invite) => ({
+          id: invite.id,
+          email: invite.invited_email,
+          status: capitalizeStatus(invite.status),
+        }))
+      : []
 
     return {
       id: selection.service_category_id,
@@ -346,7 +394,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
   })
 
-  const heroGroups = features
+  let heroGroups = features
     .map((feature) => ({ feature, photos: photosByFeature.get(feature.id) ?? [] }))
     .filter(({ photos }) => photos.length > 0)
     .map(({ feature, photos }) => ({
@@ -360,6 +408,22 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         isPrimary: index === 0,
       })),
     }))
+
+  if (heroGroups.length === 0 && photos.length > 0) {
+    heroGroups = [
+      {
+        id: "project-gallery",
+        title: "Gallery",
+        description: null,
+        photos: photos.map((photo, index) => ({
+          id: photo.id,
+          url: photo.url,
+          alt: photo.caption ?? "Project photo",
+          isPrimary: (photo.is_primary ?? false) || index === 0,
+        })),
+      },
+    ]
+  }
 
   const professionalServices = servicePreviews.map((service) => ({
     id: service.id,
@@ -379,6 +443,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         badge: service.name,
       })),
     )
+    .filter((professional) => Boolean(professional.name))
     .slice(0, 3)
 
   const SIMILAR_LIMIT = 6
@@ -488,6 +553,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       })),
       groups: heroGroups,
     },
+    canViewInviteDetails,
     info: {
       breadcrumbs,
       title: project.title ?? "Untitled project",
@@ -507,6 +573,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       city: project.address_city,
       region: project.address_region,
       shareExact: project.share_exact_location ?? false,
+      canViewExact: canViewExactLocation,
+      latitude: canViewExactLocation ? latitude : null,
+      longitude: canViewExactLocation ? longitude : null,
+      addressFormatted: canViewExactLocation ? project.address_formatted : null,
+      summary: locationSummary,
     },
     similarProjects,
     shareImageUrl: coverPhoto?.url ?? null,

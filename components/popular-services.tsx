@@ -43,13 +43,13 @@ export function PopularServices() {
 
   const scrollLeft = () => {
     if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: -400, behavior: "smooth" })
+      scrollRef.current.scrollBy({ left: -320, behavior: "smooth" })
     }
   }
 
   const scrollRight = () => {
     if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: 400, behavior: "smooth" })
+      scrollRef.current.scrollBy({ left: 320, behavior: "smooth" })
     }
   }
 
@@ -70,27 +70,24 @@ export function PopularServices() {
 
         <div
           ref={scrollRef}
-          className="flex gap-6 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-5 md:gap-6 md:overflow-visible"
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-3 lg:grid-cols-5 md:gap-4 md:overflow-visible"
           style={{ scrollSnapType: "x mandatory" }}
         >
           {services.map((service, index) => (
             <Link
               key={index}
               href={service.href}
-              className="group cursor-pointer flex-none w-80 md:w-auto"
+              className="group cursor-pointer flex-none w-64 md:w-auto"
               style={{ scrollSnapAlign: "start" }}
             >
-              <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-3">
+              <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3">
                 <img
                   src={service.image || "/placeholder.svg"}
                   alt={service.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
-                <div className="absolute bottom-4 left-4 text-white">
-                  <h3 className="text-lg font-semibold mb-1">{service.title}</h3>
-                  <p className="text-sm text-white/90">{service.description}</p>
-                </div>
+                <h3 className="absolute bottom-4 left-4 text-white font-semibold text-3xl">{service.title}</h3>
               </div>
             </Link>
           ))}

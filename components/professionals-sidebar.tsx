@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProfessionalsSidebar() {
-  const { professionalServices } = useProjectPreview()
+  const { professionalServices, canViewInviteDetails } = useProjectPreview()
 
   if (professionalServices.length === 0) {
     return null
@@ -27,14 +27,18 @@ export function ProfessionalsSidebar() {
                       <span className="truncate">
                         {invite.name ?? invite.email ?? "Pending invite"}
                       </span>
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700">
-                        {invite.status}
-                      </span>
+                      {canViewInviteDetails && invite.status && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700">
+                          {invite.status}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-gray-500">No invites yet</p>
+                canViewInviteDetails ? (
+                  <p className="text-xs text-gray-500">No invites yet</p>
+                ) : null
               )}
             </div>
           ))}
