@@ -33,7 +33,7 @@ export function MapSection() {
     } else if (summaryLabel) {
       const encodedSummary = encodeURIComponent(summaryLabel)
       const marker = encodeURIComponent(`color:0x4b5563|${summaryLabel}`)
-      const zoom = location.shareExact ? 13 : 11
+      const zoom = location.canViewExact ? 13 : 11
       staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${encodedSummary}&zoom=${zoom}&size=800x320&scale=2&markers=${marker}&key=${mapsApiKey}`
     }
   }

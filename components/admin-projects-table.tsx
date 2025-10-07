@@ -110,6 +110,8 @@ const STATUS_OPTIONS = [
   ...STATUS_CHOICES.map((status) => ({ value: status.value, label: status.label })),
 ]
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50]
+
 export type AdminProjectRow = {
   id: string
   title: string
@@ -164,6 +166,8 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   const [isPending, startTransition] = useTransition()
   const [isApprovePending, startApproveTransition] = useTransition()
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0])
 
   const totalCount = projects.length
 
@@ -395,6 +399,47 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     minImages,
     maxImages,
   ])
+
+  const locationFilterKey = selectedLocations.join("|")
+  const featureFilterKey = selectedFeatures.join("|")
+  const styleFilterKey = selectedStyles.join("|")
+  const typeFilterKey = selectedTypes.join("|")
+  const subtypeFilterKey = selectedSubtypes.join("|")
+
+  useEffect(() => {
+    setPage(0)
+  }, [
+    search,
+    statusFilter,
+    featuredOnly,
+    showSeoView,
+    locationFilterKey,
+    featureFilterKey,
+    styleFilterKey,
+    typeFilterKey,
+    subtypeFilterKey,
+    dateFrom,
+    dateTo,
+    minImages,
+    maxImages,
+  ])
+
+  const pageCount = Math.max(1, Math.ceil(filteredProjects.length / pageSize))
+  const currentPage = Math.min(page, pageCount - 1)
+  const pageItems = useMemo(
+    () =>
+      filteredProjects.slice(
+        currentPage * pageSize,
+        currentPage * pageSize + pageSize,
+      ),
+    [filteredProjects, currentPage, pageSize],
+  )
+
+  useEffect(() => {
+    if (page !== currentPage) {
+      setPage(currentPage)
+    }
+  }, [currentPage, page])
 
   const handleExportCsv = useCallback(() => {
     if (filteredProjects.length === 0) {
@@ -694,7 +739,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProjects.map((project) => {
+              pageItems.map((project) => {
                 const features = project.features ?? []
                 const featurePreview = features.slice(0, 5)
                 const remainingCount = Math.max(features.length - featurePreview.length, 0)
@@ -939,8 +984,76 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
         </Table>
       </div>
 
-      <div className="flex justify-end text-sm text-muted-foreground">
-        Showing {filteredProjects.length} / {totalCount}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <div>
+          Showing {pageItems.length} of {filteredProjects.length} filtered projects ({totalCount} total)
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="projects-rows" className="text-sm font-medium text-foreground">
+              Rows per page
+            </Label>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value))
+                setPage(0)
+              }}
+            >
+              <SelectTrigger id="projects-rows" className="h-8 w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {PAGE_SIZE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setPage(0)}
+              disabled={currentPage === 0}
+            >
+              First
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+              disabled={currentPage === 0}
+            >
+              Prev
+            </Button>
+            <span className="px-2">
+              Page {currentPage + 1} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setPage((prev) => Math.min(pageCount - 1, prev + 1))}
+              disabled={currentPage + 1 >= pageCount}
+            >
+              Next
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setPage(pageCount - 1)}
+              disabled={currentPage + 1 >= pageCount}
+            >
+              Last
+            </Button>
+          </div>
+        </div>
       </div>
 
       <Dialog

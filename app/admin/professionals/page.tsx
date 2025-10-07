@@ -14,6 +14,7 @@ import { AdminProfessionalsCompaniesTable } from "@/components/admin-professiona
 import { AdminProfessionalInvitesTable } from "@/components/admin-professional-invites-table"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Database, Tables } from "@/lib/supabase/types"
+import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 
@@ -52,99 +53,97 @@ type InviteRow = {
   respondedAt: string | null
 }
 
-type ProjectProfessionalRow = Tables<"project_professionals"> & {
-  project: Pick<Tables<"projects">, "title" | "status"> | null
-  professional: Pick<Tables<"professionals">, "company_id"> | null
+type AdminCompanyMetricsRow = {
+  company_id: string
+  professional_count: number
+  projects_linked: number
+  average_rating: number | null
+  total_reviews: number
 }
 
-type ProfessionalRow = Pick<Tables<"professionals">, "id" | "company_id">
-
-type ProfessionalRatingRow = Pick<Tables<"professional_ratings">, "professional_id" | "overall_rating" | "total_reviews">
+type ProjectInviteRow = Pick<Tables<"project_professionals">, "id" | "invited_email" | "invited_at" | "responded_at" | "status"> & {
+  project: Pick<Tables<"projects">, "title" | "status"> | null
+}
 
 async function loadAdminProfessionalsData() {
   const supabase = await createServerSupabaseClient()
 
-  const [companiesQuery, professionalsQuery, ratingsQuery, invitesQuery, servicesQuery] = await Promise.all([
+  const [companiesQuery, metricsQuery, invitesQuery, servicesQuery] = await Promise.all([
     supabase
       .from("companies")
       .select(
         "id, name, status, plan_tier, city, country, is_verified, domain, logo_url, website, email, services_offered"
       ),
-    supabase.from("professionals").select("id, company_id"),
-    supabase.from("professional_ratings").select("professional_id, overall_rating, total_reviews"),
+    supabase
+      .from("admin_company_professional_metrics")
+      .select("company_id, professional_count, projects_linked, average_rating, total_reviews"),
     supabase
       .from("project_professionals")
-      .select(
-        "id, project_id, professional_id, invited_email, invited_at, responded_at, status, project:projects(title, status), professional:professionals(company_id)"
-      ),
+      .select("id, invited_email, invited_at, responded_at, status, project:projects(title, status)")
+      .is("professional_id", null),
     supabase.from("categories").select("id, name").eq("is_active", true).order("name", { ascending: true }),
   ])
 
+  // Check for query errors
+  if (companiesQuery.error) {
+    logger.error("Failed to load companies", { table: "companies" }, companiesQuery.error)
+    throw new Error("Failed to load companies data")
+  }
+
+  if (invitesQuery.error) {
+    logger.error("Failed to load invites", { table: "project_professionals" }, invitesQuery.error)
+    throw new Error("Failed to load invites data")
+  }
+
+  if (metricsQuery.error) {
+    logger.error(
+      "Failed to load company metrics",
+      { view: "admin_company_professional_metrics" },
+      metricsQuery.error
+    )
+    throw new Error("Failed to load company metrics")
+  }
+
+  if (servicesQuery.error) {
+    logger.error("Failed to load services", { table: "categories" }, servicesQuery.error)
+    throw new Error("Failed to load services data")
+  }
+
   const companies = (companiesQuery.data ?? []).filter((company): company is Tables<"companies"> => Boolean(company?.id))
 
-  const professionals = (professionalsQuery.data ?? []).filter(
-    (professional): professional is ProfessionalRow => Boolean(professional?.id)
+  const metrics = (metricsQuery.data ?? []).filter(
+    (row): row is AdminCompanyMetricsRow => Boolean(row?.company_id)
   )
 
-  const ratings = (ratingsQuery.data ?? []).filter((rating): rating is ProfessionalRatingRow => Boolean(rating?.professional_id))
-
-  const projectProfessionals = (invitesQuery.data ?? []).filter(
-    (row): row is ProjectProfessionalRow => Boolean(row?.id)
+  const projectInvites = (invitesQuery.data ?? []).filter(
+    (row): row is ProjectInviteRow => Boolean(row?.id)
   )
 
   const servicesOptions: ServiceOption[] = (servicesQuery.data ?? [])
     .filter((service): service is { id: string; name: string } => Boolean(service?.id && service?.name))
     .map((service) => ({ id: service.id, name: service.name }))
 
-  const professionalsByCompany = new Map<string, string[]>()
-  professionals.forEach((professional) => {
-    if (!professional.company_id) return
-    const list = professionalsByCompany.get(professional.company_id) ?? []
-    list.push(professional.id)
-    professionalsByCompany.set(professional.company_id, list)
-  })
-
-  const ratingByProfessional = new Map<string, { rating: number; totalReviews: number }>()
-  ratings.forEach((rating) => {
-    ratingByProfessional.set(rating.professional_id, {
-      rating: typeof rating.overall_rating === "number" ? Number(rating.overall_rating) : 0,
-      totalReviews: typeof rating.total_reviews === "number" ? Number(rating.total_reviews) : 0,
+  const metricsByCompany = new Map<string, AdminCompanyMetricsRow>()
+  metrics.forEach((row) => {
+    metricsByCompany.set(row.company_id, {
+      ...row,
+      professional_count: typeof row.professional_count === "number" ? row.professional_count : 0,
+      projects_linked: typeof row.projects_linked === "number" ? row.projects_linked : 0,
+      total_reviews: typeof row.total_reviews === "number" ? row.total_reviews : 0,
+      average_rating:
+        typeof row.average_rating === "number"
+          ? Number(Number(row.average_rating).toFixed(2))
+          : null,
     })
-  })
-
-  const projectIdsByProfessional = new Map<string, Set<string>>()
-  projectProfessionals.forEach((row) => {
-    if (!row.professional_id) return
-    const projectId = row.project_id
-    if (!projectId) return
-    const existing = projectIdsByProfessional.get(row.professional_id) ?? new Set<string>()
-    existing.add(projectId)
-    projectIdsByProfessional.set(row.professional_id, existing)
   })
 
   const companiesRows: CompanyRow[] = companies.map((company) => {
-    const companyProfessionalIds = professionalsByCompany.get(company.id) ?? []
+    const metric = metricsByCompany.get(company.id)
 
-    const aggregatedProjectIds = new Set<string>()
-    let ratingSum = 0
-    let ratingCount = 0
-    let totalReviews = 0
-
-    companyProfessionalIds.forEach((professionalId) => {
-      const projectSet = projectIdsByProfessional.get(professionalId)
-      if (projectSet) {
-        projectSet.forEach((projectId) => aggregatedProjectIds.add(projectId))
-      }
-
-      const ratingInfo = ratingByProfessional.get(professionalId)
-      if (ratingInfo && ratingInfo.rating > 0) {
-        ratingSum += ratingInfo.rating
-        ratingCount += 1
-        totalReviews += ratingInfo.totalReviews
-      }
-    })
-
-    const averageRating = ratingCount > 0 ? Number((ratingSum / ratingCount).toFixed(2)) : null
+    const projectsLinked = metric?.projects_linked ?? 0
+    const professionalCount = metric?.professional_count ?? 0
+    const averageRating = metric?.average_rating ?? null
+    const totalReviews = metric?.total_reviews ?? 0
 
     const locationPieces = [company.city, company.country].filter(Boolean)
     const location = locationPieces.length > 0 ? locationPieces.join(", ") : null
@@ -158,8 +157,8 @@ async function loadAdminProfessionalsData() {
       planTier: company.plan_tier,
       status: company.status,
       isVerified: Boolean(company.is_verified),
-      projectsLinked: aggregatedProjectIds.size,
-      professionalCount: companyProfessionalIds.length,
+      projectsLinked,
+      professionalCount,
       averageRating,
       totalReviews,
       domain: company.domain ?? null,
@@ -167,13 +166,12 @@ async function loadAdminProfessionalsData() {
       website: company.website ?? null,
       contactEmail: company.email ?? null,
       servicesOffered: Array.isArray(company.services_offered)
-        ? (company.services_offered.filter((value): value is string => typeof value === "string") ?? [])
+        ? company.services_offered.filter((value): value is string => typeof value === "string")
         : [],
     }
   })
 
-  const inviteRows: InviteRow[] = projectProfessionals
-    .filter((row) => !row.professional_id)
+  const inviteRows: InviteRow[] = projectInvites
     .map((row) => ({
       id: row.id,
       invitedEmail: row.invited_email,

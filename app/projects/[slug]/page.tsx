@@ -12,7 +12,7 @@ import { MapSection } from "@/components/map-section"
 import { SimilarProjects } from "@/components/similar-projects"
 import { Footer } from "@/components/footer"
 import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
-import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 
@@ -109,33 +109,41 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   const canViewInviteDetails = isOwner || isAdmin
-  const projectDataClient = isPublished ? createServiceRoleSupabaseClient() : supabase
 
   const [photosResult, featuresResult, serviceSelectionsResult, projectCategoriesResult, invitesResult] =
     await Promise.all([
-      projectDataClient
+      supabase
         .from("project_photos")
         .select("id, url, caption, feature_id, is_primary, order_index")
         .eq("project_id", project.id)
         .order("is_primary", { ascending: false })
         .order("order_index", { ascending: true, nullsFirst: false }),
-      projectDataClient
+      supabase
         .from("project_features")
         .select("id, name, description, is_building_default, order_index, category_id, tagline, is_highlighted")
         .eq("project_id", project.id)
         .order("order_index", { ascending: true, nullsFirst: false }),
-      projectDataClient
+      supabase
         .from("project_professional_services")
         .select("id, service_category_id")
         .eq("project_id", project.id),
-      projectDataClient
+      supabase
         .from("project_categories")
         .select("category_id, is_primary")
         .eq("project_id", project.id),
-      projectDataClient
-        .from("project_professionals")
-        .select("id, invited_email, invited_service_category_id, status")
-        .eq("project_id", project.id),
+      canViewInviteDetails
+        ? supabase
+            .from("project_professionals")
+            .select("id, invited_email, invited_service_category_id, status")
+            .eq("project_id", project.id)
+        : Promise.resolve({
+            data: [] as ProjectProfessionalRow[],
+            error: null,
+            status: 200,
+            statusText: "OK",
+            count: null,
+            body: [] as ProjectProfessionalRow[],
+          }),
     ])
 
   const photos: ProjectPhotoRow[] = photosResult.data ?? []
@@ -188,17 +196,31 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const [categoriesResult, taxonomyResult] = await Promise.all([
     categoryIds.size
-      ? projectDataClient
+      ? supabase
           .from("categories")
           .select("id, name, slug, parent_id")
           .in("id", Array.from(categoryIds))
-      : Promise.resolve<{ data: CategoryRow[]; error: null }>({ data: [], error: null }),
+      : Promise.resolve({
+          data: [] as CategoryRow[],
+          error: null,
+          status: 200,
+          statusText: "OK",
+          count: null,
+          body: [] as CategoryRow[],
+        }),
     taxonomyIds.size
-      ? projectDataClient
+      ? supabase
           .from("project_taxonomy_options")
           .select("id, name, taxonomy_type")
           .in("id", Array.from(taxonomyIds))
-      : Promise.resolve<{ data: TaxonomyOptionRow[]; error: null }>({ data: [], error: null }),
+      : Promise.resolve({
+          data: [] as TaxonomyOptionRow[],
+          error: null,
+          status: 200,
+          statusText: "OK",
+          count: null,
+          body: [] as TaxonomyOptionRow[],
+        }),
   ])
 
   const categoryMap = new Map<string, CategoryRow>()
@@ -465,7 +487,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       continue
     }
 
-    let query = projectDataClient
+    let query = supabase
       .from("mv_project_summary")
       .select(
         "id, slug, title, location, likes_count, primary_photo_url, project_type, primary_category, building_type, created_at",

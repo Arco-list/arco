@@ -1525,6 +1525,16 @@ export type Database = {
       }
     }
     Views: {
+      admin_company_professional_metrics: {
+        Row: {
+          average_rating: number | null
+          company_id: string | null
+          professional_count: number | null
+          projects_linked: number | null
+          total_reviews: number | null
+        }
+        Relationships: []
+      }
       mv_professional_summary: {
         Row: {
           avatar_url: string | null
