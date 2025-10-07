@@ -33,7 +33,7 @@ export type PreviewServiceInvite = {
   id: string
   name?: string | null
   email?: string | null
-  status: string
+  status?: string | null
 }
 
 export type PreviewService = {
@@ -71,6 +71,7 @@ export type ProjectPreviewData = {
     secondaryPhotos: PreviewPhoto[]
     groups: PreviewGalleryGroup[]
   }
+  canViewInviteDetails: boolean
   info: {
     breadcrumbs: string[]
     title: string
@@ -90,6 +91,11 @@ export type ProjectPreviewData = {
     city?: string | null
     region?: string | null
     shareExact: boolean
+    canViewExact: boolean
+    latitude?: number | null
+    longitude?: number | null
+    addressFormatted?: string | null
+    summary?: string | null
   }
   similarProjects?: PreviewSimilarProject[]
   shareImageUrl?: string | null

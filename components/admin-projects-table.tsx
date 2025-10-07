@@ -122,6 +122,8 @@ export type AdminProjectRow = {
   isFeatured: boolean | null
   likesCount: number | null
   location: string | null
+  addressFormatted?: string | null
+  shareExactLocation?: boolean | null
   imageCount?: number | null
   primaryCategory?: string | null
   styles?: string[] | null
@@ -706,7 +708,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                 const projectHref = project.slug ? `/projects/${project.slug}${previewSuffix}` : "#"
 
                 const subTypeLabel = project.projectType || "Sub-type unavailable"
-                const locationLabel = project.location ?? "Location unknown"
+                const locationSummary = project.location?.trim() || "Location unknown"
+                const preciseLocation = project.addressFormatted?.trim() || null
+                const showPreciseLocation = Boolean(preciseLocation && preciseLocation !== locationSummary)
 
                 if (showSeoView) {
                   return (
@@ -846,8 +850,18 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {locationLabel}
+                    <TableCell>
+                      <div className="flex flex-col text-sm">
+                        <span className={showPreciseLocation ? "text-gray-900" : "text-muted-foreground"}>
+                          {preciseLocation ?? locationSummary}
+                        </span>
+                        {showPreciseLocation && (
+                          <span className="text-xs text-muted-foreground">{locationSummary}</span>
+                        )}
+                        {!project.shareExactLocation && (
+                          <span className="text-xs text-amber-600">Exact address hidden from public</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center text-sm">{project.imageCount ?? 0}</TableCell>
                     <TableCell>{project.projectYear ?? "—"}</TableCell>

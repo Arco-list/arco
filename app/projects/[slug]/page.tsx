@@ -12,7 +12,7 @@ import { MapSection } from "@/components/map-section"
 import { SimilarProjects } from "@/components/similar-projects"
 import { Footer } from "@/components/footer"
 import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 
@@ -67,7 +67,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     supabase
       .from("projects")
       .select(
-        "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_city, address_region, share_exact_location, slug, created_at, updated_at",
+        "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, slug, created_at, updated_at",
       )
       .eq("slug", resolvedParams.slug)
       .maybeSingle(),
@@ -108,28 +108,31 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     notFound()
   }
 
+  const canViewInviteDetails = isOwner || isAdmin
+  const projectDataClient = isPublished ? createServiceRoleSupabaseClient() : supabase
+
   const [photosResult, featuresResult, serviceSelectionsResult, projectCategoriesResult, invitesResult] =
     await Promise.all([
-      supabase
+      projectDataClient
         .from("project_photos")
         .select("id, url, caption, feature_id, is_primary, order_index")
         .eq("project_id", project.id)
         .order("is_primary", { ascending: false })
         .order("order_index", { ascending: true, nullsFirst: false }),
-      supabase
+      projectDataClient
         .from("project_features")
         .select("id, name, description, is_building_default, order_index, category_id, tagline, is_highlighted")
         .eq("project_id", project.id)
         .order("order_index", { ascending: true, nullsFirst: false }),
-      supabase
+      projectDataClient
         .from("project_professional_services")
         .select("id, service_category_id")
         .eq("project_id", project.id),
-      supabase
+      projectDataClient
         .from("project_categories")
         .select("category_id, is_primary")
         .eq("project_id", project.id),
-      supabase
+      projectDataClient
         .from("project_professionals")
         .select("id, invited_email, invited_service_category_id, status")
         .eq("project_id", project.id),
@@ -185,13 +188,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const [categoriesResult, taxonomyResult] = await Promise.all([
     categoryIds.size
-      ? supabase
+      ? projectDataClient
           .from("categories")
           .select("id, name, slug, parent_id")
           .in("id", Array.from(categoryIds))
       : Promise.resolve<{ data: CategoryRow[]; error: null }>({ data: [], error: null }),
     taxonomyIds.size
-      ? supabase
+      ? projectDataClient
           .from("project_taxonomy_options")
           .select("id, name, taxonomy_type")
           .in("id", Array.from(taxonomyIds))
@@ -236,6 +239,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const buildingTypeId = project.building_type ?? null
 
   const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
+  const locationSummaryRaw = locationLabel || project.location || project.address_formatted || null
+  const locationSummary = locationSummaryRaw ? locationSummaryRaw.trim() : null
+  const canViewExactLocation = (project.share_exact_location ?? false) || isOwner || isAdmin
+
+  const normalizeCoordinate = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined) {
+      return null
+    }
+
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null
+    }
+
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const latitude = normalizeCoordinate(project.latitude)
+  const longitude = normalizeCoordinate(project.longitude)
 
   const coverPhoto = photos.find((photo) => photo.is_primary) ?? (photos.length > 0 ? photos[0] : null)
   const secondaryPhotos = photos.filter((photo) => photo.id !== coverPhoto?.id)
@@ -256,13 +278,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       categoryMap.get(selection.service_category_id)?.name ??
       (isUuid(selection.service_category_id) ? "Unnamed service" : selection.service_category_id)
 
-    const relatedInvites = invites
-      .filter((invite) => invite.invited_service_category_id === selection.service_category_id)
-      .map((invite) => ({
-        id: invite.id,
-        email: invite.invited_email,
-        status: capitalizeStatus(invite.status),
-      }))
+    const serviceInvites = invites.filter(
+      (invite) => invite.invited_service_category_id === selection.service_category_id,
+    )
+
+    const relatedInvites = canViewInviteDetails
+      ? serviceInvites.map((invite) => ({
+          id: invite.id,
+          email: invite.invited_email,
+          status: capitalizeStatus(invite.status),
+        }))
+      : []
 
     return {
       id: selection.service_category_id,
@@ -346,7 +372,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
   })
 
-  const heroGroups = features
+  let heroGroups = features
     .map((feature) => ({ feature, photos: photosByFeature.get(feature.id) ?? [] }))
     .filter(({ photos }) => photos.length > 0)
     .map(({ feature, photos }) => ({
@@ -360,6 +386,22 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         isPrimary: index === 0,
       })),
     }))
+
+  if (heroGroups.length === 0 && photos.length > 0) {
+    heroGroups = [
+      {
+        id: "project-gallery",
+        title: "Gallery",
+        description: null,
+        photos: photos.map((photo, index) => ({
+          id: photo.id,
+          url: photo.url,
+          alt: photo.caption ?? "Project photo",
+          isPrimary: (photo.is_primary ?? false) || index === 0,
+        })),
+      },
+    ]
+  }
 
   const professionalServices = servicePreviews.map((service) => ({
     id: service.id,
@@ -379,6 +421,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         badge: service.name,
       })),
     )
+    .filter((professional) => Boolean(professional.name))
     .slice(0, 3)
 
   const SIMILAR_LIMIT = 6
@@ -422,7 +465,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       continue
     }
 
-    let query = supabase
+    let query = projectDataClient
       .from("mv_project_summary")
       .select(
         "id, slug, title, location, likes_count, primary_photo_url, project_type, primary_category, building_type, created_at",
@@ -488,6 +531,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       })),
       groups: heroGroups,
     },
+    canViewInviteDetails,
     info: {
       breadcrumbs,
       title: project.title ?? "Untitled project",
@@ -507,6 +551,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       city: project.address_city,
       region: project.address_region,
       shareExact: project.share_exact_location ?? false,
+      canViewExact: canViewExactLocation,
+      latitude: canViewExactLocation ? latitude : null,
+      longitude: canViewExactLocation ? longitude : null,
+      addressFormatted: canViewExactLocation ? project.address_formatted : null,
+      summary: locationSummary,
     },
     similarProjects,
     shareImageUrl: coverPhoto?.url ?? null,
