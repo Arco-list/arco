@@ -8,7 +8,7 @@ import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProfessionalsSection() {
   const [showModal, setShowModal] = useState(false)
-  const { professionalServices, professionalsSummary } = useProjectPreview()
+  const { professionalServices, professionalsSummary, canViewInviteDetails } = useProjectPreview()
 
   if (professionalServices.length === 0 && professionalsSummary.length === 0) {
     return null
@@ -82,13 +82,17 @@ export function ProfessionalsSection() {
                             <span className="text-xs text-gray-500">{invite.email}</span>
                           )}
                         </div>
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-                          {invite.status}
-                        </span>
+                        {canViewInviteDetails && invite.status && (
+                          <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
+                            {invite.status}
+                          </span>
+                        )}
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-gray-500">No professionals invited yet.</p>
+                    canViewInviteDetails ? (
+                      <p className="text-sm text-gray-500">No professionals invited yet.</p>
+                    ) : null
                   )}
                 </div>
               </div>

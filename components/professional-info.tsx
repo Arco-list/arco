@@ -50,6 +50,11 @@ export function ProfessionalInfo({ professionalData }: { professionalData: any }
           </div>
           <span className="text-sm text-gray-500">({professionalData.reviewCount} reviews)</span>
         </div>
+
+        {/* Company description */}
+        {professionalData.description && (
+          <p className="text-gray-700 leading-relaxed">{professionalData.description}</p>
+        )}
       </div>
 
       <div className="border-t border-b border-gray-200 py-6">
