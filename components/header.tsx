@@ -45,6 +45,15 @@ export function Header({ transparent = false }: HeaderProps) {
   const shouldShowLoginLink = !isLoggedIn && !isLoginPage;
   const shouldShowSignupLink = !isLoggedIn && !isSignupPage;
 
+  // Check if user has professional role
+  const metadataUserTypes = Array.isArray(sessionMetadata.user_types)
+    ? (sessionMetadata.user_types as string[])
+    : typeof sessionMetadata.user_types === "string"
+      ? [sessionMetadata.user_types]
+      : null;
+  const userTypes = profile?.user_types ?? metadataUserTypes;
+  const hasProfessionalRole = userTypes?.includes("professional") ?? false;
+
   const toggleMenu = () => setIsMenuOpen((open) => !open);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -148,10 +157,10 @@ export function Header({ transparent = false }: HeaderProps) {
             {isLoggedIn ? (
               <>
                 <Link
-                  href="/new-project"
+                  href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
                   className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
                 >
-                  Add new project
+                  {hasProfessionalRole ? "Add new project" : "List with us"}
                 </Link>
                 <Button
                   variant="ghost"
@@ -254,11 +263,11 @@ export function Header({ transparent = false }: HeaderProps) {
                         Dashboard
                       </Link>
                       <Link
-                        href="/new-project"
+                        href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Add new project
+                        {hasProfessionalRole ? "Add new project" : "List with us"}
                       </Link>
                       <button
                         type="button"
