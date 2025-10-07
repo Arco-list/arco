@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "next/navigation"
 import {
   ChevronRight,
@@ -19,10 +19,61 @@ import {
   Home,
   Waves,
 } from "lucide-react"
+import { useEditor } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import Underline from "@tiptap/extension-underline"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
+import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
+import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
+import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
+import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
+import {
+  DEFAULT_LOCATION_ICONS,
+  DEFAULT_MATERIAL_ICONS,
+  generateYearErrorMessages,
+  getPlainTextFromHtml,
+  getWordCountFromHtml,
+  mapFeatureOptionsToIconItems,
+  MAX_TITLE_LENGTH,
+  MIN_DESCRIPTION_LENGTH,
+  type ProjectDetailsDescriptionCommand,
+  type ProjectDetailsFormState,
+  type ProjectDetailsSelectField,
+  type ProjectDetailsTextField,
+  sortByOrderThenLabel,
+} from "@/lib/project-details"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import type { Enums, TablesUpdate } from "@/lib/supabase/types"
+import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
+
+type ProjectBudgetLevel = Enums<"project_budget_level">
+
+const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
+  category: "",
+  projectType: "",
+  buildingType: "",
+  projectStyle: "",
+  locationFeatures: [],
+  materialFeatures: [],
+  size: "",
+  budget: "",
+  yearBuilt: "",
+  buildingYear: "",
+  projectTitle: "",
+  projectDescription: "",
+  address: "",
+  latitude: null,
+  longitude: null,
+  city: "",
+  region: "",
+  shareExactLocation: false,
+}
+
+const isUuid = (value?: string | null): value is string =>
+  Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
 
 export default function ListingEditorPage() {
   const params = useParams()
@@ -77,6 +128,619 @@ export default function ListingEditorPage() {
     shareExactLocation: false,
   })
 
+  const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const rawProjectId = params?.id
+  const projectId = useMemo(
+    () => (Array.isArray(rawProjectId) ? rawProjectId[0] : (rawProjectId as string | undefined) ?? null),
+    [rawProjectId],
+  )
+
+  const {
+    categoryOptions,
+    projectTypeOptionsByCategory,
+    isLoadingTaxonomy,
+    taxonomyError,
+    projectTaxonomyError,
+    projectStyleOptions,
+    buildingTypeOptions,
+    sizeOptions,
+    budgetOptions,
+    locationFeatureOptions,
+    materialFeatureOptions,
+  } = useProjectTaxonomyOptions(supabase)
+
+  const [detailsForm, setDetailsForm] = useState<ProjectDetailsFormState>({ ...EMPTY_DETAILS_FORM })
+  const detailsFormRef = useRef<ProjectDetailsFormState>(EMPTY_DETAILS_FORM)
+  const [detailsErrors, setDetailsErrors] = useState<Record<string, string>>({})
+  const [detailsLoading, setDetailsLoading] = useState(true)
+  const [detailsLoadError, setDetailsLoadError] = useState<string | null>(null)
+  const [detailsSaving, setDetailsSaving] = useState(false)
+  const [detailsFeedback, setDetailsFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null)
+  const [detailsOpenDropdown, setDetailsOpenDropdown] = useState<ProjectDetailsSelectField | null>(null)
+  const [detailsLastSavedAt, setDetailsLastSavedAt] = useState<Date | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    detailsFormRef.current = detailsForm
+  }, [detailsForm])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser()
+      if (cancelled) {
+        return
+      }
+
+      if (error) {
+        setDetailsFeedback({ type: "error", message: error.message })
+        return
+      }
+
+      setUserId(data.user?.id ?? null)
+    }
+
+    void loadUser()
+
+    return () => {
+      cancelled = true
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    if (!projectId) {
+      setDetailsLoading(false)
+      setDetailsLoadError("Project not found.")
+      return
+    }
+
+    if (!userId) {
+      return
+    }
+
+    let cancelled = false
+
+    const hydrateDetails = async () => {
+      setDetailsLoading(true)
+      setDetailsFeedback(null)
+      setDetailsLoadError(null)
+
+      const { data: project, error } = await supabase
+        .from("projects")
+        .select(
+          "id, client_id, title, description, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at",
+        )
+        .eq("id", projectId)
+        .maybeSingle()
+
+      if (cancelled) {
+        return
+      }
+
+      if (error || !project) {
+        setDetailsLoadError(error?.message ?? "We couldn't load this project.")
+        setDetailsLoading(false)
+        return
+      }
+
+      if (project.client_id !== userId) {
+        setDetailsLoadError("You do not have access to edit this project.")
+        setDetailsLoading(false)
+        return
+      }
+
+      const [{ data: categoryRows }, { data: selectionRows }] = await Promise.all([
+        supabase
+          .from("project_categories")
+          .select("category_id, is_primary")
+          .eq("project_id", project.id),
+        supabase
+          .from("project_taxonomy_selections")
+          .select("taxonomy_option_id")
+          .eq("project_id", project.id),
+      ])
+
+      const taxonomyIds = (selectionRows ?? []).map((row) => row.taxonomy_option_id)
+      let locationSelections: string[] = []
+      let materialSelections: string[] = []
+
+      if (taxonomyIds.length) {
+        const { data: taxonomyRows } = await supabase
+          .from("project_taxonomy_options")
+          .select("id, taxonomy_type")
+          .in("id", taxonomyIds)
+
+        locationSelections = (taxonomyRows ?? [])
+          .filter((row) => row.taxonomy_type === "location_feature")
+          .map((row) => row.id)
+        materialSelections = (taxonomyRows ?? [])
+          .filter((row) => row.taxonomy_type === "material_feature")
+          .map((row) => row.id)
+      }
+
+      const primaryCategoryId = categoryRows?.find((row) => row.is_primary)?.category_id ?? ""
+      const parentCategoryId = categoryRows?.find((row) => !row.is_primary)?.category_id ?? ""
+      const projectTypeValue = project.project_type_category_id || project.project_type || ""
+
+      const hydratedState: ProjectDetailsFormState = {
+        category: parentCategoryId || projectTypeValue,
+        projectType: primaryCategoryId || projectTypeValue,
+        buildingType: project.building_type ?? "",
+        projectStyle: project.style_preferences?.[0] ?? "",
+        locationFeatures: locationSelections,
+        materialFeatures: materialSelections,
+        size: project.project_size ?? "",
+        budget: (project.budget_level as ProjectBudgetLevel | null) ?? "",
+        yearBuilt: project.project_year ? String(project.project_year) : "",
+        buildingYear: project.building_year ? String(project.building_year) : "",
+        projectTitle: project.title ?? "",
+        projectDescription: project.description ?? "",
+        address: project.address_formatted ?? "",
+        latitude: project.latitude ?? null,
+        longitude: project.longitude ?? null,
+        city: project.address_city ?? "",
+        region: project.address_region ?? "",
+        shareExactLocation: project.share_exact_location ?? false,
+      }
+
+      if (!cancelled) {
+        setDetailsForm(hydratedState)
+        setLocationData({
+          address: project.address_formatted ?? "",
+          shareExactLocation: project.share_exact_location ?? false,
+        })
+        setDetailsLastSavedAt(project.updated_at ? new Date(project.updated_at) : null)
+        setDetailsLoading(false)
+        setDetailsLoadError(null)
+      }
+    }
+
+    void hydrateDetails()
+
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, supabase, userId])
+
+  const projectTypeOptions = useMemo(() => {
+    if (!detailsForm.category) {
+      return []
+    }
+    const options = projectTypeOptionsByCategory[detailsForm.category] ?? []
+    return [...options].sort(sortByOrderThenLabel)
+  }, [detailsForm.category, projectTypeOptionsByCategory])
+
+  const sortedProjectStyleOptions = useMemo(
+    () => [...projectStyleOptions].sort(sortByOrderThenLabel),
+    [projectStyleOptions],
+  )
+  const sortedBuildingTypeOptions = useMemo(
+    () => [...buildingTypeOptions].sort(sortByOrderThenLabel),
+    [buildingTypeOptions],
+  )
+  const sortedSizeOptions = useMemo(() => [...sizeOptions].sort(sortByOrderThenLabel), [sizeOptions])
+  const sortedBudgetOptions = useMemo(() => [...budgetOptions].sort(sortByOrderThenLabel), [budgetOptions])
+
+  const locationFeaturesData = useMemo(
+    () => mapFeatureOptionsToIconItems(locationFeatureOptions, DEFAULT_LOCATION_ICONS),
+    [locationFeatureOptions],
+  )
+  const materialFeaturesData = useMemo(
+    () => mapFeatureOptionsToIconItems(materialFeatureOptions, DEFAULT_MATERIAL_ICONS),
+    [materialFeatureOptions],
+  )
+
+  const yearFieldValidation = useMemo(
+    () => generateYearErrorMessages(detailsForm, { treatEmptyAsError: false }),
+    [detailsForm],
+  )
+
+  const descriptionPlainText = useMemo(() => getPlainTextFromHtml(detailsForm.projectDescription), [detailsForm.projectDescription])
+  const descriptionPlainTextLength = descriptionPlainText.trim().length
+  const descriptionWordCount = useMemo(() => getWordCountFromHtml(detailsForm.projectDescription), [detailsForm.projectDescription])
+
+  const detailsLastSavedLabel = useMemo(() => {
+    if (detailsSaving) {
+      return "Saving..."
+    }
+    if (!detailsLastSavedAt) {
+      return "Not saved yet"
+    }
+    return `Saved ${detailsLastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+  }, [detailsLastSavedAt, detailsSaving])
+
+  const descriptionEditor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        bulletList: {
+          keepAttributes: false,
+          keepMarks: true,
+        },
+        orderedList: {
+          keepAttributes: false,
+          keepMarks: true,
+        },
+      }),
+      Underline,
+    ],
+    content: detailsForm.projectDescription || "",
+    editorProps: {
+      attributes: {
+        spellCheck: "true",
+      },
+    },
+    immediatelyRender: false,
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML()
+      const normalizedHtml = html === "<p></p>" ? "" : html
+
+      setDetailsForm((prev) => {
+        if (prev.projectDescription === normalizedHtml) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          projectDescription: normalizedHtml,
+        }
+      })
+
+      const plainTextLength = editor.getText().trim().length
+
+      if (plainTextLength === 0) {
+        setDetailsErrors((prev) => ({ ...prev, projectDescription: "Add a project description." }))
+      } else if (plainTextLength < MIN_DESCRIPTION_LENGTH) {
+        setDetailsErrors((prev) => ({
+          ...prev,
+          projectDescription: `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`,
+        }))
+      } else {
+        setDetailsErrors((prev) => {
+          if (!prev.projectDescription) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next.projectDescription
+          return next
+        })
+      }
+    },
+  })
+
+  useEffect(() => {
+    if (!descriptionEditor) {
+      return
+    }
+
+    const currentHtml = descriptionEditor.getHTML()
+    const normalizedCurrent = currentHtml === "<p></p>" ? "" : currentHtml
+    const desiredHtml = detailsForm.projectDescription || ""
+
+    if (normalizedCurrent !== desiredHtml) {
+      descriptionEditor.commands.setContent(desiredHtml === "" ? "<p></p>" : desiredHtml, false)
+    }
+  }, [descriptionEditor, detailsForm.projectDescription])
+
+  const applyDescriptionFormatting = (command: ProjectDetailsDescriptionCommand) => {
+    if (!descriptionEditor) {
+      return
+    }
+
+    const chain = descriptionEditor.chain().focus()
+
+    switch (command) {
+      case "bold":
+        chain.toggleBold()
+        break
+      case "italic":
+        chain.toggleItalic()
+        break
+      case "underline":
+        chain.toggleUnderline()
+        break
+      case "bulletList":
+        chain.toggleBulletList()
+        break
+      case "orderedList":
+        chain.toggleOrderedList()
+        break
+      default:
+        break
+    }
+
+    chain.run()
+  }
+
+  const updateYearFieldErrors = (state: ProjectDetailsFormState, options?: { treatEmptyAsError?: boolean }) => {
+    const { errors } = generateYearErrorMessages(state, options)
+
+    setDetailsErrors((prev) => {
+      const next = { ...prev }
+      delete next.yearBuilt
+      delete next.buildingYear
+
+      return Object.keys(errors).length > 0 ? { ...next, ...errors } : next
+    })
+  }
+
+  const setFieldError = (field: string, message: string) => {
+    setDetailsErrors((prev) => {
+      if (prev[field] === message) {
+        return prev
+      }
+      return { ...prev, [field]: message }
+    })
+  }
+
+  const clearFieldError = (field: string) => {
+    setDetailsErrors((prev) => {
+      if (!prev[field]) {
+        return prev
+      }
+
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const handleDropdownSelect = (field: ProjectDetailsSelectField, value: string) => {
+    setDetailsForm((prev) => {
+      if (field === "category") {
+        return {
+          ...prev,
+          category: value,
+          projectType: "",
+        }
+      }
+
+      return {
+        ...prev,
+        [field]: value,
+      }
+    })
+    setDetailsOpenDropdown(null)
+    clearFieldError(field)
+  }
+
+  const handleInputChange = (field: ProjectDetailsTextField, value: string) => {
+    if (field === "yearBuilt" || field === "buildingYear") {
+      setDetailsForm((prev) => {
+        const next = {
+          ...prev,
+          [field]: value,
+        }
+
+        updateYearFieldErrors(next)
+        return next
+      })
+    } else if (field === "address") {
+      setDetailsForm((prev) => ({
+        ...prev,
+        address: value,
+        latitude: null,
+        longitude: null,
+        city: "",
+        region: "",
+      }))
+      setLocationData((prev) => ({
+        ...prev,
+        address: value,
+      }))
+      clearFieldError(field)
+    } else {
+      setDetailsForm((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
+      clearFieldError(field)
+    }
+  }
+
+  const handleCheckboxChange = (field: "locationFeatures" | "materialFeatures", value: string) => {
+    setDetailsForm((prev) => {
+      const currentValues = prev[field]
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter((entry) => entry !== value)
+        : [...currentValues, value]
+
+      if (newValues.length > 0) {
+        clearFieldError(field)
+      }
+
+      return {
+        ...prev,
+        [field]: newValues,
+      }
+    })
+  }
+
+  const handleToggleChange = (value: boolean) => {
+    setDetailsForm((prev) => ({
+      ...prev,
+      shareExactLocation: value,
+    }))
+    setLocationData((prev) => ({
+      ...prev,
+      shareExactLocation: value,
+    }))
+  }
+
+  const validateDetailsForm = useCallback(() => {
+    const errors: Record<string, string> = {}
+
+    if (!detailsForm.category) {
+      errors.category = "Select a project category."
+    }
+    if (!detailsForm.projectType) {
+      errors.projectType = "Select a project type."
+    }
+    if (!detailsForm.buildingType) {
+      errors.buildingType = "Select a building type."
+    }
+    if (!detailsForm.projectStyle) {
+      errors.projectStyle = "Select a project style."
+    }
+    if (detailsForm.locationFeatures.length === 0) {
+      errors.locationFeatures = "Select at least one location feature."
+    }
+    if (detailsForm.materialFeatures.length === 0) {
+      errors.materialFeatures = "Select at least one material feature."
+    }
+    if (!detailsForm.size) {
+      errors.size = "Select the project size."
+    }
+    if (!detailsForm.budget) {
+      errors.budget = "Select the project budget."
+    }
+
+    const yearErrors = generateYearErrorMessages(detailsForm, { treatEmptyAsError: true }).errors
+    Object.assign(errors, yearErrors)
+
+    const trimmedTitle = detailsForm.projectTitle.trim()
+    if (!trimmedTitle) {
+      errors.projectTitle = "Enter a project title."
+    } else if (trimmedTitle.length > MAX_TITLE_LENGTH) {
+      errors.projectTitle = `Project title must be ${MAX_TITLE_LENGTH} characters or fewer.`
+    }
+
+    const descriptionText = descriptionPlainText.trim()
+    if (!descriptionText) {
+      errors.projectDescription = "Add a project description."
+    } else if (descriptionText.length < MIN_DESCRIPTION_LENGTH) {
+      errors.projectDescription = `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`
+    }
+
+    if (!detailsForm.address.trim()) {
+      errors.address = "Enter the project address."
+    }
+
+    setDetailsErrors(errors)
+    return Object.keys(errors).length === 0
+  }, [descriptionPlainText, detailsForm])
+
+  const handleSaveDetails = useCallback(async () => {
+    if (!projectId || !userId || detailsSaving) {
+      return
+    }
+
+    const snapshot = detailsFormRef.current
+    if (!snapshot) {
+      return
+    }
+
+    const isValid = validateDetailsForm()
+    if (!isValid) {
+      setDetailsFeedback({ type: "error", message: "Please resolve the highlighted fields." })
+      return
+    }
+
+    const trimmedTitle = snapshot.projectTitle.trim()
+    const { parsedYearBuilt, parsedBuildingYear } = generateYearErrorMessages(snapshot, {
+      treatEmptyAsError: false,
+    })
+
+    const projectUpdatePayload: TablesUpdate<"projects"> = {
+      title: trimmedTitle,
+      description: snapshot.projectDescription || null,
+      project_type: snapshot.projectType || null,
+      project_type_category_id: isUuid(snapshot.projectType) ? snapshot.projectType : null,
+      building_type: snapshot.buildingType || null,
+      project_size: snapshot.size || null,
+      budget_level: (snapshot.budget || null) as ProjectBudgetLevel | null,
+      project_year: parsedYearBuilt,
+      building_year: parsedBuildingYear,
+      style_preferences: snapshot.projectStyle ? [snapshot.projectStyle] : null,
+      address_formatted: snapshot.address || null,
+      address_city: snapshot.city || null,
+      address_region: snapshot.region || null,
+      latitude: snapshot.latitude,
+      longitude: snapshot.longitude,
+      share_exact_location: snapshot.shareExactLocation,
+      location:
+        snapshot.city || snapshot.region
+          ? [snapshot.city, snapshot.region].filter(Boolean).join(", ")
+          : snapshot.address || null,
+    }
+
+    setDetailsSaving(true)
+    setDetailsFeedback(null)
+
+    try {
+      const { error: updateError } = await supabase.from("projects").update(projectUpdatePayload).eq("id", projectId)
+      if (updateError) {
+        throw updateError
+      }
+
+      const categoryRows: { category_id: string; is_primary: boolean }[] = []
+      if (snapshot.projectType && isUuid(snapshot.projectType)) {
+        categoryRows.push({ category_id: snapshot.projectType, is_primary: true })
+      }
+      if (snapshot.category && isUuid(snapshot.category)) {
+        categoryRows.push({ category_id: snapshot.category, is_primary: false })
+      }
+
+      const { error: deleteCategoriesError } = await supabase
+        .from("project_categories")
+        .delete()
+        .eq("project_id", projectId)
+
+      if (deleteCategoriesError) {
+        throw deleteCategoriesError
+      }
+
+      if (categoryRows.length) {
+        const insertPayload = categoryRows.map((row) => ({ ...row, project_id: projectId }))
+        const { error: insertCategoriesError } = await supabase.from("project_categories").insert(insertPayload)
+        if (insertCategoriesError) {
+          throw insertCategoriesError
+        }
+      }
+
+      const taxonomySelectionIds = Array.from(
+        new Set(
+          [
+            ...snapshot.locationFeatures.filter((value) => isUuid(value)),
+            ...snapshot.materialFeatures.filter((value) => isUuid(value)),
+          ],
+        ),
+      )
+
+      const { error: deleteSelectionsError } = await supabase
+        .from("project_taxonomy_selections")
+        .delete()
+        .eq("project_id", projectId)
+
+      if (deleteSelectionsError) {
+        throw deleteSelectionsError
+      }
+
+      if (taxonomySelectionIds.length) {
+        const selectionRows = taxonomySelectionIds.map((id) => ({
+          project_id: projectId,
+          taxonomy_option_id: id,
+        }))
+
+        const { error: insertSelectionsError } = await supabase
+          .from("project_taxonomy_selections")
+          .insert(selectionRows)
+
+        if (insertSelectionsError) {
+          throw insertSelectionsError
+        }
+      }
+
+      setDetailsLastSavedAt(new Date())
+      setDetailsFeedback({ type: "success", message: "Project details saved." })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Something went wrong while saving."
+      setDetailsFeedback({ type: "error", message })
+    } finally {
+      setDetailsSaving(false)
+    }
+  }, [detailsSaving, projectId, supabase, userId, validateDetailsForm])
   // Professionals state management
   const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([
     "architect",
@@ -527,12 +1191,20 @@ export default function ListingEditorPage() {
 
   // Location input change handler
   const handleLocationInputChange = (field: string, value: string | boolean) => {
-    setLocationData({ ...locationData, [field]: value })
+    if (field === "address" && typeof value === "string") {
+      handleInputChange("address", value)
+    } else {
+      setLocationData({ ...locationData, [field]: value })
+    }
   }
 
   // Location toggle handler
   const handleLocationToggleChange = (field: string, value: boolean) => {
-    setLocationData({ ...locationData, [field]: value })
+    if (field === "shareExactLocation") {
+      handleToggleChange(value)
+    } else {
+      setLocationData({ ...locationData, [field]: value })
+    }
   }
 
   const renderPhotoTourSection = () => (
@@ -855,9 +1527,115 @@ export default function ListingEditorPage() {
               {activeSection === "photo-tour" && renderPhotoTourSection()}
               {activeSection === "professionals" && renderProfessionalsSection()}
               {activeSection === "details" && (
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Details</h2>
-                  <p className="text-gray-500">Details section coming soon...</p>
+                <div className="space-y-8">
+                  {detailsFeedback && (
+                    <div
+                      className={`rounded-md border p-4 text-sm ${
+                        detailsFeedback.type === "success"
+                          ? "border-green-200 bg-green-50 text-green-700"
+                          : "border-red-200 bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {detailsFeedback.message}
+                    </div>
+                  )}
+
+                  {detailsLoadError && !detailsLoading ? (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+                      {detailsLoadError}
+                    </div>
+                  ) : detailsLoading ? (
+                    <div className="py-12 text-center text-gray-500">Loading project details…</div>
+                  ) : (
+                    <div className="space-y-12">
+                      <section className="space-y-6">
+                        <div>
+                          <h2 className="text-2xl font-semibold text-gray-900">Project basics</h2>
+                          <p className="text-sm text-gray-500">
+                            Update the core classification of your project.
+                          </p>
+                        </div>
+                        <ProjectBasicsFields
+                          formData={detailsForm}
+                          validationErrors={detailsErrors}
+                          categoryOptions={categoryOptions}
+                          projectTypeOptions={projectTypeOptions}
+                          buildingTypeOptions={sortedBuildingTypeOptions}
+                          projectStyleOptions={sortedProjectStyleOptions}
+                          openDropdown={detailsOpenDropdown}
+                          setOpenDropdown={setDetailsOpenDropdown}
+                          onDropdownSelect={handleDropdownSelect}
+                          isLoadingTaxonomy={isLoadingTaxonomy}
+                          taxonomyError={taxonomyError}
+                          projectTaxonomyError={projectTaxonomyError}
+                        />
+                      </section>
+
+                      <section className="space-y-6">
+                        <div>
+                          <h2 className="text-2xl font-semibold text-gray-900">Features</h2>
+                          <p className="text-sm text-gray-500">
+                            Highlight the location and material characteristics that define this project.
+                          </p>
+                        </div>
+                        <ProjectFeaturesFields
+                          locationItems={locationFeaturesData}
+                          materialItems={materialFeaturesData}
+                          selectedLocationFeatures={detailsForm.locationFeatures}
+                          selectedMaterialFeatures={detailsForm.materialFeatures}
+                          onToggle={handleCheckboxChange}
+                          validationErrors={detailsErrors}
+                          projectTaxonomyError={projectTaxonomyError}
+                        />
+                      </section>
+
+                      <section className="space-y-6">
+                        <div>
+                          <h2 className="text-2xl font-semibold text-gray-900">Project metrics</h2>
+                          <p className="text-sm text-gray-500">
+                            Capture scale, investment level, and timeline details.
+                          </p>
+                        </div>
+                        <ProjectMetricsFields
+                          formData={detailsForm}
+                          validationErrors={detailsErrors}
+                          sizeOptions={sortedSizeOptions}
+                          budgetOptions={sortedBudgetOptions}
+                          openDropdown={detailsOpenDropdown}
+                          setOpenDropdown={setDetailsOpenDropdown}
+                          onDropdownSelect={handleDropdownSelect}
+                          onInputChange={handleInputChange}
+                        />
+                      </section>
+
+                      <section className="space-y-6">
+                        <div>
+                          <h2 className="text-2xl font-semibold text-gray-900">Storytelling</h2>
+                          <p className="text-sm text-gray-500">
+                            Craft a narrative that helps prospects understand the scope and highlights.
+                          </p>
+                        </div>
+                        <ProjectNarrativeFields
+                          formData={detailsForm}
+                          validationErrors={detailsErrors}
+                          onInputChange={handleInputChange}
+                          editor={descriptionEditor}
+                          onCommand={applyDescriptionFormatting}
+                          plainTextLength={descriptionPlainTextLength}
+                          wordCount={descriptionWordCount}
+                          minDescriptionLength={MIN_DESCRIPTION_LENGTH}
+                          maxTitleLength={MAX_TITLE_LENGTH}
+                        />
+                      </section>
+
+                      <div className="flex flex-col gap-4 border-t border-gray-200 pt-6 md:flex-row md:items-center md:justify-between">
+                        <span className="text-sm text-gray-500">{detailsLastSavedLabel}</span>
+                        <Button onClick={() => void handleSaveDetails()} disabled={detailsSaving} className="md:w-auto">
+                          {detailsSaving ? "Saving…" : "Save details"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {activeSection === "location" && renderLocationSection()}

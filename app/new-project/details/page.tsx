@@ -1,97 +1,37 @@
 "use client"
 
-import type { LucideIcon } from "lucide-react"
-import {
-  Anchor,
-  BrickWallIcon as Brick,
-  Building,
-  Building2,
-  ChevronDown,
-  CloudRainIcon,
-  Cpu,
-  Eye,
-  GuitarIcon as Golf,
-  Home,
-  Landmark,
-  Layers,
-  Leaf,
-  Mountain,
-  PanelsTopLeft,
-  RockingChair,
-  Ruler,
-  Snowflake,
-  Sprout,
-  Square,
-  Sun,
-  Thermometer,
-  TreePine,
-  Trees,
-  Wallet,
-  Waves,
-  Wind,
-  Zap,
-} from "lucide-react"
+import { Building2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { EditorContent, useEditor } from "@tiptap/react"
+import { useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { useRouter, useSearchParams } from "next/navigation"
 import Script from "next/script"
+import {
+  DEFAULT_LOCATION_ICONS,
+  DEFAULT_MATERIAL_ICONS,
+  generateYearErrorMessages,
+  getPlainTextFromHtml,
+  getWordCountFromHtml,
+  mapFeatureOptionsToIconItems,
+  MAX_TITLE_LENGTH,
+  MIN_DESCRIPTION_LENGTH,
+  type ProjectDetailsDescriptionCommand,
+  type ProjectDetailsFormState,
+  type ProjectDetailsSelectField,
+  type ProjectDetailsTextField,
+  sortByOrderThenLabel,
+} from "@/lib/project-details"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import type { Enums, Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
-
-type DropdownOption = {
-  value: string
-  label: string
-  sortOrder?: number | null
-}
-
-type CategoryWithAttributes = Tables<"categories"> & {
-  project_category_attributes: Tables<"project_category_attributes"> | null
-}
-
-type ProjectTaxonomyOption = Tables<"project_taxonomy_options">
+import type { Enums, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
+import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
+import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
+import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
+import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
+import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
 
 type ProjectStatus = Enums<"project_status">
 type ProjectBudgetLevel = Enums<"project_budget_level">
-
-type FormState = {
-  category: string
-  projectType: string
-  buildingType: string
-  projectStyle: string
-  locationFeatures: string[]
-  materialFeatures: string[]
-  size: string
-  budget: string
-  yearBuilt: string
-  buildingYear: string
-  projectTitle: string
-  projectDescription: string
-  address: string
-  latitude: number | null
-  longitude: number | null
-  city: string
-  region: string
-  shareExactLocation: boolean
-}
-
-type SelectField = keyof Pick<
-  FormState,
-  "category" | "projectType" | "buildingType" | "projectStyle" | "size" | "budget"
->
-
-type TextField = keyof Pick<
-  FormState,
-  "yearBuilt" | "buildingYear" | "projectTitle" | "projectDescription" | "address"
->
-
-type FeatureOption = {
-  value: string
-  label: string
-  iconKey?: string | null
-  sortOrder?: number | null
-}
 
 declare global {
   interface Window {
@@ -145,318 +85,8 @@ const extractCityAndRegion = (
   return { city, region }
 }
 
-const FALLBACK_CATEGORY_OPTIONS: DropdownOption[] = [
-  { value: "house", label: "House", sortOrder: 1 },
-  { value: "kitchen-living", label: "Kitchen & Living", sortOrder: 2 },
-  { value: "bed-bath", label: "Bed & Bath", sortOrder: 3 },
-  { value: "outdoor", label: "Outdoor", sortOrder: 4 },
-  { value: "other", label: "Other", sortOrder: 5 },
-]
-
-const FALLBACK_PROJECT_STYLE_OPTIONS: DropdownOption[] = [
-  { value: "modern", label: "Modern", sortOrder: 1 },
-  { value: "contemporary", label: "Contemporary", sortOrder: 2 },
-  { value: "traditional", label: "Traditional", sortOrder: 3 },
-  { value: "minimalist", label: "Minimalist", sortOrder: 4 },
-  { value: "industrial", label: "Industrial", sortOrder: 5 },
-  { value: "scandinavian", label: "Scandinavian", sortOrder: 6 },
-  { value: "mediterranean", label: "Mediterranean", sortOrder: 7 },
-  { value: "rustic", label: "Rustic", sortOrder: 8 },
-  { value: "mid-century-modern", label: "Mid-Century Modern", sortOrder: 9 },
-  { value: "bohemian", label: "Bohemian", sortOrder: 10 },
-  { value: "coastal", label: "Coastal", sortOrder: 11 },
-  { value: "farmhouse", label: "Farmhouse", sortOrder: 12 },
-  { value: "transitional", label: "Transitional", sortOrder: 13 },
-  { value: "urban-modern", label: "Urban Modern", sortOrder: 14 },
-  { value: "eclectic", label: "Eclectic", sortOrder: 15 },
-]
-
-const FALLBACK_PROJECT_TYPES: Record<string, DropdownOption[]> = {
-  house: [
-    { value: "villa", label: "Villa", sortOrder: 1 },
-    { value: "house", label: "House", sortOrder: 2 },
-    { value: "apartment", label: "Apartment", sortOrder: 3 },
-    { value: "chalet", label: "Chalet", sortOrder: 4 },
-    { value: "bungalow", label: "Bungalow", sortOrder: 5 },
-    { value: "farm", label: "Farm", sortOrder: 6 },
-    { value: "extension", label: "Extension", sortOrder: 7 },
-  ],
-  "kitchen-living": [
-    { value: "kitchen", label: "Kitchen", sortOrder: 1 },
-    { value: "living-room", label: "Living room", sortOrder: 2 },
-    { value: "dining-room", label: "Dining room", sortOrder: 3 },
-    { value: "sunroom", label: "Sunroom", sortOrder: 4 },
-  ],
-  "bed-bath": [
-    { value: "bathroom", label: "Bathroom", sortOrder: 1 },
-    { value: "bedroom", label: "Bedroom", sortOrder: 2 },
-    { value: "indoor-pool", label: "Indoor pool", sortOrder: 3 },
-    { value: "jacuzzi", label: "Jacuzzi", sortOrder: 4 },
-    { value: "sauna", label: "Sauna", sortOrder: 5 },
-    { value: "steam-room", label: "Steam room", sortOrder: 6 },
-  ],
-  outdoor: [
-    { value: "garden", label: "Garden", sortOrder: 1 },
-    { value: "outdoor-pool", label: "Outdoor pool", sortOrder: 2 },
-    { value: "garden-house", label: "Garden house", sortOrder: 3 },
-    { value: "outdoor-kitchen", label: "Outdoor kitchen", sortOrder: 4 },
-    { value: "garage", label: "Garage", sortOrder: 5 },
-    { value: "porch", label: "Porch", sortOrder: 6 },
-  ],
-  other: [
-    { value: "hall", label: "Hall", sortOrder: 1 },
-    { value: "home-office", label: "Home office", sortOrder: 2 },
-    { value: "bar", label: "Bar", sortOrder: 3 },
-    { value: "cinema", label: "Cinema", sortOrder: 4 },
-    { value: "gym", label: "Gym", sortOrder: 5 },
-    { value: "game-room", label: "Game room", sortOrder: 6 },
-    { value: "kids-room", label: "Kids room", sortOrder: 7 },
-    { value: "wine-cellar", label: "Wine cellar", sortOrder: 8 },
-  ],
-}
-
-const FALLBACK_BUILDING_TYPE_OPTIONS: DropdownOption[] = [
-  { value: "new_build", label: "New build", sortOrder: 1 },
-  { value: "renovated", label: "Renovated", sortOrder: 2 },
-  { value: "interior_designed", label: "Interior designed", sortOrder: 3 },
-]
-
-const FALLBACK_SIZE_OPTIONS: DropdownOption[] = [
-  { value: "under_100", label: "< 100 m2", sortOrder: 1 },
-  { value: "100_200", label: "100-200 m2", sortOrder: 2 },
-  { value: "200_500", label: "200-500 m2", sortOrder: 3 },
-  { value: "500_plus", label: "> 500 m2", sortOrder: 4 },
-]
-
-const FALLBACK_BUDGET_OPTIONS: DropdownOption[] = [
-  { value: "budget", label: "Budget", sortOrder: 1 },
-  { value: "mid_range", label: "Mid-range", sortOrder: 2 },
-  { value: "premium", label: "Premium", sortOrder: 3 },
-  { value: "luxury", label: "Luxury", sortOrder: 4 },
-]
-
-const FALLBACK_LOCATION_FEATURES: FeatureOption[] = [
-  { value: "urban-center", label: "Urban center", iconKey: "building", sortOrder: 1 },
-  { value: "suburban", label: "Suburban", iconKey: "home", sortOrder: 2 },
-  { value: "countryside", label: "Countryside", iconKey: "trees", sortOrder: 3 },
-  { value: "coastal", label: "Coastal", iconKey: "waves", sortOrder: 4 },
-  { value: "beach", label: "Beach", iconKey: "sun", sortOrder: 5 },
-  { value: "waterfront", label: "Waterfront", iconKey: "anchor", sortOrder: 6 },
-  { value: "lakefront", label: "Lakefront", iconKey: "waves", sortOrder: 7 },
-  { value: "mountain", label: "Mountain", iconKey: "mountain", sortOrder: 8 },
-  { value: "amazing-views", label: "Amazing views", iconKey: "eye", sortOrder: 9 },
-  { value: "city-view", label: "City view", iconKey: "building-2", sortOrder: 10 },
-  { value: "golfing", label: "Golfing", iconKey: "golf", sortOrder: 11 },
-  { value: "ski-resort", label: "Ski resort", iconKey: "snowflake", sortOrder: 12 },
-  { value: "forest", label: "Forest", iconKey: "tree-pine", sortOrder: 13 },
-  { value: "historic-district", label: "Historic district", iconKey: "landmark", sortOrder: 14 },
-  { value: "business-district", label: "Business district", iconKey: "building", sortOrder: 15 },
-]
-
-const FALLBACK_MATERIAL_FEATURES: FeatureOption[] = [
-  { value: "metal-constructions", label: "Metal constructions", iconKey: "zap", sortOrder: 1 },
-  { value: "stucco-walls", label: "Stucco walls", iconKey: "brick", sortOrder: 2 },
-  { value: "glass-facades", label: "Glass facades", iconKey: "square", sortOrder: 3 },
-  { value: "slate-roof", label: "Slate roof", iconKey: "cloud-rain", sortOrder: 4 },
-  { value: "bamboo", label: "Bamboo", iconKey: "leaf", sortOrder: 5 },
-  { value: "natural-stone", label: "Natural Stone", iconKey: "rocking-chair", sortOrder: 6 },
-  { value: "exposed-brick", label: "Exposed brick", iconKey: "brick", sortOrder: 7 },
-  { value: "reclaimed-wood", label: "Reclaimed wood", iconKey: "layers", sortOrder: 8 },
-  { value: "thatched-roof", label: "Thatched roof", iconKey: "home", sortOrder: 9 },
-  { value: "exposed-concrete", label: "Exposed concrete", iconKey: "square", sortOrder: 10 },
-  { value: "solar-panels", label: "Solar panels", iconKey: "sun", sortOrder: 11 },
-  { value: "green-roof", label: "Green roof", iconKey: "sprout", sortOrder: 12 },
-  { value: "smart-home-technology", label: "Smart home technology", iconKey: "cpu", sortOrder: 13 },
-  { value: "underfloor-heating", label: "Underfloor heating", iconKey: "waves", sortOrder: 14 },
-  { value: "heat-pump", label: "Heat pump", iconKey: "thermometer", sortOrder: 15 },
-  { value: "insulation", label: "Insulation", iconKey: "layers", sortOrder: 16 },
-  { value: "double-glazing", label: "Double glazing", iconKey: "panel-top", sortOrder: 17 },
-  { value: "ventilation-system", label: "Ventilation system", iconKey: "wind", sortOrder: 18 },
-]
-
-const iconComponentMap: Record<string, LucideIcon> = {
-  anchor: Anchor,
-  brick: Brick,
-  "brick-wall": Brick,
-  building: Building,
-  "building-2": Building2,
-  cpu: Cpu,
-  "cloud-rain": CloudRainIcon,
-  eye: Eye,
-  golf: Golf,
-  home: Home,
-  landmark: Landmark,
-  layers: Layers,
-  leaf: Leaf,
-  mountain: Mountain,
-  "panel-top": PanelsTopLeft,
-  "rocking-chair": RockingChair,
-  ruler: Ruler,
-  snowflake: Snowflake,
-  sprout: Sprout,
-  square: Square,
-  sun: Sun,
-  thermometer: Thermometer,
-  "tree-pine": TreePine,
-  trees: Trees,
-  wallet: Wallet,
-  waves: Waves,
-  wind: Wind,
-  zap: Zap,
-}
-
-const DEFAULT_LOCATION_ICONS: LucideIcon[] = [
-  Waves,
-  Eye,
-  Building,
-  Trees,
-  Golf,
-  Snowflake,
-  Anchor,
-  TreePine,
-  Mountain,
-  Landmark,
-  Sun,
-  Wind,
-]
-
-const DEFAULT_MATERIAL_ICONS: LucideIcon[] = [
-  Zap,
-  Square,
-  CloudRainIcon,
-  Leaf,
-  RockingChair,
-  Brick,
-  Layers,
-  Home,
-  Sun,
-  Sprout,
-  Cpu,
-  Thermometer,
-  Wind,
-]
-
-const resolveIconComponent = (iconKey?: string | null): LucideIcon | undefined => {
-  if (!iconKey) {
-    return undefined
-  }
-
-  return iconComponentMap[iconKey]
-}
-
-const YEAR_LOWER_BOUND = 1800
-const CURRENT_YEAR = new Date().getFullYear()
-const MAX_TITLE_LENGTH = 120
-const MIN_DESCRIPTION_LENGTH = 50
-
-const parseYearValue = (value: string) => {
-  if (!/^[0-9]{4}$/.test(value)) {
-    return null
-  }
-  const numeric = Number.parseInt(value, 10)
-  return Number.isNaN(numeric) ? null : numeric
-}
-
 const isUuid = (value?: string | null): value is string =>
   Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
-
-const generateYearErrorMessages = (
-  state: FormState,
-  { treatEmptyAsError = false }: { treatEmptyAsError?: boolean } = {},
-) => {
-  const errors: Record<string, string> = {}
-
-  const yearBuiltRaw = state.yearBuilt.trim()
-  const buildingYearRaw = state.buildingYear.trim()
-
-  const parsedYearBuilt = parseYearValue(yearBuiltRaw)
-  const parsedBuildingYear = parseYearValue(buildingYearRaw)
-
-  if (!yearBuiltRaw) {
-    if (treatEmptyAsError) {
-      errors.yearBuilt = "Enter the year the project was completed."
-    }
-  } else if (parsedYearBuilt === null) {
-    errors.yearBuilt = "Use a 4-digit year like 2023."
-  } else if (parsedYearBuilt < YEAR_LOWER_BOUND || parsedYearBuilt > CURRENT_YEAR) {
-    errors.yearBuilt = `Use a completion year between ${YEAR_LOWER_BOUND} and ${CURRENT_YEAR}.`
-  }
-
-  if (!buildingYearRaw) {
-    if (treatEmptyAsError) {
-      errors.buildingYear = "Enter the original construction year."
-    }
-  } else if (parsedBuildingYear === null) {
-    errors.buildingYear = "Use a 4-digit year like 2010."
-  } else if (parsedBuildingYear < YEAR_LOWER_BOUND || parsedBuildingYear > CURRENT_YEAR) {
-    errors.buildingYear = `Use a construction year between ${YEAR_LOWER_BOUND} and ${CURRENT_YEAR}.`
-  }
-
-  if (
-    !errors.buildingYear &&
-    parsedYearBuilt !== null &&
-    parsedBuildingYear !== null &&
-    parsedBuildingYear > parsedYearBuilt
-  ) {
-    errors.buildingYear = "Original construction year can't be after the completion year."
-  }
-
-  return { errors, parsedYearBuilt, parsedBuildingYear }
-}
-
-const getPlainTextFromHtml = (html: string) => {
-  if (!html) {
-    return ""
-  }
-
-  if (typeof window === "undefined") {
-    return html
-      .replace(/<br\s*\/?>(\n)?/gi, "\n")
-      .replace(/<\/(p|div|li)>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-  }
-
-  const parser = new window.DOMParser()
-  const doc = parser.parseFromString(`<body>${html}</body>`, "text/html")
-  return (doc.body.textContent ?? "").replace(/\u00a0/g, " ")
-}
-
-const getWordCountFromHtml = (html: string) => {
-  const text = getPlainTextFromHtml(html).trim()
-  if (!text) {
-    return 0
-  }
-  return text.split(/\s+/).length
-}
-
-const sortByOrderThenLabel = <T extends { sortOrder?: number | null; label: string }>(
-  a: T,
-  b: T,
-) => {
-  const orderA = typeof a.sortOrder === "number" ? a.sortOrder : Number.MAX_SAFE_INTEGER
-  const orderB = typeof b.sortOrder === "number" ? b.sortOrder : Number.MAX_SAFE_INTEGER
-
-  if (orderA !== orderB) {
-    return orderA - orderB
-  }
-
-  return a.label.localeCompare(b.label)
-}
-
-const sortFeatureOptions = (options: FeatureOption[]) => {
-  return [...options].sort((a, b) => {
-    const orderA = typeof a.sortOrder === "number" ? a.sortOrder : Number.MAX_SAFE_INTEGER
-    const orderB = typeof b.sortOrder === "number" ? b.sortOrder : Number.MAX_SAFE_INTEGER
-
-    if (orderA !== orderB) {
-      return orderA - orderB
-    }
-
-    return a.label.localeCompare(b.label)
-  })
-}
 
 export default function NewProjectPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
@@ -470,33 +100,23 @@ export default function NewProjectPage() {
   const [initializing, setInitializing] = useState(true)
   const [isDirty, setIsDirty] = useState(false)
   const saveInFlightRef = useRef(false)
-  const formDataRef = useRef<FormState | null>(null)
-  const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(true)
-  const [taxonomyError, setTaxonomyError] = useState<string | null>(null)
-  const [categoryOptions, setCategoryOptions] = useState<DropdownOption[]>([])
-  const [projectTypeOptionsByCategory, setProjectTypeOptionsByCategory] = useState<Record<string, DropdownOption[]>>({})
-  const [projectTaxonomyError, setProjectTaxonomyError] = useState<string | null>(null)
-  const [styleDropdownOptions, setStyleDropdownOptions] = useState<DropdownOption[]>([
-    ...FALLBACK_PROJECT_STYLE_OPTIONS,
-  ])
-  const [buildingTypeDropdownOptions, setBuildingTypeDropdownOptions] = useState<DropdownOption[]>([
-    ...FALLBACK_BUILDING_TYPE_OPTIONS,
-  ])
-  const [sizeDropdownOptions, setSizeDropdownOptions] = useState<DropdownOption[]>([
-    ...FALLBACK_SIZE_OPTIONS,
-  ])
-  const [budgetDropdownOptions, setBudgetDropdownOptions] = useState<DropdownOption[]>([
-    ...FALLBACK_BUDGET_OPTIONS,
-  ])
-  const [locationFeatureOptions, setLocationFeatureOptions] = useState<FeatureOption[]>([
-    ...FALLBACK_LOCATION_FEATURES,
-  ])
-  const [materialFeatureOptions, setMaterialFeatureOptions] = useState<FeatureOption[]>([
-    ...FALLBACK_MATERIAL_FEATURES,
-  ])
+  const formDataRef = useRef<ProjectDetailsFormState | null>(null)
+  const {
+    categoryOptions,
+    projectTypeOptionsByCategory,
+    isLoadingTaxonomy,
+    taxonomyError,
+    projectTaxonomyError,
+    projectStyleOptions,
+    buildingTypeOptions,
+    sizeOptions,
+    budgetOptions,
+    locationFeatureOptions,
+    materialFeatureOptions,
+  } = useProjectTaxonomyOptions(supabase)
   const [currentStep, setCurrentStep] = useState(1)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
-  const [formData, setFormData] = useState<FormState>({
+  const [formData, setFormData] = useState<ProjectDetailsFormState>({
     category: "",
     projectType: "",
     buildingType: "",
@@ -542,7 +162,7 @@ export default function NewProjectPage() {
   const autocompleteRef = useRef<any>(null)
   const geocoderRef = useRef<any>(null)
 
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const [openDropdown, setOpenDropdown] = useState<ProjectDetailsSelectField | null>(null)
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const projectIdFromParams = useMemo(() => searchParams.get("projectId"), [searchParams])
@@ -633,7 +253,7 @@ export default function NewProjectPage() {
 
       const projectTypeValue = project.project_type_category_id || project.project_type || ""
 
-      const hydratedState: FormState = {
+      const hydratedState: ProjectDetailsFormState = {
         category: parentCategoryId || projectTypeValue,
         projectType: primaryCategoryId || projectTypeValue,
         buildingType: project.building_type ?? "",
@@ -870,208 +490,6 @@ export default function NewProjectPage() {
     [initializing, projectId, router, supabase, userId],
   )
 
-  useEffect(() => {
-    let isMounted = true
-
-    const applyFallbackTaxonomy = () => {
-      const sortedCategories = [...FALLBACK_CATEGORY_OPTIONS].sort(sortByOrderThenLabel)
-      const fallbackTypes: Record<string, DropdownOption[]> = {}
-
-      Object.entries(FALLBACK_PROJECT_TYPES).forEach(([key, options]) => {
-        fallbackTypes[key] = [...options].sort(sortByOrderThenLabel)
-      })
-
-      setCategoryOptions(sortedCategories)
-      setProjectTypeOptionsByCategory(fallbackTypes)
-    }
-
-    const applyFallbackProjectTaxonomy = () => {
-      setStyleDropdownOptions([...FALLBACK_PROJECT_STYLE_OPTIONS].sort(sortByOrderThenLabel))
-      setBuildingTypeDropdownOptions([...FALLBACK_BUILDING_TYPE_OPTIONS].sort(sortByOrderThenLabel))
-      setSizeDropdownOptions([...FALLBACK_SIZE_OPTIONS].sort(sortByOrderThenLabel))
-      setBudgetDropdownOptions([...FALLBACK_BUDGET_OPTIONS].sort(sortByOrderThenLabel))
-      setLocationFeatureOptions(sortFeatureOptions([...FALLBACK_LOCATION_FEATURES]))
-      setMaterialFeatureOptions(sortFeatureOptions([...FALLBACK_MATERIAL_FEATURES]))
-    }
-
-    const loadTaxonomy = async () => {
-      setIsLoadingTaxonomy(true)
-      setTaxonomyError(null)
-
-      const { data, error } = await supabase
-        .from("categories")
-        .select("id,name,slug,sort_order,parent_id,project_category_attributes(is_listable,is_building_feature)")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true, nullsFirst: false })
-        .order("name", { ascending: true })
-
-      if (!isMounted) {
-        return
-      }
-
-      if (error) {
-        applyFallbackTaxonomy()
-        setTaxonomyError(error.message)
-        setIsLoadingTaxonomy(false)
-        return
-      }
-
-      const records = (data ?? []) as CategoryWithAttributes[]
-      if (records.length === 0) {
-        applyFallbackTaxonomy()
-        setIsLoadingTaxonomy(false)
-        return
-      }
-
-      const listableChildren = records.filter((record) => record.project_category_attributes?.is_listable)
-
-      if (listableChildren.length === 0) {
-        applyFallbackTaxonomy()
-        setIsLoadingTaxonomy(false)
-        return
-      }
-
-      const parentIds = new Set(
-        listableChildren
-          .map((child) => child.parent_id)
-          .filter((id): id is string => Boolean(id)),
-      )
-
-      const parentOptions = records
-        .filter((record) => parentIds.has(record.id))
-        .map<DropdownOption>((record) => ({
-          value: record.id,
-          label: record.name,
-          sortOrder: record.sort_order,
-        }))
-        .sort(sortByOrderThenLabel)
-
-      const groupedProjectTypes = listableChildren.reduce<Record<string, DropdownOption[]>>((acc, child) => {
-        if (!child.parent_id) {
-          return acc
-        }
-
-        if (!acc[child.parent_id]) {
-          acc[child.parent_id] = []
-        }
-
-        acc[child.parent_id].push({
-          value: child.id,
-          label: child.name,
-          sortOrder: child.sort_order,
-        })
-
-        return acc
-      }, {})
-
-      Object.values(groupedProjectTypes).forEach((options) => options.sort(sortByOrderThenLabel))
-
-      setCategoryOptions(parentOptions)
-      setProjectTypeOptionsByCategory(groupedProjectTypes)
-      setIsLoadingTaxonomy(false)
-    }
-
-    const loadProjectTaxonomy = async () => {
-      setProjectTaxonomyError(null)
-
-      const { data, error } = await supabase
-        .from("project_taxonomy_options")
-        .select("id, taxonomy_type, name, slug, sort_order, icon, budget_level")
-        .in("taxonomy_type", [
-          "project_style",
-          "building_type",
-          "size_range",
-          "budget_tier",
-          "location_feature",
-          "material_feature",
-        ])
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true, nullsFirst: false })
-        .order("name", { ascending: true })
-
-      if (!isMounted) {
-        return
-      }
-
-      if (error || !data) {
-        applyFallbackProjectTaxonomy()
-        if (error) {
-          setProjectTaxonomyError(error.message)
-        }
-        return
-      }
-
-      const grouped = data.reduce<Record<ProjectTaxonomyOption["taxonomy_type"], ProjectTaxonomyOption[]>>(
-        (acc, option) => {
-          if (!acc[option.taxonomy_type]) {
-            acc[option.taxonomy_type] = []
-          }
-          acc[option.taxonomy_type].push(option)
-          return acc
-        },
-        {
-          project_style: [],
-          building_type: [],
-          size_range: [],
-          budget_tier: [],
-          location_feature: [],
-          material_feature: [],
-        },
-      )
-
-      const groupSortedFeatureOptions = (options: ProjectTaxonomyOption[]) => {
-        return sortFeatureOptions(
-          options.map<FeatureOption>((option) => ({
-            value: option.id,
-            label: option.name,
-            iconKey: option.icon,
-            sortOrder: option.sort_order,
-          })),
-        )
-      }
-
-      const mapDropdown = (options: ProjectTaxonomyOption[], valueSelector?: (option: ProjectTaxonomyOption) => string) =>
-        options
-          .map<DropdownOption>((option) => ({
-            value: valueSelector ? valueSelector(option) : option.id,
-            label: option.name,
-            sortOrder: option.sort_order ?? undefined,
-          }))
-          .sort(sortByOrderThenLabel)
-
-      const mappedLocationFeatures = groupSortedFeatureOptions(grouped.location_feature)
-      const mappedMaterialFeatures = groupSortedFeatureOptions(grouped.material_feature)
-
-      const styles = mapDropdown(grouped.project_style)
-      const buildingTypes = mapDropdown(grouped.building_type)
-      const sizes = mapDropdown(grouped.size_range)
-      const budgets = mapDropdown(grouped.budget_tier, (option) => option.budget_level ?? option.id ?? option.slug)
-
-      setStyleDropdownOptions(
-        styles.length ? styles : [...FALLBACK_PROJECT_STYLE_OPTIONS].sort(sortByOrderThenLabel),
-      )
-      setBuildingTypeDropdownOptions(
-        buildingTypes.length ? buildingTypes : [...FALLBACK_BUILDING_TYPE_OPTIONS].sort(sortByOrderThenLabel),
-      )
-      setSizeDropdownOptions(sizes.length ? sizes : [...FALLBACK_SIZE_OPTIONS].sort(sortByOrderThenLabel))
-      setBudgetDropdownOptions(
-        budgets.length ? budgets : [...FALLBACK_BUDGET_OPTIONS].sort(sortByOrderThenLabel),
-      )
-      setLocationFeatureOptions(
-        mappedLocationFeatures.length ? mappedLocationFeatures : sortFeatureOptions([...FALLBACK_LOCATION_FEATURES]),
-      )
-      setMaterialFeatureOptions(
-        mappedMaterialFeatures.length ? mappedMaterialFeatures : sortFeatureOptions([...FALLBACK_MATERIAL_FEATURES]),
-      )
-    }
-
-    loadTaxonomy()
-    loadProjectTaxonomy()
-
-    return () => {
-      isMounted = false
-    }
-  }, [supabase])
 
   useEffect(() => {
     setAddressInputValue(formData.address)
@@ -1130,21 +548,21 @@ export default function NewProjectPage() {
     formData.category && projectTypeOptionsByCategory[formData.category]
       ? projectTypeOptionsByCategory[formData.category]
       : []
-  const projectStyleOptions = useMemo(
-    () => [...styleDropdownOptions].sort(sortByOrderThenLabel),
-    [styleDropdownOptions],
+  const sortedProjectStyleOptions = useMemo(
+    () => [...projectStyleOptions].sort(sortByOrderThenLabel),
+    [projectStyleOptions],
   )
-  const buildingTypeOptions = useMemo(
-    () => [...buildingTypeDropdownOptions].sort(sortByOrderThenLabel),
-    [buildingTypeDropdownOptions],
+  const sortedBuildingTypeOptions = useMemo(
+    () => [...buildingTypeOptions].sort(sortByOrderThenLabel),
+    [buildingTypeOptions],
   )
-  const sizeOptions = useMemo(
-    () => [...sizeDropdownOptions].sort(sortByOrderThenLabel),
-    [sizeDropdownOptions],
+  const sortedSizeOptions = useMemo(
+    () => [...sizeOptions].sort(sortByOrderThenLabel),
+    [sizeOptions],
   )
-  const budgetOptions = useMemo(
-    () => [...budgetDropdownOptions].sort(sortByOrderThenLabel),
-    [budgetDropdownOptions],
+  const sortedBudgetOptions = useMemo(
+    () => [...budgetOptions].sort(sortByOrderThenLabel),
+    [budgetOptions],
   )
 
   const yearFieldValidation = useMemo(
@@ -1157,36 +575,16 @@ export default function NewProjectPage() {
   const isBuildingYearValidForState = isBuildingYearComplete && !yearFieldValidation.errors.buildingYear
 
   const locationFeaturesData = useMemo(
-    () =>
-      locationFeatureOptions.map((option, index) => {
-        const IconComponent = resolveIconComponent(option.iconKey) ??
-          DEFAULT_LOCATION_ICONS[index % DEFAULT_LOCATION_ICONS.length]
-
-        return {
-          value: option.value,
-          label: option.label,
-          icon: IconComponent,
-        }
-      }),
+    () => mapFeatureOptionsToIconItems(locationFeatureOptions, DEFAULT_LOCATION_ICONS),
     [locationFeatureOptions],
   )
 
   const materialFeaturesData = useMemo(
-    () =>
-      materialFeatureOptions.map((option, index) => {
-        const IconComponent = resolveIconComponent(option.iconKey) ??
-          DEFAULT_MATERIAL_ICONS[index % DEFAULT_MATERIAL_ICONS.length]
-
-        return {
-          value: option.value,
-          label: option.label,
-          icon: IconComponent,
-        }
-      }),
+    () => mapFeatureOptionsToIconItems(materialFeatureOptions, DEFAULT_MATERIAL_ICONS),
     [materialFeatureOptions],
   )
 
-  const updateYearFieldErrors = (state: FormState, options?: { treatEmptyAsError?: boolean }) => {
+  const updateYearFieldErrors = (state: ProjectDetailsFormState, options?: { treatEmptyAsError?: boolean }) => {
     const { errors } = generateYearErrorMessages(state, options)
 
     setValidationErrors((prev) => {
@@ -1220,7 +618,7 @@ export default function NewProjectPage() {
     })
   }
 
-  const handleDropdownSelect = (field: SelectField, value: string) => {
+  const handleDropdownSelect = (field: ProjectDetailsSelectField, value: string) => {
     setFormData((prev) => {
       if (field === "category") {
         return {
@@ -1233,13 +631,13 @@ export default function NewProjectPage() {
       return {
         ...prev,
         [field]: value,
-      } as FormState
+      } as ProjectDetailsFormState
     })
     setOpenDropdown(null)
     clearFieldError(field)
   }
 
-  const handleInputChange = (field: TextField, value: string) => {
+  const handleInputChange = (field: ProjectDetailsTextField, value: string) => {
     if (field === "yearBuilt" || field === "buildingYear") {
       setFormData((prev) => {
         const next = {
@@ -1541,12 +939,6 @@ export default function NewProjectPage() {
     chain.run()
   }
 
-  const getFormattingButtonClass = (active: boolean) => {
-    return `flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-gray-900 ${
-      active ? "bg-gray-200 text-gray-900" : "text-gray-600 hover:bg-gray-100"
-    } disabled:cursor-not-allowed disabled:opacity-40`
-  }
-
   const handleCheckboxChange = (field: "locationFeatures" | "materialFeatures", value: string) => {
     const currentValues = formData[field]
     const newValues = currentValues.includes(value)
@@ -1648,7 +1040,6 @@ export default function NewProjectPage() {
   const descriptionPlainText = getPlainTextFromHtml(formData.projectDescription)
   const descriptionPlainTextLength = descriptionPlainText.trim().length
   const descriptionWordCount = getWordCountFromHtml(formData.projectDescription)
-  const isDescriptionTooShort = descriptionPlainTextLength < MIN_DESCRIPTION_LENGTH
 
   const isNextDisabled =
     (currentStep === 1 &&
@@ -1713,148 +1104,6 @@ export default function NewProjectPage() {
     router.push("/dashboard/listings")
   }
 
-  const CustomDropdown = ({
-    field,
-    placeholder,
-    value,
-    options,
-    disabled = false,
-    isLoading = false,
-  }: {
-    field: SelectField
-    placeholder: string
-    value: string
-    options: DropdownOption[]
-    disabled?: boolean
-    isLoading?: boolean
-  }) => {
-    const isOpen = openDropdown === field
-    const selectedOption = options.find((opt) => opt.value === value)
-    const buttonLabel = selectedOption?.label ?? (isLoading ? "Loading options..." : placeholder)
-    const isDisabled = disabled || isLoading
-    const [searchQuery, setSearchQuery] = useState("")
-
-    useEffect(() => {
-      if (!isOpen && searchQuery !== "") {
-        setSearchQuery("")
-      }
-    }, [isOpen, searchQuery])
-
-    const filteredOptions = useMemo(() => {
-      const term = searchQuery.trim().toLowerCase()
-      if (!term) {
-        return options
-      }
-
-      return options.filter((option) => option.label.toLowerCase().includes(term))
-    }, [options, searchQuery])
-
-    return (
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => {
-            if (isDisabled) {
-              return
-            }
-            setOpenDropdown(isOpen ? null : field)
-          }}
-          disabled={isDisabled}
-          className={`w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors ${
-            isDisabled ? "cursor-not-allowed opacity-60" : "hover:border-gray-400"
-          }`}
-        >
-          <span className={selectedOption ? "text-gray-900" : "text-gray-500"}>{buttonLabel}</span>
-          <ChevronDown
-            className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 transition-transform ${
-              isOpen ? "rotate-180" : ""
-            } ${isDisabled ? "opacity-40" : ""}`}
-          />
-        </button>
-
-        {isOpen && (
-          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-            <div className="p-2 border-b border-gray-200 bg-gray-50">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search options"
-                autoFocus
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-              />
-            </div>
-            <div className="max-h-60 overflow-auto">
-              {filteredOptions.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-500">
-                  {options.length === 0 && !searchQuery
-                    ? isLoading
-                      ? "Loading options..."
-                      : "No options available"
-                    : "No matches found"}
-                </div>
-              ) : (
-                filteredOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => handleDropdownSelect(field, option.value)}
-                    className="w-full px-4 py-3 text-left text-gray-900 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors"
-                  >
-                    {option.label}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const CheckboxGrid = ({
-    title,
-    items,
-    selectedValues,
-    onChange,
-    error,
-  }: {
-    title: string
-    items: { value: string; label: string; icon: LucideIcon }[]
-    selectedValues: string[]
-    onChange: (value: string) => void
-    error?: string
-  }) => (
-    <div>
-      <label className="block text-base font-medium text-gray-900 mb-4">
-        {title} <span className="text-red-500">*</span>
-      </label>
-      <div className="grid grid-cols-2 gap-4">
-        {items.map((item) => {
-          const IconComponent = item.icon
-          const isSelected = selectedValues.includes(item.value)
-
-          return (
-            <label
-              key={item.value}
-              className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onChange(item.value)}
-                className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
-              />
-              <IconComponent className="w-5 h-5 text-gray-600" />
-              <span className="text-gray-900">{item.label}</span>
-            </label>
-          )
-        })}
-      </div>
-      {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-    </div>
-  )
-
   const handleToggleChange = (value: boolean) => {
     setFormData((prev) => ({
       ...prev,
@@ -1890,98 +1139,20 @@ export default function NewProjectPage() {
               {/* Main heading */}
               <h1 className="text-3xl font-bold text-gray-900 mb-6 leading-tight">What project have you realised?</h1>
 
-              {projectTaxonomyError && (
-                <p className="text-sm text-amber-600 mb-6">
-                  We could not load the latest taxonomy data, so fallback values are shown for now.
-                </p>
-              )}
-
-              {/* Form */}
-              <div className="space-y-8">
-                {/* Category */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    What is the category of your project? <span className="text-red-500">*</span>
-                  </label>
-                  <CustomDropdown
-                    field="category"
-                    placeholder="Select a category"
-                    value={formData.category}
-                    options={categoryOptions}
-                    isLoading={isLoadingTaxonomy}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Choose the main category that best describes your project
-                  </p>
-                  {taxonomyError && (
-                    <p className="text-sm text-amber-600 mt-2">
-                      We could not reach Supabase; showing fallback taxonomy options for now.
-                    </p>
-                  )}
-                  {validationErrors.category && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.category}</p>
-                  )}
-                </div>
-
-                {/* Project Type */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Project type <span className="text-red-500">*</span>
-                  </label>
-                  <CustomDropdown
-                    field="projectType"
-                    placeholder="Select a project type"
-                    value={formData.projectType}
-                    options={projectTypeOptions}
-                    disabled={!formData.category || isLoadingTaxonomy}
-                    isLoading={isLoadingTaxonomy}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Select the specific subtype within your chosen category (e.g., Villa, Kitchen)
-                  </p>
-                  {validationErrors.projectType && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.projectType}</p>
-                  )}
-                </div>
-
-                {/* Building Type */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Building type <span className="text-red-500">*</span>
-                  </label>
-                  <CustomDropdown
-                    field="buildingType"
-                    placeholder="Select a building type"
-                    value={formData.buildingType}
-                    options={buildingTypeOptions}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Indicate whether the project was a new build, renovation, or interior design scope
-                  </p>
-                  {validationErrors.buildingType && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.buildingType}</p>
-                  )}
-                </div>
-
-                {/* Project Style */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Project style <span className="text-red-500">*</span>
-                  </label>
-                  <CustomDropdown
-                    field="projectStyle"
-                    placeholder="Select a project style"
-                    value={formData.projectStyle}
-                    options={projectStyleOptions}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Choose the architectural or design style that best represents your project
-                  </p>
-                  {validationErrors.projectStyle && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.projectStyle}</p>
-                  )}
-                </div>
-              </div>
+              <ProjectBasicsFields
+                formData={formData}
+                validationErrors={validationErrors}
+                categoryOptions={categoryOptions}
+                projectTypeOptions={projectTypeOptions}
+                buildingTypeOptions={sortedBuildingTypeOptions}
+                projectStyleOptions={sortedProjectStyleOptions}
+                openDropdown={openDropdown}
+                setOpenDropdown={setOpenDropdown}
+                onDropdownSelect={handleDropdownSelect}
+                isLoadingTaxonomy={isLoadingTaxonomy}
+                taxonomyError={taxonomyError}
+                projectTaxonomyError={projectTaxonomyError}
+              />
             </>
           )}
 
@@ -1992,32 +1163,15 @@ export default function NewProjectPage() {
                 Describe the location and materials used
               </h1>
 
-              {projectTaxonomyError && (
-                <p className="text-sm text-amber-600 mb-8">
-                  Feature options are using fallback values because taxonomy data is temporarily unavailable.
-                </p>
-              )}
-
-              {/* Form */}
-              <div className="space-y-12">
-                {/* Location Features */}
-                <CheckboxGrid
-                  title="Location features"
-                  items={locationFeaturesData}
-                  selectedValues={formData.locationFeatures}
-                  onChange={(value) => handleCheckboxChange("locationFeatures", value)}
-                  error={validationErrors.locationFeatures}
-                />
-
-                {/* Material Features */}
-                <CheckboxGrid
-                  title="Material features"
-                  items={materialFeaturesData}
-                  selectedValues={formData.materialFeatures}
-                  onChange={(value) => handleCheckboxChange("materialFeatures", value)}
-                  error={validationErrors.materialFeatures}
-                />
-              </div>
+              <ProjectFeaturesFields
+                locationItems={locationFeaturesData}
+                materialItems={materialFeaturesData}
+                selectedLocationFeatures={formData.locationFeatures}
+                selectedMaterialFeatures={formData.materialFeatures}
+                onToggle={handleCheckboxChange}
+                validationErrors={validationErrors}
+                projectTaxonomyError={projectTaxonomyError}
+              />
             </>
           )}
 
@@ -2026,84 +1180,16 @@ export default function NewProjectPage() {
               {/* Main heading */}
               <h1 className="text-3xl font-bold text-gray-900 mb-12 leading-tight">Add some details</h1>
 
-              {/* Form */}
-              <div className="space-y-8">
-                {/* Size */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Size <span className="text-red-500">*</span>
-                  </label>
-                  <CustomDropdown
-                    field="size"
-                    placeholder="Select size"
-                    value={formData.size}
-                    options={sizeOptions}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">Choose the overall size category of your project</p>
-                  {validationErrors.size && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.size}</p>
-                  )}
-                </div>
-
-                {/* Budget */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Budget <span className="text-red-500">*</span>
-                  </label>
-                  <CustomDropdown
-                    field="budget"
-                    placeholder="Select budget range"
-                    value={formData.budget}
-                    options={budgetOptions}
-                  />
-                  <p className="text-sm text-gray-500 mt-2">Select the tier that best represents your total investment</p>
-                  {validationErrors.budget && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.budget}</p>
-                  )}
-                </div>
-
-                {/* Year built */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Year built <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.yearBuilt}
-                    onChange={(e) => handleInputChange("yearBuilt", e.target.value)}
-                    placeholder="2022"
-                    min="1800"
-                    max={new Date().getFullYear()}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">Enter the year when construction was completed</p>
-                  {validationErrors.yearBuilt && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.yearBuilt}</p>
-                  )}
-                </div>
-
-                {/* Building year */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Building year <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.buildingYear}
-                    onChange={(e) => handleInputChange("buildingYear", e.target.value)}
-                    placeholder="1930"
-                    min="1800"
-                    max={new Date().getFullYear()}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Enter the original construction year if different from completion
-                  </p>
-                  {validationErrors.buildingYear && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.buildingYear}</p>
-                  )}
-                </div>
-              </div>
+              <ProjectMetricsFields
+                formData={formData}
+                validationErrors={validationErrors}
+                sizeOptions={sortedSizeOptions}
+                budgetOptions={sortedBudgetOptions}
+                openDropdown={openDropdown}
+                setOpenDropdown={setOpenDropdown}
+                onDropdownSelect={handleDropdownSelect}
+                onInputChange={handleInputChange}
+              />
             </>
           )}
 
@@ -2114,143 +1200,17 @@ export default function NewProjectPage() {
                 Give your project a title and description
               </h1>
 
-              {/* Form */}
-              <div className="space-y-8">
-                {/* Project Title */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Project title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.projectTitle}
-                    onChange={(e) => handleInputChange("projectTitle", e.target.value)}
-                    placeholder="Project title"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
-                  />
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-sm text-gray-500">Give your project a memorable and descriptive title</p>
-                    <span className={`text-sm ${
-                      formData.projectTitle.length > MAX_TITLE_LENGTH ? "text-red-600" : "text-gray-400"
-                    }`}>
-                      {formData.projectTitle.length}/{MAX_TITLE_LENGTH}
-                    </span>
-                  </div>
-                  {validationErrors.projectTitle && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.projectTitle}</p>
-                  )}
-                </div>
-
-                {/* Project Description */}
-                <div>
-                  <label className="block text-base font-medium text-gray-900 mb-3">
-                    Project description <span className="text-red-500">*</span>
-                  </label>
-                  <div
-                    className={`rounded-md border bg-white transition-colors focus-within:ring-2 ${
-                      validationErrors.projectDescription
-                        ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500"
-                        : "border-gray-300 focus-within:border-transparent focus-within:ring-gray-900"
-                    }`}
-                  >
-                    {descriptionEditor ? (
-                      <>
-                        <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-2">
-                          <button
-                            type="button"
-                            className={getFormattingButtonClass(descriptionEditor.isActive("bold"))}
-                            aria-label="Bold"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              applyDescriptionFormatting("bold")
-                            }}
-                          >
-                            B
-                          </button>
-                          <button
-                            type="button"
-                            className={getFormattingButtonClass(descriptionEditor.isActive("italic"))}
-                            aria-label="Italic"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              applyDescriptionFormatting("italic")
-                            }}
-                          >
-                            <span className="italic">I</span>
-                          </button>
-                          <button
-                            type="button"
-                            className={getFormattingButtonClass(descriptionEditor.isActive("underline"))}
-                            aria-label="Underline"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              applyDescriptionFormatting("underline")
-                            }}
-                          >
-                            <span className="underline">U</span>
-                          </button>
-                          <span className="mx-1 h-8 w-px bg-gray-200" aria-hidden="true" />
-                          <button
-                            type="button"
-                            className={getFormattingButtonClass(descriptionEditor.isActive("bulletList"))}
-                            aria-label="Bulleted list"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              applyDescriptionFormatting("bulletList")
-                            }}
-                          >
-                            •
-                          </button>
-                          <button
-                            type="button"
-                            className={getFormattingButtonClass(descriptionEditor.isActive("orderedList"))}
-                            aria-label="Numbered list"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              applyDescriptionFormatting("orderedList")
-                            }}
-                          >
-                            1.
-                          </button>
-                        </div>
-                        <div className="relative">
-                          <EditorContent
-                            editor={descriptionEditor}
-                            aria-label="Project description editor"
-                            className="px-4 py-3 text-gray-900 focus:outline-none [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:break-words [&_.ProseMirror]:outline-none [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-base [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:space-y-4 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:pl-1"
-                          />
-                          {descriptionPlainTextLength === 0 && (
-                            <span className="pointer-events-none absolute left-4 top-3 text-sm text-gray-400">
-                              Describe the project, its scope, and unique details
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="px-4 py-6 text-sm text-gray-500">Loading editor…</div>
-                    )}
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm text-gray-500">
-                      Provide a detailed description of your project, including key features and design elements
-                    </p>
-                    <div className="flex items-center gap-4 text-sm text-gray-400">
-                      <span>{descriptionWordCount} words</span>
-                      <span className={isDescriptionTooShort ? "text-red-600" : "text-gray-400"}>
-                        {descriptionPlainTextLength}/{MIN_DESCRIPTION_LENGTH}+ characters
-                      </span>
-                    </div>
-                  </div>
-                  {validationErrors.projectDescription && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.projectDescription}</p>
-                  )}
-                </div>
-              </div>
+              <ProjectNarrativeFields
+                formData={formData}
+                validationErrors={validationErrors}
+                onInputChange={handleInputChange}
+                editor={descriptionEditor}
+                onCommand={applyDescriptionFormatting}
+                plainTextLength={descriptionPlainTextLength}
+                wordCount={descriptionWordCount}
+                minDescriptionLength={MIN_DESCRIPTION_LENGTH}
+                maxTitleLength={MAX_TITLE_LENGTH}
+              />
             </>
           )}
 
