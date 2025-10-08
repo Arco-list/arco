@@ -536,6 +536,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   const previewData: ProjectPreviewData = {
+    projectId: project.id,
+    slug: project.slug ?? resolvedParams.slug,
     hero: {
       coverPhoto: coverPhoto
         ? {

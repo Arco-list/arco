@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useFilters } from "@/contexts/filter-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
+import { useSavedProjects } from "@/contexts/saved-projects-context"
 
 const sortOptions = ["Most recent", "Most liked", "Alphabetical"] as const
 
@@ -15,6 +16,12 @@ export function ProjectsGrid() {
   const filterContext = useFilters()
   const { removeFilter, taxonomy } = filterContext
   const { projects, isLoading, error, hasMore, loadMore, typePhotoOverrides } = useProjectsQuery({ pageSize: 12 })
+  const {
+    savedProjectIds,
+    mutatingProjectIds,
+    saveProject,
+    removeProject,
+  } = useSavedProjects()
 
   const [sortBy, setSortBy] = useState<SortOption>("Most recent")
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
@@ -177,6 +184,8 @@ export function ProjectsGrid() {
                 project.title ??
                 filterContext.taxonomyLabelMap.get(project.project_type ?? "") ??
                 "Project"
+              const isSaved = projectId ? savedProjectIds.has(projectId) : false
+              const isMutating = projectId ? mutatingProjectIds.has(projectId) : false
 
               return (
                 <Link key={project.id} href={project.slug ? `/projects/${project.slug}` : "#"} className="group cursor-pointer">
@@ -189,10 +198,22 @@ export function ProjectsGrid() {
                   <button
                     onClick={(event) => {
                       event.preventDefault()
+                      if (!projectId) return
+                      if (isSaved) {
+                        void removeProject(projectId)
+                      } else {
+                        void saveProject(projectId, project)
+                      }
                     }}
+                    disabled={!projectId || isMutating}
+                    aria-pressed={isSaved}
+                    aria-label={isSaved ? "Remove from saved projects" : "Save project"}
                     className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
                   >
-                    <Heart className="h-4 w-4 text-gray-600" />
+                    <Heart
+                      className={`h-4 w-4 ${isSaved ? "text-red-500" : "text-gray-600"}`}
+                      fill={isSaved ? "currentColor" : "none"}
+                    />
                   </button>
                 </div>
                 <div className="mt-3">

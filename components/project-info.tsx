@@ -6,11 +6,16 @@ import { Heart, Share, Bookmark } from "lucide-react"
 import { ReportModal } from "./report-modal"
 import { ShareModal } from "./share-modal"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { useSavedProjects } from "@/contexts/saved-projects-context"
 
 export function ProjectInfo() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
-  const { info, statusBadge, locationLabel, shareImageUrl, shareUrl } = useProjectPreview()
+  const { projectId, info, statusBadge, locationLabel, shareImageUrl, shareUrl } = useProjectPreview()
+  const { savedProjectIds, mutatingProjectIds, saveProject, removeProject } = useSavedProjects()
+
+  const isSaved = projectId ? savedProjectIds.has(projectId) : false
+  const isMutating = projectId ? mutatingProjectIds.has(projectId) : false
 
   return (
     <div className="space-y-4">
@@ -30,9 +35,22 @@ export function ProjectInfo() {
               <Share className="w-4 h-4 mr-2" />
               Share
             </Button>
-            <Button variant="outline" size="sm">
-              <Bookmark className="w-4 h-4 mr-2" />
-              Save
+            <Button
+              variant={isSaved ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (!projectId) return
+                if (isSaved) {
+                  void removeProject(projectId)
+                } else {
+                  void saveProject(projectId, null)
+                }
+              }}
+              disabled={!projectId || isMutating}
+              aria-pressed={isSaved}
+            >
+              <Bookmark className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
+              {isSaved ? "Saved" : "Save"}
             </Button>
           </div>
         </div>
