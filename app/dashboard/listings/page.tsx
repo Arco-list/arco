@@ -3,7 +3,7 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, X, Check, AlertTriangle } from "lucide-react"
+import { MoreHorizontal, Check, AlertTriangle, X } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
@@ -12,18 +12,31 @@ import type { Database, Enums } from "@/lib/supabase/types"
 import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
 import { toast } from "sonner"
 import { useTableRLSValidation } from "@/hooks/useRLSValidation"
+import {
+  ListingStatusModal,
+  type ListingStatusModalOption,
+  type ListingStatusModalProject,
+} from "@/components/listing-status-modal"
 
 type ProjectStatus = Enums<"project_status">
 
+type ProjectPhotoRow = Pick<
+  Database["public"]["Tables"]["project_photos"]["Row"],
+  "id" | "url" | "is_primary" | "order_index"
+>
+
 type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
-  project_photos: {
-    url: string
-    is_primary: boolean | null
-    order_index: number | null
-  }[] | null
+  project_photos: ProjectPhotoRow[] | null
   project_professionals: {
     is_project_owner: boolean
   }[] | null
+}
+
+type ListingProjectPhoto = {
+  id: string
+  url: string
+  isPrimary: boolean
+  orderIndex: number | null
 }
 
 type ListingProject = {
@@ -32,10 +45,13 @@ type ListingProject = {
   status: ProjectStatus
   statusLabel: string
   statusChipClass: string
+  slug: string | null
   subtitle: string
   styleLabel: string | null
   locationLabel: string | null
   coverImageUrl: string
+  coverPhotoId: string | null
+  photos: ListingProjectPhoto[]
   createdAt: string
   role: "owner" | "contributor"
   projectType: string
@@ -84,7 +100,8 @@ export default function DashboardListingsPage() {
   const [coverPhotoModalOpen, setCoverPhotoModalOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState<ListingProject | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<ListingStatusValue | "">("")
-  const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<number>(4)
+  const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<string | null>(null)
+  const [isSavingCoverPhoto, setIsSavingCoverPhoto] = useState(false)
   // TODO: Wire up real company plan tier when subscription data is available.
   const [companyPlan] = useState<"basic" | "plus">("basic")
   const [pendingDeleteProject, setPendingDeleteProject] = useState<ListingProject | null>(null)
@@ -166,6 +183,7 @@ export default function DashboardListingsPage() {
           id,
           title,
           status,
+          slug,
           project_type,
           project_type_category_id,
           style_preferences,
@@ -175,7 +193,7 @@ export default function DashboardListingsPage() {
           project_year,
           client_id,
           project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
-          project_photos(url, is_primary, order_index),
+          project_photos(id, url, is_primary, order_index),
           project_professionals(is_project_owner)
           `
         )
@@ -278,10 +296,26 @@ export default function DashboardListingsPage() {
           chipClass: "bg-slate-200 text-slate-700",
         }
 
-        const photos = project.project_photos ?? []
-        const sortedPhotos = photos.length > 0 ? [...photos].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) : []
-        const primary = photos.find((photo) => photo.is_primary) ?? sortedPhotos[0] ?? null
-        const coverImageUrl = primary?.url ?? "/placeholder.svg"
+        const rawPhotos = project.project_photos ?? []
+        const normalizedPhotos: ListingProjectPhoto[] = rawPhotos
+          .filter((photo): photo is ProjectPhotoRow & { id: string; url: string } => {
+            return Boolean(photo && photo.id && photo.url)
+          })
+          .map((photo) => ({
+            id: photo.id,
+            url: photo.url,
+            isPrimary: Boolean(photo.is_primary),
+            orderIndex: photo.order_index,
+          }))
+          .sort((a, b) => {
+            const aIndex = a.orderIndex ?? Number.MAX_SAFE_INTEGER
+            const bIndex = b.orderIndex ?? Number.MAX_SAFE_INTEGER
+            return aIndex - bIndex
+          })
+
+        const primaryPhoto = normalizedPhotos.find((photo) => photo.isPrimary) ?? normalizedPhotos[0] ?? null
+        const coverImageUrl = primaryPhoto?.url ?? "/placeholder.svg"
+        const coverPhotoId = primaryPhoto?.id ?? null
 
         const rawStyle = project.style_preferences?.[0] ?? null
         // Check if this project's style failed to resolve
@@ -314,10 +348,13 @@ export default function DashboardListingsPage() {
           status: statusKey,
           statusLabel: statusConfig.label,
           statusChipClass: statusConfig.chipClass,
+          slug: project.slug ?? null,
           subtitle,
           styleLabel: styleLabel || null,
           locationLabel: locationParts ? locationParts : null,
           coverImageUrl,
+          coverPhotoId,
+          photos: normalizedPhotos,
           createdAt: project.created_at ?? new Date().toISOString(),
           role,
           projectType: projectTypeLabel,
@@ -380,29 +417,92 @@ export default function DashboardListingsPage() {
     setOpenDropdown(null)
   }
 
+  const handleCloseStatusModal = useCallback(() => {
+    setStatusModalOpen(false)
+    setSelectedProject(null)
+    setSelectedStatus("")
+  }, [])
+
   const handleEditCoverImage = (project: ListingProject) => {
+    const initialCoverPhotoId = project.coverPhotoId ?? project.photos[0]?.id ?? null
     setSelectedProject(project)
+    setSelectedCoverPhoto(initialCoverPhotoId)
     setCoverPhotoModalOpen(true)
     setOpenDropdown(null)
   }
 
+  const closeCoverPhotoModal = useCallback(() => {
+    setCoverPhotoModalOpen(false)
+    setSelectedProject(null)
+    setSelectedCoverPhoto(null)
+  }, [])
+
   const handleSaveStatus = () => {
     if (!selectedProject || !selectedStatus) {
-      setStatusModalOpen(false)
-      setSelectedProject(null)
+      handleCloseStatusModal()
       return
     }
 
     console.log(`Updating project ${selectedProject.id} status to ${selectedStatus}`)
-    setStatusModalOpen(false)
-    setSelectedProject(null)
-    setSelectedStatus("")
+    handleCloseStatusModal()
   }
 
-  const handleSaveCoverPhoto = () => {
-    console.log(`Updating project ${selectedProject.id} cover photo to ${selectedCoverPhoto}`)
-    setCoverPhotoModalOpen(false)
-    setSelectedProject(null)
+  const handleSaveCoverPhoto = async () => {
+    if (!selectedProject) {
+      return
+    }
+
+    if (!selectedCoverPhoto) {
+      toast.error("Select a cover photo to continue.", {
+        duration: 4000,
+      })
+      return
+    }
+
+    setIsSavingCoverPhoto(true)
+
+    try {
+      const { error } = await supabase
+        .from("project_photos")
+        .update({ is_primary: true })
+        .eq("id", selectedCoverPhoto)
+        .eq("project_id", selectedProject.id)
+
+      if (error) {
+        throw error
+      }
+
+      setProjects((prev) =>
+        prev.map((project) => {
+          if (project.id !== selectedProject.id) {
+            return project
+          }
+
+          const updatedPhotos = project.photos.map((photo) => ({
+            ...photo,
+            isPrimary: photo.id === selectedCoverPhoto,
+          }))
+          const newPrimary = updatedPhotos.find((photo) => photo.id === selectedCoverPhoto) ?? null
+
+          return {
+            ...project,
+            photos: updatedPhotos,
+            coverPhotoId: newPrimary?.id ?? null,
+            coverImageUrl: newPrimary?.url ?? project.coverImageUrl,
+          }
+        }),
+      )
+
+      toast.success("Cover photo updated")
+      closeCoverPhotoModal()
+    } catch (error) {
+      console.error("Failed to update cover photo", error)
+      toast.error("We couldn't update the cover photo. Please try again.", {
+        duration: 5000,
+      })
+    } finally {
+      setIsSavingCoverPhoto(false)
+    }
   }
 
   const handleDeleteListing = (project: ListingProject) => {
@@ -433,6 +533,29 @@ export default function DashboardListingsPage() {
     } else {
       router.push(`/dashboard/edit/${project.id}`)
     }
+  }
+
+  const handlePreviewListing = (project: ListingProject) => {
+    setOpenDropdown(null)
+
+    if (!project.slug) {
+      toast.error("Preview unavailable", {
+        description: "This listing does not have a public link yet.",
+      })
+      return
+    }
+
+    const basePath = `/projects/${project.slug}`
+    const isInReview = project.status === "in_progress"
+    const isLive = project.status === "published" || project.status === "completed"
+    const targetUrl = isInReview ? `${basePath}?preview=1` : basePath
+
+    if (isLive || isInReview) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer")
+      return
+    }
+
+    router.push(targetUrl)
   }
 
   // Client-side filtering with debouncing
@@ -523,6 +646,14 @@ export default function DashboardListingsPage() {
 
   const isPendingAdminReview = selectedProject?.status === "in_progress"
 
+  const statusModalProject: ListingStatusModalProject | null = selectedProject
+    ? {
+        title: selectedProject.title,
+        descriptor: selectedProjectDescriptor,
+        coverImageUrl: selectedProject.coverImageUrl,
+      }
+    : null
+
   const handleApplyFilters = useCallback((newFilters: FilterState) => {
     setFilters(newFilters)
   }, [])
@@ -555,13 +686,7 @@ export default function DashboardListingsPage() {
     })
   }, [])
 
-  const statusOptions: Array<{
-    value: ListingStatusValue
-    label: string
-    description: string
-    colorClass: string
-    requiresPlus?: boolean
-  }> = [
+  const statusOptions: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
     {
       value: "published",
       label: "Live on page",
@@ -585,11 +710,6 @@ export default function DashboardListingsPage() {
 
   const isValidStatusSelection =
     !isPendingAdminReview && statusOptions.some((option) => option.value === selectedStatus)
-
-  const samplePhotos = Array.from({ length: 9 }, (_, i) => ({
-    id: i,
-    url: "/placeholder.svg",
-  }))
 
   const displayedProjects = filteredProjects
   const hasProjects = projects.length > 0
@@ -807,6 +927,12 @@ export default function DashboardListingsPage() {
                         >
                           Edit listing
                         </button>
+                        <button
+                          onClick={() => handlePreviewListing(project)}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          Preview listing
+                        </button>
                         <div className="border-t border-gray-100 my-1" />
                         <button
                           onClick={() => handleDeleteListing(project)}
@@ -854,161 +980,20 @@ export default function DashboardListingsPage() {
         )}
       </main>
 
-      {statusModalOpen && selectedProject && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Listing status</h2>
-              <button onClick={() => setStatusModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 mb-6">
-              <img
-                src={selectedProject.coverImageUrl}
-                alt={selectedProject.title}
-                className="w-16 h-16 rounded-lg object-cover"
-              />
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900">{selectedProject.title}</h3>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      companyPlan === "plus"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
-                  >
-                    {companyPlan === "plus" ? "Plus plan" : "Basic plan"}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500">{selectedProjectDescriptor}</p>
-              </div>
-            </div>
-
-            {isPendingAdminReview && (
-              <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-5 text-sm text-blue-800">
-                <AlertTriangle className="h-5 w-5 mt-0.5 text-blue-600" />
-                <div>
-                  <p className="font-medium">Under review by the Arco team</p>
-                  <p className="text-blue-700">
-                    We&apos;ll email you once the review is complete. Status changes are disabled until approval.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {limitReachedForNewActivation && !isPendingAdminReview && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-5 text-sm text-amber-800">
-                <AlertTriangle className="h-5 w-5 mt-0.5" />
-                <div>
-                  <p className="font-medium">You&apos;ve reached the Basic plan limit.</p>
-                  <p className="text-amber-700">
-                    Unlist another project or upgrade to Plus to set this listing live.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3 mb-6">
-              {statusOptions.map((option) => {
-                const isSelected = selectedStatus === option.value
-                const requiresPlus = option.requiresPlus === true
-                const isPlusLocked = requiresPlus && companyPlan !== "plus"
-                const wouldBeActive = ACTIVE_STATUS_VALUES.includes(option.value)
-                const hitsActiveLimit =
-                  companyPlan === "basic" &&
-                  wouldBeActive &&
-                  activeListingsExcludingSelected >= BASIC_ACTIVE_LIMIT &&
-                  !isSelectedProjectActive
-                const isDisabled = isPlusLocked || hitsActiveLimit || isPendingAdminReview
-                const showUpgradeLink = isPlusLocked && !isPendingAdminReview
-                const description =
-                  isPendingAdminReview
-                    ? option.description
-                    : requiresPlus && companyPlan !== "plus"
-                        ? "Upgrade to Plus to make this project searchable on Discover."
-                        : option.description
-
-                return (
-                  <label
-                    key={option.value}
-                    className={`block p-4 border rounded-lg transition-colors ${
-                      isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300"
-                    } ${isDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                    aria-disabled={isDisabled}
-                  >
-                    <div className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name="status"
-                        value={option.value}
-                        checked={selectedStatus === option.value}
-                        onChange={() => {
-                          if (isDisabled) return
-                          setSelectedStatus(option.value)
-                        }}
-                        disabled={isDisabled}
-                        className="sr-only"
-                      />
-                      <div className="flex flex-1 flex-col gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${option.colorClass}`} />
-                          <span className="font-medium text-gray-900">{option.label}</span>
-                          {requiresPlus && (
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                companyPlan === "plus"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}
-                            >
-                              {companyPlan === "plus" ? "Included in Plus" : "Plus"}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-600">{description}</p>
-                        {showUpgradeLink && (
-                          <div className="flex items-center gap-2 text-sm text-amber-700">
-                            <AlertTriangle className="h-4 w-4" />
-                            <span>Upgrade to Plus to unlock this status.</span>
-                          </div>
-                        )}
-                        {hitsActiveLimit && (
-                          <div className="flex items-center gap-2 text-sm text-red-600">
-                            <AlertTriangle className="h-4 w-4" />
-                            <span>Basic plan allows up to three live listings.</span>
-                          </div>
-                        )}
-                      </div>
-                      {showUpgradeLink && (
-                        <Link
-                          href="/dashboard/pricing"
-                          className="text-sm font-semibold text-emerald-600 hover:text-emerald-700"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          Upgrade
-                        </Link>
-                      )}
-                    </div>
-                  </label>
-                )
-              })}
-            </div>
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStatusModalOpen(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={handleSaveStatus} className="flex-1" disabled={!isValidStatusSelection}>
-                Save
-              </Button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      <ListingStatusModal
+        open={statusModalOpen && Boolean(selectedProject)}
+        onClose={handleCloseStatusModal}
+        onSave={handleSaveStatus}
+        project={statusModalProject}
+        companyPlan={companyPlan}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
+        statusOptions={statusOptions}
+        saveDisabled={!isValidStatusSelection}
+        isPendingAdminReview={isPendingAdminReview}
+        limitReachedForNewActivation={limitReachedForNewActivation}
+        activeStatusValues={ACTIVE_STATUS_VALUES}
+      />
 
       {pendingDeleteProject && (
         <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
@@ -1043,7 +1028,7 @@ export default function DashboardListingsPage() {
           <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Edit cover photo</h2>
-              <button onClick={() => setCoverPhotoModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={closeCoverPhotoModal} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1052,28 +1037,49 @@ export default function DashboardListingsPage() {
               This photo will be displayed with the project on your company portfolio
             </p>
 
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              {samplePhotos.map((photo) => (
-                <div key={photo.id} className="relative cursor-pointer" onClick={() => setSelectedCoverPhoto(photo.id)}>
-                  <img
-                    src={photo.url || "/placeholder.svg"}
-                    alt={`Cover option ${photo.id + 1}`}
-                    className="w-full h-32 object-cover rounded-lg"
-                  />
-                  {selectedCoverPhoto === photo.id && (
-                    <div className="absolute top-2 right-2 bg-white rounded-full p-1">
-                      <Check className="w-4 h-4 text-gray-900" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            {selectedProject.photos.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+                {selectedProject.photos.map((photo) => {
+                  const isSelected = selectedCoverPhoto === photo.id
+                  const isCurrentCover = photo.isPrimary
+
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      onClick={() => setSelectedCoverPhoto(photo.id)}
+                      className={`relative h-32 w-full overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                        isSelected ? "border-primary ring-2 ring-primary/20" : "border-transparent hover:border-gray-200"
+                      }`}
+                    >
+                      <img src={photo.url} alt={selectedProject.title} className="h-full w-full object-cover" />
+                      {isCurrentCover && (
+                        <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-xs font-medium text-gray-700">
+                          Current cover
+                        </span>
+                      )}
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-sm">
+                          <Check className="w-4 h-4 text-gray-900" />
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="mb-6 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+                Upload project photos in the listing editor to choose a cover image.
+              </div>
+            )}
 
             <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={() => setCoverPhotoModalOpen(false)}>
+              <Button variant="outline" onClick={closeCoverPhotoModal}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveCoverPhoto}>Save</Button>
+              <Button onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto}>
+                {isSavingCoverPhoto ? "Saving..." : "Save"}
+              </Button>
             </div>
           </div>
         </div>
