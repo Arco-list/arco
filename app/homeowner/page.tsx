@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from "react"
 
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Heart, X } from "lucide-react"
+import { Heart, ThumbsUp, X } from "lucide-react"
 
 import { AccountSettingsForm } from "@/components/account-settings-form"
 import { DashboardHeader } from "@/components/dashboard-header"
@@ -136,7 +136,7 @@ function HomeownerContent() {
                             <p className="text-xs text-gray-500 mt-1">{projectLocation}</p>
                           </div>
                           <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
-                            <Heart className="h-3 w-3" />
+                            <ThumbsUp className="h-3 w-3" />
                             <span>{projectLikes}</span>
                           </div>
                         </div>

@@ -2,20 +2,27 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Heart, Share, Bookmark } from "lucide-react"
+import { Heart, Share, ThumbsUp } from "lucide-react"
 import { ReportModal } from "./report-modal"
 import { ShareModal } from "./share-modal"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
+import { useProjectLikes } from "@/contexts/project-likes-context"
 
 export function ProjectInfo() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
-  const { projectId, info, statusBadge, locationLabel, shareImageUrl, shareUrl } = useProjectPreview()
+  const { projectId, info, statusBadge, locationLabel, shareImageUrl, shareUrl, likesCount: initialLikesCount, isLiked: initialLiked } =
+    useProjectPreview()
   const { savedProjectIds, mutatingProjectIds, saveProject, removeProject } = useSavedProjects()
+  const { likedProjectIds, likeCounts, mutatingProjectIds: likeMutatingProjectIds, toggleLike } = useProjectLikes()
 
   const isSaved = projectId ? savedProjectIds.has(projectId) : false
-  const isMutating = projectId ? mutatingProjectIds.has(projectId) : false
+  const isMutatingSave = projectId ? mutatingProjectIds.has(projectId) : false
+  const providerLiked = projectId ? likedProjectIds.has(projectId) : undefined
+  const isLiked = providerLiked ?? Boolean(initialLiked)
+  const isMutatingLike = projectId ? likeMutatingProjectIds.has(projectId) : false
+  const likesCount = projectId ? likeCounts[projectId] ?? initialLikesCount ?? 0 : initialLikesCount ?? 0
 
   return (
     <div className="space-y-4">
@@ -27,9 +34,18 @@ export function ProjectInfo() {
 
           {/* Action buttons - moved to same row as breadcrumbs */}
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <Heart className="w-4 h-4 mr-2" />
-              Like
+            <Button
+              variant={isLiked ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (!projectId) return
+                void toggleLike(projectId, { currentCount: likesCount })
+              }}
+              disabled={!projectId || isMutatingLike}
+              aria-pressed={isLiked}
+            >
+              <ThumbsUp className="w-4 h-4 mr-2" fill={isLiked ? "currentColor" : "none"} />
+              {isLiked ? "Liked" : "Like"} • {likesCount}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
               <Share className="w-4 h-4 mr-2" />
@@ -46,10 +62,10 @@ export function ProjectInfo() {
                   void saveProject(projectId, null)
                 }
               }}
-              disabled={!projectId || isMutating}
+              disabled={!projectId || isMutatingSave}
               aria-pressed={isSaved}
             >
-              <Bookmark className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
+              <Heart className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
               {isSaved ? "Saved" : "Save"}
             </Button>
           </div>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useFilters } from "@/contexts/filter-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
+import { useProjectLikes } from "@/contexts/project-likes-context"
 
 const sortOptions = ["Most recent", "Most liked", "Alphabetical"] as const
 
@@ -18,10 +19,16 @@ export function ProjectsGrid() {
   const { projects, isLoading, error, hasMore, loadMore, typePhotoOverrides } = useProjectsQuery({ pageSize: 12 })
   const {
     savedProjectIds,
-    mutatingProjectIds,
+    mutatingProjectIds: savedMutatingProjectIds,
     saveProject,
     removeProject,
   } = useSavedProjects()
+  const {
+    likedProjectIds,
+    mutatingProjectIds: likeMutatingProjectIds,
+    likeCounts,
+    toggleLike,
+  } = useProjectLikes()
 
   const [sortBy, setSortBy] = useState<SortOption>("Most recent")
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
@@ -185,7 +192,10 @@ export function ProjectsGrid() {
                 filterContext.taxonomyLabelMap.get(project.project_type ?? "") ??
                 "Project"
               const isSaved = projectId ? savedProjectIds.has(projectId) : false
-              const isMutating = projectId ? mutatingProjectIds.has(projectId) : false
+              const isMutatingSave = projectId ? savedMutatingProjectIds.has(projectId) : false
+              const isLiked = projectId ? likedProjectIds.has(projectId) : false
+              const isMutatingLike = projectId ? likeMutatingProjectIds.has(projectId) : false
+              const likesCount = projectId ? likeCounts[projectId] ?? project.likes_count ?? 0 : project.likes_count ?? 0
 
               return (
                 <Link key={project.id} href={project.slug ? `/projects/${project.slug}` : "#"} className="group cursor-pointer">
@@ -205,7 +215,7 @@ export function ProjectsGrid() {
                         void saveProject(projectId, project)
                       }
                     }}
-                    disabled={!projectId || isMutating}
+                    disabled={!projectId || isMutatingSave}
                     aria-pressed={isSaved}
                     aria-label={isSaved ? "Remove from saved projects" : "Save project"}
                     className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
@@ -219,10 +229,24 @@ export function ProjectsGrid() {
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">{project.title}</h3>
-                    <div className="flex items-center gap-1 text-sm text-gray-500">
-                      <ThumbsUp className="h-3 w-3" />
-                      <span>{project.likes_count ?? 0}</span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        if (!projectId) return
+                        void toggleLike(projectId, { currentCount: likesCount })
+                      }}
+                      disabled={!projectId || isMutatingLike}
+                      aria-pressed={isLiked}
+                      aria-label={isLiked ? "Unlike project" : "Like project"}
+                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-70"
+                    >
+                      <ThumbsUp
+                        className={`h-3 w-3 ${isLiked ? "text-blue-600 fill-blue-600" : ""}`}
+                        fill={isLiked ? "currentColor" : "none"}
+                      />
+                      <span>{likesCount}</span>
+                    </button>
                   </div>
                   <p className="text-xs text-gray-500 line-clamp-1">{project.location || "Location unavailable"}</p>
                 </div>

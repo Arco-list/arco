@@ -87,6 +87,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   let isOwner = false
   let isAdmin = false
+  let userHasLiked = false
 
   if (user) {
     isOwner = project.client_id === user.id
@@ -110,7 +111,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const canViewInviteDetails = isOwner || isAdmin
 
-  const [photosResult, featuresResult, serviceSelectionsResult, projectCategoriesResult, invitesResult] =
+  const likeQuery = user
+    ? supabase
+        .from("project_likes")
+        .select("project_id")
+        .eq("project_id", project.id)
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null })
+
+  const [photosResult, featuresResult, serviceSelectionsResult, projectCategoriesResult, invitesResult, userLikeResult] =
     await Promise.all([
       supabase
         .from("project_photos")
@@ -144,6 +154,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             count: null,
             body: [] as ProjectProfessionalRow[],
           }),
+      likeQuery,
     ])
 
   const photos: ProjectPhotoRow[] = photosResult.data ?? []
@@ -151,6 +162,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const serviceSelections: ProjectProfessionalServiceRow[] = serviceSelectionsResult.data ?? []
   const invites: ProjectProfessionalRow[] = invitesResult.data ?? []
   const projectCategories: ProjectCategoryRow[] = projectCategoriesResult.data ?? []
+  userHasLiked = Boolean(userLikeResult.data)
 
   const categoryIds = new Set<string>()
   const taxonomyIds = new Set<string>()
@@ -538,6 +550,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const previewData: ProjectPreviewData = {
     projectId: project.id,
     slug: project.slug ?? resolvedParams.slug,
+    likesCount: project.likes_count ?? 0,
+    isLiked: userHasLiked,
     hero: {
       coverPhoto: coverPhoto
         ? {

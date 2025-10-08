@@ -1,9 +1,10 @@
 "use client"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Heart, ChevronLeft, ChevronRight } from "lucide-react"
+import { useMemo, useRef } from "react"
+import { ThumbsUp, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { useProjectLikes } from "@/contexts/project-likes-context"
 
 interface Project {
   id: string
@@ -13,11 +14,13 @@ interface Project {
   likes: number
   isLiked: boolean
   href?: string | null
+  isMutating?: boolean
 }
 
 export function SimilarProjects() {
   const { similarProjects } = useProjectPreview()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { likedProjectIds, likeCounts, mutatingProjectIds, toggleLike } = useProjectLikes()
 
   const initialProjects = useMemo<Project[]>(() => {
     if (!similarProjects || similarProjects.length === 0) {
@@ -35,26 +38,6 @@ export function SimilarProjects() {
     }))
   }, [similarProjects])
 
-  const [projects, setProjects] = useState<Project[]>(initialProjects)
-
-  useEffect(() => {
-    setProjects(initialProjects)
-  }, [initialProjects])
-
-  const toggleLike = (projectId: string) => {
-    setProjects((prev) =>
-      prev.map((project) =>
-        project.id === projectId
-          ? {
-              ...project,
-              isLiked: !project.isLiked,
-              likes: project.isLiked ? project.likes - 1 : project.likes + 1,
-            }
-          : project,
-      ),
-    )
-  }
-
   const scrollLeft = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: -320, behavior: "smooth" })
@@ -67,9 +50,16 @@ export function SimilarProjects() {
     }
   }
 
-  if (projects.length === 0) {
+  if (initialProjects.length === 0) {
     return null
   }
+
+  const projects = initialProjects.map((project) => {
+    const likes = likeCounts[project.id] ?? project.likes
+    const isLiked = likedProjectIds.has(project.id)
+    const isMutating = mutatingProjectIds.has(project.id)
+    return { ...project, likes, isLiked, isMutating }
+  })
 
   return (
     <div className="space-y-6">
@@ -108,13 +98,14 @@ export function SimilarProjects() {
                 onClick={(e) => {
                   e.stopPropagation()
                   e.preventDefault()
-                  toggleLike(project.id)
+                  void toggleLike(project.id, { currentCount: project.likes })
                 }}
+                disabled={project.isMutating}
                 className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
               >
-                <Heart
+                <ThumbsUp
                   className={`h-4 w-4 ${
-                    project.isLiked ? "fill-red-500 text-red-500" : "text-gray-600 hover:text-red-500"
+                    project.isLiked ? "fill-blue-600 text-blue-600" : "text-gray-600 hover:text-blue-600"
                   }`}
                 />
               </button>
@@ -127,7 +118,7 @@ export function SimilarProjects() {
                 <p className="text-xs text-gray-500 mt-1">{project.location}</p>
               </div>
               <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
-                <Heart className="h-3 w-3" />
+                <ThumbsUp className="h-3 w-3" />
                 <span>{project.likes}</span>
               </div>
             </div>

@@ -68,6 +68,8 @@ export type PreviewSimilarProject = {
 export type ProjectPreviewData = {
   projectId: string
   slug: string
+  likesCount: number
+  isLiked: boolean
   hero: {
     coverPhoto?: PreviewPhoto | null
     secondaryPhotos: PreviewPhoto[]

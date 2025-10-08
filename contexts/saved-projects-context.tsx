@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/auth-context";
+import { useRequireAuth } from "@/hooks/use-require-auth";
 import type { Tables } from "@/lib/supabase/types";
 
 type ProjectSummaryRow = Tables<"mv_project_summary">;
@@ -46,6 +47,7 @@ const SavedProjectsContext = createContext<SavedProjectsContextValue | undefined
 
 export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => {
   const { supabase, user } = useAuth();
+  const { ensureAuth } = useRequireAuth();
   const [savedProjects, setSavedProjects] = useState<SavedProjectEntry[]>([]);
   const [mutatingProjectIds, setMutatingProjectIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -166,7 +168,7 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         return { success: false, error: "Missing project reference." };
       }
 
-      if (!user) {
+      if (!ensureAuth()) {
         toast.info("Sign in to save projects for later.");
         return { success: false, requiresAuth: true };
       }
@@ -232,7 +234,7 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         return { success: false, error: "Missing project reference." };
       }
 
-      if (!user) {
+      if (!ensureAuth()) {
         toast.info("Sign in to manage saved projects.");
         return { success: false, requiresAuth: true };
       }
