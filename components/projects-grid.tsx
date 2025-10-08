@@ -14,7 +14,7 @@ type SortOption = (typeof sortOptions)[number]
 export function ProjectsGrid() {
   const filterContext = useFilters()
   const { removeFilter, taxonomy } = filterContext
-  const { projects, isLoading, error, hasMore, loadMore } = useProjectsQuery({ pageSize: 12 })
+  const { projects, isLoading, error, hasMore, loadMore, typePhotoOverrides } = useProjectsQuery({ pageSize: 12 })
 
   const [sortBy, setSortBy] = useState<SortOption>("Most recent")
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
@@ -167,12 +167,23 @@ export function ProjectsGrid() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {sortedProjects.map((project) => (
-              <Link key={project.id} href={project.slug ? `/projects/${project.slug}` : "#"} className="group cursor-pointer">
+            {sortedProjects.map((project) => {
+              const projectId = project.id ?? ""
+              const override = projectId ? typePhotoOverrides[projectId] : undefined
+              const imageSrc = override?.url ?? project.primary_photo_url ?? "/placeholder.svg"
+              const imageAlt =
+                override?.alt ??
+                project.primary_photo_alt ??
+                project.title ??
+                filterContext.taxonomyLabelMap.get(project.project_type ?? "") ??
+                "Project"
+
+              return (
+                <Link key={project.id} href={project.slug ? `/projects/${project.slug}` : "#"} className="group cursor-pointer">
                 <div className="relative overflow-hidden rounded-lg bg-gray-100">
                   <img
-                    src={project.primary_photo_url || "/placeholder.svg"}
-                    alt={project.title ?? "Project"}
+                    src={imageSrc}
+                    alt={imageAlt}
                     className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <button
@@ -195,7 +206,8 @@ export function ProjectsGrid() {
                   <p className="text-xs text-gray-500 line-clamp-1">{project.location || "Location unavailable"}</p>
                 </div>
               </Link>
-            ))}
+              )
+            })}
 
             {isLoading && (
               <div className="col-span-full flex justify-center py-12">
