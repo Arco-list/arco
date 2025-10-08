@@ -22,6 +22,12 @@ import {
 } from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Tables } from "@/lib/supabase/types"
+import {
+  ADDITIONAL_FEATURE_ID,
+  BUILDING_FEATURE_ID,
+  MIN_PHOTOS_REQUIRED,
+  OVERLAY_CLASSES,
+} from "@/hooks/use-project-photo-tour"
 
 function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
@@ -70,15 +76,10 @@ type ProjectPhotoRow = Tables<"project_photos">
 const isUuid = (value?: string | null): value is string =>
   !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
-const MIN_PHOTOS_REQUIRED = 5
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MIN_IMAGE_WIDTH = 1200
 const MAX_FILES_PER_UPLOAD = 30 // Prevent bulk upload abuse
-const BUILDING_FEATURE_ID = "building-default"
-const ADDITIONAL_FEATURE_ID = "additional-photos"
-const OVERLAY_CLASSES = "modal-overlay fixed inset-0 flex items-center justify-center z-50 p-4"
 
-// Security: Allowlist of safe image extensions
 const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png"])
 const MIME_TO_EXTENSION: Record<string, string> = {
   "image/jpeg": "jpg",

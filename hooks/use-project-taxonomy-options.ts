@@ -264,11 +264,23 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         .sort(sortByOrderThenLabel)
 
       const budgets = grouped.budget_tier
-        .map<ProjectDetailsDropdownOption>((option) => ({
-          value: option.id,
-          label: option.name,
-          sortOrder: option.sort_order,
-        }))
+        .reduce<ProjectDetailsDropdownOption[]>((acc, option) => {
+          const value = option.budget_level ?? option.slug ?? option.id
+          if (!value) {
+            return acc
+          }
+
+          if (acc.some((existing) => existing.value === value)) {
+            return acc
+          }
+
+          acc.push({
+            value,
+            label: option.name,
+            sortOrder: option.sort_order,
+          })
+          return acc
+        }, [])
         .sort(sortByOrderThenLabel)
 
       const mappedLocationFeatures = groupSortedFeatureOptions(grouped.location_feature)

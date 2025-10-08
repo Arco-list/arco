@@ -3,6 +3,7 @@
 import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "next/navigation"
+import Script from "next/script"
 import {
   ChevronRight,
   ImageIcon,
@@ -10,20 +11,33 @@ import {
   FileText,
   MapPin,
   Trash2,
-  Bed,
-  Bath,
-  Car,
-  TreePine,
-  Utensils,
-  Sofa,
-  Home,
-  Waves,
+  Plus,
+  MoreHorizontal,
+  MailPlus,
+  Pencil,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
+import { toast } from "sonner"
 import { useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent as ConfirmationDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import ListingStatusModal, {
+  type ListingStatusModalOption,
+} from "@/components/listing-status-modal"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
@@ -41,15 +55,126 @@ import {
   MIN_DESCRIPTION_LENGTH,
   type ProjectDetailsDescriptionCommand,
   type ProjectDetailsFormState,
-  type ProjectDetailsSelectField,
-  type ProjectDetailsTextField,
-  sortByOrderThenLabel,
+type ProjectDetailsSelectField,
+type ProjectDetailsTextField,
+sortByOrderThenLabel,
 } from "@/lib/project-details"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import type { Enums, TablesUpdate } from "@/lib/supabase/types"
+import type { Enums, Tables, TablesUpdate } from "@/lib/supabase/types"
 import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
+import {
+  ADDITIONAL_FEATURE_ID,
+  BUILDING_FEATURE_ID,
+  MIN_PHOTOS_REQUIRED,
+  OVERLAY_CLASSES,
+  useProjectPhotoTour,
+} from "@/hooks/use-project-photo-tour"
 
 type ProjectBudgetLevel = Enums<"project_budget_level">
+type ProjectStatus = Enums<"project_status">
+type ProjectLocationUpdate = Pick<
+  TablesUpdate<"projects">,
+  "address_formatted" | "address_city" | "address_region" | "latitude" | "longitude" | "share_exact_location" | "location"
+>
+
+const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
+const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+-])+(?:\.(?:[a-zA-Z0-9_'^&+-])+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
+
+const LISTING_STATUS_VALUES = ["published", "completed", "archived"] as const
+type ListingStatusValue = (typeof LISTING_STATUS_VALUES)[number]
+const ACTIVE_STATUS_VALUES: ReadonlyArray<ListingStatusValue> = ["published", "completed"]
+
+const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  draft: "In progress",
+  in_progress: "In review",
+  published: "Live on page",
+  completed: "Listed",
+  archived: "Unlisted",
+}
+
+const PROJECT_STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
+  draft: "bg-amber-500",
+  in_progress: "bg-blue-500",
+  published: "bg-emerald-500",
+  completed: "bg-teal-500",
+  archived: "bg-slate-400",
+}
+
+const isListingStatusValue = (status: ProjectStatus | string): status is ListingStatusValue =>
+  LISTING_STATUS_VALUES.includes(status as ListingStatusValue)
+
+const LISTING_STATUS_MODAL_OPTIONS: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
+  {
+    value: "published",
+    label: "Live on page",
+    description: "Appears on your company page",
+    colorClass: "bg-emerald-500",
+  },
+  {
+    value: "completed",
+    label: "Listed",
+    description: "Visible on the project page and searchable on Discover",
+    colorClass: "bg-teal-500",
+    requiresPlus: true,
+  },
+  {
+    value: "archived",
+    label: "Unlisted",
+    description: "Hidden from the project page and your company page",
+    colorClass: "bg-slate-400",
+  },
+]
+
+const getDomain = (email: string) => {
+  const parts = email.split("@").map((part) => part.trim().toLowerCase())
+  return parts.length === 2 ? parts[1] : ""
+}
+
+type CategoriesRow = Tables<"categories">
+type ProjectProfessionalRow = Tables<"project_professionals">
+type ProfessionalSummaryRow = Tables<"mv_professional_summary">
+type ProjectCategoryAttributeRow = Tables<"project_category_attributes">
+
+type ProfessionalServiceOption = {
+  id: string
+  name: string
+  parentName: string | null
+  parentSortOrder: number | null
+  sortOrder: number | null
+}
+
+type ProfessionalInviteSummary = {
+  id: string
+  serviceId: string | null
+  email: string
+  status: ProjectProfessionalRow["status"]
+  isOwner: boolean
+  invitedAt: string
+  respondedAt: string | null
+  professionalId: string | null
+  companyName: string | null
+  primaryService: string | null
+}
+
+type ProfessionalSectionData = {
+  services: ProfessionalServiceOption[]
+  selectedIds: string[]
+  invitesByService: Record<string, ProfessionalInviteSummary[]>
+  ownerInvite: ProfessionalInviteSummary | null
+  serviceLoadError: string | null
+}
+
+declare global {
+  interface Window {
+    google: any
+  }
+}
+
+const DEFAULT_MAP_CENTER = {
+  lat: 52.3727598,
+  lng: 4.8936041,
+}
+const DEFAULT_MAP_ZOOM = 12
 
 const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
   category: "",
@@ -75,58 +200,100 @@ const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
 const isUuid = (value?: string | null): value is string =>
   Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
 
+const getInviteStatusMeta = (invite: ProfessionalInviteSummary) => {
+  if (invite.isOwner) {
+    return {
+      label: "Listing owner",
+      className: "bg-gray-100 text-gray-800",
+    }
+  }
+
+  switch (invite.status) {
+    case "invited":
+      return { label: "Invite sent", className: "bg-amber-100 text-amber-800" }
+    case "listed":
+    case "live_on_page":
+      return { label: "Listed", className: "bg-green-100 text-green-800" }
+    case "unlisted":
+      return { label: "Unlisted", className: "bg-gray-200 text-gray-700" }
+    case "removed":
+    case "rejected":
+      return { label: invite.status === "removed" ? "Removed" : "Rejected", className: "bg-red-100 text-red-800" }
+    default:
+      return { label: invite.status.replace(/_/g, " "), className: "bg-gray-100 text-gray-800" }
+  }
+}
+
+const sanitizeString = (value?: string | null) => {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+const extractCityAndRegion = (
+  components: Array<{ long_name: string; short_name: string; types: string[] }> = [],
+) => {
+  let city = ""
+  let region = ""
+
+  for (const component of components) {
+    if (!city && (component.types.includes("locality") || component.types.includes("postal_town"))) {
+      city = component.long_name
+    }
+
+    if (
+      !region &&
+      (component.types.includes("administrative_area_level_1") ||
+        component.types.includes("administrative_area_level_2"))
+    ) {
+      region = component.long_name
+    }
+  }
+
+  return { city, region }
+}
+
+const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpdate => {
+  const address = sanitizeString(state.address)
+  const city = sanitizeString(state.city)
+  const region = sanitizeString(state.region)
+  const parts = [city, region].filter((value): value is string => Boolean(value))
+
+  return {
+    address_formatted: address,
+    address_city: city,
+    address_region: region,
+    latitude: state.latitude,
+    longitude: state.longitude,
+    share_exact_location: state.shareExactLocation,
+    location: parts.length ? parts.join(", ") : address,
+  }
+}
+
 export default function ListingEditorPage() {
   const params = useParams()
   const [activeSection, setActiveSection] = useState("photo-tour")
   const [showStatusModal, setShowStatusModal] = useState(false)
-  const [currentStatus, setCurrentStatus] = useState("Listed")
-  const [selectedStatus, setSelectedStatus] = useState("Listed")
+  const [currentStatusValue, setCurrentStatusValue] = useState<ListingStatusValue | "">("")
+  const [selectedStatus, setSelectedStatus] = useState<ListingStatusValue | "">("")
+  const [projectSlug, setProjectSlug] = useState<string | null>(null)
+  const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null)
 
-  // Photo tour state (reused from photo-tour page)
-  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ id: string; url: string; isCover: boolean }>>([
-    { id: "1", url: "/placeholder.svg?height=300&width=400", isCover: false },
-    { id: "2", url: "/placeholder.svg?height=300&width=400", isCover: false },
-    { id: "3", url: "/placeholder.svg?height=300&width=400", isCover: false },
-    { id: "4", url: "/placeholder.svg?height=300&width=400", isCover: false },
-    { id: "5", url: "/placeholder.svg?height=300&width=400", isCover: false },
-    { id: "6", url: "/placeholder.svg?height=300&width=400", isCover: false },
-  ])
-  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([
-    "building",
-    "living-room",
-    "kitchen",
-    "bathroom",
-    "gym",
-  ])
-  const [featurePhotos, setFeaturePhotos] = useState<Record<string, string[]>>({
-    building: ["1", "2", "3"],
-    kitchen: ["3", "4", "5"],
-    bathroom: ["4", "5", "6"],
-    gym: ["2", "3", "4"],
-  })
-  const [featureCoverPhotos, setFeatureCoverPhotos] = useState<Record<string, string>>({
-    building: "1",
-    kitchen: "3",
-    bathroom: "4",
-    gym: "2",
-  })
-  const [featureTaglines, setFeatureTaglines] = useState<Record<string, string>>({})
-  const [featureHighlights, setFeatureHighlights] = useState<Record<string, boolean>>({})
-  const [tempTagline, setTempTagline] = useState("")
-  const [tempHighlight, setTempHighlight] = useState(false)
-  const [showAddMenu, setShowAddMenu] = useState(false)
-  const [showPhotoSelector, setShowPhotoSelector] = useState<string | null>(null)
-  const [showAddFeatureModal, setShowAddFeatureModal] = useState(false)
-  const [tempSelectedFeatures, setTempSelectedFeatures] = useState<string[]>([])
-  const [tempSelectedPhotos, setTempSelectedPhotos] = useState<string[]>([])
-  const [tempCoverPhoto, setTempCoverPhoto] = useState<string>("")
-  const [modalDragOver, setModalDragOver] = useState(false)
 
   // Location state variables
   const [locationData, setLocationData] = useState({
     address: "",
     shareExactLocation: false,
   })
+  const [addressInputValue, setAddressInputValue] = useState("")
+  const [isMapsApiLoaded, setIsMapsApiLoaded] = useState(false)
+  const [mapsError, setMapsError] = useState<string | null>(null)
+  const mapContainerRef = useRef<HTMLDivElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const mapInstanceRef = useRef<any>(null)
+  const markerRef = useRef<any>(null)
+  const autocompleteRef = useRef<any>(null)
+  const geocoderRef = useRef<any>(null)
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const rawProjectId = params?.id
@@ -159,10 +326,125 @@ export default function ListingEditorPage() {
   const [detailsOpenDropdown, setDetailsOpenDropdown] = useState<ProjectDetailsSelectField | null>(null)
   const [detailsLastSavedAt, setDetailsLastSavedAt] = useState<Date | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [hasProjectAccess, setHasProjectAccess] = useState(false)
+  const [locationSaving, setLocationSaving] = useState(false)
+
+  const {
+    uploadedPhotos,
+    orderedFeatureOptions,
+    selectedFeatures,
+    displayFeatureIds,
+    dragOver,
+    modalDragOver,
+    openMenuId,
+    setOpenMenuId,
+    showAddMenu,
+    setShowAddMenu,
+    showAddFeatureModal,
+    setShowAddFeatureModal,
+    showPhotoSelector,
+    openPhotoSelector,
+    cancelPhotoSelection,
+    saveSelectedPhotos,
+    tempSelectedFeatures,
+    toggleTempFeature,
+    saveNewFeatures,
+    deleteFeature,
+    tempSelectedPhotos,
+    toggleTempPhoto,
+    tempCoverPhoto,
+    setTempCoverPhoto,
+    isUploading,
+    isSavingFeatures,
+    isSavingSelection,
+    isLoadingProject,
+    isLoadingFeatures,
+    uploadErrors,
+    modalUploadErrors,
+    featureError,
+    featureMutationError,
+    projectLoadError: photoProjectLoadError,
+    getFeatureDisplay,
+    getFeaturePhotoCount,
+    getFeatureCoverPhoto,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleFileUpload,
+    handleModalFileUpload,
+    handleModalDrop,
+    handleModalDragOver,
+    handleModalDragLeave,
+    setCoverPhoto,
+    deletePhoto,
+    handlePhotoDragStart,
+    handlePhotoDragOver,
+    handlePhotoDropOnCard,
+    handlePhotoDragEnd,
+    resetModalUploadErrors,
+  } = useProjectPhotoTour({ supabase, projectId: hasProjectAccess ? projectId : null })
+
+  const statusModalProject = useMemo(() => {
+    const coverPhotoUrl =
+      getFeatureCoverPhoto(BUILDING_FEATURE_ID) ??
+      getFeatureCoverPhoto(ADDITIONAL_FEATURE_ID) ??
+      uploadedPhotos[0]?.url ??
+      "/placeholder.svg"
+
+    const descriptorParts = [detailsForm.projectStyle, detailsForm.city, detailsForm.region]
+      .filter((value): value is string => Boolean(value && value.trim().length > 0))
+      .map((value) => value.trim())
+
+    return {
+      title: detailsForm.projectTitle?.trim() || "Untitled project",
+      descriptor: descriptorParts.join(" • ") || "Add project details",
+      coverImageUrl: coverPhotoUrl,
+    }
+  }, [
+    detailsForm.city,
+    detailsForm.projectStyle,
+    detailsForm.projectTitle,
+    detailsForm.region,
+    getFeatureCoverPhoto,
+    uploadedPhotos,
+  ])
+
+  const isPendingAdminReview = projectStatus === "in_progress"
+  const limitReachedForNewActivation = false
+  const canSaveStatus = Boolean(selectedStatus) && !isPendingAdminReview
+
+  const currentFeatureDisplay = useMemo(
+    () => (showPhotoSelector ? getFeatureDisplay(showPhotoSelector) : null),
+    [getFeatureDisplay, showPhotoSelector],
+  )
+
+  useEffect(() => {
+    if (!projectStatus) {
+      return
+    }
+
+    if (isListingStatusValue(projectStatus)) {
+      setCurrentStatusValue(projectStatus)
+      setSelectedStatus(projectStatus)
+    } else {
+      setCurrentStatusValue("")
+      setSelectedStatus("")
+    }
+  }, [projectStatus])
+
+  useEffect(() => {
+    if (showStatusModal) {
+      setSelectedStatus(currentStatusValue || "")
+    }
+  }, [currentStatusValue, showStatusModal])
 
   useEffect(() => {
     detailsFormRef.current = detailsForm
   }, [detailsForm])
+
+  useEffect(() => {
+    setAddressInputValue(detailsForm.address ?? "")
+  }, [detailsForm.address])
 
   useEffect(() => {
     let cancelled = false
@@ -189,6 +471,10 @@ export default function ListingEditorPage() {
   }, [supabase])
 
   useEffect(() => {
+    setHasProjectAccess(false)
+    setProjectSlug(null)
+    setProjectStatus(null)
+
     if (!projectId) {
       setDetailsLoading(false)
       setDetailsLoadError("Project not found.")
@@ -209,7 +495,7 @@ export default function ListingEditorPage() {
       const { data: project, error } = await supabase
         .from("projects")
         .select(
-          "id, client_id, title, description, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at",
+          "id, client_id, title, description, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug",
         )
         .eq("id", projectId)
         .maybeSingle()
@@ -229,6 +515,7 @@ export default function ListingEditorPage() {
         setDetailsLoading(false)
         return
       }
+      setHasProjectAccess(true)
 
       const [{ data: categoryRows }, { data: selectionRows }] = await Promise.all([
         supabase
@@ -285,6 +572,8 @@ export default function ListingEditorPage() {
       }
 
       if (!cancelled) {
+        setProjectSlug(project.slug ?? null)
+        setProjectStatus((project.status as ProjectStatus | null) ?? null)
         setDetailsForm(hydratedState)
         setLocationData({
           address: project.address_formatted ?? "",
@@ -302,6 +591,204 @@ export default function ListingEditorPage() {
       cancelled = true
     }
   }, [projectId, supabase, userId])
+
+  useEffect(() => {
+    if (activeSection !== "location") {
+      return
+    }
+
+    if (!googleMapsApiKey) {
+      return
+    }
+
+    if (!isMapsApiLoaded) {
+      return
+    }
+
+    if (typeof window === "undefined" || !window.google?.maps || !mapContainerRef.current) {
+      setMapsError("Google Maps failed to initialize. Refresh the page to try again.")
+      return
+    }
+
+    setMapsError(null)
+
+    const startPosition =
+      detailsForm.latitude !== null && detailsForm.longitude !== null
+        ? { lat: detailsForm.latitude, lng: detailsForm.longitude }
+        : DEFAULT_MAP_CENTER
+
+    if (!mapInstanceRef.current) {
+      const map = new window.google.maps.Map(mapContainerRef.current, {
+        center: startPosition,
+        zoom: detailsForm.latitude !== null ? 15 : DEFAULT_MAP_ZOOM,
+        mapTypeControl: true,
+        fullscreenControl: false,
+        streetViewControl: false,
+        zoomControl: true,
+      })
+
+      mapInstanceRef.current = map
+
+      const marker = new window.google.maps.Marker({
+        map,
+        position: startPosition,
+        draggable: true,
+      })
+
+      markerRef.current = marker
+      geocoderRef.current = new window.google.maps.Geocoder()
+
+      marker.addListener("dragend", () => {
+        const position = marker.getPosition()
+        if (!position) {
+          return
+        }
+
+        const lat = position.lat()
+        const lng = position.lng()
+
+        setDetailsForm((prev) => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng,
+        }))
+
+        const geocoder = geocoderRef.current ?? new window.google.maps.Geocoder()
+        geocoderRef.current = geocoder
+
+        geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+          if (status === "OK" && results?.length) {
+            const primary = results[0]
+            const formattedAddress = primary.formatted_address ?? ""
+            const { city, region } = extractCityAndRegion(primary.address_components ?? [])
+
+            setDetailsForm((prev) => ({
+              ...prev,
+              address: formattedAddress,
+              latitude: lat,
+              longitude: lng,
+              city,
+              region,
+            }))
+            setLocationData((prev) => ({
+              ...prev,
+              address: formattedAddress,
+            }))
+            setAddressInputValue(formattedAddress)
+            setDetailsErrors((prev) => {
+              if (!prev.address) {
+                return prev
+              }
+              const next = { ...prev }
+              delete next.address
+              return next
+            })
+          }
+        })
+      })
+    } else {
+      const marker = markerRef.current
+      if (marker) {
+        marker.setPosition(startPosition)
+      }
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setCenter(startPosition)
+        mapInstanceRef.current.setZoom(detailsForm.latitude !== null ? 15 : DEFAULT_MAP_ZOOM)
+      }
+    }
+
+    if (!autocompleteRef.current && searchInputRef.current) {
+      const autocomplete = new window.google.maps.places.Autocomplete(searchInputRef.current, {
+        fields: ["formatted_address", "geometry", "address_components"],
+        types: ["geocode"],
+      })
+
+      autocompleteRef.current = autocomplete
+
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace()
+        if (!place || !place.geometry?.location) {
+          return
+        }
+
+        const location = place.geometry.location
+        const lat = location.lat()
+        const lng = location.lng()
+
+        const formattedAddress = place.formatted_address ?? ""
+        const { city, region } = extractCityAndRegion(place.address_components ?? [])
+
+        setDetailsForm((prev) => ({
+          ...prev,
+          address: formattedAddress,
+          latitude: lat,
+          longitude: lng,
+          city,
+          region,
+        }))
+        setLocationData((prev) => ({
+          ...prev,
+          address: formattedAddress,
+        }))
+        setAddressInputValue(formattedAddress)
+        setDetailsErrors((prev) => {
+          if (!prev.address) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next.address
+          return next
+        })
+
+        if (markerRef.current) {
+          markerRef.current.setPosition({ lat, lng })
+        }
+
+        if (mapInstanceRef.current) {
+          if (place.geometry.viewport) {
+            mapInstanceRef.current.fitBounds(place.geometry.viewport)
+          } else {
+            mapInstanceRef.current.panTo({ lat, lng })
+            mapInstanceRef.current.setZoom(15)
+          }
+        }
+      })
+    }
+  }, [
+    activeSection,
+    detailsForm.latitude,
+    detailsForm.longitude,
+    googleMapsApiKey,
+    isMapsApiLoaded,
+    setDetailsErrors,
+  ])
+
+  useEffect(() => {
+    if (activeSection === "location") {
+      return
+    }
+
+    if (typeof window === "undefined" || !window.google?.maps) {
+      mapInstanceRef.current = null
+      markerRef.current = null
+      autocompleteRef.current = null
+      return
+    }
+
+    if (markerRef.current) {
+      window.google.maps.event.clearInstanceListeners(markerRef.current)
+    }
+    if (autocompleteRef.current) {
+      window.google.maps.event.clearInstanceListeners(autocompleteRef.current)
+    }
+    if (mapInstanceRef.current) {
+      window.google.maps.event.clearInstanceListeners(mapInstanceRef.current)
+    }
+
+    markerRef.current = null
+    autocompleteRef.current = null
+    mapInstanceRef.current = null
+  }, [activeSection])
 
   const projectTypeOptions = useMemo(() => {
     if (!detailsForm.category) {
@@ -517,6 +1004,7 @@ export default function ListingEditorPage() {
         return next
       })
     } else if (field === "address") {
+      setAddressInputValue(value)
       setDetailsForm((prev) => ({
         ...prev,
         address: value,
@@ -567,6 +1055,55 @@ export default function ListingEditorPage() {
       shareExactLocation: value,
     }))
   }
+
+  const handleSaveLocation = useCallback(async () => {
+    if (!projectId || !userId || locationSaving) {
+      return
+    }
+
+    const snapshot = detailsFormRef.current
+    if (!snapshot) {
+      return
+    }
+
+    const locationUpdate = buildLocationUpdate(snapshot)
+
+    if (!locationUpdate.address_formatted) {
+      toast.error("Enter the project address before saving.")
+      return
+    }
+
+    setLocationSaving(true)
+
+    try {
+      const { error: updateError } = await supabase.from("projects").update(locationUpdate).eq("id", projectId)
+      if (updateError) {
+        throw updateError
+      }
+
+      const nextAddress = locationUpdate.address_formatted ?? ""
+      const nextCity = locationUpdate.address_city ?? ""
+      const nextRegion = locationUpdate.address_region ?? ""
+
+      setDetailsForm((prev) => ({
+        ...prev,
+        address: nextAddress,
+        city: nextCity,
+        region: nextRegion,
+      }))
+      setLocationData((prev) => ({
+        ...prev,
+        address: nextAddress,
+      }))
+      setDetailsLastSavedAt(new Date())
+      toast.success("Location saved.")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update the project location."
+      toast.error("Location not saved", { description: message })
+    } finally {
+      setLocationSaving(false)
+    }
+  }, [locationSaving, projectId, supabase, userId])
 
   const validateDetailsForm = useCallback(() => {
     const errors: Record<string, string> = {}
@@ -653,16 +1190,7 @@ export default function ListingEditorPage() {
       project_year: parsedYearBuilt,
       building_year: parsedBuildingYear,
       style_preferences: snapshot.projectStyle ? [snapshot.projectStyle] : null,
-      address_formatted: snapshot.address || null,
-      address_city: snapshot.city || null,
-      address_region: snapshot.region || null,
-      latitude: snapshot.latitude,
-      longitude: snapshot.longitude,
-      share_exact_location: snapshot.shareExactLocation,
-      location:
-        snapshot.city || snapshot.region
-          ? [snapshot.city, snapshot.region].filter(Boolean).join(", ")
-          : snapshot.address || null,
+      ...buildLocationUpdate(snapshot),
     }
 
     setDetailsSaving(true)
@@ -733,7 +1261,8 @@ export default function ListingEditorPage() {
       }
 
       setDetailsLastSavedAt(new Date())
-      setDetailsFeedback({ type: "success", message: "Project details saved." })
+      toast.success("Project details saved.")
+      setDetailsFeedback(null)
     } catch (error) {
       const message = error instanceof Error ? error.message : "Something went wrong while saving."
       setDetailsFeedback({ type: "error", message })
@@ -742,34 +1271,21 @@ export default function ListingEditorPage() {
     }
   }, [detailsSaving, projectId, supabase, userId, validateDetailsForm])
   // Professionals state management
-  const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([
-    "architect",
-    "interior-designer",
-    "general-contractor",
-  ])
-  const [invitedProfessionals, setInvitedProfessionals] = useState<{
-    [key: string]: { name?: string; email?: string; status: "pending" | "invited" }
-  }>({
-    architect: { email: "architect@example.com", status: "invited" },
-    "interior-designer": { status: "pending" },
-  })
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [currentInviteProfessional, setCurrentInviteProfessional] = useState<string>("")
+  const [professionalServices, setProfessionalServices] = useState<ProfessionalServiceOption[]>([])
+  const [selectedProfessionalServiceIds, setSelectedProfessionalServiceIds] = useState<string[]>([])
+  const [professionalInvites, setProfessionalInvites] = useState<Record<string, ProfessionalInviteSummary[]>>({})
+  const [projectOwnerInvite, setProjectOwnerInvite] = useState<ProfessionalInviteSummary | null>(null)
+  const [professionalsLoading, setProfessionalsLoading] = useState(true)
+  const [professionalsError, setProfessionalsError] = useState<string | null>(null)
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState(false)
+  const [serviceSelectionDraft, setServiceSelectionDraft] = useState<string[]>([])
+  const [isUpdatingServices, setIsUpdatingServices] = useState(false)
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
+  const [inviteServiceId, setInviteServiceId] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState("")
-  const [openMenus, setOpenMenus] = useState<{ [key: string]: boolean }>({})
-
-  const features = [
-    { id: "building", name: "Building", icon: Home },
-    { id: "bedroom", name: "Bedroom", icon: Bed },
-    { id: "bathroom", name: "Bathroom", icon: Bath },
-    { id: "garage", name: "Garage", icon: Car },
-    { id: "garden", name: "Garden", icon: TreePine },
-    { id: "kitchen", name: "Kitchen", icon: Utensils },
-    { id: "living-room", name: "Living room", icon: Sofa },
-    { id: "office", name: "Office", icon: Home },
-    { id: "pool", name: "Pool", icon: Waves },
-    { id: "gym", name: "Gym", icon: Home },
-  ]
+  const [editingInviteId, setEditingInviteId] = useState<string | null>(null)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [isInviteMutating, setIsInviteMutating] = useState(false)
 
   const sidebarItems = [
     { id: "photo-tour", name: "Photo tour", icon: ImageIcon },
@@ -778,415 +1294,590 @@ export default function ListingEditorPage() {
     { id: "location", name: "Location", icon: MapPin },
   ]
 
-  const statusOptions = [
-    {
-      id: "live",
-      name: "Live on page",
-      description: "Upgrade to add this project to your company page",
-      color: "green",
-    },
-    {
-      id: "listed",
-      name: "Listed",
-      description: "You are visible on the project page",
-      color: "green",
-    },
-    {
-      id: "unlisted",
-      name: "Unlisted",
-      description: "You won't be visible on the project page as contributor",
-      color: "gray",
-    },
-  ]
+  const statusOptions = LISTING_STATUS_MODAL_OPTIONS
+  const companyPlan: "basic" | "plus" = "basic"
 
-  // Professional Services Data
-  const professionalServices = [
-    {
-      id: "architect",
-      name: "Architect",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "interior-designer",
-      name: "Interior Designer",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4 4 4 0 004-4V5z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "general-contractor",
-      name: "General contractor",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-          />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
-    },
-    {
-      id: "structural-engineer",
-      name: "Structural Engineer",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "landscape-architect",
-      name: "Landscape Architect",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "electrician",
-      name: "Electrician",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-    },
-    {
-      id: "plumber",
-      name: "Plumber",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 3v1m0 16v1m9-9h-1M4 12H3m2 6H3m15.364 6.364l-.707-.707L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "hvac-specialist",
-      name: "HVAC Specialist",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 3v1m0 16v1m9-9h-1M4 12H3m2 6H3m15.364 6.364l-.707-.707L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "roofer",
-      name: "Roofer",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "flooring-specialist",
-      name: "Flooring Specialist",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "painter",
-      name: "Painter",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-          />
-        </svg>
-      ),
-    },
-    {
-      id: "mason",
-      name: "Mason",
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-          />
-        </svg>
-      ),
-    },
-  ]
+  const statusOptionByValue = useMemo(
+    () => new Map(statusOptions.map((option) => [option.value, option])),
+    [statusOptions],
+  )
 
-  // Photo tour functions (reused from photo-tour page)
-  const getFeaturePhotoCount = (featureId: string) => {
-    return featurePhotos[featureId]?.length || 0
-  }
+  const currentStatusLabel = useMemo(() => {
+    if (currentStatusValue && statusOptionByValue.has(currentStatusValue)) {
+      return statusOptionByValue.get(currentStatusValue)!.label
+    }
+    if (projectStatus) {
+      return PROJECT_STATUS_LABELS[projectStatus]
+    }
+    return "Set status"
+  }, [currentStatusValue, projectStatus, statusOptionByValue])
 
-  const getFeatureCoverPhoto = (featureId: string) => {
-    const coverPhotoId = featureCoverPhotos[featureId]
-    if (coverPhotoId) {
-      const photo = uploadedPhotos.find((p) => p.id === coverPhotoId)
-      return photo?.url || null
+  const statusIndicatorClass = useMemo(() => {
+    if (currentStatusValue && statusOptionByValue.has(currentStatusValue)) {
+      return statusOptionByValue.get(currentStatusValue)!.colorClass
+    }
+    if (projectStatus) {
+      return PROJECT_STATUS_DOT_CLASS[projectStatus]
+    }
+    return "bg-gray-400"
+  }, [currentStatusValue, projectStatus, statusOptionByValue])
+
+  const loadProfessionalServiceOptions = useCallback(async () => {
+    const { data: childRows, error: childError } = await supabase
+      .from("categories")
+      .select("id, name, parent_id, sort_order")
+      .eq("is_active", true)
+      .not("parent_id", "is", null)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("name", { ascending: true })
+
+    if (childError) {
+      throw childError
     }
 
-    const photoIds = featurePhotos[featureId]
-    if (!photoIds || photoIds.length === 0) return null
-    const photo = uploadedPhotos.find((p) => p.id === photoIds[0])
-    return photo?.url || null
-  }
+    const children: CategoriesRow[] = childRows ?? []
+    if (children.length === 0) {
+      return [] as ProfessionalServiceOption[]
+    }
 
-  const handleFileUpload = (files: FileList | null) => {
-    if (!files) return
+    const childIds = children.map((row) => row.id)
+    const parentIds = Array.from(
+      new Set(children.map((row) => row.parent_id).filter((value): value is string => Boolean(value))),
+    )
 
-    Array.from(files).forEach((file, index) => {
-      if (file.type.startsWith("image/")) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const newPhoto = {
-            id: Math.random().toString(36).substr(2, 9),
-            url: e.target?.result as string,
-            isCover: false,
-          }
-          setUploadedPhotos((prev) => [...prev, newPhoto])
+    const [parentResult, attributeResult] = await Promise.all([
+      parentIds.length
+        ? supabase
+            .from("categories")
+            .select("id, name, sort_order")
+            .in("id", parentIds)
+        : Promise.resolve<{ data: CategoriesRow[]; error: null }>({ data: [], error: null }),
+      childIds.length
+        ? supabase
+            .from("project_category_attributes")
+            .select("category_id")
+            .in("category_id", childIds)
+        : Promise.resolve<{ data: ProjectCategoryAttributeRow[]; error: null }>({ data: [], error: null }),
+    ])
+
+    if (parentResult.error) {
+      throw parentResult.error
+    }
+
+    if (attributeResult.error) {
+      throw attributeResult.error
+    }
+
+    const parentMap = new Map<string, { name: string | null; sortOrder: number | null }>()
+    ;(parentResult.data ?? []).forEach((row) => {
+      parentMap.set(row.id, { name: row.name, sortOrder: row.sort_order ?? null })
+    })
+
+    const excludedIds = new Set((attributeResult.data ?? []).map((row) => row.category_id))
+
+    return children
+      .filter((row) => !excludedIds.has(row.id))
+      .map<ProfessionalServiceOption>((row) => {
+        const parentMeta = row.parent_id ? parentMap.get(row.parent_id) : null
+        return {
+          id: row.id,
+          name: row.name,
+          parentName: parentMeta?.name ?? null,
+          parentSortOrder: parentMeta?.sortOrder ?? null,
+          sortOrder: row.sort_order ?? null,
         }
-        reader.readAsDataURL(file)
+      })
+      .sort((a, b) => {
+        const parentOrderA = a.parentSortOrder ?? 0
+        const parentOrderB = b.parentSortOrder ?? 0
+        if (parentOrderA !== parentOrderB) {
+          return parentOrderA - parentOrderB
+        }
+        if (a.parentName && b.parentName && a.parentName !== b.parentName) {
+          return a.parentName.localeCompare(b.parentName)
+        }
+        const orderA = a.sortOrder ?? 0
+        const orderB = b.sortOrder ?? 0
+        if (orderA !== orderB) {
+          return orderA - orderB
+        }
+        return a.name.localeCompare(b.name)
+      })
+  }, [supabase])
+
+  const fetchProfessionalSectionData = useCallback(async (): Promise<ProfessionalSectionData | null> => {
+    if (!projectId || !hasProjectAccess) {
+      return null
+    }
+
+    let serviceLoadError: string | null = null
+    let serviceOptions: ProfessionalServiceOption[] = []
+
+    try {
+      serviceOptions = await loadProfessionalServiceOptions()
+    } catch (error) {
+      serviceLoadError =
+        error instanceof Error ? error.message : "We couldn't load professional services. Please try again."
+      serviceOptions = []
+    }
+
+    const { data: selectionRows, error: selectionError } = await supabase
+      .from("project_professional_services")
+      .select("service_category_id")
+      .eq("project_id", projectId)
+
+    if (selectionError) {
+      throw selectionError
+    }
+
+    const selectedIds = (selectionRows ?? [])
+      .map((row) => row.service_category_id)
+      .filter((value): value is string => Boolean(value))
+
+    const { data: inviteRows, error: invitesError } = await supabase
+      .from("project_professionals")
+      .select(
+        "id, invited_email, invited_service_category_id, status, is_project_owner, invited_at, responded_at, professional_id",
+      )
+      .eq("project_id", projectId)
+      .order("is_project_owner", { ascending: false })
+      .order("invited_at", { ascending: true, nullsFirst: false })
+
+    if (invitesError) {
+      throw invitesError
+    }
+
+    const professionalIds = Array.from(
+      new Set(
+        (inviteRows ?? [])
+          .map((row) => row.professional_id)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    )
+
+    let professionalMap = new Map<string, ProfessionalSummaryRow>()
+    if (professionalIds.length) {
+      const { data: professionals, error: professionalError } = await supabase
+        .from("mv_professional_summary")
+        .select("id, company_name, primary_specialty")
+        .in("id", professionalIds)
+
+      if (professionalError) {
+        throw professionalError
+      }
+
+      professionalMap = new Map(
+        (professionals ?? [])
+          .filter((row): row is ProfessionalSummaryRow & { id: string } => Boolean(row?.id))
+          .map((row) => [row.id!, row]),
+      )
+    }
+
+    const invitesByService: Record<string, ProfessionalInviteSummary[]> = {}
+    let ownerInvite: ProfessionalInviteSummary | null = null
+
+    ;(inviteRows ?? []).forEach((row) => {
+      const professionalData = row.professional_id ? professionalMap.get(row.professional_id) : null
+      const summary: ProfessionalInviteSummary = {
+        id: row.id,
+        serviceId: row.invited_service_category_id,
+        email: row.invited_email,
+        status: row.status,
+        isOwner: row.is_project_owner,
+        invitedAt: row.invited_at,
+        respondedAt: row.responded_at,
+        professionalId: row.professional_id,
+        companyName: professionalData?.company_name ?? null,
+        primaryService: professionalData?.primary_specialty ?? null,
+      }
+
+      if (summary.isOwner) {
+        ownerInvite = summary
+        return
+      }
+
+      if (!summary.serviceId) {
+        return
+      }
+
+      if (!invitesByService[summary.serviceId]) {
+        invitesByService[summary.serviceId] = []
+      }
+      invitesByService[summary.serviceId].push(summary)
+    })
+
+    Object.values(invitesByService).forEach((list) => {
+      list.sort((a, b) => new Date(a.invitedAt).getTime() - new Date(b.invitedAt).getTime())
+    })
+
+    const optionMap = new Map(serviceOptions.map((option) => [option.id, option]))
+    const additionalOptions: ProfessionalServiceOption[] = []
+
+    selectedIds.forEach((serviceId) => {
+      if (!optionMap.has(serviceId)) {
+        additionalOptions.push({
+          id: serviceId,
+          name: serviceId,
+          parentName: null,
+          parentSortOrder: null,
+          sortOrder: null,
+        })
       }
     })
-  }
 
-  const handleModalFileUpload = (files: FileList | null) => {
-    if (!files) return
+    const combinedServices = [...serviceOptions, ...additionalOptions]
 
-    Array.from(files).forEach((file, index) => {
-      if (file.type.startsWith("image/")) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const newPhoto = {
-            id: Math.random().toString(36).substr(2, 9),
-            url: e.target?.result as string,
-            isCover: false,
-          }
-          setUploadedPhotos((prev) => [...prev, newPhoto])
-          setTempSelectedPhotos((prev) => [...prev, newPhoto.id])
-        }
-        reader.readAsDataURL(file)
+    return {
+      services: combinedServices,
+      selectedIds,
+      invitesByService,
+      ownerInvite,
+      serviceLoadError,
+    }
+  }, [hasProjectAccess, loadProfessionalServiceOptions, projectId, supabase])
+
+  const applyProfessionalSectionData = useCallback((data: ProfessionalSectionData) => {
+    setProfessionalServices(data.services)
+    setSelectedProfessionalServiceIds(data.selectedIds)
+    setProfessionalInvites(data.invitesByService)
+    setProjectOwnerInvite(data.ownerInvite)
+    if (data.serviceLoadError) {
+      setProfessionalsError(data.serviceLoadError)
+    } else {
+      setProfessionalsError(null)
+    }
+  }, [])
+
+  const refreshProfessionalSection = useCallback(async () => {
+    const result = await fetchProfessionalSectionData()
+    if (result) {
+      applyProfessionalSectionData(result)
+    }
+    return result
+  }, [applyProfessionalSectionData, fetchProfessionalSectionData])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadProfessionals = async () => {
+      if (!projectId || !hasProjectAccess) {
+        setProfessionalServices([])
+        setSelectedProfessionalServiceIds([])
+        setProfessionalInvites({})
+        setProjectOwnerInvite(null)
+        setProfessionalsLoading(false)
+        return
       }
-    })
+
+      setProfessionalsLoading(true)
+      setProfessionalsError(null)
+
+      try {
+        const result = await fetchProfessionalSectionData()
+        if (!cancelled && result) {
+          applyProfessionalSectionData(result)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message =
+            error instanceof Error ? error.message : "We couldn't load professionals for this project."
+          setProfessionalsError(message)
+        }
+      } finally {
+        if (!cancelled) {
+          setProfessionalsLoading(false)
+        }
+      }
+    }
+
+    void loadProfessionals()
+
+    return () => {
+      cancelled = true
+    }
+  }, [applyProfessionalSectionData, fetchProfessionalSectionData, hasProjectAccess, projectId])
+
+  const openServiceModal = () => {
+    setServiceSelectionDraft(selectedProfessionalServiceIds)
+    setIsServiceModalOpen(true)
   }
 
-  const handleModalDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setModalDragOver(false)
-    handleModalFileUpload(e.dataTransfer.files)
+  const handleServiceModalOpenChange = (open: boolean) => {
+    setIsServiceModalOpen(open)
+    if (open) {
+      setServiceSelectionDraft(selectedProfessionalServiceIds)
+    } else {
+      setServiceSelectionDraft([])
+    }
   }
 
-  const handleModalDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setModalDragOver(true)
+  const toggleServiceInDraft = (serviceId: string) => {
+    setServiceSelectionDraft((prev) =>
+      prev.includes(serviceId) ? prev.filter((id) => id !== serviceId) : [...prev, serviceId],
+    )
   }
 
-  const handleModalDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setModalDragOver(false)
-  }
+  const handleSaveServiceSelection = async () => {
+    if (!projectId || isUpdatingServices) {
+      return
+    }
 
-  const togglePhotoSelection = (photoId: string) => {
-    setTempSelectedPhotos((prev) => (prev.includes(photoId) ? prev.filter((id) => id !== photoId) : [...prev, photoId]))
-  }
+    const nextSelection = Array.from(new Set(serviceSelectionDraft))
+    const added = nextSelection.filter((id) => !selectedProfessionalServiceIds.includes(id))
+    const removed = selectedProfessionalServiceIds.filter((id) => !nextSelection.includes(id))
 
-  const openPhotoSelector = (featureId: string) => {
-    setShowPhotoSelector(featureId)
-    setTempSelectedPhotos(featurePhotos[featureId] || [])
-    setTempCoverPhoto(featureCoverPhotos[featureId] || "")
-    setTempTagline(featureTaglines[featureId] || "")
-    setTempHighlight(featureHighlights[featureId] || false)
-  }
+    if (added.length === 0 && removed.length === 0) {
+      setIsServiceModalOpen(false)
+      return
+    }
 
-  const saveSelectedPhotos = () => {
-    if (showPhotoSelector) {
-      setFeaturePhotos((prev) => ({
-        ...prev,
-        [showPhotoSelector]: tempSelectedPhotos,
-      }))
-      if (tempCoverPhoto) {
-        setFeatureCoverPhotos((prev) => ({
-          ...prev,
-          [showPhotoSelector]: tempCoverPhoto,
+    setIsUpdatingServices(true)
+    setProfessionalsError(null)
+
+    try {
+      if (added.length) {
+        const rows = added.map((serviceId) => ({
+          project_id: projectId,
+          service_category_id: serviceId,
         }))
+        const { error: insertError } = await supabase.from("project_professional_services").insert(rows)
+        if (insertError) {
+          throw insertError
+        }
       }
-      setFeatureTaglines((prev) => ({
-        ...prev,
-        [showPhotoSelector]: tempTagline,
-      }))
-      setFeatureHighlights((prev) => ({
-        ...prev,
-        [showPhotoSelector]: tempHighlight,
-      }))
+
+      if (removed.length) {
+        const deleteQuery = supabase.from("project_professional_services").delete().eq("project_id", projectId)
+        const { error: deleteError } =
+          removed.length === 1
+            ? await deleteQuery.eq("service_category_id", removed[0]!)
+            : await deleteQuery.in("service_category_id", removed)
+        if (deleteError) {
+          throw deleteError
+        }
+
+        setProfessionalInvites((prev) => {
+          const next = { ...prev }
+          removed.forEach((serviceId) => {
+            delete next[serviceId]
+          })
+          return next
+        })
+      }
+
+      setSelectedProfessionalServiceIds(nextSelection)
+      setIsServiceModalOpen(false)
+      setServiceSelectionDraft([])
+      await refreshProfessionalSection()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We couldn't update your professional services. Please try again."
+      setProfessionalsError(message)
+  } finally {
+    setIsUpdatingServices(false)
+  }
+}
+
+  const handlePreviewListing = useCallback(() => {
+    if (!projectSlug) {
+      toast.error("Preview unavailable", {
+        description: "This listing does not have a public link yet.",
+      })
+      return
     }
-    setShowPhotoSelector(null)
-    setTempSelectedPhotos([])
-    setTempCoverPhoto("")
-    setTempTagline("")
-    setTempHighlight(false)
+
+    const basePath = `/projects/${projectSlug}`
+    const isInReview = projectStatus === "in_progress"
+    const isDraft = projectStatus === "draft"
+    const targetUrl = isInReview || isDraft ? `${basePath}?preview=1` : basePath
+
+    window.open(targetUrl, "_blank", "noopener,noreferrer")
+  }, [projectSlug, projectStatus])
+
+  const handleRemoveService = async (serviceId: string) => {
+    if (!projectId || isUpdatingServices) {
+      return
+    }
+
+    setIsUpdatingServices(true)
+    setProfessionalsError(null)
+
+    try {
+      const { error } = await supabase
+        .from("project_professional_services")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("service_category_id", serviceId)
+
+      if (error) {
+        throw error
+      }
+
+      setSelectedProfessionalServiceIds((prev) => prev.filter((id) => id !== serviceId))
+      setProfessionalInvites((prev) => {
+        const next = { ...prev }
+        delete next[serviceId]
+        return next
+      })
+      await refreshProfessionalSection()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We couldn't remove that professional service. Please try again."
+      setProfessionalsError(message)
+    } finally {
+      setIsUpdatingServices(false)
+    }
   }
 
-  const cancelPhotoSelection = () => {
-    setShowPhotoSelector(null)
-    setTempSelectedPhotos([])
-    setTempCoverPhoto("")
-    setTempTagline("")
-    setTempHighlight(false)
-  }
-
-  const deleteFeature = (featureId: string) => {
-    setSelectedFeatures((prev) => prev.filter((id) => id !== featureId))
-    setFeaturePhotos((prev) => {
-      const newFeaturePhotos = { ...prev }
-      delete newFeaturePhotos[featureId]
-      return newFeaturePhotos
-    })
-    setFeatureCoverPhotos((prev) => {
-      const newCoverPhotos = { ...prev }
-      delete newCoverPhotos[featureId]
-      return newCoverPhotos
-    })
-    setFeatureTaglines((prev) => {
-      const newTaglines = { ...prev }
-      delete newTaglines[featureId]
-      return newTaglines
-    })
-    setFeatureHighlights((prev) => {
-      const newHighlights = { ...prev }
-      delete newHighlights[featureId]
-      return newHighlights
-    })
-    setShowPhotoSelector(null)
-  }
-
-  const toggleTempFeature = (featureId: string) => {
-    setTempSelectedFeatures((prev) =>
-      prev.includes(featureId) ? prev.filter((id) => id !== featureId) : [...prev, featureId],
-    )
-  }
-
-  const saveNewFeatures = () => {
-    setSelectedFeatures((prev) => [...new Set([...prev, ...tempSelectedFeatures])])
-    setShowAddFeatureModal(false)
-    setTempSelectedFeatures([])
-  }
-
-  // Professional Management Functions
-  const handleInviteProfessional = (professionalId: string) => {
-    setCurrentInviteProfessional(professionalId)
-    setInviteEmail("")
-    setShowInviteModal(true)
-  }
-
-  const handleSendInvite = () => {
-    if (inviteEmail.trim()) {
-      setInvitedProfessionals((prev) => ({
-        ...prev,
-        [currentInviteProfessional]: {
-          email: inviteEmail,
-          status: "invited",
-        },
-      }))
-      setShowInviteModal(false)
+  const handleInviteDialogChange = (open: boolean) => {
+    setInviteDialogOpen(open)
+    if (!open) {
+      setInviteServiceId(null)
       setInviteEmail("")
+      setEditingInviteId(null)
+      setInviteError(null)
     }
   }
 
-  const toggleMenu = (professionalId: string) => {
-    setOpenMenus((prev) => ({
-      ...prev,
-      [professionalId]: !prev[professionalId],
-    }))
+  const openInviteModal = (serviceId: string, invite?: ProfessionalInviteSummary) => {
+    if (!invite) {
+      const existingInvites = professionalInvites[serviceId] ?? []
+      if (existingInvites.length > 0) {
+        setInviteError("Only one professional can be invited per service. Remove the existing invite to add another.")
+        return
+      }
+    }
+
+    setInviteServiceId(serviceId)
+    setInviteEmail(invite?.email ?? "")
+    setEditingInviteId(invite?.id ?? null)
+    setInviteError(null)
+    setInviteDialogOpen(true)
   }
 
-  const deleteProfessional = (professionalId: string) => {
-    setSelectedProfessionals((prev) => prev.filter((id) => id !== professionalId))
-    setInvitedProfessionals((prev) => {
-      const updated = { ...prev }
-      delete updated[professionalId]
-      return updated
-    })
-    setOpenMenus((prev) => ({
-      ...prev,
-      [professionalId]: false,
-    }))
+  const handleInviteSubmit = async () => {
+    if (!projectId || !inviteServiceId || isInviteMutating) {
+      return
+    }
+
+    if (!isUuid(inviteServiceId)) {
+      setInviteError("Please select a professional service from the Arco catalog to send invites.")
+      return
+    }
+
+    const trimmedEmail = inviteEmail.trim()
+
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setInviteError("Please enter a valid company email address.")
+      return
+    }
+
+    const domain = getDomain(trimmedEmail)
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) {
+      setInviteError("Please use a company email address (personal domains are not allowed).")
+      return
+    }
+
+    if (!editingInviteId) {
+      const existingInvites = professionalInvites[inviteServiceId] ?? []
+      if (existingInvites.length > 0) {
+        setInviteError("Only one professional can be invited per service. Remove the existing invite to add another.")
+        return
+      }
+    }
+
+    setInviteError(null)
+    setIsInviteMutating(true)
+
+    try {
+      if (editingInviteId) {
+        const { error, data } = await supabase
+          .from("project_professionals")
+          .update({ invited_email: trimmedEmail })
+          .eq("id", editingInviteId)
+          .select(
+            "id, invited_email, invited_service_category_id, status, is_project_owner, invited_at, responded_at, professional_id",
+          )
+          .maybeSingle()
+
+        if (error || !data) {
+          throw error ?? new Error("Invite could not be updated.")
+        }
+      } else {
+        const { error, data } = await supabase
+          .from("project_professionals")
+          .insert({
+            project_id: projectId,
+            invited_email: trimmedEmail,
+            invited_service_category_id: inviteServiceId,
+            status: "invited",
+          })
+          .select(
+            "id, invited_email, invited_service_category_id, status, is_project_owner, invited_at, responded_at, professional_id",
+          )
+          .maybeSingle()
+
+        if (error || !data) {
+          throw error ?? new Error("Invite could not be saved.")
+        }
+      }
+
+      await refreshProfessionalSection()
+      handleInviteDialogChange(false)
+    } catch (error) {
+      setInviteError(
+        error instanceof Error ? error.message : "We couldn't send that invite. Please try again.",
+      )
+    } finally {
+      setIsInviteMutating(false)
+    }
   }
 
-  const cancelInvitation = (professionalId: string) => {
-    setInvitedProfessionals((prev) => {
-      const updated = { ...prev }
-      delete updated[professionalId]
-      return updated
-    })
-    setOpenMenus((prev) => ({
-      ...prev,
-      [professionalId]: false,
-    }))
+  const handleDeleteInvite = async (invite: ProfessionalInviteSummary) => {
+    if (isInviteMutating) {
+      return
+    }
+
+    if (invite.isOwner) {
+      setInviteError("You cannot remove the listing owner from this project.")
+      return
+    }
+
+    setInviteError(null)
+    setIsInviteMutating(true)
+
+    try {
+      const { error } = await supabase.from("project_professionals").delete().eq("id", invite.id)
+      if (error) {
+        throw error
+      }
+      await refreshProfessionalSection()
+    } catch (error) {
+      setInviteError(
+        error instanceof Error ? error.message : "We couldn't update that invite. Please try again.",
+      )
+    } finally {
+      setIsInviteMutating(false)
+    }
   }
 
-  const toggleProfessional = (professionalId: string) => {
-    setSelectedProfessionals((prev) =>
-      prev.includes(professionalId) ? prev.filter((id) => id !== professionalId) : [...prev, professionalId],
-    )
-  }
+  const handleCloseStatusModal = useCallback(() => {
+    setShowStatusModal(false)
+    setSelectedStatus(currentStatusValue || "")
+  }, [currentStatusValue])
 
   const handleStatusSave = () => {
-    setCurrentStatus(selectedStatus)
-    setShowStatusModal(false)
+    if (!selectedStatus || isPendingAdminReview) {
+      handleCloseStatusModal()
+      return
+    }
+
+    setCurrentStatusValue(selectedStatus)
+    handleCloseStatusModal()
   }
 
   // Location input change handler
@@ -1194,7 +1885,10 @@ export default function ListingEditorPage() {
     if (field === "address" && typeof value === "string") {
       handleInputChange("address", value)
     } else {
-      setLocationData({ ...locationData, [field]: value })
+      setLocationData((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
     }
   }
 
@@ -1203,93 +1897,547 @@ export default function ListingEditorPage() {
     if (field === "shareExactLocation") {
       handleToggleChange(value)
     } else {
-      setLocationData({ ...locationData, [field]: value })
+      setLocationData((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
     }
   }
 
-  const renderPhotoTourSection = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl text-gray-900 font-medium">Photo tour</h2>
-          <p className="text-gray-500 mt-1">Description</p>
+  const renderPhotoTourSection = () => {
+    if (!hasProjectAccess) {
+      return (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+          You need access to this project to manage its photo tour.
+        </div>
+      )
+    }
+
+    if (!projectId) {
+      return (
+        <div className="py-16 text-center text-sm text-gray-500">
+          Select a project to manage its photo tour.
+        </div>
+      )
+    }
+
+    if (isLoadingProject) {
+      return <div className="py-16 text-center text-sm text-gray-500">Loading project photos…</div>
+    }
+
+    if (photoProjectLoadError) {
+      return (
+        <div className="rounded-md border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+          {photoProjectLoadError}
+        </div>
+      )
+    }
+
+    const photosRemaining = Math.max(0, MIN_PHOTOS_REQUIRED - uploadedPhotos.length)
+    const progressLabel =
+      photosRemaining > 0
+        ? `${photosRemaining} more photo${photosRemaining === 1 ? "" : "s"} needed`
+        : "Minimum met — add more to showcase your project"
+
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900">Photo tour</h2>
+            <p className="text-sm text-gray-500">
+              Add photos for every feature. Only features with photos appear on the published page.
+            </p>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowAddMenu((state) => !state)}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800"
+              aria-haspopup="menu"
+              aria-expanded={showAddMenu}
+            >
+              <span className="text-xl font-light">+</span>
+            </button>
+
+            {showAddMenu && (
+              <div className="absolute top-12 right-0 z-10 min-w-[160px] rounded-lg border border-gray-200 bg-white py-2 shadow-lg">
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png"
+                    className="hidden"
+                    disabled={isUploading}
+                    onChange={(event) => {
+                      void handleFileUpload(event.target.files)
+                      event.target.value = ""
+                      setShowAddMenu(false)
+                    }}
+                  />
+                  <span
+                    className={`block px-4 py-2 text-sm transition-colors ${
+                      isUploading ? "cursor-not-allowed text-gray-400" : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {isUploading ? "Uploading…" : "Add photos"}
+                  </span>
+                </label>
+                <button
+                  onClick={() => {
+                    setShowAddFeatureModal(true)
+                    setShowAddMenu(false)
+                  }}
+                  disabled={isSavingFeatures}
+                  className={`block w-full px-4 py-2 text-left text-sm transition-colors ${
+                    isSavingFeatures ? "cursor-not-allowed text-gray-400" : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {isSavingFeatures ? "Saving…" : "Add feature"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            className="bg-gray-900 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-gray-800 transition-colors"
-          >
-            <span className="text-xl font-light">+</span>
-          </button>
+        <section className="space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">Photo categories</h3>
+              <p className="text-sm text-gray-500">Choose a category to add or manage photos.</p>
+            </div>
+          </div>
 
-          {showAddMenu && (
-            <div className="absolute top-12 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10 min-w-[140px]">
-              <label className="block">
+          {featureMutationError && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {featureMutationError}
+            </div>
+          )}
+
+          {featureError && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {featureError}
+            </div>
+          )}
+
+          {isLoadingFeatures ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {displayFeatureIds.map((featureId) => {
+                const featureDisplay = getFeatureDisplay(featureId)
+                const FeatureIcon = featureDisplay.icon
+                const photoCount = getFeaturePhotoCount(featureId)
+                const coverPhoto = getFeatureCoverPhoto(featureId)
+
+                return (
+                  <div key={featureId} className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    <button
+                      onClick={() => openPhotoSelector(featureId)}
+                      className="w-full text-left transition-colors hover:bg-gray-50"
+                    >
+                      <div className="relative aspect-square bg-gray-100">
+                        {coverPhoto ? (
+                          <img
+                            src={coverPhoto || "/placeholder.svg"}
+                            alt={featureDisplay.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center">
+                            <ImageIcon className="mb-4 h-12 w-12 text-gray-400" />
+                            <span className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors">
+                              Select photos
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-4">
+                        <div className="mb-1 flex items-center gap-2">
+                          <FeatureIcon className="h-4 w-4 text-gray-600" />
+                          <h3 className="font-medium text-gray-900">{featureDisplay.name}</h3>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          {photoCount > 0 ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "Add photos"}
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">All photos</h3>
+              <p className="text-sm text-gray-500">
+                {uploadedPhotos.length} uploaded · {progressLabel}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div
+              className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                dragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
+              }`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              <ImageIcon className="mx-auto mb-3 h-8 w-8 text-gray-400" />
+              <p className="font-medium text-gray-900">Drag and drop</p>
+              <p className="mb-4 text-sm text-gray-500">or browse for photos</p>
+              <label className="inline-block">
                 <input
                   type="file"
                   multiple
-                  accept="image/*"
+                  accept="image/jpeg,image/png"
                   className="hidden"
-                  onChange={(e) => handleFileUpload(e.target.files)}
+                  disabled={isUploading}
+                  onChange={(event) => {
+                    void handleFileUpload(event.target.files)
+                    event.target.value = ""
+                  }}
                 />
-                <span className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer block">
-                  Add photos
+                <span
+                  className={`rounded-md px-6 py-2 text-sm font-medium text-white transition-colors ${
+                    isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
+                  }`}
+                >
+                  {isUploading ? "Uploading…" : "Browse"}
                 </span>
               </label>
-              <button
-                onClick={() => setShowAddFeatureModal(true)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Add feature
-              </button>
+              {uploadErrors.length > 0 && (
+                <ul className="mt-4 space-y-1 text-left text-sm text-red-600">
+                  {uploadErrors.map((error, index) => (
+                    <li key={`${error}-${index}`}>{error}</li>
+                  ))}
+                </ul>
+              )}
             </div>
-          )}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {selectedFeatures.map((featureId) => {
-          const feature = features.find((f) => f.id === featureId)
-          if (!feature) return null
-
-          const photoCount = getFeaturePhotoCount(featureId)
-          const coverPhoto = getFeatureCoverPhoto(featureId)
-
-          return (
-            <div key={featureId} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <button
-                onClick={() => openPhotoSelector(featureId)}
-                className="w-full text-left hover:bg-gray-50 transition-colors"
+            {uploadedPhotos.map((photo) => (
+              <div
+                key={photo.id}
+                className="group relative"
+                draggable
+                onDragStart={(event) => handlePhotoDragStart(event, photo.id)}
+                onDragOver={handlePhotoDragOver}
+                onDrop={(event) => handlePhotoDropOnCard(event, photo.id)}
+                onDragEnd={handlePhotoDragEnd}
               >
-                <div className="aspect-square bg-gray-100 relative">
-                  {coverPhoto ? (
-                    <img
-                      src={coverPhoto || "/placeholder.svg"}
-                      alt={feature.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center">
-                      <ImageIcon className="w-12 h-12 text-gray-400 mb-4" />
-                      <span className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors cursor-pointer block">
-                        Select photos
-                      </span>
+                <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+                  <img src={photo.url || "/placeholder.svg"} alt="Project photo" className="h-full w-full object-cover" />
+                </div>
+
+                {photo.isCover && (
+                  <div className="absolute left-2 top-2 rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
+                    Cover photo
+                  </div>
+                )}
+
+                <div className="absolute right-2 top-2">
+                  <button
+                    onClick={() => setOpenMenuId(openMenuId === photo.id ? null : photo.id)}
+                    className="rounded-full bg-white p-1 shadow-md transition-colors hover:bg-gray-50"
+                  >
+                    <MoreHorizontal className="h-4 w-4 text-gray-600" />
+                  </button>
+
+                  {openMenuId === photo.id && (
+                    <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                      <button
+                        onClick={() => setCoverPhoto(photo.id)}
+                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        Set as cover photo
+                      </button>
+                      <button
+                        onClick={() => deletePhoto(photo.id)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </button>
                     </div>
                   )}
                 </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-                <div className="p-4">
-                  <h3 className="font-medium text-gray-900 mb-1">{feature.name}</h3>
-                  <p className="text-sm text-gray-500">{photoCount > 0 ? `${photoCount} photos` : "Add photos"}</p>
+        {showAddFeatureModal && (
+          <div className={OVERLAY_CLASSES}>
+            <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white">
+              <div className="flex items-center justify-between border-b border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900">Add feature</h2>
+                <button
+                  onClick={() => {
+                    setShowAddFeatureModal(false)
+                    setTempSelectedFeatures([])
+                  }}
+                  className="text-2xl leading-none text-gray-400 transition-colors hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="p-6">
+                {isLoadingFeatures ? (
+                  <div className="mb-6 grid grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <div key={index} className="h-24 rounded-lg border-2 border-dashed border-gray-200 animate-pulse" />
+                    ))}
+                  </div>
+                ) : orderedFeatureOptions.length === 0 ? (
+                  <div className="mb-6 rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+                    No feature taxonomy available yet. Try again later.
+                  </div>
+                ) : (
+                  <div className="mb-6 grid grid-cols-3 gap-4">
+                    {orderedFeatureOptions.map((feature) => {
+                      const display = getFeatureDisplay(feature.id)
+                      const IconComponent = display.icon
+                      const isSelected = tempSelectedFeatures.includes(feature.id)
+                      const isAlreadyAdded = selectedFeatures.includes(feature.id)
+
+                      return (
+                        <button
+                          key={feature.id}
+                          onClick={() => !isAlreadyAdded && toggleTempFeature(feature.id)}
+                          disabled={isAlreadyAdded || isSavingFeatures}
+                          className={`rounded-lg border-2 p-4 text-left transition-all ${
+                            isAlreadyAdded
+                              ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-50"
+                              : isSelected
+                                ? "border-gray-900 bg-gray-50"
+                                : "border-gray-200 bg-white hover:border-gray-300"
+                          }`}
+                        >
+                          <IconComponent className="mb-2 h-6 w-6 text-gray-700" />
+                          <p className="text-sm font-medium text-gray-900">{display.name}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowAddFeatureModal(false)
+                      setTempSelectedFeatures([])
+                    }}
+                    className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveNewFeatures()}
+                    disabled={tempSelectedFeatures.length === 0 || isSavingFeatures}
+                    className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSavingFeatures ? "Adding…" : "Add selected"}
+                  </button>
                 </div>
-              </button>
+              </div>
             </div>
-          )
-        })}
+          </div>
+        )}
+
+        {showPhotoSelector && (
+          <div className={OVERLAY_CLASSES}>
+            <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-lg bg-white">
+              <div className="flex items-center justify-between border-b border-gray-200 p-6">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Select photos for {currentFeatureDisplay?.name ?? "feature"}
+                </h2>
+                <div className="flex items-center gap-3">
+                  {![
+                    BUILDING_FEATURE_ID,
+                    ADDITIONAL_FEATURE_ID,
+                  ].includes(showPhotoSelector) && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button className="flex items-center gap-2 text-sm font-medium text-red-600 transition-colors hover:text-red-700">
+                          <Trash2 className="h-4 w-4" />
+                          Delete feature
+                        </button>
+                      </AlertDialogTrigger>
+                      <ConfirmationDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remove this feature?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove {currentFeatureDisplay?.name ?? "this feature"} and unassign its photos from
+                            the project. You can add it again later if needed.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-700"
+                            onClick={() => void deleteFeature(showPhotoSelector)}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </ConfirmationDialogContent>
+                    </AlertDialog>
+                  )}
+                  <button onClick={cancelPhotoSelection} className="text-2xl leading-none text-gray-400 hover:text-gray-600">
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div
+                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                    modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
+                  }`}
+                  onDrop={handleModalDrop}
+                  onDragOver={handleModalDragOver}
+                  onDragLeave={handleModalDragLeave}
+                >
+                  <ImageIcon className="mx-auto mb-3 h-8 w-8 text-gray-400" />
+                  <p className="font-medium text-gray-900">Upload new photos</p>
+                  <p className="mb-4 text-sm text-gray-500">Drag and drop or browse for photos</p>
+                  <label className="inline-block">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png"
+                      className="hidden"
+                      disabled={isUploading}
+                      onChange={(event) => {
+                        void handleModalFileUpload(event.target.files)
+                        event.target.value = ""
+                      }}
+                    />
+                    <span
+                      className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
+                        isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
+                      }`}
+                    >
+                      {isUploading ? "Uploading…" : "Browse Files"}
+                    </span>
+                  </label>
+                </div>
+
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Select from existing photos</h3>
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      {tempCoverPhoto && <span className="font-medium text-blue-600">Cover photo selected</span>}
+                      <span>{tempSelectedPhotos.length} selected</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+                    {uploadedPhotos.map((photo) => {
+                      const isSelected = tempSelectedPhotos.includes(photo.id)
+                      const isCoverPhoto = tempCoverPhoto === photo.id
+
+                      return (
+                        <div key={photo.id} className="relative">
+                          <button
+                            onClick={() => toggleTempPhoto(photo.id)}
+                            className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <img
+                              src={photo.url || "/placeholder.svg"}
+                              alt="Project photo"
+                              className="h-full w-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
+                                ✓
+                              </div>
+                            )}
+                            {isCoverPhoto && (
+                              <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
+                                Cover
+                              </div>
+                            )}
+                          </button>
+
+                          {isSelected && (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
+                              }}
+                              className={`absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors ${
+                                isCoverPhoto
+                                  ? "bg-blue-600 text-white"
+                                  : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {modalUploadErrors.length > 0 && (
+                  <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+                      <div className="space-y-2">
+                        <ul className="space-y-1">
+                          {modalUploadErrors.map((error, index) => (
+                            <li key={`${error}-${index}`}>{error}</li>
+                          ))}
+                        </ul>
+                        <button
+                          onClick={() => resetModalUploadErrors()}
+                          className="inline-flex items-center font-medium text-red-700 transition-colors hover:text-red-800"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={cancelPhotoSelection}
+                    className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveSelectedPhotos()}
+                    disabled={isSavingSelection || tempSelectedPhotos.length === 0}
+                    className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSavingSelection ? "Saving…" : "Save selection"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
 
   // Location section render function
   const renderLocationSection = () => (
@@ -1302,33 +2450,68 @@ export default function ListingEditorPage() {
       <div className="space-y-8">
         {/* Map Container */}
         <div className="relative">
-          <div className="w-full h-96 bg-gray-100 rounded-lg overflow-hidden relative">
-            {/* Map placeholder with embedded Google Maps */}
-            <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d387191.33750346623!2d-73.97968099999999!3d40.6974881!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89c24fa5d33f083b%3A0xc80b8f06e177fe62!2sNew%20York%2C%20NY%2C%20USA!5e0!3m2!1sen!2sus!4v1703123456789!5m2!1sen!2sus"
-              width="100%"
-              height="100%"
-              style={{ border: 0 }}
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              className="absolute inset-0"
-            />
-
-            {/* Address search input overlay */}
-            <div className="absolute top-4 left-4 right-4 z-10">
+          {googleMapsApiKey ? (
+            <>
+              <Script
+                src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+                strategy="lazyOnload"
+                onLoad={() => {
+                  if (window.google?.maps) {
+                    setIsMapsApiLoaded(true)
+                    setMapsError(null)
+                  } else {
+                    setMapsError("Google Maps failed to initialize. Refresh the page to try again.")
+                  }
+                }}
+                onError={() => setMapsError("We couldn't load Google Maps. Check your connection and try again.")}
+              />
+              <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
+                <div ref={mapContainerRef} className="h-full w-full" />
+                <div className="pointer-events-none absolute top-4 left-0 right-0 z-10 flex justify-center px-4">
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={addressInputValue}
+                    onChange={(event) => handleLocationInputChange("address", event.target.value)}
+                    placeholder="Search for your address"
+                    className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+                  />
+                </div>
+                {!isMapsApiLoaded && !mapsError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-gray-700">
+                    Loading map...
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                Add your Google Maps API key to `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to enable address autocomplete and map
+                selection.
+              </div>
               <input
                 type="text"
-                value={locationData.address}
-                onChange={(e) => handleLocationInputChange("address", e.target.value)}
-                placeholder="Enter your address"
-                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+                value={addressInputValue}
+                onChange={(event) => handleLocationInputChange("address", event.target.value)}
+                placeholder="Enter your project address"
+                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
               />
             </div>
-          </div>
+          )}
           <p className="text-sm text-gray-500 mt-2">
-            Search for your project location or click on the map to select it
+            Search for your project location or drag the pin on the map to fine-tune it
           </p>
+          {mapsError && <p className="text-sm text-red-600 mt-2">{mapsError}</p>}
+          {detailsErrors.address && <p className="text-sm text-red-600 mt-2">{detailsErrors.address}</p>}
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm font-medium text-gray-900">Selected address</p>
+            <p className="mt-1 text-sm text-gray-700">
+              {detailsForm.address
+                ? detailsForm.address
+                : "Start typing in the search box or drag the map pin to capture the address."}
+            </p>
+          </div>
         </div>
 
         {/* Share exact location toggle */}
@@ -1339,136 +2522,232 @@ export default function ListingEditorPage() {
           </div>
           <button
             type="button"
-            onClick={() => handleLocationToggleChange("shareExactLocation", !locationData.shareExactLocation)}
+            onClick={() => handleLocationToggleChange("shareExactLocation", !detailsForm.shareExactLocation)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 ${
-              locationData.shareExactLocation ? "bg-gray-900" : "bg-gray-200"
+              detailsForm.shareExactLocation ? "bg-gray-900" : "bg-gray-200"
             }`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                locationData.shareExactLocation ? "translate-x-6" : "translate-x-1"
+                detailsForm.shareExactLocation ? "translate-x-6" : "translate-x-1"
               }`}
             />
           </button>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={() => void handleSaveLocation()} disabled={locationSaving}>
+            {locationSaving ? "Saving…" : "Save location"}
+          </Button>
         </div>
       </div>
     </div>
   )
 
   // Professionals section render function
-  const renderProfessionalsSection = () => (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl text-gray-900 font-medium">Professionals</h2>
-          <p className="text-gray-500 mt-1">Manage professionals working on this project</p>
-        </div>
-        <button className="w-10 h-10 bg-gray-900 text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition-colors">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      </div>
+  const renderProfessionalsSection = () => {
+    const serviceMap = new Map(professionalServices.map((service) => [service.id, service]))
+    const selectedServices = selectedProfessionalServiceIds.map((id) => {
+      const option = serviceMap.get(id)
+      if (option) {
+        return option
+      }
+      return {
+        id,
+        name: id,
+        parentName: null,
+        parentSortOrder: null,
+        sortOrder: null,
+      }
+    })
 
-      {/* Professional Services Selection */}
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Add Professional Services</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {professionalServices.map((professional) => (
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-medium text-gray-900">Professionals</h2>
+            <p className="mt-1 text-gray-500">Manage the professional services linked to this project.</p>
+          </div>
+          <button
+            type="button"
+            onClick={openServiceModal}
+            aria-label="Manage professional services"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
+
+        {professionalsError && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            {professionalsError}
+          </div>
+        )}
+
+        {inviteError && !inviteDialogOpen && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{inviteError}</div>
+        )}
+
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Professional services</h3>
+              <p className="text-sm text-gray-500">
+                Choose which professional services contributed to this project to invite collaborators.
+              </p>
+            </div>
             <button
-              key={professional.id}
-              onClick={() => toggleProfessional(professional.id)}
-              className={`p-4 rounded-lg border-2 text-left transition-all duration-200 hover:shadow-md ${
-                selectedProfessionals.includes(professional.id)
-                  ? "border-gray-900 bg-gray-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
-              }`}
+              type="button"
+              onClick={openServiceModal}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
-              <div className="flex items-center space-x-3">
-                <div className="text-gray-900">{professional.icon}</div>
-                <span className="font-medium text-gray-900">{professional.name}</span>
-              </div>
+              <Plus className="h-4 w-4" />
+              Manage services
             </button>
-          ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {selectedServices.length > 0 ? (
+              selectedServices.map((service) => (
+                <span key={service.id} className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
+                  {service.name}
+                </span>
+              ))
+            ) : (
+              <span className="text-sm text-gray-600">No professional services selected yet.</span>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Selected Professionals */}
-      {selectedProfessionals.length > 0 && (
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Project Professionals</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {selectedProfessionals.map((professionalId) => {
-              const professional = professionalServices.find((p) => p.id === professionalId)
-              const invitation = invitedProfessionals[professionalId]
+        {professionalsLoading ? (
+          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading professionals…
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {projectOwnerInvite && (
+              <div className="rounded-lg border border-gray-200 bg-white p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Listing owner</p>
+                    <p className="mt-1 text-lg font-semibold text-gray-900">
+                      {projectOwnerInvite.companyName ?? projectOwnerInvite.email}
+                    </p>
+                    {projectOwnerInvite.primaryService && (
+                      <p className="text-sm text-gray-600">{projectOwnerInvite.primaryService}</p>
+                    )}
+                  </div>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800">
+                    Listing owner
+                  </span>
+                </div>
+              </div>
+            )}
 
-              return (
-                <div key={professionalId} className="p-6 rounded-lg border border-gray-200 bg-white relative">
-                  <div className="absolute top-4 right-4">
-                    <button
-                      onClick={() => toggleMenu(professionalId)}
-                      className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                      </svg>
-                    </button>
-
-                    {openMenus[professionalId] && (
-                      <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[160px]">
-                        {invitation?.status === "invited" ? (
+            {selectedServices.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600">
+                Add a professional service to invite collaborators to this project.
+              </div>
+            ) : (
+              selectedServices.map((service) => {
+                const invites = professionalInvites[service.id] ?? []
+                return (
+                  <div key={service.id} className="rounded-lg border border-gray-200 bg-white p-6">
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-500">
+                          {service.parentName ?? "Professional service"}
+                        </p>
+                        <h3 className="text-lg font-semibold text-gray-900">{service.name}</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {invites.length === 0 && (
                           <button
-                            onClick={() => cancelInvitation(professionalId)}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            type="button"
+                            onClick={() => openInviteModal(service.id)}
+                            disabled={isInviteMutating}
+                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Cancel invite
+                            <MailPlus className="h-4 w-4" />
+                            Invite
                           </button>
-                        ) : null}
+                        )}
                         <button
-                          onClick={() => deleteProfessional(professionalId)}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          type="button"
+                          onClick={() => handleRemoveService(service.id)}
+                          disabled={isUpdatingServices}
+                          className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Delete professional
+                          <Trash2 className="h-4 w-4" />
                         </button>
+                      </div>
+                    </div>
+
+                    {invites.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+                        No professionals invited yet for this service.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {invites.map((invite) => {
+                          const statusMeta = getInviteStatusMeta(invite)
+                          return (
+                            <div
+                              key={invite.id}
+                              className="flex items-center justify-between rounded-md border border-gray-200 p-4"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">
+                                  {invite.companyName ?? invite.email}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {invite.companyName ? invite.email : "Invite pending"}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
+                                >
+                                  {statusMeta.label}
+                                </span>
+                                {!invite.isOwner && (
+                                  <>
+                                    {invite.status === "invited" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openInviteModal(service.id, invite)}
+                                        disabled={isInviteMutating}
+                                        className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteInvite(invite)}
+                                      disabled={isInviteMutating}
+                                      className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
-
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className="text-gray-900">{professional?.icon}</div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{professional?.name}</span>
-                        {invitation?.status === "invited" && (
-                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                            Invited
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {invitation?.status === "invited" ? (
-                    <div className="space-y-2">
-                      <div className="text-sm text-orange-600 font-medium">Will be invited</div>
-                      <div className="text-sm text-gray-600">{invitation.email}</div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleInviteProfessional(professionalId)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors"
-                    >
-                      Invite professional
-                    </button>
-                  )}
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
-        </div>
-      )}
-    </div>
-  )
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -1488,15 +2767,20 @@ export default function ListingEditorPage() {
                   >
                     <div className="text-left">
                       <div className="flex items-center gap-2">
-                        <div
-                          className={`w-2 h-2 rounded-full ${currentStatus === "Listed" ? "bg-green-500" : "bg-gray-400"}`}
-                        />
-                        <span className="font-medium text-gray-900">{currentStatus}</span>
+                        <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
+                        <span className="font-medium text-gray-900">{currentStatusLabel}</span>
                       </div>
                       <p className="text-sm text-red-500 mt-1">List your project</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-400" />
                   </button>
+                </div>
+
+                {/* Preview listing */}
+                <div>
+                  <Button variant="outline" className="w-full" onClick={handlePreviewListing}>
+                    Preview listing
+                  </Button>
                 </div>
 
                 {/* Navigation Items */}
@@ -1647,331 +2931,107 @@ export default function ListingEditorPage() {
       <Footer />
 
       {/* Status Modal */}
-      <Dialog open={showStatusModal} onOpenChange={setShowStatusModal}>
-        <DialogContent className="max-w-md">
+      <ListingStatusModal
+        open={showStatusModal}
+        onClose={handleCloseStatusModal}
+        onSave={handleStatusSave}
+        project={statusModalProject}
+        companyPlan={companyPlan}
+        selectedStatus={selectedStatus}
+        onStatusChange={(value) => setSelectedStatus(value)}
+        statusOptions={statusOptions}
+        saveDisabled={!canSaveStatus}
+        isPendingAdminReview={isPendingAdminReview}
+        limitReachedForNewActivation={limitReachedForNewActivation}
+        activeStatusValues={ACTIVE_STATUS_VALUES}
+      />
+
+      <Dialog open={isServiceModalOpen} onOpenChange={handleServiceModalOpenChange}>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Listing status</DialogTitle>
+            <DialogTitle>Select professional services</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <img
-                src="/placeholder.svg?height=60&width=60"
-                alt="Villa Mel"
-                className="w-12 h-12 rounded-lg object-cover"
-              />
-              <div>
-                <h3 className="font-medium text-gray-900">Villa Mel</h3>
-                <p className="text-sm text-gray-500">Modern Villa in Huizen</p>
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+            {professionalServices.length === 0 ? (
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                Professional services are not available right now. Please try again later.
               </div>
-            </div>
-
-            <div className="space-y-3">
-              {statusOptions.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => setSelectedStatus(option.name)}
-                  className={`w-full p-4 text-left border-2 rounded-lg transition-all ${
-                    selectedStatus === option.name
-                      ? "border-gray-900 bg-gray-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div
-                      className={`w-2 h-2 rounded-full ${option.color === "green" ? "bg-green-500" : "bg-gray-400"}`}
-                    />
-                    <span className="font-medium text-gray-900">{option.name}</span>
-                  </div>
-                  <p className="text-sm text-gray-500">{option.description}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={() => setShowStatusModal(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={handleStatusSave} className="flex-1">
-                Save
-              </Button>
-            </div>
+            ) : (
+              professionalServices.map((service) => {
+                const isSelected = serviceSelectionDraft.includes(service.id)
+                const parentLabel = service.parentName ?? "Professional service"
+                return (
+                  <button
+                    key={service.id}
+                    type="button"
+                    onClick={() => toggleServiceInDraft(service.id)}
+                    className={`w-full rounded-lg border-2 p-4 text-left transition-all ${
+                      isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="block text-xs uppercase tracking-wide text-gray-500">{parentLabel}</span>
+                    <span className="mt-2 block text-base font-medium text-gray-900">{service.name}</span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => handleServiceModalOpenChange(false)}
+              className="flex-1"
+              disabled={isUpdatingServices}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSaveServiceSelection()} disabled={isUpdatingServices} className="flex-1">
+              {isUpdatingServices ? "Saving…" : "Save"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Add Feature Modal */}
-      {showAddFeatureModal && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Add feature</h2>
-                <button
-                  onClick={() => setShowAddFeatureModal(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {features.map((feature) => {
-                  const IconComponent = feature.icon
-                  const isSelected = tempSelectedFeatures.includes(feature.id)
-                  const isAlreadyAdded = selectedFeatures.includes(feature.id)
-
-                  return (
-                    <button
-                      key={feature.id}
-                      onClick={() => !isAlreadyAdded && toggleTempFeature(feature.id)}
-                      disabled={isAlreadyAdded}
-                      className={`p-4 rounded-lg border-2 transition-all text-left ${
-                        isAlreadyAdded
-                          ? "border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed"
-                          : isSelected
-                            ? "border-gray-900 bg-gray-50"
-                            : "border-gray-200 bg-white hover:border-gray-300"
-                      }`}
-                    >
-                      <IconComponent className="w-6 h-6 text-gray-700 mb-2" />
-                      <p className="font-medium text-gray-900 text-sm">{feature.name}</p>
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowAddFeatureModal(false)}
-                  className="flex-1 bg-white text-gray-900 py-3 px-6 rounded-md text-sm font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveNewFeatures}
-                  disabled={tempSelectedFeatures.length === 0}
-                  className="flex-1 bg-gray-900 text-white py-3 px-6 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Save
-                </button>
-              </div>
+      <Dialog open={inviteDialogOpen} onOpenChange={handleInviteDialogChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingInviteId ? "Edit invite" : "Invite a professional"}</DialogTitle>
+          </DialogHeader>
+          {inviteError && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{inviteError}</div>
+          )}
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="invite-email" className="mb-2 block text-sm font-medium text-gray-700">
+                Email address
+              </label>
+              <input
+                id="invite-email"
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                disabled={isInviteMutating}
+                placeholder="company@example.com"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/20 disabled:cursor-not-allowed disabled:opacity-50"
+              />
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Photo Selector Modal */}
-      {showPhotoSelector && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Select photos for {features.find((f) => f.id === showPhotoSelector)?.name}
-                </h2>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => deleteFeature(showPhotoSelector!)}
-                    className="text-red-600 hover:text-red-700 font-medium transition-colors flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete feature
-                  </button>
-                  <button onClick={cancelPhotoSelection} className="text-gray-400 hover:text-gray-600 text-2xl">
-                    ×
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="mb-6 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">Tagline</label>
-                  <input
-                    type="text"
-                    value={tempTagline}
-                    onChange={(e) => setTempTagline(e.target.value)}
-                    placeholder="Tagline"
-                    maxLength={80}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                  />
-                  <p className="text-sm text-gray-500 mt-1">{tempTagline.length} / 80 characters</p>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-1">Highlight this feature</h3>
-                    <p className="text-sm text-gray-500">
-                      Features with at least one photo can be highlighted on the project page
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTempHighlight(!tempHighlight)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 ${
-                      tempHighlight ? "bg-gray-900" : "bg-gray-200"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        tempHighlight ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
-                  }`}
-                  onDrop={handleModalDrop}
-                  onDragOver={handleModalDragOver}
-                  onDragLeave={handleModalDragLeave}
-                >
-                  <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-900 font-medium mb-1">Upload new photos</p>
-                  <p className="text-gray-500 text-sm mb-4">Drag and drop or browse for photos</p>
-                  <label className="inline-block">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handleModalFileUpload(e.target.files)}
-                    />
-                    <span className="bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors cursor-pointer">
-                      Browse Files
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {uploadedPhotos.map((photo) => {
-                  const isSelected = tempSelectedPhotos.includes(photo.id)
-                  const isCoverPhoto = tempCoverPhoto === photo.id
-
-                  return (
-                    <div key={photo.id} className="relative">
-                      <button
-                        onClick={() => togglePhotoSelection(photo.id)}
-                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-all relative w-full ${
-                          isSelected
-                            ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <img
-                          src={photo.url || "/placeholder.svg"}
-                          alt="Project photo"
-                          className="w-full h-full object-cover"
-                        />
-                        {isSelected && (
-                          <div className="absolute top-2 right-2">
-                            <div className="bg-gray-900 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium shadow-lg">
-                              ✓
-                            </div>
-                          </div>
-                        )}
-                        {isCoverPhoto && (
-                          <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                            Cover
-                          </div>
-                        )}
-                      </button>
-
-                      {isSelected && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
-                          }}
-                          className={`absolute bottom-2 left-2 right-2 text-xs py-1 px-2 rounded font-medium transition-colors ${
-                            isCoverPhoto
-                              ? "bg-blue-600 text-white"
-                              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                          }`}
-                        >
-                          {isCoverPhoto ? "Cover photo" : "Set as cover"}
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={cancelPhotoSelection}
-                  className="flex-1 bg-white text-gray-900 py-3 px-6 rounded-md text-sm font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveSelectedPhotos}
-                  className="flex-1 bg-gray-900 text-white py-3 px-6 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors"
-                >
-                  Save Selection ({tempSelectedPhotos.length})
-                </button>
-              </div>
-            </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => handleInviteDialogChange(false)}
+              className="flex-1"
+              disabled={isInviteMutating}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => void handleInviteSubmit()} disabled={isInviteMutating} className="flex-1">
+              {isInviteMutating ? "Sending…" : editingInviteId ? "Update invite" : "Send invite"}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Invite Professional Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Invite Professional</h3>
-              <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="Enter email address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowInviteModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendInvite}
-                  disabled={!inviteEmail.trim()}
-                  className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
