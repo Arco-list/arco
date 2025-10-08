@@ -1,9 +1,10 @@
 "use client"
-import { useMemo, useState } from "react"
+import { useMemo, useState, type MouseEvent } from "react"
 import { X, ChevronDown, ChevronUp } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useFilters } from "@/contexts/filter-context"
+import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
 
 interface FiltersModalProps {
   isOpen: boolean
@@ -53,7 +54,24 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   const [showAllMaterialFeatures, setShowAllMaterialFeatures] = useState(false)
 
   const toggleSelection = (item: string, selectedItems: string[], setSelectedItems: (items: string[]) => void) => {
-    setSelectedItems(selectedItems.includes(item) ? selectedItems.filter((value) => value !== item) : [...selectedItems, item])
+    setSelectedItems(
+      selectedItems.includes(item) ? selectedItems.filter((value) => value !== item) : [...selectedItems, item],
+    )
+  }
+
+  const handleTypeSelection = (typeId: string) => {
+    if (selectedTypes.includes(typeId)) {
+      setSelectedTypes([])
+    } else {
+      setSelectedTypes([typeId])
+    }
+  }
+
+  const handleTypeRadioClick = (event: MouseEvent<HTMLInputElement>, typeId: string) => {
+    if (selectedTypes.includes(typeId)) {
+      event.preventDefault()
+      setSelectedTypes([])
+    }
   }
 
   const topLevelCategories = useMemo(
@@ -78,38 +96,62 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   )
 
   const typeSections = useMemo(() => {
-    return topLevelCategories
-      .map((category) => {
-        const children = childCategoriesByParent.get(category.id) ?? []
+    const sections: Array<{
+      id: string
+      name: string
+      items: { id: string; name: string; isParent: boolean; isListable: boolean }[]
+    }> = []
+    const topLevelByName = new Map(topLevelCategories.map((category) => [category.name, category]))
+    const orderedTypes = Object.keys(PROJECT_TYPE_FILTERS)
 
-        const listableChildren = children
-          .filter((item) => item.project_category_attributes?.is_listable)
-          .sort((a, b) => {
-            const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER
-            const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER
-            if (orderA !== orderB) return orderA - orderB
-            return a.name.localeCompare(b.name)
-          })
+    orderedTypes.forEach((typeName) => {
+      if (!isAllowedProjectType(typeName)) {
+        return
+      }
 
-        const itemsSource = [
-          ...(category.project_category_attributes?.is_listable ? [category] : []),
-          ...listableChildren,
-        ]
+      const category = topLevelByName.get(typeName)
+      if (!category) {
+        return
+      }
 
-        if (itemsSource.length === 0) {
-          return null
-        }
+      const allowedSubTypes = PROJECT_TYPE_FILTERS[typeName]
+      const children = childCategoriesByParent.get(category.id) ?? []
 
-        return {
-          id: category.id ?? category.slug ?? category.name,
-          name: category.name,
-          items: itemsSource.map((item, index) => ({
+      const sortedChildren = [...children]
+        .filter((item) => isAllowedProjectSubType(typeName, item.name))
+        .sort((a, b) => {
+          const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER
+          const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER
+          if (orderA !== orderB) return orderA - orderB
+          return a.name.localeCompare(b.name)
+        })
+
+      const shouldIncludeParent = allowedSubTypes.includes(typeName)
+      const itemsSource = [
+        ...(shouldIncludeParent ? [category] : []),
+        ...sortedChildren,
+      ]
+
+      if (itemsSource.length === 0) {
+        return
+      }
+
+      sections.push({
+        id: category.id ?? category.slug ?? category.name,
+        name: category.name,
+        items: itemsSource.map((item, index) => {
+          const isParentItem = item.id === category.id
+          return {
             id: item.id ?? item.slug ?? `${item.name}-${index}`,
             name: item.name,
-          })),
-        }
+            isParent: isParentItem,
+            isListable: isAllowedProjectSubType(typeName, item.name) || (isParentItem && shouldIncludeParent),
+          }
+        }),
       })
-      .filter((section): section is { id: string; name: string; items: { id: string; name: string }[] } => section !== null)
+    })
+
+    return sections
   }, [childCategoriesByParent, topLevelCategories])
 
   const styleOptions = taxonomyOptions.project_style ?? []
@@ -118,33 +160,6 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   const buildingTypeOptions = taxonomyOptions.building_type ?? []
   const sizeOptions = taxonomyOptions.size_range ?? []
   const budgetOptions = taxonomyOptions.budget_tier ?? []
-
-  const toggleCategorySelection = (sectionId: string) => {
-    const section = typeSections.find((item) => item.id === sectionId)
-    if (!section) return
-    const candidateIds = section.items.map((item) => item.id)
-    const allSelected = candidateIds.every((id) => selectedTypes.includes(id))
-
-    if (allSelected) {
-      setSelectedTypes(selectedTypes.filter((type) => !candidateIds.includes(type)))
-    } else {
-      const nextTypes = new Set(selectedTypes)
-      candidateIds.forEach((id) => nextTypes.add(id))
-      setSelectedTypes(Array.from(nextTypes))
-    }
-  }
-
-  const isCategorySelected = (sectionId: string) => {
-    const section = typeSections.find((item) => item.id === sectionId)
-    if (!section || section.items.length === 0) return false
-    return section.items.every((item) => selectedTypes.includes(item.id))
-  }
-
-  const isCategoryPartiallySelected = (sectionId: string) => {
-    const section = typeSections.find((item) => item.id === sectionId)
-    if (!section) return false
-    return section.items.some((item) => selectedTypes.includes(item.id)) && !isCategorySelected(sectionId)
-  }
 
   const toggleProjectTypeExpansion = (id: string) => {
     setExpandedProjectTypes((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
@@ -188,46 +203,70 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                 <div className="space-y-4">
                   {typeSections.map((section) => (
                     <div key={section.id}>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded"
-                            checked={isCategorySelected(section.id)}
-                            ref={(el) => {
-                              if (el) el.indeterminate = isCategoryPartiallySelected(section.id)
-                            }}
-                            onChange={() => toggleCategorySelection(section.id)}
-                          />
-                          <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
-                        </label>
-                        <button
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-                          onClick={() => toggleProjectTypeExpansion(section.id)}
-                        >
-                          {expandedProjectTypes.includes(section.id) ? "Show less" : "View all"}
-                          {expandedProjectTypes.includes(section.id) ? (
-                            <ChevronUp className="h-3 w-3" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="space-y-2 ml-6">
-                        {section.items
-                          .slice(0, expandedProjectTypes.includes(section.id) ? undefined : 3)
-                          .map((item) => (
-                            <label key={item.id} className="flex items-center gap-3 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded"
-                                checked={selectedTypes.includes(item.id)}
-                                onChange={() => toggleSelection(item.id, selectedTypes, setSelectedTypes)}
-                              />
-                              <span className="text-sm">{item.name}</span>
-                            </label>
-                          ))}
-                      </div>
+                      {(() => {
+                        const parentItem = section.items.find((item) => item.isParent)
+                        const childItems = section.items.filter((item) => !item.isParent)
+
+                        const renderOption = (item: { id: string; name: string }) => (
+                          <label key={item.id} className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="modal-type-filter"
+                              className="h-4 w-4 rounded-full border-gray-300 text-black focus:ring-black"
+                              checked={selectedTypes.includes(item.id)}
+                              onChange={() => handleTypeSelection(item.id)}
+                              onClick={(event) => handleTypeRadioClick(event, item.id)}
+                              aria-checked={selectedTypes.includes(item.id)}
+                            />
+                            <span className="text-sm">{item.name}</span>
+                          </label>
+                        )
+
+                        const isExpanded = expandedProjectTypes.includes(section.id)
+                        const showToggle = childItems.length > 3
+                        const itemsToRender = isExpanded ? childItems : childItems.slice(0, 3)
+
+                        return (
+                          <>
+                            <div className="flex items-center justify-between mb-2">
+                              {parentItem ? (
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name="modal-type-filter"
+                                    className="h-4 w-4 rounded-full border-gray-300 text-black focus:ring-black"
+                                    checked={selectedTypes.includes(parentItem.id)}
+                                    onChange={() => handleTypeSelection(parentItem.id)}
+                                    onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
+                                    aria-checked={selectedTypes.includes(parentItem.id)}
+                                  />
+                                  <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
+                                </label>
+                              ) : (
+                                <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
+                              )}
+                              {showToggle && (
+                                <button
+                                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                                  onClick={() => toggleProjectTypeExpansion(section.id)}
+                                >
+                                  {isExpanded ? "Show less" : "View all"}
+                                  {isExpanded ? (
+                                    <ChevronUp className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronDown className="h-3 w-3" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                            {childItems.length > 0 && (
+                              <div className="space-y-2 ml-6">
+                                {itemsToRender.map((item) => renderOption(item))}
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>

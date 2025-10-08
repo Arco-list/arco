@@ -221,12 +221,12 @@ async function loadLandingData() {
 
       const representativeProject = listableChild ? representativeProjectMap.get(listableChild.id) : undefined
 
+      const typeSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
+
       return {
         id: category.id,
         title: category.name,
-        href: listableChild
-          ? `/projects?type=${encodeURIComponent(listableChild.slug ?? listableChild.name)}`
-          : "/projects",
+        href: typeSlug ? `/projects?type=${encodeURIComponent(typeSlug)}` : "/projects",
         imageUrl: representativeProject?.primary_photo_url ?? null,
       }
     })
