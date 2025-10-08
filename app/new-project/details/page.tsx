@@ -407,7 +407,11 @@ export default function NewProjectPage() {
           const { client_id: _clientId, ...rest } = projectPayload
           const projectUpdatePayload: TablesUpdate<"projects"> = rest
 
-          const { error } = await supabase.from("projects").update(projectUpdatePayload).eq("id", nextProjectId)
+          const { error } = await supabase
+            .from("projects")
+            .update(projectUpdatePayload)
+            .eq("id", nextProjectId)
+            .eq("client_id", userId)
           if (error) {
             throw error
           }

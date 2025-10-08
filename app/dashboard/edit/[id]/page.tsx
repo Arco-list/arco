@@ -1076,7 +1076,11 @@ export default function ListingEditorPage() {
     setLocationSaving(true)
 
     try {
-      const { error: updateError } = await supabase.from("projects").update(locationUpdate).eq("id", projectId)
+      const { error: updateError } = await supabase
+        .from("projects")
+        .update(locationUpdate)
+        .eq("id", projectId)
+        .eq("client_id", userId)
       if (updateError) {
         throw updateError
       }
@@ -1197,7 +1201,11 @@ export default function ListingEditorPage() {
     setDetailsFeedback(null)
 
     try {
-      const { error: updateError } = await supabase.from("projects").update(projectUpdatePayload).eq("id", projectId)
+      const { error: updateError } = await supabase
+        .from("projects")
+        .update(projectUpdatePayload)
+        .eq("id", projectId)
+        .eq("client_id", userId)
       if (updateError) {
         throw updateError
       }
