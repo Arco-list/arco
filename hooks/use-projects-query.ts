@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import type { Tables } from "@/lib/supabase/types"
+import type { Enums, Tables } from "@/lib/supabase/types"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
 
 import { useFilters } from "@/contexts/filter-context"
@@ -38,6 +38,13 @@ interface UseProjectsQueryOptions {
 
 const DEFAULT_PAGE_SIZE = 12
 const MAX_PAGE_SIZE = 100
+type ProjectBudgetLevel = Enums<"project_budget_level">
+const ALLOWED_BUDGET_LEVELS = new Set<ProjectBudgetLevel>([
+  "budget",
+  "mid_range",
+  "premium",
+  "luxury",
+])
 
 type CategoryRow = Tables<"categories"> & {
   project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable" | "is_building_feature"> | null
@@ -164,7 +171,9 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
       buildingFeatures: selectedBuildingFeatures,
       materialFeatures: selectedMaterialFeatures,
       sizes: selectedSizes,
-      budgets: selectedBudgets,
+      budgets: selectedBudgets.filter((budget): budget is ProjectBudgetLevel =>
+        ALLOWED_BUDGET_LEVELS.has(budget as ProjectBudgetLevel),
+      ),
       projectYearRange,
       buildingYearRange,
     }),

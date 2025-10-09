@@ -81,7 +81,6 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
       // This replaces the N+1 query pattern with a single JOIN query
       const { data: savedProjectsData, error: fetchError } = await supabase.rpc(
         "get_user_saved_projects_with_summary",
-        { p_user_id: user.id },
       );
 
       if (fetchError) {
@@ -142,8 +141,8 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
       setSavedProjects(projects);
     } catch (refreshError) {
       if (!isMountedRef.current) return;
-      const message =
-        refreshError instanceof Error ? refreshError.message : "Could not load saved projects right now.";
+      console.error("Failed to load saved projects", refreshError);
+      const message = "Could not load saved projects right now.";
       setError(message);
       toast.error("Unable to load saved projects", { description: message });
     } finally {
@@ -224,8 +223,8 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         await refresh();
         return { success: true };
       } catch (saveError) {
-        const message =
-          saveError instanceof Error ? saveError.message : "We could not save this project. Please try again.";
+        console.error("Failed to save project", { projectId, error: saveError });
+        const message = "We could not save this project. Please try again.";
         toast.error("Unable to save project", { description: message });
         setSavedProjects((previous) => previous.filter((entry) => entry.projectId !== projectId));
         return { success: false, error: message };
@@ -272,8 +271,8 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         await refresh();
         return { success: true };
       } catch (removeError) {
-        const message =
-          removeError instanceof Error ? removeError.message : "We could not remove this project right now.";
+        console.error("Failed to remove saved project", { projectId, error: removeError });
+        const message = "We could not remove this project right now.";
         toast.error("Unable to remove project", { description: message });
         setSavedProjects(previousState);
         return { success: false, error: message };
