@@ -125,7 +125,7 @@ export const ProjectLikesProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, error: "Missing project id." };
       }
 
-      if (!ensureAuth() || !user) {
+      if (!ensureAuth() || !user?.id) {
         toast.info("Sign in to like projects.");
         return { success: false, requiresAuth: true };
       }

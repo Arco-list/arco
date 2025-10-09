@@ -168,7 +168,7 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         return { success: false, error: "Missing project reference." };
       }
 
-      if (!ensureAuth()) {
+      if (!ensureAuth() || !user?.id) {
         toast.info("Sign in to save projects for later.");
         return { success: false, requiresAuth: true };
       }
@@ -234,7 +234,7 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         return { success: false, error: "Missing project reference." };
       }
 
-      if (!ensureAuth()) {
+      if (!ensureAuth() || !user?.id) {
         toast.info("Sign in to manage saved projects.");
         return { success: false, requiresAuth: true };
       }
