@@ -367,6 +367,7 @@ export default function ListingEditorPage() {
     getFeatureDisplay,
     getFeaturePhotoCount,
     getFeatureCoverPhoto,
+    getSelectablePhotos,
     handleDragOver,
     handleDragLeave,
     handleDrop,
@@ -416,6 +417,11 @@ export default function ListingEditorPage() {
   const currentFeatureDisplay = useMemo(
     () => (showPhotoSelector ? getFeatureDisplay(showPhotoSelector) : null),
     [getFeatureDisplay, showPhotoSelector],
+  )
+
+  const selectablePhotos = useMemo(
+    () => getSelectablePhotos(showPhotoSelector),
+    [getSelectablePhotos, showPhotoSelector],
   )
 
   useEffect(() => {
@@ -2350,57 +2356,63 @@ export default function ListingEditorPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-                    {uploadedPhotos.map((photo) => {
-                      const isSelected = tempSelectedPhotos.includes(photo.id)
-                      const isCoverPhoto = tempCoverPhoto === photo.id
+                  {selectablePhotos.length === 0 ? (
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                      Upload more photos
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+                      {selectablePhotos.map((photo) => {
+                        const isSelected = tempSelectedPhotos.includes(photo.id)
+                        const isCoverPhoto = tempCoverPhoto === photo.id
 
-                      return (
-                        <div key={photo.id} className="relative">
-                          <button
-                            onClick={() => toggleTempPhoto(photo.id)}
-                            className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
-                              isSelected
-                                ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <img
-                              src={photo.url || "/placeholder.svg"}
-                              alt="Project photo"
-                              className="h-full w-full object-cover"
-                            />
-                            {isSelected && (
-                              <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
-                                ✓
-                              </div>
-                            )}
-                            {isCoverPhoto && (
-                              <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
-                                Cover
-                              </div>
-                            )}
-                          </button>
-
-                          {isSelected && (
+                        return (
+                          <div key={photo.id} className="relative">
                             <button
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
-                              }}
-                              className={`absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors ${
-                                isCoverPhoto
-                                  ? "bg-blue-600 text-white"
-                                  : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                              onClick={() => toggleTempPhoto(photo.id)}
+                              className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
+                                isSelected
+                                  ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
+                                  : "border-gray-200 hover:border-gray-300"
                               }`}
                             >
-                              {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                              <img
+                                src={photo.url || "/placeholder.svg"}
+                                alt="Project photo"
+                                className="h-full w-full object-cover"
+                              />
+                              {isSelected && (
+                                <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
+                                  ✓
+                                </div>
+                              )}
+                              {isCoverPhoto && (
+                                <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
+                                  Cover
+                                </div>
+                              )}
                             </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+
+                            {isSelected && (
+                              <button
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
+                                }}
+                                className={`absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors ${
+                                  isCoverPhoto
+                                    ? "bg-blue-600 text-white"
+                                    : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {modalUploadErrors.length > 0 && (

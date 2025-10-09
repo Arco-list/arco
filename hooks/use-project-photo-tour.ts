@@ -104,6 +104,7 @@ export type UseProjectPhotoTourResult = {
   getFeatureDisplay: (featureId: string) => FeatureDisplay
   getFeaturePhotoCount: (featureId: string) => number
   getFeatureCoverPhoto: (featureId: string) => string | null
+  getSelectablePhotos: (featureId: string | null) => UploadedPhoto[]
   handleDragOver: (event: React.DragEvent) => void
   handleDragLeave: (event: React.DragEvent) => void
   handleDrop: (event: React.DragEvent) => void
@@ -166,6 +167,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const [featureMetadata, setFeatureMetadata] = useState<
     Record<string, { featureId: string; orderIndex: number; categoryId: string | null }>
   >({})
+  const unresolvedAssignmentsRef = useRef<Map<string, string>>(new Map())
   const [isSavingFeatures, setIsSavingFeatures] = useState(false)
   const [isSavingSelection, setIsSavingSelection] = useState(false)
   const [featureMutationError, setFeatureMutationError] = useState<string | null>(null)
@@ -583,7 +585,10 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   }, [])
 
   const uploadFiles = useCallback(
-    async (files: FileList | null, options: { addToModalSelection?: boolean } = {}) => {
+    async (
+      files: FileList | null,
+      options: { addToModalSelection?: boolean; selectorFeatureId?: string | null } = {},
+    ) => {
       if (!files || files.length === 0 || !resolvedProjectId) {
         return
       }
@@ -645,7 +650,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
           const orderIndex = uploadedPhotos.length + uploaded.length
           const shouldBePrimary = uploadedPhotos.length + uploaded.length === 0
-          const featureId = buildingFeatureId ?? null
+      const featureId = options.selectorFeatureId ?? showPhotoSelector ?? buildingFeatureId ?? null
 
           const photoId = generateUploadId()
 
@@ -695,22 +700,38 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         setFeaturePhotos((prev) => {
           const next = { ...prev }
-          const buildingPhotos = next[BUILDING_FEATURE_ID] ? [...next[BUILDING_FEATURE_ID]] : []
-          buildingPhotos.push(...uploaded.map((photo) => photo.id))
-          next[BUILDING_FEATURE_ID] = buildingPhotos
+          const targetFeatureId = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+          const existing = next[targetFeatureId] ? [...next[targetFeatureId]] : []
+          existing.push(...uploaded.map((photo) => photo.id))
+          next[targetFeatureId] = Array.from(new Set(existing))
+
+          if (targetFeatureId !== BUILDING_FEATURE_ID) {
+            const buildingPhotos = next[BUILDING_FEATURE_ID] ? [...next[BUILDING_FEATURE_ID]] : []
+            const filtered = buildingPhotos.filter((id) => !uploaded.find((photo) => photo.id === id))
+            next[BUILDING_FEATURE_ID] = filtered
+          }
+
           return next
         })
 
-        if (!featureCoverPhotos[BUILDING_FEATURE_ID]) {
+        const targetFeatureId = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+
+        if (!featureCoverPhotos[targetFeatureId]) {
           setFeatureCoverPhotos((prev) => ({
             ...prev,
-            [BUILDING_FEATURE_ID]: uploaded[0].id,
+            [targetFeatureId]: uploaded[0].id,
           }))
         }
 
         if (options.addToModalSelection) {
           setTempSelectedPhotos((prev) => [...new Set([...prev, ...modalPhotoIds])])
           setTempCoverPhoto((prev) => prev || modalPhotoIds[0] || "")
+          const featureId = options.selectorFeatureId ?? showPhotoSelector
+          if (featureId) {
+            modalPhotoIds.forEach((photoId) => {
+              unresolvedAssignmentsRef.current.set(photoId, featureId)
+            })
+          }
         }
       }
 
@@ -728,6 +749,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       generateUploadId,
       normaliseCoverFlag,
       resolvedProjectId,
+      showPhotoSelector,
       supabase,
       uploadedPhotos.length,
       validateFile,
@@ -754,9 +776,9 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
   const handleModalFileUpload = useCallback(
     async (files: FileList | null) => {
-      await uploadFiles(files, { addToModalSelection: true })
+      await uploadFiles(files, { addToModalSelection: true, selectorFeatureId: showPhotoSelector })
     },
-    [uploadFiles],
+    [showPhotoSelector, uploadFiles],
   )
 
   const handleModalDrop = useCallback(
@@ -764,9 +786,9 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       event.preventDefault()
       setModalDragOver(false)
       const files = event.dataTransfer.files
-      void uploadFiles(files, { addToModalSelection: true })
+      void uploadFiles(files, { addToModalSelection: true, selectorFeatureId: showPhotoSelector })
     },
-    [uploadFiles],
+    [showPhotoSelector, uploadFiles],
   )
 
   const handleModalDragOver = useCallback((event: React.DragEvent) => {
@@ -778,6 +800,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     event.preventDefault()
     setModalDragOver(false)
   }, [])
+
+  const photoAssignmentMap = useMemo(() => {
+    const map = new Map<string, string>()
+    Object.entries(featurePhotos).forEach(([featureId, photoIds]) => {
+      photoIds.forEach((photoId) => {
+        map.set(photoId, featureId)
+      })
+    })
+    return map
+  }, [featurePhotos])
 
   const getFeatureDisplay = useCallback(
     (featureId: string): FeatureDisplay => {
@@ -1509,6 +1541,20 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     setModalUploadErrors([])
   }, [])
 
+  const getSelectablePhotos = useCallback(
+    (featureId: string | null) => {
+      if (!featureId) {
+        return uploadedPhotos
+      }
+
+      return uploadedPhotos.filter((photo) => {
+        const assignedFeature = photoAssignmentMap.get(photo.id)
+        return !assignedFeature || assignedFeature === featureId
+      })
+    },
+    [photoAssignmentMap, uploadedPhotos],
+  )
+
   return {
     projectId: resolvedProjectId,
     uploadedPhotos,
@@ -1544,6 +1590,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     getFeatureDisplay,
     getFeaturePhotoCount,
     getFeatureCoverPhoto,
+    getSelectablePhotos,
     handleDragOver,
     handleDragLeave,
     handleDrop,
