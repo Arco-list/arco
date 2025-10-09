@@ -1555,7 +1555,23 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
       return uploadedPhotos.filter((photo) => {
         const assignedFeature = photoAssignmentMap.get(photo.id)
-        return !assignedFeature || assignedFeature === featureId
+        if (!assignedFeature || assignedFeature === featureId) {
+          return true
+        }
+
+        if (featureId === BUILDING_FEATURE_ID) {
+          return assignedFeature === BUILDING_FEATURE_ID || assignedFeature === ADDITIONAL_FEATURE_ID
+        }
+
+        if (featureId === ADDITIONAL_FEATURE_ID) {
+          return (
+            assignedFeature === ADDITIONAL_FEATURE_ID ||
+            assignedFeature === BUILDING_FEATURE_ID ||
+            !assignedFeature
+          )
+        }
+
+        return assignedFeature === BUILDING_FEATURE_ID || assignedFeature === ADDITIONAL_FEATURE_ID
       })
     },
     [photoAssignmentMap, uploadedPhotos],

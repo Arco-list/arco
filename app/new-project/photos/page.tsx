@@ -142,7 +142,23 @@ export default function PhotoTourPage() {
 
     return uploadedPhotos.filter((photo) => {
       const assignedFeature = photoAssignmentMap.get(photo.id)
-      return !assignedFeature || assignedFeature === showPhotoSelector
+      if (!assignedFeature || assignedFeature === showPhotoSelector) {
+        return true
+      }
+
+      if (showPhotoSelector === BUILDING_FEATURE_ID) {
+        return assignedFeature === BUILDING_FEATURE_ID || assignedFeature === ADDITIONAL_FEATURE_ID
+      }
+
+      if (showPhotoSelector === ADDITIONAL_FEATURE_ID) {
+        return (
+          assignedFeature === ADDITIONAL_FEATURE_ID ||
+          assignedFeature === BUILDING_FEATURE_ID ||
+          !assignedFeature
+        )
+      }
+
+      return assignedFeature === BUILDING_FEATURE_ID || assignedFeature === ADDITIONAL_FEATURE_ID
     })
   }, [photoAssignmentMap, showPhotoSelector, uploadedPhotos])
 

@@ -63,7 +63,15 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
       }
 
       toast.success("Signed in successfully");
-      const destination = resolveRedirectPath(sanitizedRedirect);
+      const defaultDestination = resolveRedirectPath(sanitizedRedirect);
+      const sessionMetadata = result.data?.user?.user_metadata ?? {};
+      const metadataUserTypes = Array.isArray(sessionMetadata.user_types)
+        ? (sessionMetadata.user_types as string[])
+        : typeof sessionMetadata.user_types === "string"
+          ? [sessionMetadata.user_types]
+          : null;
+      const isAdminLogin = metadataUserTypes?.includes("admin") ?? false;
+      const destination = sanitizedRedirect ?? (isAdminLogin ? "/admin" : defaultDestination);
       form.reset({ email: values.email, password: "", redirectTo: sanitizedRedirect ?? "" });
 
       let sessionRefreshed = true;

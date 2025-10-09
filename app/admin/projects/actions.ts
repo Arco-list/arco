@@ -114,6 +114,18 @@ export async function setProjectStatusAction(input: {
     return { success: false, error: updateError.message }
   }
 
+  const serviceClient = createServiceRoleSupabaseClient()
+  const { error: refreshError } = await serviceClient.rpc("refresh_project_summary")
+
+  if (refreshError) {
+    logger.error(
+      "Failed to refresh project summary after status update",
+      { scope: "admin-projects", projectId: idResult.data, nextStatus: statusResult.data },
+      refreshError,
+    )
+    return { success: false, error: "Status updated, but failed to refresh project summaries. Try again." }
+  }
+
   revalidatePath("/admin/projects")
   return { success: true }
 }
