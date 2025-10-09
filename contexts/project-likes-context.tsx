@@ -156,47 +156,30 @@ export const ProjectLikesProvider = ({ children }: { children: ReactNode }) => {
       }));
 
       try {
-        const nextLiked = !wasLiked;
+        const targetLiked = !wasLiked;
+        const { data, error: rpcError } = await supabase.rpc("toggle_project_like", {
+          p_project_id: projectId,
+        });
 
-        if (wasLiked) {
-          const { error: deleteError } = await supabase
-            .from("project_likes")
-            .delete()
-            .eq("project_id", projectId)
-            .eq("user_id", user.id);
-
-          if (deleteError) {
-            throw deleteError;
-          }
-        } else {
-          const { error: insertError } = await supabase
-            .from("project_likes")
-            .upsert({
-              project_id: projectId,
-              user_id: user.id,
-            });
-
-          if (insertError) {
-            throw insertError;
-          }
+        if (rpcError) {
+          throw rpcError;
         }
 
-        const { data: projectRow, error: countError } = await supabase
-          .from("projects")
-          .select("likes_count")
-          .eq("id", projectId)
-          .maybeSingle();
-
-        if (countError) {
-          throw countError;
-        }
-
-        const latestCount = projectRow?.likes_count ?? Math.max(0, nextLiked ? previousCount + 1 : previousCount - 1);
-        const nextCount = Math.max(0, latestCount);
+        const rpcResult = Array.isArray(data) ? data?.[0] : data;
+        const latestLiked = rpcResult?.liked ?? targetLiked;
+        const latestCount = rpcResult?.likes_count;
+        const nextCount = Math.max(
+          0,
+          typeof latestCount === "number"
+            ? latestCount
+            : targetLiked
+              ? previousCount + 1
+              : previousCount - 1,
+        );
 
         setLikedProjectIds(() => {
           const next = new Set(previousLikedIds);
-          if (nextLiked) {
+          if (latestLiked) {
             next.add(projectId);
           } else {
             next.delete(projectId);
@@ -209,7 +192,7 @@ export const ProjectLikesProvider = ({ children }: { children: ReactNode }) => {
           [projectId]: nextCount,
         }));
 
-        return { success: true, liked: nextLiked, likesCount: nextCount };
+        return { success: true, liked: latestLiked, likesCount: nextCount };
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "We could not update your like right now. Please try again.";

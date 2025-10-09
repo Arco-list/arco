@@ -650,7 +650,13 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
           const orderIndex = uploadedPhotos.length + uploaded.length
           const shouldBePrimary = uploadedPhotos.length + uploaded.length === 0
-      const featureId = options.selectorFeatureId ?? showPhotoSelector ?? buildingFeatureId ?? null
+          const targetFeatureKey = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+          const dbFeatureId =
+            targetFeatureKey === BUILDING_FEATURE_ID
+              ? buildingFeatureId
+              : targetFeatureKey
+                ? featureIdMap[targetFeatureKey] ?? null
+                : null
 
           const photoId = generateUploadId()
 
@@ -662,7 +668,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               url: publicUrl,
               storage_path: storagePath,
               order_index: orderIndex,
-              feature_id: featureId,
+              feature_id: dbFeatureId,
               is_primary: shouldBePrimary,
               width,
               height,
@@ -700,12 +706,12 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         setFeaturePhotos((prev) => {
           const next = { ...prev }
-          const targetFeatureId = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
-          const existing = next[targetFeatureId] ? [...next[targetFeatureId]] : []
+          const targetFeatureKey = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+          const existing = next[targetFeatureKey] ? [...next[targetFeatureKey]] : []
           existing.push(...uploaded.map((photo) => photo.id))
-          next[targetFeatureId] = Array.from(new Set(existing))
+          next[targetFeatureKey] = Array.from(new Set(existing))
 
-          if (targetFeatureId !== BUILDING_FEATURE_ID) {
+          if (targetFeatureKey !== BUILDING_FEATURE_ID) {
             const buildingPhotos = next[BUILDING_FEATURE_ID] ? [...next[BUILDING_FEATURE_ID]] : []
             const filtered = buildingPhotos.filter((id) => !uploaded.find((photo) => photo.id === id))
             next[BUILDING_FEATURE_ID] = filtered
@@ -714,12 +720,12 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           return next
         })
 
-        const targetFeatureId = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+        const targetFeatureKey = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
 
-        if (!featureCoverPhotos[targetFeatureId]) {
+        if (!featureCoverPhotos[targetFeatureKey]) {
           setFeatureCoverPhotos((prev) => ({
             ...prev,
-            [targetFeatureId]: uploaded[0].id,
+            [targetFeatureKey]: uploaded[0].id,
           }))
         }
 

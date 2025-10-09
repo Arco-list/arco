@@ -34,23 +34,41 @@ type AuthActionResult<TData> = {
   error?: AuthActionError;
 };
 
-const getBaseUrl = async () => {
-  const envUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-
-  if (envUrl) {
-    return envUrl.replace(/\/$/, '');
+const normalizeUrl = (value: string | undefined | null) => {
+  if (!value) return undefined;
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return undefined;
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return trimmedValue.replace(/\/$/, '');
   }
+  return `https://${trimmedValue}`.replace(/\/$/, '');
+};
 
-  const headerList = await headers();
+const getBaseUrl = async () => {
+  const envUrl = normalizeUrl(process.env.NEXT_PUBLIC_SITE_URL);
+  if (envUrl) return envUrl;
+
+  const headerList = headers();
+
   const forwardedProto = headerList.get('x-forwarded-proto');
   const protocol = forwardedProto?.split(',')[0]?.trim() || 'https';
-  const forwardedHost = headerList.get('x-forwarded-host');
-  const host =
-    forwardedHost?.split(',')[0]?.trim() || headerList.get('host')?.split(',')[0]?.trim();
 
-  if (host) {
-    return `${protocol}://${host}`.replace(/\/$/, '');
+  const possibleHosts = [
+    headerList.get('x-forwarded-host'),
+    headerList.get('x-vercel-forwarded-host'),
+    headerList.get('host'),
+  ];
+
+  for (const rawHost of possibleHosts) {
+    const host = rawHost?.split(',')[0]?.trim();
+    if (host) {
+      return `${protocol}://${host}`.replace(/\/$/, '');
+    }
   }
+
+  const vercelUrl =
+    normalizeUrl(process.env.NEXT_PUBLIC_VERCEL_URL) || normalizeUrl(process.env.VERCEL_URL);
+  if (vercelUrl) return vercelUrl;
 
   return 'http://localhost:3000';
 };
