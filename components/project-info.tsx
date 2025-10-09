@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Heart, Share, ThumbsUp } from "lucide-react"
@@ -23,14 +24,31 @@ export function ProjectInfo() {
   const isLiked = providerLiked ?? Boolean(initialLiked)
   const isMutatingLike = projectId ? likeMutatingProjectIds.has(projectId) : false
   const likesCount = projectId ? likeCounts[projectId] ?? initialLikesCount ?? 0 : initialLikesCount ?? 0
+  const breadcrumbs = info.breadcrumbs.length > 0 ? info.breadcrumbs : [{ label: "Projects", href: "/projects" }]
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="text-sm text-gray-500">
-            {info.breadcrumbs.length > 0 ? info.breadcrumbs.join(" > ") : "Projects"}
-          </div>
+          <nav className="text-sm text-gray-500 flex flex-wrap items-center gap-1" aria-label="Breadcrumb">
+            {breadcrumbs.map((crumb, index) => {
+              const isLast = index === breadcrumbs.length - 1
+              const content = crumb.href ? (
+                <Link href={crumb.href} className="hover:text-gray-700 hover:underline">
+                  {crumb.label}
+                </Link>
+              ) : (
+                <span>{crumb.label}</span>
+              )
+
+              return (
+                <span key={`${crumb.label}-${index}`} className="flex items-center gap-1">
+                  {content}
+                  {!isLast && <span className="text-gray-300">/</span>}
+                </span>
+              )
+            })}
+          </nav>
 
           {/* Action buttons - moved to same row as breadcrumbs */}
           <div className="flex gap-2">
@@ -93,7 +111,7 @@ export function ProjectInfo() {
           <p className="text-gray-700 leading-relaxed">{info.descriptionPlain}</p>
         )}
 
-        <Button variant="link" className="p-0 text-blue-600">
+        <Button variant="link" className="p-0 text-red-600 hover:text-red-700">
           Show more
         </Button>
       </div>

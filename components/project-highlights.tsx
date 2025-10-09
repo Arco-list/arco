@@ -1,16 +1,14 @@
 "use client"
 
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useRef } from "react"
+import { useCallback, useRef } from "react"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { useProjectGalleryModal } from "@/contexts/project-gallery-modal-context"
 
 export function ProjectHighlights() {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const { highlights } = useProjectPreview()
-
-  if (highlights.length === 0) {
-    return null
-  }
+  const { highlights, hero } = useProjectPreview()
+  const { openModal } = useProjectGalleryModal()
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -22,6 +20,22 @@ export function ProjectHighlights() {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: 320, behavior: "smooth" })
     }
+  }
+
+  const handleHighlightClick = useCallback(
+    (highlightId: string) => {
+      const hasMatchingGroup = hero.groups.some((group) => group.id === highlightId)
+      if (hasMatchingGroup) {
+        openModal({ groupId: highlightId })
+        return
+      }
+      openModal()
+    },
+    [hero.groups, openModal],
+  )
+
+  if (highlights.length === 0) {
+    return null
   }
 
   return (
@@ -52,15 +66,21 @@ export function ProjectHighlights() {
         style={{ scrollSnapType: "x mandatory" }}
       >
         {highlights.map((highlight) => (
-          <div key={highlight.id} className="flex-none w-80 space-y-2" style={{ scrollSnapAlign: "start" }}>
+          <button
+            key={highlight.id}
+            type="button"
+            onClick={() => handleHighlightClick(highlight.id)}
+            className="flex-none w-80 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
+            style={{ scrollSnapAlign: "start" }}
+          >
             <img
               src={highlight.imageUrl || "/placeholder.svg"}
               alt={highlight.title}
-              className="w-full h-48 object-cover rounded-lg hover:scale-105 transition-transform duration-300"
+              className="w-full h-48 object-cover rounded-lg transition-transform duration-300 hover:scale-105"
             />
             <p className="text-sm font-medium text-gray-900">{highlight.title}</p>
             {highlight.description && <p className="text-xs text-gray-600">{highlight.description}</p>}
-          </div>
+          </button>
         ))}
       </div>
     </div>

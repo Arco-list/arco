@@ -5,21 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import {
-  Bed,
-  Bath,
-  Car,
-  Grid3x3,
-  Home,
-  ImageIcon,
-  Layers,
-  MoreHorizontal,
-  Sofa,
-  Trash2,
-  TreePine,
-  Utensils,
-  Waves,
-} from "lucide-react"
+import { Grid3x3, Home, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Tables } from "@/lib/supabase/types"
 import {
@@ -28,6 +14,7 @@ import {
   MIN_PHOTOS_REQUIRED,
   OVERLAY_CLASSES,
 } from "@/hooks/use-project-photo-tour"
+import { resolveFeatureIcon } from "@/lib/icons/project-features"
 
 function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
@@ -86,22 +73,6 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   "image/png": "png",
 }
 
-const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
-  attic: Home,
-  balcony: Home,
-  basement: Layers,
-  bathroom: Bath,
-  bedroom: Bed,
-  dining_room: Utensils,
-  garage: Car,
-  garden: TreePine,
-  kitchen: Utensils,
-  living_room: Sofa,
-  office: Home,
-  pool: Waves,
-  terrace: Layers,
-}
-
 const FALLBACK_FEATURES: FeatureOption[] = [
   { id: "bedroom", name: "Bedroom", slug: "bedroom" },
   { id: "bathroom", name: "Bathroom", slug: "bathroom" },
@@ -116,15 +87,6 @@ const FALLBACK_FEATURES: FeatureOption[] = [
   { id: "attic", name: "Attic", slug: "attic" },
   { id: "terrace", name: "Terrace", slug: "terrace" },
 ]
-
-const resolveFeatureIcon = (slug?: string | null) => {
-  if (!slug) {
-    return Grid3x3
-  }
-
-  const key = slug.replace(/-/g, "_")
-  return FEATURE_ICON_MAP[key] ?? Grid3x3
-}
 
 export default function PhotoTourPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])

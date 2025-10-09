@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner"
 
 interface ImageGroup {
+  id: string
   category: string
   description?: string
   images: {
@@ -30,6 +31,7 @@ interface GroupedPicturesModalProps {
   onClose: () => void
   imageGroups: ImageGroup[]
   title?: string
+  selectedGroupId?: string
 }
 
 export function GroupedPicturesModal({
@@ -37,11 +39,13 @@ export function GroupedPicturesModal({
   onClose,
   imageGroups,
   title = "Project Gallery",
+  selectedGroupId,
 }: GroupedPicturesModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
+  const groupRefs = useRef(new Map<string, HTMLDivElement>())
 
   // Flatten all images for lightbox navigation
   const allImages = useMemo(
@@ -59,7 +63,7 @@ export function GroupedPicturesModal({
   const handleImageClick = (groupIndex: number, imageIndex: number) => {
     // Calculate the global index for the clicked image
     let globalIndex = 0
-    for (let i = 0; i < groupIndex; i++) {
+    for (let i = 0; i < groupIndex; i += 1) {
       globalIndex += imageGroups[i].images.length
     }
     globalIndex += imageIndex
@@ -85,6 +89,46 @@ export function GroupedPicturesModal({
   useEffect(() => {
     setIsZoomed(false)
   }, [isLightboxOpen, currentImageIndex])
+
+  useEffect(() => {
+    if (!isOpen || !selectedGroupId) {
+      return
+    }
+
+    const targetGroupIndex = imageGroups.findIndex((group) => group.id === selectedGroupId)
+    if (targetGroupIndex === -1 || imageGroups[targetGroupIndex]?.images.length === 0) {
+      return
+    }
+
+    let globalIndex = 0
+    for (let i = 0; i < targetGroupIndex; i += 1) {
+      globalIndex += imageGroups[i].images.length
+    }
+    setCurrentImageIndex(globalIndex)
+
+    let cancelled = false
+    let animationFrameId: number | null = null
+    const attemptScroll = () => {
+      if (cancelled) {
+        return
+      }
+      const targetRef = groupRefs.current.get(selectedGroupId)
+      if (targetRef) {
+        targetRef.scrollIntoView({ behavior: "smooth", block: "start" })
+        return
+      }
+      animationFrameId = requestAnimationFrame(attemptScroll)
+    }
+
+    animationFrameId = requestAnimationFrame(attemptScroll)
+
+    return () => {
+      cancelled = true
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+      }
+    }
+  }, [imageGroups, isOpen, selectedGroupId])
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -179,7 +223,17 @@ export function GroupedPicturesModal({
               <div className="p-4 md:p-6">
                 <div className="max-w-4xl mx-auto space-y-8">
                   {imageGroups.map((group, groupIndex) => (
-                    <div key={group.category} className="space-y-4">
+                    <div
+                      key={group.id}
+                      ref={(node) => {
+                        if (!node) {
+                          groupRefs.current.delete(group.id)
+                          return
+                        }
+                        groupRefs.current.set(group.id, node)
+                      }}
+                      className="space-y-4"
+                    >
                       {/* Category Header */}
                       <div className="space-y-1">
                         <h2 className="text-xl font-semibold text-gray-900">{group.category}</h2>

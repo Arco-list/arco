@@ -55,6 +55,11 @@ export type PreviewDetail = {
   value: string
 }
 
+export type PreviewBreadcrumb = {
+  label: string
+  href?: string | null
+}
+
 export type PreviewSimilarProject = {
   id: string
   title: string
@@ -77,7 +82,7 @@ export type ProjectPreviewData = {
   }
   canViewInviteDetails: boolean
   info: {
-    breadcrumbs: string[]
+    breadcrumbs: PreviewBreadcrumb[]
     title: string
     subtitle?: string | null
     sponsoredLabel?: string | null

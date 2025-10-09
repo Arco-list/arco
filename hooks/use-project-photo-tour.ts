@@ -4,20 +4,10 @@ import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { LucideIcon } from "lucide-react"
-import {
-  Bath,
-  Bed,
-  Car,
-  Grid3x3,
-  Home,
-  Layers,
-  Sofa,
-  TreePine,
-  Utensils,
-  Waves,
-} from "lucide-react"
+import { Grid3x3, Home } from "lucide-react"
 
 import type { Tables } from "@/lib/supabase/types"
+import { resolveFeatureIcon } from "@/lib/icons/project-features"
 
 export type FeatureOption = {
   id: string
@@ -55,22 +45,6 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   "image/png": "png",
 }
 
-const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
-  attic: Home,
-  balcony: Home,
-  basement: Layers,
-  bathroom: Bath,
-  bedroom: Bed,
-  dining_room: Utensils,
-  garage: Car,
-  garden: TreePine,
-  kitchen: Utensils,
-  living_room: Sofa,
-  office: Home,
-  pool: Waves,
-  terrace: Layers,
-}
-
 const FALLBACK_FEATURES: FeatureOption[] = [
   { id: "bedroom", name: "Bedroom", slug: "bedroom" },
   { id: "bathroom", name: "Bathroom", slug: "bathroom" },
@@ -85,15 +59,6 @@ const FALLBACK_FEATURES: FeatureOption[] = [
   { id: "attic", name: "Attic", slug: "attic" },
   { id: "terrace", name: "Terrace", slug: "terrace" },
 ]
-
-const resolveFeatureIcon = (slug?: string | null) => {
-  if (!slug) {
-    return Grid3x3
-  }
-
-  const key = slug.replace(/-/g, "_")
-  return FEATURE_ICON_MAP[key] ?? Grid3x3
-}
 
 const isUuid = (value?: string | null): value is string =>
   !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
