@@ -77,61 +77,69 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
     setError(null);
 
     try {
-      const { data: rawSaved, error: fetchError } = await supabase
-        .from("saved_projects")
-        .select("project_id, created_at")
-        .order("created_at", { ascending: false });
+      // Use optimized database function to fetch saved projects with summaries in a single query
+      // This replaces the N+1 query pattern with a single JOIN query
+      const { data: savedProjectsData, error: fetchError } = await supabase.rpc(
+        "get_user_saved_projects_with_summary",
+        { p_user_id: user.id },
+      );
 
       if (fetchError) {
         throw fetchError;
       }
 
-      const entries = rawSaved ?? [];
-      const projectIds = entries.map((entry) => entry.project_id).filter(Boolean);
-
-      let summaries: ProjectSummaryRow[] = [];
-
-      if (projectIds.length > 0) {
-        const { data: summariesData, error: summaryError } = await supabase
-          .from("mv_project_summary")
-          .select(
-            "id, slug, title, primary_photo_url, primary_photo_alt, location, likes_count, created_at, updated_at, budget_display",
-          )
-          .in("id", projectIds);
-
-        if (summaryError) {
-          throw summaryError;
-        }
-
-        summaries = summariesData ?? [];
-      }
-
-      const summaryById = new Map(
-        summaries
-          .filter((summary): summary is ProjectSummaryRow & { id: string } => isValidProjectSummary(summary))
-          .map((summary) => [summary.id as string, summary]),
-      );
-
       if (!isMountedRef.current) {
         return;
       }
 
-      setSavedProjects(
-        entries
-          .map((entry) => {
-            const projectId = entry.project_id;
-            if (!projectId) return null;
+      const projects = (savedProjectsData ?? []).map((row) => {
+        // Map RPC result to ProjectSummaryRow format
+        const summary = {
+          id: row.id,
+          slug: row.slug,
+          title: row.title,
+          primary_photo_url: row.primary_photo_url,
+          primary_photo_alt: row.primary_photo_alt,
+          location: row.location,
+          likes_count: row.likes_count,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          budget_display: row.budget_display,
+          // Add missing fields with null values to match ProjectSummaryRow type
+          description: null,
+          budget_level: null,
+          budget_max: null,
+          budget_min: null,
+          building_type: null,
+          building_year: null,
+          client_avatar: null,
+          client_first_name: null,
+          client_last_name: null,
+          features: null,
+          is_featured: null,
+          pending_applications: null,
+          photo_count: null,
+          primary_category: null,
+          primary_category_color: null,
+          primary_category_icon: null,
+          primary_category_slug: null,
+          project_size: null,
+          project_type: null,
+          project_year: null,
+          status: null,
+          style_preferences: null,
+          total_applications: null,
+          views_count: null,
+        } as ProjectSummaryRow & { id: string };
 
-            const summary = summaryById.get(projectId) ?? null;
+        return {
+          projectId: row.id,
+          createdAt: row.saved_at,
+          summary: isValidProjectSummary(summary) ? summary : null,
+        } satisfies SavedProjectEntry;
+      });
 
-            return {
-              projectId,
-              createdAt: entry.created_at ?? null,
-              summary: summary && isValidProjectSummary(summary) ? summary : null,
-            } satisfies SavedProjectEntry;
-          })
-          .filter((entry): entry is SavedProjectEntry => Boolean(entry)),
-      );
+      setSavedProjects(projects);
     } catch (refreshError) {
       if (!isMountedRef.current) return;
       const message =
