@@ -1693,7 +1693,9 @@ export default function PhotoTourPage() {
 
                 {selectablePhotos.length === 0 ? (
                   <div className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
-                    Upload more photos
+                    {uploadedPhotos.length === 0
+                      ? "Upload photos to get started"
+                      : "All photos are assigned. Upload more to add to this feature."}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
