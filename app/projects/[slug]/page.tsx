@@ -191,6 +191,23 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       likeQuery,
     ])
 
+  const primaryQueryErrors = [
+    { label: "project photos", error: photosResult.error },
+    { label: "project features", error: featuresResult.error },
+    { label: "project taxonomy selections", error: taxonomySelectionsResult.error },
+    { label: "project professional services", error: serviceSelectionsResult.error },
+    { label: "project categories", error: projectCategoriesResult.error },
+    { label: "project invites", error: invitesResult.error },
+    { label: "project like status", error: userLikeResult.error },
+  ].filter((item) => item.error)
+
+  if (primaryQueryErrors.length > 0) {
+    primaryQueryErrors.forEach(({ label, error }) => {
+      console.error(`Failed to load ${label} for project ${project.id}`, error)
+    })
+    throw new Error("We couldn't load this project right now. Please try again later.")
+  }
+
   const photos: ProjectPhotoRow[] = photosResult.data ?? []
   const features: ProjectFeatureRow[] = featuresResult.data ?? []
   const taxonomySelections = taxonomySelectionsResult.data ?? []
@@ -294,6 +311,18 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           body: [] as TaxonomyOptionRow[],
         }),
   ])
+
+  const secondaryQueryErrors = [
+    { label: "categories", error: categoriesResult.error },
+    { label: "taxonomy options", error: taxonomyResult.error },
+    { label: "budget options", error: budgetOptionsResult.error },
+  ].filter((item) => item.error)
+
+  if (secondaryQueryErrors.length > 0) {
+    secondaryQueryErrors.forEach(({ label, error }) => {
+      console.error(`Failed to load ${label} for project ${project.id}`, error)
+    })
+  }
 
   const categoryMap = new Map<string, CategoryRow>()
   ;(categoriesResult.data ?? []).forEach((row) => categoryMap.set(row.id, row))
@@ -731,10 +760,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       query = query.eq("building_type", buildId)
     }
 
-    const { data } = await query
+    const { data, error: similarError } = await query
       .order("likes_count", { ascending: false, nullsLast: false })
       .order("created_at", { ascending: false, nullsLast: false })
       .limit(remaining)
+
+    if (similarError) {
+      console.error("Failed to load similar projects", { projectId: project.id, filter, error: similarError })
+      continue
+    }
 
     const rows: ProjectSummaryRow[] = data ?? []
 
