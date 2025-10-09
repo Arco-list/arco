@@ -250,10 +250,21 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     buildingYearRange,
   } = state
 
-  const setSelectedTypes = useCallback(
-    (types: string[]) => dispatch({ type: "SET_TYPES", payload: Array.isArray(types) ? [...types] : [] }),
-    [],
-  )
+  const setSelectedTypes = useCallback((types: string[]) => {
+    if (!Array.isArray(types)) {
+      dispatch({ type: "SET_TYPES", payload: [] })
+      return
+    }
+
+    const sanitized = types
+      .filter((type): type is string => Boolean(type))
+      .filter((value, index, array) => array.indexOf(value) === index)
+
+    // Keep only the most recent type to enforce single-selection behaviour
+    const nextSelection = sanitized.length > 1 ? [sanitized[sanitized.length - 1]] : sanitized
+
+    dispatch({ type: "SET_TYPES", payload: nextSelection })
+  }, [])
   const setSelectedStyles = useCallback(
     (styles: string[]) =>
       dispatch({ type: "SET_STYLES", payload: Array.isArray(styles) ? [...styles] : [] }),

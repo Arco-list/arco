@@ -1437,6 +1437,46 @@ export type Database = {
           },
         ]
       }
+      project_likes: {
+        Row: {
+          created_at: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_likes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_likes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_professionals: {
         Row: {
           created_at: string | null
@@ -1721,6 +1761,13 @@ export type Database = {
           project_type: string
           slug: string
           title: string
+        }[]
+      }
+      toggle_project_like: {
+        Args: { p_project_id: string }
+        Returns: {
+          liked: boolean
+          likes_count: number
         }[]
       }
       user_has_type: {

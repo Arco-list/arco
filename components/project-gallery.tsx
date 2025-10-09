@@ -2,9 +2,9 @@
 
 import { Button } from "@/components/ui/button"
 import { MoreHorizontal } from "lucide-react"
-import { useMemo, useState } from "react"
-import { GroupedPicturesModal } from "@/components/grouped-pictures-modal"
+import { useMemo } from "react"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { useProjectGalleryModal } from "@/contexts/project-gallery-modal-context"
 import { cn } from "@/lib/utils"
 
 const PLACEHOLDER_IMAGE = {
@@ -13,8 +13,8 @@ const PLACEHOLDER_IMAGE = {
 }
 
 export function ProjectGallery() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const { hero } = useProjectPreview()
+  const { openModal } = useProjectGalleryModal()
 
   const galleryImages = useMemo(() => {
     const all = [] as {
@@ -68,24 +68,7 @@ export function ProjectGallery() {
     return slice
   }, [galleryImages])
 
-  const imageGroups = hero.groups.map((group) => ({
-    category: group.title,
-    description: group.description ?? undefined,
-    images: group.photos.map((photo, index) => ({
-      src: photo.url,
-      alt: photo.alt,
-      isPrimary: photo.isPrimary ?? index === 0,
-    })),
-  }))
-
-  const openModal = () => {
-    if (imageGroups.length === 0) {
-      return
-    }
-    setIsModalOpen(true)
-  }
-
-  const galleryIsInteractive = imageGroups.length > 0
+  const galleryIsInteractive = hero.groups.some((group) => group.photos.length > 0)
 
   return (
     <div className="space-y-4">
@@ -151,11 +134,6 @@ export function ProjectGallery() {
         </div>
       </div>
 
-      <GroupedPicturesModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        imageGroups={imageGroups}
-      />
     </div>
   )
 }

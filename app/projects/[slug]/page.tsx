@@ -12,6 +12,7 @@ import { MapSection } from "@/components/map-section"
 import { SimilarProjects } from "@/components/similar-projects"
 import { Footer } from "@/components/footer"
 import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
+import { ProjectGalleryModalProvider } from "@/contexts/project-gallery-modal-context"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
@@ -38,6 +39,27 @@ const formatDate = (value?: string | null) => {
 }
 
 const capitalizeStatus = (status: string) => status.replace(/_/g, " ")
+
+const formatEnumLabel = (value: string | null | undefined) => {
+  if (!value) {
+    return ""
+  }
+
+  const normalized = value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
+
+  if (!normalized) {
+    return ""
+  }
+
+  if (/[A-Z]/.test(normalized)) {
+    return normalized
+  }
+
+  return normalized
+    .split(" ")
+    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : ""))
+    .join(" ")
+}
 
 const stripHtml = (input: string | null | undefined) =>
   input ? input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : null
@@ -87,6 +109,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   let isOwner = false
   let isAdmin = false
+  let userHasLiked = false
 
   if (user) {
     isOwner = project.client_id === user.id
@@ -110,7 +133,24 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const canViewInviteDetails = isOwner || isAdmin
 
-  const [photosResult, featuresResult, serviceSelectionsResult, projectCategoriesResult, invitesResult] =
+  const likeQuery = user
+    ? supabase
+        .from("project_likes")
+        .select("project_id")
+        .eq("project_id", project.id)
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null })
+
+  const [
+    photosResult,
+    featuresResult,
+    taxonomySelectionsResult,
+    serviceSelectionsResult,
+    projectCategoriesResult,
+    invitesResult,
+    userLikeResult,
+  ] =
     await Promise.all([
       supabase
         .from("project_photos")
@@ -123,6 +163,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         .select("id, name, description, is_building_default, order_index, category_id, tagline, is_highlighted")
         .eq("project_id", project.id)
         .order("order_index", { ascending: true, nullsFirst: false }),
+      supabase
+        .from("project_taxonomy_selections")
+        .select("taxonomy_option_id")
+        .eq("project_id", project.id),
       supabase
         .from("project_professional_services")
         .select("id, service_category_id")
@@ -144,16 +188,37 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             count: null,
             body: [] as ProjectProfessionalRow[],
           }),
+      likeQuery,
     ])
+
+  const primaryQueryErrors = [
+    { label: "project photos", error: photosResult.error },
+    { label: "project features", error: featuresResult.error },
+    { label: "project taxonomy selections", error: taxonomySelectionsResult.error },
+    { label: "project professional services", error: serviceSelectionsResult.error },
+    { label: "project categories", error: projectCategoriesResult.error },
+    { label: "project invites", error: invitesResult.error },
+    { label: "project like status", error: userLikeResult.error },
+  ].filter((item) => item.error)
+
+  if (primaryQueryErrors.length > 0) {
+    primaryQueryErrors.forEach(({ label, error }) => {
+      console.error(`Failed to load ${label} for project ${project.id}`, error)
+    })
+    throw new Error("We couldn't load this project right now. Please try again later.")
+  }
 
   const photos: ProjectPhotoRow[] = photosResult.data ?? []
   const features: ProjectFeatureRow[] = featuresResult.data ?? []
+  const taxonomySelections = taxonomySelectionsResult.data ?? []
   const serviceSelections: ProjectProfessionalServiceRow[] = serviceSelectionsResult.data ?? []
   const invites: ProjectProfessionalRow[] = invitesResult.data ?? []
   const projectCategories: ProjectCategoryRow[] = projectCategoriesResult.data ?? []
+  userHasLiked = Boolean(userLikeResult.data)
 
   const categoryIds = new Set<string>()
   const taxonomyIds = new Set<string>()
+  const budgetLevels = new Set<string>()
 
   if (isUuid(project.project_type)) {
     categoryIds.add(project.project_type)
@@ -194,7 +259,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     taxonomyIds.add(project.project_size)
   }
 
-  const [categoriesResult, taxonomyResult] = await Promise.all([
+  taxonomySelections.forEach((selection) => {
+    if (isUuid(selection.taxonomy_option_id)) {
+      taxonomyIds.add(selection.taxonomy_option_id)
+    }
+  })
+
+  if (project.budget_level) {
+    budgetLevels.add(project.budget_level)
+  }
+
+  const [categoriesResult, taxonomyResult, budgetOptionsResult] = await Promise.all([
     categoryIds.size
       ? supabase
           .from("categories")
@@ -211,8 +286,22 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     taxonomyIds.size
       ? supabase
           .from("project_taxonomy_options")
-          .select("id, name, taxonomy_type")
+          .select("id, name, taxonomy_type, slug, icon, metadata")
           .in("id", Array.from(taxonomyIds))
+      : Promise.resolve({
+          data: [] as TaxonomyOptionRow[],
+          error: null,
+          status: 200,
+          statusText: "OK",
+          count: null,
+          body: [] as TaxonomyOptionRow[],
+        }),
+    budgetLevels.size
+      ? supabase
+          .from("project_taxonomy_options")
+          .select("id, name, taxonomy_type, budget_level")
+          .eq("taxonomy_type", "budget_tier")
+          .in("budget_level", Array.from(budgetLevels))
       : Promise.resolve({
           data: [] as TaxonomyOptionRow[],
           error: null,
@@ -223,22 +312,35 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         }),
   ])
 
+  const secondaryQueryErrors = [
+    { label: "categories", error: categoriesResult.error },
+    { label: "taxonomy options", error: taxonomyResult.error },
+    { label: "budget options", error: budgetOptionsResult.error },
+  ].filter((item) => item.error)
+
+  if (secondaryQueryErrors.length > 0) {
+    secondaryQueryErrors.forEach(({ label, error }) => {
+      console.error(`Failed to load ${label} for project ${project.id}`, error)
+    })
+  }
+
   const categoryMap = new Map<string, CategoryRow>()
   ;(categoriesResult.data ?? []).forEach((row) => categoryMap.set(row.id, row))
 
   const taxonomyMap = new Map<string, TaxonomyOptionRow>()
   ;(taxonomyResult.data ?? []).forEach((row) => taxonomyMap.set(row.id, row))
 
+  const budgetLabelMap = new Map<string, string>()
+  ;(budgetOptionsResult.data ?? []).forEach((row) => {
+    if (row.budget_level) {
+      budgetLabelMap.set(row.budget_level, row.name)
+    }
+  })
+
   const primaryCategoryRow = projectCategories.find((row) => row.is_primary)
   const primaryCategoryEntity = primaryCategoryRow ? categoryMap.get(primaryCategoryRow.category_id) : null
   const primaryCategoryName = primaryCategoryEntity?.name ?? null
   const primaryCategorySlug = primaryCategoryEntity?.slug ?? null
-
-  const secondaryCategoryName = projectCategories
-    .filter((row) => !row.is_primary)
-    .map((row) => categoryMap.get(row.category_id)?.name)
-    .filter((value): value is string => Boolean(value))
-    .join(", ")
 
   const styleLabel = primaryStyle
     ? taxonomyMap.get(primaryStyle)?.name ?? (isUuid(primaryStyle) ? "" : primaryStyle)
@@ -322,27 +424,59 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const descriptionText = stripHtml(project.description)
   const createdAt = formatDate(project.created_at)
   const updatedAt = formatDate(project.updated_at)
+  const projectTitle = project.title ?? "Untitled project"
 
-  const breadcrumbs = ["Projects"]
+  const createProjectsHref = (params?: Record<string, string | null | undefined>) => {
+    if (!params) {
+      return null
+    }
+
+    const searchParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (!value) {
+        return
+      }
+      searchParams.set(key, value)
+    })
+
+    const query = searchParams.toString()
+    return query.length > 0 ? `/projects?${query}` : "/projects"
+  }
+
+  const breadcrumbs: ProjectPreviewData["info"]["breadcrumbs"] = []
+
+  const pushBreadcrumb = (label: string | null | undefined, params?: Record<string, string | null | undefined> | null) => {
+    if (!label) {
+      return
+    }
+    const href = createProjectsHref(params ?? undefined)
+    const entry = { label, href }
+    if (!breadcrumbs.some((crumb) => crumb.label === entry.label && crumb.href === entry.href)) {
+      breadcrumbs.push(entry)
+    }
+  }
+
+  pushBreadcrumb("Projects", {})
+
+  const locationBreadcrumbLabel = project.address_city?.trim() ?? null
+  if (locationBreadcrumbLabel) {
+    pushBreadcrumb(locationBreadcrumbLabel, { location: locationBreadcrumbLabel })
+  }
+
   if (primaryCategoryName) {
-    breadcrumbs.push(primaryCategoryName)
+    const primaryCategoryToken = primaryCategorySlug ?? primaryCategoryRow?.category_id ?? null
+    pushBreadcrumb(primaryCategoryName, primaryCategoryToken ? { type: primaryCategoryToken } : null)
+  } else if (projectTypeLabel) {
+    const projectTypeToken =
+      (projectTypeCategoryId && (categoryMap.get(projectTypeCategoryId)?.slug ?? projectTypeCategoryId)) ??
+      (project.project_type ? (isUuid(project.project_type) ? project.project_type : project.project_type) : null)
+
+    pushBreadcrumb(projectTypeLabel, projectTypeToken ? { type: projectTypeToken } : null)
   }
 
-  if (secondaryCategoryName) {
-    secondaryCategoryName
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .forEach((value) => {
-        if (!breadcrumbs.includes(value)) {
-          breadcrumbs.push(value)
-        }
-      })
-  }
+  pushBreadcrumb(projectTitle, null)
 
-  if (projectTypeLabel && !breadcrumbs.includes(projectTypeLabel)) {
-    breadcrumbs.push(projectTypeLabel)
-  }
+  const budgetLabel = project.budget_level ? budgetLabelMap.get(project.budget_level) ?? formatEnumLabel(project.budget_level) : ""
 
   const metaDetails = [
     { label: "Category", value: primaryCategoryName ?? "" },
@@ -350,7 +484,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     { label: "Style", value: styleLabel },
     { label: "Building type", value: buildingTypeLabel },
     { label: "Project size", value: projectSizeLabel },
-    { label: "Budget", value: project.budget_level ?? "" },
+    { label: "Budget", value: budgetLabel },
     { label: "Project year", value: project.project_year ? String(project.project_year) : "" },
     { label: "Building year", value: project.building_year ? String(project.building_year) : "" },
     { label: "Photos", value: photos.length ? String(photos.length) : "" },
@@ -358,48 +492,33 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     { label: "Updated", value: updatedAt ?? "" },
   ].filter((detail) => detail.value !== null && detail.value !== undefined && detail.value !== "")
 
-  const featureGroupsMap = new Map<string, { id: string; name: string; items: Array<{ id: string; label: string }> }>()
+  const normalizeFeatureName = (name: string) => (name.includes("_") ? formatEnumLabel(name) : name)
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
 
-  features.forEach((feature) => {
-    const groupId = feature.category_id ?? (feature.is_building_default ? "building-default" : "additional")
-    const fallbackName = feature.is_building_default ? "Building" : "Additional"
-    const name = feature.category_id
-      ? categoryMap.get(feature.category_id)?.name ?? fallbackName
-      : fallbackName
-
-    if (!featureGroupsMap.has(groupId)) {
-      featureGroupsMap.set(groupId, {
-        id: groupId,
-        name,
-        items: [],
-      })
-    }
-
-    featureGroupsMap.get(groupId)!.items.push({ id: feature.id, label: feature.name })
+  const featurePhotoCounts = new Map<string, number>()
+  photosByFeature.forEach((list, featureId) => {
+    featurePhotoCounts.set(featureId, list.length)
   })
 
-  const featureGroups = Array.from(featureGroupsMap.values()).filter((group) => group.items.length > 0)
+  const featuresWithPhotos = features.filter((feature) => (featurePhotoCounts.get(feature.id) ?? 0) > 0)
 
-  const highlightFeatures = features
-    .filter((feature) => feature.is_highlighted || (photosByFeature.get(feature.id)?.length ?? 0) > 0)
-    .slice(0, 6)
-
-  const highlights = highlightFeatures.map((feature) => {
-    const photo = photosByFeature.get(feature.id)?.[0]
+  let heroGroups = featuresWithPhotos.map((feature) => {
+    const featurePhotos = photosByFeature.get(feature.id) ?? []
     return {
-      id: feature.id,
-      title: feature.name,
-      imageUrl: photo?.url ?? coverPhoto?.url ?? "/placeholder.svg?height=200&width=300",
-      description: feature.tagline ?? feature.description,
+      feature,
+      photos: featurePhotos,
     }
   })
-
-  let heroGroups = features
-    .map((feature) => ({ feature, photos: photosByFeature.get(feature.id) ?? [] }))
+  heroGroups = heroGroups
     .filter(({ photos }) => photos.length > 0)
     .map(({ feature, photos }) => ({
       id: feature.id,
-      title: feature.name,
+      title: normalizeFeatureName(feature.name),
       description: feature.description ?? feature.tagline,
       photos: photos.map((photo, index) => ({
         id: photo.id,
@@ -424,6 +543,140 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       },
     ]
   }
+
+  const heroGroupIdSet = new Set(heroGroups.map((group) => group.id))
+  const heroGroupBySlug = new Map<string, string>()
+  const heroGroupByTitle = new Map<string, string>()
+
+  heroGroups.forEach((group) => {
+    heroGroupBySlug.set(slugify(group.title), group.id)
+    heroGroupByTitle.set(group.title.trim().toLowerCase(), group.id)
+  })
+
+  const resolveModalGroupId = (option: TaxonomyOptionRow) => {
+    let resolved: string | null = null
+
+    const metadata = option.metadata as Record<string, unknown> | null | undefined
+    if (metadata && typeof metadata === "object") {
+      const featureIdValue = (metadata["feature_id"] ?? metadata["featureId"]) as unknown
+      const featureId = typeof featureIdValue === "string" ? featureIdValue : null
+      if (featureId && heroGroupIdSet.has(featureId)) {
+        resolved = featureId
+      }
+
+      if (!resolved) {
+        const featureSlugValue = (metadata["feature_slug"] ?? metadata["featureSlug"]) as unknown
+        const featureSlug = typeof featureSlugValue === "string" ? featureSlugValue : null
+        if (featureSlug) {
+          resolved = heroGroupBySlug.get(featureSlug) ?? null
+        }
+      }
+    }
+
+    if (!resolved) {
+      resolved = heroGroupBySlug.get(option.slug) ?? null
+    }
+
+    if (!resolved) {
+      resolved = heroGroupByTitle.get(option.name.trim().toLowerCase()) ?? null
+    }
+
+    return resolved
+  }
+
+  const seenOptionIds = new Set<string>()
+  const selectionOptions = taxonomySelections
+    .map((selection) => taxonomyMap.get(selection.taxonomy_option_id))
+    .filter((option): option is TaxonomyOptionRow => Boolean(option))
+
+  const buildFeatureItems = (type: TaxonomyOptionRow["taxonomy_type"]) => {
+    const items: Array<{ id: string; label: string; icon?: string | null; modalGroupId: string }> = []
+
+    selectionOptions.forEach((option) => {
+      if (option.taxonomy_type !== type) {
+        return
+      }
+      if (seenOptionIds.has(option.id)) {
+        return
+      }
+
+      const modalGroupId = resolveModalGroupId(option)
+      if (!modalGroupId) {
+        return
+      }
+
+      seenOptionIds.add(option.id)
+      items.push({
+        id: option.id,
+        label: option.name,
+        icon: option.slug ?? null,
+        modalGroupId,
+      })
+    })
+
+    return items
+  }
+
+  const locationFeatureItems = buildFeatureItems("location_feature")
+  const materialFeatureItems = buildFeatureItems("material_feature")
+
+  let featureGroups: ProjectPreviewData["featureGroups"] = []
+
+  if (locationFeatureItems.length > 0) {
+    featureGroups.push({
+      id: "location_features",
+      name: "Location features",
+      items: locationFeatureItems,
+    })
+  }
+
+  if (materialFeatureItems.length > 0) {
+    featureGroups.push({
+      id: "material_features",
+      name: "Material features",
+      items: materialFeatureItems,
+    })
+  }
+
+  if (featureGroups.length === 0) {
+    const fallbackItems = featuresWithPhotos
+      .map((feature) => ({
+        id: feature.id,
+        label: normalizeFeatureName(feature.name),
+        icon: slugify(feature.name),
+        modalGroupId: heroGroupIdSet.has(feature.id) ? feature.id : null,
+      }))
+      .filter((item): item is { id: string; label: string; icon: string | null; modalGroupId: string } =>
+        Boolean(item.modalGroupId),
+      )
+
+    if (fallbackItems.length > 0) {
+      featureGroups = [
+        {
+          id: "project_features",
+          name: "Project features",
+          items: fallbackItems,
+        },
+      ]
+    }
+  }
+
+  let highlightFeatures = featuresWithPhotos.filter((feature) => feature.is_highlighted)
+  if (highlightFeatures.length === 0) {
+    highlightFeatures = featuresWithPhotos
+  }
+
+  highlightFeatures = highlightFeatures.slice(0, 6)
+
+  const highlights = highlightFeatures.map((feature) => {
+    const photo = photosByFeature.get(feature.id)?.[0]
+    return {
+      id: feature.id,
+      title: normalizeFeatureName(feature.name),
+      imageUrl: photo?.url ?? coverPhoto?.url ?? "/placeholder.svg?height=200&width=300",
+      description: feature.tagline ?? feature.description,
+    }
+  })
 
   const professionalServices = servicePreviews.map((service) => ({
     id: service.id,
@@ -507,10 +760,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       query = query.eq("building_type", buildId)
     }
 
-    const { data } = await query
+    const { data, error: similarError } = await query
       .order("likes_count", { ascending: false, nullsLast: false })
       .order("created_at", { ascending: false, nullsLast: false })
       .limit(remaining)
+
+    if (similarError) {
+      console.error("Failed to load similar projects", { projectId: project.id, filter, error: similarError })
+      continue
+    }
 
     const rows: ProjectSummaryRow[] = data ?? []
 
@@ -536,6 +794,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   const previewData: ProjectPreviewData = {
+    projectId: project.id,
+    slug: project.slug ?? resolvedParams.slug,
+    likesCount: project.likes_count ?? 0,
+    isLiked: userHasLiked,
     hero: {
       coverPhoto: coverPhoto
         ? {
@@ -556,7 +818,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     canViewInviteDetails,
     info: {
       breadcrumbs,
-      title: project.title ?? "Untitled project",
+      title: projectTitle,
       subtitle: [styleLabel, projectTypeLabel].filter(Boolean).join(" • ") || null,
       sponsoredLabel: project.project_year ? `Sponsored in ${project.project_year}` : null,
       descriptionHtml: project.description,
@@ -586,40 +848,42 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   return (
     <ProjectPreviewProvider value={previewData}>
-      <div className="min-h-screen bg-white">
-        {canPreview && <PreviewBanner />}
+      <ProjectGalleryModalProvider>
+        <div className="min-h-screen bg-white">
+          {canPreview && <PreviewBanner />}
 
-        <Header />
+          <Header />
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8">
-          <div className="mb-8">
-            <ProjectGallery />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start py-8">
-            <div className="lg:col-span-2 space-y-8">
-              <ProjectInfo />
-              <ProjectHighlights />
-              <ProjectFeatures />
-              <ProfessionalsSection />
-              <ProjectDetails />
-              <MapSection />
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8">
+            <div className="mb-8">
+              <ProjectGallery />
             </div>
 
-            <div className="lg:col-span-1">
-              <ProfessionalsSidebar />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start py-8">
+              <div className="lg:col-span-2 space-y-8">
+                <ProjectInfo />
+                <ProjectHighlights />
+                <ProjectFeatures />
+                <ProfessionalsSection />
+                <ProjectDetails />
+                <MapSection />
+              </div>
+
+              <div className="lg:col-span-1">
+                <ProfessionalsSidebar />
+              </div>
+            </div>
+          </main>
+
+          <div className="w-full bg-white py-16">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
+              <SimilarProjects />
             </div>
           </div>
-        </main>
 
-        <div className="w-full bg-white py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-[0]">
-            <SimilarProjects />
-          </div>
+          <Footer />
         </div>
-
-        <Footer />
-      </div>
+      </ProjectGalleryModalProvider>
     </ProjectPreviewProvider>
   )
 }

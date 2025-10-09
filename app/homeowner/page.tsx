@@ -3,40 +3,14 @@ import { useState, useEffect, Suspense } from "react"
 
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Heart, X } from "lucide-react"
+import { Heart, ThumbsUp, X } from "lucide-react"
 
 import { AccountSettingsForm } from "@/components/account-settings-form"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
-
-const savedProjects = [
-  {
-    id: 1,
-    title: "Villa upgrade",
-    location: "Contemporary Villa in Nijmegen",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 12,
-    slug: "villa-upgrade",
-  },
-  {
-    id: 2,
-    title: "Modern Garden house in Vinkeveense Plassen",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 8,
-    slug: "modern-garden-house",
-  },
-  {
-    id: 3,
-    title: "Contemporary Villa in Nijmegen",
-    location: "Netherlands",
-    image: "/placeholder.svg?height=300&width=400",
-    likes: 15,
-    slug: "contemporary-villa",
-  },
-]
+import { useSavedProjects } from "@/contexts/saved-projects-context"
 
 const savedProfessionals = [
   {
@@ -65,10 +39,16 @@ function HomeownerContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { profile, user, isLoading } = useAuth()
+  const {
+    savedProjects,
+    isLoading: isSavedProjectsLoading,
+    error: savedProjectsError,
+    mutatingProjectIds,
+    removeProject,
+  } = useSavedProjects()
   const initialTab = searchParams.get("tab") || "saved-projects"
   const [activeTab, setActiveTab] = useState(initialTab)
 
-  const [userSavedProjects, setUserSavedProjects] = useState(savedProjects)
   const [userSavedProfessionals, setUserSavedProfessionals] = useState(savedProfessionals)
 
   useEffect(() => {
@@ -94,8 +74,8 @@ function HomeownerContent() {
     router.replace("/admin")
   }, [isAdmin, isLoading, router])
 
-  const unsaveProject = (projectId: number) => {
-    setUserSavedProjects((prev) => prev.filter((project) => project.id !== projectId))
+  const unsaveProject = (projectId: string) => {
+    void removeProject(projectId)
   }
 
   const unsaveProfessional = (professionalId: string) => {
@@ -124,43 +104,67 @@ function HomeownerContent() {
             </TabsList>
 
             <TabsContent value="saved-projects">
+              {savedProjectsError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
+                  {savedProjectsError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {userSavedProjects.map((project) => (
-                  <div key={project.id} className="group cursor-pointer relative">
-                    <Link href={`/projects/${project.slug}`}>
-                      <div className="relative overflow-hidden rounded-lg bg-gray-100">
-                        <img
-                          src={project.image || "/placeholder.svg"}
-                          alt={project.title}
-                          className="h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                      </div>
-                      <div className="mt-3 flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{project.title}</h3>
-                          <p className="text-xs text-gray-500 mt-1">{project.location}</p>
+                {savedProjects.map((entry) => {
+                  const { projectId, summary } = entry
+                  const projectTitle = summary?.title ?? "Untitled project"
+                  const projectSlug = summary?.slug ?? null
+                  const projectImage = summary?.primary_photo_url ?? "/placeholder.svg"
+                  const projectAlt = summary?.primary_photo_alt ?? projectTitle
+                  const projectLocation = summary?.location ?? "Location unavailable"
+                  const projectLikes = summary?.likes_count ?? 0
+                  const isMutating = mutatingProjectIds.has(projectId)
+
+                  return (
+                    <div key={projectId} className="group cursor-pointer relative">
+                      <Link href={projectSlug ? `/projects/${projectSlug}` : "#"} aria-disabled={!projectSlug}>
+                        <div className="relative overflow-hidden rounded-lg bg-gray-100">
+                          <img
+                            src={projectImage}
+                            alt={projectAlt ?? projectTitle}
+                            className="h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
                         </div>
-                        <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
-                          <Heart className="h-3 w-3" />
-                          <span>{project.likes}</span>
+                        <div className="mt-3 flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{projectTitle}</h3>
+                            <p className="text-xs text-gray-500 mt-1">{projectLocation}</p>
+                          </div>
+                          <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
+                            <ThumbsUp className="h-3 w-3" />
+                            <span>{projectLikes}</span>
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        unsaveProject(project.id)
-                      }}
-                      className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
-                    >
-                      <X className="h-4 w-4 text-gray-600 hover:text-red-500" />
-                    </button>
-                  </div>
-                ))}
+                      </Link>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          unsaveProject(projectId)
+                        }}
+                        disabled={isMutating}
+                        aria-label="Remove from saved projects"
+                        className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors disabled:opacity-70"
+                      >
+                        <X className="h-4 w-4 text-gray-600 hover:text-red-500" />
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
-              {userSavedProjects.length === 0 && (
+              {!isSavedProjectsLoading && savedProjects.length === 0 && !savedProjectsError && (
                 <div className="text-center py-12">
                   <p className="text-gray-500">No saved projects yet.</p>
+                </div>
+              )}
+              {isSavedProjectsLoading && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Loading saved projects…</p>
                 </div>
               )}
             </TabsContent>

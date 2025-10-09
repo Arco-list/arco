@@ -5,21 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import {
-  Bed,
-  Bath,
-  Car,
-  Grid3x3,
-  Home,
-  ImageIcon,
-  Layers,
-  MoreHorizontal,
-  Sofa,
-  Trash2,
-  TreePine,
-  Utensils,
-  Waves,
-} from "lucide-react"
+import { Grid3x3, Home, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Tables } from "@/lib/supabase/types"
 import {
@@ -28,6 +14,7 @@ import {
   MIN_PHOTOS_REQUIRED,
   OVERLAY_CLASSES,
 } from "@/hooks/use-project-photo-tour"
+import { resolveFeatureIcon } from "@/lib/icons/project-features"
 
 function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
@@ -86,22 +73,6 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   "image/png": "png",
 }
 
-const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
-  attic: Home,
-  balcony: Home,
-  basement: Layers,
-  bathroom: Bath,
-  bedroom: Bed,
-  dining_room: Utensils,
-  garage: Car,
-  garden: TreePine,
-  kitchen: Utensils,
-  living_room: Sofa,
-  office: Home,
-  pool: Waves,
-  terrace: Layers,
-}
-
 const FALLBACK_FEATURES: FeatureOption[] = [
   { id: "bedroom", name: "Bedroom", slug: "bedroom" },
   { id: "bathroom", name: "Bathroom", slug: "bathroom" },
@@ -116,15 +87,6 @@ const FALLBACK_FEATURES: FeatureOption[] = [
   { id: "attic", name: "Attic", slug: "attic" },
   { id: "terrace", name: "Terrace", slug: "terrace" },
 ]
-
-const resolveFeatureIcon = (slug?: string | null) => {
-  if (!slug) {
-    return Grid3x3
-  }
-
-  const key = slug.replace(/-/g, "_")
-  return FEATURE_ICON_MAP[key] ?? Grid3x3
-}
 
 export default function PhotoTourPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
@@ -162,6 +124,27 @@ export default function PhotoTourPage() {
   const [featureMutationError, setFeatureMutationError] = useState<string | null>(null)
   const router = useRouter()
   const draggedPhotoIdRef = useRef<string | null>(null)
+
+  const photoAssignmentMap = useMemo(() => {
+    const map = new Map<string, string>()
+    Object.entries(featurePhotos).forEach(([featureId, photoIds]) => {
+      photoIds.forEach((photoId) => {
+        map.set(photoId, featureId)
+      })
+    })
+    return map
+  }, [featurePhotos])
+
+  const selectablePhotos = useMemo(() => {
+    if (!showPhotoSelector) {
+      return uploadedPhotos
+    }
+
+    return uploadedPhotos.filter((photo) => {
+      const assignedFeature = photoAssignmentMap.get(photo.id)
+      return !assignedFeature || assignedFeature === showPhotoSelector
+    })
+  }, [photoAssignmentMap, showPhotoSelector, uploadedPhotos])
 
   useEffect(() => {
     let isMounted = true
@@ -1708,59 +1691,67 @@ export default function PhotoTourPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {uploadedPhotos.map((photo) => {
-                    const isSelected = tempSelectedPhotos.includes(photo.id)
-                    const isCoverPhoto = tempCoverPhoto === photo.id
+                {selectablePhotos.length === 0 ? (
+                  <div className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                    {uploadedPhotos.length === 0
+                      ? "Upload photos to get started"
+                      : "All photos are assigned. Upload more to add to this feature."}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {selectablePhotos.map((photo) => {
+                      const isSelected = tempSelectedPhotos.includes(photo.id)
+                      const isCoverPhoto = tempCoverPhoto === photo.id
 
-                    return (
-                      <div key={photo.id} className="relative">
-                        <button
-                          onClick={() => togglePhotoSelection(photo.id)}
-                          className={`aspect-square rounded-lg overflow-hidden border-2 transition-all relative w-full ${
-                            isSelected
-                              ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                              : "border-gray-200 hover:border-gray-300"
-                          }`}
-                        >
-                          <img
-                            src={photo.url || "/placeholder.svg"}
-                            alt="Project photo"
-                            className="w-full h-full object-cover"
-                          />
-                          {isSelected && (
-                            <div className="absolute top-2 right-2">
-                              <div className="bg-gray-900 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium shadow-lg">
-                                ✓
-                              </div>
-                            </div>
-                          )}
-                          {isCoverPhoto && (
-                            <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                              Cover
-                            </div>
-                          )}
-                        </button>
-
-                        {isSelected && (
+                      return (
+                        <div key={photo.id} className="relative">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
-                            }}
-                            className={`absolute bottom-2 left-2 right-2 text-xs py-1 px-2 rounded font-medium transition-colors ${
-                              isCoverPhoto
-                                ? "bg-blue-600 text-white"
-                                : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                            onClick={() => togglePhotoSelection(photo.id)}
+                            className={`aspect-square rounded-lg overflow-hidden border-2 transition-all relative w-full ${
+                              isSelected
+                                ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
+                                : "border-gray-200 hover:border-gray-300"
                             }`}
                           >
-                            {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                            <img
+                              src={photo.url || "/placeholder.svg"}
+                              alt="Project photo"
+                              className="w-full h-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute top-2 right-2">
+                                <div className="bg-gray-900 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-medium shadow-lg">
+                                  ✓
+                                </div>
+                              </div>
+                            )}
+                            {isCoverPhoto && (
+                              <div className="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                Cover
+                              </div>
+                            )}
                           </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+
+                          {isSelected && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
+                              }}
+                              className={`absolute bottom-2 left-2 right-2 text-xs py-1 px-2 rounded font-medium transition-colors ${
+                                isCoverPhoto
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                              }`}
+                            >
+                              {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
