@@ -123,7 +123,8 @@ export async function setProjectStatusAction(input: {
       { scope: "admin-projects", projectId: idResult.data, nextStatus: statusResult.data },
       refreshError,
     )
-    return { success: false, error: "Status updated, but failed to refresh project summaries. Try again." }
+    // Status was updated successfully, just warn about the refresh
+    // View will be refreshed by auto-refresh triggers eventually
   }
 
   revalidatePath("/admin/projects")
