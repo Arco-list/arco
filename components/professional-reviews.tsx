@@ -1,80 +1,58 @@
 "use client"
 
-import { useState } from "react"
-import { Star, Award, Shield, MessageCircle, X } from "lucide-react"
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Award, MessageCircle, Shield, Star, X } from "lucide-react"
+import { toast } from "sonner"
+
+import type { ProfessionalRatingsBreakdown, ProfessionalReviewSummary } from "@/lib/professionals/types"
+import { createReviewAction } from "@/app/professionals/[slug]/actions"
+import { useRequireAuth } from "@/hooks/use-require-auth"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 
-interface Review {
-  id: string
-  name: string
-  avatar: string
-  yearsOnPlatform: number
-  rating: number
-  date: string
-  text: string
-  isExpanded?: boolean
+const PLACEHOLDER_AVATAR = "/placeholder.svg?height=40&width=40"
+
+type ProfessionalReviewsProps = {
+  professionalId: string
+  professionalName: string
+  ratings: ProfessionalRatingsBreakdown
+  reviews: ProfessionalReviewSummary[]
+  id?: string
 }
 
-const reviews: Review[] = [
-  {
-    id: "1",
-    name: "René",
-    avatar: "/placeholder.svg?height=40&width=40",
-    yearsOnPlatform: 8,
-    rating: 5,
-    date: "3 weeks ago",
-    text: "Perfect stay",
-  },
-  {
-    id: "2",
-    name: "Mathias",
-    avatar: "/placeholder.svg?height=40&width=40",
-    yearsOnPlatform: 9,
-    rating: 5,
-    date: "March 2025",
-    text: "Had a lovely weekend at Stian's cabin. All amenities in place and throughout a high standard. Only a few meters walk away to groomed cross country tracks (could probably be excited...",
-  },
-  {
-    id: "3",
-    name: "Erik",
-    avatar: "/placeholder.svg?height=40&width=40",
-    yearsOnPlatform: 8,
-    rating: 5,
-    date: "March 2025",
-    text: "Fantastic great cabin. We were 8 adults and 6 children who had a lovely weekend on the slopes. Ski in, ski out suited us perfectly.",
-  },
-  {
-    id: "4",
-    name: "Øivind",
-    avatar: "/placeholder.svg?height=40&width=40",
-    yearsOnPlatform: 11,
-    rating: 5,
-    date: "February 2025",
-    text: "Great cabin, big and spacious and good kitchen facilities",
-  },
-  {
-    id: "5",
-    name: "Astrid",
-    avatar: "/placeholder.svg?height=40&width=40",
-    yearsOnPlatform: 7,
-    rating: 5,
-    date: "December 2024",
-    text: "The cabin was exceptionally beautiful, spacious, well outfitted, and well appointed. It was very comfortable and we felt right at home. A Christmas tree had been put up and we...",
-  },
-  {
-    id: "6",
-    name: "Kurt",
-    avatar: "/placeholder.svg?height=40&width=40",
-    yearsOnPlatform: 9,
-    rating: 5,
-    date: "October 2024",
-    text: "Great place and location. About a 10 minute drive from the local town. Straight out on to the trail within minutes. Accommodation was very clean and user friendly.",
-  },
-]
+const formatRating = (value: number) => Number.isFinite(value) ? value.toFixed(2) : "0.00"
 
-export function ProfessionalReviews() {
+const renderStars = (
+  rating: number,
+  interactive = false,
+  onRatingChange?: (rating: number) => void,
+  color = "black",
+) => (
+  <div className="flex gap-1">
+    {[1, 2, 3, 4, 5].map((star) => (
+      <Star
+        key={star}
+        className={`h-5 w-5 ${
+          star <= rating
+            ? color === "red"
+              ? "fill-red-500 text-red-500"
+              : "fill-black text-black"
+            : "text-gray-300"
+        } ${interactive ? "cursor-pointer hover:text-red-500" : ""}`}
+        onClick={interactive && onRatingChange ? () => onRatingChange(star) : undefined}
+      />
+    ))}
+  </div>
+)
+
+const getRatingLabel = (rating: number) => {
+  const labels = ["", "Poor", "Fair", "Good", "Great", "Excellent"]
+  return labels[rating] || ""
+}
+
+export function ProfessionalReviews({ professionalId, professionalName, ratings, reviews, id }: ProfessionalReviewsProps) {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set())
   const [reviewText, setReviewText] = useState("")
@@ -83,209 +61,259 @@ export function ProfessionalReviews() {
   const [reliabilityRating, setReliabilityRating] = useState(0)
   const [communicationRating, setCommunicationRating] = useState(0)
   const [workCarriedOut, setWorkCarriedOut] = useState<boolean | null>(null)
+  const [isSubmitting, startTransition] = useTransition()
+
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const { ensureAuth, isAuthenticated } = useRequireAuth()
 
   const toggleExpanded = (reviewId: string) => {
-    const newExpanded = new Set(expandedReviews)
-    if (newExpanded.has(reviewId)) {
-      newExpanded.delete(reviewId)
+    const next = new Set(expandedReviews)
+    if (next.has(reviewId)) {
+      next.delete(reviewId)
     } else {
-      newExpanded.add(reviewId)
+      next.add(reviewId)
     }
-    setExpandedReviews(newExpanded)
+    setExpandedReviews(next)
+  }
+
+  const ratingHeadline = useMemo(() => {
+    const reviewCount = ratings.total
+    if (!reviewCount || reviewCount <= 0) {
+      return "No reviews yet"
+    }
+
+    return `${formatRating(ratings.overall)} · ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
+  }, [ratings.overall, ratings.total])
+
+  useEffect(() => {
+    const intent = searchParams?.get("intent")
+
+    if (intent !== "write-review") {
+      return
+    }
+
+    if (!isAuthenticated) {
+      return
+    }
+
+    setIsReviewModalOpen(true)
+
+    const params = new URLSearchParams(searchParams?.toString() ?? "")
+    params.delete("intent")
+    const next = params.toString()
+    const url = `${pathname}${next ? `?${next}` : ""}`
+    router.replace(url, { scroll: false })
+  }, [isAuthenticated, pathname, router, searchParams])
+
+  const handleOpenReviewModal = () => {
+    if (!isAuthenticated) {
+      const params = new URLSearchParams(searchParams?.toString() ?? "")
+      params.set("intent", "write-review")
+      const next = params.toString()
+      const url = `${pathname}${next ? `?${next}` : ""}`
+      router.replace(url, { scroll: false })
+    }
+
+    if (!ensureAuth()) {
+      return
+    }
+
+    setIsReviewModalOpen(true)
   }
 
   const handleSubmitReview = () => {
-    console.log("Review submitted:", {
+    if (!ensureAuth()) {
+      return
+    }
+
+    if (workCarriedOut === null) {
+      toast.error("Review incomplete", {
+        description: "Let us know if any work was carried out.",
+      })
+      return
+    }
+
+    const payload = {
+      professionalId,
       overallRating,
-      qualityRating,
-      reliabilityRating,
-      communicationRating,
+      qualityRating: qualityRating > 0 ? qualityRating : null,
+      reliabilityRating: reliabilityRating > 0 ? reliabilityRating : null,
+      communicationRating: communicationRating > 0 ? communicationRating : null,
       workCarriedOut,
-      text: reviewText,
+      comment: reviewText.trim().length > 0 ? reviewText.trim() : undefined,
+    }
+
+    startTransition(async () => {
+      const result = await createReviewAction(payload)
+
+      if (!result.success) {
+        toast.error("Unable to submit review", {
+          description: result.error,
+        })
+        return
+      }
+
+      toast.success("Review submitted", {
+        description: "Thanks for the feedback! We'll publish it once it's approved.",
+      })
+
+      setIsReviewModalOpen(false)
+      setReviewText("")
+      setOverallRating(0)
+      setQualityRating(0)
+      setReliabilityRating(0)
+      setCommunicationRating(0)
+      setWorkCarriedOut(null)
+      setExpandedReviews(new Set())
+      router.refresh()
     })
-    setIsReviewModalOpen(false)
-    setReviewText("")
-    setOverallRating(0)
-    setQualityRating(0)
-    setReliabilityRating(0)
-    setCommunicationRating(0)
-    setWorkCarriedOut(null)
-  }
-
-  const renderStars = (
-    rating: number,
-    interactive = false,
-    onRatingChange?: (rating: number) => void,
-    color = "black",
-  ) => {
-    return (
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`w-5 h-5 ${
-              star <= rating
-                ? color === "red"
-                  ? "fill-red-500 text-red-500"
-                  : "fill-black text-black"
-                : "text-gray-300"
-            } ${interactive ? "cursor-pointer hover:text-red-500" : ""}`}
-            onClick={interactive && onRatingChange ? () => onRatingChange(star) : undefined}
-          />
-        ))}
-      </div>
-    )
-  }
-
-  const getRatingLabel = (rating: number) => {
-    const labels = ["", "Poor", "Fair", "Good", "Great", "Excellent"]
-    return labels[rating] || ""
   }
 
   return (
-    <div className="w-full bg-white py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-[0]">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+    <div id={id} className="w-full bg-white py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Star className="w-5 h-5 fill-black text-black" />
-            <span className="text-xl font-semibold">4.92 · 24 reviews</span>
+            <Star className="h-5 w-5 fill-black text-black" />
+            <span className="text-xl font-semibold">{ratingHeadline}</span>
           </div>
-          <Button variant="outline" onClick={() => setIsReviewModalOpen(true)} className="px-6 py-2">
+          <Button variant="outline" onClick={handleOpenReviewModal} className="px-6 py-2">
             Write a review
           </Button>
         </div>
 
-        {/* Rating Categories */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+        <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-3">
           <div className="text-center">
-            <div className="flex justify-center mb-2">
-              <Award className="w-8 h-8 text-gray-600" />
+            <div className="mb-2 flex justify-center">
+              <Award className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="font-medium text-gray-900 mb-1">Quality of work</h3>
-            <p className="text-2xl font-semibold">4.9</p>
+            <h3 className="mb-1 font-medium text-gray-900">Quality of work</h3>
+            <p className="text-2xl font-semibold">{formatRating(ratings.quality)}</p>
           </div>
           <div className="text-center">
-            <div className="flex justify-center mb-2">
-              <Shield className="w-8 h-8 text-gray-600" />
+            <div className="mb-2 flex justify-center">
+              <Shield className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="font-medium text-gray-900 mb-1">Reliability</h3>
-            <p className="text-2xl font-semibold">4.6</p>
+            <h3 className="mb-1 font-medium text-gray-900">Reliability</h3>
+            <p className="text-2xl font-semibold">{formatRating(ratings.reliability)}</p>
           </div>
           <div className="text-center">
-            <div className="flex justify-center mb-2">
-              <MessageCircle className="w-8 h-8 text-gray-600" />
+            <div className="mb-2 flex justify-center">
+              <MessageCircle className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="font-medium text-gray-900 mb-1">Communication</h3>
-            <p className="text-2xl font-semibold">4.6</p>
+            <h3 className="mb-1 font-medium text-gray-900">Communication</h3>
+            <p className="text-2xl font-semibold">{formatRating(ratings.communication)}</p>
           </div>
         </div>
 
-        {/* Reviews Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          {reviews.map((review) => (
-            <div key={review.id} className="space-y-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={review.avatar || "/placeholder.svg"}
-                  alt={review.name}
-                  className="w-10 h-10 rounded-full object-cover"
-                />
+        <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-2">
+          {reviews.length === 0 ? (
+            <div className="col-span-full rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+              Reviews will appear here once homeowners share feedback.
+            </div>
+          ) : (
+            reviews.map((review) => (
+              <div key={review.id} className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={review.reviewerAvatarUrl || PLACEHOLDER_AVATAR}
+                    alt={review.reviewerName}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                  <div>
+                    <h4 className="font-medium text-gray-900">{review.reviewerName}</h4>
+                    {typeof review.yearsOnPlatform === "number" && review.yearsOnPlatform > 0 ? (
+                      <p className="text-sm text-gray-500">
+                        {review.yearsOnPlatform} year{review.yearsOnPlatform === 1 ? "" : "s"} on Arco
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {renderStars(review.rating)}
+                  {review.createdAt ? (
+                    <span className="text-sm text-gray-500">
+                      {new Intl.DateTimeFormat("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      }).format(new Date(review.createdAt))}
+                    </span>
+                  ) : null}
+                </div>
+
+                {review.title ? <h5 className="text-sm font-semibold text-gray-900">{review.title}</h5> : null}
+
                 <div>
-                  <h4 className="font-medium text-gray-900">{review.name}</h4>
-                  <p className="text-sm text-gray-500">{review.yearsOnPlatform} years on Arco</p>
+                  <p className="text-gray-700">
+                    {review.comment && review.comment.length > 160 && !expandedReviews.has(review.id)
+                      ? `${review.comment.substring(0, 160)}…`
+                      : review.comment}
+                  </p>
+                  {review.comment && review.comment.length > 160 ? (
+                    <button
+                      onClick={() => toggleExpanded(review.id)}
+                      className="mt-1 text-sm font-medium text-gray-900 underline hover:no-underline"
+                    >
+                      {expandedReviews.has(review.id) ? "Show less" : "Show more"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
-
-              <div className="flex items-center gap-2">
-                {renderStars(review.rating)}
-                <span className="text-sm text-gray-500">{review.date}</span>
-              </div>
-
-              <div>
-                <p className="text-gray-700">
-                  {expandedReviews.has(review.id) || review.text.length <= 100
-                    ? review.text
-                    : `${review.text.substring(0, 100)}...`}
-                </p>
-                {review.text.length > 100 && (
-                  <button
-                    onClick={() => toggleExpanded(review.id)}
-                    className="text-sm font-medium text-gray-900 underline mt-1 hover:no-underline"
-                  >
-                    {expandedReviews.has(review.id) ? "Show less" : "Show more"}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
-        {/* Bottom Actions */}
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="px-6 py-2 bg-transparent">
-            Show all 23 reviews
+          <Button variant="outline" className="bg-transparent px-6 py-2" disabled={reviews.length === 0}>
+            Show all reviews
           </Button>
           <button className="text-sm text-gray-500 underline hover:no-underline">Learn how reviews work</button>
         </div>
 
-        {/* Review Modal */}
         <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto p-0">
+          <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-lg">
             <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold">How was your experience with Marco van Veldhuizen?</h2>
-                <button onClick={() => setIsReviewModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                  <X className="w-5 h-5" />
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-xl font-semibold">How was your experience with {professionalName}?</h2>
+                <button onClick={() => setIsReviewModalOpen(false)} className="rounded-full p-1 hover:bg-gray-100">
+                  <X className="h-5 w-5" />
                 </button>
               </div>
 
-              {/* Professional Info */}
-              <div className="flex items-center gap-3 mb-6">
-                <img
-                  src="/placeholder.svg?height=48&width=48"
-                  alt="Niek van Leeuwen"
-                  className="w-12 h-12 rounded-full object-cover"
-                />
-                <div>
-                  <h3 className="font-medium text-gray-900">Niek van Leeuwen</h3>
-                  <p className="text-sm text-gray-500">posting publicly on Arco</p>
-                </div>
-              </div>
-
-              {/* Overall Rating */}
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
+                <div className="mb-2 flex items-center justify-between">
                   {renderStars(overallRating, true, setOverallRating, "red")}
                 </div>
-                {overallRating > 0 && (
+                {overallRating > 0 ? (
                   <p className="text-lg font-medium text-gray-900">{getRatingLabel(overallRating)}</p>
-                )}
+                ) : null}
               </div>
 
-              <hr className="border-gray-200 mb-6" />
+              <hr className="mb-6 border-gray-200" />
 
-              {/* Work Carried Out */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-3">Was any work carried out?</h3>
+                <h3 className="mb-3 font-medium text-gray-900">Was any work carried out?</h3>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setWorkCarriedOut(true)}
-                    className={`px-4 py-2 rounded-full border ${
+                    className={`rounded-full px-4 py-2 border ${
                       workCarriedOut === true
-                        ? "bg-black text-white border-black"
-                        : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                        ? "border-black bg-black text-white"
+                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
                     }`}
                   >
                     Yes
                   </button>
                   <button
                     onClick={() => setWorkCarriedOut(false)}
-                    className={`px-4 py-2 rounded-full border ${
+                    className={`rounded-full px-4 py-2 border ${
                       workCarriedOut === false
-                        ? "bg-black text-white border-black"
-                        : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                        ? "border-black bg-black text-white"
+                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
                     }`}
                   >
                     No
@@ -293,32 +321,31 @@ export function ProfessionalReviews() {
                 </div>
               </div>
 
-              <hr className="border-gray-200 mb-6" />
+              <hr className="mb-6 border-gray-200" />
 
-              {/* Category Ratings */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Rate your experience in these areas</h3>
-                <p className="text-sm text-gray-500 mb-4">
+                <h3 className="mb-2 font-medium text-gray-900">Rate your experience in these areas</h3>
+                <p className="mb-4 text-sm text-gray-500">
                   You’ve provided an overall rating. Let them know what they did great and where they can improve.
                 </p>
 
                 <div className="space-y-4">
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex items-center justify-between">
                       <span className="font-medium text-gray-900">Quality of work</span>
                     </div>
                     {renderStars(qualityRating, true, setQualityRating, "red")}
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex items-center justify-between">
                       <span className="font-medium text-gray-900">Reliability</span>
                     </div>
                     {renderStars(reliabilityRating, true, setReliabilityRating, "red")}
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="mb-2 flex items-center justify-between">
                       <span className="font-medium text-gray-900">Communication</span>
                     </div>
                     {renderStars(communicationRating, true, setCommunicationRating, "red")}
@@ -326,31 +353,29 @@ export function ProfessionalReviews() {
                 </div>
               </div>
 
-              <hr className="border-gray-200 mb-6" />
+              <hr className="mb-6 border-gray-200" />
 
-              {/* Written Review */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-3">Tell us about your experience</h3>
+                <h3 className="mb-3 font-medium text-gray-900">Tell us about your experience</h3>
                 <Textarea
                   placeholder="Please share more to help understand your rating"
                   value={reviewText}
-                  onChange={(e) => setReviewText(e.target.value)}
+                  onChange={(event) => setReviewText(event.target.value)}
                   className="min-h-[120px] resize-none"
                   maxLength={500}
                 />
-                <div className="flex justify-between items-center mt-2">
+                <div className="mt-2 flex items-center justify-between">
                   <span className="text-sm text-gray-400">{reviewText.length}/500</span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setIsReviewModalOpen(false)} className="flex-1">
                   Cancel
                 </Button>
                 <Button
                   onClick={handleSubmitReview}
-                  disabled={overallRating === 0 || workCarriedOut === null}
+                  disabled={isSubmitting || overallRating === 0 || workCarriedOut === null}
                   className="flex-1 bg-black hover:bg-gray-800"
                 >
                   Submit

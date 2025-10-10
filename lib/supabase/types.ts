@@ -1344,6 +1344,10 @@ export type Database = {
           communication_rating: number | null
           created_at: string | null
           id: string
+          moderation_notes: string | null
+          moderation_status: Database["public"]["Enums"]["review_moderation_status"]
+          moderated_at: string | null
+          moderated_by: string | null
           is_published: boolean | null
           is_verified: boolean | null
           overall_rating: number
@@ -1364,6 +1368,10 @@ export type Database = {
           communication_rating?: number | null
           created_at?: string | null
           id?: string
+          moderation_notes?: string | null
+          moderation_status?: Database["public"]["Enums"]["review_moderation_status"]
+          moderated_at?: string | null
+          moderated_by?: string | null
           is_published?: boolean | null
           is_verified?: boolean | null
           overall_rating: number
@@ -1384,6 +1392,10 @@ export type Database = {
           communication_rating?: number | null
           created_at?: string | null
           id?: string
+          moderation_notes?: string | null
+          moderation_status?: Database["public"]["Enums"]["review_moderation_status"]
+          moderated_at?: string | null
+          moderated_by?: string | null
           is_published?: boolean | null
           is_verified?: boolean | null
           overall_rating?: number
@@ -1431,6 +1443,13 @@ export type Database = {
           {
             foreignKeyName: "reviews_reviewer_id_fkey"
             columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_moderated_by_fkey"
+            columns: ["moderated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1814,6 +1833,7 @@ export type Database = {
         | "material_feature"
         | "size_range"
         | "budget_tier"
+      review_moderation_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never

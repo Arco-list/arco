@@ -1,9 +1,8 @@
 "use client"
 import { useState, useEffect, Suspense } from "react"
 
-import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Heart, ThumbsUp, X } from "lucide-react"
+import { ThumbsUp, X } from "lucide-react"
 
 import { AccountSettingsForm } from "@/components/account-settings-form"
 import { DashboardHeader } from "@/components/dashboard-header"
@@ -11,29 +10,9 @@ import { Footer } from "@/components/footer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
-
-const savedProfessionals = [
-  {
-    id: "marco-van-veldhuizen",
-    name: "Marco van Veldhuizen",
-    profession: "Architect",
-    location: "Amsterdam",
-    rating: 4.92,
-    reviewCount: 24,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Modern Architecture", "Sustainable Design"],
-  },
-  {
-    id: "fx-domotica",
-    name: "FX Domotica",
-    profession: "Home Automation Specialist",
-    location: "Amsterdam",
-    rating: 4.8,
-    reviewCount: 18,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Smart Home", "Automation Systems"],
-  },
-]
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
+import { ProfessionalCard } from "@/components/professional-card"
+import Link from "next/link"
 
 function HomeownerContent() {
   const searchParams = useSearchParams()
@@ -46,10 +25,15 @@ function HomeownerContent() {
     mutatingProjectIds,
     removeProject,
   } = useSavedProjects()
+  const {
+    savedProfessionals: savedProfessionalEntries,
+    isLoading: isSavedProfessionalsLoading,
+    error: savedProfessionalsError,
+    mutatingProfessionalIds: mutatingProfessionalIds,
+    removeProfessional,
+  } = useSavedProfessionals()
   const initialTab = searchParams.get("tab") || "saved-projects"
   const [activeTab, setActiveTab] = useState(initialTab)
-
-  const [userSavedProfessionals, setUserSavedProfessionals] = useState(savedProfessionals)
 
   useEffect(() => {
     const tabParam = searchParams.get("tab")
@@ -79,7 +63,7 @@ function HomeownerContent() {
   }
 
   const unsaveProfessional = (professionalId: string) => {
-    setUserSavedProfessionals((prev) => prev.filter((professional) => professional.id !== professionalId))
+    void removeProfessional(professionalId)
   }
 
   const handleTabChange = (value: string) => {
@@ -109,7 +93,7 @@ function HomeownerContent() {
                   {savedProjectsError}
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {savedProjects.map((entry) => {
                   const { projectId, summary } = entry
                   const projectTitle = summary?.title ?? "Untitled project"
@@ -170,56 +154,40 @@ function HomeownerContent() {
             </TabsContent>
 
             <TabsContent value="saved-professionals">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {userSavedProfessionals.map((professional) => (
-                  <div
-                    key={professional.id}
-                    className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow relative"
-                  >
-                    <Link href={`/professionals/${professional.id}`}>
-                      <div className="aspect-square relative">
-                        <img
-                          src={professional.image || "/placeholder.svg"}
-                          alt={professional.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                      <div className="p-4">
-                        <div className="flex items-center gap-1 mb-2">
-                          <span className="text-sm font-medium">{professional.rating}</span>
-                          <span className="text-sm text-gray-500">({professional.reviewCount} reviews)</span>
-                        </div>
-                        <h3 className="font-semibold text-lg mb-1">{professional.name}</h3>
-                        <p className="text-gray-600 mb-2">
-                          {professional.profession} in {professional.location}
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {professional.specialties.map((specialty, index) => (
-                            <span
-                              key={index}
-                              className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded"
-                            >
-                              {specialty}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </Link>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        unsaveProfessional(professional.id)
-                      }}
-                      className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
-                    >
-                      <X className="h-4 w-4 text-gray-600 hover:text-red-500" />
-                    </button>
-                  </div>
-                ))}
+              {savedProfessionalsError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
+                  {savedProfessionalsError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {savedProfessionalEntries.map((entry) => {
+                  const { professionalId, card } = entry
+                  const isMutating = mutatingProfessionalIds.has(professionalId)
+
+                  return (
+                    <div key={professionalId} className="relative">
+                      <ProfessionalCard
+                        professional={card}
+                        isSaved
+                        isMutating={isMutating}
+                        onToggleSave={() => {
+                          unsaveProfessional(professionalId)
+                        }}
+                      />
+                    </div>
+                  )
+                })}
               </div>
-              {userSavedProfessionals.length === 0 && (
+              {!isSavedProfessionalsLoading &&
+                savedProfessionalEntries.length === 0 &&
+                !savedProfessionalsError && (
                 <div className="text-center py-12">
                   <p className="text-gray-500">No saved professionals yet.</p>
+                </div>
+              )}
+              {isSavedProfessionalsLoading && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Loading saved professionals…</p>
                 </div>
               )}
             </TabsContent>

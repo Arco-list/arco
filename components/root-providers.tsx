@@ -8,6 +8,7 @@ import { ScrollToTop } from "@/components/scroll-to-top";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { SavedProjectsProvider } from "@/contexts/saved-projects-context";
+import { SavedProfessionalsProvider } from "@/contexts/saved-professionals-context";
 import { ProjectLikesProvider } from "@/contexts/project-likes-context";
 
 export interface RootProvidersProps {
@@ -21,9 +22,11 @@ export const RootProviders = ({ children, initialSession }: RootProvidersProps) 
       <AuthProvider initialSession={initialSession}>
         <ProjectLikesProvider>
           <SavedProjectsProvider>
-            <ScrollToTop />
-            {children}
-            <Toaster richColors position="top-right" />
+            <SavedProfessionalsProvider>
+              <ScrollToTop />
+              {children}
+              <Toaster richColors position="top-right" />
+            </SavedProfessionalsProvider>
           </SavedProjectsProvider>
         </ProjectLikesProvider>
       </AuthProvider>
