@@ -1,84 +1,94 @@
+import type { Metadata } from "next"
+import { notFound } from "next/navigation"
+
+import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
+import { ProfessionalContactSidebar } from "@/components/professional-contact-sidebar"
 import { ProfessionalGallery } from "@/components/professional-gallery"
 import { ProfessionalInfo } from "@/components/professional-info"
-import { ProfessionalContactSidebar } from "@/components/professional-contact-sidebar"
-import { ProfessionalDetails } from "@/components/professional-details"
-import { Footer } from "@/components/footer"
+import { ProfessionalProjects } from "@/components/professional-projects"
 import { ProfessionalReviews } from "@/components/professional-reviews"
-import { ProfessionalProjects } from "@/components/professional-projects" // Import ProfessionalProjects
+import { fetchProfessionalDetail } from "@/lib/professionals/queries"
 
-const getProfessionalData = (slug: string) => {
-  const professionals = {
-    "fx-domotica": {
-      name: "FX Domotica",
-      title: "Home Automation Specialist in Amsterdam",
-      rating: 4.8,
-      reviewCount: 16,
-      description:
-        "FX Domotica specializes in smart home automation systems, bringing cutting-edge technology to modern living spaces. With expertise in integrated lighting, climate control, security systems, and entertainment solutions, we transform houses into intelligent homes.",
-      location: "Amsterdam",
-      category: "Home Automation",
-      type: "Technology Specialist",
-    },
-    "teus-van-den-berg-aannemers-timmerwerken": {
-      name: "Teus van den Berg Aannemers & Timmerwerken B.V.",
-      title: "General Contractor in Amsterdam",
-      rating: 4.9,
-      reviewCount: 32,
-      description:
-        "Teus van den Berg Aannemers & Timmerwerken B.V. is a leading construction and carpentry company with over 20 years of experience in residential and commercial projects throughout Amsterdam.",
-      location: "Amsterdam",
-      category: "Construction",
-      type: "General Contractor",
-    },
-    "visser-in-en-exterieur": {
-      name: "Visser In- en Exterieur",
-      title: "Interior & Exterior Designer in Amsterdam",
-      rating: 4.7,
-      reviewCount: 28,
-      description:
-        "Visser In- en Exterieur creates stunning interior and exterior designs that blend functionality with aesthetic appeal. Our team specializes in complete home transformations and landscape design.",
-      location: "Amsterdam",
-      category: "Design",
-      type: "Interior & Exterior Designer",
-    },
-  }
+const REVIEWS_ANCHOR_ID = "professional-reviews"
+const PLACEHOLDER_IMAGE = "/placeholder.svg?height=800&width=1200"
 
-  return professionals[slug as keyof typeof professionals] || professionals["fx-domotica"]
+type PageParams = {
+  slug: string
 }
 
-export default function ProfessionalDetailPage({ params }: { params: { slug: string } }) {
-  const professionalData = getProfessionalData(params.slug)
+export const revalidate = 300
+
+export async function generateMetadata({ params }: { params: PageParams }): Promise<Metadata> {
+  const professional = await fetchProfessionalDetail(params.slug)
+
+  if (!professional) {
+    return {
+      title: "Professional not found · Arco",
+    }
+  }
+
+  const description =
+    professional.description ??
+    (professional.location ? `Discover ${professional.name} in ${professional.location}.` : `Discover ${professional.name}.`)
+
+  const image = professional.gallery.find((entry) => entry.isCover)?.url ?? PLACEHOLDER_IMAGE
+
+  return {
+    title: `${professional.name} · Arco`,
+    description,
+    openGraph: {
+      title: `${professional.name} · Arco`,
+      description,
+      images: image ? [{ url: image, alt: professional.name }] : undefined,
+    },
+  }
+}
+
+export default async function ProfessionalDetailPage({ params }: { params: PageParams }) {
+  const professional = await fetchProfessionalDetail(params.slug)
+
+  if (!professional) {
+    notFound()
+  }
+
+  const shareUrl = `/professionals/${professional.slug}`
+  const galleryImages = professional.gallery
+  const projects = professional.projects
+  const reviews = professional.reviews
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-[0] py-8">
+
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-0">
         <div className="mb-8">
-          <ProfessionalGallery />
+          <ProfessionalGallery professionalName={professional.name} images={galleryImages} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start py-8">
-          {/* Main content */}
-          <div className="lg:col-span-2 space-y-8">
-            <ProfessionalInfo professionalData={professionalData} />
-            <ProfessionalDetails professionalData={professionalData} />
+        <div className="grid grid-cols-1 items-start gap-8 py-8 lg:grid-cols-3">
+          <div className="space-y-8 lg:col-span-2">
+            <ProfessionalInfo professional={professional} shareUrl={shareUrl} reviewsAnchorId={REVIEWS_ANCHOR_ID} />
           </div>
 
-          {/* Sidebar - removed min-h-screen and self-start for proper sticky behavior */}
           <div className="lg:col-span-1">
-            <ProfessionalContactSidebar professionalData={professionalData} />
+            <ProfessionalContactSidebar professional={professional} />
           </div>
         </div>
       </main>
 
-      <div className="w-full bg-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-[0]">
-          <ProfessionalProjects />
+      <section className="w-full bg-white py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-0">
+          <ProfessionalProjects projects={projects} />
         </div>
-      </div>
+      </section>
 
-      <ProfessionalReviews />
+      <ProfessionalReviews
+        id={REVIEWS_ANCHOR_ID}
+        professionalName={professional.name}
+        ratings={professional.ratings}
+        reviews={reviews}
+      />
 
       <Footer />
     </div>

@@ -1,110 +1,37 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Heart, ChevronDown, ChevronLeft, ChevronRight, X, Star, ThumbsUp } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import Link from "next/link"
 import { useFilters } from "@/contexts/filter-context"
+import type { ProfessionalCard } from "@/lib/professionals/types"
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
+import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
 
-interface Professional {
-  id: string
-  name: string
-  profession: string
-  location: string
-  rating: number
-  reviewCount: number
-  image: string
-  specialties: string[]
-  isLiked: boolean
-  likes: number
+type ProfessionalWithState = ProfessionalCard
+
+type ProfessionalsGridProps = {
+  professionals: ProfessionalCard[]
 }
 
-const professionals: Professional[] = [
-  {
-    id: "marco-van-veldhuizen",
-    name: "Marco van Veldhuizen",
-    profession: "Architect",
-    location: "Amsterdam",
-    rating: 4.92,
-    reviewCount: 24,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Modern Architecture", "Sustainable Design"],
-    isLiked: false,
-    likes: 15,
-  },
-  {
-    id: "fx-domotica",
-    name: "FX Domotica",
-    profession: "Home Automation Specialist",
-    location: "Amsterdam",
-    rating: 4.8,
-    reviewCount: 18,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Smart Home", "Automation Systems"],
-    isLiked: true,
-    likes: 8,
-  },
-  {
-    id: "sarah-interior",
-    name: "Sarah Interior Design",
-    profession: "Interior Designer",
-    location: "Utrecht",
-    rating: 4.95,
-    reviewCount: 32,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Luxury Interiors", "Color Consulting"],
-    isLiked: false,
-    likes: 22,
-  },
-  {
-    id: "green-landscapes",
-    name: "Green Landscapes",
-    profession: "Landscape Architect",
-    location: "Rotterdam",
-    rating: 4.7,
-    reviewCount: 15,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Garden Design", "Outdoor Spaces"],
-    isLiked: false,
-    likes: 5,
-  },
-  {
-    id: "build-masters",
-    name: "Build Masters",
-    profession: "General Contractor",
-    location: "The Hague",
-    rating: 4.85,
-    reviewCount: 28,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Renovations", "New Construction"],
-    isLiked: true,
-    likes: 12,
-  },
-  {
-    id: "light-solutions",
-    name: "Light Solutions",
-    profession: "Lighting Designer",
-    location: "Eindhoven",
-    rating: 4.9,
-    reviewCount: 21,
-    image: "/placeholder.svg?height=300&width=300",
-    specialties: ["Architectural Lighting", "Smart Lighting"],
-    isLiked: false,
-    likes: 9,
-  },
-]
-
-export function ProfessionalsGrid() {
+export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
   const { selectedTypes, selectedStyles, selectedLocation, selectedFeatures, removeFilter, hasActiveFilters } =
     useFilters()
 
-  const [professionalsState, setProfessionalsState] = useState<Professional[]>(professionals)
+  const [professionalsState, setProfessionalsState] = useState<ProfessionalWithState[]>(professionals)
   const [sortBy, setSortBy] = useState("Best match")
   const [currentPage, setCurrentPage] = useState(1)
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
+  const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
+    useSavedProfessionals()
+
+  useEffect(() => {
+    setProfessionalsState(professionals)
+    setCurrentPage(1)
+  }, [professionals])
 
   const professionalsPerPage = 8
-  const sortOptions = ["Best match", "Most recent", "Highest rated", "Most liked", "Alphabetical"]
+  const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"]
 
   const filteredProfessionals = useMemo(() => {
     return professionalsState.filter((professional) => {
@@ -177,21 +104,13 @@ export function ProfessionalsGrid() {
     return tags
   }
 
-  const totalPages = Math.ceil(filteredProfessionals.length / professionalsPerPage)
+  const totalPages = Math.max(1, Math.ceil(filteredProfessionals.length / professionalsPerPage))
 
-  const toggleLike = (professionalId: string) => {
-    setProfessionalsState((prev) =>
-      prev.map((professional) =>
-        professional.id === professionalId
-          ? {
-              ...professional,
-              isLiked: !professional.isLiked,
-              likes: professional.isLiked ? professional.likes - 1 : professional.likes + 1,
-            }
-          : professional,
-      ),
-    )
-  }
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   const handleSort = (option: string) => {
     setSortBy(option)
@@ -203,8 +122,6 @@ export function ProfessionalsGrid() {
           return b.name.localeCompare(a.name) // Placeholder sorting
         case "Highest rated":
           return b.rating - a.rating
-        case "Most liked":
-          return b.likes - a.likes
         case "Alphabetical":
           return a.name.localeCompare(b.name)
         default:
@@ -276,46 +193,20 @@ export function ProfessionalsGrid() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {getCurrentPageProfessionals().map((professional) => (
-              <Link key={professional.id} href={`/professionals/${professional.id}`} className="group cursor-pointer">
-                <div className="relative overflow-hidden rounded-lg bg-gray-100">
-                  <img
-                    src={professional.image || "/placeholder.svg"}
-                    alt={professional.name}
-                    className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      e.preventDefault()
-                      toggleLike(professional.id)
-                    }}
-                    className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
-                  >
-                    <Heart
-                      className={`h-4 w-4 ${
-                        professional.isLiked ? "fill-red-500 text-red-500" : "text-gray-600 hover:text-red-500"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{professional.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{professional.profession}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs text-gray-600">{professional.rating}</span>
-                      <span className="text-xs text-gray-500">({professional.reviewCount})</span>
-                    </div>
-                  </div>
-                  <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
-                    <ThumbsUp className="h-3 w-3" />
-                    <span>{professional.likes}</span>
-                  </div>
-                </div>
-              </Link>
+              <ProfessionalCardComponent
+                key={professional.id}
+                professional={professional}
+                isSaved={savedProfessionalIds.has(professional.id)}
+                isMutating={mutatingProfessionalIds.has(professional.id)}
+                onToggleSave={(card) => {
+                  const isSaved = savedProfessionalIds.has(card.id)
+                  if (isSaved) {
+                    void removeProfessional(card.id)
+                  } else {
+                    void saveProfessional(card)
+                  }
+                }}
+              />
             ))}
           </div>
 
