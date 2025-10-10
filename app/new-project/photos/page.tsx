@@ -15,6 +15,7 @@ import {
   OVERLAY_CLASSES,
 } from "@/hooks/use-project-photo-tour"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { isPhotoSelectableForFeature } from "@/lib/photo-filtering"
 
 function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   return (
@@ -142,23 +143,7 @@ export default function PhotoTourPage() {
 
     return uploadedPhotos.filter((photo) => {
       const assignedFeature = photoAssignmentMap.get(photo.id)
-      if (!assignedFeature || assignedFeature === showPhotoSelector) {
-        return true
-      }
-
-      if (showPhotoSelector === BUILDING_FEATURE_ID) {
-        return assignedFeature === BUILDING_FEATURE_ID || assignedFeature === ADDITIONAL_FEATURE_ID
-      }
-
-      if (showPhotoSelector === ADDITIONAL_FEATURE_ID) {
-        return (
-          assignedFeature === ADDITIONAL_FEATURE_ID ||
-          assignedFeature === BUILDING_FEATURE_ID ||
-          !assignedFeature
-        )
-      }
-
-      return assignedFeature === BUILDING_FEATURE_ID || assignedFeature === ADDITIONAL_FEATURE_ID
+      return isPhotoSelectableForFeature(assignedFeature, showPhotoSelector)
     })
   }, [photoAssignmentMap, showPhotoSelector, uploadedPhotos])
 

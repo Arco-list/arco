@@ -27,6 +27,7 @@ type AuthSessionPayload = {
   redirectTo?: string;
   requiresEmailConfirmation?: boolean;
   email?: string;
+  userTypes?: string[] | null;
 };
 
 type AuthActionResult<TData> = {
@@ -134,11 +135,42 @@ export const signInWithPasswordAction = async (
     return { error: normalizedError };
   }
 
+  let profileUserTypes: string[] | null = null;
+  const userId = data.user?.id;
+
+  if (userId) {
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('user_types')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError) {
+      logger.db(
+        'select',
+        'profiles',
+        'Failed to load user types during password sign-in',
+        {
+          scope: 'auth-signin',
+          userId,
+          profileError: {
+            message: profileError.message,
+            code: profileError.code,
+          },
+        },
+        new Error(profileError.message)
+      );
+    } else {
+      profileUserTypes = profileData?.user_types ?? null;
+    }
+  }
+
   return {
     data: {
       session: data.session,
       user: data.user,
       redirectTo,
+      userTypes: profileUserTypes,
     },
   };
 };
