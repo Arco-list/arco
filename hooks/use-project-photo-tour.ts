@@ -8,6 +8,7 @@ import { Grid3x3, Home } from "lucide-react"
 
 import type { Tables } from "@/lib/supabase/types"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { isPhotoSelectableForFeature } from "@/lib/photo-filtering"
 
 export type FeatureOption = {
   id: string
@@ -1555,7 +1556,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
       return uploadedPhotos.filter((photo) => {
         const assignedFeature = photoAssignmentMap.get(photo.id)
-        return !assignedFeature || assignedFeature === featureId
+        return isPhotoSelectableForFeature(assignedFeature, featureId)
       })
     },
     [photoAssignmentMap, uploadedPhotos],

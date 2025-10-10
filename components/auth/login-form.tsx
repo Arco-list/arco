@@ -63,7 +63,10 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
       }
 
       toast.success("Signed in successfully");
-      const destination = resolveRedirectPath(sanitizedRedirect);
+      const defaultDestination = resolveRedirectPath(sanitizedRedirect);
+      const userTypes = result.data?.userTypes ?? null;
+      const isAdminLogin = Array.isArray(userTypes) ? userTypes.includes("admin") : false;
+      const destination = sanitizedRedirect ?? (isAdminLogin ? "/admin" : defaultDestination);
       form.reset({ email: values.email, password: "", redirectTo: sanitizedRedirect ?? "" });
 
       let sessionRefreshed = true;
