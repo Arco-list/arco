@@ -3,7 +3,25 @@ import { Redis } from "@upstash/redis"
 
 // Redis client singleton
 let redis: Redis | null = null
-let ratelimiter: Ratelimit | null = null
+const ratelimiterCache = new Map<string, Ratelimit>()
+
+export type RateLimitOptions = {
+  /**
+   * Maximum number of requests allowed within the window.
+   * Defaults to 10 if not provided.
+   */
+  limit?: number
+  /**
+   * Sliding window duration in seconds.
+   * Defaults to 60 seconds if not provided.
+   */
+  window?: number
+  /**
+   * Prefix used for the rate limiter keys in Redis/analytics.
+   * Defaults to "@arco/ratelimit".
+   */
+  prefix?: string
+}
 
 function getRedis() {
   if (!redis) {
@@ -24,27 +42,38 @@ function getRedis() {
   return redis
 }
 
-function getRateLimiter() {
+function getRateLimiter(options?: RateLimitOptions) {
   const redisClient = getRedis()
 
   if (!redisClient) {
     return null
   }
 
-  if (!ratelimiter) {
-    ratelimiter = new Ratelimit({
-      redis: redisClient,
-      limiter: Ratelimit.slidingWindow(10, "60 s"), // 10 requests per 60 seconds
-      analytics: true,
-      prefix: "@arco/ratelimit",
-    })
+  const limit = options?.limit ?? 10
+  const windowInSeconds = options?.window ?? 60
+  const basePrefix = options?.prefix ?? "@arco/ratelimit"
+  const limiterKey = `${basePrefix}:${limit}:${windowInSeconds}`
+
+  if (!ratelimiterCache.has(limiterKey)) {
+    ratelimiterCache.set(
+      limiterKey,
+      new Ratelimit({
+        redis: redisClient,
+        limiter: Ratelimit.slidingWindow(limit, `${windowInSeconds} s`),
+        analytics: true,
+        prefix: limiterKey,
+      }),
+    )
   }
 
-  return ratelimiter
+  return ratelimiterCache.get(limiterKey) ?? null
 }
 
-export async function checkRateLimit(identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
-  const limiter = getRateLimiter()
+export async function checkRateLimit(
+  identifier: string,
+  options?: RateLimitOptions,
+): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
+  const limiter = getRateLimiter(options)
 
   // If rate limiting is not configured, allow all requests
   if (!limiter) {

@@ -6,6 +6,7 @@ import { z } from "zod"
 import { createServerActionSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { isAdminUser } from "@/lib/auth-utils"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -26,7 +27,10 @@ type ActionResult = {
   error?: string
 }
 
-const ensureAdmin = async () => {
+type SupabaseServerClient = Awaited<ReturnType<typeof createServerActionSupabaseClient>>
+type SupabaseUser = Awaited<ReturnType<SupabaseServerClient["auth"]["getUser"]>>["data"]["user"]
+
+const ensureAdmin = async (): Promise<{ supabase: SupabaseServerClient; user: SupabaseUser | null; isAdmin: boolean }> => {
   const supabase = await createServerActionSupabaseClient()
   const {
     data: { user },
@@ -35,11 +39,11 @@ const ensureAdmin = async () => {
 
   if (authError) {
     logger.auth("moderate-review", "Unable to verify user session", undefined, authError)
-    return { supabase, user: null }
+    return { supabase, user: null, isAdmin: false }
   }
 
   if (!user) {
-    return { supabase, user: null }
+    return { supabase, user: null, isAdmin: false }
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -50,14 +54,12 @@ const ensureAdmin = async () => {
 
   if (profileError) {
     logger.db("select", "profiles", "Failed to load profile while moderating review", { userId: user.id }, profileError)
-    return { supabase, user: null }
+    return { supabase, user, isAdmin: false }
   }
 
-  if (!isAdminUser(profile?.user_types ?? null)) {
-    return { supabase, user: null }
-  }
+  const isAdmin = isAdminUser(profile?.user_types ?? null)
 
-  return { supabase, user }
+  return { supabase, user, isAdmin }
 }
 
 const revalidateReviewPaths = (professionalId?: string | null) => {
@@ -74,10 +76,30 @@ export const approveReviewAction = async (rawInput: z.infer<typeof reviewIdSchem
     return { success: false, error: parseResult.error.issues[0]?.message ?? "Invalid input." }
   }
 
-  const { supabase, user } = await ensureAdmin()
+  const { supabase, user, isAdmin } = await ensureAdmin()
 
   if (!user) {
+    return { success: false, error: "You must be signed in to moderate reviews." }
+  }
+
+  if (!isAdmin) {
     return { success: false, error: "You do not have permission to approve reviews." }
+  }
+
+  const rateLimit = await checkRateLimit(`review:moderate:${user.id}`, {
+    limit: 5,
+    window: 60,
+    prefix: "@arco/reviews/moderation",
+  })
+
+  if (!rateLimit.success) {
+    logger.warn("Rate limit triggered while approving review", {
+      moderatorId: user.id,
+      reviewId: parseResult.data.reviewId,
+      remaining: rateLimit.remaining,
+      reset: rateLimit.reset,
+    })
+    return { success: false, error: "You are moderating reviews too quickly. Please wait and try again." }
   }
 
   const { data, error } = await supabase
@@ -117,10 +139,30 @@ export const rejectReviewAction = async (rawInput: z.infer<typeof rejectSchema>)
     return { success: false, error: parseResult.error.issues[0]?.message ?? "Invalid input." }
   }
 
-  const { supabase, user } = await ensureAdmin()
+  const { supabase, user, isAdmin } = await ensureAdmin()
 
   if (!user) {
+    return { success: false, error: "You must be signed in to moderate reviews." }
+  }
+
+  if (!isAdmin) {
     return { success: false, error: "You do not have permission to reject reviews." }
+  }
+
+  const rateLimit = await checkRateLimit(`review:moderate:${user.id}`, {
+    limit: 5,
+    window: 60,
+    prefix: "@arco/reviews/moderation",
+  })
+
+  if (!rateLimit.success) {
+    logger.warn("Rate limit triggered while rejecting review", {
+      moderatorId: user.id,
+      reviewId: parseResult.data.reviewId,
+      remaining: rateLimit.remaining,
+      reset: rateLimit.reset,
+    })
+    return { success: false, error: "You are moderating reviews too quickly. Please wait and try again." }
   }
 
   const notes = parseResult.data.moderationNotes?.trim() ?? null

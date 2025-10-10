@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { createServerActionSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 const ratingSchema = z.number().int().min(1, "Select a rating").max(5, "Rating must be 5 or less")
 
@@ -79,6 +80,26 @@ export async function createReviewAction(rawInput: CreateReviewInput): Promise<R
     return {
       success: false,
       error: "You need to sign in before leaving a review.",
+    }
+  }
+
+  const rateLimit = await checkRateLimit(`review:create:${user.id}`, {
+    limit: 5,
+    window: 60,
+    prefix: "@arco/reviews/create",
+  })
+
+  if (!rateLimit.success) {
+    logger.warn("Rate limit triggered while creating review", {
+      reviewerId: user.id,
+      professionalId: input.professionalId,
+      remaining: rateLimit.remaining,
+      reset: rateLimit.reset,
+    })
+    return {
+      success: false,
+      error: "You are submitting reviews too quickly. Please wait a moment before trying again.",
+      code: "rate_limited",
     }
   }
 
