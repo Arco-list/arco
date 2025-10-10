@@ -7,6 +7,8 @@ import { createServerActionSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { isAdminUser } from "@/lib/auth-utils"
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const reviewIdSchema = z.object({
   reviewId: z.string().uuid("Invalid review id."),
 })
@@ -60,7 +62,7 @@ const ensureAdmin = async () => {
 
 const revalidateReviewPaths = (professionalId?: string | null) => {
   revalidatePath("/admin/reviews")
-  if (professionalId) {
+  if (professionalId && UUID_REGEX.test(professionalId)) {
     revalidatePath(`/professionals/${professionalId}`)
   }
 }
