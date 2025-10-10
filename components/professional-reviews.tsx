@@ -1,9 +1,13 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Award, MessageCircle, Shield, Star, X } from "lucide-react"
+import { toast } from "sonner"
 
 import type { ProfessionalRatingsBreakdown, ProfessionalReviewSummary } from "@/lib/professionals/types"
+import { createReviewAction } from "@/app/professionals/[slug]/actions"
+import { useRequireAuth } from "@/hooks/use-require-auth"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 const PLACEHOLDER_AVATAR = "/placeholder.svg?height=40&width=40"
 
 type ProfessionalReviewsProps = {
+  professionalId: string
   professionalName: string
   ratings: ProfessionalRatingsBreakdown
   reviews: ProfessionalReviewSummary[]
@@ -47,7 +52,7 @@ const getRatingLabel = (rating: number) => {
   return labels[rating] || ""
 }
 
-export function ProfessionalReviews({ professionalName, ratings, reviews, id }: ProfessionalReviewsProps) {
+export function ProfessionalReviews({ professionalId, professionalName, ratings, reviews, id }: ProfessionalReviewsProps) {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set())
   const [reviewText, setReviewText] = useState("")
@@ -56,6 +61,12 @@ export function ProfessionalReviews({ professionalName, ratings, reviews, id }: 
   const [reliabilityRating, setReliabilityRating] = useState(0)
   const [communicationRating, setCommunicationRating] = useState(0)
   const [workCarriedOut, setWorkCarriedOut] = useState<boolean | null>(null)
+  const [isSubmitting, startTransition] = useTransition()
+
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const { ensureAuth, isAuthenticated } = useRequireAuth()
 
   const toggleExpanded = (reviewId: string) => {
     const next = new Set(expandedReviews)
@@ -76,26 +87,99 @@ export function ProfessionalReviews({ professionalName, ratings, reviews, id }: 
     return `${formatRating(ratings.overall)} · ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
   }, [ratings.overall, ratings.total])
 
+  useEffect(() => {
+    const intent = searchParams?.get("intent")
+
+    if (intent !== "write-review") {
+      return
+    }
+
+    if (!isAuthenticated) {
+      return
+    }
+
+    setIsReviewModalOpen(true)
+
+    const params = new URLSearchParams(searchParams?.toString() ?? "")
+    params.delete("intent")
+    const next = params.toString()
+    const url = `${pathname}${next ? `?${next}` : ""}`
+    router.replace(url, { scroll: false })
+  }, [isAuthenticated, pathname, router, searchParams])
+
+  const handleOpenReviewModal = () => {
+    if (!isAuthenticated) {
+      const params = new URLSearchParams(searchParams?.toString() ?? "")
+      params.set("intent", "write-review")
+      const next = params.toString()
+      const url = `${pathname}${next ? `?${next}` : ""}`
+      router.replace(url, { scroll: false })
+    }
+
+    if (!ensureAuth()) {
+      return
+    }
+
+    setIsReviewModalOpen(true)
+  }
+
   const handleSubmitReview = () => {
-    // Placeholder implementation – integrate review submission once available.
-    setIsReviewModalOpen(false)
-    setReviewText("")
-    setOverallRating(0)
-    setQualityRating(0)
-    setReliabilityRating(0)
-    setCommunicationRating(0)
-    setWorkCarriedOut(null)
+    if (!ensureAuth()) {
+      return
+    }
+
+    if (workCarriedOut === null) {
+      toast.error("Review incomplete", {
+        description: "Let us know if any work was carried out.",
+      })
+      return
+    }
+
+    const payload = {
+      professionalId,
+      overallRating,
+      qualityRating: qualityRating > 0 ? qualityRating : null,
+      reliabilityRating: reliabilityRating > 0 ? reliabilityRating : null,
+      communicationRating: communicationRating > 0 ? communicationRating : null,
+      workCarriedOut,
+      comment: reviewText.trim().length > 0 ? reviewText.trim() : undefined,
+    }
+
+    startTransition(async () => {
+      const result = await createReviewAction(payload)
+
+      if (!result.success) {
+        toast.error("Unable to submit review", {
+          description: result.error,
+        })
+        return
+      }
+
+      toast.success("Review submitted", {
+        description: "Thanks for the feedback! We'll publish it once it's approved.",
+      })
+
+      setIsReviewModalOpen(false)
+      setReviewText("")
+      setOverallRating(0)
+      setQualityRating(0)
+      setReliabilityRating(0)
+      setCommunicationRating(0)
+      setWorkCarriedOut(null)
+      setExpandedReviews(new Set())
+      router.refresh()
+    })
   }
 
   return (
     <div id={id} className="w-full bg-white py-16">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-[0]">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Star className="h-5 w-5 fill-black text-black" />
             <span className="text-xl font-semibold">{ratingHeadline}</span>
           </div>
-          <Button variant="outline" onClick={() => setIsReviewModalOpen(true)} className="px-6 py-2">
+          <Button variant="outline" onClick={handleOpenReviewModal} className="px-6 py-2">
             Write a review
           </Button>
         </div>
@@ -140,7 +224,7 @@ export function ProfessionalReviews({ professionalName, ratings, reviews, id }: 
                   />
                   <div>
                     <h4 className="font-medium text-gray-900">{review.reviewerName}</h4>
-                    {typeof review.yearsOnPlatform === "number" ? (
+                    {typeof review.yearsOnPlatform === "number" && review.yearsOnPlatform > 0 ? (
                       <p className="text-sm text-gray-500">
                         {review.yearsOnPlatform} year{review.yearsOnPlatform === 1 ? "" : "s"} on Arco
                       </p>
@@ -291,7 +375,7 @@ export function ProfessionalReviews({ professionalName, ratings, reviews, id }: 
                 </Button>
                 <Button
                   onClick={handleSubmitReview}
-                  disabled={overallRating === 0 || workCarriedOut === null}
+                  disabled={isSubmitting || overallRating === 0 || workCarriedOut === null}
                   className="flex-1 bg-black hover:bg-gray-800"
                 >
                   Submit

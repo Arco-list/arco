@@ -85,6 +85,7 @@ export default async function ProfessionalDetailPage({ params }: { params: PageP
 
       <ProfessionalReviews
         id={REVIEWS_ANCHOR_ID}
+        professionalId={professional.id}
         professionalName={professional.name}
         ratings={professional.ratings}
         reviews={reviews}

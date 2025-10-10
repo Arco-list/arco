@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { NavUser } from "@/components/nav-user"
-import { Users, FolderOpen, UserCheck, Settings } from "lucide-react"
+import { Users, FolderOpen, UserCheck, Settings, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -29,6 +29,11 @@ const NAV_ITEMS = [
     title: "Projects",
     url: "/admin/projects",
     icon: FolderOpen,
+  },
+  {
+    title: "Reviews",
+    url: "/admin/reviews",
+    icon: MessageSquare,
   },
   {
     title: "Professionals",

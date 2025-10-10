@@ -129,12 +129,14 @@ type ReviewRow = {
   comment: NullableString
   work_completed: boolean | null
   reviewer_id: string
-  profiles: {
-    first_name: NullableString
-    last_name: NullableString
-    avatar_url: NullableString
-    created_at: NullableString
-  } | null
+}
+
+type ReviewerProfileRow = {
+  id: string
+  first_name: NullableString
+  last_name: NullableString
+  avatar_url: NullableString
+  created_at: NullableString
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -533,23 +535,7 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
       .limit(50),
     supabase
       .from("reviews")
-      .select(
-        `
-          id,
-          created_at,
-          overall_rating,
-          title,
-          comment,
-          work_completed,
-          reviewer_id,
-          profiles:profiles!reviews_reviewer_id_fkey (
-            first_name,
-            last_name,
-          avatar_url,
-          created_at
-          )
-        `
-      )
+      .select("id, created_at, overall_rating, title, comment, work_completed, reviewer_id")
       .eq("professional_id", professionalId)
       .eq("is_published", true)
       .order("created_at", { ascending: false })
@@ -646,8 +632,42 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
   }
 
   const reviewRows = Array.isArray(reviewsResult.data) ? (reviewsResult.data as ReviewRow[]) : []
+  const reviewerIds = Array.from(
+    new Set(
+      reviewRows
+        .map((row) => row.reviewer_id)
+        .filter((id): id is string => typeof id === "string" && isUuid(id)),
+    ),
+  )
+
+  let reviewerProfiles = new Map<string, ReviewerProfileRow>()
+
+  if (reviewerIds.length > 0) {
+    const { data: reviewerProfilesData, error: reviewerProfilesError } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name, avatar_url, created_at")
+      .in("id", reviewerIds)
+
+    if (reviewerProfilesError) {
+      logger.warn("Failed to load reviewer profiles for professional detail", {
+        professionalId,
+        supabaseError: reviewerProfilesError,
+      })
+    } else {
+      const profileRows = Array.isArray(reviewerProfilesData)
+        ? (reviewerProfilesData as ReviewerProfileRow[])
+        : []
+
+      reviewerProfiles = new Map(
+        profileRows
+          .filter((row): row is ReviewerProfileRow => Boolean(row && typeof row.id === "string" && isUuid(row.id)))
+          .map((row) => [row.id, row]),
+      )
+    }
+  }
+
   const reviews: ProfessionalReviewSummary[] = reviewRows.map((row) => {
-    const reviewerProfile = row.profiles
+    const reviewerProfile = reviewerProfiles.get(row.reviewer_id) ?? null
     const reviewerName = [reviewerProfile?.first_name, reviewerProfile?.last_name]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join(" ")
@@ -690,8 +710,52 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
       ?.map((entry) => entry?.category?.name?.trim())
       .filter((value): value is string => typeof value === "string" && value.length > 0) ?? []
 
-  const companyServices = toNonEmptyStrings(company.services_offered)
-  const services = mergeUniqueStrings(company.services_offered, detailRow.services_offered)
+  const companyServicesRaw = toNonEmptyStrings(company.services_offered)
+  const rawServices = mergeUniqueStrings(company.services_offered, detailRow.services_offered)
+  const serviceIds = rawServices.filter((value) => isUuid(value))
+  let serviceNameMap = new Map<string, string>()
+
+  if (serviceIds.length > 0) {
+    const { data: serviceCategories, error: serviceCategoryError } = await supabase
+      .from("categories")
+      .select("id, name")
+      .in("id", serviceIds)
+
+    if (serviceCategoryError) {
+      logger.warn("Failed to load service category names for professional detail", {
+        professionalId,
+        serviceIds,
+        supabaseError: serviceCategoryError,
+      })
+    } else if (Array.isArray(serviceCategories)) {
+      serviceNameMap = new Map(
+        serviceCategories
+          .filter(
+            (row): row is { id: string; name: string } =>
+              Boolean(row && typeof row.id === "string" && isUuid(row.id) && typeof row.name === "string" && row.name.trim().length > 0),
+          )
+          .map((row) => [row.id, row.name.trim()]),
+      )
+    }
+  }
+
+  const resolveServiceLabels = (values: string[]) =>
+    Array.from(
+      new Set(
+        values
+          .map((value) => {
+            if (isUuid(value)) {
+              return serviceNameMap.get(value) ?? null
+            }
+            return value
+          })
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .map((value) => value.trim()),
+      ),
+    )
+
+  const services = resolveServiceLabels(rawServices)
+  const companyServices = resolveServiceLabels(companyServicesRaw)
   const companyLanguages = toNonEmptyStrings(company.languages)
   const languages = mergeUniqueStrings(company.languages, detailRow.languages_spoken)
 
