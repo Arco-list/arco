@@ -83,6 +83,9 @@ export function ProjectsGrid() {
       const [min, max] = filterContext.buildingYearRange
       tags.push({ type: "buildingYear", value: "buildingYear", label: `Building year ≤ ${max ?? "any"}` })
     }
+    if (filterContext.keyword.trim()) {
+      tags.push({ type: "keyword", value: filterContext.keyword.trim(), label: `Keyword: “${filterContext.keyword.trim()}”` })
+    }
     return tags
   }, [
     filterContext.buildingYearRange,
@@ -97,6 +100,7 @@ export function ProjectsGrid() {
     filterContext.selectedStyles,
     filterContext.selectedTypes,
     filterContext.taxonomyLabelMap,
+    filterContext.keyword,
   ])
 
   const headingText = useMemo(() => {

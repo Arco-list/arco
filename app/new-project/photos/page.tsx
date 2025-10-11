@@ -1733,19 +1733,15 @@ export default function PhotoTourPage() {
                             )}
                           </button>
 
-                          {isSelected && (
+                          {isSelected && !isCoverPhoto && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
+                                setTempCoverPhoto(photo.id)
                               }}
-                              className={`absolute bottom-2 left-2 right-2 text-xs py-1 px-2 rounded font-medium transition-colors ${
-                                isCoverPhoto
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                              }`}
+                              className="absolute bottom-2 left-2 right-2 text-xs py-1 px-2 rounded font-medium transition-colors bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
                             >
-                              {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                              Set as cover
                             </button>
                           )}
                         </div>

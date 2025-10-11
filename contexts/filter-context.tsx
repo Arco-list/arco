@@ -127,6 +127,7 @@ interface FilterState {
   selectedBudgets: string[]
   projectYearRange: [number | null, number | null]
   buildingYearRange: [number | null, number | null]
+  keyword: string
 }
 
 const INITIAL_FILTER_STATE: FilterState = {
@@ -142,6 +143,7 @@ const INITIAL_FILTER_STATE: FilterState = {
   selectedBudgets: [],
   projectYearRange: [null, null],
   buildingYearRange: [null, null],
+  keyword: "",
 }
 
 type FilterAction =
@@ -157,6 +159,7 @@ type FilterAction =
   | { type: "SET_BUDGETS"; payload: string[] }
   | { type: "SET_PROJECT_YEAR_RANGE"; payload: [number | null, number | null] }
   | { type: "SET_BUILDING_YEAR_RANGE"; payload: [number | null, number | null] }
+  | { type: "SET_KEYWORD"; payload: string }
   | { type: "RESET" }
 
 const filterReducer = (state: FilterState, action: FilterAction): FilterState => {
@@ -185,6 +188,8 @@ const filterReducer = (state: FilterState, action: FilterAction): FilterState =>
       return { ...state, projectYearRange: action.payload }
     case "SET_BUILDING_YEAR_RANGE":
       return { ...state, buildingYearRange: action.payload }
+    case "SET_KEYWORD":
+      return { ...state, keyword: action.payload }
     case "RESET":
       return INITIAL_FILTER_STATE
     default:
@@ -205,6 +210,7 @@ interface FilterContextType {
   selectedBudgets: string[]
   projectYearRange: [number | null, number | null]
   buildingYearRange: [number | null, number | null]
+  keyword: string
   setSelectedTypes: (types: string[]) => void
   setSelectedStyles: (styles: string[]) => void
   setSelectedLocation: (location: string) => void
@@ -217,6 +223,7 @@ interface FilterContextType {
   setSelectedBudgets: (budgets: string[]) => void
   setProjectYearRange: (range: [number | null, number | null]) => void
   setBuildingYearRange: (range: [number | null, number | null]) => void
+  setKeyword: (value: string) => void
   clearAllFilters: () => void
   removeFilter: (type: string, value: string) => void
   hasActiveFilters: () => boolean
@@ -248,6 +255,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     selectedBudgets,
     projectYearRange,
     buildingYearRange,
+    keyword,
   } = state
 
   const setSelectedTypes = useCallback((types: string[]) => {
@@ -315,6 +323,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     (range: [number | null, number | null]) => dispatch({ type: "SET_BUILDING_YEAR_RANGE", payload: range }),
     [],
   )
+  const setKeyword = useCallback((value: string) => dispatch({ type: "SET_KEYWORD", payload: value }), [])
 
   const taxonomyLabelMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -528,6 +537,11 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       setBuildingYearRange(nextBuildingYearRange)
     }
 
+    const keywordValue = searchParams.get("search") ?? ""
+    if (keyword !== keywordValue) {
+      setKeyword(keywordValue)
+    }
+
     initializedRef.current = true
     lastSyncedQueryRef.current = searchParams.toString()
     if (!isUrlHydrated) {
@@ -546,6 +560,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     selectedBudgets,
     projectYearRange,
     buildingYearRange,
+    keyword,
     isUrlHydrated,
     categoryTokenMaps,
     taxonomyTokenMaps,
@@ -596,6 +611,11 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     setArrayParam("size", mapIdsToTokens(selectedSizes, taxonomyTokenMaps.size_range))
     setArrayParam("budget", mapIdsToTokens(selectedBudgets, taxonomyTokenMaps.budget_tier))
 
+    const trimmedKeyword = keyword.trim()
+    if (trimmedKeyword.length > 0) {
+      params.set("search", trimmedKeyword)
+    }
+
     if (projectYearRange[1] !== null) {
       params.set("projectYearMax", String(projectYearRange[1]))
     }
@@ -645,6 +665,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     searchParams,
     categoryTokenMaps,
     taxonomyTokenMaps,
+    keyword,
   ])
 
   const clearAllFilters = useCallback(() => {
@@ -692,6 +713,9 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       case "buildingYear":
         setBuildingYearRange([null, null])
         break
+      case "keyword":
+        setKeyword("")
+        break
     }
   }
 
@@ -708,7 +732,8 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       selectedSizes.length > 0 ||
       selectedBudgets.length > 0 ||
       projectYearRange.some((value) => value !== null) ||
-      buildingYearRange.some((value) => value !== null)
+      buildingYearRange.some((value) => value !== null) ||
+      keyword.trim().length > 0
     )
   }
 
@@ -727,6 +752,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
         selectedBudgets,
         projectYearRange,
         buildingYearRange,
+        keyword,
         setSelectedTypes,
         setSelectedStyles,
         setSelectedLocation,
@@ -739,6 +765,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
         setSelectedBudgets,
         setProjectYearRange,
         setBuildingYearRange,
+        setKeyword,
         clearAllFilters,
         removeFilter,
         hasActiveFilters,

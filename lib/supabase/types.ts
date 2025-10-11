@@ -1680,6 +1680,94 @@ export type Database = {
         }
         Relationships: []
       }
+      professional_search_documents: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          communication_rating: number | null
+          company_logo: string | null
+          company_name: string | null
+          created_at: string | null
+          display_rating: number | null
+          first_name: string | null
+          hourly_rate_display: string | null
+          hourly_rate_max: number | null
+          hourly_rate_min: number | null
+          id: string | null
+          is_available: boolean | null
+          is_verified: boolean | null
+          languages_spoken: string[] | null
+          last_name: string | null
+          last_review_at: string | null
+          overall_rating: number | null
+          portfolio_url: string | null
+          primary_specialty: string | null
+          primary_specialty_color: string | null
+          primary_specialty_icon: string | null
+          primary_specialty_slug: string | null
+          quality_rating: number | null
+          reliability_rating: number | null
+          search_vector: unknown
+          services_offered: string[] | null
+          title: string | null
+          total_reviews: number | null
+          updated_at: string | null
+          user_id: string | null
+          user_location: string | null
+          years_experience: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professionals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_search_documents: {
+        Row: {
+          budget_display: string | null
+          budget_level:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          budget_max: number | null
+          budget_min: number | null
+          building_type: string | null
+          building_year: number | null
+          client_avatar: string | null
+          client_first_name: string | null
+          client_last_name: string | null
+          created_at: string | null
+          description: string | null
+          features: string[] | null
+          id: string | null
+          is_featured: boolean | null
+          likes_count: number | null
+          location: string | null
+          pending_applications: number | null
+          photo_count: number | null
+          primary_category: string | null
+          primary_category_color: string | null
+          primary_category_icon: string | null
+          primary_category_slug: string | null
+          primary_photo_alt: string | null
+          primary_photo_url: string | null
+          project_size: string | null
+          project_type: string | null
+          project_year: number | null
+          search_vector: unknown
+          slug: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          style_preferences: string[] | null
+          title: string | null
+          total_applications: number | null
+          updated_at: string | null
+          views_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_platform_stats: {

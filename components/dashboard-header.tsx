@@ -1,22 +1,25 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Menu, Search } from "lucide-react"
 import { useState, useTransition, useEffect, useRef, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { signOutAction } from "@/app/(auth)/actions"
+import { HeaderSearch } from "@/components/header-search"
 import { useAuth } from "@/contexts/auth-context"
 
 export function DashboardHeader() {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const searchParamQuery = searchParams.get("search") ?? ""
   const { profile, user } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isSigningOut, startSignOutTransition] = useTransition()
   const menuRef = useRef<HTMLDivElement>(null)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState(searchParamQuery)
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
   const isHomeownerPage = pathname === "/homeowner"
@@ -78,8 +81,12 @@ export function DashboardHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    setSearchQuery(searchParamQuery)
+  }, [searchParamQuery])
+
   return (
-    <header className="border-b border-gray-200 px-4 py-4 md:px-8">
+    <header className="bg-white border-b border-gray-200 px-4 py-4 md:px-8">
       <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
         <div className="flex items-center space-x-8">
           <Link href="/" className="hover:opacity-80 transition-opacity">
@@ -137,23 +144,14 @@ export function DashboardHeader() {
         )}
 
         {isHomeownerPage && (
-          <div className="hidden md:block w-80">
-            <form onSubmit={handleSearch} className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search projects..."
-                className="w-full rounded-full border border-gray-300 bg-white px-4 py-2 pr-10 text-sm text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="submit"
-                className="absolute right-3 top-1/2 -translate-y-1/2 transform text-gray-600 hover:text-gray-800"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-            </form>
-          </div>
+          <HeaderSearch
+            centered={false}
+            transparent={false}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onSearch={handleSearch}
+            textColor="text-gray-600"
+          />
         )}
 
         <div className="flex items-center space-x-4">
@@ -189,7 +187,7 @@ export function DashboardHeader() {
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
                             placeholder="Search projects..."
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                           />
                           <button
                             type="submit"

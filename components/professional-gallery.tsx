@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, ArrowLeft, Share, Heart } from "lucide-react
 import type { ProfessionalGalleryImage } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { cn } from "@/lib/utils"
+import { GalleryGrid } from "@/components/gallery-grid"
 
 const PLACEHOLDER_IMAGE = {
   src: "/placeholder.svg",
@@ -24,39 +24,34 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
 
   const galleryImages = useMemo(() => {
     if (images.length === 0) {
-      return [
-        {
-          src: PLACEHOLDER_IMAGE.src,
-          alt: `Placeholder image for ${professionalName}`,
-        },
-      ]
+      return []
     }
 
-    return images.map((image, index) => ({
-      src: image.url || PLACEHOLDER_IMAGE.src,
-      alt: image.altText || `Photo ${index + 1} of ${professionalName}`,
-    }))
+    return images
+      .map((image, index) => ({ image, index }))
+      .sort((first, second) => {
+        const coverDifference = Number(second.image.isCover ?? false) - Number(first.image.isCover ?? false)
+        if (coverDifference !== 0) {
+          return coverDifference
+        }
+        return first.index - second.index
+      })
+      .map((entry, index) => ({
+        src: entry.image.url || PLACEHOLDER_IMAGE.src,
+        alt: entry.image.altText || `Photo ${index + 1} of ${professionalName}`,
+      }))
   }, [images, professionalName])
-
-  const displayImages = useMemo(() => {
-    const desiredCount = 5
-    const slice = galleryImages.slice(0, desiredCount)
-
-    if (slice.length < desiredCount) {
-      return [
-        ...slice,
-        ...Array.from({ length: desiredCount - slice.length }, () => PLACEHOLDER_IMAGE),
-      ]
-    }
-
-    return slice
-  }, [galleryImages])
 
   const totalImages = galleryImages.length
   const galleryIsInteractive = totalImages > 0
 
   const openModal = (index = 0) => {
-    setCurrentPhotoIndex(index)
+    if (!galleryIsInteractive) {
+      return
+    }
+
+    const boundedIndex = Math.min(Math.max(index, 0), totalImages - 1)
+    setCurrentPhotoIndex(boundedIndex)
     setIsModalOpen(true)
   }
 
@@ -68,60 +63,11 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
     setCurrentPhotoIndex((previous) => (previous - 1 + totalImages) % totalImages)
   }
 
+  const modalImage = galleryImages[currentPhotoIndex] ?? PLACEHOLDER_IMAGE
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:items-stretch">
-        <button
-          type="button"
-          onClick={() => openModal(0)}
-          className={cn(
-            "group relative overflow-hidden rounded-xl bg-gray-100 transition-transform",
-            "aspect-[4/3] md:aspect-auto md:min-h-[420px] md:h-full",
-            galleryIsInteractive ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black" : "cursor-default",
-          )}
-          disabled={!galleryIsInteractive}
-        >
-          <img
-            src={displayImages[0]?.src || PLACEHOLDER_IMAGE.src}
-            alt={displayImages[0]?.alt || PLACEHOLDER_IMAGE.alt}
-            className={cn(
-              "h-full w-full object-cover transition-transform duration-300 ease-out",
-              galleryIsInteractive && "group-hover:scale-105",
-            )}
-          />
-        </button>
-
-        <div className="grid grid-cols-2 gap-4 md:h-full md:min-h-[420px] md:grid-rows-[repeat(2,minmax(0,1fr))]">
-          {displayImages.slice(1, 5).map((image, index) => {
-            const resolvedImage = image ?? PLACEHOLDER_IMAGE
-
-            return (
-              <button
-                key={`professional-gallery-tile-${index}`}
-                type="button"
-                onClick={() => openModal(index + 1)}
-                className={cn(
-                  "group relative overflow-hidden rounded-xl bg-gray-100",
-                  "aspect-square md:aspect-auto md:h-full",
-                  galleryIsInteractive
-                    ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
-                    : "cursor-default",
-                )}
-                disabled={!galleryIsInteractive}
-              >
-                <img
-                  src={resolvedImage.src}
-                  alt={resolvedImage.alt}
-                  className={cn(
-                    "h-full w-full object-cover transition-transform duration-300 ease-out",
-                    galleryIsInteractive && "group-hover:scale-105",
-                  )}
-                />
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <GalleryGrid images={galleryImages} interactive={galleryIsInteractive} onOpen={openModal} />
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent
@@ -156,12 +102,8 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
               </div>
             </div>
 
-            <div className="flex flex-1 items-center justify-center p-8 md:p-16">
-              <img
-                src={galleryImages[currentPhotoIndex]?.src || PLACEHOLDER_IMAGE.src}
-                alt={galleryImages[currentPhotoIndex]?.alt || PLACEHOLDER_IMAGE.alt}
-                className="max-h-full max-w-full object-contain"
-              />
+            <div className="flex flex-1 items-center justify-center px-4 pb-12 pt-24 md:px-12 md:pt-28 md:pb-20">
+              <img src={modalImage.src} alt={modalImage.alt} className="mx-auto block max-h-[calc(100vh-9rem)] max-w-full object-contain" />
             </div>
 
             <Button

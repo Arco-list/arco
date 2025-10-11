@@ -2395,19 +2395,15 @@ export default function ListingEditorPage() {
                               )}
                             </button>
 
-                            {isSelected && (
+                            {isSelected && !isCoverPhoto && (
                               <button
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  setTempCoverPhoto(isCoverPhoto ? "" : photo.id)
+                                  setTempCoverPhoto(photo.id)
                                 }}
-                                className={`absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors ${
-                                  isCoverPhoto
-                                    ? "bg-blue-600 text-white"
-                                    : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                                }`}
+                                className="absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
                               >
-                                {isCoverPhoto ? "Cover photo" : "Set as cover"}
+                                Set as cover
                               </button>
                             )}
                           </div>

@@ -15,8 +15,15 @@ type ProfessionalsGridProps = {
 }
 
 export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
-  const { selectedTypes, selectedStyles, selectedLocation, selectedFeatures, removeFilter, hasActiveFilters } =
-    useFilters()
+  const {
+    selectedTypes,
+    selectedStyles,
+    selectedLocation,
+    selectedFeatures,
+    keyword,
+    removeFilter,
+    hasActiveFilters,
+  } = useFilters()
 
   const [professionalsState, setProfessionalsState] = useState<ProfessionalWithState[]>(professionals)
   const [sortBy, setSortBy] = useState("Best match")
@@ -34,6 +41,7 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
   const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"]
 
   const filteredProfessionals = useMemo(() => {
+    const trimmedKeyword = keyword.trim().toLowerCase()
     return professionalsState.filter((professional) => {
       // Filter by type (profession)
       if (
@@ -68,9 +76,22 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
         return false
       }
 
+      if (trimmedKeyword.length > 0) {
+        const searchable = [
+          professional.name,
+          professional.profession,
+          professional.location,
+          ...professional.specialties,
+        ]
+        const matchesKeyword = searchable.some((value) => value.toLowerCase().includes(trimmedKeyword))
+        if (!matchesKeyword) {
+          return false
+        }
+      }
+
       return true
     })
-  }, [professionalsState, selectedTypes, selectedStyles, selectedLocation, selectedFeatures])
+  }, [keyword, professionalsState, selectedTypes, selectedStyles, selectedLocation, selectedFeatures])
 
   const getPageTitle = () => {
     if (selectedTypes.length > 0) {
@@ -100,6 +121,10 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
     selectedFeatures.forEach((feature) => {
       tags.push({ type: "feature", value: feature, label: feature })
     })
+
+    if (keyword.trim()) {
+      tags.push({ type: "keyword", value: keyword.trim(), label: `Keyword: “${keyword.trim()}”` })
+    }
 
     return tags
   }

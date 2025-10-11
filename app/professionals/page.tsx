@@ -3,7 +3,6 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { FilterBar } from "@/components/filter-bar"
 import { ProfessionalsGrid } from "@/components/professionals-grid"
-import { ProjectsNavigation } from "@/components/projects-navigation"
 import { FilterProvider } from "@/contexts/filter-context"
 import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { fetchDiscoverProfessionals } from "@/lib/professionals/queries"
@@ -28,7 +27,6 @@ export default async function ProfessionalsPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <ProjectsNavigation activeTab="professionals" />
       <FilterErrorBoundary>
         <FilterProvider>
           <FilterBar />

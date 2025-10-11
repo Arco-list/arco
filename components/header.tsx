@@ -5,11 +5,12 @@ import type React from "react";
 
 import { Menu, Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { signOutAction } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
+import { HeaderSearch } from "@/components/header-search";
 import { useAuth } from "@/contexts/auth-context";
 
 export interface HeaderProps {
@@ -19,10 +20,12 @@ export interface HeaderProps {
 export function Header({ transparent = false }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamQuery = searchParams.get("search") ?? "";
   const { profile, user } = useAuth();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchParamQuery);
   const [isSigningOut, startSignOutTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -90,6 +93,10 @@ export function Header({ transparent = false }: HeaderProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setSearchQuery(searchParamQuery);
+  }, [searchParamQuery]);
+
   const headerClasses = transparent
     ? "absolute top-0 left-0 right-0 z-50 px-4 py-4 md:px-8"
     : "border-b border-gray-200 px-4 py-4 md:px-8";
@@ -116,42 +123,37 @@ export function Header({ transparent = false }: HeaderProps) {
               />
             </Link>
 
-            {pathname !== "/projects" && pathname !== "/professionals" && (
-              <div className="hidden items-center space-x-6 md:flex">
-                <Link href="/projects" className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}>
-                  Projects
-                </Link>
-                <Link
-                  href="/professionals"
-                  className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
-                >
-                  Professionals
-                </Link>
-              </div>
-            )}
+            <div className="hidden items-center space-x-6 md:flex">
+              <Link
+                href="/projects"
+                className={`text-sm font-medium transition-colors ${
+                  pathname === "/projects"
+                    ? "text-red-500 border-b-2 border-red-500 pb-1"
+                    : `${textColor} ${hoverColor}`
+                }`}
+              >
+                Projects
+              </Link>
+              <Link
+                href="/professionals"
+                className={`text-sm font-medium transition-colors ${
+                  pathname === "/professionals"
+                    ? "text-red-500 border-b-2 border-red-500 pb-1"
+                    : `${textColor} ${hoverColor}`
+                }`}
+              >
+                Professionals
+              </Link>
+            </div>
           </div>
 
-          <div className="absolute left-1/2 hidden w-80 -translate-x-1/2 transform md:block">
-            <form onSubmit={handleSearch} className="relative">
-              <input
-                type="text"
-                placeholder="Search projects..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                className={`w-full rounded-full border px-4 py-2 pr-10 ${
-                  transparent
-                    ? "border-white/20 bg-white/10 text-white placeholder-white/70 backdrop-blur-sm"
-                    : "border-gray-300 bg-white text-black placeholder-gray-500"
-                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-              />
-              <button
-                type="submit"
-                className={`absolute right-3 top-1/2 -translate-y-1/2 transform ${textColor} hover:opacity-70`}
-              >
-                <Search className="h-4 w-4" />
-              </button>
-            </form>
-          </div>
+          <HeaderSearch
+            transparent={transparent}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onSearch={handleSearch}
+            textColor={textColor}
+          />
 
           <div className="relative flex items-center space-x-3" ref={menuRef}>
             {isLoggedIn ? (
@@ -243,7 +245,7 @@ export function Header({ transparent = false }: HeaderProps) {
                         placeholder="Search projects..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       <button
                         type="submit"

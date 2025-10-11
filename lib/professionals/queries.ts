@@ -47,6 +47,12 @@ type ProfessionalRow = {
     overall_rating: number | null
     total_reviews: number | null
   } | null
+  specialties: {
+    is_primary: boolean | null
+    category: {
+      name: NullableString
+    } | null
+  }[] | null
 }
 
 type CoverPhotoRow = {
@@ -252,11 +258,26 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim()
   const name = company.name || fullName || "Professional"
 
+  // Use services_offered if title appears to be a name (matches first_name or last_name)
+  const titleLooksLikeName =
+    row.title && profile && (
+      row.title.toLowerCase() === profile.first_name?.toLowerCase() ||
+      row.title.toLowerCase() === profile.last_name?.toLowerCase()
+    )
+
+  // Get primary specialty name from specialties, or use services_offered as fallback
+  const primarySpecialty = Array.isArray(row.specialties)
+    ? row.specialties.find(s => s.is_primary)?.category?.name ||
+      row.specialties[0]?.category?.name
+    : null
+
   const profession =
-    row.title ||
-    (Array.isArray(row.services_offered) && row.services_offered.length > 0
-      ? row.services_offered[0] ?? "Professional"
-      : "Professional")
+    (row.title && !titleLooksLikeName)
+      ? row.title
+      : primarySpecialty ||
+        (Array.isArray(row.services_offered) && row.services_offered.length > 0
+          ? row.services_offered[0] ?? "Professional"
+          : "Professional")
 
   const locationPieces = [company.city, company.country].filter(Boolean)
   const location =
@@ -344,6 +365,12 @@ export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> 
         rating:professional_ratings (
           overall_rating,
           total_reviews
+        ),
+        specialties:professional_specialties (
+          is_primary,
+          category:categories (
+            name
+          )
         )
       `
     )

@@ -50,13 +50,15 @@ type CategoryRow = Tables<"categories"> & {
   project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable" | "is_building_feature"> | null
 }
 
+type ProjectSummaryRow = Tables<"project_search_documents">
+
 interface PaginatedProjects {
-  data: Tables<"mv_project_summary">[]
+  data: ProjectSummaryRow[]
   total: number
 }
 
 interface UseProjectsQueryResult {
-  projects: Tables<"mv_project_summary">[]
+  projects: ProjectSummaryRow[]
   total: number
   isLoading: boolean
   error: string | null
@@ -81,9 +83,10 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
     projectYearRange,
     buildingYearRange,
     taxonomy,
+    keyword,
   } = useFilters()
 
-  const [projects, setProjects] = useState<Tables<"mv_project_summary">[]>([])
+  const [projects, setProjects] = useState<ProjectSummaryRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -176,6 +179,7 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
       ),
       projectYearRange,
       buildingYearRange,
+      keyword: keyword.trim(),
     }),
     [
       typeFilterValues,
@@ -190,6 +194,7 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
       selectedBudgets,
       projectYearRange,
       buildingYearRange,
+      keyword,
     ],
   )
 
@@ -255,7 +260,7 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
       const to = from + effectivePageSize - 1
 
       let query = supabase
-        .from("mv_project_summary")
+        .from("project_search_documents")
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false, nullsFirst: false })
         .range(from, to)
@@ -274,6 +279,9 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
 
       if (filters.features.length > 0) {
         query = query.contains("features", filters.features)
+      }
+      if (filters.keyword) {
+        query = query.textSearch("search_vector", filters.keyword, { type: "websearch", config: "simple" })
       }
 
       if (filters.buildingTypes.length > 0) {
@@ -315,7 +323,7 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
   )
 
   const fetchTypePhotoOverrides = useCallback(
-    async (projectRows: Tables<"mv_project_summary">[]) => {
+    async (projectRows: ProjectSummaryRow[]) => {
       if (imageCategorySearchOrder.length === 0 || projectRows.length === 0) {
         return {}
       }

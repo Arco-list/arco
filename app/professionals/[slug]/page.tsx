@@ -61,7 +61,7 @@ export default async function ProfessionalDetailPage({ params }: { params: PageP
     <div className="min-h-screen bg-white">
       <Header />
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-0">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-8">
           <ProfessionalGallery professionalName={professional.name} images={galleryImages} />
         </div>
@@ -78,7 +78,7 @@ export default async function ProfessionalDetailPage({ params }: { params: PageP
       </main>
 
       <section className="w-full bg-white py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-0">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
           <ProfessionalProjects projects={projects} />
         </div>
       </section>
