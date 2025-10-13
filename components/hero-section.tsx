@@ -67,9 +67,17 @@ export function HeroSection({ projects }: HeroSectionProps) {
         <div className="absolute inset-0 bg-black/35" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-8 text-white md:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-[1800px] px-4 pb-8 text-white md:px-8">
         <div className="max-w-2xl">
-          <h1 className="text-4xl font-bold leading-tight md:text-6xl lg:text-7xl">
+          <h1 
+            className="text-4xl leading-tight md:text-6xl lg:text-7xl"
+            style={{
+              fontFamily: 'Figtree, sans-serif',
+              fontWeight: 600,
+              letterSpacing: '-2px',
+              fontSize: '76px'
+            }}
+          >
             {heroTitle}
           </h1>
         </div>

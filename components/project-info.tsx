@@ -4,15 +4,14 @@ import Link from "next/link"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Heart, Share, ThumbsUp } from "lucide-react"
-import { ReportModal } from "./report-modal"
 import { ShareModal } from "./share-modal"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useProjectLikes } from "@/contexts/project-likes-context"
 
 export function ProjectInfo() {
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
   const { projectId, info, statusBadge, locationLabel, shareImageUrl, shareUrl, likesCount: initialLikesCount, isLiked: initialLiked } =
     useProjectPreview()
   const { savedProjectIds, mutatingProjectIds, saveProject, removeProject } = useSavedProjects()
@@ -25,10 +24,18 @@ export function ProjectInfo() {
   const isMutatingLike = projectId ? likeMutatingProjectIds.has(projectId) : false
   const likesCount = projectId ? likeCounts[projectId] ?? initialLikesCount ?? 0 : initialLikesCount ?? 0
   const breadcrumbs = info.breadcrumbs.length > 0 ? info.breadcrumbs : [{ label: "Projects", href: "/projects" }]
+  
+  // Description truncation logic
+  const MAX_CHARS = 200
+  const description = info.descriptionPlain || ""
+  const shouldTruncate = description.length > MAX_CHARS
+  const displayDescription = shouldTruncate && !isDescriptionExpanded 
+    ? description.substring(0, MAX_CHARS) + "..."
+    : description
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <nav className="text-sm text-gray-500 flex flex-wrap items-center gap-1" aria-label="Breadcrumb">
             {breadcrumbs.map((crumb, index) => {
@@ -88,35 +95,33 @@ export function ProjectInfo() {
             </Button>
           </div>
         </div>
-
-        <button
-          className="text-sm text-gray-500 hover:text-gray-700 underline self-start sm:self-center"
-          onClick={() => setIsReportModalOpen(true)}
-        >
-          Report this listing
-        </button>
       </div>
 
       {/* Project title and description */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold text-black">{info.title}</h1>
         {info.subtitle && <h2 className="text-xl text-gray-600">{info.subtitle}</h2>}
-        {(info.sponsoredLabel || statusBadge || locationLabel) && (
+        {(info.sponsoredLabel || locationLabel) && (
           <p className="text-sm text-gray-500">
-            {[info.sponsoredLabel, statusBadge, locationLabel].filter(Boolean).join(" • ")}
+            {[info.sponsoredLabel, locationLabel].filter(Boolean).join(" • ")}
           </p>
         )}
 
-        {info.descriptionPlain && (
-          <p className="text-gray-700 leading-relaxed">{info.descriptionPlain}</p>
+        {description && (
+          <p className="text-gray-700 leading-relaxed">{displayDescription}</p>
         )}
 
-        <Button variant="link" className="p-0 text-red-600 hover:text-red-700">
-          Show more
-        </Button>
+        {shouldTruncate && (
+          <Button 
+            variant="link" 
+            className="p-0 text-red-600 hover:text-red-700"
+            onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+          >
+            {isDescriptionExpanded ? "Show less" : "Show more"}
+          </Button>
+        )}
       </div>
 
-      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="project" />
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}

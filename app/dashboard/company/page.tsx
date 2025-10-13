@@ -58,7 +58,7 @@ export default async function CompanySettingsPage() {
     redirect("/create-company")
   }
 
-  const [{ data: socialLinks }, { data: photos }, { data: services }] = await Promise.all([
+  const [{ data: socialLinks }, { data: photos }, { data: services }, { data: professional }] = await Promise.all([
     supabase
       .from("company_social_links")
       .select("id, platform, url")
@@ -75,6 +75,12 @@ export default async function CompanySettingsPage() {
       .eq("is_active", true)
       .is("parent_id", null)
       .order("name"),
+    supabase
+      .from("professionals")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("company_id", company.id)
+      .maybeSingle(),
   ])
 
   const serviceOptions = (services ?? []).map((service) => ({
@@ -93,6 +99,7 @@ export default async function CompanySettingsPage() {
             socialLinks={socialLinks ?? []}
             photos={photos ?? []}
             services={serviceOptions}
+            professionalId={professional?.id ?? null}
           />
         </div>
       </main>

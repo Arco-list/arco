@@ -79,8 +79,9 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white hover:bg-white/10"
+                className="text-white hover:bg-white/10 hover:text-white"
                 onClick={() => setIsModalOpen(false)}
+                aria-label="Close gallery"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
@@ -91,11 +92,11 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
               </div>
 
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" aria-label="Share professional">
                   <Share className="mr-2 h-4 w-4" />
                   Share
                 </Button>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" aria-label="Save professional">
                   <Heart className="mr-2 h-4 w-4" />
                   Save
                 </Button>
@@ -103,15 +104,22 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
             </div>
 
             <div className="flex flex-1 items-center justify-center px-4 pb-12 pt-24 md:px-12 md:pt-28 md:pb-20">
-              <img src={modalImage.src} alt={modalImage.alt} className="mx-auto block max-h-[calc(100vh-9rem)] max-w-full object-contain" />
+              <img 
+                src={modalImage.src} 
+                alt={modalImage.alt} 
+                className="mx-auto block max-h-[calc(100vh-9rem)] max-w-full object-contain" 
+                role="img"
+                aria-label={`${modalImage.alt} - ${currentPhotoIndex + 1} of ${totalImages}`}
+              />
             </div>
 
             <Button
               variant="ghost"
               size="icon"
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={prevPhoto}
               disabled={totalImages <= 1}
+              aria-label="Previous image"
             >
               <ChevronLeft className="h-6 w-6" />
             </Button>
@@ -119,9 +127,10 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={nextPhoto}
               disabled={totalImages <= 1}
+              aria-label="Next image"
             >
               <ChevronRight className="h-6 w-6" />
             </Button>

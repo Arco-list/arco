@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation"
+import Link from "next/link"
+import { ChevronLeft } from "lucide-react"
 
 import { Header } from "@/components/header"
 import { ProjectGallery } from "@/components/project-gallery"
@@ -11,6 +13,7 @@ import { ProjectDetails } from "@/components/project-details"
 import { MapSection } from "@/components/map-section"
 import { SimilarProjects } from "@/components/similar-projects"
 import { Footer } from "@/components/footer"
+import { MobileProfessionalsButton } from "@/components/mobile-professionals-button"
 import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
 import { ProjectGalleryModalProvider } from "@/contexts/project-gallery-modal-context"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
@@ -459,39 +462,28 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   pushBreadcrumb("Projects", {})
 
+  // Location breadcrumb
   const locationBreadcrumbLabel = project.address_city?.trim() ?? null
   if (locationBreadcrumbLabel) {
     pushBreadcrumb(locationBreadcrumbLabel, { location: locationBreadcrumbLabel })
   }
 
-  if (primaryCategoryName) {
-    const primaryCategoryToken = primaryCategorySlug ?? primaryCategoryRow?.category_id ?? null
-    pushBreadcrumb(primaryCategoryName, primaryCategoryToken ? { type: primaryCategoryToken } : null)
-  } else if (projectTypeLabel) {
-    const projectTypeToken =
-      (projectTypeCategoryId && (categoryMap.get(projectTypeCategoryId)?.slug ?? projectTypeCategoryId)) ??
-      (project.project_type ? (isUuid(project.project_type) ? project.project_type : project.project_type) : null)
+  // Find parent and child categories for breadcrumbs
+  const allProjectCategories = projectCategories.map(row => categoryMap.get(row.category_id)).filter(Boolean)
+  const parentCategory = allProjectCategories.find(cat => !cat?.parent_id) // Category without parent
+  const childCategory = allProjectCategories.find(cat => cat?.parent_id) // Category with parent
 
-    pushBreadcrumb(projectTypeLabel, projectTypeToken ? { type: projectTypeToken } : null)
+  // Type breadcrumb (parent category like "House")
+  if (parentCategory?.name && parentCategory.name.trim() !== "") {
+    pushBreadcrumb(parentCategory.name, { type: parentCategory.slug ?? parentCategory.id })
   }
 
-  pushBreadcrumb(projectTitle, null)
+  // Sub-Type breadcrumb (child category like "Apartment")
+  if (childCategory?.name && childCategory.name.trim() !== "") {
+    pushBreadcrumb(childCategory.name, { type: childCategory.slug ?? childCategory.id })
+  }
 
   const budgetLabel = project.budget_level ? budgetLabelMap.get(project.budget_level) ?? formatEnumLabel(project.budget_level) : ""
-
-  const metaDetails = [
-    { label: "Category", value: primaryCategoryName ?? "" },
-    { label: "Project type", value: projectTypeLabel },
-    { label: "Style", value: styleLabel },
-    { label: "Building type", value: buildingTypeLabel },
-    { label: "Project size", value: projectSizeLabel },
-    { label: "Budget", value: budgetLabel },
-    { label: "Project year", value: project.project_year ? String(project.project_year) : "" },
-    { label: "Building year", value: project.building_year ? String(project.building_year) : "" },
-    { label: "Photos", value: photos.length ? String(photos.length) : "" },
-    { label: "Created", value: createdAt ?? "" },
-    { label: "Updated", value: updatedAt ?? "" },
-  ].filter((detail) => detail.value !== null && detail.value !== undefined && detail.value !== "")
 
   const normalizeFeatureName = (name: string) => (name.includes("_") ? formatEnumLabel(name) : name)
   const slugify = (value: string) =>
@@ -620,6 +612,21 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const locationFeatureItems = buildFeatureItems("location_feature")
   const materialFeatureItems = buildFeatureItems("material_feature")
+
+  // Get materials value for metaDetails
+  const materialsValue = materialFeatureItems.map(item => item.label).join(", ")
+
+  const metaDetails = [
+    { label: "Category", value: primaryCategoryName ?? "" },
+    { label: "Style", value: styleLabel },
+    { label: "Size", value: projectSizeLabel },
+    { label: "Project year", value: project.project_year ? String(project.project_year) : "" },
+    { label: "Materials", value: materialsValue },
+    { label: "Type", value: projectTypeLabel },
+    { label: "Budget", value: budgetLabel },
+    { label: "Building year", value: project.building_year ? String(project.building_year) : "" },
+    { label: "Location", value: locationLabel },
+  ].filter((detail) => detail.value !== null && detail.value !== undefined && detail.value !== "")
 
   let featureGroups: ProjectPreviewData["featureGroups"] = []
 
@@ -853,14 +860,24 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         <div className="min-h-screen bg-white">
           {canPreview && <PreviewBanner />}
 
-          <Header />
+          <Header maxWidth="max-w-7xl" />
 
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8">
+          <main className="px-4 py-8 md:px-8">
+            <div className="max-w-7xl mx-auto">
+            <div className="mb-6">
+              <Link 
+                href="/projects" 
+                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back to search
+              </Link>
+            </div>
             <div className="mb-8">
               <ProjectGallery />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 py-8">
               <div className="lg:col-span-2 space-y-8">
                 <ProjectInfo />
                 <ProjectHighlights />
@@ -870,19 +887,24 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 <MapSection />
               </div>
 
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 lg:self-start">
                 <ProfessionalsSidebar />
               </div>
+            </div>
             </div>
           </main>
 
           <div className="w-full bg-white py-16">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
-              <SimilarProjects />
+            <div className="px-4 md:px-8">
+              <div className="max-w-7xl mx-auto">
+                <SimilarProjects />
+              </div>
             </div>
           </div>
 
-          <Footer />
+          <Footer maxWidth="max-w-7xl" />
+          
+          <MobileProfessionalsButton />
         </div>
       </ProjectGalleryModalProvider>
     </ProjectPreviewProvider>

@@ -118,10 +118,10 @@ export function SimilarProjects() {
                   disabled={project.isMutatingSave}
                   aria-pressed={project.isSaved}
                   aria-label={project.isSaved ? "Remove from saved projects" : "Save project"}
-                  className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
+                  className="absolute top-3 right-3 p-1 text-gray-600 hover:text-red-500 transition-colors"
                 >
                   <Heart
-                    className={`h-4 w-4 ${project.isSaved ? "text-red-500" : "text-gray-600"}`}
+                    className={`h-6 w-6 ${project.isSaved ? "text-red-500 fill-red-500" : "text-gray-600 hover:text-red-500"}`}
                     fill={project.isSaved ? "currentColor" : "none"}
                   />
                 </button>

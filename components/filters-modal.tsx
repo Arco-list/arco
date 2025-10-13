@@ -223,8 +223,8 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                         )
 
                         const isExpanded = expandedProjectTypes.includes(section.id)
-                        const showToggle = childItems.length > 3
-                        const itemsToRender = isExpanded ? childItems : childItems.slice(0, 3)
+                        const showToggle = childItems.length > 0
+                        const itemsToRender = isExpanded ? childItems : []
 
                         return (
                           <>
@@ -273,21 +273,12 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-medium">Style</h3>
-                  <button
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
-                    onClick={() => setShowAllStyles(!showAllStyles)}
-                  >
-                    {showAllStyles ? "Show less" : "View all"}
-                    {showAllStyles ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  </button>
-                </div>
-                <div className="space-y-3">
+                <h3 className="text-base font-medium mb-3">Style</h3>
+                <div className="grid grid-cols-2 gap-3">
                   {styleOptions.slice(0, showAllStyles ? undefined : 6).map((style, index) => {
                     const value = style.id ?? style.slug ?? `${style.name}-${index}`
                     return (
-                      <label key={value} className="flex items-center gap-3 cursor-pointer">
+                      <label key={value} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
                           className="h-4 w-4 rounded"
@@ -299,6 +290,12 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                     )
                   })}
                 </div>
+                <button
+                  className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
+                  onClick={() => setShowAllStyles(!showAllStyles)}
+                >
+                  {showAllStyles ? "Show less" : "Show all"}
+                </button>
               </div>
 
               <div>

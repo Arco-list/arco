@@ -70,13 +70,13 @@ export function ProjectHighlights() {
             key={highlight.id}
             type="button"
             onClick={() => handleHighlightClick(highlight.id)}
-            className="flex-none w-80 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
+            className="flex-none w-64 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
             style={{ scrollSnapAlign: "start" }}
           >
             <img
               src={highlight.imageUrl || "/placeholder.svg"}
               alt={highlight.title}
-              className="w-full h-48 object-cover rounded-lg transition-transform duration-300 hover:scale-105"
+              className="aspect-square w-full object-cover rounded-lg transition-transform duration-300 hover:scale-105"
             />
             <p className="text-sm font-medium text-gray-900">{highlight.title}</p>
             {highlight.description && <p className="text-xs text-gray-600">{highlight.description}</p>}

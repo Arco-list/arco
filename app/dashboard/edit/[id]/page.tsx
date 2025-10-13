@@ -2,9 +2,10 @@
 
 import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Script from "next/script"
 import {
+  ChevronLeft,
   ChevronRight,
   ImageIcon,
   Users,
@@ -17,6 +18,8 @@ import {
   Pencil,
   Loader2,
   AlertCircle,
+  Menu,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useEditor } from "@tiptap/react"
@@ -272,12 +275,14 @@ const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpd
 
 export default function ListingEditorPage() {
   const params = useParams()
+  const router = useRouter()
   const [activeSection, setActiveSection] = useState("photo-tour")
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [currentStatusValue, setCurrentStatusValue] = useState<ListingStatusValue | "">("")
   const [selectedStatus, setSelectedStatus] = useState<ListingStatusValue | "">("")
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
 
   // Location state variables
@@ -1317,6 +1322,11 @@ export default function ListingEditorPage() {
     { id: "details", name: "Details", icon: FileText },
     { id: "location", name: "Location", icon: MapPin },
   ]
+
+  const getCurrentSectionTitle = () => {
+    const currentItem = sidebarItems.find(item => item.id === activeSection)
+    return currentItem?.name || "Photo tour"
+  }
 
   const statusOptions = LISTING_STATUS_MODAL_OPTIONS
 
@@ -2786,15 +2796,41 @@ export default function ListingEditorPage() {
       <DashboardHeader />
 
       <div className="flex-1 px-4 md:px-8">
+        {/* Navigation Button */}
+        <div className="max-w-7xl mx-auto py-4">
+          <button
+            onClick={() => router.push('/dashboard/listings')}
+            className="flex items-center gap-3 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="font-medium">Listing editor</span>
+          </button>
+        </div>
         <div className="max-w-7xl mx-auto">
           {entitlementsError && (
             <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {entitlementsError}
             </div>
           )}
+          {/* Mobile Status Switcher */}
+          <div className="md:hidden mb-6">
+            <button
+              onClick={() => setShowStatusModal(true)}
+              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="text-left">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
+                  <span className="font-medium text-gray-900">{currentStatusLabel}</span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+
           <div className="flex">
-            {/* Sidebar */}
-            <div className="w-64 bg-white border-r border-gray-200 p-6">
+            {/* Sidebar - Hidden on mobile */}
+            <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6">
               <div className="space-y-6">
                 {/* Status Selector */}
                 <div>
@@ -2807,7 +2843,6 @@ export default function ListingEditorPage() {
                         <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
                         <span className="font-medium text-gray-900">{currentStatusLabel}</span>
                       </div>
-                      <p className="text-sm text-red-500 mt-1">List your project</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-400" />
                   </button>
@@ -2815,7 +2850,7 @@ export default function ListingEditorPage() {
 
                 {/* Preview listing */}
                 <div>
-                  <Button variant="outline" className="w-full" onClick={handlePreviewListing}>
+                  <Button className="w-full bg-gray-900 text-white hover:bg-gray-800" onClick={handlePreviewListing}>
                     Preview listing
                   </Button>
                 </div>
@@ -2844,7 +2879,22 @@ export default function ListingEditorPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 p-8">
+            <div className="flex-1 p-4 md:p-8">
+              {/* Mobile Navigation Header */}
+              <div className="md:hidden mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    <Menu className="h-5 w-5 text-gray-600" />
+                  </button>
+                  <h1 className="text-xl font-semibold text-gray-900">{getCurrentSectionTitle()}</h1>
+                </div>
+                <Button className="bg-gray-900 text-white hover:bg-gray-800" onClick={handlePreviewListing}>
+                  Preview
+                </Button>
+              </div>
               {activeSection === "photo-tour" && renderPhotoTourSection()}
               {activeSection === "professionals" && renderProfessionalsSection()}
               {activeSection === "details" && (
@@ -3065,6 +3115,76 @@ export default function ListingEditorPage() {
             <Button onClick={() => void handleInviteSubmit()} disabled={isInviteMutating} className="flex-1">
               {isInviteMutating ? "Sending…" : editingInviteId ? "Update invite" : "Send invite"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mobile Navigation Drawer */}
+      <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              Navigation
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Status Selector */}
+            <button
+              onClick={() => {
+                setShowStatusModal(true)
+                setIsMobileMenuOpen(false)
+              }}
+              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="text-left">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
+                  <span className="font-medium text-gray-900">{currentStatusLabel}</span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            </button>
+
+            {/* Preview listing */}
+            <Button 
+              className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+              onClick={() => {
+                handlePreviewListing()
+                setIsMobileMenuOpen(false)
+              }}
+            >
+              Preview listing
+            </Button>
+
+            {/* Navigation Items */}
+            <div className="space-y-2">
+              {sidebarItems.map((item) => {
+                const IconComponent = item.icon
+                const isActive = activeSection === item.id
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveSection(item.id)
+                      setIsMobileMenuOpen(false)
+                    }}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
+                      isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
+                  >
+                    <IconComponent className="w-5 h-5" />
+                    <span className="font-medium">{item.name}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,8 +1,11 @@
 "use client"
 
+import { useState } from "react"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { ReportModal } from "./report-modal"
 
 export function ProjectDetails() {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const { metaDetails } = useProjectPreview()
 
   if (metaDetails.length === 0) {
@@ -21,6 +24,15 @@ export function ProjectDetails() {
           </div>
         ))}
       </div>
+
+      <button
+        className="text-sm text-gray-500 hover:text-gray-700 underline mt-4"
+        onClick={() => setIsReportModalOpen(true)}
+      >
+        Report this listing
+      </button>
+
+      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="project" />
     </div>
   )
 }

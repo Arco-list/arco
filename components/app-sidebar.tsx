@@ -41,7 +41,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <img
             src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
             alt="Arco Logo"
-            className="h-6 w-auto"
+            className="h-4 w-auto"
           />
         </div>
       </SidebarHeader>
