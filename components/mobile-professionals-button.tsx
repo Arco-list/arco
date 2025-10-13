@@ -1,13 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function MobileProfessionalsButton() {
   const [showModal, setShowModal] = useState(false)
-  const { professionalServices, canViewInviteDetails } = useProjectPreview()
+  const projectPreview = useProjectPreview()
+  
+  // Memoize only the values we need to prevent unnecessary re-renders
+  const { professionalServices, canViewInviteDetails } = useMemo(() => ({
+    professionalServices: projectPreview.professionalServices,
+    canViewInviteDetails: projectPreview.canViewInviteDetails,
+  }), [projectPreview.professionalServices, projectPreview.canViewInviteDetails])
 
   // Only show if there are professionals
   if (professionalServices.length === 0) {

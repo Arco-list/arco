@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { logger } from "@/lib/logger"
 
 interface GeneralErrorProps {
   error?: Error & { digest?: string }
@@ -11,12 +12,19 @@ interface GeneralErrorProps {
 
 export default function GeneralError({ error, reset }: GeneralErrorProps) {
   useEffect(() => {
-    // Log the error to an error reporting service
-    console.error(error)
+    if (error) {
+      // Log the error using proper error monitoring service
+      logger.error("Global error boundary triggered", {
+        component: "GeneralError",
+        digest: error.digest,
+        userAgent: typeof window !== "undefined" ? window.navigator.userAgent : undefined,
+        url: typeof window !== "undefined" ? window.location.href : undefined,
+      }, error)
+    }
   }, [error])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="flex items-center justify-center bg-background py-20">
       <div className="text-center space-y-6 max-w-md mx-auto px-4">
         <div className="space-y-2">
           <h1 className="text-6xl font-bold text-destructive">Error</h1>

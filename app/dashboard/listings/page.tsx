@@ -961,7 +961,12 @@ export default function DashboardListingsPage() {
             <div 
               key={project.id} 
               className="group cursor-pointer"
-              onClick={() => handleCardClick(project)}
+              onClick={(e) => {
+                // Only trigger if not clicking dropdown area
+                if (!(e.target as Element).closest('.dropdown-menu')) {
+                  handleCardClick(project)
+                }
+              }}
             >
               <div className="relative overflow-hidden rounded-lg bg-gray-100">
                 <img
@@ -1012,7 +1017,7 @@ export default function DashboardListingsPage() {
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   <span className="text-xs text-black bg-white px-2 py-1 rounded">Project owner</span>
-                  <div className="relative">
+                  <div className="relative dropdown-menu">
                     <button
                       onClick={(e) => {
                         e.stopPropagation()

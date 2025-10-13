@@ -1,13 +1,17 @@
-import NotFoundError from "@/components/errors/not-found-error"
+import type React from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 
-export default function NotFound() {
+export default function ErrorLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <NotFoundError />
+        {children}
       </main>
       <Footer />
     </div>

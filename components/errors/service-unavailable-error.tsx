@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 
 export default function ServiceUnavailableError() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="flex items-center justify-center bg-background py-20">
       <div className="text-center space-y-6 max-w-md mx-auto px-4">
         <div className="space-y-2">
           <h1 className="text-6xl font-bold text-primary">503</h1>
