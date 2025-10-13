@@ -616,11 +616,14 @@ export type Database = {
       }
       profiles: {
         Row: {
+          admin_role: Database["public"]["Enums"]["admin_role"] | null
           avatar_url: string | null
           bio: string | null
           created_at: string | null
           first_name: string | null
           id: string
+          invited_at: string | null
+          invited_by: string | null
           is_active: boolean | null
           is_verified: boolean | null
           last_name: string | null
@@ -631,11 +634,14 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          admin_role?: Database["public"]["Enums"]["admin_role"] | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
           id: string
+          invited_at?: string | null
+          invited_by?: string | null
           is_active?: boolean | null
           is_verified?: boolean | null
           last_name?: string | null
@@ -646,11 +652,14 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          admin_role?: Database["public"]["Enums"]["admin_role"] | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           is_active?: boolean | null
           is_verified?: boolean | null
           last_name?: string | null
@@ -660,7 +669,15 @@ export type Database = {
           user_types?: string[] | null
           website?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_applications: {
         Row: {
@@ -1895,6 +1912,7 @@ export type Database = {
       }
     }
     Enums: {
+      admin_role: "super_admin" | "admin"
       company_plan_tier: "basic" | "plus"
       company_social_platform: "facebook" | "instagram" | "linkedin" | "pinterest"
       company_status: "unlisted" | "listed" | "deactivated"
@@ -2004,6 +2022,7 @@ export type TablesUpdate<
     }
     ? U
     : never
+
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
@@ -2011,6 +2030,8 @@ export type TablesUpdate<
       ? U
       : never
     : never
+
+export type UserProfile = Tables<"profiles">
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends

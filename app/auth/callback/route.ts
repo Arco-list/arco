@@ -7,7 +7,9 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const redirectTo = resolveRedirectPath(requestUrl.searchParams.get('redirect_to'));
+  const redirectParam = requestUrl.searchParams.get('redirect_to');
+  const redirectTo = resolveRedirectPath(redirectParam);
+  const inviteType = requestUrl.searchParams.get('invite');
   const callbackId = Math.random().toString(36).substring(7);
 
   logger.auth('callback', 'Auth callback started', {
@@ -110,9 +112,33 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      if (redirectTo.startsWith('/auth/admin-onboarding')) {
+        const onboardingUrl = new URL(redirectTo, requestUrl.origin);
+        if (redirectParam && !redirectParam.includes('invite=')) {
+          onboardingUrl.searchParams.set('invite', inviteType ?? 'admin');
+        }
+        const inviteEmail = requestUrl.searchParams.get('email');
+        if (inviteEmail && !redirectParam?.includes('email=')) {
+          onboardingUrl.searchParams.set('email', inviteEmail);
+        }
+
+        logger.auth('callback', 'Admin invite detected, redirecting to onboarding flow', {
+          callbackId,
+          onboardingUrl: onboardingUrl.href,
+        });
+
+        return NextResponse.redirect(onboardingUrl);
+      }
+
       // Redirect to email confirmation success page with the original redirectTo as a parameter
       const confirmationUrl = new URL('/auth/confirmed', requestUrl.origin);
       confirmationUrl.searchParams.set('redirectTo', redirectTo);
+      if (inviteType) {
+        confirmationUrl.searchParams.set('invite', inviteType);
+      }
+      if (redirectParam && redirectParam.includes('email=')) {
+        confirmationUrl.searchParams.set('inviteEmail', requestUrl.searchParams.get('email') ?? '');
+      }
 
       logger.auth('callback', 'Callback completed successfully, redirecting to confirmation page', {
         callbackId,

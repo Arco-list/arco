@@ -24,6 +24,7 @@ const NAV_ITEMS = [
     title: "Users",
     url: "/admin/users",
     icon: Users,
+    requiresSuperAdmin: true,
   },
   {
     title: "Projects",
@@ -51,6 +52,8 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
   const pathname = usePathname()
   const { profile, user } = useAuth()
 
+  const isSuperAdmin = profile?.admin_role === "super_admin"
+
   const displayName = [profile?.first_name, profile?.last_name]
     .filter(Boolean)
     .join(" ")
@@ -76,7 +79,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu className="gap-2">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter((item) => (item.requiresSuperAdmin ? isSuperAdmin : true)).map((item) => {
               const isActive = pathname.startsWith(item.url)
               return (
                 <SidebarMenuItem key={item.title}>
