@@ -373,7 +373,7 @@ export async function toggleAdminStatusAction(input: { userId: string; active: b
     return { success: false, error: "Failed to update admin status." }
   }
 
-  const banDuration = parsed.data.active ? "none" : "forever"
+  const banDuration = parsed.data.active ? "none" : "87600h" // Supabase supports Go duration strings; use 10 years as a soft "forever"
 
   const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(parsed.data.userId, {
     ban_duration: banDuration,

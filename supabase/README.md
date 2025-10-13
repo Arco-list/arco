@@ -224,6 +224,12 @@ After seeding:
   - `profiles.user_types` must include `'admin'`
   - `profiles.admin_role` differentiates `'admin'` from `'super_admin'`
 - Keep at least one active super admin. Demotion and deactivation are blocked when only one remains.
+- Before running migrations, set a database variable for the initial super admin email so environments can bootstrap correctly:
+
+  ```bash
+  supabase db push --db-variables "app.super_admin_email='founder@yourdomain.com'"
+  ```
+
 - Promote an existing user to super admin manually if needed:
 
 ```sql

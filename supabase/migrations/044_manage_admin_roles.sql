@@ -150,34 +150,38 @@ END
 WHERE admin_role IS NULL
   AND COALESCE(user_types, ARRAY[]::TEXT[]) @> ARRAY['admin'];
 
--- Guarantee an initial super admin using the provided email if present
-WITH target_user AS (
+DO $$
+DECLARE
+  configured_email TEXT := current_setting('app.super_admin_email', true);
+  normalized_email TEXT;
+  target_user_id UUID;
+BEGIN
+  IF configured_email IS NULL OR length(trim(configured_email)) = 0 THEN
+    RAISE NOTICE 'app.super_admin_email not set; skipping initial super admin seed.';
+    RETURN;
+  END IF;
+
+  normalized_email := lower(trim(configured_email));
+
   SELECT u.id
+  INTO target_user_id
   FROM auth.users u
-  WHERE LOWER(u.email) = 'bartek+admin@tinkso.com'
-  LIMIT 1
-),
-updated AS (
+  WHERE lower(u.email) = normalized_email
+  LIMIT 1;
+
+  IF target_user_id IS NULL THEN
+    RAISE NOTICE 'Configured super admin email % not found in auth.users; skipping.', configured_email;
+    RETURN;
+  END IF;
+
   UPDATE public.profiles p
   SET admin_role = 'super_admin',
       user_types = ARRAY(
         SELECT DISTINCT v
         FROM unnest(COALESCE(p.user_types, ARRAY[]::TEXT[]) || ARRAY['admin']) AS v
       )
-  WHERE p.id = (SELECT id FROM target_user)
-  RETURNING p.id
-)
-UPDATE public.profiles p
-SET admin_role = 'super_admin'
-WHERE admin_role IS NULL
-  AND COALESCE(user_types, ARRAY[]::TEXT[]) @> ARRAY['admin']
-  AND NOT EXISTS (SELECT 1 FROM updated)
-  AND p.id IN (
-    SELECT id
-    FROM public.profiles
-    WHERE COALESCE(user_types, ARRAY[]::TEXT[]) @> ARRAY['admin']
-    ORDER BY created_at
-    LIMIT 1
-  );
+  WHERE p.id = target_user_id;
+END;
+$$;
 
 COMMIT;
