@@ -305,8 +305,9 @@ export function GroupedPicturesModal({
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-white hover:bg-white/10"
+                className="text-white hover:bg-white/10 hover:text-white"
                 onClick={() => setIsLightboxOpen(false)}
+                aria-label="Close lightbox"
               >
                 <X className="w-4 h-4 mr-2" />
                 Close
@@ -320,8 +321,9 @@ export function GroupedPicturesModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-white hover:bg-white/10"
+                  className="text-white hover:bg-white/10 hover:text-white"
                   onClick={toggleZoom}
+                  aria-label={isZoomed ? "Zoom out" : "Zoom in"}
                 >
                   {isZoomed ? (
                     <>
@@ -335,15 +337,16 @@ export function GroupedPicturesModal({
                     </>
                   )}
                 </Button>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10" onClick={handleShare}>
+                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" onClick={handleShare} aria-label="Share project">
                   <Share className="w-4 h-4 mr-2" />
                   Share
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`hover:bg-white/10 ${isSaved ? "text-blue-400" : "text-white"}`}
+                  className={`hover:bg-white/10 hover:text-white ${isSaved ? "text-blue-400" : "text-white"}`}
                   onClick={handleSave}
+                  aria-label={isSaved ? "Remove from saved" : "Save project"}
                 >
                   <Bookmark className={`w-4 h-4 mr-2 ${isSaved ? "fill-current" : ""}`} />
                   Save
@@ -366,6 +369,8 @@ export function GroupedPicturesModal({
                     transformOrigin: "center",
                   }}
                   onClick={toggleZoom}
+                  role="img"
+                  aria-label={`${allImages[currentImageIndex]?.alt || "Project image"} - ${currentImageIndex + 1} of ${allImages.length}`}
                 />
               </div>
             </div>
@@ -374,9 +379,10 @@ export function GroupedPicturesModal({
             <Button
               variant="ghost"
               size="icon"
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={prevImage}
               disabled={allImages.length <= 1}
+              aria-label="Previous image"
             >
               <ChevronLeft className="w-6 h-6" />
             </Button>
@@ -384,15 +390,20 @@ export function GroupedPicturesModal({
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={nextImage}
               disabled={allImages.length <= 1}
+              aria-label="Next image"
             >
               <ChevronRight className="w-6 h-6" />
             </Button>
 
             {/* Category Label */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+            <div 
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm"
+              role="status"
+              aria-live="polite"
+            >
               {allImages[currentImageIndex]?.category}
             </div>
           </div>

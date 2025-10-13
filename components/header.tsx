@@ -15,9 +15,10 @@ import { useAuth } from "@/contexts/auth-context";
 
 export interface HeaderProps {
   transparent?: boolean;
+  maxWidth?: string;
 }
 
-export function Header({ transparent = false }: HeaderProps) {
+export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -108,7 +109,7 @@ export function Header({ transparent = false }: HeaderProps) {
 
   return (
     <header className={headerClasses}>
-      <div className="mx-auto max-w-7xl">
+      <div className={`mx-auto ${maxWidth}`}>
         <div className="relative flex items-center justify-between">
           <div className="flex items-center space-x-8">
             <Link href="/" className="transition-opacity hover:opacity-80">
@@ -119,7 +120,7 @@ export function Header({ transparent = false }: HeaderProps) {
                     : "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                 }
                 alt="Arco Logo"
-                className="h-6 w-auto"
+                className="h-4 w-auto"
               />
             </Link>
 
@@ -196,48 +197,122 @@ export function Header({ transparent = false }: HeaderProps) {
               </Button>
             ) : null}
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium md:hidden ${
-                transparent
-                  ? "border-white text-white hover:bg-white/10 hover:text-white"
-                  : "border-black text-black hover:bg-gray-100"
-              }`}
-              aria-label="Open menu"
-              onClick={toggleMenu}
-            >
-              <span className={textColor}>{menuLabel}</span>
-              <Menu className="h-5 w-5" />
-            </Button>
-
             {isMenuOpen && (
               <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="py-1">
-                  {pathname !== "/projects" && (
-                    <>
+                  {/* Section 1: Projects / Professionals */}
+                  <div className="px-4 py-3">
+                    <Link
+                      href="/projects"
+                      className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Projects
+                    </Link>
+                    <Link
+                      href="/professionals"
+                      className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Professionals
+                    </Link>
+                  </div>
+                  
+                  {/* Divider */}
+                  <div className="border-t border-gray-100" />
+                  
+                  {/* Section 2: Login/Signup OR Saved projects/Saved professionals/Account */}
+                  <div className="px-4 py-3">
+                    {isLoggedIn ? (
+                      <>
+                        <Link
+                          href="/homeowner?tab=saved-projects"
+                          className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Saved projects
+                        </Link>
+                        <Link
+                          href="/homeowner?tab=saved-professionals"
+                          className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Saved professionals
+                        </Link>
+                        <Link
+                          href="/homeowner?tab=settings"
+                          className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Account
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        {shouldShowLoginLink && (
+                          <Link
+                            href={`/login${redirectQuery}`}
+                            className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                            onClick={() => setIsMenuOpen(false)}
+                          >
+                            Login
+                          </Link>
+                        )}
+                        {shouldShowSignupLink && (
+                          <Link
+                            href={`/signup${redirectQuery}`}
+                            className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                            onClick={() => setIsMenuOpen(false)}
+                          >
+                            Sign up
+                          </Link>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Divider */}
+                  <div className="border-t border-gray-100" />
+                  
+                  {/* Section 3: List with us/Help center/Sign out */}
+                  <div className="px-4 py-3">
+                    {hasProfessionalRole ? (
                       <Link
-                        href="/projects"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                        href="/dashboard/listings"
+                        className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Projects
+                        Switch to company
                       </Link>
-                      <div className="border-t border-gray-100" />
-                    </>
-                  )}
-                  {pathname !== "/professionals" && (
-                    <>
+                    ) : (
                       <Link
-                        href="/professionals"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                        href="/list-with-us"
+                        className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Professionals
+                        List with us
                       </Link>
-                      <div className="border-t border-gray-100" />
-                    </>
-                  )}
+                    )}
+                    <Link
+                      href="/help-center"
+                      className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Help center
+                    </Link>
+                    {isLoggedIn && (
+                      <button
+                        type="button"
+                        className="block w-full text-left text-sm text-red-600 transition-colors hover:bg-red-50 py-2"
+                        onClick={handleSignOut}
+                        disabled={isSigningOut}
+                      >
+                        {isSigningOut ? "Signing out..." : "Sign out"}
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Mobile search - only show on mobile */}
                   <div className="border-t border-gray-100 px-4 py-3 md:hidden">
                     <form onSubmit={handleSearch} className="relative">
                       <input
@@ -245,7 +320,7 @@ export function Header({ transparent = false }: HeaderProps) {
                         placeholder="Search projects..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                       />
                       <button
                         type="submit"
@@ -255,74 +330,6 @@ export function Header({ transparent = false }: HeaderProps) {
                       </button>
                     </form>
                   </div>
-                  {isLoggedIn ? (
-                    <>
-                      <Link
-                        href="/dashboard"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Dashboard
-                      </Link>
-                      <Link
-                        href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        {hasProfessionalRole ? "Add new project" : "List with us"}
-                      </Link>
-                      <button
-                        type="button"
-                        className="block w-full px-4 py-3 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                        onClick={handleSignOut}
-                        disabled={isSigningOut}
-                      >
-                        {isSigningOut ? "Signing out..." : "Sign out"}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {shouldShowLoginLink && (
-                        <>
-                          <Link
-                            href={`/login${redirectQuery}`}
-                            className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            Login
-                          </Link>
-                          <div className="border-t border-gray-100" />
-                        </>
-                      )}
-                      {shouldShowSignupLink && (
-                        <>
-                          <Link
-                            href={`/signup${redirectQuery}`}
-                            className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            Sign up
-                          </Link>
-                          <div className="border-t border-gray-100" />
-                        </>
-                      )}
-                      <Link
-                        href="/list-with-us"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        List with us
-                      </Link>
-                      <div className="border-t border-gray-100" />
-                      <Link
-                        href="/help-center"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Help center
-                      </Link>
-                    </>
-                  )}
                 </div>
               </div>
             )}

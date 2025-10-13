@@ -83,9 +83,10 @@ interface SocialFormState {
 
 export interface CompanySettingsShellProps {
   company: Database["public"]["Tables"]["companies"]["Row"]
-  socialLinks: Array<Database["public"]["Tables"]["company_social_links"]["Row"]>
-  photos: Array<Database["public"]["Tables"]["company_photos"]["Row"]>
+  socialLinks: Array<Pick<Database["public"]["Tables"]["company_social_links"]["Row"], "id" | "platform" | "url">>
+  photos: Array<Pick<Database["public"]["Tables"]["company_photos"]["Row"], "id" | "url" | "alt_text" | "caption" | "is_cover" | "order_index">>
   services: Array<{ id: string; name: string; slug: string | null }>
+  professionalId: string | null
 }
 
 const moveItem = <T,>(items: readonly T[], from: number, to: number): T[] => {
@@ -99,7 +100,7 @@ const moveItem = <T,>(items: readonly T[], from: number, to: number): T[] => {
   return result
 }
 
-export function CompanySettingsShell({ company, socialLinks, photos, services }: CompanySettingsShellProps) {
+export function CompanySettingsShell({ company, socialLinks, photos, services, professionalId }: CompanySettingsShellProps) {
   const [activeSection, setActiveSection] = useState<"profile" | "photos">("profile")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -592,12 +593,23 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
     })
   }
 
+  const handlePreviewCompany = () => {
+    if (!professionalId) {
+      toast.error("Preview unavailable", {
+        description: "Professional profile not found for this company.",
+      })
+      return
+    }
+
+    const targetUrl = `/professionals/${professionalId}`
+    window.open(targetUrl, "_blank", "noopener,noreferrer")
+  }
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Company settings</h1>
-          <p className="mt-1 text-sm text-gray-600">Manage your public profile, status, and contact information.</p>
+          <h1 className="text-2xl font-semibold text-gray-900">Company</h1>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <Badge variant="secondary">{planBadgeText}</Badge>
@@ -627,7 +639,6 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                       <span className={cn("h-2 w-2 rounded-full", statusIndicator)} />
                       <span className="font-medium text-gray-900">{statusLabel}</span>
                     </div>
-                    <p className="mt-2 text-sm text-gray-500">{statusDescription}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-gray-400" />
                 </div>
@@ -689,6 +700,16 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
             </DialogContent>
           </Dialog>
 
+          {/* Preview company */}
+          <div className="mt-4">
+            <Button 
+              className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+              onClick={handlePreviewCompany}
+            >
+              Preview company
+            </Button>
+          </div>
+
           <div className="hidden lg:mt-8 lg:block">
             <nav className="space-y-2">
               {navItems.map((item) => {
@@ -738,12 +759,12 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
           </div>
 
           {showUpgradeBanner && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Upgrade to unlock your company page</h3>
-                  <p className="text-sm text-gray-600">Upgrade to be discoverable by homeowners and feature your projects.</p>
-                </div>
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Upgrade to appear in homeowner searches</h3>
+                    <p className="text-sm text-gray-600">Become findable by thousands of homeowners</p>
+                  </div>
                 <Button asChild className="bg-red-500 text-white hover:bg-red-600">
                   <Link href="/dashboard/pricing">View plans</Link>
                 </Button>
@@ -1087,18 +1108,11 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                 </p>
               </header>
 
-              <div className={sectionCardClass}>
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/svg+xml"
-                  className="hidden"
-                  onChange={handlePhotoInputChange}
-                />
+              <div className="grid gap-4 md:grid-cols-3">
+                {/* Upload card - first in grid */}
                 <div
                   className={cn(
-                    "flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-10 text-center transition",
+                    "aspect-square flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center transition",
                     dragOver && "border-gray-400",
                     (!canUploadMorePhotos || photoPending) && "cursor-not-allowed opacity-60"
                   )}
@@ -1107,14 +1121,17 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                   onDrop={handleDrop}
                   aria-disabled={photoPending || !canUploadMorePhotos}
                 >
-                  <ImageIcon className="h-10 w-10 text-gray-400" />
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/svg+xml"
+                    className="hidden"
+                    onChange={handlePhotoInputChange}
+                  />
+                  <ImageIcon className="h-8 w-8 text-gray-400" />
                   <div className="text-sm font-medium text-gray-900">Drag and drop</div>
-                  <div className="text-sm text-gray-500">JPG, PNG or SVG. Up to 5MB each.</div>
-                  <div className="text-xs text-gray-500">
-                    {photoSlotsRemaining > 0
-                      ? `${photoSlotsRemaining} photo slot${photoSlotsRemaining > 1 ? "s" : ""} remaining.`
-                      : "Maximum of 5 photos reached."}
-                  </div>
+                  <div className="text-sm text-gray-500">or browse for photos</div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1122,17 +1139,21 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                     onClick={() => photoInputRef.current?.click()}
                     disabled={photoPending || !canUploadMorePhotos}
                   >
-                    {photoPending ? "Uploading..." : "Browse files"}
+                    {photoPending ? "Uploading..." : "Browse"}
                   </Button>
+                  <div className="text-xs text-gray-500">
+                    {photoSlotsRemaining > 0
+                      ? `${photoSlotsRemaining} photo slot${photoSlotsRemaining > 1 ? "s" : ""} remaining.`
+                      : "Maximum of 5 photos reached."}
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+                {/* Existing photos */}
                 {companyPhotos.map((photo) => (
                   <div
                     key={photo.id}
                     className={cn(
-                      "relative transition",
+                      "relative group",
                       photoPending ? "cursor-not-allowed" : "cursor-move",
                       draggedPhotoId === photo.id && "opacity-60"
                     )}
@@ -1145,34 +1166,37 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                     }}
                     onDragEnd={handlePhotoDragEnd}
                   >
-                    <div className="overflow-hidden rounded-lg bg-gray-100">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
                       <Image
                         src={photo.url}
                         alt={photo.alt_text ?? company.name}
                         width={400}
                         height={400}
-                        className="h-56 w-full object-cover"
+                        className="w-full h-full object-cover"
                       />
                     </div>
+
                     {photo.is_cover && (
-                      <span className="absolute left-3 top-3 rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
+                      <div className="absolute top-2 left-2 bg-gray-900 text-white px-2 py-1 rounded text-xs font-medium">
                         Cover photo
-                      </span>
+                      </div>
                     )}
-                    <div className="absolute right-3 top-3">
+
+                    <div className="absolute top-2 right-2">
                       <button
                         type="button"
                         onClick={() => handlePhotoMenu(photo.id)}
-                        className="rounded-full bg-white p-1 shadow hover:bg-gray-50"
+                        className="bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
                         disabled={photoPending}
                       >
                         <MoreHorizontal className="h-4 w-4 text-gray-600" />
                       </button>
+
                       {openMenuId === photo.id && (
-                        <div className="absolute right-0 top-8 z-10 min-w-[160px] rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                        <div className="absolute top-8 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[160px]">
                           <button
                             type="button"
-                            className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-gray-50"
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             onClick={() => setCoverPhoto(photo.id)}
                             disabled={coverPhotoId === photo.id || photoPending}
                           >
@@ -1180,23 +1204,18 @@ export function CompanySettingsShell({ company, socialLinks, photos, services }:
                           </button>
                           <button
                             type="button"
-                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-gray-50"
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50 transition-colors flex items-center gap-2"
                             onClick={() => deletePhoto(photo.id)}
                             disabled={photoPending}
                           >
                             <Trash2 className="h-3 w-3" />
-                            Remove photo
+                            Delete
                           </button>
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
-                {companyPhotos.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
-                    No photos added yet.
-                  </div>
-                )}
               </div>
             </div>
           )}

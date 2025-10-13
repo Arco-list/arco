@@ -55,7 +55,7 @@ export function FilterBar() {
   const carouselRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: Event) => {
       if (
         typeDropdownRef.current &&
         !typeDropdownRef.current.contains(event.target as Node) &&
@@ -172,7 +172,7 @@ export function FilterBar() {
           return a.name.localeCompare(b.name)
         })
 
-      const shouldIncludeParent = allowedSubTypes.includes(typeName)
+      const shouldIncludeParent = (allowedSubTypes as readonly string[]).includes(typeName)
 
       const itemsSource = [
         ...(shouldIncludeParent ? [category] : []),
@@ -285,7 +285,7 @@ export function FilterBar() {
   const projectStyles = taxonomyOptions.project_style ?? []
 
   const getButtonClassName = (hasSelection: boolean) => {
-    return `flex items-center gap-2 whitespace-nowrap ${
+    return `flex items-center gap-2 whitespace-nowrap rounded-full ${
       hasSelection
         ? "border-red-500 text-red-600 bg-red-50 hover:bg-red-100"
         : "bg-transparent border-gray-300 hover:border-gray-400"
@@ -294,7 +294,7 @@ export function FilterBar() {
 
   return (
     <div className="w-full border-b border-gray-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4">
+      <div className="mx-auto max-w-[1800px] px-4">
         <div className="flex items-center gap-4 py-4">
           {/* Filters Button */}
           <Button
@@ -359,8 +359,8 @@ export function FilterBar() {
                           }
 
                           const isExpanded = expandedSections.includes(section.id)
-                          const showToggle = childItems.length > 3
-                          const itemsToRender = isExpanded ? childItems : childItems.slice(0, 3)
+                          const showToggle = childItems.length > 0
+                          const itemsToRender = isExpanded ? childItems : []
 
                           return (
                             <>
@@ -557,11 +557,13 @@ export function FilterBar() {
                   <button
                     key={item.id}
                     onClick={() => toggleTypeSelection(item.id)}
-                    className={`flex flex-col items-center gap-2 whitespace-nowrap py-2 transition-colors flex-shrink-0 ${
-                      isSelected ? "text-red-600 border-b-2 border-red-600" : "text-gray-600 hover:text-gray-900"
+                    className={`flex items-center gap-2 whitespace-nowrap py-2 px-3 rounded-full transition-colors flex-shrink-0 border ${
+                      isSelected 
+                        ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100" 
+                        : "bg-transparent border-gray-300 hover:border-gray-400"
                     }`}
                   >
-                    <IconComponent className="h-5 w-5" />
+                    <IconComponent className="h-4 w-4" />
                     <span className="text-xs font-medium">{item.name}</span>
                   </button>
                 )

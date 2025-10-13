@@ -1,6 +1,6 @@
 "use client"
 
-import { Heart, ChevronLeft, ChevronRight } from "lucide-react"
+import { Heart, ChevronLeft, ChevronRight, ThumbsUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useRef } from "react"
@@ -40,22 +40,27 @@ export function PopularProjects({ projects }: PopularProjectsProps) {
 
   return (
     <section className="py-16 px-4 md:px-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold text-gray-900">Popular projects</h2>
-          <div className="hidden md:flex gap-2">
-            <Button size="sm" variant="outline" className="p-2 bg-transparent" onClick={scrollLeft}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline" className="p-2 bg-transparent" onClick={scrollRight}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/projects" className="text-sm text-gray-600 hover:text-gray-900 transition-colors mr-2">
+              View all
+            </Link>
+            <div className="hidden md:flex items-center gap-2">
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
         <div
           ref={scrollRef}
-          className="flex gap-6 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-5 md:gap-6 md:overflow-visible"
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-4 md:overflow-visible"
         style={{ scrollSnapType: "x mandatory" }}
       >
         {projects.map((project) => (
@@ -71,31 +76,26 @@ export function PopularProjects({ projects }: PopularProjectsProps) {
                   alt={project.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="absolute top-3 right-3 p-2 bg-white/90 hover:bg-white text-gray-600 hover:text-red-500"
+                <button
+                  className="absolute top-3 right-3 p-1 text-gray-600 hover:text-red-500 transition-colors"
                   onClick={(e) => e.preventDefault()}
                 >
-                  <Heart className="h-4 w-4" />
-                </Button>
+                  <Heart className="h-6 w-6" />
+                </button>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 group-hover:text-gray-600 transition-colors">
-                {project.title}
-              </h3>
-              {typeof project.likes === "number" ? (
-                <p className="mt-1 text-sm text-gray-500">{project.likes} likes</p>
-              ) : null}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900 group-hover:text-gray-600 transition-colors">
+                  {project.title}
+                </h3>
+                {typeof project.likes === "number" ? (
+                  <div className="flex items-center gap-1 text-sm text-gray-500">
+                    <ThumbsUp className="h-3 w-3" />
+                    <span>{project.likes}</span>
+                  </div>
+                ) : null}
+              </div>
             </Link>
           ))}
-        </div>
-
-        <div className="text-center">
-          <Link href="/projects">
-            <Button variant="outline" className="px-8 bg-transparent">
-              All projects
-            </Button>
-          </Link>
         </div>
       </div>
     </section>

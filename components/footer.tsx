@@ -7,20 +7,24 @@ const footerLinks = {
   Arco: ["About", "Help center"], // Removed "Blog" from "Arco"
 }
 
-export function Footer() {
+interface FooterProps {
+  maxWidth?: string;
+}
+
+export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
   return (
     <footer className="bg-white border-t border-gray-200 py-12 px-4 md:px-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+      <div className={`${maxWidth} mx-auto`}>
+        <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
           <div>
             <Link
               href="/"
-              className="mb-6 block hover:opacity-80 transition-opacity" // updated hover effect to match header
+              className="mb-6 block hover:opacity-80 transition-opacity"
             >
               <img
                 src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                 alt="Arco Logo"
-                className="h-4 w-auto" // reduced logo height from h-8 to h-4 (50% smaller)
+                className="h-4 w-auto"
               />
             </Link>
             <div className="flex gap-4">
@@ -30,46 +34,48 @@ export function Footer() {
             </div>
           </div>
 
-          {Object.entries(footerLinks).map(([category, links]) => (
-            <div key={category}>
-              <h3 className="font-semibold text-gray-900 mb-4">{category}</h3>
-              <ul className="space-y-2">
-                {links.map((link) => (
-                  <li key={link}>
-                    {link === "Pricing" ? (
-                      <Link href="/pricing" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </Link>
-                    ) : link === "Projects" ? (
-                      <Link href="/projects" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </Link>
-                    ) : link === "About" ? (
-                      <Link href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </Link>
-                    ) : link === "Help center" ? (
-                      <Link href="/help-center" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </Link>
-                    ) : link === "Professionals" ? (
-                      <Link href="/professionals" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </Link>
-                    ) : link === "List with us" ? (
-                      <Link href="/list-with-us" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </Link>
-                    ) : (
-                      <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">
-                        {link}
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+            {Object.entries(footerLinks).map(([category, links]) => (
+              <div key={category}>
+                <h3 className="font-semibold text-gray-900 mb-4">{category}</h3>
+                <ul className="space-y-2">
+                  {links.map((link) => (
+                    <li key={link}>
+                      {link === "Pricing" ? (
+                        <Link href="/pricing" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </Link>
+                      ) : link === "Projects" ? (
+                        <Link href="/projects" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </Link>
+                      ) : link === "About" ? (
+                        <Link href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </Link>
+                      ) : link === "Help center" ? (
+                        <Link href="/help-center" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </Link>
+                      ) : link === "Professionals" ? (
+                        <Link href="/professionals" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </Link>
+                      ) : link === "List with us" ? (
+                        <Link href="/list-with-us" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </Link>
+                      ) : (
+                        <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">
+                          {link}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">

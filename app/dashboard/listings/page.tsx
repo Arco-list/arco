@@ -3,9 +3,10 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, Check, AlertTriangle, X } from "lucide-react"
+import { MoreHorizontal, Check, AlertTriangle, X, Info } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Database, Enums } from "@/lib/supabase/types"
@@ -75,6 +76,7 @@ const STATUS_CONFIG: Record<
   published: { label: "Live on page", chipClass: "bg-green-100 text-green-800" },
   completed: { label: "Listed", chipClass: "bg-emerald-100 text-emerald-800" },
   archived: { label: "Unlisted", chipClass: "bg-slate-200 text-slate-700" },
+  rejected: { label: "Rejected", chipClass: "bg-red-100 text-red-800" },
 }
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -588,6 +590,18 @@ export default function DashboardListingsPage() {
     setSelectedProject((prev) => (prev?.id === pendingDeleteProject.id ? null : prev))
   }
 
+  const handleCardClick = (project: ListingProject) => {
+    // If project is live (published or completed), open in new tab
+    const isLive = project.status === "published" || project.status === "completed"
+    if (isLive && project.slug) {
+      window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer")
+      return
+    }
+    
+    // Otherwise, use the same logic as Edit listing
+    handleEditListing(project)
+  }
+
   const handleEditListing = (project: ListingProject) => {
     setOpenDropdown(null)
     // If project is draft (in progress), redirect to new-project flow
@@ -798,9 +812,6 @@ export default function DashboardListingsPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Manage the listings you are creating and publishing on Arco.
-              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -933,35 +944,66 @@ export default function DashboardListingsPage() {
         )}
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="h-64 rounded-lg bg-white shadow-sm animate-pulse overflow-hidden">
-                <div className="h-40 bg-gray-200" />
-                <div className="p-4 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded" />
-                  <div className="h-3 bg-gray-100 rounded w-3/4" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="animate-pulse">
+                <div className="aspect-square w-full bg-gray-200 rounded-lg" />
+                <div className="mt-3 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4" />
                   <div className="h-3 bg-gray-100 rounded w-1/2" />
                 </div>
               </div>
             ))}
           </div>
         ) : hasProjects ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {displayedProjects.map((project) => (
-            <div
-              key={project.id}
-              className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+            <div 
+              key={project.id} 
+              className="group cursor-pointer"
+              onClick={(e) => {
+                // Only trigger if not clicking dropdown area
+                if (!(e.target as Element).closest('.dropdown-menu')) {
+                  handleCardClick(project)
+                }
+              }}
             >
-              <div className="relative">
+              <div className="relative overflow-hidden rounded-lg bg-gray-100">
                 <img
                   src={project.coverImageUrl}
                   alt={project.title}
-                  className="w-full h-48 object-cover"
+                  className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute top-3 left-3 flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass}`}>
-                    {project.statusLabel}
-                  </span>
+                  {project.status === "in_progress" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass} flex items-center gap-1 cursor-help`}>
+                          {project.statusLabel}
+                          <Info className="w-3 h-3" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Awaiting Arco review. We'll email you as soon as the team approves this listing.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : project.status === "draft" ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass} flex items-center gap-1 cursor-help`}>
+                          {project.statusLabel}
+                          <Info className="w-3 h-3" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Continue the listing wizard to submit this project for review.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass}`}>
+                      {project.statusLabel}
+                    </span>
+                  )}
                   {/* ERROR HANDLING: Visual indicator for projects with missing metadata */}
                   {project.hasMetadataError && (
                     <span
@@ -975,9 +1017,12 @@ export default function DashboardListingsPage() {
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   <span className="text-xs text-black bg-white px-2 py-1 rounded">Project owner</span>
-                  <div className="relative">
+                  <div className="relative dropdown-menu">
                     <button
-                      onClick={() => setOpenDropdown(openDropdown === project.id ? null : project.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenDropdown(openDropdown === project.id ? null : project.id)
+                      }}
                       className="p-1 bg-white rounded-full shadow-sm hover:bg-gray-50"
                     >
                       <MoreHorizontal className="w-4 h-4 text-gray-600" />
@@ -985,32 +1030,47 @@ export default function DashboardListingsPage() {
                     {openDropdown === project.id && (
                       <div className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border py-2 w-40 z-10">
                         <button
-                          onClick={() => handleUpdateStatus(project)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleUpdateStatus(project)
+                          }}
                           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           Update status
                         </button>
                         <button
-                          onClick={() => handleEditCoverImage(project)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditCoverImage(project)
+                          }}
                           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           Edit cover image
                         </button>
                         <button
-                          onClick={() => handleEditListing(project)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditListing(project)
+                          }}
                           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           Edit listing
                         </button>
                         <button
-                          onClick={() => handlePreviewListing(project)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handlePreviewListing(project)
+                          }}
                           className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         >
                           Preview listing
                         </button>
                         <div className="border-t border-gray-100 my-1" />
                         <button
-                          onClick={() => handleDeleteListing(project)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteListing(project)
+                          }}
                           className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                         >
                           Delete listing
@@ -1020,22 +1080,9 @@ export default function DashboardListingsPage() {
                   </div>
                 </div>
               </div>
-              <div className="p-4">
+              <div className="mt-3">
                 <h3 className="font-medium text-gray-900">{project.title}</h3>
                 <p className="text-sm text-gray-500 mt-1">{project.subtitle}</p>
-                <p className="text-xs text-gray-400 mt-2">
-                  Created on {new Date(project.createdAt).toLocaleDateString()}
-                </p>
-                {project.status === "in_progress" && (
-                  <div className="mt-4 rounded-md border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800">
-                    Awaiting Arco review. We&apos;ll email you as soon as the team approves this listing.
-                  </div>
-                )}
-                {project.status === "draft" && (
-                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                    Continue the listing wizard to submit this project for review.
-                  </div>
-                )}
               </div>
             </div>
             ))}
@@ -1160,7 +1207,7 @@ export default function DashboardListingsPage() {
         </div>
       )}
 
-      <Footer />
+      <Footer maxWidth="max-w-7xl" />
 
       <DashboardListingsFilter
         isOpen={isFilterOpen}

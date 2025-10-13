@@ -123,7 +123,7 @@ export function ProjectsGrid() {
   return (
     <div className="w-full bg-white">
       <div className="px-4 md:px-8">
-        <div className="max-w-7xl mx-auto py-8">
+        <div className="max-w-[1800px] mx-auto py-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-xl font-medium text-gray-900">
@@ -184,7 +184,7 @@ export function ProjectsGrid() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 mb-8">
             {sortedProjects.map((project) => {
               const projectId = project.id ?? ""
               const override = projectId ? typePhotoOverrides[projectId] : undefined
@@ -222,17 +222,36 @@ export function ProjectsGrid() {
                     disabled={!projectId || isMutatingSave}
                     aria-pressed={isSaved}
                     aria-label={isSaved ? "Remove from saved projects" : "Save project"}
-                    className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
+                    className="absolute top-3 right-3 p-1.5 text-gray-600 hover:text-red-500 transition-all duration-200"
                   >
                     <Heart
-                      className={`h-4 w-4 ${isSaved ? "text-red-500" : "text-gray-600"}`}
+                      className={`h-6 w-6 ${isSaved ? "text-red-500 fill-red-500" : "text-gray-600 hover:text-red-500"}`}
                       fill={isSaved ? "currentColor" : "none"}
                     />
                   </button>
                 </div>
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">{project.title}</h3>
+                    <div className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">
+                      {(() => {
+                        const style = project.style_preferences?.[0] || ""
+                        const subType = project.project_type || ""
+                        const location = project.location || "Location unavailable"
+                        
+                        const parts = []
+                        if (style) {
+                          const styleLabel = filterContext.taxonomyLabelMap.get(style) || style
+                          parts.push(styleLabel)
+                        }
+                        if (subType) {
+                          const subTypeLabel = filterContext.taxonomyLabelMap.get(subType) || subType
+                          parts.push(subTypeLabel)
+                        }
+                        parts.push(`in ${location}`)
+                        
+                        return parts.join(" ")
+                      })()}
+                    </div>
                     <button
                       type="button"
                       onClick={(event) => {
@@ -252,7 +271,6 @@ export function ProjectsGrid() {
                       <span>{likesCount}</span>
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 line-clamp-1">{project.location || "Location unavailable"}</p>
                 </div>
               </Link>
               )

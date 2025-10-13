@@ -12,8 +12,8 @@ export function ProfessionalsSidebar() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="p-6 space-y-6 sticky top-24 z-10">
+    <div className="lg:sticky lg:top-8 lg:z-20">
+      <Card className="p-6 space-y-6">
         <h3 className="text-lg font-semibold">Professionals who built it</h3>
 
         <div className="space-y-4">
