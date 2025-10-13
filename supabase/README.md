@@ -217,6 +217,29 @@ After seeding:
 3. Regenerate types: `pnpm supabase gen types typescript ...` so `lib/supabase/types.ts` picks up new columns.
 
 🚨 **Reminder:** Only professional accounts can create listings. Ensure the Create Company onboarding sets `profiles.user_types` to include `professional` before exposing the wizard.
+
+### Admin Access
+
+- Internal tooling now relies on two fields:
+  - `profiles.user_types` must include `'admin'`
+  - `profiles.admin_role` differentiates `'admin'` from `'super_admin'`
+- Keep at least one active super admin. Demotion and deactivation are blocked when only one remains.
+- Promote an existing user to super admin manually if needed:
+
+```sql
+UPDATE public.profiles
+SET
+  admin_role = 'super_admin',
+  user_types = ARRAY(
+    SELECT DISTINCT value
+    FROM unnest(COALESCE(user_types, ARRAY[]::text[])) AS value
+    UNION ALL
+    SELECT 'admin'
+  )
+WHERE id = '<auth_user_id>';
+```
+
+- Admin invitations populate `profiles.invited_by` and `profiles.invited_at` for audit trails.
 - Full-text search on titles and descriptions
 
 ### Performance Features
@@ -229,6 +252,7 @@ After seeding:
 
 ### Core Enums
 \`\`\`sql
+admin_role: 'super_admin' | 'admin'
 user_type: 'client' | 'professional' | 'admin'
 project_status: 'draft' | 'published' | 'in_progress' | 'completed' | 'archived'
 application_status: 'pending' | 'accepted' | 'rejected'

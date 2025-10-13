@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("user_types")
+    .select("user_types, admin_role, is_active")
     .eq("id", session.user.id)
     .maybeSingle()
 
@@ -30,7 +30,11 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     return redirect(`/dashboard?unauthorized=admin`)
   }
 
-  if (!isAdminUser(profile?.user_types)) {
+  if (profile?.is_active === false) {
+    return redirect(`/dashboard?unauthorized=admin`)
+  }
+
+  if (!isAdminUser(profile?.user_types, profile?.admin_role)) {
     return redirect(`/dashboard?unauthorized=admin`)
   }
 

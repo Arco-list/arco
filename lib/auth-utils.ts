@@ -29,5 +29,29 @@ export const buildSession = (rawSession: Session | null, verifiedUser: User | nu
   }
 }
 
-export const isAdminUser = (userTypes?: string[] | null): boolean =>
-  Array.isArray(userTypes) && userTypes.includes("admin")
+const normalizeUserTypes = (userTypes?: string[] | null) =>
+  Array.isArray(userTypes)
+    ? Array.from(
+        new Set(
+          userTypes
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      )
+    : []
+
+export const isAdminUser = (userTypes?: string[] | null, adminRole?: string | null): boolean => {
+  const normalizedTypes = normalizeUserTypes(userTypes)
+  return normalizedTypes.includes("admin") || adminRole === "admin" || adminRole === "super_admin"
+}
+
+export const isSuperAdminUser = (adminRole?: string | null): boolean => adminRole === "super_admin"
+
+export const ensureAdminUserTypes = (userTypes?: string[] | null): string[] => {
+  const normalizedTypes = normalizeUserTypes(userTypes)
+  if (!normalizedTypes.includes("admin")) {
+    normalizedTypes.push("admin")
+  }
+  return normalizedTypes
+}
