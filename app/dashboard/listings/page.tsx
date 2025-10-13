@@ -12,6 +12,7 @@ import type { Database, Enums } from "@/lib/supabase/types"
 import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
 import { toast } from "sonner"
 import { useTableRLSValidation } from "@/hooks/useRLSValidation"
+import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
 import {
   ListingStatusModal,
   type ListingStatusModalOption,
@@ -102,8 +103,7 @@ export default function DashboardListingsPage() {
   const [selectedStatus, setSelectedStatus] = useState<ListingStatusValue | "">("")
   const [selectedCoverPhoto, setSelectedCoverPhoto] = useState<string | null>(null)
   const [isSavingCoverPhoto, setIsSavingCoverPhoto] = useState(false)
-  // TODO: Wire up real company plan tier when subscription data is available.
-  const [companyPlan] = useState<"basic" | "plus">("basic")
+  const [isSavingStatus, setIsSavingStatus] = useState(false)
   const [pendingDeleteProject, setPendingDeleteProject] = useState<ListingProject | null>(null)
   const [projects, setProjects] = useState<ListingProject[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -129,6 +129,9 @@ export default function DashboardListingsPage() {
   })
   const MAX_CACHE_SIZE = 100 // Reasonable limit for taxonomy options
   const router = useRouter()
+  const { planTier, isPlus, error: entitlementsError } = useCompanyEntitlements()
+  const companyPlan: "basic" | "plus" = planTier ?? "basic"
+  const [userId, setUserId] = useState<string | null>(null)
 
   // Track in-flight requests to prevent race conditions
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -167,6 +170,7 @@ export default function DashboardListingsPage() {
       }
 
       if (!authData?.user || authError) {
+        setUserId(null)
         if (isActive && !abortController.signal.aborted) {
           setLoadError(authError?.message ?? "You need to be signed in to view your projects.")
           setProjects([])
@@ -174,6 +178,8 @@ export default function DashboardListingsPage() {
         }
         return
       }
+
+      setUserId(authData.user.id)
 
       // Single optimized query with JOINs to fetch projects with resolved labels
       const { data, error } = await supabase
@@ -437,14 +443,71 @@ export default function DashboardListingsPage() {
     setSelectedCoverPhoto(null)
   }, [])
 
-  const handleSaveStatus = () => {
+  const handleSaveStatus = async () => {
     if (!selectedProject || !selectedStatus) {
       handleCloseStatusModal()
       return
     }
 
-    console.log(`Updating project ${selectedProject.id} status to ${selectedStatus}`)
-    handleCloseStatusModal()
+    if (selectedStatus === selectedProject.status) {
+      handleCloseStatusModal()
+      return
+    }
+
+    const statusOption = statusOptions.find((option) => option.value === selectedStatus)
+    if (!statusOption) {
+      toast.error("Select a valid status before saving.")
+      return
+    }
+
+    if (statusOption.requiresPlus && !isPlus) {
+      toast.error("Upgrade to Plus to make this project discoverable.")
+      return
+    }
+
+    if (!userId) {
+      toast.error("We couldn't verify your account. Please refresh and try again.")
+      return
+    }
+
+    setIsSavingStatus(true)
+
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ status: selectedStatus })
+        .eq("id", selectedProject.id)
+        .eq("client_id", userId)
+
+      if (error) {
+        throw error
+      }
+
+      const statusConfig = STATUS_CONFIG[selectedStatus as ProjectStatus]
+
+      setProjects((prev) =>
+        prev.map((project) => {
+          if (project.id !== selectedProject.id) {
+            return project
+          }
+
+          return {
+            ...project,
+            status: selectedStatus,
+            statusLabel: statusConfig.label,
+            statusChipClass: statusConfig.chipClass,
+          }
+        }),
+      )
+
+      toast.success("Listing status updated")
+      handleCloseStatusModal()
+    } catch (error) {
+      console.error("Failed to update listing status", error)
+      toast.error("We couldn't update the listing status. Please try again.")
+    } finally {
+      setIsSavingStatus(false)
+    }
   }
 
   const handleSaveCoverPhoto = async () => {
@@ -642,7 +705,7 @@ export default function DashboardListingsPage() {
     : false
 
   const limitReachedForNewActivation =
-    companyPlan === "basic" && activeListingsExcludingSelected >= BASIC_ACTIVE_LIMIT && !isSelectedProjectActive
+    !isPlus && activeListingsExcludingSelected >= BASIC_ACTIVE_LIMIT && !isSelectedProjectActive
 
   const isPendingAdminReview = selectedProject?.status === "in_progress"
 
@@ -651,6 +714,7 @@ export default function DashboardListingsPage() {
         title: selectedProject.title,
         descriptor: selectedProjectDescriptor,
         coverImageUrl: selectedProject.coverImageUrl,
+        planBadgeLabel: isPlus ? "Plus plan" : "Basic plan",
       }
     : null
 
@@ -707,9 +771,15 @@ export default function DashboardListingsPage() {
       colorClass: "bg-slate-400",
     },
   ]
+  const selectedStatusOption = statusOptions.find((option) => option.value === selectedStatus)
+  const statusSelectionRequiresUpgrade = selectedStatusOption?.requiresPlus === true && !isPlus
+  const statusSelectionHitsLimit =
+    !isPlus && limitReachedForNewActivation && selectedStatusOption
+      ? ACTIVE_STATUS_VALUES.includes(selectedStatusOption.value)
+      : false
 
   const isValidStatusSelection =
-    !isPendingAdminReview && statusOptions.some((option) => option.value === selectedStatus)
+    !isPendingAdminReview && Boolean(selectedStatusOption) && !statusSelectionRequiresUpgrade && !statusSelectionHitsLimit
 
   const displayedProjects = filteredProjects
   const hasProjects = projects.length > 0
@@ -719,6 +789,11 @@ export default function DashboardListingsPage() {
       <DashboardHeader />
 
       <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-8 xl:px-12">
+        {entitlementsError && (
+          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {entitlementsError}
+          </div>
+        )}
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
@@ -989,7 +1064,7 @@ export default function DashboardListingsPage() {
         selectedStatus={selectedStatus}
         onStatusChange={setSelectedStatus}
         statusOptions={statusOptions}
-        saveDisabled={!isValidStatusSelection}
+        saveDisabled={isSavingStatus || !isValidStatusSelection}
         isPendingAdminReview={isPendingAdminReview}
         limitReachedForNewActivation={limitReachedForNewActivation}
         activeStatusValues={ACTIVE_STATUS_VALUES}

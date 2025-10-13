@@ -69,6 +69,7 @@ import {
   OVERLAY_CLASSES,
   useProjectPhotoTour,
 } from "@/hooks/use-project-photo-tour"
+import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
 
 type ProjectBudgetLevel = Enums<"project_budget_level">
 type ProjectStatus = Enums<"project_status">
@@ -296,6 +297,8 @@ export default function ListingEditorPage() {
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const { planTier, isPlus, error: entitlementsError } = useCompanyEntitlements()
+  const companyPlan: "basic" | "plus" = planTier ?? "basic"
   const rawProjectId = params?.id
   const projectId = useMemo(
     () => (Array.isArray(rawProjectId) ? rawProjectId[0] : (rawProjectId as string | undefined) ?? null),
@@ -400,6 +403,7 @@ export default function ListingEditorPage() {
       title: detailsForm.projectTitle?.trim() || "Untitled project",
       descriptor: descriptorParts.join(" • ") || "Add project details",
       coverImageUrl: coverPhotoUrl,
+      planBadgeLabel: isPlus ? "Plus plan" : "Basic plan",
     }
   }, [
     detailsForm.city,
@@ -407,12 +411,18 @@ export default function ListingEditorPage() {
     detailsForm.projectTitle,
     detailsForm.region,
     getFeatureCoverPhoto,
+    isPlus,
     uploadedPhotos,
   ])
 
   const isPendingAdminReview = projectStatus === "in_progress"
   const limitReachedForNewActivation = false
-  const canSaveStatus = Boolean(selectedStatus) && !isPendingAdminReview
+  const selectedStatusOption = useMemo(
+    () => LISTING_STATUS_MODAL_OPTIONS.find((option) => option.value === selectedStatus),
+    [selectedStatus],
+  )
+  const requiresPlusForSelection = selectedStatusOption?.requiresPlus === true && !isPlus
+  const canSaveStatus = Boolean(selectedStatusOption) && !isPendingAdminReview && !requiresPlusForSelection
 
   const currentFeatureDisplay = useMemo(
     () => (showPhotoSelector ? getFeatureDisplay(showPhotoSelector) : null),
@@ -1309,7 +1319,6 @@ export default function ListingEditorPage() {
   ]
 
   const statusOptions = LISTING_STATUS_MODAL_OPTIONS
-  const companyPlan: "basic" | "plus" = "basic"
 
   const statusOptionByValue = useMemo(
     () => new Map(statusOptions.map((option) => [option.value, option])),
@@ -1887,6 +1896,11 @@ export default function ListingEditorPage() {
   const handleStatusSave = () => {
     if (!selectedStatus || isPendingAdminReview) {
       handleCloseStatusModal()
+      return
+    }
+
+    if (requiresPlusForSelection) {
+      toast.error("Upgrade to Plus to make this listing discoverable.")
       return
     }
 
@@ -2773,6 +2787,11 @@ export default function ListingEditorPage() {
 
       <div className="flex-1 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
+          {entitlementsError && (
+            <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {entitlementsError}
+            </div>
+          )}
           <div className="flex">
             {/* Sidebar */}
             <div className="w-64 bg-white border-r border-gray-200 p-6">

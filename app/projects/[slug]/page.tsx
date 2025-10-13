@@ -105,6 +105,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const previewRequested = Boolean(resolvedSearchParams?.[PREVIEW_PARAM])
   const isPublished = project.status === "published"
+  const isListed = project.status === "completed"
   const user = authData?.user ?? null
 
   let isOwner = false
@@ -127,7 +128,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const canPreview = previewRequested && (isOwner || isAdmin)
 
-  if (!isPublished && !canPreview) {
+  if (!(isPublished || isListed) && !canPreview) {
     notFound()
   }
 
