@@ -67,6 +67,21 @@ const formatEnumLabel = (value: string | null | undefined) => {
 const stripHtml = (input: string | null | undefined) =>
   input ? input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : null
 
+const sanitizeBreadcrumbLabel = (label: string | null | undefined): string | null => {
+  if (!label) {
+    return null
+  }
+  
+  // Remove HTML tags and normalize whitespace
+  const sanitized = label
+    .replace(/<[^>]+>/g, " ") // Remove HTML tags
+    .replace(/[<>\"'&]/g, "") // Remove potentially dangerous characters
+    .replace(/\s+/g, " ") // Normalize whitespace
+    .trim()
+  
+  return sanitized.length > 0 ? sanitized : null
+}
+
 type ProjectRow = Tables<"projects">
 type ProjectPhotoRow = Tables<"project_photos">
 type ProjectFeatureRow = Tables<"project_features">
@@ -463,7 +478,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   pushBreadcrumb("Projects", {})
 
   // Location breadcrumb
-  const locationBreadcrumbLabel = project.address_city?.trim() ?? null
+  const locationBreadcrumbLabel = sanitizeBreadcrumbLabel(project.address_city)
   if (locationBreadcrumbLabel) {
     pushBreadcrumb(locationBreadcrumbLabel, { location: locationBreadcrumbLabel })
   }
@@ -474,13 +489,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const childCategory = allProjectCategories.find(cat => cat?.parent_id) // Category with parent
 
   // Type breadcrumb (parent category like "House")
-  if (parentCategory?.name && parentCategory.name.trim() !== "") {
-    pushBreadcrumb(parentCategory.name, { type: parentCategory.slug ?? parentCategory.id })
+  const parentCategoryName = sanitizeBreadcrumbLabel(parentCategory?.name)
+  if (parentCategoryName && parentCategory) {
+    pushBreadcrumb(parentCategoryName, { type: parentCategory.slug ?? parentCategory.id })
   }
 
   // Sub-Type breadcrumb (child category like "Apartment")
-  if (childCategory?.name && childCategory.name.trim() !== "") {
-    pushBreadcrumb(childCategory.name, { type: childCategory.slug ?? childCategory.id })
+  const childCategoryName = sanitizeBreadcrumbLabel(childCategory?.name)
+  if (childCategoryName && childCategory) {
+    pushBreadcrumb(childCategoryName, { type: childCategory.slug ?? childCategory.id })
   }
 
   const budgetLabel = project.budget_level ? budgetLabelMap.get(project.budget_level) ?? formatEnumLabel(project.budget_level) : ""
