@@ -1,3 +1,35 @@
+# Fake Plus Upgrade Workflow Plan
+
+1. Baseline Audit & Traceability
+   - Locate dashboard pricing UI (likely under `app/dashboard/pricing/page.tsx`) and document entry points for the upgrade CTA.
+   - Inspect Supabase MCP schema (`public.companies.plan_tier`, `plan_expires_at`, `upgrade_eligible`) and confirm current plan enum values (`basic`, `plus`).
+   - Trace where plan tier is consumed today (listing editor, listings table, discover visibility) and catalog code paths that still hardcode `"basic"` so we can replace them with live Supabase reads.
+
+2. Placeholder State Architecture
+   - Expose a server action (e.g., `upgradeCompanyPlanAction`) that updates `companies.plan_tier` + `plan_expires_at` in Supabase and returns the refreshed company payload; no client-only state.
+   - Define a reusable entitlement helper (e.g., `useCompanyEntitlements()` in `@/hooks`) that reads the signed-in user’s company record via Supabase and exposes `isPlus`, `canListProjects`, and `canSetListingStatus`.
+   - Ensure the helper is easily replaceable when Stripe webhook arrives by keeping action logic in one module and documenting the expected webhook payload/row updates.
+
+3. Fake Upgrade Handler Implementation
+   - Add `handleUpgradeToPlus` in the dashboard pricing page that calls the new server action with the active session, sets `plan_tier = 'plus'`, `plan_expires_at = now() + interval '1 month'` (placeholder), and records a fake `stripe_checkout_id` comment/TODO.
+   - Surface optimistic feedback (toast/banner) so users know the upgrade succeeded, trigger entitlements hook re-fetch, and navigate/refresh as needed.
+   - Leave TODO comments outlining how Stripe checkout + webhook will eventually supply invoice metadata instead of the inline Supabase mutation.
+
+4. Entitlement-Gated UI Updates
+   - `/dashboard/listings`: replace hardcoded plan tier with entitlements hook so the listing status modal respects Supabase data.
+   - `/dashboard/edit/[id]`: gate `Listed` modal option via entitlements and disable when company is still Basic (with upgrade prompt linking back to pricing).
+   - `/projects` discovery: update Supabase view/query to surface projects where `status IN ('published','completed')` and parent company is Plus, ensuring anonymous visitors see Plus listings.
+   - Revalidate listing data after upgrade so newly listed projects become discoverable without full refresh.
+
+5. Future Stripe Integration Hooks
+   - Document in code comments where Stripe session creation and webhook confirmation should replace the fake handler (server action becomes webhook consumer).
+   - Outline data persistence expectations (`companies.plan_tier`, `plan_expires_at`, potential `subscription_status`) so the webhook path is straightforward.
+   - Identify analytics/events (Upgrade CTA clicked, Upgrade succeeded) and leave TODOs for instrumentation once real billing exists.
+
+6. Validation & Hand-off
+   - Draft manual QA checklist: upgrade flow, reloading the dashboard, editing listings, verifying discovery visibility.
+   - Confirm lint passes and identify any follow-up migrations required once the real plan tier field is introduced.
+
 # High-Level Implementation Plan
 
 ## 1. Establish Data & State Foundations
