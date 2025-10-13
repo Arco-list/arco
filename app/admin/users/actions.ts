@@ -380,7 +380,7 @@ export async function toggleAdminStatusAction(input: { userId: string; active: b
   return { success: true }
 }
 
-export async function generateAdminResetPasswordAction(input: { userId: string }): Promise<ActionResult<{ resetUrl: string }>> {
+export async function generateAdminResetPasswordAction(input: { userId: string }): Promise<ActionResult> {
   const parsed = resetSchema.safeParse(input)
   if (!parsed.success) {
     return { success: false, error: "Invalid reset request." }
@@ -406,12 +406,12 @@ export async function generateAdminResetPasswordAction(input: { userId: string }
 
   const targetEmail = userResponse.data.user.email
 
-  const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+  const { error: linkError } = await serviceClient.auth.admin.generateLink({
     type: "recovery",
     email: targetEmail,
   })
 
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError) {
     logger.auth(
       "admin-reset-password",
       "Failed to generate password reset link for admin",
@@ -421,5 +421,5 @@ export async function generateAdminResetPasswordAction(input: { userId: string }
     return { success: false, error: "Could not generate reset password link." }
   }
 
-  return { success: true, data: { resetUrl: linkData.properties.action_link } }
+  return { success: true }
 }
