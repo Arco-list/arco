@@ -256,13 +256,31 @@ export async function changeAdminRoleAction(input: { userId: string; role: "admi
   })
 
   if (authUpdateError) {
+    const { error: revertError } = await serviceClient
+      .from("profiles")
+      .update({
+        admin_role: targetProfile.admin_role,
+        user_types: targetProfile.user_types,
+      })
+      .eq("id", parsed.data.userId)
+
+    if (revertError) {
+      logger.db(
+        "update",
+        "profiles",
+        "Failed to revert admin role after auth metadata sync error",
+        { targetAdminId: parsed.data.userId },
+        revertError,
+      )
+    }
+
     logger.auth(
       "admin-role-change",
       "Failed to update auth metadata after role change",
       { targetAdminId: parsed.data.userId, nextRole: parsed.data.role },
       authUpdateError,
     )
-    return { success: false, error: "Role updated, but failed to sync authentication metadata." }
+    return { success: false, error: "Failed to sync authentication metadata. The admin role change was not applied." }
   }
 
   revalidatePath("/admin/users")
@@ -367,13 +385,30 @@ export async function toggleAdminStatusAction(input: { userId: string; active: b
   })
 
   if (authUpdateError) {
+    const { error: revertError } = await serviceClient
+      .from("profiles")
+      .update({
+        is_active: targetProfile.is_active,
+      })
+      .eq("id", parsed.data.userId)
+
+    if (revertError) {
+      logger.db(
+        "update",
+        "profiles",
+        "Failed to revert admin status after auth sync error",
+        { targetAdminId: parsed.data.userId },
+        revertError,
+      )
+    }
+
     logger.auth(
       "admin-status-change",
       "Failed to update authentication status during admin toggle",
       { targetAdminId: parsed.data.userId, nextActive: parsed.data.active },
       authUpdateError,
     )
-    return { success: false, error: "Status updated, but failed to sync authentication metadata." }
+    return { success: false, error: "Failed to sync authentication metadata. The admin status change was not applied." }
   }
 
   revalidatePath("/admin/users")
