@@ -129,7 +129,7 @@ export async function inviteAdminUserAction(input: { email: string; role: "admin
   const invitedUserId = inviteData?.user?.id ?? null
 
   if (invitedUserId) {
-    const { error: profileUpdateError } = await serviceClient
+    const { data: updatedProfile, error: profileUpdateError } = await serviceClient
       .from("profiles")
       .update({
         admin_role: parsed.data.role,
@@ -138,15 +138,21 @@ export async function inviteAdminUserAction(input: { email: string; role: "admin
         user_types: ["admin"],
       })
       .eq("id", invitedUserId)
+      .select("id")
+      .maybeSingle()
 
-    if (profileUpdateError) {
+    if (profileUpdateError || !updatedProfile) {
       logger.db(
         "update",
         "profiles",
         "Failed to update profile metadata after admin invite",
         { invitedUserId, invitedRole: parsed.data.role },
-        profileUpdateError,
+        profileUpdateError ?? new Error("Profile update returned no rows"),
       )
+      return {
+        success: false,
+        error: "Invite email sent, but we could not finalise the profile. Please resend or contact support.",
+      }
     }
   }
 
