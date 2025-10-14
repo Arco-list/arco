@@ -803,7 +803,7 @@ function ProfessionalsHeader({
             <img
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
               alt="Arco"
-              className="h-6"
+              className="h-4"
             />
           </div>
           <div className="flex items-center gap-4">

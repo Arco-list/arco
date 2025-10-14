@@ -220,8 +220,8 @@ export function GroupedPicturesModal({
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="p-4 md:p-6">
-                <div className="max-w-4xl mx-auto space-y-8">
+              <div className="px-4 md:px-6 py-4 md:py-6">
+                <div className="max-w-[1800px] mx-auto space-y-8">
                   {imageGroups.map((group, groupIndex) => (
                     <div
                       key={group.id}
@@ -256,7 +256,7 @@ export function GroupedPicturesModal({
                             <img
                               src={group.images.find((img) => img.isPrimary)?.src || "/placeholder.svg"}
                               alt={group.images.find((img) => img.isPrimary)?.alt}
-                              className="w-full h-64 md:h-80 object-cover rounded-lg hover:opacity-95 transition-opacity"
+                              className="w-full aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
                             />
                           </div>
                         )}
@@ -276,7 +276,7 @@ export function GroupedPicturesModal({
                                   <img
                                     src={image.src || "/placeholder.svg"}
                                     alt={image.alt}
-                                    className="w-full h-32 md:h-40 object-cover rounded-lg hover:opacity-95 transition-opacity"
+                                    className="w-full aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
                                   />
                                 </div>
                               )
@@ -318,25 +318,6 @@ export function GroupedPicturesModal({
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-white hover:bg-white/10 hover:text-white"
-                  onClick={toggleZoom}
-                  aria-label={isZoomed ? "Zoom out" : "Zoom in"}
-                >
-                  {isZoomed ? (
-                    <>
-                      <ZoomOut className="w-4 h-4 mr-2" />
-                      Zoom out
-                    </>
-                  ) : (
-                    <>
-                      <ZoomIn className="w-4 h-4 mr-2" />
-                      Zoom in
-                    </>
-                  )}
-                </Button>
                 <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" onClick={handleShare} aria-label="Share project">
                   <Share className="w-4 h-4 mr-2" />
                   Share
