@@ -86,38 +86,43 @@ export function DashboardHeader() {
   }, [searchParamQuery])
 
   return (
-    <header className="bg-white border-b border-gray-200 px-4 py-4 md:px-8">
-      <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
-        <div className="flex items-center space-x-8">
-          <Link href="/" className="hover:opacity-80 transition-opacity">
-            <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
-              alt="Arco Logo"
-              className="h-4 w-auto"
-            />
-          </Link>
-        </div>
+    <header className="border-b border-gray-200 px-4 py-4 md:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center space-x-8">
+            <Link href="/" className="transition-opacity hover:opacity-80">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
+                alt="Arco Logo"
+                className="h-4 w-auto"
+              />
+            </Link>
 
-        {isHomeownerPage ? (
-          <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/projects" className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-600">
-              Projects
-            </Link>
-            <Link
-              href="/professionals"
-              className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-600"
-            >
-              Professionals
-            </Link>
-          </nav>
-        ) : (
-          canAccessProfessionalDashboard && (
-            <nav className="hidden md:flex items-center space-x-8">
+            {isHomeownerPage && (
+              <div className="hidden items-center space-x-6 md:flex">
+                <Link
+                  href="/projects"
+                  className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                >
+                  Projects
+                </Link>
+                <Link
+                  href="/professionals"
+                  className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                >
+                  Professionals
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {!isHomeownerPage && canAccessProfessionalDashboard && (
+            <div className="hidden items-center space-x-6 md:flex">
               {isAdmin && (
                 <Link
                   href="/admin"
                   className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                    isActive("/admin") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+                    isActive("/admin") ? "text-red-500 border-b-2 border-red-500 pb-1" : "text-black"
                   }`}
                 >
                   Admin
@@ -126,7 +131,7 @@ export function DashboardHeader() {
               <Link
                 href="/dashboard/listings"
                 className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                  isActive("/dashboard/listings") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+                  isActive("/dashboard/listings") ? "text-red-500 border-b-2 border-red-500 pb-1" : "text-black"
                 }`}
               >
                 Listings
@@ -134,48 +139,52 @@ export function DashboardHeader() {
               <Link
                 href="/dashboard/company"
                 className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                  isActive("/dashboard/company") ? "text-black border-b-2 border-black pb-1" : "text-gray-700"
+                  isActive("/dashboard/company") ? "text-red-500 border-b-2 border-red-500 pb-1" : "text-black"
                 }`}
               >
                 Company
               </Link>
-            </nav>
-          )
-        )}
-
-        {isHomeownerPage && (
-          <HeaderSearch
-            centered={false}
-            transparent={false}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            onSearch={handleSearch}
-            textColor="text-gray-600"
-          />
-        )}
-
-        <div className="flex items-center space-x-4">
-          {isHomeownerPage && (
-            <Link
-              href="/list-with-us"
-              className="hidden text-sm font-medium text-gray-700 transition-colors hover:text-gray-600 md:block"
-            >
-              List with us
-            </Link>
+            </div>
           )}
 
-          <div className="flex items-center relative" ref={menuRef}>
+          {isHomeownerPage && (
+            <HeaderSearch
+              transparent={false}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onSearch={handleSearch}
+              textColor="text-black"
+            />
+          )}
+
+          <div className="relative flex items-center space-x-3" ref={menuRef}>
+            {isHomeownerPage && (
+              <Link
+                href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
+                className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+              >
+                {hasProfessionalRole ? "Add new project" : "List with us"}
+              </Link>
+            )}
+            {!isHomeownerPage && canAccessProfessionalDashboard && (
+              <Link
+                href="/new-project"
+                className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+              >
+                Add new project
+              </Link>
+            )}
             <button
-              className="flex items-center space-x-3 px-3 py-2 hover:bg-gray-100 rounded-full transition-colors border border-black"
+              className="flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium border-black text-black hover:bg-gray-100"
               aria-label="Open menu"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              <span className="text-sm font-medium text-black">{menuLabel}</span>
+              <span className="text-black">{menuLabel}</span>
               <Menu className="h-5 w-5" />
             </button>
 
             {isMenuOpen && (
-              <div className="absolute right-0 top-16 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
                 <div className="py-1">
                   {isHomeownerPage ? (
                     <>
@@ -348,10 +357,10 @@ export function DashboardHeader() {
                 >
                   {isSigningOut ? "Signing out..." : "Sign out"}
                 </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

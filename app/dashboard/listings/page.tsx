@@ -802,7 +802,8 @@ export default function DashboardListingsPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 max-w-7xl mx-auto py-8 w-full px-4 md:px-6 lg:px-8 xl:px-12">
+      <main className="flex-1 py-8 px-4 md:px-8">
+        <div className="max-w-7xl mx-auto">
         {entitlementsError && (
           <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {entitlementsError}
@@ -811,7 +812,7 @@ export default function DashboardListingsPage() {
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-gray-900 font-medium text-xl">Your projects</h1>
+              <h1 className="text-2xl font-semibold text-gray-900">Your projects</h1>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -1100,6 +1101,7 @@ export default function DashboardListingsPage() {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       <ListingStatusModal

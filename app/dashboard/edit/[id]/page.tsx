@@ -3015,7 +3015,7 @@ export default function ListingEditorPage() {
         </div>
       </div>
 
-      <Footer />
+      <Footer maxWidth="max-w-7xl" />
 
       {/* Status Modal */}
       <ListingStatusModal

@@ -17,7 +17,7 @@ export default function DashboardSettings() {
         </div>
       </main>
 
-      <Footer />
+      <Footer maxWidth="max-w-7xl" />
     </div>
   )
 }
