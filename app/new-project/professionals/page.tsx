@@ -2,11 +2,30 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, Loader2, MailPlus, Plus, ShieldAlert, Trash2, X } from "lucide-react"
+import {
+  AlertTriangle,
+  Loader2,
+  MailPlus,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  ShieldAlert,
+  Trash2,
+  X,
+  XCircle,
+} from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 import { toast } from "sonner"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const TOTAL_STEPS = 4
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
@@ -68,6 +87,26 @@ type InviteSummary = {
   invitedAt: string
   respondedAt: string | null
 }
+
+const INVITE_STATUS_META: Partial<
+  Record<ProjectProfessionalRow["status"], { label: string; className: string }>
+> = {
+  invited: { label: "Invite sent", className: "bg-amber-100 text-amber-800" },
+  listed: { label: "Listed", className: "bg-green-100 text-green-800" },
+  live_on_page: { label: "Listed", className: "bg-green-100 text-green-800" },
+  unlisted: { label: "Unlisted", className: "bg-gray-200 text-gray-700" },
+  removed: { label: "Removed", className: "bg-red-100 text-red-800" },
+  rejected: { label: "Rejected", className: "bg-red-100 text-red-800" },
+} as const
+
+const formatInviteStatusLabel = (status: ProjectProfessionalRow["status"]) =>
+  status
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+
+const getInviteStatusMeta = (status: ProjectProfessionalRow["status"]) =>
+  INVITE_STATUS_META[status] ?? { label: formatInviteStatusLabel(status), className: "bg-gray-100 text-gray-800" }
 
 export default function ProfessionalsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
@@ -473,6 +512,14 @@ export default function ProfessionalsPage() {
       return
     }
 
+    if (!invite) {
+      const existingInvites = invitesByService[serviceId] ?? []
+      if (existingInvites.length >= 1) {
+        setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+        return
+      }
+    }
+
     setInviteServiceId(serviceId)
     setInviteEmail(invite?.email ?? "")
     setEditingInviteId(invite?.id ?? null)
@@ -596,6 +643,14 @@ export default function ProfessionalsPage() {
       return
     }
 
+    if (!editingInviteId) {
+      const existingInvites = invitesByService[inviteServiceId] ?? []
+      if (existingInvites.length >= 1) {
+        setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+        return
+      }
+    }
+
     const trimmedEmail = inviteEmail.trim()
 
     if (!EMAIL_REGEX.test(trimmedEmail)) {
@@ -667,17 +722,16 @@ export default function ProfessionalsPage() {
           if (!serviceId) {
             return prev
           }
-          const next = [...(prev[serviceId] ?? [])]
-          next.push({
+          const nextInvite = {
             id: data.id,
             email: data.invited_email,
             serviceCategoryId: serviceId,
             status: data.status,
             invitedAt: data.invited_at,
             respondedAt: data.responded_at,
-          })
+          }
 
-          return { ...prev, [serviceId]: next }
+          return { ...prev, [serviceId]: [nextInvite] }
         })
       }
 
@@ -893,19 +947,23 @@ function ServiceSelectionStep({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {services.map((service) => {
           const isSelected = selectedServiceIds.includes(service.id)
+          const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
           return (
             <button
               key={service.id}
+              type="button"
               onClick={() => onToggleService(service.id)}
               disabled={isBusy}
-              className={`rounded-lg border-2 p-6 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
+              aria-pressed={isSelected}
+              className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
                 isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
               } disabled:cursor-not-allowed disabled:opacity-60`}
             >
-              <span className="block text-xs uppercase tracking-wide text-gray-500">
-                {service.parentName ?? "Professional service"}
-              </span>
-              <span className="mt-2 block text-lg font-medium text-gray-900">{service.name}</span>
+              <IconComponent
+                aria-hidden
+                className={`mb-3 h-6 w-6 ${isSelected ? "text-gray-900" : "text-gray-700"}`}
+              />
+              <span className="mt-2 text-sm font-medium text-gray-900">{service.name}</span>
             </button>
           )
         })}
@@ -970,58 +1028,137 @@ function InviteStep({
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {selectedServices.map((service) => {
           const invites = invitesByService[service.id] ?? []
+          const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
+          const hasInvite = invites.length > 0
+          const editableInvite = invites.find((invite) => invite.status === "invited") ?? null
+          const primaryActionIcon = hasInvite && editableInvite ? Pencil : MailPlus
+          const primaryActionLabel =
+            hasInvite && !editableInvite
+              ? "Invite already added"
+              : hasInvite
+                ? "Edit invite"
+                : "Invite professional"
+          const primaryActionDisabled = isBusy || (hasInvite && !editableInvite)
+          const handlePrimaryAction = () => {
+            if (primaryActionDisabled) {
+              return
+            }
+            if (hasInvite) {
+              if (editableInvite) {
+                onInvite(service.id, editableInvite)
+              }
+              return
+            }
+            onInvite(service.id)
+          }
           return (
-            <div key={service.id} className="rounded-lg border border-gray-200 p-5">
-              <div className="mb-4 flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm uppercase tracking-wide text-gray-500">{service.parentName}</p>
-                  <h2 className="text-lg font-semibold text-gray-900">{service.name}</h2>
+            <div
+              key={service.id}
+              className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-5"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+                    <IconComponent aria-hidden className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900">{service.name}</h2>
+                    {service.parentName && <p className="text-xs text-gray-500">{service.parentName}</p>}
+                  </div>
                 </div>
-                <button
-                  onClick={() => onRemoveService(service.id)}
-                  disabled={isBusy}
-                  className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={`Manage actions for ${service.name}`}
+                      disabled={isBusy}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onSelect={handlePrimaryAction} disabled={primaryActionDisabled}>
+                      {primaryActionIcon === Pencil ? (
+                        <Pencil className="h-4 w-4" />
+                      ) : (
+                        <MailPlus className="h-4 w-4" />
+                      )}
+                      {primaryActionLabel}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => onRemoveService(service.id)}
+                      disabled={isBusy}
+                      variant="destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove service
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
-              <div className="space-y-3">
-                {invites.map((invite) => (
-                  <div key={invite.id} className="flex items-center justify-between rounded-md border border-gray-200 p-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{invite.email}</p>
-                      <p className="text-xs text-gray-500">{invite.status === "invited" ? "Invite pending" : invite.status}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => onInvite(service.id, invite)}
-                        disabled={isBusy}
-                        className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => onDeleteInvite(invite)}
-                        disabled={isBusy}
-                        className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Remove
-                      </button>
+              <div className="mt-4 flex flex-1 flex-col">
+                {invites.length === 0 ? (
+                  <div className="flex flex-1 flex-col justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onInvite(service.id)}
+                      disabled={isBusy}
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <MailPlus className="h-4 w-4" />
+                      Invite professional
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-1 flex-col gap-3">
+                    <div className="space-y-3">
+                      {invites.map((invite) => {
+                        const statusMeta = getInviteStatusMeta(invite.status)
+                        return (
+                          <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
+                            <p className="text-sm font-medium text-gray-900">{invite.email}</p>
+                            <div className="mt-2 flex items-center justify-between gap-3">
+                              <span
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
+                              >
+                                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                {statusMeta.label}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {invite.status === "invited" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onInvite(service.id, invite)}
+                                    disabled={isBusy}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    aria-label={`Edit invite for ${invite.email}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteInvite(invite)}
+                                  disabled={isBusy}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                  aria-label={`Remove invite for ${invite.email}`}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
-                ))}
-
-                <button
-                  onClick={() => onInvite(service.id)}
-                  disabled={isBusy}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <MailPlus className="h-4 w-4" /> Invite professional
-                </button>
+                )}
               </div>
             </div>
           )
