@@ -2341,39 +2341,6 @@ export default function ListingEditorPage() {
               </div>
 
               <div className="p-6 space-y-6">
-                <div
-                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                    modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
-                  }`}
-                  onDrop={handleModalDrop}
-                  onDragOver={handleModalDragOver}
-                  onDragLeave={handleModalDragLeave}
-                >
-                  <ImageIcon className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-                  <p className="font-medium text-gray-900">Upload new photos</p>
-                  <p className="mb-4 text-sm text-gray-500">Drag and drop or browse for photos</p>
-                  <label className="inline-block">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/jpeg,image/png"
-                      className="hidden"
-                      disabled={isUploading}
-                      onChange={(event) => {
-                        void handleModalFileUpload(event.target.files)
-                        event.target.value = ""
-                      }}
-                    />
-                    <span
-                      className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
-                        isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
-                      }`}
-                    >
-                      {isUploading ? "Uploading…" : "Browse Files"}
-                    </span>
-                  </label>
-                </div>
-
                 <div>
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Select from existing photos</h3>
@@ -2383,59 +2350,92 @@ export default function ListingEditorPage() {
                     </div>
                   </div>
 
-                  {selectablePhotos.length === 0 ? (
-                    <div className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+                    <div
+                      className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                        modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
+                      }`}
+                      onDrop={handleModalDrop}
+                      onDragOver={handleModalDragOver}
+                      onDragLeave={handleModalDragLeave}
+                    >
+                      <ImageIcon className="mb-3 h-8 w-8 text-gray-400" />
+                      <p className="font-medium text-gray-900">Upload new photos</p>
+                      <p className="mb-4 text-sm text-gray-500">Drag and drop or browse for photos</p>
+                      <label className="inline-block">
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/jpeg,image/png"
+                          className="hidden"
+                          disabled={isUploading}
+                          onChange={(event) => {
+                            void handleModalFileUpload(event.target.files)
+                            event.target.value = ""
+                          }}
+                        />
+                        <span
+                          className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
+                            isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
+                          }`}
+                        >
+                          {isUploading ? "Uploading…" : "Browse Files"}
+                        </span>
+                      </label>
+                    </div>
+
+                    {selectablePhotos.map((photo) => {
+                      const isSelected = tempSelectedPhotos.includes(photo.id)
+                      const isCoverPhoto = tempCoverPhoto === photo.id
+
+                      return (
+                        <div key={photo.id} className="relative">
+                          <button
+                            onClick={() => toggleTempPhoto(photo.id)}
+                            className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <img
+                              src={photo.url || "/placeholder.svg"}
+                              alt="Project photo"
+                              className="h-full w-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
+                                ✓
+                              </div>
+                            )}
+                            {isCoverPhoto && (
+                              <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
+                                Cover
+                              </div>
+                            )}
+                          </button>
+
+                          {isSelected && !isCoverPhoto && (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setTempCoverPhoto(photo.id)
+                              }}
+                              className="absolute left-2 right-2 bottom-2 rounded border border-gray-300 bg-white py-1 px-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                            >
+                              Set as cover
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {selectablePhotos.length === 0 && (
+                    <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
                       {uploadedPhotos.length === 0
                         ? "Upload photos to get started"
                         : "All photos are assigned. Upload more to add to this feature."}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-                      {selectablePhotos.map((photo) => {
-                        const isSelected = tempSelectedPhotos.includes(photo.id)
-                        const isCoverPhoto = tempCoverPhoto === photo.id
-
-                        return (
-                          <div key={photo.id} className="relative">
-                            <button
-                              onClick={() => toggleTempPhoto(photo.id)}
-                              className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
-                                isSelected
-                                  ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                                  : "border-gray-200 hover:border-gray-300"
-                              }`}
-                            >
-                              <img
-                                src={photo.url || "/placeholder.svg"}
-                                alt="Project photo"
-                                className="h-full w-full object-cover"
-                              />
-                              {isSelected && (
-                                <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
-                                  ✓
-                                </div>
-                              )}
-                              {isCoverPhoto && (
-                                <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
-                                  Cover
-                                </div>
-                              )}
-                            </button>
-
-                            {isSelected && !isCoverPhoto && (
-                              <button
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  setTempCoverPhoto(photo.id)
-                                }}
-                                className="absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                              >
-                                Set as cover
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })}
                     </div>
                   )}
                 </div>
@@ -2693,16 +2693,6 @@ export default function ListingEditorPage() {
       <DashboardHeader />
 
       <div className="flex-1">
-        {/* Navigation Button */}
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-4">
-          <button
-            onClick={() => router.push('/dashboard/listings')}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Listing editor
-          </button>
-        </div>
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           {entitlementsError && (
             <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -2729,6 +2719,17 @@ export default function ListingEditorPage() {
             {/* Sidebar - Hidden on mobile */}
             <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
               <div className="space-y-6">
+                {/* Navigation Button */}
+                <div>
+                  <button
+                    onClick={() => router.push('/dashboard/listings')}
+                    className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Listing editor
+                  </button>
+                </div>
+
                 {/* Status Selector */}
                 <div>
                   <button
@@ -2776,7 +2777,7 @@ export default function ListingEditorPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1">
+            <div className="flex-1 pt-6">
               {/* Mobile Navigation Header */}
               <div className="md:hidden mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
