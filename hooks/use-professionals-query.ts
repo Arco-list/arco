@@ -1,12 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
+const PAGE_SIZE = 20
 
 type SearchProfessionalsRow = {
   id: string
@@ -25,7 +26,7 @@ type SearchProfessionalsRow = {
   company_country: string | null
   primary_specialty: string | null
   services_offered: string[] | null
-  display_rating: number | null
+  display_rating: number | string | null
   total_reviews: number | null
   hourly_rate_display: string | null
   is_verified: boolean | null
@@ -34,8 +35,24 @@ type SearchProfessionalsRow = {
 interface UseProfessionalsQueryResult {
   professionals: ProfessionalCard[]
   isLoading: boolean
+  isLoadingMore: boolean
   error: string | null
+  hasMore: boolean
+  loadMore: () => Promise<void>
   refetch: () => Promise<void>
+}
+
+const parseRating = (value: number | string | null | undefined) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
+  }
+
+  return 0
 }
 
 const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
@@ -55,8 +72,8 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
     ? row.services_offered.filter((value): value is string => Boolean(value))
     : []
 
-  const rating = typeof row.display_rating === "number" && !Number.isNaN(row.display_rating) ? Number(row.display_rating) : 0
-  const reviewCount = typeof row.total_reviews === "number" && !Number.isNaN(row.total_reviews) ? row.total_reviews : 0
+  const rating = parseRating(row.display_rating)
+  const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
 
   return {
     id: row.id,
@@ -85,73 +102,120 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
   } = useProfessionalFilters()
 
   const [professionals, setProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
-  const [isLoading, setIsLoading] = useState(false)
+  const [hasMore, setHasMore] = useState(initialProfessionals.length === PAGE_SIZE)
+  const [currentOffset, setCurrentOffset] = useState(initialProfessionals.length)
+  const [isLoading, setIsLoading] = useState(initialProfessionals.length === 0)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const filtersKey = useMemo(
-    () =>
-      JSON.stringify({
-        selectedCategories: [...selectedCategories].sort(),
-        selectedServices: [...selectedServices].sort(),
-        selectedCountry,
-        selectedState,
-        selectedCity,
-        keyword: keyword.trim(),
-      }),
-    [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState],
-  )
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const skipInitialFetchRef = useRef(initialProfessionals.length > 0)
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const supabase = getBrowserSupabaseClient()
-
-      const { data, error: rpcError } = await supabase.rpc("search_professionals", {
-        search_query: keyword.trim().length > 0 ? keyword.trim() : null,
-        country_filter: selectedCountry ?? null,
-        state_filter: selectedState ?? null,
-        city_filter: selectedCity ?? null,
-        category_filters: selectedCategories.length > 0 ? selectedCategories : null,
-        service_filters: selectedServices.length > 0 ? selectedServices : null,
-        limit_count: 100,
-        offset_count: 0,
-      })
-
-      if (rpcError) {
-        throw rpcError
+  const fetchPage = useCallback(
+    async (offset: number, replace: boolean) => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
       }
 
-      const rows = Array.isArray(data) ? (data as SearchProfessionalsRow[]) : []
+      const controller = new AbortController()
+      abortControllerRef.current = controller
 
-      const mapped = rows
-        .map((row) => mapRowToCard(row))
-        .filter((card): card is ProfessionalCard => card !== null)
+      if (replace) {
+        setIsLoading(true)
+      } else {
+        setIsLoadingMore(true)
+      }
+      setError(null)
 
-      setProfessionals(mapped)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to load professionals"
-      setError(message)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState])
+      try {
+        const supabase = getBrowserSupabaseClient()
 
-  const skipInitialFetchRef = useRef(initialProfessionals.length > 0)
+        const { data, error: rpcError } = await supabase.rpc(
+          "search_professionals",
+          {
+            search_query: keyword.trim().length > 0 ? keyword.trim() : null,
+            country_filter: selectedCountry ?? null,
+            state_filter: selectedState ?? null,
+            city_filter: selectedCity ?? null,
+            category_filters: selectedCategories.length > 0 ? selectedCategories : null,
+            service_filters: selectedServices.length > 0 ? selectedServices : null,
+            min_rating: null,
+            max_hourly_rate: null,
+            verified_only: false,
+            limit_count: PAGE_SIZE,
+            offset_count: offset,
+          },
+          { signal: controller.signal },
+        )
+
+        if (rpcError) {
+          throw rpcError
+        }
+
+        const rows = Array.isArray(data) ? (data as SearchProfessionalsRow[]) : []
+        const mapped = rows
+          .map((row) => mapRowToCard(row))
+          .filter((card): card is ProfessionalCard => card !== null)
+
+        setProfessionals((prev) => (replace ? mapped : [...prev, ...mapped]))
+        setHasMore(mapped.length === PAGE_SIZE)
+        setCurrentOffset(offset + mapped.length)
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return
+        }
+        const message = err instanceof Error ? err.message : "Unable to load professionals"
+        setError(message)
+        if (replace) {
+          setProfessionals([])
+          setHasMore(false)
+          setCurrentOffset(0)
+        }
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null
+        }
+        if (replace) {
+          setIsLoading(false)
+        } else {
+          setIsLoadingMore(false)
+        }
+      }
+    },
+    [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState],
+  )
 
   useEffect(() => {
     if (skipInitialFetchRef.current) {
       skipInitialFetchRef.current = false
       return
     }
-    void fetchData()
-  }, [fetchData, filtersKey])
+
+    setProfessionals([])
+    setHasMore(true)
+    setCurrentOffset(0)
+    void fetchPage(0, true)
+  }, [fetchPage])
+
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || !hasMore) {
+      return
+    }
+    await fetchPage(currentOffset, false)
+  }, [fetchPage, currentOffset, hasMore, isLoading, isLoadingMore])
+
+  const refetch = useCallback(async () => {
+    setCurrentOffset(0)
+    await fetchPage(0, true)
+  }, [fetchPage])
 
   return {
     professionals,
     isLoading,
+    isLoadingMore,
     error,
-    refetch: fetchData,
+    hasMore,
+    loadMore,
+    refetch,
   }
 }

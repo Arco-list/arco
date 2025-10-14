@@ -59,7 +59,9 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   bathroom: Bath,
   construction_swimming_pool: Waves,
   swimming_pool: Waves,
+  construction_wellness: HeartPulse,
   construction_welness: HeartPulse,
+  wellness: HeartPulse,
   welness: HeartPulse,
   construction_doors: DoorClosed,
   doors: DoorClosed,
@@ -138,4 +140,3 @@ export const resolveProfessionalServiceIcon = (slug?: string | null, parentName?
 
   return DEFAULT_PROFESSIONAL_ICON
 }
-

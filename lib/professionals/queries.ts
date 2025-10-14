@@ -15,6 +15,7 @@ import type {
 } from "./types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
+const INITIAL_PAGE_SIZE = 20
 
 type NullableString = string | null
 
@@ -405,7 +406,7 @@ export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> 
     min_rating: null,
     max_hourly_rate: null,
     verified_only: false,
-    limit_count: 100,
+    limit_count: INITIAL_PAGE_SIZE,
     offset_count: 0,
   })
 

@@ -43,7 +43,7 @@ Acceptance Criteria
   | Construction | Windows |
   | Construction | Bathroom |
   | Construction | Swimming pool |
-  | Construction | Welness |
+  | Construction | Wellness |
   | Construction | Doors |
   | Systems | Lighting |
   | Systems | Electrical systems |

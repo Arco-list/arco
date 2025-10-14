@@ -69,7 +69,7 @@ const SERVICE_ICON_REGISTRY: Array<[string[], LucideIcon]> = [
   [["construction-windows", "windows"], Square],
   [["construction-bathroom", "bathroom"], Droplet],
   [["construction-swimming-pool", "swimming pool"], Waves],
-  [["construction-welness", "welness"], HeartPulse],
+  [["construction-wellness", "construction-welness", "wellness"], HeartPulse],
   [["construction-doors", "doors"], DoorClosed],
   [["systems-lighting", "lighting", "outdoor lighting"], Lightbulb],
   [["systems-electrical-systems", "electrical systems"], Zap],

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react"
+import { useMemo, useState } from "react"
+import { ChevronDown, Loader2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
@@ -10,13 +10,9 @@ import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
 
-type ProfessionalsGridProps = {
-  professionals: ProfessionalCard[]
-}
-
 const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"] as const
 
-export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
+export function ProfessionalsGrid({ professionals }: { professionals: ProfessionalCard[] }) {
   const {
     selectedCategories,
     selectedServices,
@@ -32,22 +28,21 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
     useSavedProfessionals()
 
-  const { professionals: queryProfessionals, isLoading, error, refetch } = useProfessionalsQuery(professionals)
+  const {
+    professionals: queryProfessionals,
+    isLoading,
+    isLoadingMore,
+    error,
+    refetch,
+    hasMore,
+    loadMore,
+  } = useProfessionalsQuery(professionals)
 
   const [sortBy, setSortBy] = useState<(typeof sortOptions)[number]>("Best match")
-  const [currentPage, setCurrentPage] = useState(1)
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
 
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [selectedCategories, selectedServices, selectedCountry, selectedState, selectedCity, keyword])
-
-  const professionalsPerPage = 8
-
-  const filteredProfessionals = useMemo(() => queryProfessionals, [queryProfessionals])
-
   const sortedProfessionals = useMemo(() => {
-    const next = [...filteredProfessionals]
+    const next = [...queryProfessionals]
     switch (sortBy) {
       case "Most recent":
         return next.sort((a, b) => b.name.localeCompare(a.name))
@@ -59,21 +54,7 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
       default:
         return next
     }
-  }, [filteredProfessionals, sortBy])
-
-  const totalPages = Math.max(1, Math.ceil(sortedProfessionals.length / professionalsPerPage))
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
-
-  const currentPageProfessionals = useMemo(() => {
-    const startIndex = (currentPage - 1) * professionalsPerPage
-    const endIndex = startIndex + professionalsPerPage
-    return sortedProfessionals.slice(startIndex, endIndex)
-  }, [currentPage, sortedProfessionals])
+  }, [queryProfessionals, sortBy])
 
   const getPageTitle = () => {
     if (selectedCategories.length > 0) {
@@ -202,7 +183,7 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 mb-8">
-            {currentPageProfessionals.map((professional) => {
+            {sortedProfessionals.map((professional) => {
               const professionalId = professional.id ?? ""
               const isSaved = professionalId ? savedProfessionalIds.has(professionalId) : false
               const isMutating = professionalId ? mutatingProfessionalIds.has(professionalId) : false
@@ -224,33 +205,23 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
             <div className="text-center text-gray-500">No professionals match your filters yet. Try adjusting them.</div>
           )}
 
-          {sortedProfessionals.length > professionalsPerPage && (
-            <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-              <div className="text-sm text-gray-500">
-                Page {currentPage} of {totalPages}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadMore}
+                disabled={isLoadingMore}
+                className="min-w-[140px]"
+              >
+                {isLoadingMore ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </span>
+                ) : (
+                  "Load more"
+                )}
+              </Button>
             </div>
           )}
         </div>

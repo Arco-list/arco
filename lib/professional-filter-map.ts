@@ -37,7 +37,7 @@ export const PROFESSIONAL_CATEGORY_CONFIG: readonly ProfessionalCategoryConfig[]
       { name: "Windows", slug: "construction-windows" },
       { name: "Bathroom", slug: "construction-bathroom" },
       { name: "Swimming pool", slug: "construction-swimming-pool" },
-      { name: "Welness", slug: "construction-welness" },
+      { name: "Wellness", slug: "construction-wellness" },
       { name: "Doors", slug: "construction-doors" },
     ],
   },
@@ -81,6 +81,8 @@ export const PROFESSIONAL_CATEGORY_CONFIG: readonly ProfessionalCategoryConfig[]
 
 const categorySlugSet = new Set(PROFESSIONAL_CATEGORY_CONFIG.map((item) => item.slug))
 const serviceSlugSet = new Set(PROFESSIONAL_CATEGORY_CONFIG.flatMap((item) => item.services.map((service) => service.slug)))
+serviceSlugSet.add("construction-welness")
+serviceSlugSet.add("welness")
 
 export const isAllowedProfessionalCategorySlug = (slug: string | null | undefined): boolean => {
   if (!slug) return false
