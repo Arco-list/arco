@@ -2786,8 +2786,8 @@ export default function ListingEditorPage() {
     <div className="min-h-screen bg-white flex flex-col">
       <DashboardHeader />
 
-      <div className="flex-1">
-        <div className="max-w-7xl mx-auto px-4 md:px-8">
+      <main className="flex-1 px-4 py-8 md:px-8">
+        <div className="mx-auto max-w-7xl">
           {entitlementsError && (
             <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {entitlementsError}
@@ -3005,7 +3005,7 @@ export default function ListingEditorPage() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
       <Footer maxWidth="max-w-7xl" />
 
