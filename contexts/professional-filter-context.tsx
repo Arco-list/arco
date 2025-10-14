@@ -14,7 +14,7 @@ import {
 import { debounce } from "lodash-es"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
-import { useProfessionalTaxonomy } from "@/hooks/use-professional-taxonomy"
+import { useProfessionalTaxonomy, type LocationOptions } from "@/hooks/use-professional-taxonomy"
 
 const normalizeToken = (value: string) => value.trim().toLowerCase()
 
@@ -186,12 +186,6 @@ const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilte
   }
 }
 
-interface LocationOptions {
-  countries: string[]
-  statesByCountry: Map<string, string[]>
-  citiesByCountryState: Map<string, Map<string, string[]>>
-}
-
 interface ProfessionalFilterContextValue extends ProfessionalFilterState {
   setSelectedCategories: (values: string[]) => void
   setSelectedServices: (values: string[]) => void
@@ -209,69 +203,12 @@ interface ProfessionalFilterContextValue extends ProfessionalFilterState {
 
 const ProfessionalFilterContext = createContext<ProfessionalFilterContextValue | undefined>(undefined)
 
-const buildLocationOptions = (facets: ReturnType<typeof useProfessionalTaxonomy>["locationFacets"]): LocationOptions => {
-  const countrySet = new Set<string>()
-  const statesByCountry = new Map<string, Set<string>>()
-  const citiesByCountryState = new Map<string, Map<string, Set<string>>>()
-
-  facets.forEach((facet) => {
-    const country = facet.country
-    const state = facet.stateRegion
-    const city = facet.city
-
-    if (country) {
-      countrySet.add(country)
-      if (state) {
-        const stateSet = statesByCountry.get(country) ?? new Set<string>()
-        stateSet.add(state)
-        statesByCountry.set(country, stateSet)
-      }
-
-      const stateKey = state ?? "__none__"
-      const stateMap = citiesByCountryState.get(country) ?? new Map<string, Set<string>>()
-      const citySet = stateMap.get(stateKey) ?? new Set<string>()
-      if (city) {
-        citySet.add(city)
-      }
-      stateMap.set(stateKey, citySet)
-      citiesByCountryState.set(country, stateMap)
-    }
-  })
-
-  const countries = Array.from(countrySet).sort((a, b) => a.localeCompare(b))
-  const sortedStatesByCountry = new Map<string, string[]>(
-    countries.map((country) => {
-      const stateSet = statesByCountry.get(country)
-      const states = stateSet ? Array.from(stateSet).sort((a, b) => a.localeCompare(b)) : []
-      return [country, states]
-    }),
-  )
-
-  const sortedCitiesByCountryState = new Map<string, Map<string, string[]>>()
-  countries.forEach((country) => {
-    const stateMap = citiesByCountryState.get(country)
-    if (!stateMap) return
-    const sortedStateMap = new Map<string, string[]>()
-    stateMap.forEach((citySet, stateKey) => {
-      const cities = Array.from(citySet).sort((a, b) => a.localeCompare(b))
-      sortedStateMap.set(stateKey, cities)
-    })
-    sortedCitiesByCountryState.set(country, sortedStateMap)
-  })
-
-  return {
-    countries,
-    statesByCountry: sortedStatesByCountry,
-    citiesByCountryState: sortedCitiesByCountryState,
-  }
-}
-
 function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) {
   const taxonomy = useProfessionalTaxonomy()
   const [state, dispatch] = useReducer(filterReducer, INITIAL_STATE)
   const { selectedCategories, selectedServices, selectedCountry, selectedState, selectedCity, keyword } = state
 
-  const locationOptions = useMemo(() => buildLocationOptions(taxonomy.locationFacets), [taxonomy.locationFacets])
+  const locationOptions = taxonomy.locationOptions
 
   const taxonomyLabelMap = useMemo(() => {
     const map = new Map<string, string>()

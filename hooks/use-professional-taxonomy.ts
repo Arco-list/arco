@@ -8,34 +8,48 @@ import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 
+export type LocationFacet = {
+  country: string | null
+  stateRegion: string | null
+  city: string | null
+}
+
+export type LocationOption = LocationFacet & {
+  key: string
+  label: string
+}
+
+export type LocationOptions = {
+  countries: string[]
+  statesByCountry: Map<string, string[]>
+  citiesByCountryState: Map<string, Map<string, string[]>>
+  flatOptions: LocationOption[]
+}
+
 type CategoryRow = Tables<"categories">
 
 type ProfessionalTaxonomyCache = {
   categories: CategoryRow[]
   services: CategoryRow[]
   locationFacets: LocationFacet[]
+  locationOptions: LocationOptions
   fetchedAt: number
 }
 
 let taxonomyCache: ProfessionalTaxonomyCache | null = null
 let inFlightPromise: Promise<void> | null = null
 
-type LocationFacet = {
+interface LocationRpcRow {
   country: string | null
-  stateRegion: string | null
+  state_region: string | null
   city: string | null
-}
-
-type LocationRow = {
-  company_country: string | null
-  company_state_region: string | null
-  company_city: string | null
 }
 
 interface ProfessionalTaxonomyState {
   categories: CategoryRow[]
   services: CategoryRow[]
   locationFacets: LocationFacet[]
+  locationOptions: LocationOptions
   isLoading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -52,10 +66,90 @@ const allowedServiceSlugs = new Set(
   PROFESSIONAL_CATEGORY_CONFIG.flatMap((category) => category.services.map((service) => service.slug)),
 )
 
+const EMPTY_LOCATION_OPTIONS: LocationOptions = {
+  countries: [],
+  statesByCountry: new Map(),
+  citiesByCountryState: new Map(),
+  flatOptions: [],
+}
+
+const formatLocationLabel = (facet: LocationFacet): string => {
+  const parts: string[] = []
+  if (facet.city) parts.push(facet.city)
+  if (facet.stateRegion && facet.stateRegion !== facet.city) parts.push(facet.stateRegion)
+  if (facet.country) parts.push(facet.country)
+  if (parts.length === 0) {
+    return facet.country ?? facet.stateRegion ?? facet.city ?? ""
+  }
+  return parts.join(", ")
+}
+
+const buildLocationOptions = (facets: LocationFacet[]): LocationOptions => {
+  const countrySet = new Set<string>()
+  const statesByCountry = new Map<string, Set<string>>()
+  const citiesByCountryState = new Map<string, Map<string, Set<string>>>()
+
+  facets.forEach((facet) => {
+    const { country, stateRegion, city } = facet
+
+    if (country) {
+      countrySet.add(country)
+      if (stateRegion) {
+        const stateSet = statesByCountry.get(country) ?? new Set<string>()
+        stateSet.add(stateRegion)
+        statesByCountry.set(country, stateSet)
+      }
+
+      const stateKey = stateRegion ?? "__none__"
+      const stateMap = citiesByCountryState.get(country) ?? new Map<string, Set<string>>()
+      const citySet = stateMap.get(stateKey) ?? new Set<string>()
+      if (city) {
+        citySet.add(city)
+      }
+      stateMap.set(stateKey, citySet)
+      citiesByCountryState.set(country, stateMap)
+    }
+  })
+
+  const countries = Array.from(countrySet).sort((a, b) => a.localeCompare(b))
+  const sortedStatesByCountry = new Map<string, string[]>()
+  countries.forEach((country) => {
+    const stateSet = statesByCountry.get(country)
+    const states = stateSet ? Array.from(stateSet).sort((a, b) => a.localeCompare(b)) : []
+    sortedStatesByCountry.set(country, states)
+  })
+
+  const sortedCitiesByCountryState = new Map<string, Map<string, string[]>>()
+  countries.forEach((country) => {
+    const stateMap = citiesByCountryState.get(country)
+    if (!stateMap) return
+    const sortedStateMap = new Map<string, string[]>()
+    stateMap.forEach((citySet, stateKey) => {
+      const cities = Array.from(citySet).sort((a, b) => a.localeCompare(b))
+      sortedStateMap.set(stateKey, cities)
+    })
+    sortedCitiesByCountryState.set(country, sortedStateMap)
+  })
+
+  const flatOptions: LocationOption[] = facets.map((facet) => ({
+    ...facet,
+    key: [facet.country ?? "", facet.stateRegion ?? "", facet.city ?? ""].join("|"),
+    label: formatLocationLabel(facet),
+  }))
+
+  return {
+    countries,
+    statesByCountry: sortedStatesByCountry,
+    citiesByCountryState: sortedCitiesByCountryState,
+    flatOptions,
+  }
+}
+
 export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [services, setServices] = useState<CategoryRow[]>([])
   const [locationFacets, setLocationFacets] = useState<LocationFacet[]>([])
+  const [locationOptions, setLocationOptions] = useState<LocationOptions>(EMPTY_LOCATION_OPTIONS)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -64,6 +158,7 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
     setCategories(cache.categories)
     setServices(cache.services)
     setLocationFacets(cache.locationFacets)
+    setLocationOptions(cache.locationOptions)
   }, [])
 
   const load = useCallback(
@@ -95,12 +190,7 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
               .eq("is_active", true)
               .order("sort_order", { ascending: true, nullsFirst: false })
               .order("name", { ascending: true }),
-            supabase
-              .from("mv_professional_summary")
-              .select("company_country,company_state_region,company_city")
-              .order("company_country", { ascending: true, nullsFirst: false })
-              .order("company_state_region", { ascending: true, nullsFirst: false })
-              .order("company_city", { ascending: true, nullsFirst: false }),
+            supabase.rpc("get_professional_location_facets"),
           ])
 
           if (categoriesResult.error) {
@@ -120,13 +210,13 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
             (record) => record.slug && allowedServiceSlugs.has(record.slug),
           )
 
-          const locationRecords = (locationsResult.data as LocationRow[] | null) ?? []
+          const locationRecords = (locationsResult.data as LocationRpcRow[] | null) ?? []
 
           const uniqueLocations = new Map<string, LocationFacet>()
           locationRecords.forEach((entry) => {
-            const country = sanitizeString(entry.company_country)
-            const stateRegion = sanitizeString(entry.company_state_region)
-            const city = sanitizeString(entry.company_city)
+            const country = sanitizeString(entry.country)
+            const stateRegion = sanitizeString(entry.state_region)
+            const city = sanitizeString(entry.city)
             const key = [country ?? "", stateRegion ?? "", city ?? ""].join("|")
             if (!uniqueLocations.has(key)) {
               uniqueLocations.set(key, { country, stateRegion, city })
@@ -141,10 +231,13 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
             return (a.city ?? "").localeCompare(b.city ?? "")
           })
 
+          const options = buildLocationOptions(orderedLocations)
+
           taxonomyCache = {
             categories: allowedCategories,
             services: allowedServices,
             locationFacets: orderedLocations,
+            locationOptions: options,
             fetchedAt: Date.now(),
           }
 
@@ -178,6 +271,7 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
     categories,
     services,
     locationFacets,
+    locationOptions,
     isLoading,
     error,
     refresh,

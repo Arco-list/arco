@@ -69,7 +69,7 @@ const SERVICE_ICON_REGISTRY: Array<[string[], LucideIcon]> = [
   [["construction-windows", "windows"], Square],
   [["construction-bathroom", "bathroom"], Droplet],
   [["construction-swimming-pool", "swimming pool"], Waves],
-  [["construction-wellness", "construction-welness", "wellness"], HeartPulse],
+  [["construction-wellness", "wellness"], HeartPulse],
   [["construction-doors", "doors"], DoorClosed],
   [["systems-lighting", "lighting", "outdoor lighting"], Lightbulb],
   [["systems-electrical-systems", "electrical systems"], Zap],
@@ -162,12 +162,10 @@ export function ProfessionalsFilterBar() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node
-      if (
-        serviceDropdownRef.current &&
-        !serviceDropdownRef.current.contains(target) &&
-        locationDropdownRef.current &&
-        !locationDropdownRef.current.contains(target)
-      ) {
+      const clickedInsideService = serviceDropdownRef.current?.contains(target) ?? false
+      const clickedInsideLocation = locationDropdownRef.current?.contains(target) ?? false
+
+      if (!clickedInsideService && !clickedInsideLocation) {
         setActiveDropdown(null)
       }
     }
@@ -197,67 +195,7 @@ export function ProfessionalsFilterBar() {
     }).filter((section): section is NonNullable<typeof section> => Boolean(section))
   }, [taxonomy.categories, taxonomy.services])
 
-  type LocationOption = {
-    key: string
-    label: string
-    country: string | null
-    stateRegion: string | null
-    city: string | null
-  }
-
-  const formatLocationLabel = (country: string | null, stateRegion: string | null, city: string | null) => {
-    const parts: string[] = []
-    if (city) parts.push(city)
-    if (stateRegion && stateRegion !== city) parts.push(stateRegion)
-    if (country) parts.push(country)
-    if (parts.length === 0) {
-      return country ?? stateRegion ?? city ?? ""
-    }
-    return parts.join(", ")
-  }
-
-  const locationOptionsList = useMemo<LocationOption[]>(() => {
-    const map = new Map<string, LocationOption>()
-
-    const register = (country: string | null, stateRegion: string | null, city: string | null) => {
-      const label = formatLocationLabel(country, stateRegion, city)
-      if (!label) return
-      const key = [country ?? "", stateRegion ?? "", city ?? ""].join("|")
-      if (map.has(key)) return
-      map.set(key, { key, label, country, stateRegion, city })
-    }
-
-    taxonomy.locationFacets.forEach((facet) => {
-      const { country, stateRegion, city } = facet
-      register(country, stateRegion, city)
-      if (country) {
-        register(country, stateRegion, null)
-        register(country, null, null)
-      }
-    })
-
-    locationOptions.countries.forEach((country) => {
-      register(country, null, null)
-    })
-
-    const options = Array.from(map.values())
-    options.sort((a, b) => a.label.localeCompare(b.label))
-    return options
-  }, [locationOptions.countries, taxonomy.locationFacets])
-
-  const selectedLocationLabel = useMemo(() => {
-    return formatLocationLabel(selectedCountry, selectedState, selectedCity)
-  }, [selectedCity, selectedCountry, selectedState])
-
-  useEffect(() => {
-    if (!selectedCountry && !selectedState && !selectedCity) {
-      setLocationSearch("")
-    }
-  }, [selectedCity, selectedCountry, selectedState])
-
-  useEffect(() => {
-    setExpandedCategories({})
-  }, [sections])
+  const locationOptionsList = taxonomy.locationOptions.flatOptions
 
   const filteredLocationItems = useMemo(() => {
     const term = locationSearch.trim().toLowerCase()
