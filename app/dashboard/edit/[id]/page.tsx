@@ -2692,18 +2692,18 @@ export default function ListingEditorPage() {
     <div className="min-h-screen bg-white flex flex-col">
       <DashboardHeader />
 
-      <div className="flex-1 px-4 md:px-8">
+      <div className="flex-1">
         {/* Navigation Button */}
-        <div className="max-w-7xl mx-auto py-4">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-4">
           <button
             onClick={() => router.push('/dashboard/listings')}
-            className="flex items-center gap-3 text-gray-600 hover:text-gray-900 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="font-medium">Listing editor</span>
+            <ChevronLeft className="w-4 h-4" />
+            Listing editor
           </button>
         </div>
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
           {entitlementsError && (
             <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {entitlementsError}
@@ -2727,7 +2727,7 @@ export default function ListingEditorPage() {
 
           <div className="flex">
             {/* Sidebar - Hidden on mobile */}
-            <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6">
+            <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
               <div className="space-y-6">
                 {/* Status Selector */}
                 <div>
@@ -2776,7 +2776,7 @@ export default function ListingEditorPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 p-4 md:p-8">
+            <div className="flex-1">
               {/* Mobile Navigation Header */}
               <div className="md:hidden mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">

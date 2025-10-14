@@ -121,8 +121,10 @@ export function DashboardHeader() {
               {isAdmin && (
                 <Link
                   href="/admin"
-                  className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                    isActive("/admin") ? "text-red-500 border-b-2 border-red-500 pb-1" : "text-black"
+                  className={`text-sm font-medium transition-colors ${
+                    isActive("/admin") 
+                      ? "text-red-500 border-b-2 border-red-500 pb-1 hover:text-red-600" 
+                      : "text-black hover:text-gray-600"
                   }`}
                 >
                   Admin
@@ -130,16 +132,20 @@ export function DashboardHeader() {
               )}
               <Link
                 href="/dashboard/listings"
-                className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                  isActive("/dashboard/listings") ? "text-red-500 border-b-2 border-red-500 pb-1" : "text-black"
+                className={`text-sm font-medium transition-colors ${
+                  isActive("/dashboard/listings") 
+                    ? "text-red-500 border-b-2 border-red-500 pb-1 hover:text-red-600" 
+                    : "text-black hover:text-gray-600"
                 }`}
               >
                 Listings
               </Link>
               <Link
                 href="/dashboard/company"
-                className={`text-sm font-medium transition-colors hover:text-gray-600 ${
-                  isActive("/dashboard/company") ? "text-red-500 border-b-2 border-red-500 pb-1" : "text-black"
+                className={`text-sm font-medium transition-colors ${
+                  isActive("/dashboard/company") 
+                    ? "text-red-500 border-b-2 border-red-500 pb-1 hover:text-red-600" 
+                    : "text-black hover:text-gray-600"
                 }`}
               >
                 Company
