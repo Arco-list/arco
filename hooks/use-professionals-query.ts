@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalCard } from "@/lib/professionals/types"
@@ -138,7 +138,13 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     }
   }, [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState])
 
+  const skipInitialFetchRef = useRef(initialProfessionals.length > 0)
+
   useEffect(() => {
+    if (skipInitialFetchRef.current) {
+      skipInitialFetchRef.current = false
+      return
+    }
     void fetchData()
   }, [fetchData, filtersKey])
 
