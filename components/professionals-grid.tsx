@@ -1,169 +1,119 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { useMemo, useState } from "react"
+import { ChevronDown, Loader2, X } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { useFilters } from "@/contexts/filter-context"
-import type { ProfessionalCard } from "@/lib/professionals/types"
-import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
+import { useProfessionalFilters } from "@/contexts/professional-filter-context"
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
+import type { ProfessionalCard } from "@/lib/professionals/types"
+import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
 
-type ProfessionalWithState = ProfessionalCard
+const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"] as const
 
-type ProfessionalsGridProps = {
-  professionals: ProfessionalCard[]
-}
-
-export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
+export function ProfessionalsGrid({ professionals }: { professionals: ProfessionalCard[] }) {
   const {
-    selectedTypes,
-    selectedStyles,
-    selectedLocation,
-    selectedFeatures,
+    selectedCategories,
+    selectedServices,
+    selectedCountry,
+    selectedState,
+    selectedCity,
     keyword,
     removeFilter,
     hasActiveFilters,
-  } = useFilters()
+    taxonomyLabelMap,
+  } = useProfessionalFilters()
 
-  const [professionalsState, setProfessionalsState] = useState<ProfessionalWithState[]>(professionals)
-  const [sortBy, setSortBy] = useState("Best match")
-  const [currentPage, setCurrentPage] = useState(1)
-  const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
     useSavedProfessionals()
 
-  useEffect(() => {
-    setProfessionalsState(professionals)
-    setCurrentPage(1)
-  }, [professionals])
+  const {
+    professionals: queryProfessionals,
+    isLoading,
+    isLoadingMore,
+    error,
+    refetch,
+    hasMore,
+    loadMore,
+  } = useProfessionalsQuery(professionals)
 
-  const professionalsPerPage = 8
-  const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"]
+  const [sortBy, setSortBy] = useState<(typeof sortOptions)[number]>("Best match")
+  const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
 
-  const filteredProfessionals = useMemo(() => {
-    const trimmedKeyword = keyword.trim().toLowerCase()
-    return professionalsState.filter((professional) => {
-      // Filter by type (profession)
-      if (
-        selectedTypes.length > 0 &&
-        !selectedTypes.some((type) => professional.profession.toLowerCase().includes(type.toLowerCase()))
-      ) {
-        return false
-      }
-
-      // Filter by style (specialties)
-      if (
-        selectedStyles.length > 0 &&
-        !selectedStyles.some((style) =>
-          professional.specialties.some((s) => s.toLowerCase().includes(style.toLowerCase())),
-        )
-      ) {
-        return false
-      }
-
-      // Filter by location
-      if (selectedLocation && !professional.location.toLowerCase().includes(selectedLocation.toLowerCase())) {
-        return false
-      }
-
-      // Filter by features (specialties)
-      if (
-        selectedFeatures.length > 0 &&
-        !selectedFeatures.some((feature) =>
-          professional.specialties.some((s) => s.toLowerCase().includes(feature.toLowerCase())),
-        )
-      ) {
-        return false
-      }
-
-      if (trimmedKeyword.length > 0) {
-        const searchable = [
-          professional.name,
-          professional.profession,
-          professional.location,
-          ...professional.specialties,
-        ]
-        const matchesKeyword = searchable.some((value) => value.toLowerCase().includes(trimmedKeyword))
-        if (!matchesKeyword) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [keyword, professionalsState, selectedTypes, selectedStyles, selectedLocation, selectedFeatures])
+  const sortedProfessionals = useMemo(() => {
+    const next = [...queryProfessionals]
+    switch (sortBy) {
+      case "Most recent":
+        return next.sort((a, b) => b.name.localeCompare(a.name))
+      case "Highest rated":
+        return next.sort((a, b) => b.rating - a.rating)
+      case "Alphabetical":
+        return next.sort((a, b) => a.name.localeCompare(b.name))
+      case "Best match":
+      default:
+        return next
+    }
+  }, [queryProfessionals, sortBy])
 
   const getPageTitle = () => {
-    if (selectedTypes.length > 0) {
-      const primaryType = selectedTypes[0]
-      const pluralType = primaryType.endsWith("s") ? primaryType : `${primaryType}s`
+    if (selectedCategories.length > 0) {
+      const labels = selectedCategories
+        .map((categoryId) => taxonomyLabelMap.get(categoryId) ?? categoryId)
+        .filter(Boolean)
 
-      return selectedLocation ? `${pluralType} in ${selectedLocation}` : `${pluralType} in all locations`
+      const categoryPart = (() => {
+        if (labels.length === 0) return "Professionals"
+        if (labels.length === 1) return labels[0]
+        if (labels.length === 2) return `${labels[0]} & ${labels[1]}`
+        return `${labels.slice(0, -1).join(", ")} & ${labels[labels.length - 1]}`
+      })()
+
+      const locationPart = selectedCountry ?? "all locations"
+      return `${categoryPart} in ${locationPart}`
     }
-    return selectedLocation ? `Professionals in ${selectedLocation}` : "Professionals in all locations"
+
+    if (selectedCountry) {
+      return `Professionals in ${selectedCountry}`
+    }
+
+    return "Professionals in all locations"
   }
 
-  const getActiveFilterTags = () => {
+  const activeFilterTags = useMemo(() => {
     const tags: Array<{ type: string; value: string; label: string }> = []
 
-    selectedTypes.forEach((type) => {
-      tags.push({ type: "type", value: type, label: `Type: ${type}` })
+    selectedCategories.forEach((categoryId) => {
+      tags.push({ type: "category", value: categoryId, label: taxonomyLabelMap.get(categoryId) ?? categoryId })
     })
 
-    selectedStyles.forEach((style) => {
-      tags.push({ type: "style", value: style, label: style })
+    selectedServices.forEach((serviceId) => {
+      tags.push({ type: "service", value: serviceId, label: taxonomyLabelMap.get(serviceId) ?? serviceId })
     })
 
-    if (selectedLocation) {
-      tags.push({ type: "location", value: selectedLocation, label: selectedLocation })
+    if (selectedCountry) {
+      tags.push({ type: "country", value: selectedCountry, label: selectedCountry })
     }
 
-    selectedFeatures.forEach((feature) => {
-      tags.push({ type: "feature", value: feature, label: feature })
-    })
+    if (selectedState) {
+      tags.push({ type: "state", value: selectedState, label: selectedState })
+    }
+
+    if (selectedCity) {
+      tags.push({ type: "city", value: selectedCity, label: selectedCity })
+    }
 
     if (keyword.trim()) {
       tags.push({ type: "keyword", value: keyword.trim(), label: `Keyword: “${keyword.trim()}”` })
     }
 
     return tags
-  }
+  }, [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState, taxonomyLabelMap])
 
-  const totalPages = Math.max(1, Math.ceil(filteredProfessionals.length / professionalsPerPage))
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
-
-  const handleSort = (option: string) => {
+  const handleSortSelect = (option: (typeof sortOptions)[number]) => {
     setSortBy(option)
     setIsSortDropdownOpen(false)
-
-    const sorted = [...professionalsState].sort((a, b) => {
-      switch (option) {
-        case "Most recent":
-          return b.name.localeCompare(a.name) // Placeholder sorting
-        case "Highest rated":
-          return b.rating - a.rating
-        case "Alphabetical":
-          return a.name.localeCompare(b.name)
-        default:
-          return 0
-      }
-    })
-
-    setProfessionalsState(sorted)
   }
-
-  const getCurrentPageProfessionals = () => {
-    const startIndex = (currentPage - 1) * professionalsPerPage
-    const endIndex = startIndex + professionalsPerPage
-    return filteredProfessionals.slice(startIndex, endIndex)
-  }
-
-  const activeFilterTags = getActiveFilterTags()
 
   return (
     <div className="w-full bg-white">
@@ -177,7 +127,7 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
                 variant="ghost"
                 size="sm"
                 className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-                onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
+                onClick={() => setIsSortDropdownOpen((open) => !open)}
               >
                 Sort: {sortBy}
                 <ChevronDown className="h-4 w-4" />
@@ -190,7 +140,7 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
                       <button
                         key={option}
                         className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        onClick={() => handleSort(option)}
+                        onClick={() => handleSortSelect(option)}
                       >
                         {option}
                       </button>
@@ -201,7 +151,23 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
             </div>
           </div>
 
-          {activeFilterTags.length > 0 && (
+          {isLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Updating results…
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={refetch} className="text-red-700 border-red-200">
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {hasActiveFilters() && activeFilterTags.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-6">
               {activeFilterTags.map((tag, index) => (
                 <button
@@ -217,89 +183,44 @@ export function ProfessionalsGrid({ professionals }: ProfessionalsGridProps) {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 mb-8">
-            {getCurrentPageProfessionals().map((professional) => (
-              <ProfessionalCardComponent
-                key={professional.id}
-                professional={professional}
-                isSaved={savedProfessionalIds.has(professional.id)}
-                isMutating={mutatingProfessionalIds.has(professional.id)}
-                onToggleSave={(card) => {
-                  const isSaved = savedProfessionalIds.has(card.id)
-                  if (isSaved) {
-                    void removeProfessional(card.id)
-                  } else {
-                    void saveProfessional(card)
-                  }
-                }}
-              />
-            ))}
+            {sortedProfessionals.map((professional) => {
+              const professionalId = professional.id ?? ""
+              const isSaved = professionalId ? savedProfessionalIds.has(professionalId) : false
+              const isMutating = professionalId ? mutatingProfessionalIds.has(professionalId) : false
+
+              return (
+                <ProfessionalCardComponent
+                  key={professional.id}
+                  professional={professional}
+                  isSaved={isSaved}
+                  isSaving={isMutating}
+                  onSave={() => saveProfessional(professional)}
+                  onRemove={() => removeProfessional(professionalId)}
+                />
+              )
+            })}
           </div>
 
-          {/* Show message if no professionals found */}
-          {filteredProfessionals.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No professionals found matching your filters.</p>
-            </div>
+          {!isLoading && sortedProfessionals.length === 0 && (
+            <div className="text-center text-gray-500">No professionals match your filters yet. Try adjusting them.</div>
           )}
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
+          {hasMore && (
+            <div className="flex justify-center pt-4">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="p-2"
+                onClick={loadMore}
+                disabled={isLoadingMore}
+                className="min-w-[140px]"
               >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Previous
-              </Button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 p-0 text-sm ${
-                      currentPage === page
-                        ? "bg-black text-white hover:bg-gray-800"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
-                  >
-                    {page}
-                  </Button>
-                ))}
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Next
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="p-2"
-              >
-                <ChevronRight className="h-4 w-4" />
+                {isLoadingMore ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </span>
+                ) : (
+                  "Load more"
+                )}
               </Button>
             </div>
           )}

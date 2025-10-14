@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { FilterBar } from "@/components/filter-bar"
+import { ProfessionalsFilterBar } from "@/components/professionals-filter-bar"
 import { ProfessionalsGrid } from "@/components/professionals-grid"
-import { FilterProvider } from "@/contexts/filter-context"
+import { ProfessionalFilterProvider } from "@/contexts/professional-filter-context"
 import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { fetchDiscoverProfessionals } from "@/lib/professionals/queries"
 import { logger } from "@/lib/logger"
@@ -28,12 +28,12 @@ export default async function ProfessionalsPage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <FilterErrorBoundary>
-        <FilterProvider>
-          <FilterBar />
+        <ProfessionalFilterProvider>
+          <ProfessionalsFilterBar />
           <main className="flex-1 bg-white">
             <ProfessionalsGrid professionals={professionals} />
           </main>
-        </FilterProvider>
+        </ProfessionalFilterProvider>
       </FilterErrorBoundary>
       <Footer />
     </div>

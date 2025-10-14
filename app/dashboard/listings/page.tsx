@@ -985,7 +985,7 @@ export default function DashboardListingsPage() {
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Awaiting Arco review. We'll email you as soon as the team approves this listing.</p>
+                        <p>Awaiting Arco review. We&apos;ll email you as soon as the team approves this listing.</p>
                       </TooltipContent>
                     </Tooltip>
                   ) : project.status === "draft" ? (

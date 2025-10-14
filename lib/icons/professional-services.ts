@@ -22,7 +22,7 @@ import {
   Paintbrush,
   Palette,
   Ruler,
-  RulerSquare,
+  Scissors,
   ShieldCheck,
   Sofa,
   Sparkles,
@@ -59,8 +59,8 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   bathroom: Bath,
   construction_swimming_pool: Waves,
   swimming_pool: Waves,
-  construction_welness: HeartPulse,
-  welness: HeartPulse,
+  construction_wellness: HeartPulse,
+  wellness: HeartPulse,
   construction_doors: DoorClosed,
   doors: DoorClosed,
   systems_lighting: Lightbulb,
@@ -71,16 +71,16 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   security_systems: ShieldCheck,
   systems_domotica: Cpu,
   domotica: Cpu,
-  finishing_interior_fit_out: RulerSquare,
-  interior_fit_out: RulerSquare,
+  finishing_interior_fit_out: Ruler,
+  interior_fit_out: Ruler,
   finishing_fireplace: Flame,
   fireplace: Flame,
   finishing_interior_styling: Sparkles,
   interior_styling: Sparkles,
   finishing_painting: Paintbrush,
   painting: Paintbrush,
-  finishing_decoration_and_carpentry: Hammer,
-  decoration_and_carpentry: Hammer,
+  finishing_decoration_and_carpentry: Scissors,
+  decoration_and_carpentry: Scissors,
   finishing_indoor_plants: Leaf,
   indoor_plants: Leaf,
   finishing_floor: Ruler,
@@ -102,7 +102,7 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
 }
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
-  design_planning: RulerSquare,
+  design_planning: Ruler,
   construction: Hammer,
   systems: Cpu,
   finishing: Paintbrush,
@@ -138,4 +138,3 @@ export const resolveProfessionalServiceIcon = (slug?: string | null, parentName?
 
   return DEFAULT_PROFESSIONAL_ICON
 }
-

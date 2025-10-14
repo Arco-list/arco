@@ -9,7 +9,7 @@ export default function ForbiddenError() {
           <h1 className="text-6xl font-bold text-primary">403</h1>
           <h2 className="text-2xl font-semibold">Forbidden</h2>
           <p className="text-muted-foreground">
-            You don't have permission to access this resource.
+            You don&apos;t have permission to access this resource.
           </p>
         </div>
         

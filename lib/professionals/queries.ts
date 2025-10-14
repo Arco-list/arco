@@ -15,6 +15,7 @@ import type {
 } from "./types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
+const INITIAL_PAGE_SIZE = 20
 
 type NullableString = string | null
 
@@ -331,131 +332,96 @@ const sortProfessionals = (professionals: ProfessionalCard[]) => {
   })
 }
 
+type SearchProfessionalsRpcRow = {
+  id: string
+  title: string | null
+  first_name: string | null
+  last_name: string | null
+  user_location: string | null
+  company_id: string | null
+  company_name: string | null
+  company_logo: string | null
+  company_domain: string | null
+  company_country: string | null
+  company_state_region: string | null
+  company_city: string | null
+  primary_specialty: string | null
+  services_offered: string[] | null
+  display_rating: number | string | null
+  total_reviews: number | null
+  is_verified: boolean | null
+}
+
+const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): ProfessionalCard | null => {
+  if (!row.id || !row.company_id) return null
+
+  const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
+  const name = row.company_name || fullName || "Professional"
+
+  const profession = row.title || row.primary_specialty || "Professional"
+
+  const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
+  const location = locationParts.length > 0 ? locationParts.join(", ") : row.user_location || "Location unavailable"
+
+  const specialties = Array.isArray(row.services_offered)
+    ? row.services_offered.filter((value): value is string => Boolean(value))
+    : []
+
+  const displayRating =
+    typeof row.display_rating === "number"
+      ? row.display_rating
+      : typeof row.display_rating === "string"
+        ? Number(row.display_rating)
+        : 0
+
+  const rating = Number.isFinite(displayRating) ? Number(displayRating.toFixed(2)) : 0
+  const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
+
+  return {
+    id: row.id,
+    slug: row.id,
+    companyId: row.company_id,
+    name,
+    profession,
+    location,
+    rating,
+    reviewCount,
+    image: row.company_logo ?? PLACEHOLDER_IMAGE,
+    specialties,
+    isVerified: Boolean(row.is_verified),
+    domain: row.company_domain ?? null,
+  }
+}
+
 export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
-    .from("professionals")
-    .select(
-      `
-        id,
-        title,
-        created_at,
-        is_verified,
-        is_available,
-        services_offered,
-        company_id,
-        profiles:profiles!professionals_user_id_fkey (
-          first_name,
-          last_name,
-          avatar_url,
-          location
-        ),
-        company:companies (
-          id,
-          name,
-          logo_url,
-          status,
-          plan_tier,
-          plan_expires_at,
-          city,
-          country,
-          domain
-        ),
-        rating:professional_ratings (
-          overall_rating,
-          total_reviews
-        ),
-        specialties:professional_specialties (
-          is_primary,
-          category:categories (
-            name
-          )
-        )
-      `
-    )
-    .not("company_id", "is", null)
-    .eq("is_available", true)
-    .eq("company.plan_tier", "plus")
-    .eq("company.status", "listed")
-    .limit(100)
+  const { data, error } = await supabase.rpc("search_professionals", {
+    search_query: null,
+    country_filter: null,
+    state_filter: null,
+    city_filter: null,
+    category_filters: null,
+    service_filters: null,
+    min_rating: null,
+    max_hourly_rate: null,
+    verified_only: false,
+    limit_count: INITIAL_PAGE_SIZE,
+    offset_count: 0,
+  })
 
   if (error) {
-    logger.error("Failed to load professionals for discover", { table: "professionals", error })
+    logger.error("Failed to load professionals for discover", { function: "search_professionals", error })
     return []
   }
 
-  const rows = Array.isArray(data) ? (data as ProfessionalRow[]) : []
+  const rows = Array.isArray(data) ? (data as SearchProfessionalsRpcRow[]) : []
 
-  const plusProfessionals = rows.filter((row) => isPlusPlanActive(row))
-
-  const cards = plusProfessionals
-    .map((row) => toProfessionalCard(row))
+  const cards = rows
+    .map((row) => mapRpcRowToProfessionalCard(row))
     .filter((card): card is ProfessionalCard => card !== null)
 
-  const bestCardByCompany = cards.reduce<Map<string, ProfessionalCard>>((acc, card) => {
-    const existing = acc.get(card.companyId)
-
-    if (!existing) {
-      acc.set(card.companyId, card)
-      return acc
-    }
-
-    const hasBetterRating = card.rating > existing.rating
-    const hasEqualRatingMoreReviews = card.rating === existing.rating && card.reviewCount > existing.reviewCount
-
-    if (hasBetterRating || hasEqualRatingMoreReviews) {
-      acc.set(card.companyId, card)
-    }
-
-    return acc
-  }, new Map())
-
-  const uniqueCards = Array.from(bestCardByCompany.values())
-
-  if (uniqueCards.length === 0) {
-    return []
-  }
-
-  const companyIds = Array.from(new Set(uniqueCards.map((card) => card.companyId))).filter((id) => id.length > 0)
-
-  if (companyIds.length === 0) {
-    return sortProfessionals(uniqueCards)
-  }
-
-  const { data: coverPhotos, error: coverError } = await supabase
-    .from("company_photos")
-    .select("company_id, url, is_cover")
-    .in("company_id", companyIds)
-    .eq("is_cover", true)
-
-  if (coverError) {
-    logger.warn("Failed to load company cover photos for professionals", { companyIds, supabaseError: coverError })
-    return sortProfessionals(uniqueCards)
-  }
-
-  const coverPhotoMap = new Map<string, string>()
-  const coverPhotoRows: CoverPhotoRow[] = Array.isArray(coverPhotos) ? (coverPhotos as CoverPhotoRow[]) : []
-
-  coverPhotoRows.forEach((photo) => {
-    if (photo?.company_id && typeof photo.url === "string" && photo.url.length > 0 && !coverPhotoMap.has(photo.company_id)) {
-      coverPhotoMap.set(photo.company_id, photo.url)
-    }
-  })
-
-  const cardsWithCovers = uniqueCards.map((card) => {
-    const coverUrl = coverPhotoMap.get(card.companyId)
-    if (!coverUrl) {
-      return card
-    }
-
-    return {
-      ...card,
-      image: coverUrl,
-    }
-  })
-
-  return sortProfessionals(cardsWithCovers)
+  return sortProfessionals(cards)
 }
 
 export const fetchProfessionalDetail = async (professionalId: string): Promise<ProfessionalDetail | null> => {
