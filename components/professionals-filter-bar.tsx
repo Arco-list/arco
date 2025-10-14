@@ -23,7 +23,7 @@ import {
   Paintbrush,
   Palette,
   Ruler,
-  Saw,
+  Scissors,
   Search,
   Shield,
   SlidersHorizontal,
@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ProfessionalsFiltersModal } from "@/components/professionals-filters-modal"
+import type { LocationOption } from "@/hooks/use-professional-taxonomy"
 import type { Tables } from "@/lib/supabase/types"
 import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
@@ -79,7 +80,7 @@ const SERVICE_ICON_REGISTRY: Array<[string[], LucideIcon]> = [
   [["finishing-fireplace", "fireplace"], Flame],
   [["finishing-interior-styling", "interior styling"], Sparkles],
   [["finishing-painting", "painting"], Paintbrush],
-  [["finishing-decoration-and-carpentry", "decoration and carpentry"], Saw],
+  [["finishing-decoration-and-carpentry", "decoration and carpentry"], Scissors],
   [["finishing-indoor-plants", "indoor plants"], Sprout],
   [["finishing-floor", "floor"], Grid],
   [["finishing-furniture", "furniture", "outdoor furniture"], Armchair],
@@ -196,6 +197,26 @@ export function ProfessionalsFilterBar() {
   }, [taxonomy.categories, taxonomy.services])
 
   const locationOptionsList = taxonomy.locationOptions.flatOptions
+
+  const selectedLocationLabel = useMemo(() => {
+    if (!selectedCountry && !selectedState && !selectedCity) {
+      return ""
+    }
+
+    const matchedOption = locationOptionsList.find(
+      (option) =>
+        option.country === selectedCountry &&
+        option.stateRegion === selectedState &&
+        option.city === selectedCity,
+    )
+
+    if (matchedOption) {
+      return matchedOption.label
+    }
+
+    const parts = [selectedCity, selectedState, selectedCountry].filter((value): value is string => Boolean(value))
+    return parts.join(", ")
+  }, [locationOptionsList, selectedCity, selectedCountry, selectedState])
 
   const filteredLocationItems = useMemo(() => {
     const term = locationSearch.trim().toLowerCase()
