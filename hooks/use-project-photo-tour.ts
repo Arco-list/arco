@@ -88,7 +88,11 @@ export type UseProjectPhotoTourResult = {
   tempSelectedFeatures: string[]
   tempSelectedPhotos: string[]
   tempCoverPhoto: string
+  tempFeatureTagline: string
+  tempFeatureHighlight: boolean
   setTempCoverPhoto: (value: string | ((prev: string) => string)) => void
+  setTempFeatureTagline: (value: string | ((prev: string) => string)) => void
+  setTempFeatureHighlight: (value: boolean | ((prev: boolean) => boolean)) => void
   setTempSelectedPhotos: (value: string[] | ((prev: string[]) => string[])) => void
   isUploading: boolean
   isLoadingFeatures: boolean
@@ -155,6 +159,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const [tempSelectedFeatures, setTempSelectedFeatures] = useState<string[]>([])
   const [tempSelectedPhotos, setTempSelectedPhotos] = useState<string[]>([])
   const [tempCoverPhoto, setTempCoverPhoto] = useState<string>("")
+  const [tempFeatureTagline, setTempFeatureTagline] = useState<string>("")
+  const [tempFeatureHighlight, setTempFeatureHighlight] = useState<boolean>(false)
   const [featureOptions, setFeatureOptions] = useState<FeatureOption[]>(FALLBACK_FEATURES)
   const [isLoadingFeatures, setIsLoadingFeatures] = useState(false)
   const [featureError, setFeatureError] = useState<string | null>(null)
@@ -166,7 +172,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const [projectLoadError, setProjectLoadError] = useState<string | null>(null)
   const [featureIdMap, setFeatureIdMap] = useState<Record<string, string>>({})
   const [featureMetadata, setFeatureMetadata] = useState<
-    Record<string, { featureId: string; orderIndex: number; categoryId: string | null }>
+    Record<
+      string,
+      {
+        featureId: string
+        orderIndex: number
+        categoryId: string | null
+        tagline: string | null
+        isHighlighted: boolean
+      }
+    >
   >({})
   const unresolvedAssignmentsRef = useRef<Map<string, string>>(new Map())
   const [isSavingFeatures, setIsSavingFeatures] = useState(false)
@@ -378,7 +393,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         const [featureResponse, photoResponse] = await Promise.all([
           supabase
             .from("project_features")
-            .select("id, name, category_id, cover_photo_id, is_building_default, order_index")
+            .select("id, name, category_id, cover_photo_id, is_building_default, order_index, tagline, is_highlighted")
             .eq("project_id", projectIdValue)
             .order("order_index", { ascending: true, nullsFirst: false }),
           supabase
@@ -404,7 +419,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         const uiKeyByFeatureId = new Map<string, string>()
         const idMap: Record<string, string> = {}
-        const metadata: Record<string, { featureId: string; orderIndex: number; categoryId: string | null }> = {}
+        const metadata: Record<
+          string,
+          {
+            featureId: string
+            orderIndex: number
+            categoryId: string | null
+            tagline: string | null
+            isHighlighted: boolean
+          }
+        > = {}
         const taxonomySelection = new Set<string>()
 
         if (buildingFeature) {
@@ -414,6 +438,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             featureId: buildingFeature.id,
             orderIndex: buildingFeature.order_index ?? 0,
             categoryId: buildingFeature.category_id,
+            tagline: buildingFeature.tagline ?? null,
+            isHighlighted: buildingFeature.is_highlighted ?? false,
           }
         }
 
@@ -424,6 +450,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             featureId: additionalFeature.id,
             orderIndex: additionalFeature.order_index ?? 0,
             categoryId: additionalFeature.category_id,
+            tagline: additionalFeature.tagline ?? null,
+            isHighlighted: additionalFeature.is_highlighted ?? false,
           }
         }
 
@@ -439,6 +467,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               featureId: feature.id,
               orderIndex: feature.order_index ?? 0,
               categoryId: feature.category_id,
+              tagline: feature.tagline ?? null,
+              isHighlighted: feature.is_highlighted ?? false,
             }
             taxonomySelection.add(feature.category_id)
             return
@@ -450,6 +480,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             featureId: feature.id,
             orderIndex: feature.order_index ?? 0,
             categoryId: feature.category_id,
+            tagline: feature.tagline ?? null,
+            isHighlighted: feature.is_highlighted ?? false,
           }
           taxonomySelection.add(feature.id)
         })
@@ -856,6 +888,21 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           }
           return next
         })
+        setFeatureMetadata((prev) => {
+          const next = { ...prev }
+          featureIds.forEach((id) => {
+            if (!next[id]) {
+              next[id] = {
+                featureId: id,
+                orderIndex: next[ADDITIONAL_FEATURE_ID]?.orderIndex ?? 0,
+                categoryId: isUuid(id) ? id : null,
+                tagline: null,
+                isHighlighted: false,
+              }
+            }
+          })
+          return next
+        })
         return true
       }
 
@@ -905,7 +952,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               category_id: categoryId,
               order_index: nextOrder,
             })
-            .select("id, category_id, order_index")
+            .select("id, category_id, order_index, tagline, is_highlighted")
             .single()
 
           if (error || !data) {
@@ -917,6 +964,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             featureId: data.id,
             orderIndex: data.order_index ?? nextOrder,
             categoryId: data.category_id,
+            tagline: data.tagline ?? null,
+            isHighlighted: data.is_highlighted ?? false,
           }
           nextOrder += 1
         }
@@ -937,6 +986,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               featureId: additionalMeta.featureId,
               orderIndex: desiredAdditionalOrder,
               categoryId: additionalMeta.categoryId,
+              tagline: additionalMeta.tagline ?? null,
+              isHighlighted: additionalMeta.isHighlighted ?? false,
             }
           }
         }
@@ -1066,17 +1117,25 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     [addFeatures, removeFeatureById, selectedFeatures],
   )
 
-  const openPhotoSelector = useCallback((featureId: string) => {
-    setShowPhotoSelector(featureId)
-    setTempSelectedPhotos(featurePhotos[featureId] ?? [])
-    setTempCoverPhoto(featureCoverPhotos[featureId] ?? "")
-    setModalUploadErrors([])
-  }, [featureCoverPhotos, featurePhotos])
+  const openPhotoSelector = useCallback(
+    (featureId: string) => {
+      setShowPhotoSelector(featureId)
+      setTempSelectedPhotos(featurePhotos[featureId] ?? [])
+      setTempCoverPhoto(featureCoverPhotos[featureId] ?? "")
+      const metadata = featureMetadata[featureId]
+      setTempFeatureTagline(metadata?.tagline ?? "")
+      setTempFeatureHighlight(metadata?.isHighlighted ?? false)
+      setModalUploadErrors([])
+    },
+    [featureCoverPhotos, featureMetadata, featurePhotos],
+  )
 
   const cancelPhotoSelection = useCallback(() => {
     setShowPhotoSelector(null)
     setTempSelectedPhotos([])
     setTempCoverPhoto("")
+    setTempFeatureTagline("")
+    setTempFeatureHighlight(false)
     setModalUploadErrors([])
     setModalDragOver(false)
   }, [])
@@ -1162,6 +1221,59 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         }
       }
 
+      const nextTaglineValue = tempFeatureTagline.trim()
+      const nextTagline = nextTaglineValue.length > 0 ? nextTaglineValue : null
+      const nextHighlighted = tempFeatureHighlight
+      const currentMeta = featureMetadata[showPhotoSelector]
+      const previousTagline = currentMeta?.tagline ?? null
+      const previousHighlighted = currentMeta?.isHighlighted ?? false
+
+      if (
+        dbFeatureId &&
+        (previousTagline !== nextTagline || previousHighlighted !== nextHighlighted)
+      ) {
+        const { error: featureUpdateError } = await supabase
+          .from("project_features")
+          .update({ tagline: nextTagline, is_highlighted: nextHighlighted })
+          .eq("id", dbFeatureId)
+
+        if (featureUpdateError) {
+          throw featureUpdateError
+        }
+      }
+
+      setFeatureMetadata((prev) => {
+        const existing = prev[showPhotoSelector]
+        if (!existing) {
+          if (!dbFeatureId) {
+            return prev
+          }
+          return {
+            ...prev,
+            [showPhotoSelector]: {
+              featureId: dbFeatureId,
+              orderIndex: 0,
+              categoryId: null,
+              tagline: nextTagline,
+              isHighlighted: nextHighlighted,
+            },
+          }
+        }
+
+        if (existing.tagline === nextTagline && existing.isHighlighted === nextHighlighted) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          [showPhotoSelector]: {
+            ...existing,
+            tagline: nextTagline,
+            isHighlighted: nextHighlighted,
+          },
+        }
+      })
+
       const coverId = tempCoverPhoto || selectedIds[0] || null
       if (dbFeatureId) {
         const { error: coverError } = await supabase
@@ -1222,10 +1334,13 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     featureIdMap,
     featureOptions,
     featurePhotos,
+    featureMetadata,
     resolvedProjectId,
     showPhotoSelector,
     supabase,
     tempCoverPhoto,
+    tempFeatureHighlight,
+    tempFeatureTagline,
     tempSelectedPhotos,
   ])
 
@@ -1580,7 +1695,11 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     tempSelectedFeatures,
     tempSelectedPhotos,
     tempCoverPhoto,
+    tempFeatureTagline,
+    tempFeatureHighlight,
     setTempCoverPhoto,
+    setTempFeatureTagline,
+    setTempFeatureHighlight,
     setTempSelectedPhotos,
     isUploading,
     isLoadingFeatures,

@@ -25,6 +25,8 @@ import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
   AlertDialog,
@@ -362,7 +364,11 @@ export default function ListingEditorPage() {
     tempSelectedPhotos,
     toggleTempPhoto,
     tempCoverPhoto,
+    tempFeatureTagline,
+    tempFeatureHighlight,
     setTempCoverPhoto,
+    setTempFeatureTagline,
+    setTempFeatureHighlight,
     isUploading,
     isSavingFeatures,
     isSavingSelection,
@@ -435,10 +441,21 @@ export default function ListingEditorPage() {
     [getFeatureDisplay, showPhotoSelector],
   )
 
+  const modalTaglineInputId = showPhotoSelector ? `feature-tagline-${showPhotoSelector}` : "feature-tagline"
+  const modalHighlightToggleId = showPhotoSelector ? `feature-highlight-${showPhotoSelector}` : "feature-highlight"
+
   const selectablePhotos = useMemo(
     () => getSelectablePhotos(showPhotoSelector),
     [getSelectablePhotos, showPhotoSelector],
   )
+
+  const [modalOpenMenuId, setModalOpenMenuId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!showPhotoSelector) {
+      setModalOpenMenuId(null)
+    }
+  }, [showPhotoSelector])
 
   useEffect(() => {
     if (!projectStatus) {
@@ -2298,7 +2315,7 @@ export default function ListingEditorPage() {
         {showPhotoSelector && (
           <div className={OVERLAY_CLASSES}>
             <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-lg bg-white">
-              <div className="flex items-center justify-between border-b border-gray-200 p-6">
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white p-6">
                 <h2 className="text-xl font-semibold text-gray-900">
                   Select photos for {currentFeatureDisplay?.name ?? "feature"}
                 </h2>
@@ -2340,7 +2357,7 @@ export default function ListingEditorPage() {
                 </div>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-6 pb-8">
                 <div>
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Select from existing photos</h3>
@@ -2350,7 +2367,7 @@ export default function ListingEditorPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                     <div
                       className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
                         modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
@@ -2391,7 +2408,10 @@ export default function ListingEditorPage() {
                       return (
                         <div key={photo.id} className="relative">
                           <button
-                            onClick={() => toggleTempPhoto(photo.id)}
+                            onClick={() => {
+                              setModalOpenMenuId(null)
+                              toggleTempPhoto(photo.id)
+                            }}
                             className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
                               isSelected
                                 ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
@@ -2404,7 +2424,7 @@ export default function ListingEditorPage() {
                               className="h-full w-full object-cover"
                             />
                             {isSelected && (
-                              <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
+                              <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
                                 ✓
                               </div>
                             )}
@@ -2415,17 +2435,53 @@ export default function ListingEditorPage() {
                             )}
                           </button>
 
-                          {isSelected && !isCoverPhoto && (
+                          <div className="absolute right-2 top-2">
                             <button
                               onClick={(event) => {
                                 event.stopPropagation()
-                                setTempCoverPhoto(photo.id)
+                                setModalOpenMenuId(modalOpenMenuId === photo.id ? null : photo.id)
                               }}
-                              className="absolute left-2 right-2 bottom-2 rounded border border-gray-300 bg-white py-1 px-2 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                              className="rounded-full bg-white p-1 shadow-md transition-colors hover:bg-gray-50"
                             >
-                              Set as cover
+                              <MoreHorizontal className="h-4 w-4 text-gray-600" />
                             </button>
-                          )}
+
+                            {modalOpenMenuId === photo.id && (
+                              <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    if (isSelected && !isCoverPhoto) {
+                                      setTempCoverPhoto(photo.id)
+                                      setModalOpenMenuId(null)
+                                    }
+                                  }}
+                                  disabled={!isSelected || isCoverPhoto}
+                                  className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
+                                    !isSelected || isCoverPhoto
+                                      ? "cursor-not-allowed text-gray-400"
+                                      : "text-gray-700 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  Set as cover
+                                </button>
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setModalOpenMenuId(null)
+                                    if (isSelected) {
+                                      toggleTempPhoto(photo.id)
+                                    }
+                                    void deletePhoto(photo.id)
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete photo
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
@@ -2438,6 +2494,42 @@ export default function ListingEditorPage() {
                         : "All photos are assigned. Upload more to add to this feature."}
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor={modalTaglineInputId} className="block text-sm font-medium text-gray-900">
+                      Feature tagline
+                    </label>
+                    <Input
+                      id={modalTaglineInputId}
+                      value={tempFeatureTagline}
+                      onChange={(event) => setTempFeatureTagline(event.target.value)}
+                      placeholder="Add a short tagline"
+                      maxLength={200}
+                      className="mt-2"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Displayed below the feature title in the Highlights section on the project page.
+                    </p>
+                  </div>
+
+                  <label
+                    htmlFor={modalHighlightToggleId}
+                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    <div className="mr-4">
+                      <p className="text-sm font-medium text-gray-900">Highlight this feature</p>
+                      <p className="text-xs text-gray-500">
+                        Toggle to feature this category in the Highlights section on the project page.
+                      </p>
+                    </div>
+                    <Switch
+                      id={modalHighlightToggleId}
+                      checked={tempFeatureHighlight}
+                      onCheckedChange={setTempFeatureHighlight}
+                    />
+                  </label>
                 </div>
 
                 {modalUploadErrors.length > 0 && (
@@ -2461,20 +2553,22 @@ export default function ListingEditorPage() {
                   </div>
                 )}
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={cancelPhotoSelection}
-                    className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void saveSelectedPhotos()}
-                    disabled={isSavingSelection || tempSelectedPhotos.length === 0}
-                    className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSavingSelection ? "Saving…" : "Save selection"}
-                  </button>
+                <div className="sticky bottom-0 left-0 right-0 -mx-6 -mb-6 border-t border-gray-200 bg-white p-6 pt-4">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={cancelPhotoSelection}
+                      className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveSelectedPhotos()}
+                      disabled={isSavingSelection || tempSelectedPhotos.length === 0}
+                      className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingSelection ? "Saving…" : "Save selection"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
