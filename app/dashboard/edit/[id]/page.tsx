@@ -14,8 +14,6 @@ import {
   Trash2,
   Plus,
   MoreHorizontal,
-  MailPlus,
-  Pencil,
   Loader2,
   AlertCircle,
   Menu,
@@ -27,6 +25,7 @@ import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +46,7 @@ import { ProjectBasicsFields } from "@/components/project-details/project-basics
 import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
+import { ProfessionalServiceCard } from "@/components/project-professional-service-card"
 import {
   DEFAULT_LOCATION_ICONS,
   DEFAULT_MATERIAL_ICONS,
@@ -58,9 +58,9 @@ import {
   MIN_DESCRIPTION_LENGTH,
   type ProjectDetailsDescriptionCommand,
   type ProjectDetailsFormState,
-type ProjectDetailsSelectField,
-type ProjectDetailsTextField,
-sortByOrderThenLabel,
+  type ProjectDetailsSelectField,
+  type ProjectDetailsTextField,
+  sortByOrderThenLabel,
 } from "@/lib/project-details"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables, TablesUpdate } from "@/lib/supabase/types"
@@ -142,6 +142,7 @@ type ProjectCategoryAttributeRow = Tables<"project_category_attributes">
 type ProfessionalServiceOption = {
   id: string
   name: string
+  slug: string | null
   parentName: string | null
   parentSortOrder: number | null
   sortOrder: number | null
@@ -1358,7 +1359,7 @@ export default function ListingEditorPage() {
   const loadProfessionalServiceOptions = useCallback(async () => {
     const { data: childRows, error: childError } = await supabase
       .from("categories")
-      .select("id, name, parent_id, sort_order")
+      .select("id, name, slug, parent_id, sort_order")
       .eq("is_active", true)
       .not("parent_id", "is", null)
       .order("sort_order", { ascending: true, nullsFirst: false })
@@ -1415,6 +1416,7 @@ export default function ListingEditorPage() {
         return {
           id: row.id,
           name: row.name,
+          slug: row.slug ?? null,
           parentName: parentMeta?.name ?? null,
           parentSortOrder: parentMeta?.sortOrder ?? null,
           sortOrder: row.sort_order ?? null,
@@ -1551,6 +1553,7 @@ export default function ListingEditorPage() {
         additionalOptions.push({
           id: serviceId,
           name: serviceId,
+          slug: null,
           parentName: null,
           parentSortOrder: null,
           sortOrder: null,
@@ -2597,6 +2600,7 @@ export default function ListingEditorPage() {
       return {
         id,
         name: id,
+        slug: null,
         parentName: null,
         parentSortOrder: null,
         sortOrder: null,
@@ -2630,37 +2634,6 @@ export default function ListingEditorPage() {
           <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{inviteError}</div>
         )}
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">Professional services</h3>
-              <p className="text-sm text-gray-500">
-                Choose which professional services contributed to this project to invite collaborators.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={openServiceModal}
-              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              <Plus className="h-4 w-4" />
-              Manage services
-            </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {selectedServices.length > 0 ? (
-              selectedServices.map((service) => (
-                <span key={service.id} className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
-                  {service.name}
-                </span>
-              ))
-            ) : (
-              <span className="text-sm text-gray-600">No professional services selected yet.</span>
-            )}
-          </div>
-        </div>
-
         {professionalsLoading ? (
           <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -2692,98 +2665,22 @@ export default function ListingEditorPage() {
                 Add a professional service to invite collaborators to this project.
               </div>
             ) : (
-              selectedServices.map((service) => {
-                const invites = professionalInvites[service.id] ?? []
-                return (
-                  <div key={service.id} className="rounded-lg border border-gray-200 bg-white p-6">
-                    <div className="mb-4 flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-gray-500">
-                          {service.parentName ?? "Professional service"}
-                        </p>
-                        <h3 className="text-lg font-semibold text-gray-900">{service.name}</h3>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {invites.length === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => openInviteModal(service.id)}
-                            disabled={isInviteMutating}
-                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <MailPlus className="h-4 w-4" />
-                            Invite
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveService(service.id)}
-                          disabled={isUpdatingServices}
-                          className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {invites.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                        No professionals invited yet for this service.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {invites.map((invite) => {
-                          const statusMeta = getInviteStatusMeta(invite)
-                          return (
-                            <div
-                              key={invite.id}
-                              className="flex items-center justify-between rounded-md border border-gray-200 p-4"
-                            >
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {invite.companyName ?? invite.email}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {invite.companyName ? invite.email : "Invite pending"}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
-                                >
-                                  {statusMeta.label}
-                                </span>
-                                {!invite.isOwner && (
-                                  <>
-                                    {invite.status === "invited" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openInviteModal(service.id, invite)}
-                                        disabled={isInviteMutating}
-                                        className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                      >
-                                        <Pencil className="h-4 w-4" />
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteInvite(invite)}
-                                      disabled={isInviteMutating}
-                                      className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {selectedServices.map((service) => (
+                  <ProfessionalServiceCard
+                    key={service.id}
+                    service={service}
+                    invites={professionalInvites[service.id] ?? []}
+                    isBusy={isInviteMutating || isUpdatingServices}
+                    onInvite={openInviteModal}
+                    onDeleteInvite={handleDeleteInvite}
+                    onRemoveService={handleRemoveService}
+                    getInviteStatusMeta={getInviteStatusMeta}
+                    canEditInvite={(invite) => !invite.isOwner && invite.status === "invited"}
+                    canDeleteInvite={(invite) => !invite.isOwner}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -3034,35 +2931,42 @@ export default function ListingEditorPage() {
       />
 
       <Dialog open={isServiceModalOpen} onOpenChange={handleServiceModalOpenChange}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Select professional services</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto">
-            {professionalServices.length === 0 ? (
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                Professional services are not available right now. Please try again later.
+          {professionalServices.length === 0 ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              Professional services are not available right now. Please try again later.
+            </div>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto pr-1">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {professionalServices.map((service) => {
+                  const isSelected = serviceSelectionDraft.includes(service.id)
+                  const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
+                  const parentLabel = service.parentName ?? "Professional service"
+                  return (
+                    <button
+                      key={service.id}
+                      type="button"
+                      onClick={() => toggleServiceInDraft(service.id)}
+                      className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-300 ${
+                        isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <IconComponent
+                        aria-hidden
+                        className={`mb-3 h-6 w-6 ${isSelected ? "text-gray-900" : "text-gray-700"}`}
+                      />
+                      <span className="text-xs uppercase tracking-wide text-gray-500">{parentLabel}</span>
+                      <span className="mt-2 text-sm font-medium text-gray-900">{service.name}</span>
+                    </button>
+                  )
+                })}
               </div>
-            ) : (
-              professionalServices.map((service) => {
-                const isSelected = serviceSelectionDraft.includes(service.id)
-                const parentLabel = service.parentName ?? "Professional service"
-                return (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => toggleServiceInDraft(service.id)}
-                    className={`w-full rounded-lg border-2 p-4 text-left transition-all ${
-                      isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
-                    }`}
-                  >
-                    <span className="block text-xs uppercase tracking-wide text-gray-500">{parentLabel}</span>
-                    <span className="mt-2 block text-base font-medium text-gray-900">{service.name}</span>
-                  </button>
-                )
-              })
-            )}
-          </div>
+            </div>
+          )}
           <div className="flex gap-3 pt-4">
             <Button
               variant="outline"

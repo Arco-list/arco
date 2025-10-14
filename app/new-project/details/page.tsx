@@ -548,10 +548,27 @@ export default function NewProjectPage() {
     return `Saved ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
   }, [isSaving, lastSavedAt])
 
-  const projectTypeOptions =
-    formData.category && projectTypeOptionsByCategory[formData.category]
-      ? projectTypeOptionsByCategory[formData.category]
-      : []
+  const projectTypeOptions = useMemo(() => {
+    if (!formData.category) {
+      return []
+    }
+    const options = projectTypeOptionsByCategory[formData.category] ?? []
+    return [...options].sort(sortByOrderThenLabel)
+  }, [formData.category, projectTypeOptionsByCategory])
+
+  useEffect(() => {
+    if (!formData.projectType) {
+      return
+    }
+
+    const isValidSelection = projectTypeOptions.some((option) => option.value === formData.projectType)
+    if (!isValidSelection) {
+      setFormData((prev) => ({
+        ...prev,
+        projectType: "",
+      }))
+    }
+  }, [formData.projectType, projectTypeOptions])
   const sortedProjectStyleOptions = useMemo(
     () => [...projectStyleOptions].sort(sortByOrderThenLabel),
     [projectStyleOptions],
