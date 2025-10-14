@@ -191,6 +191,21 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const draggedPhotoIdRef = useRef<string | null>(null)
   const lastProjectIdRef = useRef<string | null>(null)
 
+  const computeAdditionalPhotoIds = useCallback((photoMap: Record<string, string[]>, allPhotoIds: string[]) => {
+    const assigned = new Set<string>()
+
+    Object.entries(photoMap).forEach(([featureKey, photoIds]) => {
+      if (featureKey === ADDITIONAL_FEATURE_ID) {
+        return
+      }
+
+      photoIds.forEach((photoId) => assigned.add(photoId))
+    })
+
+    const uniqueIds = Array.from(new Set(allPhotoIds))
+    return uniqueIds.filter((photoId) => !assigned.has(photoId))
+  }, [])
+
   const normaliseCoverFlag = useCallback((photos: UploadedPhoto[]) => {
     if (photos.length === 0) {
       return photos
@@ -774,6 +789,11 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             )
           }
 
+          const updatedUploadedIds = Array.from(
+            new Set([...uploadedPhotos.map((photo) => photo.id), ...uploaded.map((photo) => photo.id)]),
+          )
+          next[ADDITIONAL_FEATURE_ID] = computeAdditionalPhotoIds(next, updatedUploadedIds)
+
           return next
         })
 
@@ -811,6 +831,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       setIsUploading(false)
     },
     [
+      computeAdditionalPhotoIds,
       featureCoverPhotos,
       featureIdMap,
       generateUploadId,
@@ -818,7 +839,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       resolvedProjectId,
       showPhotoSelector,
       supabase,
-      uploadedPhotos.length,
+      uploadedPhotos,
       validateFile,
       readImageDimensions,
     ],
@@ -1332,6 +1353,9 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           next[ADDITIONAL_FEATURE_ID] = []
         }
 
+        const allPhotoIds = uploadedPhotos.map((photo) => photo.id)
+        next[ADDITIONAL_FEATURE_ID] = computeAdditionalPhotoIds(next, allPhotoIds)
+
         return next
       })
 
@@ -1359,10 +1383,12 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     }
   }, [
     cancelPhotoSelection,
+    computeAdditionalPhotoIds,
     featureIdMap,
     featureOptions,
     featurePhotos,
     featureMetadata,
+    uploadedPhotos,
     resolvedProjectId,
     showPhotoSelector,
     supabase,
