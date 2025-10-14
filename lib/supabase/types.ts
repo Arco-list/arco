@@ -618,6 +618,7 @@ export type Database = {
         Row: {
           admin_role: Database["public"]["Enums"]["admin_role"] | null
           avatar_url: string | null
+          avatar_storage_path: string | null
           bio: string | null
           created_at: string | null
           first_name: string | null
@@ -636,6 +637,7 @@ export type Database = {
         Insert: {
           admin_role?: Database["public"]["Enums"]["admin_role"] | null
           avatar_url?: string | null
+          avatar_storage_path?: string | null
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
@@ -654,6 +656,7 @@ export type Database = {
         Update: {
           admin_role?: Database["public"]["Enums"]["admin_role"] | null
           avatar_url?: string | null
+          avatar_storage_path?: string | null
           bio?: string | null
           created_at?: string | null
           first_name?: string | null

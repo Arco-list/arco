@@ -103,7 +103,7 @@ export default async function CompanySettingsPage() {
           />
         </div>
       </main>
-      <Footer />
+      <Footer maxWidth="max-w-7xl" />
     </div>
   )
 }

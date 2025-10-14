@@ -14,8 +14,6 @@ import {
   Trash2,
   Plus,
   MoreHorizontal,
-  MailPlus,
-  Pencil,
   Loader2,
   AlertCircle,
   Menu,
@@ -27,6 +25,9 @@ import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,7 @@ import { ProjectBasicsFields } from "@/components/project-details/project-basics
 import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
+import { ProfessionalServiceCard } from "@/components/project-professional-service-card"
 import {
   DEFAULT_LOCATION_ICONS,
   DEFAULT_MATERIAL_ICONS,
@@ -58,9 +60,9 @@ import {
   MIN_DESCRIPTION_LENGTH,
   type ProjectDetailsDescriptionCommand,
   type ProjectDetailsFormState,
-type ProjectDetailsSelectField,
-type ProjectDetailsTextField,
-sortByOrderThenLabel,
+  type ProjectDetailsSelectField,
+  type ProjectDetailsTextField,
+  sortByOrderThenLabel,
 } from "@/lib/project-details"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables, TablesUpdate } from "@/lib/supabase/types"
@@ -142,6 +144,7 @@ type ProjectCategoryAttributeRow = Tables<"project_category_attributes">
 type ProfessionalServiceOption = {
   id: string
   name: string
+  slug: string | null
   parentName: string | null
   parentSortOrder: number | null
   sortOrder: number | null
@@ -361,7 +364,11 @@ export default function ListingEditorPage() {
     tempSelectedPhotos,
     toggleTempPhoto,
     tempCoverPhoto,
+    tempFeatureTagline,
+    tempFeatureHighlight,
     setTempCoverPhoto,
+    setTempFeatureTagline,
+    setTempFeatureHighlight,
     isUploading,
     isSavingFeatures,
     isSavingSelection,
@@ -434,10 +441,21 @@ export default function ListingEditorPage() {
     [getFeatureDisplay, showPhotoSelector],
   )
 
+  const modalTaglineInputId = showPhotoSelector ? `feature-tagline-${showPhotoSelector}` : "feature-tagline"
+  const modalHighlightToggleId = showPhotoSelector ? `feature-highlight-${showPhotoSelector}` : "feature-highlight"
+
   const selectablePhotos = useMemo(
     () => getSelectablePhotos(showPhotoSelector),
     [getSelectablePhotos, showPhotoSelector],
   )
+
+  const [modalOpenMenuId, setModalOpenMenuId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!showPhotoSelector) {
+      setModalOpenMenuId(null)
+    }
+  }, [showPhotoSelector])
 
   useEffect(() => {
     if (!projectStatus) {
@@ -1358,7 +1376,7 @@ export default function ListingEditorPage() {
   const loadProfessionalServiceOptions = useCallback(async () => {
     const { data: childRows, error: childError } = await supabase
       .from("categories")
-      .select("id, name, parent_id, sort_order")
+      .select("id, name, slug, parent_id, sort_order")
       .eq("is_active", true)
       .not("parent_id", "is", null)
       .order("sort_order", { ascending: true, nullsFirst: false })
@@ -1415,6 +1433,7 @@ export default function ListingEditorPage() {
         return {
           id: row.id,
           name: row.name,
+          slug: row.slug ?? null,
           parentName: parentMeta?.name ?? null,
           parentSortOrder: parentMeta?.sortOrder ?? null,
           sortOrder: row.sort_order ?? null,
@@ -1551,6 +1570,7 @@ export default function ListingEditorPage() {
         additionalOptions.push({
           id: serviceId,
           name: serviceId,
+          slug: null,
           parentName: null,
           parentSortOrder: null,
           sortOrder: null,
@@ -2295,7 +2315,7 @@ export default function ListingEditorPage() {
         {showPhotoSelector && (
           <div className={OVERLAY_CLASSES}>
             <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-lg bg-white">
-              <div className="flex items-center justify-between border-b border-gray-200 p-6">
+              <div className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white p-6">
                 <h2 className="text-xl font-semibold text-gray-900">
                   Select photos for {currentFeatureDisplay?.name ?? "feature"}
                 </h2>
@@ -2337,40 +2357,7 @@ export default function ListingEditorPage() {
                 </div>
               </div>
 
-              <div className="p-6 space-y-6">
-                <div
-                  className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                    modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
-                  }`}
-                  onDrop={handleModalDrop}
-                  onDragOver={handleModalDragOver}
-                  onDragLeave={handleModalDragLeave}
-                >
-                  <ImageIcon className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-                  <p className="font-medium text-gray-900">Upload new photos</p>
-                  <p className="mb-4 text-sm text-gray-500">Drag and drop or browse for photos</p>
-                  <label className="inline-block">
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/jpeg,image/png"
-                      className="hidden"
-                      disabled={isUploading}
-                      onChange={(event) => {
-                        void handleModalFileUpload(event.target.files)
-                        event.target.value = ""
-                      }}
-                    />
-                    <span
-                      className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
-                        isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
-                      }`}
-                    >
-                      {isUploading ? "Uploading…" : "Browse Files"}
-                    </span>
-                  </label>
-                </div>
-
+              <div className="p-6 space-y-6 pb-8">
                 <div>
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Select from existing photos</h3>
@@ -2380,61 +2367,169 @@ export default function ListingEditorPage() {
                     </div>
                   </div>
 
-                  {selectablePhotos.length === 0 ? (
-                    <div className="flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-500">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+                    <div
+                      className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+                        modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
+                      }`}
+                      onDrop={handleModalDrop}
+                      onDragOver={handleModalDragOver}
+                      onDragLeave={handleModalDragLeave}
+                    >
+                      <ImageIcon className="mb-3 h-8 w-8 text-gray-400" />
+                      <p className="font-medium text-gray-900">Upload new photos</p>
+                      <p className="mb-4 text-sm text-gray-500">Drag and drop or browse for photos</p>
+                      <label className="inline-block">
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/jpeg,image/png"
+                          className="hidden"
+                          disabled={isUploading}
+                          onChange={(event) => {
+                            void handleModalFileUpload(event.target.files)
+                            event.target.value = ""
+                          }}
+                        />
+                        <span
+                          className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
+                            isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
+                          }`}
+                        >
+                          {isUploading ? "Uploading…" : "Browse Files"}
+                        </span>
+                      </label>
+                    </div>
+
+                    {selectablePhotos.map((photo) => {
+                      const isSelected = tempSelectedPhotos.includes(photo.id)
+                      const isCoverPhoto = tempCoverPhoto === photo.id
+
+                      return (
+                        <div key={photo.id} className="relative">
+                          <button
+                            onClick={() => {
+                              setModalOpenMenuId(null)
+                              toggleTempPhoto(photo.id)
+                            }}
+                            className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <img
+                              src={photo.url || "/placeholder.svg"}
+                              alt="Project photo"
+                              className="h-full w-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
+                                ✓
+                              </div>
+                            )}
+                            {isCoverPhoto && (
+                              <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
+                                Cover
+                              </div>
+                            )}
+                          </button>
+
+                          <div className="absolute right-2 top-2">
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setModalOpenMenuId(modalOpenMenuId === photo.id ? null : photo.id)
+                              }}
+                              className="rounded-full bg-white p-1 shadow-md transition-colors hover:bg-gray-50"
+                            >
+                              <MoreHorizontal className="h-4 w-4 text-gray-600" />
+                            </button>
+
+                            {modalOpenMenuId === photo.id && (
+                              <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    if (isSelected && !isCoverPhoto) {
+                                      setTempCoverPhoto(photo.id)
+                                      setModalOpenMenuId(null)
+                                    }
+                                  }}
+                                  disabled={!isSelected || isCoverPhoto}
+                                  className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
+                                    !isSelected || isCoverPhoto
+                                      ? "cursor-not-allowed text-gray-400"
+                                      : "text-gray-700 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  Set as cover
+                                </button>
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setModalOpenMenuId(null)
+                                    if (isSelected) {
+                                      toggleTempPhoto(photo.id)
+                                    }
+                                    void deletePhoto(photo.id)
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Delete photo
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {selectablePhotos.length === 0 && (
+                    <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
                       {uploadedPhotos.length === 0
                         ? "Upload photos to get started"
                         : "All photos are assigned. Upload more to add to this feature."}
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-                      {selectablePhotos.map((photo) => {
-                        const isSelected = tempSelectedPhotos.includes(photo.id)
-                        const isCoverPhoto = tempCoverPhoto === photo.id
-
-                        return (
-                          <div key={photo.id} className="relative">
-                            <button
-                              onClick={() => toggleTempPhoto(photo.id)}
-                              className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
-                                isSelected
-                                  ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                                  : "border-gray-200 hover:border-gray-300"
-                              }`}
-                            >
-                              <img
-                                src={photo.url || "/placeholder.svg"}
-                                alt="Project photo"
-                                className="h-full w-full object-cover"
-                              />
-                              {isSelected && (
-                                <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
-                                  ✓
-                                </div>
-                              )}
-                              {isCoverPhoto && (
-                                <div className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white">
-                                  Cover
-                                </div>
-                              )}
-                            </button>
-
-                            {isSelected && !isCoverPhoto && (
-                              <button
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  setTempCoverPhoto(photo.id)
-                                }}
-                                className="absolute left-2 right-2 bottom-2 rounded py-1 px-2 text-xs font-medium transition-colors border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                              >
-                                Set as cover
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
                   )}
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor={modalTaglineInputId} className="block text-sm font-medium text-gray-900">
+                      Feature tagline
+                    </label>
+                    <Input
+                      id={modalTaglineInputId}
+                      value={tempFeatureTagline}
+                      onChange={(event) => setTempFeatureTagline(event.target.value)}
+                      placeholder="Add a short tagline"
+                      maxLength={200}
+                      className="mt-2"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Displayed below the feature title in the Highlights section on the project page.
+                    </p>
+                  </div>
+
+                  <label
+                    htmlFor={modalHighlightToggleId}
+                    className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    <div className="mr-4">
+                      <p className="text-sm font-medium text-gray-900">Highlight this feature</p>
+                      <p className="text-xs text-gray-500">
+                        Toggle to feature this category in the Highlights section on the project page.
+                      </p>
+                    </div>
+                    <Switch
+                      id={modalHighlightToggleId}
+                      checked={tempFeatureHighlight}
+                      onCheckedChange={setTempFeatureHighlight}
+                    />
+                  </label>
                 </div>
 
                 {modalUploadErrors.length > 0 && (
@@ -2458,20 +2553,22 @@ export default function ListingEditorPage() {
                   </div>
                 )}
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={cancelPhotoSelection}
-                    className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void saveSelectedPhotos()}
-                    disabled={isSavingSelection || tempSelectedPhotos.length === 0}
-                    className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSavingSelection ? "Saving…" : "Save selection"}
-                  </button>
+                <div className="sticky bottom-0 left-0 right-0 -mx-6 -mb-6 border-t border-gray-200 bg-white p-6 pt-4">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={cancelPhotoSelection}
+                      className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void saveSelectedPhotos()}
+                      disabled={isSavingSelection || tempSelectedPhotos.length === 0}
+                      className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingSelection ? "Saving…" : "Save selection"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2597,6 +2694,7 @@ export default function ListingEditorPage() {
       return {
         id,
         name: id,
+        slug: null,
         parentName: null,
         parentSortOrder: null,
         sortOrder: null,
@@ -2630,37 +2728,6 @@ export default function ListingEditorPage() {
           <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{inviteError}</div>
         )}
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">Professional services</h3>
-              <p className="text-sm text-gray-500">
-                Choose which professional services contributed to this project to invite collaborators.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={openServiceModal}
-              className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              <Plus className="h-4 w-4" />
-              Manage services
-            </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {selectedServices.length > 0 ? (
-              selectedServices.map((service) => (
-                <span key={service.id} className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
-                  {service.name}
-                </span>
-              ))
-            ) : (
-              <span className="text-sm text-gray-600">No professional services selected yet.</span>
-            )}
-          </div>
-        </div>
-
         {professionalsLoading ? (
           <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -2692,98 +2759,22 @@ export default function ListingEditorPage() {
                 Add a professional service to invite collaborators to this project.
               </div>
             ) : (
-              selectedServices.map((service) => {
-                const invites = professionalInvites[service.id] ?? []
-                return (
-                  <div key={service.id} className="rounded-lg border border-gray-200 bg-white p-6">
-                    <div className="mb-4 flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-gray-500">
-                          {service.parentName ?? "Professional service"}
-                        </p>
-                        <h3 className="text-lg font-semibold text-gray-900">{service.name}</h3>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {invites.length === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => openInviteModal(service.id)}
-                            disabled={isInviteMutating}
-                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <MailPlus className="h-4 w-4" />
-                            Invite
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveService(service.id)}
-                          disabled={isUpdatingServices}
-                          className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {invites.length === 0 ? (
-                      <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                        No professionals invited yet for this service.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {invites.map((invite) => {
-                          const statusMeta = getInviteStatusMeta(invite)
-                          return (
-                            <div
-                              key={invite.id}
-                              className="flex items-center justify-between rounded-md border border-gray-200 p-4"
-                            >
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">
-                                  {invite.companyName ?? invite.email}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {invite.companyName ? invite.email : "Invite pending"}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
-                                >
-                                  {statusMeta.label}
-                                </span>
-                                {!invite.isOwner && (
-                                  <>
-                                    {invite.status === "invited" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => openInviteModal(service.id, invite)}
-                                        disabled={isInviteMutating}
-                                        className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                      >
-                                        <Pencil className="h-4 w-4" />
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteInvite(invite)}
-                                      disabled={isInviteMutating}
-                                      className="rounded-md border border-gray-300 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {selectedServices.map((service) => (
+                  <ProfessionalServiceCard
+                    key={service.id}
+                    service={service}
+                    invites={professionalInvites[service.id] ?? []}
+                    isBusy={isInviteMutating || isUpdatingServices}
+                    onInvite={openInviteModal}
+                    onDeleteInvite={handleDeleteInvite}
+                    onRemoveService={handleRemoveService}
+                    getInviteStatusMeta={getInviteStatusMeta}
+                    canEditInvite={(invite) => !invite.isOwner && invite.status === "invited"}
+                    canDeleteInvite={(invite) => !invite.isOwner}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -2795,18 +2786,8 @@ export default function ListingEditorPage() {
     <div className="min-h-screen bg-white flex flex-col">
       <DashboardHeader />
 
-      <div className="flex-1 px-4 md:px-8">
-        {/* Navigation Button */}
-        <div className="max-w-7xl mx-auto py-4">
-          <button
-            onClick={() => router.push('/dashboard/listings')}
-            className="flex items-center gap-3 text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="font-medium">Listing editor</span>
-          </button>
-        </div>
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 px-4 py-8 md:px-8">
+        <div className="mx-auto max-w-7xl">
           {entitlementsError && (
             <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {entitlementsError}
@@ -2830,8 +2811,19 @@ export default function ListingEditorPage() {
 
           <div className="flex">
             {/* Sidebar - Hidden on mobile */}
-            <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6">
+            <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
               <div className="space-y-6">
+                {/* Navigation Button */}
+                <div>
+                  <button
+                    onClick={() => router.push('/dashboard/listings')}
+                    className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Listing editor
+                  </button>
+                </div>
+
                 {/* Status Selector */}
                 <div>
                   <button
@@ -2879,7 +2871,7 @@ export default function ListingEditorPage() {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 p-4 md:p-8">
+            <div className="flex-1 pt-6">
               {/* Mobile Navigation Header */}
               <div className="md:hidden mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -3013,9 +3005,9 @@ export default function ListingEditorPage() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
-      <Footer />
+      <Footer maxWidth="max-w-7xl" />
 
       {/* Status Modal */}
       <ListingStatusModal
@@ -3034,35 +3026,42 @@ export default function ListingEditorPage() {
       />
 
       <Dialog open={isServiceModalOpen} onOpenChange={handleServiceModalOpenChange}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Select professional services</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto">
-            {professionalServices.length === 0 ? (
-              <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                Professional services are not available right now. Please try again later.
+          {professionalServices.length === 0 ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              Professional services are not available right now. Please try again later.
+            </div>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto pr-1">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {professionalServices.map((service) => {
+                  const isSelected = serviceSelectionDraft.includes(service.id)
+                  const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
+                  const parentLabel = service.parentName ?? "Professional service"
+                  return (
+                    <button
+                      key={service.id}
+                      type="button"
+                      onClick={() => toggleServiceInDraft(service.id)}
+                      className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-300 ${
+                        isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <IconComponent
+                        aria-hidden
+                        className={`mb-3 h-6 w-6 ${isSelected ? "text-gray-900" : "text-gray-700"}`}
+                      />
+                      <span className="text-xs uppercase tracking-wide text-gray-500">{parentLabel}</span>
+                      <span className="mt-2 text-sm font-medium text-gray-900">{service.name}</span>
+                    </button>
+                  )
+                })}
               </div>
-            ) : (
-              professionalServices.map((service) => {
-                const isSelected = serviceSelectionDraft.includes(service.id)
-                const parentLabel = service.parentName ?? "Professional service"
-                return (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => toggleServiceInDraft(service.id)}
-                    className={`w-full rounded-lg border-2 p-4 text-left transition-all ${
-                      isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
-                    }`}
-                  >
-                    <span className="block text-xs uppercase tracking-wide text-gray-500">{parentLabel}</span>
-                    <span className="mt-2 block text-base font-medium text-gray-900">{service.name}</span>
-                  </button>
-                )
-              })
-            )}
-          </div>
+            </div>
+          )}
           <div className="flex gap-3 pt-4">
             <Button
               variant="outline"

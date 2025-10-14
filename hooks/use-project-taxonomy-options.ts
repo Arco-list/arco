@@ -158,18 +158,14 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
 
       const parentOptions: ProjectDetailsDropdownOption[] = []
       const groupedProjectTypes: Record<string, ProjectDetailsDropdownOption[]> = {}
+      const isListable = (record: CategoryWithAttributes | null | undefined) =>
+        record?.project_category_attributes?.is_listable === true
 
       Object.keys(PROJECT_TYPE_FILTERS).forEach((typeName, typeIndex) => {
         const parentRecord = nameIndex.get(normalize(typeName)) ?? slugIndex.get(slugify(typeName))
         if (!parentRecord || !parentRecord.id) {
           return
         }
-
-        parentOptions.push({
-          value: parentRecord.id,
-          label: parentRecord.name,
-          sortOrder: parentRecord.sort_order ?? typeIndex,
-        })
 
         const subTypeNames = PROJECT_TYPE_FILTERS[typeName as keyof typeof PROJECT_TYPE_FILTERS]
         const options: ProjectDetailsDropdownOption[] = []
@@ -182,7 +178,7 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
           const subRecord =
             nameIndex.get(normalize(subTypeName)) ?? slugIndex.get(slugify(subTypeName)) ?? null
 
-          if (!subRecord || !subRecord.id) {
+          if (!subRecord || !subRecord.id || !isListable(subRecord)) {
             return
           }
 
@@ -193,11 +189,17 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
           })
         })
 
-        if (options.length > 0) {
-          groupedProjectTypes[parentRecord.id] = options.sort(sortByOrderThenLabel)
-        } else {
-          groupedProjectTypes[parentRecord.id] = []
+        if (options.length === 0) {
+          return
         }
+
+        parentOptions.push({
+          value: parentRecord.id,
+          label: parentRecord.name,
+          sortOrder: parentRecord.sort_order ?? typeIndex,
+        })
+
+        groupedProjectTypes[parentRecord.id] = options.sort(sortByOrderThenLabel)
       })
 
       if (parentOptions.length === 0) {

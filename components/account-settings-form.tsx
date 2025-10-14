@@ -1,15 +1,25 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+
+const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
+const AVATAR_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
+const AVATAR_MIME_TO_EXTENSION: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+}
+const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024
 
 interface ProfileFormState {
   firstName: string
@@ -28,7 +38,7 @@ export interface AccountSettingsFormProps {
 }
 
 export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
-  const { user, profile, supabase, refreshSession, isLoading } = useAuth()
+  const { user, profile, supabase, refreshSession, refreshProfile, isLoading } = useAuth()
 
   const [profileForm, setProfileForm] = useState<ProfileFormState>({
     firstName: "",
@@ -42,6 +52,9 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
   })
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isSavingPassword, setIsSavingPassword] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const isEmailAuthUser = useMemo(() => {
     if (!user) return false
@@ -52,6 +65,179 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
     return provider === "email" || providers?.includes("email") || Boolean(user.email)
   }, [user])
 
+  const avatarFallback = useMemo(() => {
+    const firstInitial = profileForm.firstName?.trim().charAt(0) ?? ""
+    const lastInitial = profileForm.lastName?.trim().charAt(0) ?? ""
+    const initials = `${firstInitial}${lastInitial}`.toUpperCase()
+
+    if (initials) {
+      return initials
+    }
+
+    const emailInitial = profileForm.email?.trim().charAt(0)?.toUpperCase()
+    return emailInitial ?? "U"
+  }, [profileForm.email, profileForm.firstName, profileForm.lastName])
+
+  const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    event.target.value = ""
+
+    if (!file) return
+
+    if (!user) {
+      toast.error("You need to be signed in to update your profile photo")
+      return
+    }
+
+    if (!AVATAR_ALLOWED_MIME_TYPES.has(file.type)) {
+      toast.error("Unsupported file type", {
+        description: "Profile photos must be JPG, PNG, or WEBP images.",
+      })
+      return
+    }
+
+    if (file.size > AVATAR_MAX_SIZE_BYTES) {
+      toast.error("File too large", {
+        description: "Profile photos must be 5 MB or smaller.",
+      })
+      return
+    }
+
+    const extensionFromMime = AVATAR_MIME_TO_EXTENSION[file.type]
+    const extensionFromName = file.name.split(".").pop()?.toLowerCase() ?? ""
+    const extension = extensionFromMime ?? extensionFromName
+
+    if (!extension || !AVATAR_ALLOWED_EXTENSIONS.has(extension)) {
+      toast.error("Unsupported file type", {
+        description: "Profile photos must be JPG, PNG, or WEBP images.",
+      })
+      return
+    }
+
+    const uniqueId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    const objectKey = `${user.id}/${uniqueId}.${extension}`
+
+    setIsUploadingAvatar(true)
+
+    const previousStoragePath = profile?.avatar_storage_path ?? null
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("profile-photos")
+        .upload(objectKey, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type,
+        })
+
+      if (uploadError) {
+        toast.error("Could not upload profile photo", {
+          description: uploadError.message,
+        })
+        return
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("profile-photos")
+        .getPublicUrl(objectKey)
+
+      const publicUrl = publicUrlData?.publicUrl ? `${publicUrlData.publicUrl}?v=${Date.now()}` : null
+
+      if (!publicUrl) {
+        toast.error("Could not fetch profile photo URL")
+        void supabase.storage.from("profile-photos").remove([objectKey])
+        return
+      }
+
+      setAvatarPreview(publicUrl)
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          avatar_url: publicUrl,
+          avatar_storage_path: objectKey,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+
+      if (profileError) {
+        toast.error("Could not update profile photo", {
+          description: profileError.message,
+        })
+        void supabase.storage.from("profile-photos").remove([objectKey])
+        return
+      }
+
+      if (previousStoragePath && previousStoragePath !== objectKey) {
+        void supabase.storage.from("profile-photos").remove([previousStoragePath])
+      }
+
+      await refreshProfile()
+      toast.success("Profile photo updated")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast.error("Could not update profile photo", { description: message })
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
+  const handleAvatarRemove = async () => {
+    if (!user) {
+      toast.error("You need to be signed in to update your profile photo")
+      return
+    }
+
+    if (!profile?.avatar_url && !profile?.avatar_storage_path) {
+      toast("No profile photo to remove", {
+        description: "Upload a photo before removing it.",
+      })
+      return
+    }
+
+    setIsUploadingAvatar(true)
+
+    try {
+      if (profile?.avatar_storage_path) {
+        const { error: storageError } = await supabase.storage
+          .from("profile-photos")
+          .remove([profile.avatar_storage_path])
+
+        if (storageError) {
+          console.error(storageError)
+        }
+      }
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          avatar_url: null,
+          avatar_storage_path: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+
+      if (profileError) {
+        toast.error("Could not remove profile photo", {
+          description: profileError.message,
+        })
+        return
+      }
+
+      setAvatarPreview(null)
+      await refreshProfile()
+      toast.success("Profile photo removed")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast.error("Could not remove profile photo", { description: message })
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
   useEffect(() => {
     if (isLoading) return
 
@@ -61,6 +247,14 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
       email: user?.email ?? "",
     })
   }, [isLoading, profile?.first_name, profile?.last_name, user?.email])
+
+  useEffect(() => {
+    if (profile?.avatar_url) {
+      setAvatarPreview(profile.avatar_url)
+    } else {
+      setAvatarPreview(null)
+    }
+  }, [profile?.avatar_url])
 
   const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -270,6 +464,45 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleProfileSubmit} className="space-y-6">
+            <div className="space-y-3">
+              <Label>Profile Photo</Label>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src={avatarPreview ?? undefined} alt="Profile avatar" />
+                  <AvatarFallback>{avatarFallback}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingAvatar || isSavingProfile || isLoading}
+                    >
+                      {isUploadingAvatar ? "Uploading..." : "Upload Photo"}
+                    </Button>
+                    {avatarPreview ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={handleAvatarRemove}
+                        disabled={isUploadingAvatar || isSavingProfile || isLoading}
+                      >
+                        Remove
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">JPG, PNG, or WEBP up to 5 MB.</p>
+                </div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
+            </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">First Name</Label>
@@ -313,7 +546,11 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
               />
             </div>
 
-            <Button type="submit" className="w-full md:w-auto" disabled={isSavingProfile}>
+            <Button
+              type="submit"
+              className="w-full md:w-auto"
+              disabled={isSavingProfile || isUploadingAvatar}
+            >
               {isSavingProfile ? "Saving..." : "Update Profile"}
             </Button>
           </form>

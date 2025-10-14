@@ -721,12 +721,12 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     type="button"
                     onClick={() => setActiveSection(item.id)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition",
+                      "flex w-full items-center gap-3 rounded-lg p-3 text-left text-sm font-medium transition",
                       isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     )}
                   >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
+                    <Icon className="w-5 h-5" />
+                    <span className="text-base font-medium">{item.label}</span>
                   </button>
                 )
               })}
@@ -746,12 +746,12 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     type="button"
                     onClick={() => setActiveSection(item.id)}
                     className={cn(
-                      "flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition",
+                      "flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium transition",
                       isActive ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 bg-white hover:border-gray-300"
                     )}
                   >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
+                    <Icon className="w-5 h-5" />
+                    <span className="text-base font-medium">{item.label}</span>
                   </button>
                 )
               })}
