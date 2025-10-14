@@ -500,7 +500,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         orderedPhotos.forEach((photo) => {
           const featureId = photo.feature_id
-          const featureKey = featureId ? uiKeyByFeatureId.get(featureId) ?? ADDITIONAL_FEATURE_ID : BUILDING_FEATURE_ID
+          const featureKey = featureId ? uiKeyByFeatureId.get(featureId) ?? ADDITIONAL_FEATURE_ID : ADDITIONAL_FEATURE_ID
           if (!nextFeaturePhotos[featureKey]) {
             nextFeaturePhotos[featureKey] = []
           }
@@ -514,12 +514,12 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           }
         })
 
-        if (!nextFeaturePhotos[BUILDING_FEATURE_ID]) {
-          nextFeaturePhotos[BUILDING_FEATURE_ID] = []
-        }
-
         if (!nextFeaturePhotos[ADDITIONAL_FEATURE_ID]) {
           nextFeaturePhotos[ADDITIONAL_FEATURE_ID] = []
+        }
+
+        if (!nextFeaturePhotos[BUILDING_FEATURE_ID]) {
+          nextFeaturePhotos[BUILDING_FEATURE_ID] = []
         }
 
         setResolvedProjectId(projectIdValue)
