@@ -638,6 +638,13 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       const modalPhotoIds: string[] = []
 
       const buildingFeatureId = featureIdMap[BUILDING_FEATURE_ID] ?? null
+      const additionalFeatureId = featureIdMap[ADDITIONAL_FEATURE_ID] ?? null
+      const defaultTargetFeature =
+        options.selectorFeatureId || showPhotoSelector
+          ? null
+          : additionalFeatureId
+            ? ADDITIONAL_FEATURE_ID
+            : BUILDING_FEATURE_ID
 
       for (const file of Array.from(files)) {
         const validationError = validateFile(file)
@@ -683,10 +690,13 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
           const orderIndex = uploadedPhotos.length + uploaded.length
           const shouldBePrimary = uploadedPhotos.length + uploaded.length === 0
-          const targetFeatureKey = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+          const targetFeatureKey =
+            options.selectorFeatureId ?? showPhotoSelector ?? defaultTargetFeature ?? BUILDING_FEATURE_ID
           const dbFeatureId =
             targetFeatureKey === BUILDING_FEATURE_ID
               ? buildingFeatureId
+              : targetFeatureKey === ADDITIONAL_FEATURE_ID
+                ? additionalFeatureId
               : targetFeatureKey
                 ? featureIdMap[targetFeatureKey] ?? null
                 : null
@@ -739,23 +749,41 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         setFeaturePhotos((prev) => {
           const next = { ...prev }
-          const targetFeatureKey = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+          const targetFeatureKey =
+            options.selectorFeatureId ?? showPhotoSelector ?? defaultTargetFeature ?? BUILDING_FEATURE_ID
           const existing = next[targetFeatureKey] ? [...next[targetFeatureKey]] : []
           existing.push(...uploaded.map((photo) => photo.id))
           next[targetFeatureKey] = Array.from(new Set(existing))
 
+          if (!next[BUILDING_FEATURE_ID]) {
+            next[BUILDING_FEATURE_ID] = []
+          }
+          if (!next[ADDITIONAL_FEATURE_ID]) {
+            next[ADDITIONAL_FEATURE_ID] = []
+          }
+
           if (targetFeatureKey !== BUILDING_FEATURE_ID) {
-            const buildingPhotos = next[BUILDING_FEATURE_ID] ? [...next[BUILDING_FEATURE_ID]] : []
-            const filtered = buildingPhotos.filter((id) => !uploaded.find((photo) => photo.id === id))
-            next[BUILDING_FEATURE_ID] = filtered
+            next[BUILDING_FEATURE_ID] = (next[BUILDING_FEATURE_ID] ?? []).filter(
+              (id) => !uploaded.some((photo) => photo.id === id),
+            )
+          }
+
+          if (targetFeatureKey !== ADDITIONAL_FEATURE_ID) {
+            next[ADDITIONAL_FEATURE_ID] = (next[ADDITIONAL_FEATURE_ID] ?? []).filter(
+              (id) => !uploaded.some((photo) => photo.id === id),
+            )
           }
 
           return next
         })
 
-        const targetFeatureKey = options.selectorFeatureId ?? showPhotoSelector ?? BUILDING_FEATURE_ID
+        const targetFeatureKey =
+          options.selectorFeatureId ?? showPhotoSelector ?? defaultTargetFeature ?? BUILDING_FEATURE_ID
 
-        if (!featureCoverPhotos[targetFeatureKey]) {
+        if (
+          targetFeatureKey !== ADDITIONAL_FEATURE_ID &&
+          !featureCoverPhotos[targetFeatureKey]
+        ) {
           setFeatureCoverPhotos((prev) => ({
             ...prev,
             [targetFeatureKey]: uploaded[0].id,
