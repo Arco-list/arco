@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Grid3x3, Home, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
+import { SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Tables } from "@/lib/supabase/types"
 import {
@@ -15,6 +16,7 @@ import {
   OVERLAY_CLASSES,
 } from "@/hooks/use-project-photo-tour"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { resolveProjectDetailsIcon } from "@/lib/project-details"
 import { isPhotoSelectableForFeature } from "@/lib/photo-filtering"
 
 function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
@@ -75,19 +77,49 @@ const MIME_TO_EXTENSION: Record<string, string> = {
 }
 
 const FALLBACK_FEATURES: FeatureOption[] = [
-  { id: "bedroom", name: "Bedroom", slug: "bedroom" },
-  { id: "bathroom", name: "Bathroom", slug: "bathroom" },
-  { id: "kitchen", name: "Kitchen", slug: "kitchen" },
-  { id: "living-room", name: "Living Room", slug: "living_room" },
-  { id: "garden", name: "Garden", slug: "garden" },
-  { id: "garage", name: "Garage", slug: "garage" },
-  { id: "pool", name: "Pool", slug: "pool" },
-  { id: "office", name: "Office", slug: "office" },
+  { id: "bedroom", name: "Bedroom", slug: "bed-bath-bedroom" },
+  { id: "bathroom", name: "Bathroom", slug: "bed-bath-bathroom" },
+  { id: "kitchen", name: "Kitchen", slug: "kitchen-living-kitchen" },
+  { id: "living-room", name: "Living Room", slug: "kitchen-living-living-room" },
+  { id: "garden", name: "Garden", slug: "outdoor-garden" },
+  { id: "garage", name: "Garage", slug: "outdoor-garage" },
+  { id: "pool", name: "Pool", slug: "outdoor-outdoor-pool" },
+  { id: "office", name: "Office", slug: "other-home-office" },
   { id: "balcony", name: "Balcony", slug: "balcony" },
   { id: "basement", name: "Basement", slug: "basement" },
   { id: "attic", name: "Attic", slug: "attic" },
   { id: "terrace", name: "Terrace", slug: "terrace" },
 ]
+
+const getSubtypeIconForSlug = (slug?: string | null): LucideIcon | null => {
+  if (!slug) {
+    return null
+  }
+
+  const key = slug.trim().toLowerCase()
+  const IconComponent = SUBTYPE_ICON_MAP[key]
+  return IconComponent ? (IconComponent as LucideIcon) : null
+}
+
+const resolveIconForFeatureOption = (feature?: FeatureOption | null): LucideIcon => {
+  if (!feature) {
+    return Grid3x3
+  }
+
+  const subtypeIcon = getSubtypeIconForSlug(feature.slug)
+  if (subtypeIcon) {
+    return subtypeIcon
+  }
+
+  if (feature.iconKey) {
+    const iconFromKey = resolveProjectDetailsIcon(feature.iconKey)
+    if (iconFromKey) {
+      return iconFromKey
+    }
+  }
+
+  return resolveFeatureIcon(feature.slug)
+}
 
 export default function PhotoTourPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
@@ -431,7 +463,7 @@ export default function PhotoTourPage() {
       const { data, error } = await supabase
         .from("categories")
         .select(
-          "id,name,slug,sort_order,project_category_attributes(is_building_feature)"
+          "id,name,slug,icon,sort_order,project_category_attributes(is_building_feature)"
         )
         .eq("is_active", true)
         .eq("project_category_attributes.is_building_feature", true)
@@ -465,6 +497,7 @@ export default function PhotoTourPage() {
           id: record.id,
           name: record.name,
           slug: record.slug,
+          iconKey: record.icon ?? undefined,
           sortOrder: record.sort_order ?? undefined,
         }))
         .sort((a, b) => {
@@ -1015,7 +1048,7 @@ export default function PhotoTourPage() {
       return {
         id: feature.id,
         name: feature.name,
-        icon: resolveFeatureIcon(feature.slug),
+        icon: resolveIconForFeatureOption(feature),
       }
     }
 
@@ -1024,7 +1057,7 @@ export default function PhotoTourPage() {
       return {
         id: fallback.id,
         name: fallback.name,
-        icon: resolveFeatureIcon(fallback.slug),
+        icon: resolveIconForFeatureOption(fallback),
       }
     }
 
@@ -1402,7 +1435,7 @@ export default function PhotoTourPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {orderedFeatureOptions.map((feature) => {
-              const IconComponent = resolveFeatureIcon(feature.slug)
+              const IconComponent = resolveIconForFeatureOption(feature)
               const isSelected = userSelectedFeatureIds.includes(feature.id)
 
               return (
@@ -1564,7 +1597,7 @@ export default function PhotoTourPage() {
             <div className="p-6">
               <div className="grid grid-cols-3 gap-4 mb-6">
                 {orderedFeatureOptions.map((feature) => {
-                  const IconComponent = resolveFeatureIcon(feature.slug)
+                  const IconComponent = resolveIconForFeatureOption(feature)
                   const isSelected = tempSelectedFeatures.includes(feature.id)
                   const isAlreadyAdded = selectedFeatures.includes(feature.id)
 
