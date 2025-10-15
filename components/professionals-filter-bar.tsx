@@ -435,10 +435,10 @@ export function ProfessionalsFilterBar() {
             <Button
               variant="outline"
               size="sm"
-              className={`${getButtonClassName(activeFilterCount > 0)} md:hidden`}
+              className={getButtonClassName(activeFilterCount > 0)}
               onClick={() => setIsModalOpen(true)}
             >
-              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              <Filter className="h-4 w-4 mr-2" />
               Filters
               {activeFilterCount > 0 ? <span className="ml-2 text-xs text-gray-500">{activeFilterCount}</span> : null}
             </Button>
@@ -451,7 +451,6 @@ export function ProfessionalsFilterBar() {
                   onClick={() => toggleDropdown("service")}
                   className={getButtonClassName(selectedCategories.length + selectedServices.length > 0)}
                 >
-                  <Filter className="h-4 w-4 mr-2" />
                   Service
                   {(selectedCategories.length || selectedServices.length) > 0 ? (
                     <span className="ml-2 text-xs text-gray-500">
@@ -466,7 +465,6 @@ export function ProfessionalsFilterBar() {
                       {sections.map((section) => {
                         const categoryKey = getCategoryKey(section.category)
                         const isExpanded = Boolean(expandedCategories[categoryKey])
-                        const CategoryIcon = getCategoryIcon(section.category.slug, section.category.name)
 
                         return (
                           <div key={categoryKey} className="space-y-2">
@@ -478,7 +476,6 @@ export function ProfessionalsFilterBar() {
                                   onCheckedChange={() => toggleCategorySelection(section.category.id ?? "")}
                                 />
 
-                                <CategoryIcon className="h-4 w-4 text-gray-500" />
                                 <Label htmlFor={`category-${categoryKey}`} className="text-sm font-medium">
                                   {section.category.name}
                                 </Label>
@@ -504,7 +501,6 @@ export function ProfessionalsFilterBar() {
                               <div className="mt-2 pl-6 space-y-2">
                                 {section.services.map((service) => {
                                   const serviceKey = getServiceKey(service)
-                                  const ServiceIcon = getServiceIcon(service.slug, service.name)
                                   return (
                                     <div className="flex items-center gap-2" key={serviceKey}>
                                       <Checkbox
@@ -512,8 +508,7 @@ export function ProfessionalsFilterBar() {
                                         checked={selectedServices.includes(service.id ?? "")}
                                         onCheckedChange={() => toggleServiceSelection(service.id ?? "")}
                                       />
-                                      <ServiceIcon className="h-4 w-4 text-gray-500" />
-                                      <Label htmlFor={`service-${serviceKey}`} className="text-sm text-gray-600">
+                                      <Label htmlFor={`service-${serviceKey}`} className="text-sm font-medium">
                                         {service.name}
                                       </Label>
                                     </div>
