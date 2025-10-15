@@ -155,7 +155,8 @@ export function ProfessionalsFilterBar() {
 
   const serviceDropdownRef = useRef<HTMLDivElement>(null)
   const locationDropdownRef = useRef<HTMLDivElement>(null)
-  const carouselRef = useRef<HTMLDivElement>(null)
+  const desktopCarouselRef = useRef<HTMLDivElement>(null)
+  const mobileCarouselRef = useRef<HTMLDivElement>(null)
 
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(true)
@@ -238,8 +239,11 @@ export function ProfessionalsFilterBar() {
   }, [sections])
 
   const updateCarouselScrollState = () => {
-    if (!carouselRef.current) return
-    const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current
+    // Check desktop carousel first (visible on md+)
+    const carousel = desktopCarouselRef.current || mobileCarouselRef.current
+    if (!carousel) return
+
+    const { scrollLeft, scrollWidth, clientWidth } = carousel
     setCanScrollLeft(scrollLeft > 0)
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1)
   }
@@ -249,30 +253,53 @@ export function ProfessionalsFilterBar() {
       updateCarouselScrollState()
     }
 
-    const container = carouselRef.current
-    if (!container) return
+    const desktopContainer = desktopCarouselRef.current
+    const mobileContainer = mobileCarouselRef.current
 
-    container.addEventListener("scroll", updateScrollButtons)
+    if (desktopContainer) {
+      desktopContainer.addEventListener("scroll", updateScrollButtons)
+    }
+    if (mobileContainer) {
+      mobileContainer.addEventListener("scroll", updateScrollButtons)
+    }
+
     updateScrollButtons()
 
     return () => {
-      container.removeEventListener("scroll", updateScrollButtons)
+      if (desktopContainer) {
+        desktopContainer.removeEventListener("scroll", updateScrollButtons)
+      }
+      if (mobileContainer) {
+        mobileContainer.removeEventListener("scroll", updateScrollButtons)
+      }
     }
   }, [quickServiceItems.length])
 
   useEffect(() => {
-    updateCarouselScrollState()
     const handleResize = () => updateCarouselScrollState()
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
-  }, [quickServiceItems.length])
+  }, [])
+
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure DOM has finished rendering
+    const rafId = requestAnimationFrame(() => {
+      updateCarouselScrollState()
+    })
+
+    return () => cancelAnimationFrame(rafId)
+  }, [quickServiceItems])
 
   const scrollCarousel = (direction: "left" | "right") => {
-    if (!carouselRef.current) return
-    const container = carouselRef.current
-    const scrollAmount = container.clientWidth * 0.8
-    const nextLeft = direction === "left" ? container.scrollLeft - scrollAmount : container.scrollLeft + scrollAmount
-    container.scrollTo({ left: nextLeft, behavior: "smooth" })
+    const carousel = desktopCarouselRef.current || mobileCarouselRef.current
+    if (!carousel) return
+
+    const scrollAmount = carousel.clientWidth * 0.8
+    const nextLeft = direction === "left" ? carousel.scrollLeft - scrollAmount : carousel.scrollLeft + scrollAmount
+    carousel.scrollTo({ left: nextLeft, behavior: "smooth" })
+
+    // Force update scroll state after animation
+    setTimeout(() => updateCarouselScrollState(), 400)
   }
 
   const locationFilterCount = selectedCountry || selectedState || selectedCity ? 1 : 0
@@ -348,9 +375,9 @@ export function ProfessionalsFilterBar() {
     setActiveDropdown(null)
   }
 
-  const QuickServiceCarousel = ({ className }: { className?: string }) =>
+  const MobileCarousel = () =>
     quickServiceItems.length > 0 ? (
-      <div className={`flex items-center gap-2 ${className ?? ""}`}>
+      <div className="flex md:hidden items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -363,7 +390,7 @@ export function ProfessionalsFilterBar() {
 
         <div className="flex-1 overflow-hidden">
           <div
-            ref={carouselRef}
+            ref={mobileCarouselRef}
             className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
@@ -404,7 +431,7 @@ export function ProfessionalsFilterBar() {
     <>
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-[1800px] mx-auto px-4 md:px-8 py-4 space-y-3 md:space-y-0">
-          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+          <div className="flex items-center gap-4 flex-wrap md:flex-nowrap">
             <Button
               variant="outline"
               size="sm"
@@ -416,7 +443,7 @@ export function ProfessionalsFilterBar() {
               {activeFilterCount > 0 ? <span className="ml-2 text-xs text-gray-500">{activeFilterCount}</span> : null}
             </Button>
 
-            <div className="hidden md:flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+            <div className="hidden md:flex items-center gap-4">
               <div className="relative" ref={serviceDropdownRef}>
                 <Button
                   variant="outline"
@@ -580,25 +607,68 @@ export function ProfessionalsFilterBar() {
                   </div>
                 )}
               </div>
-
-              <QuickServiceCarousel className="flex-1 min-w-0" />
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
-              {activeFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearAllFilters}
-                  className="text-sm text-gray-600 hover:text-gray-900"
-                >
-                  Clear all
-                </Button>
-              )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`hidden md:flex h-8 w-8 p-0 flex-shrink-0 ${!canScrollLeft ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => scrollCarousel("left")}
+              disabled={!canScrollLeft}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="hidden md:block flex-1 overflow-hidden">
+              <div
+                ref={desktopCarouselRef}
+                className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {quickServiceItems.map((item) => {
+                  const Icon = getServiceIcon(item.slug, item.name)
+                  const isSelected = selectedServices.includes(item.id)
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleServiceSelection(item.id)}
+                      className={`flex items-center gap-2 whitespace-nowrap py-2 px-3 rounded-full transition-colors flex-shrink-0 border ${
+                        isSelected
+                          ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
+                          : "bg-transparent border-gray-300 hover:border-gray-400"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="text-xs font-medium">{item.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`hidden md:flex h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => scrollCarousel("right")}
+              disabled={!canScrollRight}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+
+            {activeFilterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAllFilters}
+                className="hidden md:flex text-sm text-gray-600 hover:text-gray-900"
+              >
+                Clear all
+              </Button>
+            )}
           </div>
 
-          <QuickServiceCarousel className="md:hidden" />
+          <MobileCarousel />
         </div>
       </div>
 

@@ -46,12 +46,12 @@ export const ProfessionalCard = memo(function ProfessionalCard({
 
         <button
           onClick={handleToggle}
-          className="absolute top-3 right-3 p-1.5 bg-white/80 backdrop-blur-sm rounded-full text-gray-600 hover:text-red-500 hover:bg-white/90 transition-all duration-200 shadow-sm disabled:opacity-60"
+          className="absolute top-3 right-3 p-1 text-gray-600 hover:text-red-500 transition-colors disabled:opacity-60"
           aria-pressed={isSaved}
           aria-label={isSaved ? "Unsave professional" : "Save professional"}
           disabled={isMutating}
         >
-          <Heart className={`h-6 w-6 ${isSaved ? "fill-red-500 text-red-500" : "text-gray-600 hover:text-red-500"}`} />
+          <Heart className={`h-6 w-6 ${isSaved ? "fill-red-500 text-red-500" : ""}`} />
         </button>
       </div>
 
