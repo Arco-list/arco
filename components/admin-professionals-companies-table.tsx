@@ -16,6 +16,7 @@ import {
   updateCompanyStatusAction,
   updateProfessionalFeaturedAction,
 } from "@/app/admin/professionals/actions"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
