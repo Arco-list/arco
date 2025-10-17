@@ -113,6 +113,48 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   return { success: true }
 }
 
+export async function updateProfessionalFeaturedAction(input: {
+  professionalId: string
+  isFeatured: boolean
+}) {
+  const parsedProfessionalId = inviteIdSchema.safeParse(input.professionalId)
+  if (!parsedProfessionalId.success) {
+    return { success: false, error: "Invalid professional id" }
+  }
+
+  const featuredResult = z.boolean().safeParse(input.isFeatured)
+  if (!featuredResult.success) {
+    return { success: false, error: "Invalid featured status" }
+  }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const { error: updateError } = await supabase
+    .from("professionals")
+    .update({ is_featured: featuredResult.data })
+    .eq("id", parsedProfessionalId.data)
+
+  if (updateError) {
+    logger.error("admin-professionals", "Failed to update professional featured status", {
+      professionalId: parsedProfessionalId.data,
+      isFeatured: featuredResult.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  logger.info("admin-professionals", "Professional featured status updated", {
+    professionalId: parsedProfessionalId.data,
+    isFeatured: featuredResult.data,
+  })
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
 export async function updateCompanyDetailsAction(input: {
   companyId: string
   name: string

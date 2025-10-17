@@ -10,11 +10,11 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
 import {
   updateCompanyDetailsAction,
   updateCompanyStatusAction,
+  updateProfessionalFeaturedAction,
 } from "@/app/admin/professionals/actions"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -176,6 +176,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
       return
     }
 
+    let cancelled = false
     const loadCompanyProfessionals = async () => {
       const supabase = getBrowserSupabaseClient()
       const { data: professionals } = await supabase
@@ -183,17 +184,23 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
         .select("id, first_name, last_name, title, primary_specialty, is_featured, avatar_url")
         .eq("company_id", editingCompany.id)
 
-      setEditForm({
-        name: editingCompany.name,
-        logoUrl: editingCompany.logoUrl ?? "",
-        website: editingCompany.website ?? "",
-        email: editingCompany.contactEmail ?? "",
-        services: editingCompany.servicesOffered ?? [],
-        professionals: professionals ?? [],
-      })
+      if (!cancelled) {
+        setEditForm({
+          name: editingCompany.name,
+          logoUrl: editingCompany.logoUrl ?? "",
+          website: editingCompany.website ?? "",
+          email: editingCompany.contactEmail ?? "",
+          services: editingCompany.servicesOffered ?? [],
+          professionals: professionals ?? [],
+        })
+      }
     }
 
     loadCompanyProfessionals()
+    
+    return () => {
+      cancelled = true
+    }
   }, [editingCompany])
 
   const toggleService = (serviceId: string, checked: boolean) => {
@@ -207,15 +214,13 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
   }
 
   const toggleProfessionalFeatured = async (professionalId: string, checked: boolean) => {
-    const supabase = getBrowserSupabaseClient()
-    
-    const { error } = await supabase
-      .from("professionals")
-      .update({ is_featured: checked })
-      .eq("id", professionalId)
+    const result = await updateProfessionalFeaturedAction({
+      professionalId,
+      isFeatured: checked
+    })
 
-    if (error) {
-      toast.error("Failed to update professional featured status")
+    if (!result.success) {
+      toast.error(result.error)
       return
     }
 

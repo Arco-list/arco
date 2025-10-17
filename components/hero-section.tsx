@@ -57,7 +57,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
   }
 
   return (
-    <section className="relative flex h-[70vh] items-end justify-start overflow-hidden">
+    <section className="relative flex h-[50vh] md:h-[60vh] lg:h-[70vh] items-end justify-start overflow-hidden">
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-in-out"
         style={{
