@@ -26,7 +26,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
   const safeProjects = useMemo(() => (projects.length > 0 ? projects : []), [projects])
   const totalProjects = safeProjects.length
   const currentImage = safeProjects[currentImageIndex]
-  const heroTitle = safeProjects[0]?.title
+  const heroTitle = currentImage?.title
 
   useEffect(() => {
     if (totalProjects <= 1) return
@@ -57,7 +57,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
   }
 
   return (
-    <section className="relative flex h-[50vh] items-end justify-start overflow-hidden">
+    <section className="relative flex h-[70vh] items-end justify-start overflow-hidden">
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-in-out"
         style={{

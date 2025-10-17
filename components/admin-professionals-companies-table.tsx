@@ -10,6 +10,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
 import {
   updateCompanyDetailsAction,
@@ -97,6 +98,17 @@ type EditFormState = {
   website: string
   email: string
   services: string[]
+  professionals: CompanyProfessional[]
+}
+
+type CompanyProfessional = {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  title: string | null
+  primary_specialty: string | null
+  is_featured: boolean
+  avatar_url: string | null
 }
 
 const statusConfig: Record<CompanyStatus, { label: string; badgeTone: "default" | "outline" | "secondary" | "destructive" }> = {
@@ -163,13 +175,25 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
       setEditForm(null)
       return
     }
-    setEditForm({
-      name: editingCompany.name,
-      logoUrl: editingCompany.logoUrl ?? "",
-      website: editingCompany.website ?? "",
-      email: editingCompany.contactEmail ?? "",
-      services: editingCompany.servicesOffered ?? [],
-    })
+
+    const loadCompanyProfessionals = async () => {
+      const supabase = getBrowserSupabaseClient()
+      const { data: professionals } = await supabase
+        .from("mv_professional_summary")
+        .select("id, first_name, last_name, title, primary_specialty, is_featured, avatar_url")
+        .eq("company_id", editingCompany.id)
+
+      setEditForm({
+        name: editingCompany.name,
+        logoUrl: editingCompany.logoUrl ?? "",
+        website: editingCompany.website ?? "",
+        email: editingCompany.contactEmail ?? "",
+        services: editingCompany.servicesOffered ?? [],
+        professionals: professionals ?? [],
+      })
+    }
+
+    loadCompanyProfessionals()
   }, [editingCompany])
 
   const toggleService = (serviceId: string, checked: boolean) => {
@@ -180,6 +204,30 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
       }
       return { ...prev, services: prev.services.filter((id) => id !== serviceId) }
     })
+  }
+
+  const toggleProfessionalFeatured = async (professionalId: string, checked: boolean) => {
+    const supabase = getBrowserSupabaseClient()
+    
+    const { error } = await supabase
+      .from("professionals")
+      .update({ is_featured: checked })
+      .eq("id", professionalId)
+
+    if (error) {
+      toast.error("Failed to update professional featured status")
+      return
+    }
+
+    setEditForm((prev) => {
+      if (!prev) return prev
+      const updatedProfessionals = prev.professionals.map((prof) =>
+        prof.id === professionalId ? { ...prof, is_featured: checked } : prof
+      )
+      return { ...prev, professionals: updatedProfessionals }
+    })
+
+    toast.success(`Professional ${checked ? 'featured' : 'unfeatured'} successfully`)
   }
 
   const handleStatusChange = (nextStatus: CompanyStatus, company: AdminCompanyRow) => {
@@ -486,7 +534,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
       </AlertDialog>
 
       <Dialog open={Boolean(editingCompany)} onOpenChange={(open) => !open && setEditingCompany(null)}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit company</DialogTitle>
             <DialogDescription>
@@ -579,6 +627,58 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                             />
                             <span className="line-clamp-1">{service.name}</span>
                           </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2 lg:col-span-2">
+                <Label>Team Professionals</Label>
+                <p className="text-xs text-muted-foreground">Manage which professionals from this company are featured on the homepage.</p>
+                <div className="max-h-64 overflow-y-auto rounded-md border">
+                  {editForm?.professionals?.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No professionals found for this company.
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {editForm?.professionals?.map((professional) => {
+                        const name = `${professional.first_name || ''} ${professional.last_name || ''}`.trim() || 'Unnamed Professional'
+                        const role = professional.title || professional.primary_specialty || 'Professional'
+                        
+                        return (
+                          <div key={professional.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
+                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border bg-muted/40">
+                              {professional.avatar_url ? (
+                                <img
+                                  src={professional.avatar_url}
+                                  alt={name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none'
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  {name.charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{role}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={professional.is_featured}
+                                onCheckedChange={(checked) =>
+                                  toggleProfessionalFeatured(professional.id, checked === true)
+                                }
+                              />
+                              <Label className="text-xs text-muted-foreground">Featured</Label>
+                            </div>
+                          </div>
                         )
                       })}
                     </div>

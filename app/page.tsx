@@ -7,7 +7,7 @@ import { ProjectCategories, type ProjectCategoryCard } from "@/components/projec
 import { PopularProjects, type PopularProjectCard } from "@/components/popular-projects"
 import { FeaturesSection } from "@/components/features-section"
 import { PopularServices } from "@/components/popular-services"
-import { FeaturedProfessionals } from "@/components/featured-professionals"
+import { FeaturedProfessionals, type FeaturedProfessional } from "@/components/featured-professionals"
 import { ProfessionalCategories, type ProfessionalCategoryCard } from "@/components/professional-categories"
 import { ProjectTypes, type ProjectTypeCard } from "@/components/project-types"
 import { Footer } from "@/components/footer"
@@ -77,6 +77,7 @@ async function loadLandingData() {
     parentCategoriesResult,
     professionalCategoriesResult,
     professionalSpecialtiesResult,
+    featuredProfessionalsResult,
   ] = await Promise.all([
     supabase.rpc("search_projects", { featured_only: true, limit_count: 5 }),
     supabase.rpc("search_projects", { limit_count: 12 }),
@@ -98,6 +99,11 @@ async function loadLandingData() {
       .from("mv_professional_summary")
       .select("id, primary_specialty_slug")
       .not("primary_specialty_slug", "is", null),
+    supabase
+      .from("mv_professional_summary")
+      .select("id, first_name, last_name, title, primary_specialty, company_name, company_city, user_location, display_rating, total_reviews, avatar_url")
+      .eq("is_featured", true)
+      .limit(6),
   ])
 
   if (heroProjectsResult.error) {
@@ -115,12 +121,16 @@ async function loadLandingData() {
   if (professionalSpecialtiesResult.error) {
     logger.error("Failed to load professional specialties", { scope: "landing" }, professionalSpecialtiesResult.error)
   }
+  if (featuredProfessionalsResult.error) {
+    logger.error("Failed to load featured professionals", { scope: "landing" }, featuredProfessionalsResult.error)
+  }
 
   const heroProjects = (heroProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
   const popularProjects = (popularProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
   const parentCategories = (parentCategoriesResult.data as CategoryRow[] | null) ?? []
   const professionalCategoriesRaw = (professionalCategoriesResult.data as Tables<"categories">[] | null) ?? []
   const professionalSpecialties = professionalSpecialtiesResult.data ?? []
+  const featuredProfessionalsRaw = featuredProfessionalsResult.data ?? []
 
   let childCategories: CategoryRow[] = []
 
@@ -289,17 +299,35 @@ async function loadLandingData() {
     .filter((category): category is ProfessionalCategoryCard => Boolean(category))
     .slice(0, 5)
 
+  const featuredProfessionals: FeaturedProfessional[] = featuredProfessionalsRaw.map((professional) => {
+    const name = `${professional.first_name || ''} ${professional.last_name || ''}`.trim()
+    const title = professional.title || professional.primary_specialty || 'Professional'
+    const location = professional.company_name || professional.company_city || professional.user_location || 'Independent Professional'
+    
+    return {
+      id: professional.id,
+      name,
+      title,
+      location,
+      rating: professional.display_rating || 0,
+      reviews: professional.total_reviews || 0,
+      image: professional.avatar_url,
+      href: `/professionals/${professional.id}`,
+    }
+  })
+
   return {
     heroProjects: resolvedHeroProjects,
     projectCategories,
     popularProjects: popularProjectCards,
     projectTypes,
     professionalCategories: professionalCategoryCards,
+    featuredProfessionals,
   }
 }
 
 export default async function HomePage() {
-  const { heroProjects, projectCategories, popularProjects, projectTypes, professionalCategories } =
+  const { heroProjects, projectCategories, popularProjects, projectTypes, professionalCategories, featuredProfessionals } =
     await loadLandingData()
 
   return (
@@ -310,8 +338,8 @@ export default async function HomePage() {
         <ProjectCategories categories={projectCategories} />
         <PopularProjects projects={popularProjects} />
         <FeaturesSection />
-        <PopularServices />
-        <FeaturedProfessionals />
+        {/* <PopularServices /> */}
+        <FeaturedProfessionals professionals={featuredProfessionals} />
         <ProfessionalCategories categories={professionalCategories} />
         <ProjectTypes types={projectTypes} />
       </main>
