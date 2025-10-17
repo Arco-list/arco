@@ -6,6 +6,7 @@ import { z } from "zod"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
+import { generateUniqueSlug, isValidSlug } from "@/lib/seo-utils"
 
 const projectIdSchema = z.string().uuid()
 
@@ -202,4 +203,160 @@ export async function deleteProjectAction(input: { projectId: string }) {
 
   revalidatePath("/admin/projects")
   return { success: true }
+}
+
+const seoUpdateSchema = z.object({
+  projectId: projectIdSchema,
+  slug: z.string().optional(),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
+})
+
+export async function updateProjectSeoAction(input: {
+  projectId: string
+  slug?: string
+  seoTitle?: string
+  seoDescription?: string
+}) {
+  const parsed = seoUpdateSchema.safeParse(input)
+  if (!parsed.success) {
+    return { success: false, error: "Invalid input data" }
+  }
+
+  const { error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+
+  // Validate slug if provided
+  if (parsed.data.slug !== undefined) {
+    if (parsed.data.slug && !isValidSlug(parsed.data.slug)) {
+      return { success: false, error: "Slug must contain only lowercase letters, numbers, and hyphens" }
+    }
+
+    // Check for slug conflicts (excluding current project)
+    if (parsed.data.slug) {
+      const { data: existingProject, error: checkError } = await serviceClient
+        .from("projects")
+        .select("id")
+        .eq("slug", parsed.data.slug)
+        .neq("id", parsed.data.projectId)
+        .maybeSingle()
+
+      if (checkError) {
+        return { success: false, error: checkError.message }
+      }
+
+      if (existingProject) {
+        return { success: false, error: "This slug is already in use by another project" }
+      }
+    }
+  }
+
+  // Get current project data to create redirect if slug is changing
+  const { data: currentProject, error: currentError } = await serviceClient
+    .from("projects")
+    .select("slug, title")
+    .eq("id", parsed.data.projectId)
+    .single()
+
+  if (currentError) {
+    return { success: false, error: currentError.message }
+  }
+
+  // Prepare update payload
+  const updatePayload: Record<string, unknown> = {}
+  if (parsed.data.slug !== undefined) updatePayload.slug = parsed.data.slug || null
+  if (parsed.data.seoTitle !== undefined) updatePayload.seo_title = parsed.data.seoTitle || null
+  if (parsed.data.seoDescription !== undefined) updatePayload.seo_description = parsed.data.seoDescription || null
+
+  // Update project
+  const { error: updateError } = await serviceClient
+    .from("projects")
+    .update(updatePayload)
+    .eq("id", parsed.data.projectId)
+
+  if (updateError) {
+    return { success: false, error: updateError.message }
+  }
+
+  // Create redirect if slug changed and both old and new slugs exist
+  if (
+    parsed.data.slug !== undefined &&
+    currentProject.slug &&
+    parsed.data.slug &&
+    currentProject.slug !== parsed.data.slug
+  ) {
+    const { error: redirectError } = await serviceClient
+      .from("project_redirects")
+      .insert({
+        old_slug: currentProject.slug,
+        new_slug: parsed.data.slug,
+        project_id: parsed.data.projectId,
+      })
+
+    if (redirectError) {
+      logger.error(
+        "Failed to create redirect after slug change",
+        { 
+          scope: "admin-seo", 
+          projectId: parsed.data.projectId,
+          oldSlug: currentProject.slug,
+          newSlug: parsed.data.slug
+        },
+        redirectError
+      )
+      // Don't fail the entire operation for redirect creation failure
+    }
+  }
+
+  revalidatePath("/admin/projects")
+  return { success: true }
+}
+
+export async function generateProjectSlugAction(input: { projectId: string; title: string }) {
+  const parseResult = z.object({
+    projectId: projectIdSchema,
+    title: z.string().min(1),
+  }).safeParse(input)
+
+  if (!parseResult.success) {
+    return { success: false, error: "Invalid input data" }
+  }
+
+  const { error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+
+  try {
+    const checkSlugExists = async (slug: string): Promise<boolean> => {
+      const { data, error } = await serviceClient
+        .from("projects")
+        .select("id")
+        .eq("slug", slug)
+        .neq("id", parseResult.data.projectId)
+        .maybeSingle()
+
+      if (error) throw error
+      return Boolean(data)
+    }
+
+    const uniqueSlug = await generateUniqueSlug(
+      parseResult.data.title,
+      checkSlugExists,
+      parseResult.data.projectId
+    )
+
+    return { success: true, slug: uniqueSlug }
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to generate slug" 
+    }
+  }
 }
