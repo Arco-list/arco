@@ -39,7 +39,7 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
   }
 
   return (
-    <section className="py-16 px-4 md:px-8 bg-gray-50">
+    <section className="py-16 px-4 md:px-8 bg-white">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold text-gray-900">Popular professional services</h2>

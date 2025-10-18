@@ -717,7 +717,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
             <Switch id="seo-view-toggle" checked={showSeoView} onCheckedChange={setShowSeoView} />
           </div>
           <Button variant="outline" onClick={handleExportCsv}>Export CSV</Button>
-          <Button asChild>
+          <Button asChild variant="secondary">
             <Link href="/new-project/details">
               <Sparkles className="mr-2 h-4 w-4" />
               Add project
