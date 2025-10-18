@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
+import type { Metadata } from "next"
 
 import { Header } from "@/components/header"
 import { ProjectGallery } from "@/components/project-gallery"
@@ -14,10 +15,12 @@ import { MapSection } from "@/components/map-section"
 import { SimilarProjects } from "@/components/similar-projects"
 import { Footer } from "@/components/footer"
 import { MobileProfessionalsButton } from "@/components/mobile-professionals-button"
+import { ProjectStructuredData } from "@/components/project-structured-data"
 import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/project-preview-context"
 import { ProjectGalleryModalProvider } from "@/contexts/project-gallery-modal-context"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
+import { getSiteUrl } from "@/lib/utils"
 import type { Tables } from "@/lib/supabase/types"
 
 const PREVIEW_PARAM = "preview"
@@ -82,6 +85,40 @@ const sanitizeBreadcrumbLabel = (label: string | null | undefined): string | nul
   return sanitized.length > 0 ? sanitized : null
 }
 
+async function resolveRedirect(slug: string, supabase: any, visited = new Set<string>()): Promise<string> {
+  // Check for circular reference
+  if (visited.has(slug)) {
+    console.error(`Circular redirect detected in chain: ${Array.from(visited).join(' -> ')} -> ${slug}`)
+    // Return the original slug to gracefully handle the error
+    return Array.from(visited)[0] || slug
+  }
+  
+  visited.add(slug)
+  
+  // Prevent infinite chains
+  if (visited.size > 10) {
+    console.error(`Redirect chain too long: ${Array.from(visited).join(' -> ')}`)
+    return Array.from(visited)[0] || slug
+  }
+  
+  const { data, error } = await supabase
+    .from('project_redirects')
+    .select('new_slug')
+    .eq('old_slug', slug)
+    .maybeSingle()
+  
+  if (error) {
+    console.error('Error fetching redirect:', error)
+    return slug
+  }
+  
+  if (!data?.new_slug) {
+    return slug
+  }
+  
+  return resolveRedirect(data.new_slug, supabase, visited)
+}
+
 type ProjectRow = Tables<"projects">
 type ProjectPhotoRow = Tables<"project_photos">
 type ProjectFeatureRow = Tables<"project_features">
@@ -97,11 +134,113 @@ type PageProps = {
   searchParams?: { [key: string]: string | string[] | undefined }
 }
 
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const resolvedParams = await params
+  const supabase = await createServerSupabaseClient()
+
+  // Resolve redirects with recursive chain detection
+  const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
+  
+  if (finalSlug !== resolvedParams.slug) {
+    // Use redirected project metadata
+    const { data: redirectedProject } = await supabase
+      .from("projects")
+      .select("id, title, description, seo_title, seo_description, slug")
+      .eq("slug", finalSlug)
+      .maybeSingle()
+
+    if (redirectedProject) {
+      return await generateProjectMetadata(redirectedProject, supabase)
+    }
+    // If redirected project not found, fall through to use current slug
+  }
+
+  // Get project data for current slug
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, title, description, seo_title, seo_description, slug")
+    .eq("slug", resolvedParams.slug)
+    .maybeSingle()
+
+  if (!project) {
+    return {
+      title: "Project Not Found",
+      description: "The requested project could not be found."
+    }
+  }
+
+  return await generateProjectMetadata(project, supabase)
+}
+
+async function generateProjectMetadata(
+  project: { id: string; title: string; description?: string | null; seo_title?: string | null; seo_description?: string | null; slug?: string | null },
+  supabase: any
+): Promise<Metadata> {
+  // Get the primary photo for OpenGraph
+  const { data: photos } = await supabase
+    .from("project_photos")
+    .select("url, is_primary")
+    .eq("project_id", project.id)
+    .order("is_primary", { ascending: false })
+    .order("order_index", { ascending: true })
+    .limit(3)
+
+  const primaryPhoto = photos?.find(p => p.is_primary) || photos?.[0]
+
+  // Use custom SEO fields if available, otherwise fallback to generated content
+  const title = project.seo_title?.trim() || `${project.title} · Arco`
+  const description = project.seo_description?.trim() || 
+    (project.description ? 
+      project.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...' : 
+      `Discover ${project.title} on Arco. Browse our curated collection of architectural projects and connect with top professionals.`)
+
+  const baseUrl = getSiteUrl()
+  const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined
+  const ogImage = primaryPhoto?.url
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical
+    },
+    openGraph: {
+      type: 'article',
+      title,
+      description,
+      url: canonical,
+      images: ogImage ? [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: project.title,
+        }
+      ] : undefined,
+      siteName: 'Arco'
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ogImage ? [ogImage] : undefined,
+    }
+  }
+}
+
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
   const resolvedParams = await params
   const resolvedSearchParams = await searchParams
 
   const supabase = await createServerSupabaseClient()
+  
+  // Resolve redirects with recursive chain detection
+  const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
+  
+  if (finalSlug !== resolvedParams.slug) {
+    redirect(`/projects/${finalSlug}`)
+  }
+
   const [{ data: authData }, projectResult] = await Promise.all([
     supabase.auth.getUser(),
     supabase
@@ -109,7 +248,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .select(
         "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, slug, created_at, updated_at",
       )
-      .eq("slug", resolvedParams.slug)
+      .eq("slug", finalSlug)
       .maybeSingle(),
   ])
 
@@ -874,6 +1013,22 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   return (
     <ProjectPreviewProvider value={previewData}>
       <ProjectGalleryModalProvider>
+        <ProjectStructuredData
+          project={{
+            id: project.id,
+            title: project.title,
+            description: project.description,
+            slug: project.slug,
+            createdAt: project.created_at,
+            location: {
+              city: project.address_city,
+              region: project.address_region,
+              summary: locationSummary
+            }
+          }}
+          coverPhotoUrl={coverPhoto?.url}
+          professionals={professionalsSummary}
+        />
         <div className="min-h-screen bg-white">
           {canPreview && <PreviewBanner />}
 

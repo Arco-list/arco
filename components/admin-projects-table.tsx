@@ -25,6 +25,8 @@ import {
   setProjectFeaturedAction,
   setProjectStatusAction,
 } from "@/app/admin/projects/actions"
+import { EditableSeoCell } from "@/components/editable-seo-cell"
+import { calculateSeoStatus } from "@/lib/seo-utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -168,6 +170,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0])
+  const [seoUpdateTrigger, setSeoUpdateTrigger] = useState(0)
 
   const totalCount = projects.length
 
@@ -573,8 +576,13 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     startTransition(async () => {
       const result = await setProjectFeaturedAction({ projectId: project.id, featured: nextFeatured })
       if (!result.success) {
-        toast.error("Unable to update featured status", { description: result.error })
+        toast.error("Unable to update featured status", { 
+          description: result.error.message 
+        })
       } else {
+        if (result.warnings?.length) {
+          result.warnings.forEach(warning => toast.warning(warning))
+        }
         toast.success(`Project ${nextFeatured ? "added to" : "removed from"} featured list`)
       }
     })
@@ -591,7 +599,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       const result = await setProjectStatusAction({ projectId: project.id, status: "published" })
 
       if (!result.success) {
-        toast.error("Unable to approve project", { description: result.error })
+        toast.error("Unable to approve project", { 
+          description: result.error.message 
+        })
         return
       }
 
@@ -626,10 +636,15 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       })
 
       if (!result.success) {
-        toast.error("Unable to update status", { description: result.error })
+        toast.error("Unable to update status", { 
+          description: result.error.message 
+        })
         return
       }
 
+      if (result.warnings?.length) {
+        result.warnings.forEach(warning => toast.warning(warning))
+      }
       toast.success(`Status updated to ${STATUS_LABELS[statusSelection].label}`)
       closeStatusDialog()
     })
@@ -645,7 +660,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       })
 
       if (!result.success) {
-        toast.error("Unable to change owner", { description: result.error })
+        toast.error("Unable to change owner", { 
+          description: result.error.message 
+        })
         return
       }
 
@@ -661,13 +678,19 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     startDeleteTransition(async () => {
       const result = await deleteProjectAction({ projectId: deleteProject.id })
       if (!result.success) {
-        toast.error("Unable to delete project", { description: result.error })
+        toast.error("Unable to delete project", { 
+          description: result.error.message 
+        })
         return
       }
 
       toast.success("Project deleted")
       setDeleteProject(null)
     })
+  }
+
+  const handleSeoUpdate = () => {
+    setSeoUpdateTrigger(prev => prev + 1)
   }
 
   return (
@@ -703,17 +726,17 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               {showSeoView ? (
                 <>
-                  <TableHead className="w-[220px]">Slug</TableHead>
-                  <TableHead>Meta title</TableHead>
-                  <TableHead>Meta description</TableHead>
-                  <TableHead className="w-[140px]">SEO status</TableHead>
-                  <TableHead className="w-[70px]" />
+                  <TableHead className="w-auto whitespace-nowrap">Slug</TableHead>
+                  <TableHead className="w-auto">Meta title</TableHead>
+                  <TableHead className="w-auto">Meta description</TableHead>
+                  <TableHead className="w-auto whitespace-nowrap">SEO status</TableHead>
+                  <TableHead className="w-[50px]" />
                 </>
               ) : (
                 <>
@@ -758,43 +781,68 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                 const showPreciseLocation = Boolean(preciseLocation && preciseLocation !== locationSummary)
 
                 if (showSeoView) {
+                  const dynamicSeoStatus = calculateSeoStatus({
+                    slug: project.slug,
+                    seoTitle: project.seoTitle,
+                    seoDescription: project.seoDescription
+                  })
+
                   return (
                     <TableRow key={project.id} className={cn(isPending && "opacity-70")}> 
-                      <TableCell>
-                        {project.slug ? (
-                          <Link
-                            href={projectHref}
-                            target="_blank"
-                            className="flex items-center gap-2 font-medium text-blue-600 hover:underline"
-                          >
-                            {project.slug}
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">Slug missing</span>
-                        )}
+                      <TableCell className="align-top whitespace-nowrap pr-6">
+                        <div className="space-y-1 min-w-[200px]">
+                          <EditableSeoCell
+                            projectId={project.id}
+                            projectTitle={project.title}
+                            field="slug"
+                            value={project.slug}
+                            onUpdate={handleSeoUpdate}
+                          />
+                          {project.slug && (
+                            <Link
+                              href={projectHref}
+                              target="_blank"
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                            >
+                              View page <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell>
-                        {project.seoTitle ? (
-                          <span className="font-medium">{project.seoTitle}</span>
-                        ) : (
-                          <span className="text-muted-foreground">Meta title not set</span>
-                        )}
+                      <TableCell className="align-top pr-6">
+                        <div className="min-w-[250px] max-w-[350px]">
+                          <EditableSeoCell
+                            projectId={project.id}
+                            projectTitle={project.title}
+                            field="seoTitle"
+                            value={project.seoTitle}
+                            onUpdate={handleSeoUpdate}
+                          />
+                        </div>
                       </TableCell>
-                      <TableCell>
-                        {project.seoDescription ? (
-                          <span className="text-sm text-muted-foreground line-clamp-2">{project.seoDescription}</span>
-                        ) : (
-                          <span className="text-muted-foreground">Meta description not set</span>
-                        )}
+                      <TableCell className="align-top pr-6">
+                        <div className="min-w-[300px] max-w-[500px]">
+                          <EditableSeoCell
+                            projectId={project.id}
+                            projectTitle={project.title}
+                            field="seoDescription"
+                            value={project.seoDescription}
+                            onUpdate={handleSeoUpdate}
+                          />
+                        </div>
                       </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                      <TableCell className="align-top whitespace-nowrap">
+                        <span className={cn(
+                          "inline-flex items-center gap-1 text-sm rounded-md px-2 py-1 font-medium",
+                          dynamicSeoStatus === 'Ready' && "bg-green-100 text-green-800",
+                          dynamicSeoStatus === 'Partial' && "bg-amber-100 text-amber-800",
+                          dynamicSeoStatus === 'Missing' && "bg-red-100 text-red-800"
+                        )}>
                           <Globe className="h-4 w-4" />
-                          {project.seoStatus ?? "Unknown"}
+                          {dynamicSeoStatus}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right align-top">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">

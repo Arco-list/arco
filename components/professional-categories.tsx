@@ -42,27 +42,32 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
     <section className="py-16 px-4 md:px-8 bg-gray-50">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900">Featured professional categories</h2>
-          <div className="hidden md:flex gap-2">
-            <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <h2 className="text-2xl font-semibold text-gray-900">Popular professional services</h2>
+          <div className="flex items-center gap-2">
+            <Link href="/professionals" className="text-sm text-gray-600 hover:text-gray-900 transition-colors mr-2">
+              View all
+            </Link>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 md:gap-4 md:overflow-visible"
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2"
           style={{ scrollSnapType: "x mandatory" }}
         >
           {categories.map((category) => (
             <Link
               key={category.id}
               href={category.href}
-              className="group cursor-pointer flex-none w-64 md:w-auto"
+              className="group cursor-pointer flex-none w-80 sm:w-72 md:w-60 lg:w-64 xl:w-72"
               style={{ scrollSnapAlign: "start" }}
             >
               <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3">

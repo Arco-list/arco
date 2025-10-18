@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { getSupportEmail } from "@/lib/utils"
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -50,7 +51,7 @@ export default function TermsPage() {
             </p>
 
             <h2 className="text-2xl font-semibold text-black mt-8 mb-4">5. Contact Information</h2>
-            <p>If you have any questions about these Terms of Service, please contact us at legal@arco.com.</p>
+            <p>If you have any questions about these Terms of Service, please contact us at {getSupportEmail('legal')}.</p>
           </div>
         </div>
       </main>

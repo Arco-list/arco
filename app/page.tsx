@@ -261,13 +261,58 @@ async function loadLandingData() {
 
   const resolvedHeroProjects = heroProjectCards.length > 0 ? heroProjectCards : FALLBACK_HERO_PROJECTS
 
-  const popularProjectCards: PopularProjectCard[] = popularProjects.slice(0, 10).map((project) => ({
-    id: project.id,
-    title: project.title ?? "Untitled project",
-    href: project.slug ? `/projects/${project.slug}` : "/projects",
-    imageUrl: project.primary_photo_url,
-    likes: project.likes_count ?? 0,
-  }))
+  // Build mapping for title formatting (categories + taxonomy options)
+  const allCategories = [...parentCategories, ...childCategories]
+  const labelMap = new Map<string, string>()
+  
+  // Add categories to the map
+  allCategories.forEach(category => {
+    if (category.id && category.name) {
+      labelMap.set(category.id, category.name)
+    }
+  })
+  
+  // Add taxonomy options to the map
+  const taxonomyOptionsResult = await supabase
+    .from("project_taxonomy_options")
+    .select("id, name")
+    .eq("is_active", true)
+  
+  if (!taxonomyOptionsResult.error) {
+    const taxonomyOptions = taxonomyOptionsResult.data ?? []
+    taxonomyOptions.forEach(option => {
+      if (option.id && option.name) {
+        labelMap.set(option.id, option.name)
+      }
+    })
+  }
+
+  const popularProjectCards: PopularProjectCard[] = popularProjects.slice(0, 10).map((project) => {
+    const style = project.style_preferences?.[0] || ""
+    const subType = project.project_type || ""
+    const location = project.location || "Location unavailable"
+    
+    const parts = []
+    if (style) {
+      const styleLabel = labelMap.get(style) || style
+      parts.push(styleLabel)
+    }
+    if (subType) {
+      const subTypeLabel = labelMap.get(subType) || subType
+      parts.push(subTypeLabel)
+    }
+    parts.push(`in ${location}`)
+    
+    const title = parts.join(" ")
+    
+    return {
+      id: project.id,
+      title,
+      href: project.slug ? `/projects/${project.slug}` : "/projects",
+      imageUrl: project.primary_photo_url,
+      likes: project.likes_count ?? 0,
+    }
+  })
 
   const professionalCategoryCounts = new Map<string, number>()
   professionalSpecialties.forEach((entry) => {
@@ -333,7 +378,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-white">
       <Header transparent />
-      <main>
+      <main className="pt-0">
         <HeroSection projects={heroProjects} />
         <ProjectCategories categories={projectCategories} />
         <PopularProjects projects={popularProjects} />

@@ -120,7 +120,7 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
       <div className="px-4 md:px-8">
         <div className="max-w-[1800px] mx-auto py-8">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-medium text-gray-900">{getPageTitle()}</h1>
+            <h4 className="text-gray-900">{getPageTitle()}</h4>
 
             <div className="relative">
               <Button
@@ -182,7 +182,7 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
             {sortedProfessionals.map((professional) => {
               const professionalId = professional.id ?? ""
               const isSaved = professionalId ? savedProfessionalIds.has(professionalId) : false

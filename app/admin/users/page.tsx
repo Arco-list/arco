@@ -157,7 +157,7 @@ export default async function UsersPage() {
       typeof authRecord?.user_metadata?.full_name === "string" ? authRecord.user_metadata.full_name : ""
     const displayName = profileName || metadataName || authRecord?.email || "Admin user"
 
-    const email = authRecord?.email ?? "unknown@arco.app"
+    const email = authRecord?.email ?? "unknown@example.com"
     const adminRole = profile.admin_role === "super_admin" ? "super_admin" : "admin"
     const isActive = profile.is_active !== false
     const bannedUntil = authRecord?.banned_until ?? null

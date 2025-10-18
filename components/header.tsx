@@ -28,6 +28,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParamQuery);
   const [isSigningOut, startSignOutTransition] = useTransition();
+  const [isScrolled, setIsScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isLoggedIn = Boolean(user);
@@ -98,12 +99,25 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
     setSearchQuery(searchParamQuery);
   }, [searchParamQuery]);
 
-  const headerClasses = transparent
-    ? "absolute top-0 left-0 right-0 z-50 px-4 py-4 md:px-8"
-    : "border-b border-gray-200 px-4 py-4 md:px-8";
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
 
-  const textColor = transparent ? "text-white" : "text-black";
-  const hoverColor = transparent ? "hover:text-gray-300" : "hover:text-gray-600";
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const headerClasses = transparent
+    ? `fixed top-0 left-0 right-0 z-50 px-4 md:px-8 transition-all duration-200 ${
+        isScrolled 
+          ? "bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm py-3 md:py-4" 
+          : "py-4"
+      }`
+    : "fixed top-0 left-0 right-0 z-50 border-b border-gray-200 px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4";
+
+  const textColor = transparent && !isScrolled ? "text-white" : "text-black";
+  const hoverColor = transparent && !isScrolled ? "hover:text-gray-300" : "hover:text-gray-600";
 
   const redirectQuery = pathname ? `?redirectTo=${encodeURIComponent(pathname)}` : "";
 
@@ -115,7 +129,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
             <Link href="/" className="transition-opacity hover:opacity-80">
               <img
                 src={
-                  transparent
+                  transparent && !isScrolled
                     ? "/images/arco-logo-white.svg"
                     : "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                 }
@@ -127,20 +141,20 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
             <div className="hidden items-center space-x-6 md:flex">
               <Link
                 href="/projects"
-                className={`text-sm font-medium transition-colors ${
+                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
                   pathname === "/projects"
-                    ? "text-red-500 border-b-2 border-red-500 pb-1"
-                    : `${textColor} ${hoverColor}`
+                    ? "text-red-500 border-red-500"
+                    : `${textColor} ${hoverColor} border-transparent`
                 }`}
               >
                 Projects
               </Link>
               <Link
                 href="/professionals"
-                className={`text-sm font-medium transition-colors ${
+                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
                   pathname === "/professionals"
-                    ? "text-red-500 border-b-2 border-red-500 pb-1"
-                    : `${textColor} ${hoverColor}`
+                    ? "text-red-500 border-red-500"
+                    : `${textColor} ${hoverColor} border-transparent`
                 }`}
               >
                 Professionals
@@ -149,7 +163,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
           </div>
 
           <HeaderSearch
-            transparent={transparent}
+            transparent={transparent && !isScrolled}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             onSearch={handleSearch}
@@ -169,7 +183,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   variant="ghost"
                   size="sm"
                   className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium ${
-                    transparent
+                    transparent && !isScrolled
                       ? "border-white text-white hover:bg-white/10 hover:text-white"
                       : "border-black text-black hover:bg-gray-100"
                   }`}
@@ -185,7 +199,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 variant="ghost"
                 size="sm"
                 className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium ${
-                  transparent
+                  transparent && !isScrolled
                     ? "border-white text-white hover:bg-white/10 hover:text-white"
                     : "border-black text-black hover:bg-gray-100"
                 }`}
@@ -317,7 +331,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     <form onSubmit={handleSearch} className="relative">
                       <input
                         type="text"
-                        placeholder="Search projects..."
+                        placeholder="Search Arco"
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
                         className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"

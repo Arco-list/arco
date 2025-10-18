@@ -8,7 +8,7 @@ import { ProfessionalGallery } from "@/components/professional-gallery"
 import { ProfessionalInfo } from "@/components/professional-info"
 import { ProfessionalProjects } from "@/components/professional-projects"
 import { ProfessionalReviews } from "@/components/professional-reviews"
-import { fetchProfessionalDetail } from "@/lib/professionals/queries"
+import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
 
 const REVIEWS_ANCHOR_ID = "professional-reviews"
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=800&width=1200"
@@ -20,7 +20,7 @@ type PageParams = {
 export const revalidate = 300
 
 export async function generateMetadata({ params }: { params: PageParams }): Promise<Metadata> {
-  const professional = await fetchProfessionalDetail(params.slug)
+  const professional = await fetchProfessionalMetadata(params.slug)
 
   if (!professional) {
     return {
@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: { params: PageParams }): Prom
     professional.description ??
     (professional.location ? `Discover ${professional.name} in ${professional.location}.` : `Discover ${professional.name}.`)
 
-  const image = professional.gallery.find((entry) => entry.isCover)?.url ?? PLACEHOLDER_IMAGE
+  const image = professional.coverImageUrl ?? PLACEHOLDER_IMAGE
 
   return {
     title: `${professional.name} · Arco`,

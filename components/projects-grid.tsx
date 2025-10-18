@@ -126,9 +126,9 @@ export function ProjectsGrid() {
         <div className="max-w-[1800px] mx-auto py-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-xl font-medium text-gray-900">
+              <h4 className="text-gray-900">
                 {headingText}
-              </h1>
+              </h4>
             </div>
 
             <div className="relative">
@@ -184,7 +184,7 @@ export function ProjectsGrid() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
             {sortedProjects.map((project) => {
               const projectId = project.id ?? ""
               const override = projectId ? typePhotoOverrides[projectId] : undefined
@@ -232,7 +232,7 @@ export function ProjectsGrid() {
                 </div>
                 <div className="mt-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">
+                    <h7 className="text-gray-900 line-clamp-2 flex-1">
                       {(() => {
                         const style = project.style_preferences?.[0] || ""
                         const subType = project.project_type || ""
@@ -251,7 +251,7 @@ export function ProjectsGrid() {
                         
                         return parts.join(" ")
                       })()}
-                    </div>
+                    </h7>
                     <button
                       type="button"
                       onClick={(event) => {
