@@ -144,15 +144,6 @@ export async function setProjectStatusAction(input: {
     )
   }
 
-  if (!user) {
-    return createErrorResponse(
-      'AUTH',
-      'User authentication failed',
-      {},
-      'admin-projects-status'
-    )
-  }
-
   const updatePayload: Record<string, unknown> = {
     status: statusResult.data,
     status_updated_at: new Date().toISOString(),

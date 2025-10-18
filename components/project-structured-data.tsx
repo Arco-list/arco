@@ -1,4 +1,3 @@
-import type { ProjectPreviewData } from "@/contexts/project-preview-context"
 import { getSiteUrl } from "@/lib/utils"
 
 interface ProjectStructuredDataProps {

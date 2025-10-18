@@ -28,8 +28,10 @@ export function generateSlug(title: string, maxLength = 100): string {
 /**
  * Validates a slug format according to database constraints
  */
-export function isValidSlug(slug: string): boolean {
-  if (!slug || slug.length === 0) return false
+export function isValidSlug(slug: string, maxLength = 100): boolean {
+  if (!slug || slug.length === 0 || slug.length > maxLength) return false
+  if (slug.startsWith('-') || slug.endsWith('-')) return false
+  if (slug.includes('--')) return false
   return /^[a-z0-9-]+$/.test(slug)
 }
 
