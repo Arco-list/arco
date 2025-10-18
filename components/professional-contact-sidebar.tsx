@@ -17,6 +17,7 @@ import {
 import type { ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { ReportModal } from "./report-modal"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=120&width=120"
 const SOCIAL_ICON_MAP: Record<string, LucideIcon> = {
@@ -52,6 +53,7 @@ const normalizeUrl = (value: string | null) => {
 }
 
 export function ProfessionalContactSidebar({ professional }: ProfessionalContactSidebarProps) {
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const company = professional.company
   const phone = company.phone ?? null
   const email = company.email ?? null
@@ -181,8 +183,17 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
           >
             {email ? <a href={`mailto:${email}`}>Contact</a> : <span>Contact</span>}
           </Button>
+
+          <button
+            className="text-sm text-gray-500 underline transition hover:text-gray-700"
+            onClick={() => setIsReportModalOpen(true)}
+          >
+            Report this Professional
+          </button>
         </div>
       </Card>
+
+      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />
     </div>
   )
 }

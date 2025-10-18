@@ -1,12 +1,12 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
+import Link from "next/link"
 import { Bookmark, Share, Star } from "lucide-react"
 
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard, ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
-import { ReportModal } from "./report-modal"
 import { ShareModal } from "./share-modal"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
@@ -39,7 +39,6 @@ const formatArray = (values: string[], options?: { limit?: number }) => {
 }
 
 export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId }: ProfessionalInfoProps) {
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 
   const {
@@ -87,19 +86,10 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     await saveProfessional(professionalCard)
   }, [isSaved, professional.id, professionalCard, removeProfessional, saveProfessional])
 
-  const breadcrumbs = useMemo(() => {
-    const parts = ["Professionals"]
-    if (professional.location) {
-      parts.push(professional.location)
-    }
-    if (professional.specialties[0]) {
-      parts.push(professional.specialties[0])
-    } else if (professional.services[0]) {
-      parts.push(professional.services[0])
-    }
-    parts.push(professional.name)
-    return parts.join(" > ")
-  }, [professional.location, professional.name, professional.services, professional.specialties])
+  const breadcrumbs = useMemo(() => [
+    { label: "Professionals", href: "/professionals" },
+    { label: professional.name, href: null }
+  ], [professional.name])
 
   const ratingDisplay = useMemo(
     () => ({
@@ -165,7 +155,20 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3">
-          <div className="text-sm text-gray-500">{breadcrumbs}</div>
+          <nav className="text-sm text-gray-500">
+            {breadcrumbs.map((crumb, index) => (
+              <span key={index}>
+                {crumb.href ? (
+                  <Link href={crumb.href} className="hover:text-gray-700 hover:underline">
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span className="text-gray-900">{crumb.label}</span>
+                )}
+                {index < breadcrumbs.length - 1 && <span className="mx-2">></span>}
+              </span>
+            ))}
+          </nav>
 
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
@@ -185,12 +188,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
           </div>
         </div>
 
-        <button
-          className="self-start text-sm text-gray-500 underline transition hover:text-gray-700 sm:self-center"
-          onClick={() => setIsReportModalOpen(true)}
-        >
-          Report this listing
-        </button>
       </div>
 
       <div className="space-y-3">
@@ -245,7 +242,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
         </div>
       </div>
 
-      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
