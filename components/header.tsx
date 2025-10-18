@@ -142,7 +142,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               <Link
                 href="/projects"
                 className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
-                  pathname === "/projects"
+                  pathname.startsWith("/projects")
                     ? "text-red-500 border-red-500"
                     : `${textColor} ${hoverColor} border-transparent`
                 }`}
@@ -152,7 +152,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               <Link
                 href="/professionals"
                 className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
-                  pathname === "/professionals"
+                  pathname.startsWith("/professionals")
                     ? "text-red-500 border-red-500"
                     : `${textColor} ${hoverColor} border-transparent`
                 }`}

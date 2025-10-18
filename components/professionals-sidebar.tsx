@@ -44,7 +44,7 @@ export function ProfessionalsSidebar() {
           ))}
         </div>
 
-        <Button variant="outline" className="w-full bg-transparent">
+        <Button variant="default" className="w-full">
           Show all professionals
         </Button>
       </Card>

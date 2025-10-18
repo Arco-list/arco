@@ -59,7 +59,7 @@ const ResetPassword1 = ({
             <div className="min-w-sm border-muted bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md text-center">
               <h1 className="text-xl font-semibold">Check Your Email</h1>
               <p className="text-muted-foreground text-sm">We’ve sent a password reset link to {email}</p>
-              <Button asChild className="w-full">
+              <Button asChild variant="secondary" className="w-full">
                 <Link href={loginUrl}>Back to Login</Link>
               </Button>
             </div>
@@ -90,7 +90,7 @@ const ResetPassword1 = ({
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <Button type="submit" className="w-full">
+            <Button type="submit" variant="secondary" className="w-full">
               {buttonText}
             </Button>
           </form>

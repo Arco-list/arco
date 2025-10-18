@@ -81,7 +81,7 @@ const Signup1 = ({
                 </div>
               )}
             </div>
-            <Button type="submit" className="w-full" disabled={!isPasswordValid}>
+            <Button type="submit" variant="secondary" className="w-full" disabled={!isPasswordValid}>
               {buttonText}
             </Button>
           </div>

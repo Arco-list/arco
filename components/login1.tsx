@@ -40,7 +40,7 @@ const Login1 = ({
             {heading && <h1 className="text-xl font-semibold">{heading}</h1>}
             <Input type="email" placeholder="Email" className="text-sm" required />
             <Input type="password" placeholder="Password" className="text-sm" required />
-            <Button type="submit" className="w-full">
+            <Button type="submit" variant="secondary" className="w-full">
               {buttonText}
             </Button>
             <div className="text-center">

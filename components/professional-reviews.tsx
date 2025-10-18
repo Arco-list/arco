@@ -189,21 +189,21 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
             <div className="mb-2 flex justify-center">
               <Award className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="mb-1 font-medium text-gray-900">Quality of work</h3>
+            <h3 className="mb-1 text-sm font-medium text-gray-900">Quality of work</h3>
             <p className="text-2xl font-semibold">{formatRating(ratings.quality)}</p>
           </div>
           <div className="text-center">
             <div className="mb-2 flex justify-center">
               <Shield className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="mb-1 font-medium text-gray-900">Reliability</h3>
+            <h3 className="mb-1 text-sm font-medium text-gray-900">Reliability</h3>
             <p className="text-2xl font-semibold">{formatRating(ratings.reliability)}</p>
           </div>
           <div className="text-center">
             <div className="mb-2 flex justify-center">
               <MessageCircle className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="mb-1 font-medium text-gray-900">Communication</h3>
+            <h3 className="mb-1 text-sm font-medium text-gray-900">Communication</h3>
             <p className="text-2xl font-semibold">{formatRating(ratings.communication)}</p>
           </div>
         </div>
