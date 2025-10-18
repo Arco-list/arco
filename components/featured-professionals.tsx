@@ -44,7 +44,7 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
             <Link href="/professionals" className="text-sm text-gray-600 hover:text-gray-900 transition-colors mr-2">
               View all
             </Link>
-            <div className="hidden md:flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -57,7 +57,7 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
 
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 mb-8 md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-4 md:overflow-visible"
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 mb-8"
           style={{ scrollSnapType: "x mandatory" }}
         >
           {professionals.length === 0 ? (
@@ -69,7 +69,7 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
               <Link
                 key={professional.id}
                 href={professional.href}
-                className="group cursor-pointer flex-none w-80 md:w-auto"
+                className="group cursor-pointer flex-none w-80 sm:w-72 md:w-60 lg:w-64 xl:w-72"
                 style={{ scrollSnapAlign: "start" }}
               >
                 <div className="relative aspect-square rounded-lg overflow-hidden mb-3">

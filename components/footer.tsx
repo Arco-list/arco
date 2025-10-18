@@ -37,7 +37,7 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
             {Object.entries(footerLinks).map(([category, links]) => (
               <div key={category}>
-                <h3 className="font-semibold text-gray-900 mb-4">{category}</h3>
+                <h6 className="text-gray-900 mb-4">{category}</h6>
                 <ul className="space-y-2">
                   {links.map((link) => (
                     <li key={link}>

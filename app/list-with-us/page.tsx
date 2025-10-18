@@ -45,7 +45,7 @@ export default function ListWithUsPage() {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Header transparent />
-      <main className="flex-1">
+      <main className="flex-1 pt-0">
         {/* Hero Section */}
         <section className="relative h-[70vh] text-white overflow-hidden">
           <div className="absolute inset-0">

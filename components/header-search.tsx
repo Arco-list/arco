@@ -96,7 +96,7 @@ export function HeaderSearch({
       >
         <input
           type="text"
-          placeholder="Search projects or professionals..."
+          placeholder="Search Arco"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           onFocus={() => setIsFocused(true)}

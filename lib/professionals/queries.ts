@@ -424,6 +424,95 @@ export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> 
   return sortProfessionals(cards)
 }
 
+export const fetchProfessionalMetadata = async (professionalId: string): Promise<{
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  location: string | null
+  coverImageUrl: string | null
+} | null> => {
+  if (!isUuid(professionalId)) {
+    logger.warn("Attempted to load professional metadata with invalid id", { professionalId })
+    return null
+  }
+
+  const supabase = await createServerSupabaseClient()
+
+  const professionalResult = await supabase
+    .from("professionals")
+    .select(`
+      id,
+      title,
+      bio,
+      company_id,
+      is_verified,
+      is_available,
+      profiles:profiles!professionals_user_id_fkey (
+        first_name,
+        last_name,
+        location
+      ),
+      company:companies (
+        id,
+        name,
+        description,
+        logo_url,
+        city,
+        country,
+        plan_tier,
+        plan_expires_at,
+        status
+      )
+    `)
+    .eq("id", professionalId)
+    .maybeSingle()
+
+  if (professionalResult.error) {
+    logger.error("Failed to fetch professional metadata", { professionalId, supabaseError: professionalResult.error })
+    return null
+  }
+
+  const row = professionalResult.data
+  if (!row || !row.company) {
+    return null
+  }
+
+  if (!isPlusPlanActive(row) || row.is_available !== true) {
+    return null
+  }
+
+  const photosResult = await supabase.rpc("get_public_company_photos", { p_company_id: row.company.id })
+
+  const profile = row.profiles
+  const company = row.company
+
+  const name = company.name?.trim() || 
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() || 
+    row.title || 
+    "Professional"
+
+  const description = company.description || row.bio
+
+  const location = formatLocation([company.city, company.country], profile?.location ?? null)
+
+  let coverImageUrl: string | null = null
+  if (!photosResult.error && Array.isArray(photosResult.data)) {
+    const photos = photosResult.data as CompanyPhotoRow[]
+    const coverPhoto = photos.find(photo => photo.is_cover === true)
+    coverImageUrl = coverPhoto?.url || photos[0]?.url || null
+  }
+
+  return {
+    id: row.id,
+    slug: row.id,
+    name,
+    description,
+    location,
+    coverImageUrl
+  }
+}
+
 export const fetchProfessionalDetail = async (professionalId: string): Promise<ProfessionalDetail | null> => {
   if (!isUuid(professionalId)) {
     logger.warn("Attempted to load professional detail with invalid id", { professionalId })

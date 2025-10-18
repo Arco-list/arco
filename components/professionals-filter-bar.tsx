@@ -156,7 +156,6 @@ export function ProfessionalsFilterBar() {
   const serviceDropdownRef = useRef<HTMLDivElement>(null)
   const locationDropdownRef = useRef<HTMLDivElement>(null)
   const desktopCarouselRef = useRef<HTMLDivElement>(null)
-  const mobileCarouselRef = useRef<HTMLDivElement>(null)
 
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(true)
@@ -239,8 +238,7 @@ export function ProfessionalsFilterBar() {
   }, [sections])
 
   const updateCarouselScrollState = () => {
-    // Check desktop carousel first (visible on md+)
-    const carousel = desktopCarouselRef.current || mobileCarouselRef.current
+    const carousel = desktopCarouselRef.current
     if (!carousel) return
 
     const { scrollLeft, scrollWidth, clientWidth } = carousel
@@ -254,13 +252,9 @@ export function ProfessionalsFilterBar() {
     }
 
     const desktopContainer = desktopCarouselRef.current
-    const mobileContainer = mobileCarouselRef.current
 
     if (desktopContainer) {
       desktopContainer.addEventListener("scroll", updateScrollButtons)
-    }
-    if (mobileContainer) {
-      mobileContainer.addEventListener("scroll", updateScrollButtons)
     }
 
     updateScrollButtons()
@@ -268,9 +262,6 @@ export function ProfessionalsFilterBar() {
     return () => {
       if (desktopContainer) {
         desktopContainer.removeEventListener("scroll", updateScrollButtons)
-      }
-      if (mobileContainer) {
-        mobileContainer.removeEventListener("scroll", updateScrollButtons)
       }
     }
   }, [quickServiceItems.length])
@@ -291,7 +282,7 @@ export function ProfessionalsFilterBar() {
   }, [quickServiceItems])
 
   const scrollCarousel = (direction: "left" | "right") => {
-    const carousel = desktopCarouselRef.current || mobileCarouselRef.current
+    const carousel = desktopCarouselRef.current
     if (!carousel) return
 
     const scrollAmount = carousel.clientWidth * 0.8
@@ -375,88 +366,31 @@ export function ProfessionalsFilterBar() {
     setActiveDropdown(null)
   }
 
-  const MobileCarousel = () =>
-    quickServiceItems.length > 0 ? (
-      <div className="flex md:hidden items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollLeft ? "opacity-50 cursor-not-allowed" : ""}`}
-          onClick={() => scrollCarousel("left")}
-          disabled={!canScrollLeft}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-
-        <div className="flex-1 overflow-hidden">
-          <div
-            ref={mobileCarouselRef}
-            className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {quickServiceItems.map((item) => {
-              const Icon = getServiceIcon(item.slug, item.name)
-              const isSelected = selectedServices.includes(item.id)
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => toggleServiceSelection(item.id)}
-                  className={`flex items-center gap-2 whitespace-nowrap py-2 px-3 rounded-full transition-colors flex-shrink-0 border ${
-                    isSelected
-                      ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
-                      : "bg-transparent border-gray-300 hover:border-gray-400"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="text-xs font-medium">{item.name}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
-          onClick={() => scrollCarousel("right")}
-          disabled={!canScrollRight}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    ) : null
 
   return (
     <>
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-[1800px] mx-auto px-4 md:px-8 py-4 space-y-3 md:space-y-0">
-          <div className="flex items-center gap-4 flex-wrap md:flex-nowrap">
+      <div className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-14 z-40 h-16">
+        <div className="max-w-[1800px] mx-auto px-4 py-3 min-h-[64px]">
+          <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary"
               className={getButtonClassName(activeFilterCount > 0)}
               onClick={() => setIsModalOpen(true)}
             >
-              <Filter className="h-4 w-4 mr-2" />
+              <Filter className="h-4 w-4" />
               Filters
-              {activeFilterCount > 0 ? <span className="ml-2 text-xs text-gray-500">{activeFilterCount}</span> : null}
             </Button>
 
-            <div className="hidden md:flex items-center gap-4">
+            {/* Service and Location Dropdowns - Hidden on mobile */}
+            <div className="hidden md:flex items-center gap-2">
               <div className="relative" ref={serviceDropdownRef}>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="quaternary"
                   onClick={() => toggleDropdown("service")}
                   className={getButtonClassName(selectedCategories.length + selectedServices.length > 0)}
                 >
                   Service
-                  {(selectedCategories.length || selectedServices.length) > 0 ? (
-                    <span className="ml-2 text-xs text-gray-500">
-                      {selectedCategories.length + selectedServices.length} selected
-                    </span>
-                  ) : null}
+                  <ChevronDown className="h-4 w-4" />
                 </Button>
 
                 {activeDropdown === "service" && (
@@ -521,10 +455,9 @@ export function ProfessionalsFilterBar() {
                       })}
                     </div>
 
-                    <div className="border-t border-gray-200 p-4 flex gap-3">
+                    <div className="border-t border-gray-200 p-3 flex gap-2">
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="quaternary"
                         onClick={() => {
                           handleClearServiceFilters()
                           setActiveDropdown(null)
@@ -534,7 +467,6 @@ export function ProfessionalsFilterBar() {
                         Clear filter
                       </Button>
                       <Button
-                        size="sm"
                         onClick={() => setActiveDropdown(null)}
                         className="flex-1 bg-black text-white hover:bg-gray-800"
                       >
@@ -547,13 +479,12 @@ export function ProfessionalsFilterBar() {
 
               <div className="relative" ref={locationDropdownRef}>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="quaternary"
                   onClick={() => toggleDropdown("location")}
                   className={getButtonClassName(Boolean(selectedCountry || selectedState || selectedCity))}
                 >
                   {selectedLocationLabel || "Location"}
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" />
                 </Button>
 
                 {activeDropdown === "location" && (
@@ -586,12 +517,11 @@ export function ProfessionalsFilterBar() {
                         )}
                       </div>
 
-                      <div className="mt-4 flex gap-3">
-                        <Button variant="outline" size="sm" onClick={clearLocationFilter} className="flex-1 bg-transparent">
+                      <div className="mt-4 flex gap-2">
+                        <Button variant="quaternary" onClick={clearLocationFilter} className="flex-1 bg-transparent">
                           Clear filter
                         </Button>
                         <Button
-                          size="sm"
                           onClick={() => setActiveDropdown(null)}
                           className="flex-1 bg-black text-white hover:bg-gray-800"
                         >
@@ -604,46 +534,54 @@ export function ProfessionalsFilterBar() {
               </div>
             </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`hidden md:flex h-8 w-8 p-0 flex-shrink-0 ${!canScrollLeft ? "opacity-50 cursor-not-allowed" : ""}`}
-              onClick={() => scrollCarousel("left")}
-              disabled={!canScrollLeft}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
+            {/* Divider - Hidden on mobile */}
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0 self-center hidden md:block"></div>
+
+            {/* Divider for mobile */}
+            <div className="h-6 w-px bg-gray-200 flex-shrink-0 self-center md:hidden"></div>
+
+            {/* Left scroll button - Only visible on desktop */}
+            <div className="hidden md:block">
+              <Button
+                variant="quaternary"
+                className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollLeft ? "opacity-50 cursor-not-allowed" : ""}`}
+                onClick={() => scrollCarousel("left")}
+                disabled={!canScrollLeft}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
 
             <div className="hidden md:block flex-1 overflow-hidden">
               <div
                 ref={desktopCarouselRef}
-                className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth"
+                className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 {quickServiceItems.map((item) => {
                   const Icon = getServiceIcon(item.slug, item.name)
                   const isSelected = selectedServices.includes(item.id)
                   return (
-                    <button
+                    <Button
                       key={item.id}
+                      variant="quaternary"
                       onClick={() => toggleServiceSelection(item.id)}
-                      className={`flex items-center gap-2 whitespace-nowrap py-2 px-3 rounded-full transition-colors flex-shrink-0 border ${
+                      className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
                         isSelected
                           ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
-                          : "bg-transparent border-gray-300 hover:border-gray-400"
+                          : ""
                       }`}
                     >
                       <Icon className="h-4 w-4" />
-                      <span className="text-xs font-medium">{item.name}</span>
-                    </button>
+                      <span className="text-xs">{item.name}</span>
+                    </Button>
                   )
                 })}
               </div>
             </div>
 
             <Button
-              variant="ghost"
-              size="sm"
+              variant="quaternary"
               className={`hidden md:flex h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
               onClick={() => scrollCarousel("right")}
               disabled={!canScrollRight}
@@ -653,8 +591,7 @@ export function ProfessionalsFilterBar() {
 
             {activeFilterCount > 0 && (
               <Button
-                variant="ghost"
-                size="sm"
+                variant="quaternary"
                 onClick={handleClearAllFilters}
                 className="hidden md:flex text-sm text-gray-600 hover:text-gray-900"
               >
@@ -663,7 +600,31 @@ export function ProfessionalsFilterBar() {
             )}
           </div>
 
-          <MobileCarousel />
+          {/* Mobile carousel without chevron buttons */}
+          <div className="md:hidden mt-3">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-1">
+              {quickServiceItems.map((item) => {
+                const Icon = getServiceIcon(item.slug, item.name)
+                const isSelected = selectedServices.includes(item.id)
+                return (
+                  <Button
+                    key={item.id}
+                    onClick={() => toggleServiceSelection(item.id)}
+                    variant="quaternary"
+                    className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
+                      isSelected
+                        ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
+                        : ""
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="text-xs">{item.name}</span>
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+
         </div>
       </div>
 

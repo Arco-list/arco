@@ -42,7 +42,7 @@ export function ProjectTypes({ types }: ProjectTypesProps) {
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold text-gray-900">Popular project types</h2>
-          <div className="hidden md:flex gap-2">
+          <div className="flex gap-2">
             <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -54,14 +54,14 @@ export function ProjectTypes({ types }: ProjectTypesProps) {
 
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 md:grid md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 md:gap-4 md:overflow-visible"
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2"
           style={{ scrollSnapType: "x mandatory" }}
         >
           {types.map((type) => (
             <Link
               key={type.id}
               href={type.href}
-              className="group cursor-pointer flex-none w-64 md:w-auto"
+              className="group cursor-pointer flex-none w-80 sm:w-72 md:w-60 lg:w-64 xl:w-72"
               style={{ scrollSnapAlign: "start" }}
             >
               <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3">

@@ -85,6 +85,40 @@ const sanitizeBreadcrumbLabel = (label: string | null | undefined): string | nul
   return sanitized.length > 0 ? sanitized : null
 }
 
+async function resolveRedirect(slug: string, supabase: any, visited = new Set<string>()): Promise<string> {
+  // Check for circular reference
+  if (visited.has(slug)) {
+    console.error(`Circular redirect detected in chain: ${Array.from(visited).join(' -> ')} -> ${slug}`)
+    // Return the original slug to gracefully handle the error
+    return Array.from(visited)[0] || slug
+  }
+  
+  visited.add(slug)
+  
+  // Prevent infinite chains
+  if (visited.size > 10) {
+    console.error(`Redirect chain too long: ${Array.from(visited).join(' -> ')}`)
+    return Array.from(visited)[0] || slug
+  }
+  
+  const { data, error } = await supabase
+    .from('project_redirects')
+    .select('new_slug')
+    .eq('old_slug', slug)
+    .maybeSingle()
+  
+  if (error) {
+    console.error('Error fetching redirect:', error)
+    return slug
+  }
+  
+  if (!data?.new_slug) {
+    return slug
+  }
+  
+  return resolveRedirect(data.new_slug, supabase, visited)
+}
+
 type ProjectRow = Tables<"projects">
 type ProjectPhotoRow = Tables<"project_photos">
 type ProjectFeatureRow = Tables<"project_features">
@@ -104,34 +138,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const resolvedParams = await params
   const supabase = await createServerSupabaseClient()
 
-  // Check for redirects first with chain prevention
-  const { data: redirect } = await supabase
-    .from("project_redirects")
-    .select("new_slug")
-    .eq("old_slug", resolvedParams.slug)
-    .maybeSingle()
-
-  if (redirect?.new_slug) {
-    // Check if this would create a chain
-    const { data: chainCheck } = await supabase
-      .from("project_redirects")
-      .select("new_slug")
-      .eq("old_slug", redirect.new_slug)
+  // Resolve redirects with recursive chain detection
+  const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
+  
+  if (finalSlug !== resolvedParams.slug) {
+    // Use redirected project metadata
+    const { data: redirectedProject } = await supabase
+      .from("projects")
+      .select("id, title, description, seo_title, seo_description, slug")
+      .eq("slug", finalSlug)
       .maybeSingle()
-    
-    if (!chainCheck) {
-      // No chain, safe to use redirected project metadata
-      const { data: redirectedProject } = await supabase
-        .from("projects")
-        .select("id, title, description, seo_title, seo_description, slug")
-        .eq("slug", redirect.new_slug)
-        .maybeSingle()
 
-      if (redirectedProject) {
-        return await generateProjectMetadata(redirectedProject, supabase)
-      }
+    if (redirectedProject) {
+      return await generateProjectMetadata(redirectedProject, supabase)
     }
-    // If there's a chain, fall through to use current slug
+    // If redirected project not found, fall through to use current slug
   }
 
   // Get project data for current slug
@@ -213,30 +234,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const supabase = await createServerSupabaseClient()
   
-  // Check for redirects with chain prevention
-  const { data: redirectData } = await supabase
-    .from("project_redirects")
-    .select("new_slug")
-    .eq("old_slug", resolvedParams.slug)
-    .maybeSingle()
-
-  if (redirectData?.new_slug) {
-    // Prevent redirect chains and circular references
-    // Check if the new_slug would redirect again
-    const { data: chainCheck } = await supabase
-      .from("project_redirects")
-      .select("new_slug")
-      .eq("old_slug", redirectData.new_slug)
-      .maybeSingle()
-    
-    if (chainCheck) {
-      // There's a chain, don't follow it to prevent infinite loops
-      console.error(`Redirect chain detected: ${resolvedParams.slug} -> ${redirectData.new_slug} -> ${chainCheck.new_slug}`)
-      // Continue with current slug instead of redirecting
-    } else {
-      // Safe to redirect
-      redirect(`/projects/${redirectData.new_slug}`)
-    }
+  // Resolve redirects with recursive chain detection
+  const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
+  
+  if (finalSlug !== resolvedParams.slug) {
+    redirect(`/projects/${finalSlug}`)
   }
 
   const [{ data: authData }, projectResult] = await Promise.all([
@@ -246,7 +248,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .select(
         "id, client_id, title, description, status, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, slug, created_at, updated_at",
       )
-      .eq("slug", resolvedParams.slug)
+      .eq("slug", finalSlug)
       .maybeSingle(),
   ])
 

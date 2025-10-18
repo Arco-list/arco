@@ -16,7 +16,7 @@ function ProjectsPageContent() {
   return (
     <FilterErrorBoundary>
       <FilterProvider>
-        <div className="min-h-screen flex flex-col">
+        <div className="min-h-screen flex flex-col pt-[60px] md:pt-[68px]">
           <Header />
           <FilterBar />
 

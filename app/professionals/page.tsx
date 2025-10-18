@@ -25,7 +25,7 @@ export default async function ProfessionalsPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col pt-[60px] md:pt-[68px]">
       <Header />
       <FilterErrorBoundary>
         <ProfessionalFilterProvider>

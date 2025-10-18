@@ -56,7 +56,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
       </div>
 
       <div className="mt-3">
-        <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{professional.name}</h3>
+        <h7 className="text-gray-900 line-clamp-2">{professional.name}</h7>
         <p className="text-xs text-gray-500 mt-1">
           {professional.profession} in {professional.location}
         </p>

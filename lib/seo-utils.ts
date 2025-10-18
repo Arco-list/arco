@@ -33,6 +33,8 @@ export function isValidSlug(slug: string): boolean {
   return /^[a-z0-9-]+$/.test(slug)
 }
 
+const MAX_SLUG_ATTEMPTS = 100
+
 /**
  * Generates a unique slug by appending numbers if conflicts exist
  */
@@ -53,7 +55,7 @@ export async function generateUniqueSlug(
 
   // Try numbered variations
   let counter = 2
-  while (counter <= 100) { // Prevent infinite loops
+  while (counter <= MAX_SLUG_ATTEMPTS) {
     const numberedSlug = `${baseSlug}-${counter}`
     if (!(await checkExistsFn(numberedSlug))) {
       return numberedSlug
@@ -62,6 +64,12 @@ export async function generateUniqueSlug(
   }
 
   // Fallback with timestamp if we exhaust numbered options
+  console.warn('Slug generation exhausted numbered attempts', { 
+    baseSlug, 
+    attempts: MAX_SLUG_ATTEMPTS,
+    baseTitle
+  })
+  
   const timestamp = Date.now().toString(36)
   return `${baseSlug}-${timestamp}`
 }
