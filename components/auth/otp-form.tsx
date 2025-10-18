@@ -66,7 +66,7 @@ export const OtpForm = ({ redirectTo, onSuccess }: OtpFormProps) => {
         )}
       </div>
       <input type="hidden" defaultValue={safeRedirectTo ?? ""} {...form.register("redirectTo")} />
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
+      <Button type="submit" variant="secondary" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Sending magic link..." : "Send magic link"}
       </Button>
     </form>

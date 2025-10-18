@@ -139,7 +139,7 @@ export function AdminOnboardingForm({ email, redirectTo }: AdminOnboardingFormPr
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
         {success ? <p className="text-sm font-medium text-green-600">Password saved — redirecting…</p> : null}
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" variant="secondary" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Saving…" : "Save password and continue"}
         </Button>
       </form>

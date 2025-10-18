@@ -77,7 +77,7 @@ export function SimilarProjects() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-section="similar-projects">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-black">Similar projects</h2>
         <div className="flex items-center gap-2">

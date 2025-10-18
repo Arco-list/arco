@@ -151,7 +151,7 @@ export const SignupForm = ({ redirectTo, onSuccess }: SignupFormProps) => {
         )}
       </div>
       <input type="hidden" defaultValue={safeRedirectTo ?? ""} {...form.register("redirectTo")} />
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
+      <Button type="submit" variant="secondary" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Creating account..." : "Create account"}
       </Button>
     </form>

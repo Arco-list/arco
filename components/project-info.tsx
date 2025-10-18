@@ -60,7 +60,7 @@ export function ProjectInfo() {
           {/* Action buttons - moved to same row as breadcrumbs */}
           <div className="flex gap-2">
             <Button
-              variant={isLiked ? "default" : "outline"}
+              variant={isLiked ? "default" : "tertiary"}
               size="sm"
               onClick={() => {
                 if (!projectId) return
@@ -72,12 +72,12 @@ export function ProjectInfo() {
               <ThumbsUp className="w-4 h-4 mr-2" fill={isLiked ? "currentColor" : "none"} />
               {isLiked ? "Liked" : "Like"} • {likesCount}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
+            <Button variant="tertiary" size="sm" onClick={() => setIsShareModalOpen(true)}>
               <Share className="w-4 h-4 mr-2" />
               Share
             </Button>
             <Button
-              variant={isSaved ? "default" : "outline"}
+              variant={isSaved ? "default" : "tertiary"}
               size="sm"
               onClick={() => {
                 if (!projectId) return
