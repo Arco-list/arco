@@ -812,11 +812,11 @@ export default function DashboardListingsPage() {
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Your projects</h1>
+              <h3 className="text-2xl font-semibold text-gray-900">Your projects</h3>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
-                variant="outline"
+                variant="tertiary"
                 size="default"
                 onClick={() => setIsFilterOpen(true)}
                 className={hasActiveFilters ? "border-red-500 text-red-600 bg-red-50" : ""}
@@ -828,7 +828,7 @@ export default function DashboardListingsPage() {
                   </span>
                 )}
               </Button>
-              <Button asChild>
+              <Button asChild variant="secondary">
                 <Link href="/new-project/details">Add project</Link>
               </Button>
             </div>
@@ -1082,8 +1082,8 @@ export default function DashboardListingsPage() {
                 </div>
               </div>
               <div className="mt-3">
-                <h3 className="font-medium text-gray-900">{project.title}</h3>
-                <p className="text-sm text-gray-500 mt-1">{project.subtitle}</p>
+                <h7 className="font-medium text-gray-900">{project.title}</h7>
+                <p className="text-xs text-gray-500 mt-1">{project.subtitle}</p>
               </div>
             </div>
             ))}

@@ -21,8 +21,8 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.133 0 0);
+  --secondary-foreground: oklch(1 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
@@ -226,6 +226,73 @@
 
 .modal-overlay {
   background-color: rgba(128, 128, 128, 0.65);
+}
+
+/* Tertiary Button - Design System Component */
+.btn-tertiary {
+  background-color: #F2F2F2;
+  color: #222222;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: normal;
+  padding: 12px 18px;
+  border-radius: 100px;
+  border: none;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btn-tertiary:hover {
+  background-color: #F2F2F2;
+}
+
+.btn-tertiary:focus-visible {
+  outline: none;
+  ring: 2px solid #222222;
+  ring-offset: 2px;
+}
+
+.btn-tertiary:disabled {
+  background-color: transparent;
+  border: 1px solid #EBEBEB;
+  color: #EBEBEB;
+  cursor: not-allowed;
+}
+
+/* Secondary Button - Design System Component */
+.btn-secondary {
+  background-color: #222222;
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: normal;
+  padding: 12px 18px;
+  border-radius: 100px;
+  border: none;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background-color: #EC2D34;
+}
+
+.btn-secondary:focus-visible {
+  outline: none;
+  ring: 2px solid #222222;
+  ring-offset: 2px;
+}
+
+.btn-secondary:disabled {
+  background-color: #EBEBEB;
+  color: #FFFFFF;
+  cursor: not-allowed;
 }
 
 /* Quaternary Button - Design System Component */
