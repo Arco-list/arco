@@ -71,6 +71,9 @@
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
   --ring: oklch(0.439 0 0);
+  --quaternary: oklch(0.269 0 0);
+  --quaternary-foreground: oklch(0.985 0 0);
+  --quaternary-hover: oklch(0.3 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -139,78 +142,93 @@
     @apply bg-background text-foreground font-sans;
   }
   
-  /* Typography Scale */
+  /* Typography Scale - Using Tailwind utilities */
   h1 {
-    font-size: 76px;
-    font-weight: 600;
-    letter-spacing: -2px;
-    line-height: 1;
+    @apply text-6xl md:text-7xl lg:text-8xl font-semibold tracking-tight leading-none;
     font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
   h2 {
-    font-size: 36px;
-    font-weight: 600;
-    letter-spacing: -1px;
-    line-height: 1.2;
+    @apply text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight leading-tight;
     font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
   h3 {
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: -0.5px;
-    line-height: 1.2;
+    @apply text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight leading-tight;
     font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
   h4 {
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: -0.3px;
-    line-height: 1.2;
+    @apply text-lg md:text-xl font-semibold tracking-tight leading-tight;
     font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
   h5 {
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.2;
+    @apply text-base font-semibold leading-tight;
     font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
   h6 {
-    font-size: 15px;
-    font-weight: 500;
-    letter-spacing: 0;
-    line-height: 1.2;
-    font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+    @apply text-sm font-medium leading-tight;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Typography Utility Classes */
+@layer utilities {
+  .text-display {
+    @apply text-6xl md:text-7xl lg:text-8xl font-semibold tracking-tight leading-none;
+    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
-  h7 {
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0;
-    line-height: 1.2;
-    font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  .text-h1 {
+    @apply text-6xl md:text-7xl lg:text-8xl font-semibold tracking-tight leading-none;
+    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
-  /* Body Text Styles */
-  .body-regular {
-    font-size: 15px;
-    font-weight: 400;
-    letter-spacing: 0;
-    line-height: 1.5;
-    font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  .text-h2 {
+    @apply text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight leading-tight;
+    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
   }
   
-  .body-small {
-    font-size: 13px;
-    font-weight: 400;
-    letter-spacing: 0;
-    line-height: 1.5;
-    font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  .text-h3 {
+    @apply text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight leading-tight;
+    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  }
+  
+  .text-h4 {
+    @apply text-lg md:text-xl font-semibold tracking-tight leading-tight;
+    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  }
+  
+  .text-h5 {
+    @apply text-base font-semibold leading-tight;
+    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  }
+  
+  .text-h6 {
+    @apply text-sm font-medium leading-tight;
+    font-family: var(--font-sans);
+  }
+  
+  .text-h7 {
+    @apply text-xs font-medium leading-tight;
+    font-family: var(--font-sans);
+  }
+  
+  .text-body {
+    @apply text-sm leading-relaxed;
+    font-family: var(--font-sans);
+  }
+  
+  .text-body-small {
+    @apply text-xs leading-relaxed;
+    font-family: var(--font-sans);
+  }
+  
+  .text-body-large {
+    @apply text-base leading-relaxed;
+    font-family: var(--font-sans);
   }
 }
 
@@ -228,109 +246,4 @@
   background-color: rgba(128, 128, 128, 0.65);
 }
 
-/* Tertiary Button - Design System Component */
-.btn-tertiary {
-  background-color: #F2F2F2;
-  color: #222222;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: normal;
-  padding: 12px 18px;
-  border-radius: 100px;
-  border: none;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.btn-tertiary:hover {
-  background-color: #F2F2F2;
-}
-
-.btn-tertiary:focus-visible {
-  outline: none;
-  ring: 2px solid #222222;
-  ring-offset: 2px;
-}
-
-.btn-tertiary:disabled {
-  background-color: transparent;
-  border: 1px solid #EBEBEB;
-  color: #EBEBEB;
-  cursor: not-allowed;
-}
-
-/* Secondary Button - Design System Component */
-.btn-secondary {
-  background-color: #222222;
-  color: #FFFFFF;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: normal;
-  padding: 12px 18px;
-  border-radius: 100px;
-  border: none;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.btn-secondary:hover {
-  background-color: #EC2D34;
-}
-
-.btn-secondary:focus-visible {
-  outline: none;
-  ring: 2px solid #222222;
-  ring-offset: 2px;
-}
-
-.btn-secondary:disabled {
-  background-color: #EBEBEB;
-  color: #FFFFFF;
-  cursor: not-allowed;
-}
-
-/* Quaternary Button - Design System Component */
-.btn-quaternary {
-  background-color: transparent;
-  border: 1px solid #EBEBEB;
-  color: #222222;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: normal;
-  padding: 6px 12px;
-  border-radius: 100px;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.btn-quaternary:hover {
-  background-color: #F2F2F2;
-}
-
-.btn-quaternary:focus-visible {
-  outline: none;
-  ring: 2px solid #222222;
-  ring-offset: 2px;
-}
-
-.btn-quaternary[data-state="on"],
-.btn-quaternary[aria-pressed="true"] {
-  border-color: #222222;
-}
-
-.btn-quaternary:disabled {
-  color: #EBEBEB;
-  border-color: #EBEBEB;
-  background-color: transparent;
-  cursor: not-allowed;
-}
 
