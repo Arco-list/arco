@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { getSupportEmail } from "@/lib/utils"
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -55,7 +56,7 @@ export default function PrivacyPage() {
             </p>
 
             <h2 className="text-2xl font-semibold text-black mt-8 mb-4">6. Contact Us</h2>
-            <p>If you have any questions about this Privacy Policy, please contact us at privacy@arco.com.</p>
+            <p>If you have any questions about this Privacy Policy, please contact us at {getSupportEmail('privacy')}.</p>
           </div>
         </div>
       </main>

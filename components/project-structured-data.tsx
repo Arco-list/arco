@@ -1,4 +1,5 @@
 import type { ProjectPreviewData } from "@/contexts/project-preview-context"
+import { getSiteUrl } from "@/lib/utils"
 
 interface ProjectStructuredDataProps {
   project: {
@@ -21,15 +22,18 @@ interface ProjectStructuredDataProps {
 }
 
 export function ProjectStructuredData({ project, coverPhotoUrl, professionals }: ProjectStructuredDataProps) {
+  const baseUrl = getSiteUrl()
+  const projectUrl = `${baseUrl}/projects/${project.slug}`
+  
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "CreativeWork",
-    "@id": `https://arco.com/projects/${project.slug}`,
+    "@id": projectUrl,
     "name": project.title,
     "description": project.description ? 
       project.description.replace(/<[^>]*>/g, '').substring(0, 200) : 
       `Architectural project: ${project.title}`,
-    "url": `https://arco.com/projects/${project.slug}`,
+    "url": projectUrl,
     "image": coverPhotoUrl ? [coverPhotoUrl] : undefined,
     "dateCreated": project.createdAt,
     "genre": "Architecture",
@@ -37,7 +41,7 @@ export function ProjectStructuredData({ project, coverPhotoUrl, professionals }:
     "publisher": {
       "@type": "Organization",
       "name": "Arco",
-      "url": "https://arco.com"
+      "url": baseUrl
     },
     "locationCreated": project.location?.summary ? {
       "@type": "Place",
@@ -53,12 +57,12 @@ export function ProjectStructuredData({ project, coverPhotoUrl, professionals }:
       })) : undefined,
     "mainEntityOfPage": {
       "@type": "WebPage",
-      "@id": `https://arco.com/projects/${project.slug}`
+      "@id": projectUrl
     },
     "isPartOf": {
       "@type": "WebSite",
       "name": "Arco",
-      "url": "https://arco.com"
+      "url": baseUrl
     }
   }
 

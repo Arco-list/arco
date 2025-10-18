@@ -46,10 +46,15 @@ export function EditableSeoCell({ projectId, projectTitle, field, value, onUpdat
       })
 
       if (!result.success) {
-        toast.error("Failed to update", { description: result.error })
+        toast.error("Failed to update", { 
+          description: result.error.message 
+        })
         return
       }
 
+      if (result.warnings?.length) {
+        result.warnings.forEach(warning => toast.warning(warning))
+      }
       toast.success(`${field === 'slug' ? 'Slug' : field === 'seoTitle' ? 'SEO title' : 'SEO description'} updated`)
       setIsEditing(false)
       onUpdate()
@@ -66,11 +71,13 @@ export function EditableSeoCell({ projectId, projectTitle, field, value, onUpdat
       })
 
       if (!result.success) {
-        toast.error("Failed to generate slug", { description: result.error })
+        toast.error("Failed to generate slug", { 
+          description: result.error.message 
+        })
         return
       }
 
-      setEditValue(result.slug)
+      setEditValue(result.data?.slug || '')
       toast.success("Slug generated from title")
     })
   }

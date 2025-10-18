@@ -20,6 +20,7 @@ import { ProjectPreviewProvider, type ProjectPreviewData } from "@/contexts/proj
 import { ProjectGalleryModalProvider } from "@/contexts/project-gallery-modal-context"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
+import { getSiteUrl } from "@/lib/utils"
 import type { Tables } from "@/lib/supabase/types"
 
 const PREVIEW_PARAM = "preview"
@@ -103,7 +104,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const resolvedParams = await params
   const supabase = await createServerSupabaseClient()
 
-  // Check for redirects first
+  // Check for redirects first with chain prevention
   const { data: redirect } = await supabase
     .from("project_redirects")
     .select("new_slug")
@@ -111,16 +112,26 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle()
 
   if (redirect?.new_slug) {
-    // This will be handled by the main component, but we need to generate metadata for the new slug
-    const { data: redirectedProject } = await supabase
-      .from("projects")
-      .select("id, title, description, seo_title, seo_description, slug")
-      .eq("slug", redirect.new_slug)
+    // Check if this would create a chain
+    const { data: chainCheck } = await supabase
+      .from("project_redirects")
+      .select("new_slug")
+      .eq("old_slug", redirect.new_slug)
       .maybeSingle()
+    
+    if (!chainCheck) {
+      // No chain, safe to use redirected project metadata
+      const { data: redirectedProject } = await supabase
+        .from("projects")
+        .select("id, title, description, seo_title, seo_description, slug")
+        .eq("slug", redirect.new_slug)
+        .maybeSingle()
 
-    if (redirectedProject) {
-      return generateProjectMetadata(redirectedProject, supabase)
+      if (redirectedProject) {
+        return await generateProjectMetadata(redirectedProject, supabase)
+      }
     }
+    // If there's a chain, fall through to use current slug
   }
 
   // Get project data for current slug
@@ -137,7 +148,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     }
   }
 
-  return generateProjectMetadata(project, supabase)
+  return await generateProjectMetadata(project, supabase)
 }
 
 async function generateProjectMetadata(
@@ -162,7 +173,8 @@ async function generateProjectMetadata(
       project.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...' : 
       `Discover ${project.title} on Arco. Browse our curated collection of architectural projects and connect with top professionals.`)
 
-  const canonical = project.slug ? `https://arco.com/projects/${project.slug}` : undefined
+  const baseUrl = getSiteUrl()
+  const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined
   const ogImage = primaryPhoto?.url
 
   return {
@@ -201,7 +213,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const supabase = await createServerSupabaseClient()
   
-  // Check for redirects first
+  // Check for redirects with chain prevention
   const { data: redirectData } = await supabase
     .from("project_redirects")
     .select("new_slug")
@@ -209,7 +221,22 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     .maybeSingle()
 
   if (redirectData?.new_slug) {
-    redirect(`/projects/${redirectData.new_slug}`)
+    // Prevent redirect chains and circular references
+    // Check if the new_slug would redirect again
+    const { data: chainCheck } = await supabase
+      .from("project_redirects")
+      .select("new_slug")
+      .eq("old_slug", redirectData.new_slug)
+      .maybeSingle()
+    
+    if (chainCheck) {
+      // There's a chain, don't follow it to prevent infinite loops
+      console.error(`Redirect chain detected: ${resolvedParams.slug} -> ${redirectData.new_slug} -> ${chainCheck.new_slug}`)
+      // Continue with current slug instead of redirecting
+    } else {
+      // Safe to redirect
+      redirect(`/projects/${redirectData.new_slug}`)
+    }
   }
 
   const [{ data: authData }, projectResult] = await Promise.all([

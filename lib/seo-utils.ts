@@ -5,14 +5,24 @@
 /**
  * Generates a URL-friendly slug from a title
  */
-export function generateSlug(title: string): string {
-  return title
+export function generateSlug(title: string, maxLength = 100): string {
+  const slug = title
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
     .replace(/\s+/g, '-')          // Spaces to hyphens
     .replace(/-+/g, '-')           // Multiple hyphens to single
     .replace(/^-+|-+$/g, '')       // Remove leading/trailing hyphens
     .trim()
+    .substring(0, maxLength)
+    .replace(/-+$/g, '') // Remove trailing hyphen after truncation
+  
+  if (!slug) {
+    throw new Error('Cannot generate slug: title contains no valid characters')
+  }
+  
+  return slug
 }
 
 /**

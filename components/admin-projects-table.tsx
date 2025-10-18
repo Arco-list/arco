@@ -576,8 +576,13 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     startTransition(async () => {
       const result = await setProjectFeaturedAction({ projectId: project.id, featured: nextFeatured })
       if (!result.success) {
-        toast.error("Unable to update featured status", { description: result.error })
+        toast.error("Unable to update featured status", { 
+          description: result.error.message 
+        })
       } else {
+        if (result.warnings?.length) {
+          result.warnings.forEach(warning => toast.warning(warning))
+        }
         toast.success(`Project ${nextFeatured ? "added to" : "removed from"} featured list`)
       }
     })
@@ -594,7 +599,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       const result = await setProjectStatusAction({ projectId: project.id, status: "published" })
 
       if (!result.success) {
-        toast.error("Unable to approve project", { description: result.error })
+        toast.error("Unable to approve project", { 
+          description: result.error.message 
+        })
         return
       }
 
@@ -629,10 +636,15 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       })
 
       if (!result.success) {
-        toast.error("Unable to update status", { description: result.error })
+        toast.error("Unable to update status", { 
+          description: result.error.message 
+        })
         return
       }
 
+      if (result.warnings?.length) {
+        result.warnings.forEach(warning => toast.warning(warning))
+      }
       toast.success(`Status updated to ${STATUS_LABELS[statusSelection].label}`)
       closeStatusDialog()
     })
@@ -648,7 +660,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       })
 
       if (!result.success) {
-        toast.error("Unable to change owner", { description: result.error })
+        toast.error("Unable to change owner", { 
+          description: result.error.message 
+        })
         return
       }
 
@@ -664,7 +678,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     startDeleteTransition(async () => {
       const result = await deleteProjectAction({ projectId: deleteProject.id })
       if (!result.success) {
-        toast.error("Unable to delete project", { description: result.error })
+        toast.error("Unable to delete project", { 
+          description: result.error.message 
+        })
         return
       }
 
