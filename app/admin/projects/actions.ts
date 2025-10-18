@@ -248,11 +248,11 @@ export async function changeProjectOwnerAction(
 
   const serviceClient = createServiceRoleSupabaseClient()
 
-  const { data: userList, error: ownerError } = await serviceClient.auth.admin.listUsers({
-    filter: `email.eq.${parsed.data.ownerEmail}`
-  })
+  const { data: authData, error: ownerError } = await serviceClient.auth.admin.getUserByEmail(
+    parsed.data.ownerEmail
+  )
   
-  if (ownerError || !userList || userList.users.length === 0) {
+  if (ownerError || !authData?.user) {
     return createErrorResponse(
       'BUSINESS_LOGIC',
       `No user found with email: ${parsed.data.ownerEmail}`,
@@ -261,7 +261,7 @@ export async function changeProjectOwnerAction(
     )
   }
 
-  const ownerUser = userList.users[0]
+  const ownerUser = authData.user
 
   const { data: ownerProfile, error: profileError } = await serviceClient
     .from("profiles")
