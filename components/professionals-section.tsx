@@ -96,7 +96,7 @@ export function ProfessionalsSection() {
           </div>
         )}
 
-        <Button variant="secondary" onClick={() => setShowModal(true)}>
+        <Button variant="default" onClick={() => setShowModal(true)}>
           Show all professionals
         </Button>
       </div>
