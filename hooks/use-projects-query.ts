@@ -248,8 +248,16 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
       }
     })
 
+    // Add building features to the search order for cover image override
+    selectedBuildingFeatures.forEach((featureId) => {
+      if (featureId && !seen.has(featureId)) {
+        order.push(featureId)
+        seen.add(featureId)
+      }
+    })
+
     return order
-  }, [categoriesById, childCategoriesByParent, normalizedTypes])
+  }, [categoriesById, childCategoriesByParent, normalizedTypes, selectedBuildingFeatures])
 
   const effectivePageSize = useMemo(() => Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE), [pageSize])
 
@@ -266,7 +274,26 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
         .range(from, to)
 
       if (filters.types.length > 0) {
-        query = query.in("project_type", filters.types)
+        // Check if any of the selected types are also building features
+        const buildingFeatureTypes = categories
+          .filter(cat => cat.project_category_attributes?.is_building_feature && filters.types.includes(cat.id))
+          .map(cat => cat.id)
+        
+        if (buildingFeatureTypes.length > 0) {
+          // Use OR condition: match project_type OR features array for building feature types
+          const otherTypes = filters.types.filter(type => !buildingFeatureTypes.includes(type))
+          
+          if (otherTypes.length > 0) {
+            // Both regular types and building feature types selected
+            query = query.or(`project_type.in.(${filters.types.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
+          } else {
+            // Only building feature types selected - check both project_type AND features
+            query = query.or(`project_type.in.(${buildingFeatureTypes.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
+          }
+        } else {
+          // No building features, use regular project_type filter
+          query = query.in("project_type", filters.types)
+        }
       }
 
       if (filters.styles.length > 0) {
