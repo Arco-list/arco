@@ -10,9 +10,9 @@ import {
   Mail,
   MapPin,
   Phone,
-  Pinterest,
   type LucideIcon,
 } from "lucide-react"
+import { IconBrandPinterest } from "@tabler/icons-react"
 
 import type { ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
@@ -20,11 +20,15 @@ import { Card } from "@/components/ui/card"
 import { ReportModal } from "./report-modal"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=120&width=120"
+
+// Create a wrapper for Tabler icon to match LucideIcon interface
+const PinterestIcon: LucideIcon = (props: any) => <IconBrandPinterest {...props} />
+
 const SOCIAL_ICON_MAP: Record<string, LucideIcon> = {
   facebook: Facebook,
   instagram: Instagram,
   linkedin: Linkedin,
-  pinterest: Pinterest,
+  pinterest: PinterestIcon,
 }
 
 type ProfessionalContactSidebarProps = {
