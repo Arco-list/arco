@@ -32,6 +32,30 @@ const escapeIlikePattern = (value: string) =>
     .replace(/[%_]/g, "\\$&")
     .replace(/'/g, "''")
 
+const applyTypeFilters = (query: any, selectedTypes: string[], buildingFeatureCategories: Tables<"categories">[]) => {
+  // Add safety check for category IDs and identify selected building features
+  const buildingFeatureTypes = buildingFeatureCategories
+    .filter(cat => selectedTypes.includes(cat.id))
+    .map(cat => cat.id)
+  
+  if (buildingFeatureTypes.length === 0) {
+    // No building features selected - simple project_type filter
+    return query.in("project_type", selectedTypes)
+  }
+  
+  // Separate regular types from building feature types
+  const regularTypes = selectedTypes.filter(type => !buildingFeatureTypes.includes(type))
+  
+  if (regularTypes.length > 0) {
+    // Mixed selection: both regular types and building features
+    // Use ALL selected types for project_type, building features for features array
+    return query.or(`project_type.in.(${selectedTypes.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
+  } else {
+    // Only building features selected: check both project_type and features array
+    return query.or(`project_type.in.(${buildingFeatureTypes.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
+  }
+}
+
 interface UseProjectsQueryOptions {
   pageSize?: number
 }
@@ -125,6 +149,11 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
     })
     return map
   }, [categories])
+
+  const buildingFeatureCategories = useMemo(() => 
+    categories.filter(cat => cat.id && cat.project_category_attributes?.is_building_feature),
+    [categories]
+  )
 
   const normalizedTypes = useMemo(() => {
     if (categories.length === 0 || validTypeTokens.size === 0) {
@@ -274,26 +303,7 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
         .range(from, to)
 
       if (filters.types.length > 0) {
-        // Check if any of the selected types are also building features
-        const buildingFeatureTypes = categories
-          .filter(cat => cat.project_category_attributes?.is_building_feature && filters.types.includes(cat.id))
-          .map(cat => cat.id)
-        
-        if (buildingFeatureTypes.length > 0) {
-          // Use OR condition: match project_type OR features array for building feature types
-          const otherTypes = filters.types.filter(type => !buildingFeatureTypes.includes(type))
-          
-          if (otherTypes.length > 0) {
-            // Both regular types and building feature types selected
-            query = query.or(`project_type.in.(${filters.types.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
-          } else {
-            // Only building feature types selected - check both project_type AND features
-            query = query.or(`project_type.in.(${buildingFeatureTypes.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
-          }
-        } else {
-          // No building features, use regular project_type filter
-          query = query.in("project_type", filters.types)
-        }
+        query = applyTypeFilters(query, filters.types, buildingFeatureCategories)
       }
 
       if (filters.styles.length > 0) {
@@ -346,7 +356,7 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
         total: count ?? 0,
       }
     },
-    [effectivePageSize, filters],
+    [effectivePageSize, filters, buildingFeatureCategories],
   )
 
   const fetchTypePhotoOverrides = useCallback(
