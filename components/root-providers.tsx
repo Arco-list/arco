@@ -25,7 +25,7 @@ export const RootProviders = ({ children, initialSession }: RootProvidersProps) 
             <SavedProfessionalsProvider>
               <ScrollToTop />
               {children}
-              <Toaster richColors position="top-right" />
+              <Toaster richColors position="bottom-right" closeButton />
             </SavedProfessionalsProvider>
           </SavedProjectsProvider>
         </ProjectLikesProvider>

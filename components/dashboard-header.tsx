@@ -7,10 +7,15 @@ import { useState, useTransition, useEffect, useRef, type FormEvent } from "reac
 import { toast } from "sonner"
 
 import { signOutAction } from "@/app/(auth)/actions"
+import { Button } from "@/components/ui/button"
 import { HeaderSearch } from "@/components/header-search"
 import { useAuth } from "@/contexts/auth-context"
 
-export function DashboardHeader() {
+export interface DashboardHeaderProps {
+  maxWidth?: string;
+}
+
+export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeaderProps = {}) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -86,8 +91,8 @@ export function DashboardHeader() {
   }, [searchParamQuery])
 
   return (
-    <header className="border-b border-gray-200 px-4 py-4 md:px-8">
-      <div className="mx-auto max-w-7xl">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-gray-200 px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4">
+      <div className={`mx-auto ${maxWidth}`}>
         <div className="relative flex items-center justify-between">
           <div className="flex items-center space-x-8">
             <Link href="/" className="transition-opacity hover:opacity-80">
@@ -121,10 +126,10 @@ export function DashboardHeader() {
               {isAdmin && (
                 <Link
                   href="/admin"
-                  className={`text-sm font-medium transition-colors ${
+                  className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
                     isActive("/admin") 
-                      ? "text-red-500 border-b-2 border-red-500 pb-1 hover:text-red-600" 
-                      : "text-black hover:text-gray-600"
+                      ? "text-red-500 border-red-500" 
+                      : "text-black hover:text-gray-600 border-transparent"
                   }`}
                 >
                   Admin
@@ -132,20 +137,20 @@ export function DashboardHeader() {
               )}
               <Link
                 href="/dashboard/listings"
-                className={`text-sm font-medium transition-colors ${
+                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
                   isActive("/dashboard/listings") 
-                    ? "text-red-500 border-b-2 border-red-500 pb-1 hover:text-red-600" 
-                    : "text-black hover:text-gray-600"
+                    ? "text-red-500 border-red-500" 
+                    : "text-black hover:text-gray-600 border-transparent"
                 }`}
               >
                 Listings
               </Link>
               <Link
                 href="/dashboard/company"
-                className={`text-sm font-medium transition-colors ${
+                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
                   isActive("/dashboard/company") 
-                    ? "text-red-500 border-b-2 border-red-500 pb-1 hover:text-red-600" 
-                    : "text-black hover:text-gray-600"
+                    ? "text-red-500 border-red-500" 
+                    : "text-black hover:text-gray-600 border-transparent"
                 }`}
               >
                 Company
@@ -180,14 +185,16 @@ export function DashboardHeader() {
                 Add new project
               </Link>
             )}
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               className="flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium border-black text-black hover:bg-gray-100"
               aria-label="Open menu"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               <span className="text-black">{menuLabel}</span>
               <Menu className="h-5 w-5" />
-            </button>
+            </Button>
 
             {isMenuOpen && (
               <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
@@ -275,26 +282,7 @@ export function DashboardHeader() {
                   ) : canAccessProfessionalDashboard ? (
                     <>
                       {/* Professional Dashboard Menu */}
-                      {isAdmin && (
-                        <>
-                          <Link
-                            href="/admin"
-                            className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            Admin
-                          </Link>
-                          <div className="border-t border-gray-100"></div>
-                        </>
-                      )}
-                      <Link
-                        href="/homeowner"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Homeowner Dashboard
-                      </Link>
-                      <div className="border-t border-gray-100"></div>
+                      {/* Group 1: Listings & Company */}
                       <Link
                         href="/dashboard/listings"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -302,7 +290,6 @@ export function DashboardHeader() {
                       >
                         Listings
                       </Link>
-                      <div className="border-t border-gray-100"></div>
                       <Link
                         href="/dashboard/company"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -310,23 +297,28 @@ export function DashboardHeader() {
                       >
                         Company
                       </Link>
+                      
                       <div className="border-t border-gray-100"></div>
+                      
+                      {/* Group 2: Upgrade plan & Billing */}
                       <Link
-                        href="/new-project"
+                        href="/dashboard/pricing"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Add Project
+                        Upgrade plan
                       </Link>
-                      <div className="border-t border-gray-100"></div>
                       <Link
-                        href="/dashboard/pricing"
-                        className="block w-full px-4 py-3 text-left text-sm text-red-500 font-medium hover:bg-red-50 transition-colors"
+                        href="/dashboard/billing"
+                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Upgrade
+                        Billing
                       </Link>
+                      
                       <div className="border-t border-gray-100"></div>
+                      
+                      {/* Group 3: Settings */}
                       <Link
                         href="/dashboard/settings"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -334,6 +326,33 @@ export function DashboardHeader() {
                       >
                         Settings
                       </Link>
+                      
+                      <div className="border-t border-gray-100"></div>
+                      
+                      {/* Group 4: Help & Navigation */}
+                      <Link
+                        href="/help-center"
+                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Help center
+                      </Link>
+                      <Link
+                        href="/homeowner"
+                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Switch to homeowner
+                      </Link>
+                      {isAdmin && (
+                        <Link
+                          href="/admin"
+                          className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Admin
+                        </Link>
+                      )}
                     </>
                   ) : (
                     <>

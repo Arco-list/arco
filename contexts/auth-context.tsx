@@ -130,8 +130,18 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       void (async () => {
+        // Handle logout event immediately
+        if (event === "SIGNED_OUT") {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          router.push("/");
+          router.refresh();
+          return;
+        }
+
         const { data: userData } = await supabase.auth.getUser();
         if (!isMountedRef.current) return;
 

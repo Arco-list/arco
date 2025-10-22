@@ -1,6 +1,7 @@
 "use client"
 
 import { Building2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
@@ -1398,37 +1399,38 @@ function NewProjectHeader({
 }) {
   return (
     <header className="bg-white border-b border-gray-200">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 md:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo on the left */}
           <div className="flex-shrink-0">
             <img
               src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
               alt="Arco"
-              className="h-4"
+              className="h-4 w-auto"
             />
           </div>
 
           {/* Right side navigation */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-6">
             {/* Questions link */}
             <a
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+              className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
             >
               Questions?
             </a>
 
-            <button
+            <Button
               onClick={onSaveAndExit}
               disabled={isSaving}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+              variant="tertiary"
+              size="tertiary"
               aria-busy={isSaving}
             >
               {isSaving ? "Saving..." : "Save and Exit"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

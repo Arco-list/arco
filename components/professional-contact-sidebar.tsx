@@ -111,15 +111,6 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
         <div className="space-y-4 text-center">
           <h3 className="text-lg font-semibold">Contact {displayName}</h3>
 
-          <div className="flex justify-center">
-            <Image
-              src={imageSrc}
-              alt={displayName}
-              width={80}
-              height={80}
-              className="h-20 w-20 rounded-full object-cover"
-            />
-          </div>
 
           <div className="space-y-3 text-left">
             <div className="space-y-2">

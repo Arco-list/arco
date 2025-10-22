@@ -9,7 +9,7 @@ export default function DashboardSettings() {
     <div className="flex min-h-screen flex-col bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 py-8">
+      <main className="flex-1 pt-20 pb-8">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
           <h1 className="mb-8 text-2xl font-semibold text-gray-900">Settings</h1>
 
