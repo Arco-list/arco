@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Bookmark, Share, Star } from "lucide-react"
 
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
@@ -165,7 +166,7 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
                 ) : (
                   <span className="text-gray-900">{crumb.label}</span>
                 )}
-                {index < breadcrumbs.length - 1 && <span className="mx-2">></span>}
+                {index < breadcrumbs.length - 1 && <span className="mx-2">&gt;</span>}
               </span>
             ))}
           </nav>
@@ -190,32 +191,44 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
 
       </div>
 
-      <div className="space-y-3">
-        <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
-        {professional.title ? <h2 className="text-xl text-gray-600">{professional.title}</h2> : null}
+      <div className="flex items-start justify-between gap-6">
+        <div className="space-y-3 flex-1">
+          <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
+          {professional.title ? <h2 className="text-xl text-gray-600">{professional.title}</h2> : null}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-semibold text-gray-900">{ratingDisplay.value.toFixed(2)}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              <span className="text-sm font-semibold text-gray-900">{ratingDisplay.value.toFixed(2)}</span>
+            </div>
+
+            <span className="text-sm text-gray-500">·</span>
+
+            {ratingHref ? (
+              <a href={ratingHref} className="text-sm text-gray-500 underline hover:text-gray-700">
+                {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
+              </a>
+            ) : (
+              <span className="text-sm text-gray-500">
+                {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
 
-          <span className="text-sm text-gray-500">·</span>
-
-          {ratingHref ? (
-            <a href={ratingHref} className="text-sm text-gray-500 underline hover:text-gray-700">
-              {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
-            </a>
-          ) : (
-            <span className="text-sm text-gray-500">
-              {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
-            </span>
-          )}
+          {professional.description ? (
+            <p className="max-w-3xl text-gray-700">{professional.description}</p>
+          ) : null}
         </div>
 
-        {professional.description ? (
-          <p className="max-w-3xl text-gray-700">{professional.description}</p>
-        ) : null}
+        <div className="flex-shrink-0">
+          <Image
+            src={professional.company.logoUrl ?? professional.profile.avatarUrl ?? PLACEHOLDER_IMAGE}
+            alt={professional.company.name || professional.name}
+            width={80}
+            height={80}
+            className="h-20 w-20 rounded-full object-cover"
+          />
+        </div>
       </div>
 
       <div className="border-y border-gray-200 py-6">

@@ -802,7 +802,7 @@ export default function DashboardListingsPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <DashboardHeader />
 
-      <main className="flex-1 py-8 px-4 md:px-8">
+      <main className="flex-1 py-8 pt-20 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
         {entitlementsError && (
           <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

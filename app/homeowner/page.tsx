@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { ThumbsUp, X } from "lucide-react"
 
 import { AccountSettingsForm } from "@/components/account-settings-form"
-import { DashboardHeader } from "@/components/dashboard-header"
+import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
@@ -51,13 +51,6 @@ function HomeownerContent() {
   const userTypes = profile?.user_types ?? metadataUserTypes
   const isAdmin = userTypes?.includes("admin") ?? false
 
-  useEffect(() => {
-    if (isLoading) return
-    if (!isAdmin) return
-
-    router.replace("/admin")
-  }, [isAdmin, isLoading, router])
-
   const unsaveProject = (projectId: string) => {
     void removeProject(projectId)
   }
@@ -72,11 +65,10 @@ function HomeownerContent() {
   }
 
   return (
-    isAdmin ? null : (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <DashboardHeader />
+      <Header />
 
-      <main className="flex-1 py-8">
+      <main className="flex-1 py-8 pt-20">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <h1 className="text-2xl font-semibold text-gray-900 mb-8">Homeowner</h1>
 
@@ -201,7 +193,6 @@ function HomeownerContent() {
 
       <Footer />
     </div>
-    )
   )
 }
 

@@ -1,0 +1,28 @@
+# Documentation files
+*.md
+!README.md
+
+# Documentation directory
+/docs/
+
+# Project planning files
+/plan.md
+
+# Agent configuration
+/AGENTS.md
+/CLAUDE.md
+
+# Scripts and analysis
+/scripts/
+
+# Development projects
+/projects/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Supabase migrations (if you don't want them deployed)
+# /supabase/migrations/
+
+# Lock files (Vercel will install from package.json)
+# pnpm-lock.yaml

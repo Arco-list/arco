@@ -58,6 +58,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
       : null;
   const userTypes = profile?.user_types ?? metadataUserTypes;
   const hasProfessionalRole = userTypes?.includes("professional") ?? false;
+  const hasAdminRole = userTypes?.includes("admin") ?? false;
 
   const toggleMenu = () => setIsMenuOpen((open) => !open);
 
@@ -80,6 +81,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
 
       toast.success("Signed out");
       setIsMenuOpen(false);
+      router.push("/");
       router.refresh();
     });
   };
@@ -174,10 +176,10 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
             {isLoggedIn ? (
               <>
                 <Link
-                  href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
+                  href={hasProfessionalRole ? "/dashboard/company" : "/list-with-us"}
                   className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
                 >
-                  {hasProfessionalRole ? "Add new project" : "List with us"}
+                  {hasProfessionalRole ? "Switch to company" : "List with us"}
                 </Link>
                 <Button
                   variant="ghost"
@@ -258,8 +260,17 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                           className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Account
+                          Settings
                         </Link>
+                        {hasAdminRole && (
+                          <Link
+                            href="/admin"
+                            className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                            onClick={() => setIsMenuOpen(false)}
+                          >
+                            Admin
+                          </Link>
+                        )}
                       </>
                     ) : (
                       <>

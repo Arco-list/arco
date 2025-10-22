@@ -2553,7 +2553,7 @@ const renderLocationSection = () => (
     <div className="min-h-screen bg-white flex flex-col">
       <DashboardHeader />
 
-      <main className="flex-1 px-4 py-8 md:px-8">
+      <main className="flex-1 px-4 pt-20 pb-8 md:px-8">
         <div className="mx-auto max-w-7xl">
           {entitlementsError && (
             <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
