@@ -166,7 +166,7 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
                 ) : (
                   <span className="text-gray-900">{crumb.label}</span>
                 )}
-                {index < breadcrumbs.length - 1 && <span className="mx-2">></span>}
+                {index < breadcrumbs.length - 1 && <span className="mx-2">&gt;</span>}
               </span>
             ))}
           </nav>
