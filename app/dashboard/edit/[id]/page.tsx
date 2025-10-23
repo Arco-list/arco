@@ -1379,10 +1379,16 @@ export default function ListingEditorPage() {
     setShowEditConfirmModal(false)
 
     try {
+      if (!userId) {
+        toast.error("User not authenticated")
+        return
+      }
+
       const { error } = await supabase
         .from("projects")
         .update({ status: "draft" })
         .eq("id", projectId)
+        .eq("client_id", userId)
       
       if (error) {
         toast.error("Failed to update project status")
@@ -1401,10 +1407,16 @@ export default function ListingEditorPage() {
     if (!projectId) return
     
     try {
+      if (!userId) {
+        toast.error("User not authenticated")
+        return
+      }
+
       const { error } = await supabase
         .from("projects")
         .update({ status: "in_progress" })
         .eq("id", projectId)
+        .eq("client_id", userId)
       
       if (error) {
         toast.error("Failed to submit for review")

@@ -1330,7 +1330,7 @@ export default function DashboardListingsPage() {
                 <h2 className="text-lg font-semibold text-gray-900">Opt out of project?</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   You will no longer be listed as a contributor on{" "}
-                  <span className="font-medium">{projectToOptOut.title}</span> for <span className="font-medium">{projectToOptOut.invitedServiceCategory}</span> The project owner can see
+                  <span className="font-medium">{projectToOptOut.title}</span> for <span className="font-medium">{projectToOptOut.invitedServiceCategory}</span>. The project owner can see
                   that you opted out and may re-invite you later.
                 </p>
               </div>
