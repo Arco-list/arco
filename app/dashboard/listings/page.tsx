@@ -233,6 +233,7 @@ export default function DashboardListingsPage() {
           )
         `)
         .eq("professional_id", professionalData.id)
+        .neq("status", "rejected")
         .order("projects(updated_at)", { ascending: false })
 
       // RACE CONDITION CHECK: After async operation

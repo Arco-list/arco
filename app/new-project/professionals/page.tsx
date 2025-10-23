@@ -28,13 +28,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  getAvailableProfessionals,
   createInvite,
   type ProfessionalOption,
   type InviteData,
 } from "@/lib/new-project/invite-professionals"
 import { sendProjectReviewEmail } from "@/lib/email-service"
-import { findProfessionalByEmailAction, getUserEmailAction } from "@/app/new-project/actions"
+import { 
+  findProfessionalByEmailAction, 
+  getUserEmailAction,
+  getAvailableProfessionalsAction 
+} from "@/app/new-project/actions"
 
 const TOTAL_STEPS = 4
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
@@ -490,7 +493,8 @@ export default function ProfessionalsPage() {
       
       console.log("Loading professionals for user:", userId, "with types:", userTypes)
       
-      const { data, error } = await getAvailableProfessionals(supabase, userTypes, userId)
+      // Use server action for all user types - it handles auth.users access properly
+      const { data, error } = await getAvailableProfessionalsAction(userTypes, userId)
       
       if (error) {
         console.error("Failed to load professionals:", error)
@@ -748,17 +752,11 @@ export default function ProfessionalsPage() {
     try {
       const isProjectOwner = projectClientId === professional.user_id
       
-      // Get real email from auth.users (professional.email might be placeholder for admin users)
-      const { email: realEmail, error: emailError } = await getUserEmailAction(professional.user_id)
-      
-      if (emailError || !realEmail) {
-        throw new Error("Unable to get professional's email address")
-      }
-      
+      // Professional.email is now always real - comes from getAvailableProfessionalsAction
       const inviteData: InviteData = {
         project_id: projectId,
         invited_service_category_id: serviceId,
-        invited_email: realEmail,
+        invited_email: professional.email,
         professional_id: professional.id,
         company_id: professional.company_id,
         is_project_owner: isProjectOwner,

@@ -203,9 +203,7 @@ export async function setProjectStatusAction(input: {
   if (statusResult.data === "published") {
     try {
       // Get project details and owner email
-      const serviceClient = createServiceRoleSupabaseClient()
-      
-      const { data: project } = await supabase
+      const { data: project } = await serviceClient
         .from('projects')
         .select(`
           title,
@@ -218,9 +216,9 @@ export async function setProjectStatusAction(input: {
       logger.info("Project data retrieved", {
         scope: "admin-projects",
         projectId: idResult.data,
-        projectTitle: project?.title,
-        clientId: project?.client_id,
-        firstName: project?.profiles?.first_name
+        hasTitle: !!project?.title,
+        hasClientId: !!project?.client_id,
+        hasProfile: !!project?.profiles
       })
 
       // Get owner's email from auth.users table
@@ -233,7 +231,7 @@ export async function setProjectStatusAction(input: {
           logger.info("Owner auth lookup", {
             scope: "admin-projects",
             clientId: project.client_id,
-            ownerEmail: ownerEmail,
+            hasEmail: !!ownerEmail,
             authError: authError?.message
           })
         } catch (error) {
@@ -266,14 +264,12 @@ export async function setProjectStatusAction(input: {
           logger.info("Project live email sent", {
             scope: "admin-projects",
             projectId: idResult.data,
-            ownerEmail: ownerEmail,
-            projectTitle: project?.title
+            emailSent: true
           })
         } catch (emailError) {
           logger.error("Failed to send project live email", {
             scope: "admin-projects",
             projectId: idResult.data,
-            ownerEmail: ownerEmail,
             error: getErrorMessage(emailError)
           })
         }
@@ -298,8 +294,7 @@ export async function setProjectStatusAction(input: {
         if (ownerEmail && invite.invited_email.toLowerCase() === ownerEmail.toLowerCase()) {
           logger.info("Skipping invite email for project owner", {
             scope: "admin-projects",
-            projectId: idResult.data,
-            ownerEmail: ownerEmail
+            projectId: idResult.data
           })
           continue
         }
@@ -324,13 +319,13 @@ export async function setProjectStatusAction(input: {
           logger.info("Professional invite email sent", {
             scope: "admin-projects",
             projectId: idResult.data,
-            inviteEmail: invite.invited_email
+            inviteId: invite.id
           })
         } catch (inviteEmailError) {
           logger.error("Failed to send professional invite email", {
             scope: "admin-projects",
             projectId: idResult.data,
-            inviteEmail: invite.invited_email,
+            inviteId: invite.id,
             error: getErrorMessage(inviteEmailError)
           })
         }

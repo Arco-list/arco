@@ -76,6 +76,7 @@ export async function sendTransactionalEmail(
   try {
     const response = await fetch('https://app.loops.so/api/v1/transactional', {
       method: 'POST',
+      signal: AbortSignal.timeout(10000),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
@@ -172,20 +173,9 @@ export async function checkUserAndGenerateInviteUrl(
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   
   // Look up user by email in auth.users (requires service role)
-  const { data: listResult, error: authError } = await supabase.auth.admin.listUsers()
+  const { data: authUser, error: authError } = await supabase.auth.admin.getUserByEmail(email)
   
-  if (authError) {
-    // Error fetching users - default to signup flow
-    const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
-    return {
-      confirmUrl: signupUrl,
-      isExistingProfessional: false
-    }
-  }
-  
-  const user = listResult.users.find(u => u.email?.toLowerCase() === email.toLowerCase().trim())
-  
-  if (!user) {
+  if (authError || !authUser?.user) {
     // New user - send to signup with redirect to create company
     const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
     return {
@@ -202,7 +192,7 @@ export async function checkUserAndGenerateInviteUrl(
       user_types,
       professionals(id, company_id)
     `)
-    .eq('id', user.id)
+    .eq('id', authUser.user.id)
     .maybeSingle()
     
   if (profile) {

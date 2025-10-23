@@ -1,5 +1,41 @@
 # Phase 1: Professional Invite Flow Improvements
 
+## ✅ CLEANUP: Email Resolution Architecture (2025-01-23)
+
+### Problem
+The original `getAvailableProfessionals()` in `lib/new-project/invite-professionals.ts` generated synthetic emails (`professional@{company}.com`) for admin users. These would never match real `auth.users` entries, breaking the entire invite flow.
+
+### Solution
+Moved professional discovery to a server action with service role access:
+
+**New architecture:**
+- `app/new-project/actions.ts::getAvailableProfessionalsAction()` - Server action that fetches real emails from `auth.users` for all user types
+- `lib/new-project/invite-professionals.ts::getAvailableProfessionals()` - Deprecated with clear migration guide
+
+**Benefits:**
+1. ✅ Real emails for admin users (fetches from auth.users via service role)
+2. ✅ Real emails for professional users (fetches their own email)
+3. ✅ Single source of truth - no more workaround with `getUserEmailAction()`
+4. ✅ Clear deprecation path prevents future misuse
+
+**Migration:**
+```typescript
+// Old (broken for admins):
+import { getAvailableProfessionals } from "@/lib/new-project/invite-professionals"
+const { data } = await getAvailableProfessionals(supabase, userTypes, userId)
+
+// New (works for all):
+import { getAvailableProfessionalsAction } from "@/app/new-project/actions"
+const { data } = await getAvailableProfessionalsAction(userTypes, userId)
+```
+
+**Files changed:**
+- `app/new-project/actions.ts` - Added `getAvailableProfessionalsAction()`, deprecated `getUserEmailAction()`
+- `app/new-project/professionals/page.tsx` - Now calls server action instead of client function
+- `lib/new-project/invite-professionals.ts` - Deprecated `getAvailableProfessionals()` with migration guide
+
+---
+
 ## Overview
 Transform the invite flow from email-only to a hybrid company-first dropdown + email system with improved UX messaging and proper company-professional relationship handling.
 

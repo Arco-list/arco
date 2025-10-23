@@ -36,161 +36,46 @@ export interface InviteData {
 }
 
 /**
- * Get available professionals based on user type for new project invite flow
- * - Admin: Sees all active professionals with their companies
- * - Professional: Sees only themselves  
- * - Client/Others: No professionals (email-only flow)
+ * @deprecated Use getAvailableProfessionalsAction from /app/new-project/actions.ts instead
  * 
- * Note: We need to get email from auth.users, not profiles table
+ * This client-side function cannot access auth.users for real emails without service role.
+ * The server action provides proper email resolution for all user types.
+ * 
+ * Migration guide:
+ * ```ts
+ * // Old (broken for admins):
+ * import { getAvailableProfessionals } from "@/lib/new-project/invite-professionals"
+ * const { data } = await getAvailableProfessionals(supabase, userTypes, userId)
+ * 
+ * // New (works for all user types):
+ * import { getAvailableProfessionalsAction } from "@/app/new-project/actions"
+ * const { data } = await getAvailableProfessionalsAction(userTypes, userId)
+ * ```
  */
 export async function getAvailableProfessionals(
   supabase: SupabaseClient,
   userTypes: string[],
   userId: string
 ): Promise<{ data: ProfessionalOption[] | null; error: any }> {
-  try {
-    if (userTypes.includes('admin')) {
-      // Admin sees all active professionals with their companies
-      // For now, we'll use a simplified approach without admin.listUsers()
-      const { data: professionalsData, error } = await supabase
-        .from('professionals')
-        .select(`
-          id,
-          user_id,
-          title,
-          is_available,
-          company_id,
-          profiles!professionals_user_id_fkey(
-            first_name,
-            last_name
-          ),
-          companies(
-            id,
-            name,
-            city,
-            country,
-            logo_url,
-            status
-          )
-        `)
-        .eq('companies.status', 'listed')
-        .eq('is_available', true)
-
-      if (error) {
-        return { data: null, error }
-      }
-
-      // For admin users, we'll use placeholder emails for now
-      // In production, this would need server-side implementation
-      const professionals: ProfessionalOption[] = (professionalsData || [])
-        .filter((row: any) => row.companies && row.profiles) // Only include rows with valid joins
-        .map((row: any) => ({
-          id: row.id,
-          user_id: row.user_id,
-          name: `${row.profiles?.first_name || ''} ${row.profiles?.last_name || ''}`.trim() || 'Professional',
-          title: row.title || 'Professional',
-          email: `professional@${row.companies.name.toLowerCase().replace(/\s+/g, '')}.com`, // Placeholder
-          company_id: row.companies.id,
-          company: {
-            id: row.companies.id,
-            name: row.companies.name,
-            city: row.companies.city,
-            country: row.companies.country,
-            logo_url: row.companies.logo_url,
-            status: row.companies.status
-          }
-        }))
-
-      return { data: professionals, error: null }
-      
-    } else if (userTypes.includes('professional')) {
-      // Professional sees only themselves - use a simpler query approach
-      const { data: professionalsData, error } = await supabase
-        .from('professionals')
-        .select(`
-          id,
-          user_id,
-          title,
-          is_available,
-          company_id,
-          profiles!professionals_user_id_fkey(
-            first_name,
-            last_name
-          ),
-          companies(
-            id,
-            name,
-            city,
-            country,
-            logo_url,
-            status
-          )
-        `)
-        .eq('user_id', userId)
-        .eq('is_available', true)
-        .eq('companies.status', 'listed')
-
-      if (error) {
-        return { data: null, error }
-      }
-
-      if (!professionalsData || professionalsData.length === 0) {
-        return { data: [], error: null }
-      }
-
-      // Get email from current user session
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user?.email) {
-        return { data: [], error: null }
-      }
-
-      const professionals: ProfessionalOption[] = professionalsData
-        .filter((row: any) => row.companies && row.profiles) // Only include rows with valid joins
-        .map((row: any) => ({
-          id: row.id,
-          user_id: row.user_id,
-          name: `${row.profiles?.first_name || ''} ${row.profiles?.last_name || ''}`.trim() || 'Professional',
-          title: row.title || 'Professional',
-          email: user.email,
-          company_id: row.companies.id,
-          company: {
-            id: row.companies.id,
-            name: row.companies.name,
-            city: row.companies.city,
-            country: row.companies.country,
-            logo_url: row.companies.logo_url,
-            status: row.companies.status
-          }
-        }))
-
-      return { data: professionals, error: null }
-      
-    } else {
-      // Clients/others see no professionals, email-only flow
-      return { data: [], error: null }
-    }
-  } catch (error) {
-    return { data: null, error }
-  }
+  throw new Error(
+    'getAvailableProfessionals is deprecated. Use getAvailableProfessionalsAction from /app/new-project/actions.ts instead. ' +
+    'This ensures proper email access via service role for all user types.'
+  )
 }
 
 /**
- * Find professional by email - SERVER ACTION REQUIRED
- * This function checks if an email belongs to an existing professional user
- * Must be called from a server action with service role access to auth.users
+ * @deprecated Use findProfessionalByEmailAction from /app/new-project/actions.ts instead
+ * 
+ * This client-side function cannot access auth.users without service role.
+ * The server action provides proper email lookup via service role.
  */
 export async function findProfessionalByEmail(
   supabase: SupabaseClient,
   email: string
 ): Promise<{ data: ProfessionalOption | null; error: any }> {
-  try {
-    // This is a placeholder - the actual implementation must be in a server action
-    // See: /app/new-project/actions.ts for the server-side implementation
-    console.warn('findProfessionalByEmail called from client - use server action instead')
-    return { data: null, error: null }
-  } catch (error) {
-    return { data: null, error }
-  }
+  throw new Error(
+    'findProfessionalByEmail is deprecated. Use findProfessionalByEmailAction from /app/new-project/actions.ts instead.'
+  )
 }
 
 /**

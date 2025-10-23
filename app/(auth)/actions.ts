@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import type { Session, User } from '@supabase/supabase-js';
+import type { Session, User, SignUpWithPasswordCredentials } from '@supabase/supabase-js';
 import type { TablesInsert } from '@/lib/supabase/types';
 
 import {
@@ -260,7 +260,7 @@ export const signUpAction = async (
   // Step 4: Attempt Supabase auth signup
   let authData, authError;
   try {
-    const signupOptions: any = {
+    const signupOptions: SignUpWithPasswordCredentials['options'] = {
       emailRedirectTo,
       data: {
         first_name: firstName,
@@ -268,10 +268,11 @@ export const signUpAction = async (
       },
     };
     
-    // For invited users, skip email confirmation
+    // For invited users, email is already verified via invite token
+    // Note: emailRedirectTo=undefined doesn't skip confirmation; actual skip happens via admin API below
     if (isInvitedUser) {
-      signupOptions.emailRedirectTo = undefined; // Don't send confirmation email
-      logger.auth('signup', 'Skipping email confirmation for invited user', { requestId });
+      signupOptions.emailRedirectTo = undefined;
+      logger.auth('signup', 'Invited user - will auto-confirm via admin API', { requestId });
     }
     
     const response = await supabase.auth.signUp({
@@ -319,7 +320,7 @@ export const signUpAction = async (
     try {
       // Import the service role client for admin operations
       const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
-      const adminClient = createServiceRoleSupabaseClient();
+      const adminClient = await createServiceRoleSupabaseClient();
       
       logger.auth('signup', 'Auto-confirming invited user email', {
         requestId,

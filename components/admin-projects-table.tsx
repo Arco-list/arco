@@ -164,7 +164,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   const [deleteProject, setDeleteProject] = useState<AdminProjectRow | null>(null)
   const [isDeleting, startDeleteTransition] = useTransition()
   const [approvalModalProject, setApprovalModalProject] = useState<AdminProjectRow | null>(null)
-  const [approvalProfessionals, setApprovalProfessionals] = useState<Array<{email: string, status: string, professional_id: string | null, company_name?: string}>>([]) 
+  const [approvalProfessionals, setApprovalProfessionals] = useState<Array<{email: string, status: string, professional_id: string | null, is_project_owner?: boolean, company_name?: string}>>([]) 
   const [isLoadingProfessionals, setIsLoadingProfessionals] = useState(false)
   const [statusDialogProject, setStatusDialogProject] = useState<AdminProjectRow | null>(null)
   const [statusSelection, setStatusSelection] = useState<ProjectStatusValue>("draft")
