@@ -29,6 +29,14 @@ type ServiceSummary = {
   slug?: string | null
 }
 
+type ProfessionalOption = {
+  id: string
+  email: string
+  company: {
+    name: string
+  }
+}
+
 type ProfessionalServiceCardProps<TInvite extends BaseInvite> = {
   service: ServiceSummary
   invites: TInvite[]
@@ -40,6 +48,9 @@ type ProfessionalServiceCardProps<TInvite extends BaseInvite> = {
   canEditInvite?: (invite: TInvite) => boolean
   canDeleteInvite?: (invite: TInvite) => boolean
   emptyStateCtaLabel?: ReactNode
+  professionals?: ProfessionalOption[]
+  onProfessionalDirectSelect?: (professional: ProfessionalOption, serviceId: string) => void
+  userTypes?: string[]
 }
 
 const DEFAULT_EMPTY_STATE_LABEL = "Invite professional"
@@ -55,6 +66,9 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
   canEditInvite,
   canDeleteInvite,
   emptyStateCtaLabel,
+  professionals = [],
+  onProfessionalDirectSelect,
+  userTypes = [],
 }: ProfessionalServiceCardProps<TInvite>) {
   const hasInvite = invites.length > 0
   const editableInvite = invites.find((invite) => (canEditInvite ? canEditInvite(invite) : invite.status === "invited"))
@@ -121,24 +135,76 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
       <div className="mt-4 flex flex-1 flex-col">
         {invites.length === 0 ? (
           <div className="flex flex-1 flex-col justify-end">
-            <button
-              type="button"
-              onClick={() => onInvite(service.id)}
-              disabled={isBusy}
-              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <MailPlus className="h-4 w-4" />
-              {emptyStateCtaLabel ?? DEFAULT_EMPTY_STATE_LABEL}
-            </button>
+            {userTypes.includes('admin') || userTypes.includes('professional') ? (
+              <div className="mt-auto flex w-full">
+                <button
+                  type="button"
+                  onClick={() => onInvite(service.id)}
+                  disabled={isBusy}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <MailPlus className="h-4 w-4" />
+                  {emptyStateCtaLabel ?? DEFAULT_EMPTY_STATE_LABEL}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      className="inline-flex items-center justify-center border border-l-0 border-gray-200 px-2 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 rounded-r-md"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64" align="end">
+                    {professionals.length > 0 ? (
+                      professionals.map((professional) => (
+                        <DropdownMenuItem
+                          key={professional.id}
+                          onSelect={() => onProfessionalDirectSelect?.(professional, service.id)}
+                        >
+                          <div className="font-medium">{professional.company.name}</div>
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <DropdownMenuItem disabled>
+                        <div className="text-sm text-gray-500">No professionals available</div>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onInvite(service.id)}
+                disabled={isBusy}
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <MailPlus className="h-4 w-4" />
+                {emptyStateCtaLabel ?? DEFAULT_EMPTY_STATE_LABEL}
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-3">
             <div className="space-y-3">
               {invites.map((invite) => {
-                const statusMeta = getInviteStatusMeta(invite)
+                const inviteRecord = invite as Record<string, unknown>
+                const isProjectOwner = typeof inviteRecord.isOwner === "boolean" && inviteRecord.isOwner
+                
+                let statusMeta = getInviteStatusMeta(invite)
+                if (isProjectOwner) {
+                  statusMeta = {
+                    label: "Project owner",
+                    className: "bg-blue-100 text-blue-800"
+                  }
+                }
+                
                 const inviteCanEdit = canEditInvite ? canEditInvite(invite) : invite.status === "invited"
                 const inviteCanDelete = canDeleteInvite ? canDeleteInvite(invite) : true
-                const inviteRecord = invite as Record<string, unknown>
                 const companyName =
                   typeof inviteRecord.companyName === "string" && inviteRecord.companyName.trim().length > 0
                     ? (inviteRecord.companyName as string)

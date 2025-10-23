@@ -76,6 +76,23 @@ import {
   useProjectPhotoTour,
 } from "@/hooks/use-project-photo-tour"
 import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
+import {
+  createInvite,
+  type ProfessionalOption,
+  type InviteData,
+} from "@/lib/new-project/invite-professionals"
+import { 
+  findProfessionalByEmailAction, 
+  getUserEmailAction,
+  getAvailableProfessionalsAction 
+} from "@/app/new-project/actions"
+import { isAdminUser } from "@/lib/auth-utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
+import { MailPlus, Pencil, XCircle } from "lucide-react"
 
 type ProjectBudgetLevel = Enums<"project_budget_level">
 type ProjectStatus = Enums<"project_status">
@@ -218,15 +235,17 @@ const getInviteStatusMeta = (invite: ProfessionalInviteSummary) => {
 
   switch (invite.status) {
     case "invited":
-      return { label: "Invite sent", className: "bg-amber-100 text-amber-800" }
+      return { label: "Invite pending", className: "bg-amber-100 text-amber-800" }
     case "listed":
-    case "live_on_page":
       return { label: "Listed", className: "bg-green-100 text-green-800" }
+    case "live_on_page":
+      return { label: "Active", className: "bg-green-100 text-green-800" }
     case "unlisted":
       return { label: "Unlisted", className: "bg-gray-200 text-gray-700" }
     case "removed":
+      return { label: "Removed", className: "bg-red-100 text-red-800" }
     case "rejected":
-      return { label: invite.status === "removed" ? "Removed" : "Rejected", className: "bg-red-100 text-red-800" }
+      return { label: "Opted out", className: "bg-red-100 text-red-800" }
     default:
       return { label: invite.status.replace(/_/g, " "), className: "bg-gray-100 text-gray-800" }
   }
@@ -280,13 +299,15 @@ const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpd
 export default function ListingEditorPage() {
   const params = useParams()
   const router = useRouter()
-  const [activeSection, setActiveSection] = useState("photo-tour")
+  const [activeSection, setActiveSection] = useState("preview")
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [currentStatusValue, setCurrentStatusValue] = useState<ListingStatusValue | "">("")
   const [selectedStatus, setSelectedStatus] = useState<ListingStatusValue | "">("")
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [showEditConfirmModal, setShowEditConfirmModal] = useState(false)
 
 
   // Location state variables
@@ -606,7 +627,8 @@ export default function ListingEditorPage() {
 
       if (!cancelled) {
         setProjectSlug(project.slug ?? null)
-        setProjectStatus((project.status as ProjectStatus | null) ?? null)
+        const status = (project.status as ProjectStatus | null) ?? null
+        setProjectStatus(status)
         setDetailsForm(hydratedState)
         setLocationData({
           address: project.address_formatted ?? "",
@@ -1325,19 +1347,78 @@ export default function ListingEditorPage() {
   const [inviteServiceId, setInviteServiceId] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState("")
   const [editingInviteId, setEditingInviteId] = useState<string | null>(null)
+  
+  // Professional discovery state for admin/professional users
+  const [professionals, setProfessionals] = useState<ProfessionalOption[]>([])
+  const [selectedProfessional, setSelectedProfessional] = useState<ProfessionalOption | null>(null)
+  const [userTypes, setUserTypes] = useState<string[]>([])
+  const [projectClientId, setProjectClientId] = useState<string | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [isInviteMutating, setIsInviteMutating] = useState(false)
 
-  const sidebarItems = [
+  const editableSidebarItems = [
     { id: "photo-tour", name: "Photo tour", icon: ImageIcon },
     { id: "professionals", name: "Professionals", icon: Users },
     { id: "details", name: "Details", icon: FileText },
     { id: "location", name: "Location", icon: MapPin },
   ]
 
+  const sidebarItems = isEditMode ? editableSidebarItems : []
+
   const getCurrentSectionTitle = () => {
-    const currentItem = sidebarItems.find(item => item.id === activeSection)
-    return currentItem?.name || "Photo tour"
+    if (activeSection === "preview") return "Listing preview"
+    const currentItem = editableSidebarItems.find(item => item.id === activeSection)
+    return currentItem?.name || "Listing preview"
+  }
+
+  const handleEditListing = async () => {
+    if (!projectId) return
+    
+    setIsEditMode(true)
+    setActiveSection("photo-tour")
+    setShowEditConfirmModal(false)
+
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ status: "draft" })
+        .eq("id", projectId)
+      
+      if (error) {
+        toast.error("Failed to update project status")
+        console.error("Error updating project status:", error)
+      } else {
+        setProjectStatus("draft")
+        toast.success("Editing enabled - Project moved to draft for review")
+      }
+    } catch (err) {
+      toast.error("Failed to enable editing")
+      console.error("Error enabling edit mode:", err)
+    }
+  }
+
+  const handleSubmitForReview = async () => {
+    if (!projectId) return
+    
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ status: "in_progress" })
+        .eq("id", projectId)
+      
+      if (error) {
+        toast.error("Failed to submit for review")
+        console.error("Error submitting for review:", error)
+      } else {
+        setProjectStatus("in_progress")
+        setIsEditMode(false)
+        setActiveSection("preview")
+        toast.success("Submitted for admin review")
+      }
+    } catch (err) {
+      toast.error("Failed to submit for review")
+      console.error("Error submitting for review:", err)
+    }
   }
 
   const statusOptions = LISTING_STATUS_MODAL_OPTIONS
@@ -1539,7 +1620,6 @@ export default function ListingEditorPage() {
 
       if (summary.isOwner) {
         ownerInvite = summary
-        return
       }
 
       if (!summary.serviceId) {
@@ -1603,6 +1683,19 @@ export default function ListingEditorPage() {
     return result
   }, [applyProfessionalSectionData, fetchProfessionalSectionData])
 
+  const loadAvailableProfessionals = useCallback(async (userTypes: string[], userId: string) => {
+    const { data, error } = await getAvailableProfessionalsAction(userTypes, userId)
+    
+    if (error) {
+      console.error("Failed to load available professionals:", error)
+      return
+    }
+
+    if (data) {
+      setProfessionals(data)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
 
@@ -1620,6 +1713,33 @@ export default function ListingEditorPage() {
       setProfessionalsError(null)
 
       try {
+        // Load user profile and available professionals
+        const { data: authData } = await supabase.auth.getUser()
+        if (authData?.user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("user_types")
+            .eq("id", authData.user.id)
+            .maybeSingle()
+          
+          const userTypesArray = profile?.user_types || []
+          setUserTypes(userTypesArray)
+          
+          // Load available professionals for dropdown
+          await loadAvailableProfessionals(userTypesArray, authData.user.id)
+          
+          // Load project data to get client_id
+          const { data: projectData } = await supabase
+            .from("projects")
+            .select("client_id")
+            .eq("id", projectId)
+            .maybeSingle()
+          
+          if (projectData) {
+            setProjectClientId(projectData.client_id)
+          }
+        }
+        
         const result = await fetchProfessionalSectionData()
         if (!cancelled && result) {
           applyProfessionalSectionData(result)
@@ -1642,7 +1762,7 @@ export default function ListingEditorPage() {
     return () => {
       cancelled = true
     }
-  }, [applyProfessionalSectionData, fetchProfessionalSectionData, hasProjectAccess, projectId])
+  }, [applyProfessionalSectionData, fetchProfessionalSectionData, hasProjectAccess, loadAvailableProfessionals, projectId, supabase])
 
   const openServiceModal = () => {
     setServiceSelectionDraft(selectedProfessionalServiceIds)
@@ -1781,20 +1901,23 @@ export default function ListingEditorPage() {
   }
 
   const handleInviteDialogChange = (open: boolean) => {
-    setInviteDialogOpen(open)
     if (!open) {
-      setInviteServiceId(null)
-      setInviteEmail("")
-      setEditingInviteId(null)
-      setInviteError(null)
+      closeInviteModal()
+    } else {
+      setInviteDialogOpen(true)
     }
   }
 
   const openInviteModal = (serviceId: string, invite?: ProfessionalInviteSummary) => {
+    if (!isUuid(serviceId)) {
+      setInviteError("Please select a service from the Supabase taxonomy before sending invites.")
+      return
+    }
+
     if (!invite) {
       const existingInvites = professionalInvites[serviceId] ?? []
-      if (existingInvites.length > 0) {
-        setInviteError("Only one professional can be invited per service. Remove the existing invite to add another.")
+      if (existingInvites.length >= 1) {
+        setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
         return
       }
     }
@@ -1806,33 +1929,79 @@ export default function ListingEditorPage() {
     setInviteDialogOpen(true)
   }
 
+  const closeInviteModal = () => {
+    setInviteDialogOpen(false)
+    setInviteServiceId(null)
+    setInviteEmail("")
+    setEditingInviteId(null)
+    setInviteError(null)
+    setSelectedProfessional(null)
+  }
+
+  const handleProfessionalDirectSelect = async (professional: ProfessionalOption, serviceId: string) => {
+    if (!projectId || isInviteMutating) {
+      return
+    }
+
+    const existingInvites = professionalInvites[serviceId] ?? []
+    if (existingInvites.length >= 1) {
+      setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+      return
+    }
+
+    setInviteError(null)
+    setIsInviteMutating(true)
+
+    try {
+      const isProjectOwner = projectClientId === professional.user_id
+      
+      const inviteData: InviteData = {
+        project_id: projectId,
+        invited_service_category_id: serviceId,
+        invited_email: professional.email,
+        professional_id: professional.id,
+        company_id: professional.company_id,
+        is_project_owner: isProjectOwner,
+      }
+
+      const { data, error } = await createInvite(supabase, inviteData)
+
+      if (error || !data) {
+        throw error ?? new Error("Professional could not be added to project.")
+      }
+
+      await refreshProfessionalSection()
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "We couldn't add this professional. Please try again.")
+    } finally {
+      setIsInviteMutating(false)
+    }
+  }
+
   const handleInviteSubmit = async () => {
     if (!projectId || !inviteServiceId || isInviteMutating) {
       return
     }
 
-    if (!isUuid(inviteServiceId)) {
-      setInviteError("Please select a professional service from the Arco catalog to send invites.")
-      return
-    }
-
-    const trimmedEmail = inviteEmail.trim()
-
-    if (!EMAIL_REGEX.test(trimmedEmail)) {
-      setInviteError("Please enter a valid company email address.")
-      return
-    }
-
-    const domain = getDomain(trimmedEmail)
-    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) {
-      setInviteError("Please use a company email address (personal domains are not allowed).")
-      return
-    }
-
     if (!editingInviteId) {
       const existingInvites = professionalInvites[inviteServiceId] ?? []
-      if (existingInvites.length > 0) {
-        setInviteError("Only one professional can be invited per service. Remove the existing invite to add another.")
+      if (existingInvites.length >= 1) {
+        setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+        return
+      }
+    }
+
+    const email = selectedProfessional ? selectedProfessional.email : inviteEmail.trim()
+    
+    if (!selectedProfessional) {
+      if (!EMAIL_REGEX.test(email)) {
+        setInviteError("Please enter a valid company email address.")
+        return
+      }
+
+      const domain = getDomain(email)
+      if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) {
+        setInviteError("Please use a company email address (personal domains are not allowed).")
         return
       }
     }
@@ -1842,31 +2011,46 @@ export default function ListingEditorPage() {
 
     try {
       if (editingInviteId) {
-        const { error, data } = await supabase
+        const updateData: any = { invited_email: email }
+        if (selectedProfessional) {
+          updateData.professional_id = selectedProfessional.id
+          updateData.company_id = selectedProfessional.company_id
+        }
+
+        const { data, error } = await supabase
           .from("project_professionals")
-          .update({ invited_email: trimmedEmail })
+          .update(updateData)
           .eq("id", editingInviteId)
-          .select(
-            "id, invited_email, invited_service_category_id, status, is_project_owner, invited_at, responded_at, professional_id",
-          )
+          .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at")
           .maybeSingle()
 
         if (error || !data) {
           throw error ?? new Error("Invite could not be updated.")
         }
       } else {
-        const { error, data } = await supabase
-          .from("project_professionals")
-          .insert({
-            project_id: projectId,
-            invited_email: trimmedEmail,
-            invited_service_category_id: inviteServiceId,
-            status: "invited",
-          })
-          .select(
-            "id, invited_email, invited_service_category_id, status, is_project_owner, invited_at, responded_at, professional_id",
-          )
-          .maybeSingle()
+        let professionalId = selectedProfessional?.id || null
+        let companyId = selectedProfessional?.company_id || null
+        let isProjectOwner = selectedProfessional && projectClientId === selectedProfessional.user_id
+        
+        if (!selectedProfessional) {
+          const { data: foundProfessional } = await findProfessionalByEmailAction(email)
+          if (foundProfessional) {
+            professionalId = foundProfessional.id
+            companyId = foundProfessional.company_id
+            isProjectOwner = projectClientId === foundProfessional.user_id
+          }
+        }
+        
+        const inviteData: InviteData = {
+          project_id: projectId,
+          invited_service_category_id: inviteServiceId,
+          invited_email: email,
+          professional_id: professionalId,
+          company_id: companyId,
+          is_project_owner: isProjectOwner,
+        }
+
+        const { data, error } = await createInvite(supabase, inviteData)
 
         if (error || !data) {
           throw error ?? new Error("Invite could not be saved.")
@@ -1874,11 +2058,9 @@ export default function ListingEditorPage() {
       }
 
       await refreshProfessionalSection()
-      handleInviteDialogChange(false)
+      closeInviteModal()
     } catch (error) {
-      setInviteError(
-        error instanceof Error ? error.message : "We couldn't send that invite. Please try again.",
-      )
+      setInviteError(error instanceof Error ? error.message : "We couldn't send that invite. Please try again.")
     } finally {
       setIsInviteMutating(false)
     }
@@ -1886,11 +2068,6 @@ export default function ListingEditorPage() {
 
   const handleDeleteInvite = async (invite: ProfessionalInviteSummary) => {
     if (isInviteMutating) {
-      return
-    }
-
-    if (invite.isOwner) {
-      setInviteError("You cannot remove the listing owner from this project.")
       return
     }
 
@@ -2466,25 +2643,6 @@ const renderLocationSection = () => (
           </div>
         ) : (
           <div className="space-y-6">
-            {projectOwnerInvite && (
-              <div className="rounded-lg border border-gray-200 bg-white p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-500">Listing owner</p>
-                    <p className="mt-1 text-lg font-semibold text-gray-900">
-                      {projectOwnerInvite.companyName ?? projectOwnerInvite.email}
-                    </p>
-                    {projectOwnerInvite.primaryService && (
-                      <p className="text-sm text-gray-600">{projectOwnerInvite.primaryService}</p>
-                    )}
-                  </div>
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800">
-                    Listing owner
-                  </span>
-                </div>
-              </div>
-            )}
-
             {selectedServices.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-sm text-gray-600">
                 Add a professional service to invite collaborators to this project.
@@ -2503,6 +2661,9 @@ const renderLocationSection = () => (
                     getInviteStatusMeta={getInviteStatusMeta}
                     canEditInvite={(invite) => !invite.isOwner && invite.status === "invited"}
                     canDeleteInvite={(invite) => !invite.isOwner}
+                    professionals={professionals}
+                    onProfessionalDirectSelect={handleProfessionalDirectSelect}
+                    userTypes={userTypes}
                   />
                 ))}
               </div>
@@ -2607,12 +2768,26 @@ const renderLocationSection = () => (
                   </button>
                 </div>
 
-                {/* Preview listing */}
-                <div>
-                  <Button className="w-full bg-gray-900 text-white hover:bg-gray-800" onClick={handlePreviewListing}>
-                    Preview listing
-                  </Button>
-                </div>
+                {/* Edit/Submit buttons */}
+                {!isEditMode ? (
+                  <div>
+                    <Button 
+                      className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+                      onClick={() => setShowEditConfirmModal(true)}
+                    >
+                      Edit listing
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <Button 
+                      className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+                      onClick={handleSubmitForReview}
+                    >
+                      Submit for review
+                    </Button>
+                  </div>
+                )}
 
                 {/* Navigation Items */}
                 <div className="space-y-2">
@@ -2650,10 +2825,32 @@ const renderLocationSection = () => (
                   </button>
                   <h1 className="text-xl font-semibold text-gray-900">{getCurrentSectionTitle()}</h1>
                 </div>
-                <Button className="bg-gray-900 text-white hover:bg-gray-800" onClick={handlePreviewListing}>
-                  Preview
-                </Button>
+                {!isEditMode && activeSection === "preview" && (
+                  <Button 
+                    className="bg-gray-900 text-white hover:bg-gray-800" 
+                    onClick={() => setShowEditConfirmModal(true)}
+                  >
+                    Edit
+                  </Button>
+                )}
+                {isEditMode && (
+                  <Button className="bg-gray-900 text-white hover:bg-gray-800" onClick={handlePreviewListing}>
+                    Preview
+                  </Button>
+                )}
               </div>
+              {activeSection === "preview" && (
+                <div className="flex items-center justify-center min-h-[60vh]">
+                  <div className="text-center max-w-md">
+                    <h2 className="text-2xl font-semibold text-gray-900 mb-3">
+                      Ready to edit your listing?
+                    </h2>
+                    <p className="text-gray-600 mb-8">
+                      Click "Edit listing" in the sidebar to make changes to your project.
+                    </p>
+                  </div>
+                </div>
+              )}
               {activeSection === "photo-tour" && renderPhotoTourSection()}
               {activeSection === "professionals" && renderProfessionalsSection()}
               {activeSection === "details" && (
@@ -2792,6 +2989,32 @@ const renderLocationSection = () => (
         activeStatusValues={ACTIVE_STATUS_VALUES}
       />
 
+      <Dialog open={showEditConfirmModal} onOpenChange={setShowEditConfirmModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit this listing?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Making edits will require admin approval again. The listing will be moved to draft status and needs to be reviewed before it can be published.
+          </p>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditConfirmModal(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditListing}
+              className="flex-1"
+            >
+              Continue editing
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isServiceModalOpen} onOpenChange={handleServiceModalOpenChange}>
         <DialogContent className="max-w-2xl sm:max-w-2xl">
           <DialogHeader>
@@ -2848,7 +3071,12 @@ const renderLocationSection = () => (
       <Dialog open={inviteDialogOpen} onOpenChange={handleInviteDialogChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingInviteId ? "Edit invite" : "Invite a professional"}</DialogTitle>
+            <DialogTitle>{editingInviteId ? "Update invite" : "Invite professional"}</DialogTitle>
+            {inviteServiceId && (
+              <p className="mt-1 text-sm text-gray-500">
+                Service: {professionalServices.find(s => s.id === inviteServiceId)?.name}
+              </p>
+            )}
           </DialogHeader>
           {inviteError && (
             <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{inviteError}</div>
@@ -2856,7 +3084,7 @@ const renderLocationSection = () => (
           <div className="space-y-4">
             <div>
               <label htmlFor="invite-email" className="mb-2 block text-sm font-medium text-gray-700">
-                Email address
+                Company email address
               </label>
               <input
                 id="invite-email"
@@ -2864,9 +3092,19 @@ const renderLocationSection = () => (
                 value={inviteEmail}
                 onChange={(event) => setInviteEmail(event.target.value)}
                 disabled={isInviteMutating}
-                placeholder="company@example.com"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/20 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="name@company.com"
+                className={`w-full rounded-md border px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
+                  inviteError ? 'border-red-300' : 'border-gray-300'
+                } disabled:cursor-not-allowed disabled:opacity-50`}
               />
+              {inviteError && (
+                <p className="mt-2 text-sm text-red-600">
+                  {inviteError}
+                </p>
+              )}
+              <p className="mt-2 text-sm text-gray-500">
+                No invites are sent until the project is approved by Arco.
+              </p>
             </div>
           </div>
           <div className="flex gap-3 pt-4">
@@ -2879,7 +3117,8 @@ const renderLocationSection = () => (
               Cancel
             </Button>
             <Button onClick={() => void handleInviteSubmit()} disabled={isInviteMutating} className="flex-1">
-              {isInviteMutating ? "Sending…" : editingInviteId ? "Update invite" : "Send invite"}
+              {isInviteMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add to project
             </Button>
           </div>
         </DialogContent>
@@ -2917,16 +3156,40 @@ const renderLocationSection = () => (
               <ChevronRight className="w-4 h-4 text-gray-400" />
             </button>
 
-            {/* Preview listing */}
-            <Button 
-              className="w-full bg-gray-900 text-white hover:bg-gray-800" 
-              onClick={() => {
-                handlePreviewListing()
-                setIsMobileMenuOpen(false)
-              }}
-            >
-              Preview listing
-            </Button>
+            {/* Edit/Submit/Preview listing */}
+            {!isEditMode ? (
+              <Button 
+                className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+                onClick={() => {
+                  setShowEditConfirmModal(true)
+                  setIsMobileMenuOpen(false)
+                }}
+              >
+                Edit listing
+              </Button>
+            ) : (
+              <>
+                <Button 
+                  className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+                  onClick={() => {
+                    handleSubmitForReview()
+                    setIsMobileMenuOpen(false)
+                  }}
+                >
+                  Submit for review
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={() => {
+                    handlePreviewListing()
+                    setIsMobileMenuOpen(false)
+                  }}
+                >
+                  Preview listing
+                </Button>
+              </>
+            )}
 
             {/* Navigation Items */}
             <div className="space-y-2">

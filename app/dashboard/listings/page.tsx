@@ -34,6 +34,7 @@ type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
   }[] | null
   project_professional_id?: string
   project_professional_status?: string
+  invited_service_category_id?: string | null
 }
 
 type ListingProjectPhoto = {
@@ -63,6 +64,7 @@ type ListingProject = {
   hasMetadataError?: boolean
   projectProfessionalId?: string
   projectProfessionalStatus?: string
+  invitedServiceCategory?: string | null
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -214,6 +216,8 @@ export default function DashboardListingsPage() {
           project_id,
           status,
           is_project_owner,
+          invited_service_category_id,
+          invited_service_category:categories!project_professionals_invited_service_category_id_fkey(name, slug),
           projects!inner(
             id,
             title,
@@ -234,7 +238,7 @@ export default function DashboardListingsPage() {
         `)
         .eq("professional_id", professionalData.id)
         .neq("status", "rejected")
-        .order("projects(updated_at)", { ascending: false })
+        .order("created_at", { ascending: false })
 
       // RACE CONDITION CHECK: After async operation
       if (abortController.signal.aborted || !isActive) {
@@ -255,9 +259,12 @@ export default function DashboardListingsPage() {
         ...pp.projects,
         project_professionals: [{ is_project_owner: pp.is_project_owner }],
         project_professional_id: pp.id,
-        project_professional_status: pp.status
+        project_professional_status: pp.status,
+        invited_service_category_id: pp.invited_service_category_id,
+        invited_service_category: pp.invited_service_category
       })) as (ProjectRow & {
         project_type_category: { name: string | null } | null
+        invited_service_category?: { name: string | null } | null
       })[]
 
       // Collect style IDs that need resolution (styles can't be JOINed due to array column)
@@ -403,6 +410,7 @@ export default function DashboardListingsPage() {
           hasMetadataError: hasStyleError,
           projectProfessionalId: project.project_professional_id,
           projectProfessionalStatus: project.project_professional_status,
+          invitedServiceCategory: project.invited_service_category?.name || null,
         }
       })
 
@@ -1036,9 +1044,11 @@ export default function DashboardListingsPage() {
           </div>
         ) : hasProjects ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {displayedProjects.map((project) => (
+            {displayedProjects.map((project, index) => {
+              const cardKey = `${project.id}-${index}`
+              return (
             <div 
-              key={project.id} 
+              key={cardKey} 
               className="group cursor-pointer"
               onClick={(e) => {
                 // Only trigger if not clicking dropdown area
@@ -1102,13 +1112,13 @@ export default function DashboardListingsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        setOpenDropdown(openDropdown === project.id ? null : project.id)
+                        setOpenDropdown(openDropdown === cardKey ? null : cardKey)
                       }}
                       className="p-1 bg-white rounded-full shadow-sm hover:bg-gray-50"
                     >
                       <MoreHorizontal className="w-4 h-4 text-gray-600" />
                     </button>
-                    {openDropdown === project.id && (
+                    {openDropdown === cardKey && (
                       <div className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border py-2 w-40 z-10">
                         {project.role === "owner" ? (
                           <>
@@ -1178,9 +1188,15 @@ export default function DashboardListingsPage() {
               <div className="mt-3">
                 <h7 className="font-medium text-gray-900">{project.title}</h7>
                 <p className="text-xs text-gray-500 mt-1">{project.subtitle}</p>
+                {project.invitedServiceCategory && project.role === "contributor" && (
+                  <p className="text-xs text-gray-600 mt-1 font-medium">
+                    Service: {project.invitedServiceCategory}
+                  </p>
+                )}
               </div>
             </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
@@ -1314,7 +1330,7 @@ export default function DashboardListingsPage() {
                 <h2 className="text-lg font-semibold text-gray-900">Opt out of project?</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   You will no longer be listed as a contributor on{" "}
-                  <span className="font-medium">{projectToOptOut.title}</span>. The project owner can see
+                  <span className="font-medium">{projectToOptOut.title}</span> for <span className="font-medium">{projectToOptOut.invitedServiceCategory}</span> The project owner can see
                   that you opted out and may re-invite you later.
                 </p>
               </div>

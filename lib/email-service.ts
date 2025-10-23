@@ -38,7 +38,7 @@ export interface EmailVariables {
 const EMAIL_TEMPLATES: Record<EmailTemplate, string> = {
   'project-review': 'cm70btm1l003rpi2hhcxqklpe',
   'project-live': 'cmgrix7ib81tdy80igwg27jzi', // Updated with actual template ID
-  'project-rejected': 'PROJECT_REJECTED_TEMPLATE_ID', // Add your template ID
+  'project-rejected': 'cmgrir5g76hvnyc0ifadfp7b3', // Add your template ID
   'professional-invite': 'cmh2bhml30enxyw0jgvk31c3s' // Updated with actual template ID
 }
 
