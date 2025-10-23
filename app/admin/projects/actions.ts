@@ -199,8 +199,8 @@ export async function setProjectStatusAction(input: {
     warnings.push("Project status updated successfully, but search index refresh failed. It will be updated automatically soon.")
   }
 
-  // If project is being published, send emails
-  if (statusResult.data === "published") {
+  // Send emails based on status change
+  if (statusResult.data === "published" || statusResult.data === "rejected") {
     try {
       // Get project details and owner email
       const { data: project } = await serviceClient
@@ -245,98 +245,137 @@ export async function setProjectStatusAction(input: {
       
       const ownerFirstName = project?.profiles?.first_name || ''
       const ownerFullName = [project?.profiles?.first_name, project?.profiles?.last_name].filter(Boolean).join(' ') || ownerEmail || 'Project Owner'
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
-      // Send project live email to owner
-      if (ownerEmail) {
-        try {
-          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-          await sendProjectStatusEmail(
-            ownerEmail,
-            'live',
-            {
-              firstname: ownerFirstName,
-              project_title: project?.title || 'Your Project',
-              project_name: project?.title || 'Your Project',
-              dashboard_link: `${baseUrl}/dashboard/listings`
-            }
-          )
-          
-          logger.info("Project live email sent", {
+      if (statusResult.data === "rejected") {
+        // Send rejection email to project owner
+        if (ownerEmail) {
+          try {
+            await sendProjectStatusEmail(
+              ownerEmail,
+              'rejected',
+              {
+                firstname: ownerFirstName,
+                project_title: project?.title || 'Your Project',
+                project_name: project?.title || 'Your Project',
+                dashboard_link: `${baseUrl}/dashboard/listings`,
+                rejection_reason: trimmedReason || 'No reason provided'
+              }
+            )
+            
+            logger.info("Project rejection email sent", {
+              scope: "admin-projects",
+              projectId: idResult.data,
+              emailSent: true
+            })
+          } catch (emailError) {
+            logger.error("Failed to send project rejection email", {
+              scope: "admin-projects",
+              projectId: idResult.data,
+              error: getErrorMessage(emailError)
+            })
+            warnings.push("Project rejected but email notification failed.")
+          }
+        } else {
+          logger.warn("No owner email found for project rejection notification", {
             scope: "admin-projects",
             projectId: idResult.data,
-            emailSent: true
-          })
-        } catch (emailError) {
-          logger.error("Failed to send project live email", {
-            scope: "admin-projects",
-            projectId: idResult.data,
-            error: getErrorMessage(emailError)
+            clientId: project?.client_id
           })
         }
-      } else {
-        logger.warn("No owner email found for project live notification", {
-          scope: "admin-projects",
-          projectId: idResult.data,
-          clientId: project?.client_id
-        })
-      }
-
-      // Get ALL professional invites and send emails (both 'invited' and 'listed')
-      // Exclude project owner from receiving invite email
-      const { data: invites } = await supabase
-        .from('project_professionals')
-        .select('id, invited_email')
-        .eq('project_id', idResult.data)
-        .neq('status', 'rejected')
-
-      for (const invite of invites || []) {
-        // Skip sending email to project owner
-        if (ownerEmail && invite.invited_email.toLowerCase() === ownerEmail.toLowerCase()) {
-          logger.info("Skipping invite email for project owner", {
+      } else if (statusResult.data === "published") {
+        // Send project live email to owner
+        if (ownerEmail) {
+          try {
+            await sendProjectStatusEmail(
+              ownerEmail,
+              'live',
+              {
+                firstname: ownerFirstName,
+                project_title: project?.title || 'Your Project',
+                project_name: project?.title || 'Your Project',
+                dashboard_link: `${baseUrl}/dashboard/listings`
+              }
+            )
+            
+            logger.info("Project live email sent", {
+              scope: "admin-projects",
+              projectId: idResult.data,
+              emailSent: true
+            })
+          } catch (emailError) {
+            logger.error("Failed to send project live email", {
+              scope: "admin-projects",
+              projectId: idResult.data,
+              error: getErrorMessage(emailError)
+            })
+          }
+        } else {
+          logger.warn("No owner email found for project live notification", {
             scope: "admin-projects",
-            projectId: idResult.data
+            projectId: idResult.data,
+            clientId: project?.client_id
           })
-          continue
         }
 
-        try {
-          // Generate smart URL based on user type
-          const { confirmUrl } = await checkUserAndGenerateInviteUrl(
-            invite.invited_email,
-            idResult.data
-          )
-          
-          await sendProfessionalInviteEmail(
-            invite.invited_email,
-            {
-              project_owner: ownerFullName,
-              project_name: project?.title || 'Project',
-              project_title: project?.title || 'Project',
-              confirmUrl
-            }
-          )
-          
-          logger.info("Professional invite email sent", {
-            scope: "admin-projects",
-            projectId: idResult.data,
-            inviteId: invite.id
-          })
-        } catch (inviteEmailError) {
-          logger.error("Failed to send professional invite email", {
-            scope: "admin-projects",
-            projectId: idResult.data,
-            inviteId: invite.id,
-            error: getErrorMessage(inviteEmailError)
-          })
+        // Get ALL professional invites and send emails (both 'invited' and 'listed')
+        // Exclude project owner from receiving invite email
+        const { data: invites } = await supabase
+          .from('project_professionals')
+          .select('id, invited_email')
+          .eq('project_id', idResult.data)
+          .neq('status', 'rejected')
+
+        for (const invite of invites || []) {
+          // Skip sending email to project owner
+          if (ownerEmail && invite.invited_email.toLowerCase() === ownerEmail.toLowerCase()) {
+            logger.info("Skipping invite email for project owner", {
+              scope: "admin-projects",
+              projectId: idResult.data
+            })
+            continue
+          }
+
+          try {
+            // Generate smart URL based on user type
+            const { confirmUrl } = await checkUserAndGenerateInviteUrl(
+              invite.invited_email,
+              idResult.data
+            )
+            
+            await sendProfessionalInviteEmail(
+              invite.invited_email,
+              {
+                project_owner: ownerFullName,
+                project_name: project?.title || 'Project',
+                project_title: project?.title || 'Project',
+                confirmUrl
+              }
+            )
+            
+            logger.info("Professional invite email sent", {
+              scope: "admin-projects",
+              projectId: idResult.data,
+              inviteId: invite.id
+            })
+          } catch (inviteEmailError) {
+            logger.error("Failed to send professional invite email", {
+              scope: "admin-projects",
+              projectId: idResult.data,
+              inviteId: invite.id,
+              error: getErrorMessage(inviteEmailError)
+            })
+          }
         }
       }
     } catch (emailError) {
-      logger.warn("Email sending failed during project approval", {
+      logger.warn("Email sending failed during project status update", {
         scope: "admin-projects",
         projectId: idResult.data,
+        status: statusResult.data,
         error: getErrorMessage(emailError)
       })
-      warnings.push("Project published but email notifications may have failed.")
+      warnings.push(`Project status updated but email notifications may have failed.`)
     }
   }
 
