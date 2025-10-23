@@ -177,7 +177,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               <>
                 <Link
                   href={hasProfessionalRole ? "/dashboard/company" : "/list-with-us"}
-                  className={`text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
+                  className={`hidden md:block text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
                 >
                   {hasProfessionalRole ? "Switch to company" : "List with us"}
                 </Link>
@@ -192,7 +192,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   aria-label="Open menu"
                   onClick={toggleMenu}
                 >
-                  <span className={textColor}>{menuLabel}</span>
+                  <span className={`${textColor} hidden md:inline`}>{menuLabel}</span>
                   <Menu className="h-5 w-5" />
                 </Button>
               </>
@@ -208,7 +208,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 aria-label="Open menu"
                 onClick={toggleMenu}
               >
-                <span className={textColor}>{authTriggerLabel}</span>
+                <span className={`${textColor} hidden md:inline`}>{authTriggerLabel}</span>
                 <Menu className="h-5 w-5" />
               </Button>
             ) : null}
@@ -337,24 +337,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     )}
                   </div>
                   
-                  {/* Mobile search - only show on mobile */}
-                  <div className="border-t border-gray-100 px-4 py-3 md:hidden">
-                    <form onSubmit={handleSearch} className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search Arco"
-                        value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                      />
-                      <button
-                        type="submit"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 transform text-gray-500 hover:text-gray-700"
-                      >
-                        <Search className="h-4 w-4" />
-                      </button>
-                    </form>
-                  </div>
                 </div>
               </div>
             )}

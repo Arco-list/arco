@@ -42,31 +42,31 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
                   {links.map((link) => (
                     <li key={link}>
                       {link === "Pricing" ? (
-                        <Link href="/pricing" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <Link href="/pricing" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </Link>
                       ) : link === "Projects" ? (
-                        <Link href="/projects" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <Link href="/projects" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </Link>
                       ) : link === "About" ? (
-                        <Link href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <Link href="/about" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </Link>
                       ) : link === "Help center" ? (
-                        <Link href="/help-center" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <Link href="/help-center" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </Link>
                       ) : link === "Professionals" ? (
-                        <Link href="/professionals" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <Link href="/professionals" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </Link>
                       ) : link === "List with us" ? (
-                        <Link href="/list-with-us" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <Link href="/list-with-us" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </Link>
                       ) : (
-                        <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors">
+                        <a href="#" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
                           {link}
                         </a>
                       )}
@@ -81,10 +81,10 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
         <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
           <div>©2025 ArcoGlobal BV. All rights reserved.</div>
           <div className="flex gap-6">
-            <Link href="/terms" className="hover:text-gray-900 transition-colors">
+            <Link href="/terms" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
               Terms
             </Link>
-            <Link href="/privacy" className="hover:text-gray-900 transition-colors">
+            <Link href="/privacy" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
               Privacy
             </Link>
           </div>

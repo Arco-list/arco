@@ -16,7 +16,7 @@ export function ProfessionalsSidebar() {
 
   return (
     <>
-      <div className="lg:sticky lg:top-8 lg:z-20">
+      <div className="lg:sticky lg:top-24 lg:z-20">
         <Card className="p-6 space-y-6">
           <h3 className="text-lg font-semibold">Professionals who built it</h3>
 

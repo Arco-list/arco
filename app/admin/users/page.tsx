@@ -77,7 +77,7 @@ export default async function UsersPage() {
     .select(
       "id, first_name, last_name, admin_role, user_types, is_active, invited_by, invited_at, created_at, updated_at",
     )
-    .contains("user_types", ["admin"])
+    .or("user_types.cs.{admin},user_types.cs.{client}")
     .order("created_at", { ascending: true })
 
   if (adminProfilesError) {
@@ -158,7 +158,8 @@ export default async function UsersPage() {
     const displayName = profileName || metadataName || authRecord?.email || "Admin user"
 
     const email = authRecord?.email ?? "unknown@example.com"
-    const adminRole = profile.admin_role === "super_admin" ? "super_admin" : "admin"
+    const isClientUser = profile.user_types.includes("client") && !profile.user_types.includes("admin")
+    const adminRole = isClientUser ? "client" : (profile.admin_role === "super_admin" ? "super_admin" : "admin")
     const isActive = profile.is_active !== false
     const bannedUntil = authRecord?.banned_until ?? null
     const emailConfirmedAt = authRecord?.email_confirmed_at ?? null

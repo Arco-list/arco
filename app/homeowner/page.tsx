@@ -37,7 +37,7 @@ function HomeownerContent() {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab")
-    if (tabParam && ["saved-projects", "saved-professionals", "settings"].includes(tabParam)) {
+    if (tabParam && ["saved-projects", "saved-professionals", "account"].includes(tabParam)) {
       setActiveTab(tabParam)
     }
   }, [searchParams])
@@ -73,10 +73,10 @@ function HomeownerContent() {
           <h1 className="text-2xl font-semibold text-gray-900 mb-8">Homeowner</h1>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-8">
-              <TabsTrigger value="saved-projects">Saved Projects</TabsTrigger>
-              <TabsTrigger value="saved-professionals">Saved Professionals</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsList className="mb-8 rounded-full p-1 gap-1">
+              <TabsTrigger value="saved-projects" className="rounded-full px-4">Saved Projects</TabsTrigger>
+              <TabsTrigger value="saved-professionals" className="rounded-full px-4">Saved Professionals</TabsTrigger>
+              <TabsTrigger value="account" className="rounded-full px-4">Account</TabsTrigger>
             </TabsList>
 
             <TabsContent value="saved-projects">
@@ -184,7 +184,7 @@ function HomeownerContent() {
               )}
             </TabsContent>
 
-            <TabsContent value="settings">
+            <TabsContent value="account">
               <AccountSettingsForm />
             </TabsContent>
           </Tabs>

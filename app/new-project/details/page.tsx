@@ -64,27 +64,40 @@ const createDraftSlug = (title: string) => {
   return `${base}-${timestamp}${randomSuffix}`
 }
 
-const extractCityAndRegion = (
+const extractAddressComponents = (
   components: Array<{ long_name: string; short_name: string; types: string[] }> = [],
 ) => {
   let city = ""
   let region = ""
+  let country = ""
+  let postalCode = ""
+  let street = ""
+  let streetNumber = ""
 
   for (const component of components) {
     if (!city && (component.types.includes("locality") || component.types.includes("postal_town"))) {
       city = component.long_name
     }
-
-    if (
-      !region &&
-      (component.types.includes("administrative_area_level_1") ||
-        component.types.includes("administrative_area_level_2"))
-    ) {
+    if (!region && (component.types.includes("administrative_area_level_1") || component.types.includes("administrative_area_level_2"))) {
       region = component.long_name
+    }
+    if (!country && component.types.includes("country")) {
+      country = component.long_name
+    }
+    if (!postalCode && component.types.includes("postal_code")) {
+      postalCode = component.long_name
+    }
+    if (!street && component.types.includes("route")) {
+      street = component.long_name
+    }
+    if (!streetNumber && component.types.includes("street_number")) {
+      streetNumber = component.long_name
     }
   }
 
-  return { city, region }
+  const fullStreet = [streetNumber, street].filter(Boolean).join(" ")
+
+  return { city, region, country, postalCode, street: fullStreet }
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -137,6 +150,9 @@ export default function NewProjectPage() {
     longitude: null,
     city: "",
     region: "",
+    country: "",
+    postalCode: "",
+    street: "",
     shareExactLocation: false,
   })
 
@@ -280,6 +296,9 @@ export default function NewProjectPage() {
         longitude: project.longitude ?? null,
         city: project.address_city ?? "",
         region: project.address_region ?? "",
+        country: project.address_country ?? "",
+        postalCode: project.address_postal_code ?? "",
+        street: project.address_street ?? "",
         shareExactLocation: project.share_exact_location ?? false,
       }
 
@@ -370,13 +389,13 @@ export default function NewProjectPage() {
         address_formatted: snapshot.address || null,
         address_city: snapshot.city || null,
         address_region: snapshot.region || null,
+        address_country: snapshot.country || null,
+        address_postal_code: snapshot.postalCode || null,
+        address_street: snapshot.street || null,
         latitude: snapshot.latitude,
         longitude: snapshot.longitude,
         share_exact_location: snapshot.shareExactLocation,
-        location:
-          snapshot.city || snapshot.region
-            ? [snapshot.city, snapshot.region].filter(Boolean).join(", ")
-            : snapshot.address || null,
+        location: snapshot.city || snapshot.address || null,
       }
 
       try {
@@ -697,6 +716,9 @@ export default function NewProjectPage() {
         longitude: null,
         city: "",
         region: "",
+        country: "",
+        postalCode: "",
+        street: "",
       }))
       clearFieldError(field)
     } else {
@@ -765,7 +787,7 @@ export default function NewProjectPage() {
           if (status === "OK" && results?.length) {
             const primary = results[0]
             const formattedAddress = primary.formatted_address ?? ""
-            const { city, region } = extractCityAndRegion(primary.address_components ?? [])
+            const { city, region, country, postalCode, street } = extractAddressComponents(primary.address_components ?? [])
 
             setFormData((prev) => ({
               ...prev,
@@ -774,6 +796,9 @@ export default function NewProjectPage() {
               longitude: lng,
               city,
               region,
+              country,
+              postalCode,
+              street,
             }))
             setAddressInputValue(formattedAddress)
             setValidationErrors((prev) => {
@@ -808,7 +833,7 @@ export default function NewProjectPage() {
         const lat = location.lat()
         const lng = location.lng()
         const formattedAddress = place.formatted_address ?? searchInputRef.current?.value ?? ""
-        const { city, region } = extractCityAndRegion(place.address_components ?? [])
+        const { city, region, country, postalCode, street } = extractAddressComponents(place.address_components ?? [])
 
         setFormData((prev) => ({
           ...prev,
@@ -817,6 +842,9 @@ export default function NewProjectPage() {
           longitude: lng,
           city,
           region,
+          country,
+          postalCode,
+          street,
         }))
         setAddressInputValue(formattedAddress)
         setValidationErrors((prev) => {

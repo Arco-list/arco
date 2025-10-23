@@ -1127,7 +1127,7 @@ function ServiceSelectionStep({
         <p className="text-lg text-gray-600">You can add more services after you publish your project.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {services.map((service) => {
           const isSelected = selectedServiceIds.includes(service.id)
           const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)

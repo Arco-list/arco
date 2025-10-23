@@ -327,7 +327,7 @@ export default function PhotoTourPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">Tell us what your project has to offer</h1>
 
         <p className="text-gray-500 text-base mb-6">
-          Building and Additional photos groups are included automatically. Select the spaces that best describe your
+          Select the spaces that best describe your
           project — you can adjust these later.
         </p>
 
@@ -342,7 +342,7 @@ export default function PhotoTourPage() {
         ) : orderedFeatureOptions.length === 0 ? (
           <p className="text-sm text-gray-500">No feature taxonomy available yet. Use the fallback list from the PRD.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {orderedFeatureOptions.map((feature) => {
               const IconComponent = resolveIconForFeatureOption(feature)
               const isSelected = userSelectedFeatureIds.includes(feature.id)
