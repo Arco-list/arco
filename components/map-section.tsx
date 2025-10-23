@@ -34,6 +34,10 @@ export function MapSection() {
       return
     }
 
+    if (mapInstanceRef.current) {
+      return
+    }
+
     try {
       if (hasExactCoordinates && location.latitude && location.longitude) {
         const position = { lat: location.latitude, lng: location.longitude }
