@@ -634,25 +634,18 @@ export default function DashboardListingsPage() {
   }
 
   const handleCardClick = (project: ListingProject) => {
-    // If project is live (published or completed), open in new tab
-    const isLive = project.status === "published" || project.status === "completed"
-    if (isLive && project.slug) {
-      window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer")
-      return
+    if (project.role === "owner") {
+      router.push(`/dashboard/edit/${project.id}`)
+    } else {
+      if (project.slug) {
+        window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer")
+      }
     }
-    
-    // Otherwise, use the same logic as Edit listing
-    handleEditListing(project)
   }
 
   const handleEditListing = (project: ListingProject) => {
     setOpenDropdown(null)
-    // If project is draft (in progress), redirect to new-project flow
-    if (project.status === "draft") {
-      router.push(`/new-project/details?projectId=${project.id}`)
-    } else {
-      router.push(`/dashboard/edit/${project.id}`)
-    }
+    router.push(`/dashboard/edit/${project.id}`)
   }
 
   const handlePreviewListing = (project: ListingProject) => {
@@ -915,7 +908,7 @@ export default function DashboardListingsPage() {
                 )}
               </Button>
               <Button asChild variant="secondary">
-                <Link href="/new-project/details">Add project</Link>
+                <Link href="/new-project">Add project</Link>
               </Button>
             </div>
           </div>
@@ -1206,7 +1199,7 @@ export default function DashboardListingsPage() {
             </p>
             <div className="mt-6">
               <Button asChild>
-                <Link href="/new-project/details">Create a project</Link>
+                <Link href="/new-project">Create a project</Link>
               </Button>
             </div>
           </div>

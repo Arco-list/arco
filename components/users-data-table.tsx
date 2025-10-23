@@ -73,7 +73,7 @@ export type AdminUserRow = {
   id: string
   displayName: string
   email: string
-  role: "super_admin" | "admin"
+  role: "super_admin" | "admin" | "client"
   status: "active" | "inactive" | "invited"
   createdAt: string | null
   lastSignInAt: string | null
@@ -93,6 +93,7 @@ type AdminUsersTableProps = {
 const ROLE_LABELS: Record<AdminUserRow["role"], string> = {
   admin: "Admin",
   super_admin: "Super Admin",
+  client: "Homeowner",
 }
 
 const STATUS_META: Record<
@@ -526,7 +527,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       <div className="flex flex-col gap-4 px-4 lg:px-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Admin users</h2>
+            <h2 className="text-xl font-semibold">Users</h2>
             <p className="text-sm text-muted-foreground">
               {totalAdmins} total · {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"} · {pendingInvites} pending invite
               {pendingInvites === 1 ? "" : "s"}
@@ -633,6 +634,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 <SelectItem value="all">All roles</SelectItem>
                 <SelectItem value="super_admin">Super admins</SelectItem>
                 <SelectItem value="admin">Admins</SelectItem>
+                <SelectItem value="client">Homeowners</SelectItem>
               </SelectContent>
             </Select>
             <Select

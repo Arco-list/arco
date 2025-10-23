@@ -631,17 +631,15 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
             <DialogTrigger asChild>
               <button
                 type="button"
-                className="w-full rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-gray-300 hover:shadow"
+                className="w-full flex items-center justify-between px-[18px] py-3 rounded-full bg-quaternary text-quaternary-foreground hover:bg-quaternary-hover transition-all text-sm font-medium"
               >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={cn("h-2 w-2 rounded-full", statusIndicator)} />
-                      <span className="font-medium text-gray-900">{statusLabel}</span>
-                    </div>
+                <div className="text-left">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", statusIndicator)} />
+                    <span>{statusLabel}</span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
                 </div>
+                <ChevronRight className="h-4 w-4" />
               </button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -703,7 +701,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           {/* Preview company */}
           <div className="mt-4">
             <Button 
-              className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+              className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3" 
               onClick={handlePreviewCompany}
             >
               Preview company
@@ -721,12 +719,12 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     type="button"
                     onClick={() => setActiveSection(item.id)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-lg p-3 text-left text-sm font-medium transition",
-                      isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      "flex w-full items-center gap-3 px-[18px] py-3 rounded-full text-left text-sm font-medium transition-all",
+                      isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
                     )}
                   >
                     <Icon className="w-5 h-5" />
-                    <span className="text-base font-medium">{item.label}</span>
+                    <span>{item.label}</span>
                   </button>
                 )
               })}

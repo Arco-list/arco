@@ -69,17 +69,18 @@ export function HeroSection({ projects }: HeroSectionProps) {
 
       <div className="relative z-10 mx-auto w-full max-w-[1800px] px-4 pb-8 text-white md:px-8">
         <div className="max-w-2xl">
-          <h1 
-            className="text-4xl leading-tight md:text-6xl lg:text-7xl"
-            style={{
-              fontFamily: 'Figtree, sans-serif',
-              fontWeight: 600,
-              letterSpacing: '-2px',
-              fontSize: '76px'
-            }}
-          >
-            {heroTitle}
-          </h1>
+          <Link href={currentImage.href}>
+            <h1 
+              className="text-3xl leading-tight md:text-5xl lg:text-6xl xl:text-7xl hover:opacity-90 transition-opacity cursor-pointer"
+              style={{
+                fontFamily: 'Figtree, sans-serif',
+                fontWeight: 600,
+                letterSpacing: '-2px'
+              }}
+            >
+              {heroTitle}
+            </h1>
+          </Link>
         </div>
 
         <div className="absolute bottom-8 right-4 hidden items-center gap-3 text-sm text-white/80 md:flex md:right-8">

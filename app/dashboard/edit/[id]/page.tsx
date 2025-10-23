@@ -256,34 +256,21 @@ const sanitizeString = (value?: string | null) => {
   return trimmed ? trimmed : null
 }
 
-const extractCityAndRegion = (
+const extractCity = (
   components: Array<{ long_name: string; short_name: string; types: string[] }> = [],
 ) => {
-  let city = ""
-  let region = ""
-
   for (const component of components) {
-    if (!city && (component.types.includes("locality") || component.types.includes("postal_town"))) {
-      city = component.long_name
-    }
-
-    if (
-      !region &&
-      (component.types.includes("administrative_area_level_1") ||
-        component.types.includes("administrative_area_level_2"))
-    ) {
-      region = component.long_name
+    if (component.types.includes("locality") || component.types.includes("postal_town")) {
+      return component.long_name
     }
   }
-
-  return { city, region }
+  return ""
 }
 
 const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpdate => {
   const address = sanitizeString(state.address)
   const city = sanitizeString(state.city)
   const region = sanitizeString(state.region)
-  const parts = [city, region].filter((value): value is string => Boolean(value))
 
   return {
     address_formatted: address,
@@ -292,7 +279,7 @@ const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpd
     latitude: state.latitude,
     longitude: state.longitude,
     share_exact_location: state.shareExactLocation,
-    location: parts.length ? parts.join(", ") : address,
+    location: city,
   }
 }
 
@@ -715,7 +702,7 @@ export default function ListingEditorPage() {
           if (status === "OK" && results?.length) {
             const primary = results[0]
             const formattedAddress = primary.formatted_address ?? ""
-            const { city, region } = extractCityAndRegion(primary.address_components ?? [])
+            const city = extractCity(primary.address_components ?? [])
 
             setDetailsForm((prev) => ({
               ...prev,
@@ -723,7 +710,6 @@ export default function ListingEditorPage() {
               latitude: lat,
               longitude: lng,
               city,
-              region,
             }))
             setLocationData((prev) => ({
               ...prev,
@@ -771,7 +757,7 @@ export default function ListingEditorPage() {
         const lng = location.lng()
 
         const formattedAddress = place.formatted_address ?? ""
-        const { city, region } = extractCityAndRegion(place.address_components ?? [])
+        const city = extractCity(place.address_components ?? [])
 
         setDetailsForm((prev) => ({
           ...prev,
@@ -779,7 +765,6 @@ export default function ListingEditorPage() {
           latitude: lat,
           longitude: lng,
           city,
-          region,
         }))
         setLocationData((prev) => ({
           ...prev,
@@ -2754,29 +2739,29 @@ const renderLocationSection = () => (
             <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
               <div className="space-y-6">
                 {/* Navigation Button */}
-                <div>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => router.push('/dashboard/listings')}
-                    className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-quaternary text-quaternary-foreground hover:bg-quaternary-hover transition-all"
                   >
                     <ChevronLeft className="w-4 h-4" />
-                    Listing editor
                   </button>
+                  <span className="text-sm text-gray-600">Listing editor</span>
                 </div>
 
                 {/* Status Selector */}
                 <div>
                   <button
                     onClick={() => setShowStatusModal(true)}
-                    className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center justify-between px-[18px] py-3 rounded-full bg-quaternary text-quaternary-foreground hover:bg-quaternary-hover transition-all text-sm font-medium"
                   >
                     <div className="text-left">
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
-                        <span className="font-medium text-gray-900">{currentStatusLabel}</span>
+                        <span>{currentStatusLabel}</span>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -2784,7 +2769,7 @@ const renderLocationSection = () => (
                 {!isEditMode ? (
                   <div>
                     <Button 
-                      className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+                      className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3" 
                       onClick={() => setShowEditConfirmModal(true)}
                     >
                       Edit listing
@@ -2793,7 +2778,7 @@ const renderLocationSection = () => (
                 ) : (
                   <div>
                     <Button 
-                      className="w-full bg-gray-900 text-white hover:bg-gray-800" 
+                      className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3" 
                       onClick={handleSubmitForReview}
                     >
                       Submit for review
@@ -2811,12 +2796,12 @@ const renderLocationSection = () => (
                       <button
                         key={item.id}
                         onClick={() => setActiveSection(item.id)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
-                          isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        className={`w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all text-sm font-medium ${
+                          isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
                         }`}
                       >
                         <IconComponent className="w-5 h-5" />
-                        <span className="font-medium">{item.name}</span>
+                        <span>{item.name}</span>
                       </button>
                     )
                   })}
@@ -3216,12 +3201,12 @@ const renderLocationSection = () => (
                       setActiveSection(item.id)
                       setIsMobileMenuOpen(false)
                     }}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
-                      isActive ? "bg-gray-100 text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    className={`w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all text-sm font-medium ${
+                      isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
                     }`}
                   >
                     <IconComponent className="w-5 h-5" />
-                    <span className="font-medium">{item.name}</span>
+                    <span>{item.name}</span>
                   </button>
                 )
               })}

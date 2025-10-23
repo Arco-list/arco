@@ -1029,7 +1029,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 <MapSection />
               </div>
 
-              <div className="lg:col-span-1 lg:self-start">
+              <div className="lg:col-span-1">
                 <ProfessionalsSidebar />
               </div>
             </div>

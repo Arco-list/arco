@@ -48,9 +48,7 @@ export function ProfessionalsSection() {
     <>
       <div 
         ref={sectionRef}
-        className={`space-y-6 transition-all duration-300 ${
-          isSticky ? 'lg:sticky lg:top-5 lg:z-10' : ''
-        }`}
+        className="space-y-6"
       >
         <h4 className="text-h4">Professionals who built it</h4>
 

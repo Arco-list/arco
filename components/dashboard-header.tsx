@@ -26,7 +26,12 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
   const menuRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState(searchParamQuery)
 
-  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`)
+  const isActive = (path: string) => {
+    if (path === "/dashboard/listings") {
+      return pathname === path || pathname.startsWith(`${path}/`) || pathname.startsWith("/dashboard/edit/")
+    }
+    return pathname === path || pathname.startsWith(`${path}/`)
+  }
   const isHomeownerPage = pathname === "/homeowner"
 
   // Get user name from profile or session metadata
@@ -172,7 +177,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             {isHomeownerPage && (
               <Link
                 href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
-                className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                className="hidden md:block text-sm font-medium text-black hover:text-gray-600 transition-colors"
               >
                 {hasProfessionalRole ? "Add new project" : "List with us"}
               </Link>
@@ -180,7 +185,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             {!isHomeownerPage && canAccessProfessionalDashboard && (
               <Link
                 href="/new-project"
-                className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                className="hidden md:block text-sm font-medium text-black hover:text-gray-600 transition-colors"
               >
                 Add new project
               </Link>
