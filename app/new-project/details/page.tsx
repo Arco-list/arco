@@ -26,6 +26,7 @@ import {
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
 import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
+import { isAdminUser } from "@/lib/auth-utils"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
 import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
@@ -94,6 +95,7 @@ export default function NewProjectPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -196,11 +198,17 @@ export default function NewProjectPage() {
         return
       }
 
-      if (error || !project || project.client_id !== userId) {
+      if (error || !project) {
         setInitializing(false)
         if (error) {
           setSaveError(error.message)
         }
+        return
+      }
+
+      if (project.client_id !== userId && !isAdmin) {
+        setInitializing(false)
+        setSaveError("You don't have permission to edit this project.")
         return
       }
 
@@ -285,7 +293,7 @@ export default function NewProjectPage() {
     return () => {
       cancelled = true
     }
-  }, [projectIdFromParams, supabase, userId])
+  }, [projectIdFromParams, supabase, userId, isAdmin])
   useEffect(() => {
     let cancelled = false
 
@@ -301,6 +309,16 @@ export default function NewProjectPage() {
       }
 
       setUserId(data.user?.id ?? null)
+
+      if (data.user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_types")
+          .eq("id", data.user.id)
+          .maybeSingle()
+        
+        setIsAdmin(isAdminUser(profile?.user_types))
+      }
     }
 
     loadUser()

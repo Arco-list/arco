@@ -676,9 +676,9 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         if (dimensions.width < MIN_IMAGE_WIDTH) {
           errors.push(
-            `${file.name}: Image width must be at least ${MIN_IMAGE_WIDTH}px (current width: ${dimensions.width}px).`,
+            `${file.name}: Image width is ${dimensions.width}px (recommended: ${MIN_IMAGE_WIDTH}px+). This may appear pixelated.`,
           )
-          continue
+          // Don't continue - allow upload with warning
         }
 
         const fileExtension = MIME_TO_EXTENSION[file.type] ?? file.name.split(".").pop()?.toLowerCase()

@@ -225,11 +225,18 @@ async function loadLandingData() {
     .filter((category) => category.children?.some((child) => child.project_category_attributes?.is_listable))
     .slice(0, 5)
     .map((category) => {
-      const listableChild = (category.children ?? [])
+      const listableChildren = (category.children ?? [])
         .filter((child) => child.project_category_attributes?.is_listable)
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
 
-      const representativeProject = listableChild ? representativeProjectMap.get(listableChild.id) : undefined
+      const childWithProject = listableChildren.find((child) => {
+        const project = representativeProjectMap.get(child.id)
+        return project && project.primary_photo_url
+      })
+
+      const representativeProject = childWithProject 
+        ? representativeProjectMap.get(childWithProject.id)
+        : undefined
 
       const typeSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
 

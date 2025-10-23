@@ -50,6 +50,17 @@ export type PreviewProfessionalSummary = {
   imageUrl?: string | null
 }
 
+export type PreviewProjectProfessional = {
+  id: string
+  professionalId?: string | null
+  serviceCategory: string
+  serviceCategoryId: string
+  companyName?: string | null
+  companyLogo?: string | null
+  professionalTitle?: string | null
+  status?: string | null
+}
+
 export type PreviewDetail = {
   label: string
   value: string
@@ -94,7 +105,7 @@ export type ProjectPreviewData = {
   metaDetails: PreviewDetail[]
   highlights: PreviewHighlight[]
   featureGroups: PreviewFeatureGroup[]
-  professionalServices: PreviewService[]
+  projectProfessionals: PreviewProjectProfessional[]
   professionalsSummary: PreviewProfessionalSummary[]
   location: {
     city?: string | null

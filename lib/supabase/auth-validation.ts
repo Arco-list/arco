@@ -20,6 +20,7 @@ export const signUpSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   redirectTo: z.string().optional(),
+  invitedEmail: z.string().email().optional(),
 });
 
 export const signInWithOtpSchema = z.object({

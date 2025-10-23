@@ -18,6 +18,7 @@ import {
   UserCog,
 } from "lucide-react"
 import { toast } from "sonner"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
 import {
   changeProjectOwnerAction,
@@ -162,6 +163,9 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   const [isChangingOwner, startChangeOwnerTransition] = useTransition()
   const [deleteProject, setDeleteProject] = useState<AdminProjectRow | null>(null)
   const [isDeleting, startDeleteTransition] = useTransition()
+  const [approvalModalProject, setApprovalModalProject] = useState<AdminProjectRow | null>(null)
+  const [approvalProfessionals, setApprovalProfessionals] = useState<Array<{email: string, status: string, professional_id: string | null, company_name?: string}>>([]) 
+  const [isLoadingProfessionals, setIsLoadingProfessionals] = useState(false)
   const [statusDialogProject, setStatusDialogProject] = useState<AdminProjectRow | null>(null)
   const [statusSelection, setStatusSelection] = useState<ProjectStatusValue>("draft")
   const [statusNote, setStatusNote] = useState("")
@@ -594,9 +598,52 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     setStatusNote("")
   }
 
-  const handleApprove = (project: AdminProjectRow) => {
+  const handleApprove = async (project: AdminProjectRow) => {
+    // Show modal and load professionals
+    setApprovalModalProject(project)
+    setIsLoadingProfessionals(true)
+    
+    try {
+      // Load professionals for this project
+      const supabase = getBrowserSupabaseClient()
+      const { data: professionals } = await supabase
+        .from('project_professionals')
+        .select(`
+          invited_email, 
+          status, 
+          professional_id,
+          is_project_owner,
+          professionals(
+            companies(name)
+          )
+        `)
+        .eq('project_id', project.id)
+      
+      const processedProfessionals = (professionals || []).map(prof => ({
+        email: prof.invited_email,
+        status: prof.status,
+        professional_id: prof.professional_id,
+        is_project_owner: prof.is_project_owner,
+        company_name: prof.professionals?.companies?.name || null
+      }))
+      
+      setApprovalProfessionals(processedProfessionals)
+    } catch (error) {
+      console.error('Failed to load professionals:', error)
+      setApprovalProfessionals([])
+    } finally {
+      setIsLoadingProfessionals(false)
+    }
+  }
+
+  const handleApprovalModalConfirm = () => {
+    if (!approvalModalProject) return
+    
     startApproveTransition(async () => {
-      const result = await setProjectStatusAction({ projectId: project.id, status: "published" })
+      const result = await setProjectStatusAction({ 
+        projectId: approvalModalProject.id, 
+        status: "published" 
+      })
 
       if (!result.success) {
         toast.error("Unable to approve project", { 
@@ -605,10 +652,8 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
         return
       }
 
-      toast.success("Project approved and set to Live")
-      setStatusDialogProject({ ...project, status: "published" })
-      setStatusSelection("published")
-      setStatusNote("")
+      toast.success("Project approved and published")
+      setApprovalModalProject(null)
     })
   }
 
@@ -1354,6 +1399,89 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
             </Button>
             <Button variant="destructive" onClick={handleDeleteProject} disabled={isDeleting}>
               {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approval Modal */}
+      <Dialog
+        open={Boolean(approvalModalProject)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setApprovalModalProject(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Approve & publish project</DialogTitle>
+            <DialogDescription>
+              Review professionals invited to &ldquo;{approvalModalProject?.title ?? "this project"}&rdquo; before publishing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {isLoadingProfessionals ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-pulse text-sm text-muted-foreground">Loading professionals...</div>
+              </div>
+            ) : approvalProfessionals.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No professionals invited to this project.</p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Professionals ({approvalProfessionals.length})</p>
+                <div className="space-y-2">
+                  {approvalProfessionals.map((professional, index) => (
+                    <div key={index} className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="font-medium leading-none">
+                          {professional.professional_id && professional.company_name 
+                            ? professional.company_name 
+                            : professional.email
+                          }
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {professional.email}
+                        </p>
+                      </div>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${
+                          professional.is_project_owner 
+                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                            : professional.status === 'listed'
+                            ? 'bg-green-100 text-green-800 border-green-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {professional.is_project_owner 
+                          ? 'Project owner' 
+                          : professional.status === 'listed'
+                          ? 'Listed'
+                          : 'Invite pending'
+                        }
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setApprovalModalProject(null)} 
+              disabled={isApprovePending}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleApprovalModalConfirm} 
+              disabled={isApprovePending}
+            >
+              {isApprovePending ? "Publishing..." : "Publish project"}
             </Button>
           </DialogFooter>
         </DialogContent>

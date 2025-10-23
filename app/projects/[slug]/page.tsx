@@ -333,19 +333,20 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         .from("project_categories")
         .select("category_id, is_primary")
         .eq("project_id", project.id),
-      canViewInviteDetails
-        ? supabase
-            .from("project_professionals")
-            .select("id, invited_email, invited_service_category_id, status")
-            .eq("project_id", project.id)
-        : Promise.resolve({
-            data: [] as ProjectProfessionalRow[],
-            error: null,
-            status: 200,
-            statusText: "OK",
-            count: null,
-            body: [] as ProjectProfessionalRow[],
-          }),
+      supabase
+        .from("project_professionals")
+        .select(`
+          id, 
+          invited_email, 
+          invited_service_category_id, 
+          status, 
+          professional_id,
+          company_id,
+          professionals(id, title),
+          companies(id, name, logo_url)
+        `)
+        .eq("project_id", project.id)
+        .not("professional_id", "is", null),
       likeQuery,
     ])
 
@@ -555,29 +556,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     return acc
   }, new Map())
 
-  const servicePreviews = serviceSelections.map((selection) => {
-    const name =
-      categoryMap.get(selection.service_category_id)?.name ??
-      (isUuid(selection.service_category_id) ? "Unnamed service" : selection.service_category_id)
-
-    const serviceInvites = invites.filter(
-      (invite) => invite.invited_service_category_id === selection.service_category_id,
-    )
-
-    const relatedInvites = canViewInviteDetails
-      ? serviceInvites.map((invite) => ({
-          id: invite.id,
-          email: invite.invited_email,
-          status: capitalizeStatus(invite.status),
-        }))
-      : []
-
-    return {
-      id: selection.service_category_id,
-      name,
-      invites: relatedInvites,
-    }
-  })
+  const projectProfessionals = invites.map((invite) => ({
+    id: invite.id,
+    professionalId: invite.professional_id,
+    serviceCategory: categoryMap.get(invite.invited_service_category_id)?.name ?? "Service",
+    serviceCategoryId: invite.invited_service_category_id,
+    companyName: invite.companies?.name,
+    companyLogo: invite.companies?.logo_url,
+    professionalTitle: invite.professionals?.title,
+    status: invite.status,
+  }))
 
   const descriptionText = stripHtml(project.description)
   const createdAt = formatDate(project.created_at)
@@ -842,26 +830,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
   })
 
-  const professionalServices = servicePreviews.map((service) => ({
-    id: service.id,
-    name: service.name,
-    invites: service.invites.map((invite) => ({
-      id: invite.id,
-      email: invite.email,
-      status: invite.status,
-    })),
-  }))
-
-  const professionalsSummary = professionalServices
-    .flatMap((service) =>
-      service.invites.map((invite) => ({
-        id: `${service.id}-${invite.id}`,
-        name: invite.email,
-        badge: service.name,
-      })),
-    )
-    .filter((professional) => Boolean(professional.name))
-    .slice(0, 3)
+  const professionalsSummary = projectProfessionals.slice(0, 3)
 
   const SIMILAR_LIMIT = 6
   const similarProjects: ProjectPreviewData["similarProjects"] = []
@@ -993,7 +962,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     metaDetails,
     highlights,
     featureGroups,
-    professionalServices,
+    projectProfessionals,
     professionalsSummary,
     location: {
       city: project.address_city,

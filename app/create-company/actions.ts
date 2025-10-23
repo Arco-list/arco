@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createServerActionSupabaseClient } from "@/lib/supabase/server";
 import { logger, sanitizeForLogging } from "@/lib/logger";
+import { claimPendingInvitesAction } from "@/app/new-project/actions";
 
 const createCompanySchema = z.object({
   companyName: z.string().trim().min(2, "Company name is required"),
@@ -224,9 +225,33 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
     return { success: false, error: "Unable to update your account type." };
   }
 
+  // Claim any pending project invites matching this user's email
+  try {
+    const claimResult = await claimPendingInvitesAction(user.id)
+    if (claimResult.claimedCount > 0) {
+      logger.info("Claimed pending project invites", {
+        scope: "create-company",
+        userId: user.id,
+        claimedCount: claimResult.claimedCount
+      })
+    }
+  } catch (claimError) {
+    // Non-fatal error - log but don't fail the company creation
+    logger.warn("Failed to claim pending invites", {
+      scope: "create-company",
+      userId: user.id,
+      error: getErrorMessage(claimError)
+    })
+  }
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/listings");
   revalidatePath("/homeowner");
 
   return { success: true };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
 }
