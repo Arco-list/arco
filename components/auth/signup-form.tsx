@@ -15,10 +15,11 @@ import { Label } from "@/components/ui/label";
 
 export interface SignupFormProps {
   redirectTo?: string;
+  invitedEmail?: string;
   onSuccess?: () => void;
 }
 
-export const SignupForm = ({ redirectTo, onSuccess }: SignupFormProps) => {
+export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormProps) => {
   const router = useRouter();
   const [isSubmitting, startTransition] = useTransition();
   const safeRedirectTo = sanitizeRedirectPath(redirectTo);
@@ -28,9 +29,10 @@ export const SignupForm = ({ redirectTo, onSuccess }: SignupFormProps) => {
     defaultValues: {
       firstName: "",
       lastName: "",
-      email: "",
+      email: invitedEmail || "",
       password: "",
       redirectTo: safeRedirectTo ?? "",
+      invitedEmail: invitedEmail || undefined,
     },
   });
 
@@ -119,8 +121,15 @@ export const SignupForm = ({ redirectTo, onSuccess }: SignupFormProps) => {
           placeholder="you@example.com"
           autoComplete="email"
           disabled={isSubmitting}
+          readOnly={!!invitedEmail}
+          className={invitedEmail ? "bg-muted" : ""}
           {...form.register("email")}
         />
+        {invitedEmail && (
+          <p className="text-sm text-muted-foreground">
+            This email was used for your professional invitation. You can change it later in your profile settings.
+          </p>
+        )}
         {form.formState.errors.email && (
           <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
         )}
@@ -151,6 +160,7 @@ export const SignupForm = ({ redirectTo, onSuccess }: SignupFormProps) => {
         )}
       </div>
       <input type="hidden" defaultValue={safeRedirectTo ?? ""} {...form.register("redirectTo")} />
+      <input type="hidden" defaultValue={invitedEmail ?? ""} {...form.register("invitedEmail")} />
       <Button type="submit" variant="secondary" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Creating account..." : "Create account"}
       </Button>

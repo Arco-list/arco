@@ -32,6 +32,8 @@ type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
   project_professionals: {
     is_project_owner: boolean
   }[] | null
+  project_professional_id?: string
+  project_professional_status?: string
 }
 
 type ListingProjectPhoto = {
@@ -58,7 +60,9 @@ type ListingProject = {
   role: "owner" | "contributor"
   projectType: string
   projectYear: number | null
-  hasMetadataError?: boolean // Track projects with failed metadata resolution
+  hasMetadataError?: boolean
+  projectProfessionalId?: string
+  projectProfessionalStatus?: string
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -121,6 +125,9 @@ export default function DashboardListingsPage() {
     yearFrom: MIN_YEAR,
     yearTo: CURRENT_YEAR,
   })
+  const [optOutModalOpen, setOptOutModalOpen] = useState(false)
+  const [projectToOptOut, setProjectToOptOut] = useState<ListingProject | null>(null)
+  const [isOptingOut, setIsOptingOut] = useState(false)
   // LRU-style cache with size limit to prevent unbounded memory growth
   const taxonomyCacheRef = useRef<{
     styles: Map<string, string>
@@ -183,30 +190,51 @@ export default function DashboardListingsPage() {
 
       setUserId(authData.user.id)
 
-      // Single optimized query with JOINs to fetch projects with resolved labels
+      // Get professional record for this user
+      const { data: professionalData, error: professionalError } = await supabase
+        .from("professionals")
+        .select("id")
+        .eq("user_id", authData.user.id)
+        .maybeSingle()
+
+      if (!professionalData?.id || professionalError) {
+        if (isActive && !abortController.signal.aborted) {
+          setLoadError("No professional profile found. Please complete your profile setup.")
+          setProjects([])
+          setIsLoading(false)
+        }
+        return
+      }
+
+      // Fetch ALL projects this professional is part of (owner or contributor)
       const { data, error } = await supabase
-        .from("projects")
-        .select(
-          `
+        .from("project_professionals")
+        .select(`
           id,
-          title,
+          project_id,
           status,
-          slug,
-          project_type,
-          project_type_category_id,
-          style_preferences,
-          address_city,
-          address_region,
-          created_at,
-          project_year,
-          client_id,
-          project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
-          project_photos(id, url, is_primary, order_index),
-          project_professionals(is_project_owner)
-          `
-        )
-        .eq("client_id", authData.user.id)
-        .order("updated_at", { ascending: false })
+          is_project_owner,
+          projects!inner(
+            id,
+            title,
+            status,
+            slug,
+            project_type,
+            project_type_category_id,
+            style_preferences,
+            address_city,
+            address_region,
+            created_at,
+            updated_at,
+            project_year,
+            client_id,
+            project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
+            project_photos(id, url, is_primary, order_index)
+          )
+        `)
+        .eq("professional_id", professionalData.id)
+        .neq("status", "rejected")
+        .order("projects(updated_at)", { ascending: false })
 
       // RACE CONDITION CHECK: After async operation
       if (abortController.signal.aborted || !isActive) {
@@ -222,7 +250,13 @@ export default function DashboardListingsPage() {
         return
       }
 
-      const projectRows = (data ?? []) as (ProjectRow & {
+      // Transform project_professionals data into project rows
+      const projectRows = (data ?? []).map(pp => ({
+        ...pp.projects,
+        project_professionals: [{ is_project_owner: pp.is_project_owner }],
+        project_professional_id: pp.id,
+        project_professional_status: pp.status
+      })) as (ProjectRow & {
         project_type_category: { name: string | null } | null
       })[]
 
@@ -345,10 +379,9 @@ export default function DashboardListingsPage() {
           .filter(Boolean)
           .join(" ") || "Add more project details"
 
-        // Determine role: owner if client_id matches, otherwise check project_professionals
-        const isOwner = project.client_id === authData.user.id
+        // Determine role based on is_project_owner flag from project_professionals
         const isProjectOwner = project.project_professionals?.some((pp) => pp.is_project_owner) ?? false
-        const role: "owner" | "contributor" = isOwner ? "owner" : isProjectOwner ? "owner" : "contributor"
+        const role: "owner" | "contributor" = isProjectOwner ? "owner" : "contributor"
 
         return {
           id: project.id,
@@ -367,7 +400,9 @@ export default function DashboardListingsPage() {
           role,
           projectType: projectTypeLabel,
           projectYear: project.project_year,
-          hasMetadataError: hasStyleError, // Flag projects with failed metadata resolution
+          hasMetadataError: hasStyleError,
+          projectProfessionalId: project.project_professional_id,
+          projectProfessionalStatus: project.project_professional_status,
         }
       })
 
@@ -633,6 +668,49 @@ export default function DashboardListingsPage() {
     }
 
     router.push(targetUrl)
+  }
+
+  const handleOptOut = (project: ListingProject) => {
+    setProjectToOptOut(project)
+    setOptOutModalOpen(true)
+    setOpenDropdown(null)
+  }
+
+  const handleConfirmOptOut = async () => {
+    if (!projectToOptOut || !projectToOptOut.projectProfessionalId) {
+      return
+    }
+
+    setIsOptingOut(true)
+
+    try {
+      const { error } = await supabase
+        .from("project_professionals")
+        .update({
+          status: "rejected",
+          responded_at: new Date().toISOString()
+        })
+        .eq("id", projectToOptOut.projectProfessionalId)
+
+      if (error) {
+        throw error
+      }
+
+      setProjects((prev) => prev.filter((p) => p.id !== projectToOptOut.id))
+      toast.success("You've opted out of this project")
+      setOptOutModalOpen(false)
+      setProjectToOptOut(null)
+    } catch (error) {
+      console.error("Failed to opt out", error)
+      toast.error("We couldn't opt you out of this project. Please try again.")
+    } finally {
+      setIsOptingOut(false)
+    }
+  }
+
+  const handleCancelOptOut = () => {
+    setOptOutModalOpen(false)
+    setProjectToOptOut(null)
   }
 
   // Client-side filtering with debouncing
@@ -1017,7 +1095,9 @@ export default function DashboardListingsPage() {
                   )}
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
-                  <span className="text-xs text-black bg-white px-2 py-1 rounded">Project owner</span>
+                  {project.role === "owner" && (
+                    <span className="text-xs text-black bg-white px-2 py-1 rounded">Project owner</span>
+                  )}
                   <div className="relative dropdown-menu">
                     <button
                       onClick={(e) => {
@@ -1030,52 +1110,66 @@ export default function DashboardListingsPage() {
                     </button>
                     {openDropdown === project.id && (
                       <div className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border py-2 w-40 z-10">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleUpdateStatus(project)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          Update status
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditCoverImage(project)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          Edit cover image
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditListing(project)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          Edit listing
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handlePreviewListing(project)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          Preview listing
-                        </button>
-                        <div className="border-t border-gray-100 my-1" />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteListing(project)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                        >
-                          Delete listing
-                        </button>
+                        {project.role === "owner" ? (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleUpdateStatus(project)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              Update status
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditCoverImage(project)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              Edit cover image
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEditListing(project)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              Edit listing
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handlePreviewListing(project)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              Preview listing
+                            </button>
+                            <div className="border-t border-gray-100 my-1" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteListing(project)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              Delete listing
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOptOut(project)
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            Opt out
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1203,6 +1297,35 @@ export default function DashboardListingsPage() {
               </Button>
               <Button onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto}>
                 {isSavingCoverPhoto ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {optOutModalOpen && projectToOptOut && (
+        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 border border-red-100 shadow-lg">
+            <div className="flex items-start gap-3 mb-6">
+              <div className="rounded-full bg-red-50 p-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Opt out of project?</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  You will no longer be listed as a contributor on{" "}
+                  <span className="font-medium">{projectToOptOut.title}</span>. The project owner can see
+                  that you opted out and may re-invite you later.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleCancelOptOut} className="flex-1" disabled={isOptingOut}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmOptOut} className="flex-1" disabled={isOptingOut}>
+                {isOptingOut ? "Opting out..." : "Opt out"}
               </Button>
             </div>
           </div>

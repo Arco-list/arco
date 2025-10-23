@@ -1,22 +1,15 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function MobileProfessionalsButton() {
   const [showModal, setShowModal] = useState(false)
-  const projectPreview = useProjectPreview()
-  
-  // Memoize only the values we need to prevent unnecessary re-renders
-  const { professionalServices, canViewInviteDetails } = useMemo(() => ({
-    professionalServices: projectPreview.professionalServices,
-    canViewInviteDetails: projectPreview.canViewInviteDetails,
-  }), [projectPreview.professionalServices, projectPreview.canViewInviteDetails])
+  const { projectProfessionals } = useProjectPreview()
 
-  // Only show if there are professionals
-  if (professionalServices.length === 0) {
+  if (!projectProfessionals || projectProfessionals.length === 0) {
     return null
   }
 
@@ -40,33 +33,24 @@ export function MobileProfessionalsButton() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {professionalServices.map((service) => (
-              <div key={service.id} className="space-y-2">
-                <p className="font-medium text-gray-900">{service.name}</p>
-                <div className="space-y-2">
-                  {service.invites.length > 0 ? (
-                    service.invites.map((invite) => (
-                      <div key={invite.id} className="flex items-center justify-between py-1 text-sm">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-900">
-                            {invite.name ?? invite.email ?? "Pending invite"}
-                          </span>
-                          {invite.email && invite.email !== invite.name && (
-                            <span className="text-xs text-gray-500">{invite.email}</span>
-                          )}
-                        </div>
-                        {canViewInviteDetails && invite.status && (
-                          <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-                            {invite.status}
-                          </span>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    canViewInviteDetails ? (
-                      <p className="text-sm text-gray-500">No professionals invited yet.</p>
-                    ) : null
-                  )}
+            {projectProfessionals.map((professional) => (
+              <div key={professional.id} className="flex items-start gap-3 py-2">
+                {professional.companyLogo ? (
+                  <img 
+                    src={professional.companyLogo} 
+                    alt={professional.companyName || 'Company logo'} 
+                    className="w-12 h-12 rounded object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                    Logo
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {professional.companyName}
+                  </p>
+                  <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
                 </div>
               </div>
             ))}

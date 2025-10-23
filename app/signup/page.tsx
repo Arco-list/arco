@@ -19,6 +19,16 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = (await searchParams) ?? {}
   const redirectParam = getFirstSearchParamValue(params.redirectTo)
   const redirectTo = sanitizeRedirectPath(redirectParam)
+  
+  // Extract invited email from redirectTo if it's a professional invite
+  let invitedEmail: string | undefined
+  if (redirectTo?.includes('/create-company?projectInvite=')) {
+    // Check if there's an invited email in the URL
+    const inviteEmailParam = getFirstSearchParamValue(params.inviteEmail)
+    if (inviteEmailParam) {
+      invitedEmail = inviteEmailParam
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -32,7 +42,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                 Sign up to save projects, collaborate with professionals, and manage your workspace.
               </p>
             </div>
-            <SignupForm redirectTo={redirectTo} />
+            <SignupForm redirectTo={redirectTo} invitedEmail={invitedEmail} />
             <div className="mt-6 text-sm text-center text-muted-foreground">
               <span>Already have an account?</span>{" "}
               <Link href={`/login${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`} className="text-primary font-medium">

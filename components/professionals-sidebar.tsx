@@ -1,53 +1,78 @@
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProfessionalsSidebar() {
-  const { professionalServices, canViewInviteDetails } = useProjectPreview()
+  const { projectProfessionals } = useProjectPreview()
+  const [showModal, setShowModal] = useState(false)
 
-  if (professionalServices.length === 0) {
+  if (!projectProfessionals || projectProfessionals.length === 0) {
     return null
   }
 
   return (
-    <div className="lg:sticky lg:top-8 lg:z-20">
-      <Card className="p-6 space-y-6">
-        <h3 className="text-lg font-semibold">Professionals who built it</h3>
+    <>
+      <div className="lg:sticky lg:top-8 lg:z-20">
+        <Card className="p-6 space-y-6">
+          <h3 className="text-lg font-semibold">Professionals who built it</h3>
 
-        <div className="space-y-4">
-          {professionalServices.map((service) => (
-            <div key={service.id} className="space-y-2">
-              <p className="text-sm font-semibold text-gray-900">{service.name}</p>
-              {service.invites.length > 0 ? (
-                <ul className="space-y-1 text-xs text-gray-600">
-                  {service.invites.map((invite) => (
-                    <li key={invite.id} className="flex items-center justify-between gap-2">
-                      <span className="truncate">
-                        {invite.name ?? invite.email ?? "Pending invite"}
-                      </span>
-                      {canViewInviteDetails && invite.status && (
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700">
-                          {invite.status}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                canViewInviteDetails ? (
-                  <p className="text-xs text-gray-500">No invites yet</p>
-                ) : null
-              )}
-            </div>
-          ))}
-        </div>
+          <div className="space-y-3">
+            {projectProfessionals.map((professional) => (
+              <div key={professional.id} className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {professional.companyName}
+                  </p>
+                  <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
+                </div>
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
+                >
+                  Visit
+                </Button>
+              </div>
+            ))}
+          </div>
 
-        <Button variant="default" className="w-full">
-          Show all professionals
-        </Button>
-      </Card>
-    </div>
+          <Button variant="default" className="w-full" onClick={() => setShowModal(true)}>
+            Show all professionals
+          </Button>
+        </Card>
+      </div>
+
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-md mx-auto">
+          <DialogHeader className="pb-4 border-b">
+            <DialogTitle className="text-lg font-semibold">Professionals who built it</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-4">
+            {projectProfessionals.map((professional) => (
+              <div key={professional.id} className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {professional.companyName}
+                  </p>
+                  <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
+                </div>
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
+                >
+                  Visit
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import type { Session, User } from '@supabase/supabase-js';
+import type { Session, User, SignUpWithPasswordCredentials } from '@supabase/supabase-js';
 import type { TablesInsert } from '@/lib/supabase/types';
 
 import {
@@ -220,8 +220,23 @@ export const signUpAction = async (
     };
   }
 
-  const { firstName, lastName, email, password, redirectTo: rawRedirectTo } = parseResult.data;
+  const { firstName, lastName, email, password, redirectTo: rawRedirectTo, invitedEmail } = parseResult.data;
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
+  
+  // Detect if this is an invited user (must match email exactly and have create-company redirect)
+  const isInvitedUser = !!(
+    invitedEmail && 
+    email === invitedEmail && 
+    redirectTo?.includes('/create-company?projectInvite=')
+  );
+  
+  logger.auth('signup', 'Invite detection', {
+    requestId,
+    isInvitedUser,
+    invitedEmail,
+    userEmail: email,
+    redirectTo,
+  });
 
   // Step 3: Setup redirect URLs
   const baseUrl = await getBaseUrl();
@@ -245,16 +260,25 @@ export const signUpAction = async (
   // Step 4: Attempt Supabase auth signup
   let authData, authError;
   try {
+    const signupOptions: SignUpWithPasswordCredentials['options'] = {
+      emailRedirectTo,
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+      },
+    };
+    
+    // For invited users, email is already verified via invite token
+    // Note: emailRedirectTo=undefined doesn't skip confirmation; actual skip happens via admin API below
+    if (isInvitedUser) {
+      signupOptions.emailRedirectTo = undefined;
+      logger.auth('signup', 'Invited user - will auto-confirm via admin API', { requestId });
+    }
+    
     const response = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo,
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-        },
-      },
+      options: signupOptions,
     });
     authData = response.data;
     authError = response.error;
@@ -289,6 +313,61 @@ export const signUpAction = async (
       error: normalizedError,
     });
     return { error: normalizedError };
+  }
+
+  // Step 4.5: Auto-confirm invited users
+  if (isInvitedUser && authData?.user && !authData?.session) {
+    try {
+      // Import the service role client for admin operations
+      const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
+      const adminClient = await createServiceRoleSupabaseClient();
+      
+      logger.auth('signup', 'Auto-confirming invited user email', {
+        requestId,
+        userId: authData.user.id,
+      });
+      
+      // Confirm the user's email using admin API
+      const { data: confirmData, error: confirmError } = await adminClient.auth.admin.updateUserById(
+        authData.user.id,
+        { email_confirm: true }
+      );
+      
+      if (confirmError) {
+        logger.auth('signup', 'Failed to auto-confirm invited user', {
+          requestId,
+          userId: authData.user.id,
+          error: confirmError,
+        });
+        // Don't fail the signup, just log the error - they can confirm manually
+      } else {
+        logger.auth('signup', 'Successfully auto-confirmed invited user', {
+          requestId,
+          userId: authData.user.id,
+        });
+        
+        // Try to create a session for the confirmed user
+        const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (!sessionError && sessionData?.session) {
+          authData.session = sessionData.session;
+          authData.user = sessionData.user;
+          logger.auth('signup', 'Created session for auto-confirmed invited user', {
+            requestId,
+            userId: authData.user.id,
+          });
+        }
+      }
+    } catch (error) {
+      logger.auth('signup', 'Exception during auto-confirmation', {
+        requestId,
+        userId: authData?.user?.id,
+      }, error as Error);
+      // Don't fail the signup, just log the error
+    }
   }
 
   // Step 5: Verify profile creation (should be handled by trigger)

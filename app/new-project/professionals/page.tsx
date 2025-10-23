@@ -17,6 +17,7 @@ import {
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
+import { isAdminUser } from "@/lib/auth-utils"
 import { toast } from "sonner"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
@@ -26,6 +27,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  createInvite,
+  type ProfessionalOption,
+  type InviteData,
+} from "@/lib/new-project/invite-professionals"
+import { sendProjectReviewEmail } from "@/lib/email-service"
+import { 
+  findProfessionalByEmailAction, 
+  getUserEmailAction,
+  getAvailableProfessionalsAction 
+} from "@/app/new-project/actions"
 
 const TOTAL_STEPS = 4
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
@@ -86,17 +98,20 @@ type InviteSummary = {
   status: ProjectProfessionalRow["status"]
   invitedAt: string
   respondedAt: string | null
+  professional_id?: string | null
+  company_id?: string | null
+  is_project_owner?: boolean
 }
 
 const INVITE_STATUS_META: Partial<
   Record<ProjectProfessionalRow["status"], { label: string; className: string }>
 > = {
-  invited: { label: "Invite sent", className: "bg-amber-100 text-amber-800" },
+  invited: { label: "Invite pending", className: "bg-amber-100 text-amber-800" },
   listed: { label: "Listed", className: "bg-green-100 text-green-800" },
-  live_on_page: { label: "Listed", className: "bg-green-100 text-green-800" },
+  live_on_page: { label: "Active", className: "bg-green-100 text-green-800" },
   unlisted: { label: "Unlisted", className: "bg-gray-200 text-gray-700" },
   removed: { label: "Removed", className: "bg-red-100 text-red-800" },
-  rejected: { label: "Rejected", className: "bg-red-100 text-red-800" },
+  rejected: { label: "Opted out", className: "bg-red-100 text-red-800" },
 } as const
 
 const formatInviteStatusLabel = (status: ProjectProfessionalRow["status"]) =>
@@ -125,6 +140,7 @@ export default function ProfessionalsPage() {
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
   const [projectTitle, setProjectTitle] = useState<string>("")
   const [projectSummary, setProjectSummary] = useState<ProjectPreviewSummary | null>(null)
+  const [projectClientId, setProjectClientId] = useState<string | null>(null)
 
   const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>(FALLBACK_SERVICE_OPTIONS)
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
@@ -137,6 +153,12 @@ export default function ProfessionalsPage() {
   const [inviteServiceId, setInviteServiceId] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState("")
   const [editingInviteId, setEditingInviteId] = useState<string | null>(null)
+
+  // Professional discovery state for Phase 1C
+  const [professionals, setProfessionals] = useState<ProfessionalOption[]>([])
+  const [selectedProfessional, setSelectedProfessional] = useState<ProfessionalOption | null>(null)
+  const [userTypes, setUserTypes] = useState<string[]>([])
+  const [user, setUser] = useState<{ id: string } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -163,6 +185,14 @@ export default function ProfessionalsPage() {
         return
       }
 
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("user_types")
+        .eq("id", authData.user.id)
+        .maybeSingle()
+
+      const userIsAdmin = isAdminUser(profile?.user_types)
+
       const { data: projectData, error: projectError } = await supabase
         .from("projects")
         .select(
@@ -171,11 +201,20 @@ export default function ProfessionalsPage() {
         .eq("id", projectIdFromParams)
         .maybeSingle()
 
-      if (projectError || !isProjectRow(projectData) || projectData.client_id !== authData.user.id) {
+      if (projectError || !isProjectRow(projectData)) {
         if (!cancelled) {
           setProjectLoadError(
             projectError?.message ?? "We couldn't find that project. Please start from Project Details.",
           )
+          setIsInitializing(false)
+        }
+        router.replace("/new-project/details")
+        return
+      }
+
+      if (projectData.client_id !== authData.user.id && !userIsAdmin) {
+        if (!cancelled) {
+          setProjectLoadError("You don't have permission to edit this project.")
           setIsInitializing(false)
         }
         router.replace("/new-project/details")
@@ -189,12 +228,18 @@ export default function ProfessionalsPage() {
       setProjectId(projectData.id)
       setProjectSlug(projectData.slug)
       setProjectTitle(projectData.title ?? "")
+      setProjectClientId(projectData.client_id)
 
+      // Load user profile and type information for professional discovery
+      setUser({ id: authData.user.id })
+      const userProfile = await loadUserProfile(authData.user.id)
+      
       await Promise.all([
         loadServiceOptions(),
         loadServiceSelections(projectData.id),
         loadInvites(projectData.id),
         loadPreviewData(projectData),
+        loadProfessionals(userProfile?.user_types || [], authData.user.id),
       ])
 
       if (!cancelled) {
@@ -394,7 +439,7 @@ export default function ProfessionalsPage() {
     const loadInvites = async (projectId: string) => {
       const { data, error } = await supabase
         .from("project_professionals")
-        .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at")
+        .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at, professional_id, company_id, is_project_owner")
         .eq("project_id", projectId)
         .order("invited_at", { ascending: true, nullsFirst: false })
 
@@ -418,11 +463,51 @@ export default function ProfessionalsPage() {
           status: row.status,
           invitedAt: row.invited_at,
           respondedAt: row.responded_at,
+          professional_id: row.professional_id,
+          company_id: row.company_id,
+          is_project_owner: row.is_project_owner,
         })
         return acc
       }, {})
 
       setInvitesByService(grouped)
+    }
+
+    const loadUserProfile = async (userId: string) => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_types")
+        .eq("id", userId)
+        .maybeSingle()
+
+      if (error) {
+        console.warn("Failed to load user profile:", error)
+        return null
+      }
+
+      return data
+    }
+
+    const loadProfessionals = async (userTypes: string[], userId: string) => {
+      setUserTypes(userTypes)
+      
+      console.log("Loading professionals for user:", userId, "with types:", userTypes)
+      
+      // Use server action for all user types - it handles auth.users access properly
+      const { data, error } = await getAvailableProfessionalsAction(userTypes, userId)
+      
+      if (error) {
+        console.error("Failed to load professionals:", error)
+        console.error("Error details:", JSON.stringify(error, null, 2))
+        return
+      }
+
+      if (data) {
+        console.log("Loaded professionals:", data)
+        setProfessionals(data)
+      } else {
+        console.log("No professionals data returned")
+      }
     }
 
     loadContext()
@@ -491,6 +576,17 @@ export default function ProfessionalsPage() {
         throw error
       }
 
+      // Send project review email
+      if (user?.email) {
+        await sendProjectReviewEmail(user.email, {
+          firstname: user.user_metadata?.first_name || '',
+          Project_name: project?.title || '',
+          Project_title: project?.title || '',
+          project_name: project?.title || '',
+          dashboard_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/dashboard/listings`
+        })
+      }
+
       toast.success("Listing submitted for review", {
         description: "The Arco team will review your project and notify you once it's approved.",
       })
@@ -533,6 +629,7 @@ export default function ProfessionalsPage() {
     setInviteEmail("")
     setEditingInviteId(null)
     setInviteError(null)
+    setSelectedProfessional(null)
   }
 
   const toggleService = async (serviceId: string) => {
@@ -638,6 +735,61 @@ export default function ProfessionalsPage() {
     }
   }
 
+  const handleProfessionalSelect = async (professional: ProfessionalOption, serviceId: string) => {
+    if (!projectId || isSavingInvite) {
+      return
+    }
+
+    const existingInvites = invitesByService[serviceId] ?? []
+    if (existingInvites.length >= 1) {
+      setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+      return
+    }
+
+    setInviteError(null)
+    setIsSavingInvite(true)
+
+    try {
+      const isProjectOwner = projectClientId === professional.user_id
+      
+      // Professional.email is now always real - comes from getAvailableProfessionalsAction
+      const inviteData: InviteData = {
+        project_id: projectId,
+        invited_service_category_id: serviceId,
+        invited_email: professional.email,
+        professional_id: professional.id,
+        company_id: professional.company_id,
+        is_project_owner: isProjectOwner,
+      }
+
+      const { data, error } = await createInvite(supabase, inviteData)
+
+      if (error || !data) {
+        throw error ?? new Error("Professional could not be added to project.")
+      }
+
+      setInvitesByService((prev) => {
+        const nextInvite = {
+          id: data.id,
+          email: data.invited_email,
+          serviceCategoryId: serviceId,
+          status: data.status,
+          invitedAt: data.invited_at,
+          respondedAt: data.responded_at,
+          professional_id: data.professional_id,
+          company_id: data.company_id,
+          is_project_owner: data.is_project_owner,
+        }
+
+        return { ...prev, [serviceId]: [nextInvite] }
+      })
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "We couldn't add this professional. Please try again.")
+    } finally {
+      setIsSavingInvite(false)
+    }
+  }
+
   const handleInviteSubmit = async () => {
     if (!projectId || !inviteServiceId || isSavingInvite) {
       return
@@ -651,17 +803,21 @@ export default function ProfessionalsPage() {
       }
     }
 
-    const trimmedEmail = inviteEmail.trim()
+    // Determine email and professional data
+    const email = selectedProfessional ? selectedProfessional.email : inviteEmail.trim()
+    
+    // Validate email if not using professional selection
+    if (!selectedProfessional) {
+      if (!EMAIL_REGEX.test(email)) {
+        setInviteError("Please enter a valid company email address.")
+        return
+      }
 
-    if (!EMAIL_REGEX.test(trimmedEmail)) {
-      setInviteError("Please enter a valid company email address.")
-      return
-    }
-
-    const domain = getDomain(trimmedEmail)
-    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) {
-      setInviteError("Please use a company email address (personal domains are not allowed).")
-      return
+      const domain = getDomain(email)
+      if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) {
+        setInviteError("Please use a company email address (personal domains are not allowed).")
+        return
+      }
     }
 
     setInviteError(null)
@@ -669,9 +825,16 @@ export default function ProfessionalsPage() {
 
     try {
       if (editingInviteId) {
+        // For editing, we'll keep the simpler update logic for now
+        const updateData: any = { invited_email: email }
+        if (selectedProfessional) {
+          updateData.professional_id = selectedProfessional.id
+          updateData.company_id = selectedProfessional.company_id
+        }
+
         const { data, error } = await supabase
           .from("project_professionals")
-          .update({ invited_email: trimmedEmail })
+          .update(updateData)
           .eq("id", editingInviteId)
           .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at")
           .maybeSingle()
@@ -702,16 +865,31 @@ export default function ProfessionalsPage() {
           return { ...prev, [serviceId]: updated }
         })
       } else {
-        const { data, error } = await supabase
-          .from("project_professionals")
-          .insert({
-            project_id: projectId,
-            invited_email: trimmedEmail,
-            invited_service_category_id: inviteServiceId,
-            status: "invited",
-          })
-          .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at")
-          .maybeSingle()
+        // Use new createInvite function for new invites
+        let professionalId = selectedProfessional?.id || null
+        let companyId = selectedProfessional?.company_id || null
+        let isProjectOwner = selectedProfessional && projectClientId === selectedProfessional.user_id
+        
+        // If no professional selected (email-only invite), check if email belongs to existing professional
+        if (!selectedProfessional) {
+          const { data: foundProfessional } = await findProfessionalByEmailAction(email)
+          if (foundProfessional) {
+            professionalId = foundProfessional.id
+            companyId = foundProfessional.company_id
+            isProjectOwner = projectClientId === foundProfessional.user_id
+          }
+        }
+        
+        const inviteData: InviteData = {
+          project_id: projectId,
+          invited_service_category_id: inviteServiceId,
+          invited_email: email,
+          professional_id: professionalId,
+          company_id: companyId,
+          is_project_owner: isProjectOwner,
+        }
+
+        const { data, error } = await createInvite(supabase, inviteData)
 
         if (error || !data) {
           throw error ?? new Error("Invite could not be saved.")
@@ -729,6 +907,9 @@ export default function ProfessionalsPage() {
             status: data.status,
             invitedAt: data.invited_at,
             respondedAt: data.responded_at,
+            professional_id: data.professional_id,
+            company_id: data.company_id,
+            is_project_owner: data.is_project_owner,
           }
 
           return { ...prev, [serviceId]: [nextInvite] }
@@ -781,11 +962,6 @@ export default function ProfessionalsPage() {
           </div>
         )}
 
-        {inviteError && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {inviteError}
-          </div>
-        )}
 
         {currentStep === 1 && <IntroStep isLoading={isInitializing} />}
         {currentStep === 2 && (
@@ -801,9 +977,15 @@ export default function ProfessionalsPage() {
             services={serviceOptions}
             selectedServiceIds={selectedServiceIds}
             invitesByService={invitesByService}
+            professionals={professionals}
+            selectedProfessional={selectedProfessional}
+            userTypes={userTypes}
+            projectClientId={projectClientId}
             onInvite={openInviteModal}
             onRemoveService={removeService}
             onDeleteInvite={deleteInvite}
+            onProfessionalSelect={setSelectedProfessional}
+            onProfessionalDirectSelect={handleProfessionalSelect}
             isBusy={isBusy}
             goToServiceSelection={() => setCurrentStep(2)}
           />
@@ -836,6 +1018,7 @@ export default function ProfessionalsPage() {
           onSubmit={handleInviteSubmit}
           isSubmitting={isSavingInvite}
           isEditing={Boolean(editingInviteId)}
+          error={inviteError}
         />
       )}
     </div>
@@ -976,18 +1159,30 @@ function InviteStep({
   services,
   selectedServiceIds,
   invitesByService,
+  professionals,
+  selectedProfessional,
+  userTypes,
+  projectClientId,
   onInvite,
   onRemoveService,
   onDeleteInvite,
+  onProfessionalSelect,
+  onProfessionalDirectSelect,
   isBusy,
   goToServiceSelection,
 }: {
   services: ServiceOption[]
   selectedServiceIds: string[]
   invitesByService: Record<string, InviteSummary[]>
+  professionals: ProfessionalOption[]
+  selectedProfessional: ProfessionalOption | null
+  userTypes: string[]
+  projectClientId: string | null
   onInvite: (serviceId: string, invite?: InviteSummary) => void
   onRemoveService: (serviceId: string) => void
   onDeleteInvite: (invite: InviteSummary) => void
+  onProfessionalSelect: (professional: ProfessionalOption | null) => void
+  onProfessionalDirectSelect: (professional: ProfessionalOption, serviceId: string) => void
   isBusy: boolean
   goToServiceSelection: () => void
 }) {
@@ -1105,56 +1300,141 @@ function InviteStep({
               <div className="mt-4 flex flex-1 flex-col">
                 {invites.length === 0 ? (
                   <div className="flex flex-1 flex-col justify-end">
-                    <button
-                      type="button"
-                      onClick={() => onInvite(service.id)}
-                      disabled={isBusy}
-                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <MailPlus className="h-4 w-4" />
-                      Invite professional
-                    </button>
+                    {/* Debug: professionals count */}
+                    <div className="text-xs text-gray-400 mb-1">Debug: {professionals.length} professionals, user types: {userTypes.join(',')}</div>
+                    {userTypes.includes('admin') || userTypes.includes('professional') ? (
+                      <div className="mt-auto flex w-full">
+                        <button
+                          type="button"
+                          onClick={() => onInvite(service.id)}
+                          disabled={isBusy}
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <MailPlus className="h-4 w-4" />
+                          Invite professional
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              className="inline-flex items-center justify-center border border-l-0 border-gray-200 px-2 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 rounded-r-md"
+                            >
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-64" align="end">
+                            {professionals.length > 0 ? (
+                              professionals.map((professional) => (
+                                <DropdownMenuItem
+                                  key={professional.id}
+                                  onSelect={() => onProfessionalDirectSelect(professional, service.id)}
+                                >
+                                  <div className="font-medium">{professional.company.name}</div>
+                                </DropdownMenuItem>
+                              ))
+                            ) : (
+                              <DropdownMenuItem disabled>
+                                <div className="text-sm text-gray-500">No professionals available</div>
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onInvite(service.id)}
+                        disabled={isBusy}
+                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <MailPlus className="h-4 w-4" />
+                        Invite professional
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-1 flex-col gap-3">
                     <div className="space-y-3">
                       {invites.map((invite) => {
-                        const statusMeta = getInviteStatusMeta(invite.status)
-                        return (
-                          <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
-                            <p className="text-sm font-medium text-gray-900">{invite.email}</p>
-                            <div className="mt-2 flex items-center justify-between gap-3">
-                              <span
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
-                              >
-                                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                                {statusMeta.label}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                {invite.status === "invited" && (
+                        // Check if this invite has a professional_id (selected professional)
+                        const selectedProf = invite.professional_id ? professionals.find(p => p.id === invite.professional_id) : null
+                        
+                        if (selectedProf) {
+                          // Render selected professional card
+                          let statusMeta = getInviteStatusMeta(invite.status)
+                          
+                          // Override status if this is the project owner
+                          if (invite.is_project_owner) {
+                            statusMeta = {
+                              label: "Project owner",
+                              className: "bg-blue-100 text-blue-800"
+                            }
+                          }
+                          
+                          return (
+                            <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
+                              <p className="text-sm font-medium text-gray-900">{selectedProf.company.name}</p>
+                              <div className="mt-2 flex items-center justify-between gap-3">
+                                <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}>
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                  {statusMeta.label}
+                                </span>
+                                <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => onInvite(service.id, invite)}
+                                    onClick={() => onDeleteInvite(invite)}
                                     disabled={isBusy}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                    aria-label={`Edit invite for ${invite.email}`}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    aria-label={`Remove ${selectedProf.company.name}`}
                                   >
-                                    <Pencil className="h-4 w-4" />
+                                    <XCircle className="h-4 w-4" />
                                   </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteInvite(invite)}
-                                  disabled={isBusy}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-                                  aria-label={`Remove invite for ${invite.email}`}
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )
+                          )
+                        } else {
+                          // Render email invite card
+                          const statusMeta = getInviteStatusMeta(invite.status)
+                          return (
+                            <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
+                              <p className="text-sm font-medium text-gray-900">{invite.email}</p>
+                              <div className="mt-2 flex items-center justify-between gap-3">
+                                <span
+                                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                  {statusMeta.label}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  {invite.status === "invited" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onInvite(service.id, invite)}
+                                      disabled={isBusy}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                      aria-label={`Edit invite for ${invite.email}`}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteInvite(invite)}
+                                    disabled={isBusy}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    aria-label={`Remove invite for ${invite.email}`}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        }
                       })}
                     </div>
                   </div>
@@ -1345,6 +1625,58 @@ function FooterNavigation({
   )
 }
 
+function ProfessionalDropdown({ 
+  professionals, 
+  selectedProfessional, 
+  onSelect 
+}: {
+  professionals: ProfessionalOption[]
+  selectedProfessional: ProfessionalOption | null
+  onSelect: (professional: ProfessionalOption | null) => void
+}) {
+  if (professionals.length === 0) {
+    return null
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="w-full rounded-md border border-gray-300 px-3 py-2 text-left text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40">
+          {selectedProfessional ? selectedProfessional.company.name : "Choose professional..."}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-full">
+        {professionals.map((professional) => (
+          <DropdownMenuItem
+            key={professional.id}
+            onSelect={() => onSelect(professional)}
+          >
+            <div>
+              <div className="font-medium">{professional.company.name}</div>
+              <div className="text-sm text-gray-500">
+                {professional.name} - {professional.title}
+              </div>
+              {(professional.company.city || professional.company.country) && (
+                <div className="text-xs text-gray-400">
+                  {[professional.company.city, professional.company.country].filter(Boolean).join(', ')}
+                </div>
+              )}
+            </div>
+          </DropdownMenuItem>
+        ))}
+        {selectedProfessional && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onSelect(null)}>
+              Clear selection
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function InviteModal({
   service,
   email,
@@ -1353,6 +1685,7 @@ function InviteModal({
   onSubmit,
   isSubmitting,
   isEditing,
+  error,
 }: {
   service?: ServiceOption
   email: string
@@ -1361,6 +1694,7 @@ function InviteModal({
   onSubmit: () => void
   isSubmitting: boolean
   isEditing: boolean
+  error: string | null
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
@@ -1370,9 +1704,9 @@ function InviteModal({
             <h3 className="text-lg font-semibold text-gray-900">
               {isEditing ? "Update invite" : "Invite professional"}
             </h3>
-            {service ? (
+            {service && (
               <p className="mt-1 text-sm text-gray-500">Service: {service.name}</p>
-            ) : null}
+            )}
           </div>
           <button onClick={onClose} className="rounded-md p-2 text-gray-500 transition-colors hover:bg-gray-100">
             <X className="h-4 w-4" />
@@ -1390,8 +1724,18 @@ function InviteModal({
               value={email}
               onChange={(event) => onEmailChange(event.target.value)}
               placeholder="name@company.com"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40"
+              className={`w-full rounded-md border px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
+                error ? 'border-red-300' : 'border-gray-300'
+              }`}
             />
+            {error && (
+              <p className="mt-2 text-sm text-red-600">
+                {error}
+              </p>
+            )}
+            <p className="mt-2 text-sm text-gray-500">
+              No invites are sent until the project is approved by Arco.
+            </p>
           </div>
         </div>
 
@@ -1408,7 +1752,7 @@ function InviteModal({
             className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isEditing ? "Save changes" : "Send invite"}
+            Add to project
           </button>
         </div>
       </div>
