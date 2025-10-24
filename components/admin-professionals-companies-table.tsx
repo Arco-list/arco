@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import {
   updateCompanyDetailsAction,
   updateCompanyStatusAction,
+  updateCompanyFeaturedAction,
   updateProfessionalFeaturedAction,
 } from "@/app/admin/professionals/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -68,6 +69,7 @@ export type AdminCompanyRow = {
   planTier: Database["public"]["Enums"]["company_plan_tier"]
   status: Database["public"]["Enums"]["company_status"]
   isVerified: boolean
+  isFeatured: boolean
   projectsLinked: number
   professionalCount: number
   averageRating: number | null
@@ -99,6 +101,7 @@ type EditFormState = {
   website: string
   email: string
   services: string[]
+  isFeatured: boolean
   professionals: CompanyProfessional[]
 }
 
@@ -192,6 +195,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           website: editingCompany.website ?? "",
           email: editingCompany.contactEmail ?? "",
           services: editingCompany.servicesOffered ?? [],
+          isFeatured: editingCompany.isFeatured,
           professionals: professionals ?? [],
         })
       }
@@ -212,6 +216,27 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
       }
       return { ...prev, services: prev.services.filter((id) => id !== serviceId) }
     })
+  }
+
+  const toggleCompanyFeatured = async (checked: boolean) => {
+    if (!editingCompany) return
+
+    const result = await updateCompanyFeaturedAction({
+      companyId: editingCompany.id,
+      isFeatured: checked
+    })
+
+    if (!result.success) {
+      toast.error(result.error)
+      return
+    }
+
+    setEditForm((prev) => {
+      if (!prev) return prev
+      return { ...prev, isFeatured: checked }
+    })
+
+    toast.success(`Company ${checked ? 'featured' : 'unfeatured'} successfully`)
   }
 
   const toggleProfessionalFeatured = async (professionalId: string, checked: boolean) => {
@@ -548,6 +573,18 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/30">
+              <div className="space-y-0.5">
+                <Label className="text-base font-medium">Featured on homepage</Label>
+                <p className="text-sm text-muted-foreground">
+                  Display this company in the featured professionals section
+                </p>
+              </div>
+              <Checkbox
+                checked={editForm?.isFeatured ?? false}
+                onCheckedChange={(checked) => toggleCompanyFeatured(checked === true)}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="company-name">Company name</Label>
               <Input

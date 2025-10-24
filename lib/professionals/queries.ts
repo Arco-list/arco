@@ -36,6 +36,7 @@ type ProfessionalRow = {
   company: {
     id: string
     name: string
+    slug: NullableString
     logo_url: NullableString
     status: NullableString
     plan_tier: NullableString
@@ -299,9 +300,10 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
   const image = company.logo_url || profile?.avatar_url || PLACEHOLDER_IMAGE
 
   return {
-    id: row.id,
-    slug: row.id,
+    id: company.id,
+    slug: company.slug || company.id,
     companyId: company.id,
+    professionalId: row.id,
     name,
     profession,
     location,
@@ -340,6 +342,7 @@ type SearchProfessionalsRpcRow = {
   user_location: string | null
   company_id: string | null
   company_name: string | null
+  company_slug: string | null
   company_logo: string | null
   company_domain: string | null
   company_country: string | null
@@ -378,9 +381,10 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): Profession
   const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
 
   return {
-    id: row.id,
-    slug: row.id,
+    id: row.company_id,
+    slug: row.company_slug || row.company_id,
     companyId: row.company_id,
+    professionalId: row.id,
     name,
     profession,
     location,
@@ -424,7 +428,7 @@ export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> 
   return sortProfessionals(cards)
 }
 
-export const fetchProfessionalMetadata = async (professionalId: string): Promise<{
+export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   id: string
   slug: string
   name: string
@@ -432,67 +436,105 @@ export const fetchProfessionalMetadata = async (professionalId: string): Promise
   location: string | null
   coverImageUrl: string | null
 } | null> => {
-  if (!isUuid(professionalId)) {
-    logger.warn("Attempted to load professional metadata with invalid id", { professionalId })
-    return null
-  }
-
   const supabase = await createServerSupabaseClient()
 
-  const professionalResult = await supabase
-    .from("professionals")
-    .select(`
-      id,
-      title,
-      bio,
-      company_id,
-      is_verified,
-      is_available,
-      profiles:profiles!professionals_user_id_fkey (
-        first_name,
-        last_name,
-        location
-      ),
-      company:companies (
-        id,
-        name,
-        description,
-        logo_url,
-        city,
-        country,
-        plan_tier,
-        plan_expires_at,
-        status
-      )
-    `)
-    .eq("id", professionalId)
-    .maybeSingle()
+  // Query companies table first (company-centric approach)
+  const companyResult = isUuid(slugOrId)
+    ? await supabase
+        .from("companies")
+        .select(`
+          id,
+          name,
+          slug,
+          description,
+          logo_url,
+          city,
+          country,
+          plan_tier,
+          plan_expires_at,
+          status,
+          professionals (
+            id,
+            title,
+            bio,
+            is_verified,
+            is_available,
+            profiles:profiles!professionals_user_id_fkey (
+              first_name,
+              last_name,
+              location
+            )
+          )
+        `)
+        .eq("id", slugOrId)
+        .maybeSingle()
+    : await supabase
+        .from("companies")
+        .select(`
+          id,
+          name,
+          slug,
+          description,
+          logo_url,
+          city,
+          country,
+          plan_tier,
+          plan_expires_at,
+          status,
+          professionals (
+            id,
+            title,
+            bio,
+            is_verified,
+            is_available,
+            profiles:profiles!professionals_user_id_fkey (
+              first_name,
+              last_name,
+              location
+            )
+          )
+        `)
+        .eq("slug", slugOrId)
+        .maybeSingle()
 
-  if (professionalResult.error) {
-    logger.error("Failed to fetch professional metadata", { professionalId, supabaseError: professionalResult.error })
+  if (companyResult.error) {
+    logger.error("Failed to fetch company metadata", { slugOrId, supabaseError: companyResult.error })
     return null
   }
 
-  const row = professionalResult.data
-  if (!row || !row.company) {
+  const company = companyResult.data
+  if (!company) {
     return null
   }
 
-  if (!isPlusPlanActive(row) || row.is_available !== true) {
+  // Get the first active professional for this company
+  const professionals = Array.isArray(company.professionals) ? company.professionals : []
+  const activeProfessional = professionals.find((p: any) => p.is_available === true) || professionals[0]
+
+  if (!activeProfessional) {
     return null
   }
 
-  const photosResult = await supabase.rpc("get_public_company_photos", { p_company_id: row.company.id })
+  // Check plan status
+  const isPlusActive =
+    company.plan_tier === "plus" &&
+    company.status === "listed" &&
+    (!company.plan_expires_at || new Date(company.plan_expires_at).getTime() > Date.now())
 
-  const profile = row.profiles
-  const company = row.company
+  if (!isPlusActive || activeProfessional.is_available !== true) {
+    return null
+  }
 
-  const name = company.name?.trim() || 
-    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() || 
-    row.title || 
+  const photosResult = await supabase.rpc("get_public_company_photos", { p_company_id: company.id })
+
+  const profile = activeProfessional.profiles
+
+  const name = company.name?.trim() ||
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
+    activeProfessional.title ||
     "Professional"
 
-  const description = company.description || row.bio
+  const description = company.description || activeProfessional.bio
 
   const location = formatLocation([company.city, company.country], profile?.location ?? null)
 
@@ -504,8 +546,8 @@ export const fetchProfessionalMetadata = async (professionalId: string): Promise
   }
 
   return {
-    id: row.id,
-    slug: row.id,
+    id: company.id,
+    slug: company.slug || company.id,
     name,
     description,
     location,
@@ -513,99 +555,111 @@ export const fetchProfessionalMetadata = async (professionalId: string): Promise
   }
 }
 
-export const fetchProfessionalDetail = async (professionalId: string): Promise<ProfessionalDetail | null> => {
-  if (!isUuid(professionalId)) {
-    logger.warn("Attempted to load professional detail with invalid id", { professionalId })
-    return null
-  }
-
+export const fetchProfessionalDetail = async (slugOrId: string): Promise<ProfessionalDetail | null> => {
   const supabase = await createServerSupabaseClient()
 
-  const professionalResult = await supabase
+  // Query companies table first (company-centric approach)
+  const companyQuery = isUuid(slugOrId)
+    ? supabase.from("companies").select("*").eq("id", slugOrId).maybeSingle()
+    : supabase.from("companies").select("*").eq("slug", slugOrId).maybeSingle()
+
+  const companyResult = await companyQuery
+
+  if (companyResult.error) {
+    logger.error("Failed to fetch company detail", { slugOrId, supabaseError: companyResult.error })
+    return null
+  }
+
+  const company = companyResult.data
+
+  if (!company) {
+    logger.warn("Company not found", { slugOrId })
+    return null
+  }
+
+  // Check plan status
+  const isPlusActive =
+    company.plan_tier === "plus" &&
+    company.status === "listed" &&
+    (!company.plan_expires_at || new Date(company.plan_expires_at).getTime() > Date.now())
+
+  if (!isPlusActive) {
+    logger.info("Company not eligible for public detail page", {
+      slugOrId,
+      planTier: company.plan_tier,
+      companyStatus: company.status,
+    })
+    return null
+  }
+
+  const companyId = company.id
+
+  // Fetch professionals for this company
+  const professionalsResult = await supabase
     .from("professionals")
-    .select(
-      `
-        id,
-        title,
-        bio,
-        years_experience,
-        services_offered,
-        languages_spoken,
-        hourly_rate_min,
-        hourly_rate_max,
-        is_verified,
-        is_available,
-        portfolio_url,
-        company_id,
-        profiles:profiles!professionals_user_id_fkey (
-          first_name,
-          last_name,
-          avatar_url,
-          location,
-          created_at
-        ),
-        company:companies (
-          id,
-          name,
-          description,
-          logo_url,
-          email,
-          phone,
-          website,
-          domain,
-          city,
-          country,
-          services_offered,
-          languages,
-          plan_tier,
-          plan_expires_at,
-          status,
-          team_size_min,
-          team_size_max,
-          founded_year
-        ),
-        rating:professional_ratings (
-          overall_rating,
-          total_reviews,
-          quality_rating,
-          reliability_rating,
-          communication_rating,
-          last_review_at
-        ),
-        specialties:professional_specialties (
-          is_primary,
-          category:categories (
-            name
-          )
+    .select(`
+      id,
+      title,
+      bio,
+      years_experience,
+      services_offered,
+      languages_spoken,
+      hourly_rate_min,
+      hourly_rate_max,
+      is_verified,
+      is_available,
+      portfolio_url,
+      company_id,
+      profiles:profiles!professionals_user_id_fkey (
+        first_name,
+        last_name,
+        avatar_url,
+        location,
+        created_at
+      ),
+      rating:professional_ratings (
+        overall_rating,
+        total_reviews,
+        quality_rating,
+        reliability_rating,
+        communication_rating,
+        last_review_at
+      ),
+      specialties:professional_specialties (
+        is_primary,
+        category:categories (
+          name
         )
-      `
-    )
-    .eq("id", professionalId)
-    .maybeSingle<ProfessionalDetailRow>()
+      )
+    `)
+    .eq("company_id", companyId)
 
-  if (professionalResult.error) {
-    logger.error("Failed to fetch professional detail", { professionalId, supabaseError: professionalResult.error })
+  if (professionalsResult.error) {
+    logger.error("Failed to fetch professionals for company", { companyId, supabaseError: professionalsResult.error })
     return null
   }
 
-  const detailRow = professionalResult.data
+  const professionals = professionalsResult.data || []
 
-  if (!detailRow || !detailRow.company) {
-    logger.warn("Professional detail missing company", { professionalId })
+  // Get the first available professional or just the first one
+  const detailRow = professionals.find((p: any) => p.is_available === true) || professionals[0]
+
+  if (!detailRow) {
+    logger.warn("No professionals found for company", { companyId })
     return null
   }
 
-  if (!isPlusPlanActive(detailRow) || detailRow.is_available !== true) {
-    logger.info("Professional not eligible for public detail page", {
-      professionalId,
-      planTier: detailRow.company.plan_tier,
-      companyStatus: detailRow.company.status,
+  if (detailRow.is_available !== true) {
+    logger.info("Professional not available for public detail page", {
+      slugOrId,
+      companyId,
+      professionalId: detailRow.id,
       isAvailable: detailRow.is_available,
     })
     return null
   }
 
-  const companyId = detailRow.company.id
+  const professionalId = detailRow.id
 
   const [photosResult, socialLinksResult, projectLinksResult, reviewsResult] = await Promise.all([
     supabase.rpc("get_public_company_photos", { p_company_id: companyId }),
@@ -625,14 +679,15 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
   ])
 
   if (photosResult.error) {
-    logger.warn("Failed to load company photos for professional detail", { professionalId, supabaseError: photosResult.error })
+    logger.warn("Failed to load company photos for professional detail", { slugOrId, professionalId, supabaseError: photosResult.error })
   }
 
   if (socialLinksResult.error) {
     if (isRlsDenied(socialLinksResult.error)) {
-      logger.debug("RLS prevented loading company social links for anonymous viewer", { professionalId })
+      logger.debug("RLS prevented loading company social links for anonymous viewer", { slugOrId, professionalId })
     } else {
       logger.warn("Failed to load company social links for professional detail", {
+        slugOrId,
         professionalId,
         supabaseError: socialLinksResult.error,
       })
@@ -640,11 +695,11 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
   }
 
   if (projectLinksResult.error) {
-    logger.warn("Failed to load project links for professional detail", { professionalId, supabaseError: projectLinksResult.error })
+    logger.warn("Failed to load project links for professional detail", { slugOrId, professionalId, supabaseError: projectLinksResult.error })
   }
 
   if (reviewsResult.error) {
-    logger.warn("Failed to load reviews for professional detail", { professionalId, supabaseError: reviewsResult.error })
+    logger.warn("Failed to load reviews for professional detail", { slugOrId, professionalId, supabaseError: reviewsResult.error })
   }
 
   const galleryRows = Array.isArray(photosResult.data) ? (photosResult.data as CompanyPhotoRow[]) : []
@@ -779,7 +834,6 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
     created_at: null,
   }
 
-  const company = detailRow.company
   const name =
     (company.name && company.name.trim().length > 0 ? company.name.trim() : null) ??
     ([profile.first_name, profile.last_name].filter(Boolean).join(" ").trim() ||
@@ -866,8 +920,8 @@ export const fetchProfessionalDetail = async (professionalId: string): Promise<P
   }
 
   return {
-    id: detailRow.id,
-    slug: detailRow.id,
+    id: company.id,
+    slug: company.slug || company.id,
     name,
     title: detailRow.title ?? "Professional",
     description: company.description ?? detailRow.bio ?? null,

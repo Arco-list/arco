@@ -153,17 +153,17 @@ function HomeownerContent() {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {savedProfessionalEntries.map((entry) => {
-                  const { professionalId, card } = entry
-                  const isMutating = mutatingProfessionalIds.has(professionalId)
+                  const { companyId, card } = entry
+                  const isMutating = mutatingProfessionalIds.has(companyId)
 
                   return (
-                    <div key={professionalId} className="relative">
+                    <div key={companyId} className="relative">
                       <ProfessionalCard
                         professional={card}
                         isSaved
                         isMutating={isMutating}
                         onToggleSave={() => {
-                          unsaveProfessional(professionalId)
+                          unsaveProfessional(companyId)
                         }}
                       />
                     </div>

@@ -52,6 +52,7 @@ export type PreviewProfessionalSummary = {
 
 export type PreviewProjectProfessional = {
   id: string
+  companyId?: string | null
   professionalId?: string | null
   serviceCategory: string
   serviceCategoryId: string

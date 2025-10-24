@@ -248,7 +248,7 @@ export type Database = {
             foreignKeyName: "company_photos_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "admin_company_professional_metrics"
+            referencedRelation: "company_metrics"
             referencedColumns: ["company_id"]
           },
           {
@@ -304,7 +304,7 @@ export type Database = {
             foreignKeyName: "company_social_links_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "admin_company_professional_metrics"
+            referencedRelation: "company_metrics"
             referencedColumns: ["company_id"]
           },
           {
@@ -727,7 +727,7 @@ export type Database = {
             foreignKeyName: "professionals_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "admin_company_professional_metrics"
+            referencedRelation: "company_metrics"
             referencedColumns: ["company_id"]
           },
           {
@@ -1931,7 +1931,7 @@ export type Database = {
       }
     }
     Views: {
-      admin_company_professional_metrics: {
+      company_metrics: {
         Row: {
           average_rating: number | null
           company_id: string | null

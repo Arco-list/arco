@@ -19,8 +19,8 @@ import type { ProfessionalCard } from "@/lib/professionals/types";
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300";
 
 type SavedProfessionalEntry = {
-  professionalId: string;
-  companyId: string | null;
+  companyId: string;
+  professionalId: string | null;
   savedAt: string | null;
   card: ProfessionalCard;
 };
@@ -65,9 +65,10 @@ const toProfessionalCard = (row: any): ProfessionalCard => {
       : PLACEHOLDER_IMAGE;
 
   return {
-    id: row.professional_id,
-    slug: row.company_domain && row.company_domain.length > 0 ? row.company_domain : row.professional_id,
-    companyId: row.company_id ?? "",
+    id: row.company_id,
+    slug: row.company_slug || row.company_id,
+    companyId: row.company_id,
+    professionalId: row.professional_id ?? "",
     name,
     profession,
     location,
@@ -112,7 +113,7 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
     setError(null);
 
     try {
-      const { data, error: fetchError } = await supabase.rpc("get_user_saved_professionals_with_summary");
+      const { data, error: fetchError } = await supabase.rpc("get_user_saved_companies_with_summary");
 
       if (fetchError) {
         throw fetchError;
@@ -123,16 +124,16 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
       }
 
       const list = (data ?? []).map((row: any) => {
-        const professionalId = row.professional_id;
-        if (!professionalId) {
+        const companyId = row.company_id;
+        if (!companyId) {
           return null;
         }
 
         const card = toProfessionalCard(row);
 
         return {
-          professionalId,
-          companyId: row.company_id ?? null,
+          companyId,
+          professionalId: row.professional_id ?? null,
           savedAt: row.saved_at ?? null,
           card,
         } satisfies SavedProfessionalEntry;
@@ -169,8 +170,8 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
 
   const saveProfessional = useCallback(
     async (professional: ProfessionalCard): Promise<SaveResult> => {
-      if (!professional?.id) {
-        return { success: false, error: "Missing professional reference." };
+      if (!professional?.companyId) {
+        return { success: false, error: "Missing company reference." };
       }
 
       if (!ensureAuth() || !user?.id) {
@@ -178,20 +179,20 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
         return { success: false, requiresAuth: true };
       }
 
-      if (mutatingProfessionalIds.has(professional.id)) {
+      if (mutatingProfessionalIds.has(professional.companyId)) {
         return { success: false };
       }
 
-      setProfessionalIsMutating(professional.id, true);
+      setProfessionalIsMutating(professional.companyId, true);
 
       setSavedProfessionals((previous) => {
-        if (previous.some((entry) => entry.professionalId === professional.id)) {
+        if (previous.some((entry) => entry.companyId === professional.companyId)) {
           return previous;
         }
 
         const optimisticEntry: SavedProfessionalEntry = {
-          professionalId: professional.id,
-          companyId: professional.companyId ?? null,
+          companyId: professional.companyId,
+          professionalId: professional.professionalId ?? null,
           savedAt: new Date().toISOString(),
           card: professional,
         };
@@ -200,12 +201,12 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
       });
 
       try {
-        const { error: upsertError } = await supabase.from("saved_professionals").upsert(
+        const { error: upsertError } = await supabase.from("saved_companies").upsert(
           {
             user_id: user.id,
-            professional_id: professional.id,
+            company_id: professional.companyId,
           },
-          { onConflict: "user_id,professional_id" },
+          { onConflict: "user_id,company_id" },
         );
 
         if (upsertError) {
@@ -217,24 +218,24 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
 
         return { success: true };
       } catch (saveError) {
-        console.error("Failed to save professional", { professionalId: professional.id, error: saveError });
+        console.error("Failed to save professional", { companyId: professional.companyId, error: saveError });
         const message = "We could not save this professional. Please try again.";
         toast.error("Unable to save professional", { description: message });
         setSavedProfessionals((previous) =>
-          previous.filter((entry) => entry.professionalId !== professional.id),
+          previous.filter((entry) => entry.companyId !== professional.companyId),
         );
         return { success: false, error: message };
       } finally {
-        setProfessionalIsMutating(professional.id, false);
+        setProfessionalIsMutating(professional.companyId, false);
       }
     },
     [ensureAuth, mutatingProfessionalIds, refresh, supabase, user, setProfessionalIsMutating],
   );
 
   const removeProfessional = useCallback(
-    async (professionalId: string): Promise<SaveResult> => {
-      if (!professionalId) {
-        return { success: false, error: "Missing professional reference." };
+    async (companyId: string): Promise<SaveResult> => {
+      if (!companyId) {
+        return { success: false, error: "Missing company reference." };
       }
 
       if (!ensureAuth() || !user?.id) {
@@ -242,21 +243,21 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
         return { success: false, requiresAuth: true };
       }
 
-      if (mutatingProfessionalIds.has(professionalId)) {
+      if (mutatingProfessionalIds.has(companyId)) {
         return { success: false };
       }
 
-      setProfessionalIsMutating(professionalId, true);
+      setProfessionalIsMutating(companyId, true);
 
       const previousState = savedProfessionals;
 
-      setSavedProfessionals((current) => current.filter((entry) => entry.professionalId !== professionalId));
+      setSavedProfessionals((current) => current.filter((entry) => entry.companyId !== companyId));
 
       try {
         const { error: deleteError } = await supabase
-          .from("saved_professionals")
+          .from("saved_companies")
           .delete()
-          .match({ user_id: user.id, professional_id: professionalId });
+          .match({ user_id: user.id, company_id: companyId });
 
         if (deleteError) {
           throw deleteError;
@@ -267,20 +268,20 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
 
         return { success: true };
       } catch (deleteError) {
-        console.error("Failed to remove saved professional", { professionalId, error: deleteError });
+        console.error("Failed to remove saved professional", { companyId, error: deleteError });
         const message = "We could not remove this professional right now.";
         toast.error("Unable to remove professional", { description: message });
         setSavedProfessionals(previousState);
         return { success: false, error: message };
       } finally {
-        setProfessionalIsMutating(professionalId, false);
+        setProfessionalIsMutating(companyId, false);
       }
     },
     [ensureAuth, mutatingProfessionalIds, refresh, savedProfessionals, supabase, user, setProfessionalIsMutating],
   );
 
   const savedProfessionalIds = useMemo(() => {
-    return new Set(savedProfessionals.map((entry) => entry.professionalId));
+    return new Set(savedProfessionals.map((entry) => entry.companyId));
   }, [savedProfessionals]);
 
   const value = useMemo<SavedProfessionalsContextValue>(
