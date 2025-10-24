@@ -1,7 +1,16 @@
+/**
+ * Professional card data for display in listings and galleries.
+ * Note: This type uses the company as the primary identifier since professionals
+ * are displayed through their company profiles.
+ */
 export type ProfessionalCard = {
+  /** Company ID - used as the primary identifier for routing (same as companyId) */
   id: string
+  /** Company slug for URL-friendly routing */
   slug: string
+  /** Company ID - identifies which company this professional belongs to */
   companyId: string
+  /** Professional profile ID - the unique professional record ID */
   professionalId: string
   name: string
   profession: string

@@ -155,6 +155,49 @@ export async function updateProfessionalFeaturedAction(input: {
   return { success: true }
 }
 
+export async function updateCompanyFeaturedAction(input: {
+  companyId: string
+  isFeatured: boolean
+}) {
+  const parsedCompanyId = inviteIdSchema.safeParse(input.companyId)
+  if (!parsedCompanyId.success) {
+    return { success: false, error: "Invalid company id" }
+  }
+
+  const featuredResult = z.boolean().safeParse(input.isFeatured)
+  if (!featuredResult.success) {
+    return { success: false, error: "Invalid featured status" }
+  }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update({ is_featured: featuredResult.data })
+    .eq("id", parsedCompanyId.data)
+
+  if (updateError) {
+    logger.error("admin-professionals", "Failed to update company featured status", {
+      companyId: parsedCompanyId.data,
+      isFeatured: featuredResult.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  logger.info("admin-professionals", "Company featured status updated", {
+    companyId: parsedCompanyId.data,
+    isFeatured: featuredResult.data,
+  })
+
+  revalidatePath("/admin/professionals")
+  revalidatePath("/")
+  return { success: true }
+}
+
 export async function updateCompanyDetailsAction(input: {
   companyId: string
   name: string

@@ -193,9 +193,14 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
                   key={professional.id}
                   professional={professional}
                   isSaved={isSaved}
-                  isSaving={isMutating}
-                  onSave={() => saveProfessional(professional)}
-                  onRemove={() => removeProfessional(professionalId)}
+                  isMutating={isMutating}
+                  onToggleSave={(prof) => {
+                    if (isSaved) {
+                      removeProfessional(professionalId)
+                    } else {
+                      saveProfessional(prof)
+                    }
+                  }}
                 />
               )
             })}

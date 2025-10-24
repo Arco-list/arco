@@ -48,34 +48,29 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
         return;
       }
 
+      // Call onSuccess callback before redirecting
+      onSuccess?.();
+
       if (result?.data?.session) {
+        // User has immediate session (auto-confirmed or email confirmation disabled)
         toast.success("Account created");
         router.refresh();
 
-        // Redirect to dashboard by default, or use provided redirectTo
         const destination = resolveRedirectPath(sanitizedRedirect);
         router.push(destination);
       } else {
-        toast.success("Account created! Check your email to continue", {
-          description: "We've sent you a confirmation link to complete your signup.",
-        });
-
+        // User needs to confirm email
         const query = new URLSearchParams({ email: values.email });
         if (sanitizedRedirect) {
           query.set("redirectTo", sanitizedRedirect);
         }
 
+        toast.success("Account created! Check your email to continue", {
+          description: "We've sent you a confirmation link to complete your signup.",
+        });
+
         router.push(`/signup/confirm?${query.toString()}`);
       }
-
-      onSuccess?.();
-      form.reset({
-        firstName: values.firstName,
-        lastName: values.lastName,
-        email: values.email,
-        password: "",
-        redirectTo: sanitizedRedirect ?? "",
-      });
     });
   });
 

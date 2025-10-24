@@ -27,6 +27,7 @@ type CompanyRow = {
   planTier: Database["public"]["Enums"]["company_plan_tier"]
   status: Database["public"]["Enums"]["company_status"]
   isVerified: boolean
+  isFeatured: boolean
   projectsLinked: number
   professionalCount: number
   averageRating: number | null
@@ -72,7 +73,7 @@ async function loadAdminProfessionalsData() {
     supabase
       .from("companies")
       .select(
-        "id, name, status, plan_tier, city, country, is_verified, domain, logo_url, website, email, services_offered"
+        "id, name, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered"
       ),
     supabase
       .from("admin_company_professional_metrics")
@@ -157,6 +158,7 @@ async function loadAdminProfessionalsData() {
       planTier: company.plan_tier,
       status: company.status,
       isVerified: Boolean(company.is_verified),
+      isFeatured: Boolean(company.is_featured),
       projectsLinked,
       professionalCount,
       averageRating,

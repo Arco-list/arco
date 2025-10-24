@@ -7,7 +7,7 @@ import { ProjectCategories, type ProjectCategoryCard } from "@/components/projec
 import { PopularProjects, type PopularProjectCard } from "@/components/popular-projects"
 import { FeaturesSection } from "@/components/features-section"
 import { PopularServices } from "@/components/popular-services"
-import { FeaturedProfessionals, type FeaturedProfessional } from "@/components/featured-professionals"
+import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
 import { ProfessionalCategories, type ProfessionalCategoryCard } from "@/components/professional-categories"
 import { ProjectTypes, type ProjectTypeCard } from "@/components/project-types"
 import { Footer } from "@/components/footer"
@@ -79,7 +79,7 @@ async function loadLandingData() {
     parentCategoriesResult,
     professionalCategoriesResult,
     professionalSpecialtiesResult,
-    featuredProfessionalsResult,
+    featuredCompaniesResult,
   ] = await Promise.all([
     supabase.rpc("search_projects", { featured_only: true, limit_count: 5 }),
     supabase.rpc("search_projects", { limit_count: 12 }),
@@ -102,13 +102,10 @@ async function loadLandingData() {
       .select("id, primary_specialty_slug")
       .not("primary_specialty_slug", "is", null),
     supabase
-      .from("mv_professional_summary")
-      .select("id, company_id, first_name, last_name, title, primary_specialty, company_name, company_logo, company_city, user_location, display_rating, total_reviews, avatar_url")
-      .eq("is_verified", true)
-      .eq("is_available", true)
-      .not("company_id", "is", null)
-      .order("display_rating", { ascending: false })
-      .order("total_reviews", { ascending: false })
+      .from("companies")
+      .select("id, name, slug, city, country, logo_url, services_offered")
+      .eq("is_featured", true)
+      .eq("status", "listed")
       .limit(6),
   ])
 
@@ -127,8 +124,8 @@ async function loadLandingData() {
   if (professionalSpecialtiesResult.error) {
     logger.error("Failed to load professional specialties", { scope: "landing" }, professionalSpecialtiesResult.error)
   }
-  if (featuredProfessionalsResult.error) {
-    logger.error("Failed to load featured professionals", { scope: "landing" }, featuredProfessionalsResult.error)
+  if (featuredCompaniesResult.error) {
+    logger.error("Failed to load featured companies", { scope: "landing" }, featuredCompaniesResult.error)
   }
 
   const heroProjects = (heroProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
@@ -136,7 +133,7 @@ async function loadLandingData() {
   const parentCategories = (parentCategoriesResult.data as CategoryRow[] | null) ?? []
   const professionalCategoriesRaw = (professionalCategoriesResult.data as Tables<"categories">[] | null) ?? []
   const professionalSpecialties = professionalSpecialtiesResult.data ?? []
-  const featuredProfessionalsRaw = featuredProfessionalsResult.data ?? []
+  const featuredCompaniesRaw = featuredCompaniesResult.data ?? []
 
   let childCategories: CategoryRow[] = []
 
@@ -357,33 +354,47 @@ async function loadLandingData() {
     .filter((category): category is ProfessionalCategoryCard => Boolean(category))
     .slice(0, 5)
 
-  const featuredProfessionals: FeaturedProfessional[] = featuredProfessionalsRaw
-    .filter((professional): professional is typeof professional & { company_id: string } => {
-      if (!professional.company_id && process.env.NODE_ENV === 'development') {
-        logger.warn('Professional without company_id filtered out from featured list', {
-          scope: 'landing',
-          professionalId: professional.id,
-        })
-      }
-      return professional.company_id !== null && professional.company_id !== undefined
-    })
-    .map((professional) => {
-      const fullName = `${professional.first_name || ''} ${professional.last_name || ''}`.trim()
-      const name = professional.company_name || fullName
-      const title = professional.title || professional.primary_specialty || 'Professional'
-      const location = professional.company_city || professional.user_location || 'Location unavailable'
+  // Fetch rating data for featured companies
+  const featuredCompanyIds = featuredCompaniesRaw.map((company) => company.id)
+  let companyMetrics: Map<string, { averageRating: number; totalReviews: number }> = new Map()
 
-      return {
-        id: professional.company_id,
-        name,
-        title,
-        location,
-        rating: professional.display_rating || 0,
-        reviews: professional.total_reviews || 0,
-        image: professional.company_logo || professional.avatar_url || PLACEHOLDER_IMAGE,
-        href: `/professionals/${professional.company_id}`,
-      }
-    })
+  if (featuredCompanyIds.length > 0) {
+    const metricsResult = await supabase
+      .from("admin_company_professional_metrics")
+      .select("company_id, average_rating, total_reviews")
+      .in("company_id", featuredCompanyIds)
+
+    if (!metricsResult.error && metricsResult.data) {
+      metricsResult.data.forEach((metric) => {
+        companyMetrics.set(metric.company_id, {
+          averageRating: metric.average_rating || 0,
+          totalReviews: metric.total_reviews || 0,
+        })
+      })
+    }
+  }
+
+  const featuredCompanies: FeaturedCompany[] = featuredCompaniesRaw.map((company) => {
+    const location = [company.city, company.country].filter(Boolean).join(", ") || "Location unavailable"
+    const slug = company.slug || company.id
+    const metrics = companyMetrics.get(company.id) || { averageRating: 0, totalReviews: 0 }
+
+    // Get first service offered as title
+    const title = Array.isArray(company.services_offered) && company.services_offered.length > 0
+      ? company.services_offered[0]
+      : "Professional services"
+
+    return {
+      id: company.id,
+      name: company.name,
+      title,
+      location,
+      rating: metrics.averageRating,
+      reviews: metrics.totalReviews,
+      image: company.logo_url || PLACEHOLDER_IMAGE,
+      href: `/professionals/${slug}`,
+    }
+  })
 
   return {
     heroProjects: resolvedHeroProjects,
@@ -391,12 +402,12 @@ async function loadLandingData() {
     popularProjects: popularProjectCards,
     projectTypes,
     professionalCategories: professionalCategoryCards,
-    featuredProfessionals,
+    featuredCompanies,
   }
 }
 
 export default async function HomePage() {
-  const { heroProjects, projectCategories, popularProjects, projectTypes, professionalCategories, featuredProfessionals } =
+  const { heroProjects, projectCategories, popularProjects, projectTypes, professionalCategories, featuredCompanies } =
     await loadLandingData()
 
   return (
@@ -408,7 +419,7 @@ export default async function HomePage() {
         <PopularProjects projects={popularProjects} />
         <FeaturesSection />
         {/* <PopularServices /> */}
-        <FeaturedProfessionals professionals={featuredProfessionals} />
+        <FeaturedCompanies companies={featuredCompanies} />
         <ProfessionalCategories categories={professionalCategories} />
         <ProjectTypes types={projectTypes} />
       </main>

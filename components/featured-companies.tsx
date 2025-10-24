@@ -7,7 +7,7 @@ import { useRef } from "react"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 
-export type FeaturedProfessional = {
+export type FeaturedCompany = {
   id: string
   name: string
   title: string
@@ -18,11 +18,11 @@ export type FeaturedProfessional = {
   href: string
 }
 
-type FeaturedProfessionalsProps = {
-  professionals: FeaturedProfessional[]
+type FeaturedCompaniesProps = {
+  companies: FeaturedCompany[]
 }
 
-export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsProps) {
+export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } = useSavedProfessionals()
 
@@ -63,14 +63,14 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
           className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 mb-8"
           style={{ scrollSnapType: "x mandatory" }}
         >
-          {professionals.length === 0 ? (
+          {companies.length === 0 ? (
             <div className="col-span-full text-center py-8 text-gray-500">
-              No featured professionals available.
+              No featured companies available.
             </div>
           ) : (
-            professionals.map((professional) => {
-              const isSaved = savedProfessionalIds.has(professional.id)
-              const isMutating = mutatingProfessionalIds.has(professional.id)
+            companies.map((company) => {
+              const isSaved = savedProfessionalIds.has(company.id)
+              const isMutating = mutatingProfessionalIds.has(company.id)
 
               const handleSaveClick = (e: React.MouseEvent<HTMLButtonElement>) => {
                 e.preventDefault()
@@ -78,25 +78,25 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
 
                 if (isMutating) return
 
-                // Convert FeaturedProfessional to ProfessionalCard format
+                // Convert FeaturedCompany to ProfessionalCard format
                 const professionalCard: ProfessionalCard = {
-                  id: professional.id,
-                  slug: professional.href.replace('/professionals/', ''),
-                  companyId: professional.id,
+                  id: company.id,
+                  slug: company.href.replace('/professionals/', ''),
+                  companyId: company.id,
                   professionalId: "",
-                  name: professional.name,
-                  profession: professional.title,
-                  location: professional.location,
-                  rating: professional.rating,
-                  reviewCount: professional.reviews,
-                  image: professional.image,
+                  name: company.name,
+                  profession: company.title,
+                  location: company.location,
+                  rating: company.rating,
+                  reviewCount: company.reviews,
+                  image: company.image,
                   specialties: [],
                   isVerified: false,
                   domain: null,
                 }
 
                 if (isSaved) {
-                  removeProfessional(professional.id)
+                  removeProfessional(company.id)
                 } else {
                   saveProfessional(professionalCard)
                 }
@@ -104,15 +104,15 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
 
               return (
                 <Link
-                  key={professional.id}
-                  href={professional.href}
+                  key={company.id}
+                  href={company.href}
                   className="group cursor-pointer flex-none w-80 sm:w-72 md:w-60 lg:w-64 xl:w-72"
                   style={{ scrollSnapAlign: "start" }}
                 >
                   <div className="relative aspect-square rounded-lg overflow-hidden mb-3">
                     <img
-                      src={professional.image || "/placeholder.svg?height=300&width=300"}
-                      alt={professional.name}
+                      src={company.image || "/placeholder.svg?height=300&width=300"}
+                      alt={company.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     <button
@@ -127,17 +127,17 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
                   </div>
                   <div className="space-y-2">
                     <h3 className="text-lg font-medium text-gray-900 group-hover:text-gray-600 transition-colors">
-                      {professional.name}
+                      {company.name}
                     </h3>
-                    <p className="text-sm text-gray-600">{professional.location}</p>
+                    <p className="text-sm text-gray-600">{company.location}</p>
                     <div className="flex items-center gap-2">
-                      {professional.rating > 0 ? (
+                      {company.rating > 0 ? (
                         <>
                           <div className="flex items-center gap-1">
                             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm font-medium text-gray-900">{professional.rating.toFixed(1)}</span>
+                            <span className="text-sm font-medium text-gray-900">{company.rating.toFixed(1)}</span>
                           </div>
-                          <span className="text-sm text-gray-500">({professional.reviews} reviews)</span>
+                          <span className="text-sm text-gray-500">({company.reviews} reviews)</span>
                         </>
                       ) : (
                         <span className="text-sm text-gray-500">No reviews yet</span>
