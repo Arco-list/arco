@@ -23,12 +23,15 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   UserPlus,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
   changeAdminRoleAction,
+  checkUserDeletionAction,
+  deleteUserAction,
   generateAdminResetPasswordAction,
   inviteAdminUserAction,
   toggleAdminStatusAction,
@@ -167,6 +170,19 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const [isUpdatingRole, startRoleTransition] = useTransition()
   const [isUpdatingStatus, startStatusTransition] = useTransition()
   const [isGeneratingReset, startResetTransition] = useTransition()
+  const [isDeletingUser, startDeleteTransition] = useTransition()
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    user: AdminUserRow
+    checkResult?: {
+      canDelete: boolean
+      warnings: string[]
+      blockers: string[]
+      ownsCompany: boolean
+      companyName?: string
+    }
+    isChecking: boolean
+  } | null>(null)
 
   const handleResetPassword = useCallback(
     (user: AdminUserRow) => {
@@ -203,6 +219,64 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
     },
     [startResetTransition],
   )
+
+  const handleOpenDeleteDialog = useCallback(async (user: AdminUserRow) => {
+    setDeleteDialog({ user, isChecking: true })
+
+    try {
+      const result = await checkUserDeletionAction({ userId: user.id })
+
+      if (!result.success || !result.data) {
+        toast.error("Failed to check deletion requirements", {
+          description: result.error,
+        })
+        setDeleteDialog(null)
+        return
+      }
+
+      setDeleteDialog({
+        user,
+        checkResult: {
+          canDelete: result.data.canDelete,
+          warnings: result.data.warnings,
+          blockers: result.data.blockers,
+          ownsCompany: result.data.ownsCompany,
+          companyName: result.data.companyName,
+        },
+        isChecking: false,
+      })
+    } catch (err) {
+      console.error(err)
+      toast.error("Unexpected error while checking deletion requirements.")
+      setDeleteDialog(null)
+    }
+  }, [])
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteDialog) return
+
+    startDeleteTransition(async () => {
+      try {
+        const result = await deleteUserAction({ userId: deleteDialog.user.id })
+
+        if (!result.success) {
+          toast.error("Failed to delete user", {
+            description: result.error,
+          })
+          return
+        }
+
+        toast.success("User deleted", {
+          description: `${deleteDialog.user.displayName} has been permanently deleted.`,
+        })
+        setDeleteDialog(null)
+        router.refresh()
+      } catch (err) {
+        console.error(err)
+        toast.error("Unexpected error while deleting user.")
+      }
+    })
+  }, [deleteDialog, router, startDeleteTransition])
 
   const columns = useMemo<ColumnDef<AdminUserRow>[]>(() => {
     return [
@@ -376,6 +450,17 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                     </span>
                   )}
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={user.isSelf}
+                  onClick={() => handleOpenDeleteDialog(user)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Delete user…
+                  </span>
+                </DropdownMenuItem>
                 {disableDemote && (
                   <>
                     <DropdownMenuSeparator />
@@ -392,7 +477,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         enableHiding: false,
       },
     ]
-  }, [handleResetPassword, isGeneratingReset, resettingUserId])
+  }, [handleResetPassword, handleOpenDeleteDialog, isGeneratingReset, resettingUserId])
 
   const table = useReactTable({
     data,
@@ -848,6 +933,86 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             >
               {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {statusDialog?.nextActive ? "Reactivate" : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteDialog} onOpenChange={(open) => (!open ? setDeleteDialog(null) : undefined)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Delete user</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. All data associated with this user will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteDialog && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-border px-3 py-3">
+                <p className="text-sm font-medium">{deleteDialog.user.displayName}</p>
+                <p className="text-xs text-muted-foreground">{deleteDialog.user.email}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Role: {ROLE_LABELS[deleteDialog.user.role]}
+                </p>
+              </div>
+
+              {deleteDialog.isChecking ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Checking deletion requirements…</span>
+                </div>
+              ) : deleteDialog.checkResult ? (
+                <>
+                  {deleteDialog.checkResult.blockers.length > 0 && (
+                    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3">
+                      <p className="text-sm font-medium text-rose-900 mb-2">Cannot delete user</p>
+                      <ul className="space-y-1">
+                        {deleteDialog.checkResult.blockers.map((blocker, idx) => (
+                          <li key={idx} className="text-xs text-rose-800">
+                            • {blocker}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {deleteDialog.checkResult.canDelete && deleteDialog.checkResult.warnings.length > 0 && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
+                      <p className="text-sm font-medium text-amber-900 mb-2">The following data will be deleted:</p>
+                      <ul className="space-y-1">
+                        {deleteDialog.checkResult.warnings.map((warning, idx) => (
+                          <li key={idx} className="text-xs text-amber-800">
+                            • {warning}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {deleteDialog.checkResult.canDelete && deleteDialog.checkResult.warnings.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      This user has no related data. The account will be permanently deleted.
+                    </p>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialog(null)}
+              disabled={isDeletingUser || deleteDialog?.isChecking}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={isDeletingUser || deleteDialog?.isChecking || !deleteDialog?.checkResult?.canDelete}
+            >
+              {isDeletingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete permanently
             </Button>
           </DialogFooter>
         </DialogContent>

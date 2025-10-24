@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useRef } from "react"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
-import type { ProfessionalCard } from "@/lib/professionals/types"
+import { featuredItemToProfessionalCard } from "@/lib/professionals/utils"
 
 export type FeaturedProfessional = {
   id: string
@@ -78,27 +78,10 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
 
                 if (isMutating) return
 
-                // Convert FeaturedProfessional to ProfessionalCard format
-                const professionalCard: ProfessionalCard = {
-                  id: professional.id,
-                  slug: professional.href.replace('/professionals/', ''),
-                  companyId: professional.id,
-                  professionalId: "",
-                  name: professional.name,
-                  profession: professional.title,
-                  location: professional.location,
-                  rating: professional.rating,
-                  reviewCount: professional.reviews,
-                  image: professional.image,
-                  specialties: [],
-                  isVerified: false,
-                  domain: null,
-                }
-
                 if (isSaved) {
                   removeProfessional(professional.id)
                 } else {
-                  saveProfessional(professionalCard)
+                  saveProfessional(featuredItemToProfessionalCard(professional))
                 }
               }
 

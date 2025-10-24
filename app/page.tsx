@@ -360,7 +360,7 @@ async function loadLandingData() {
 
   if (featuredCompanyIds.length > 0) {
     const metricsResult = await supabase
-      .from("admin_company_professional_metrics")
+      .from("company_metrics")
       .select("company_id, average_rating, total_reviews")
       .in("company_id", featuredCompanyIds)
 

@@ -48,9 +48,6 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
         return;
       }
 
-      // Call onSuccess callback before redirecting
-      onSuccess?.();
-
       if (result?.data?.session) {
         // User has immediate session (auto-confirmed or email confirmation disabled)
         toast.success("Account created");
@@ -71,6 +68,9 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
 
         router.push(`/signup/confirm?${query.toString()}`);
       }
+
+      // Call onSuccess callback after navigation is initiated
+      onSuccess?.();
     });
   });
 

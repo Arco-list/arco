@@ -162,7 +162,7 @@ CREATE TABLE saved_professionals (
 **Current Implementation:**
 - Admin page: `app/admin/professionals/page.tsx`
 - Shows companies table ✅
-- Uses `admin_company_professional_metrics` view ✅
+- Uses `company_metrics` view ✅
 - Displays company-centric data ✅
 
 **Note:** This is the correct pattern that other parts of the app should follow.

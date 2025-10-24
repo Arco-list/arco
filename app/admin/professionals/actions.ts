@@ -7,7 +7,8 @@ import { createServerActionSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 
-const inviteIdSchema = z.string().uuid()
+// Generic UUID schema used for validating all UUID fields (invites, companies, professionals, etc.)
+const uuidSchema = z.string().uuid()
 
 async function assertAdmin() {
   const supabase = await createServerActionSupabaseClient()
@@ -50,7 +51,7 @@ async function assertAdmin() {
 const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
-  const idResult = inviteIdSchema.safeParse(inviteId)
+  const idResult = uuidSchema.safeParse(inviteId)
   if (!idResult.success) {
     return { success: false, error: "Invalid invite id" }
   }
@@ -81,7 +82,7 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
 }
 
 export async function updateCompanyStatusAction(input: { companyId: string; status: z.infer<typeof companyStatusSchema> }) {
-  const parsedCompanyId = inviteIdSchema.safeParse(input.companyId)
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
   if (!parsedCompanyId.success) {
     return { success: false, error: "Invalid company id" }
   }
@@ -117,7 +118,7 @@ export async function updateProfessionalFeaturedAction(input: {
   professionalId: string
   isFeatured: boolean
 }) {
-  const parsedProfessionalId = inviteIdSchema.safeParse(input.professionalId)
+  const parsedProfessionalId = uuidSchema.safeParse(input.professionalId)
   if (!parsedProfessionalId.success) {
     return { success: false, error: "Invalid professional id" }
   }
@@ -159,7 +160,7 @@ export async function updateCompanyFeaturedAction(input: {
   companyId: string
   isFeatured: boolean
 }) {
-  const parsedCompanyId = inviteIdSchema.safeParse(input.companyId)
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
   if (!parsedCompanyId.success) {
     return { success: false, error: "Invalid company id" }
   }
@@ -206,7 +207,7 @@ export async function updateCompanyDetailsAction(input: {
   contactEmail: string | null
   services: string[]
 }) {
-  const parsedCompanyId = inviteIdSchema.safeParse(input.companyId)
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
   if (!parsedCompanyId.success) {
     return { success: false, error: "Invalid company id" }
   }

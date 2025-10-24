@@ -76,7 +76,7 @@ async function loadAdminProfessionalsData() {
         "id, name, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered"
       ),
     supabase
-      .from("admin_company_professional_metrics")
+      .from("company_metrics")
       .select("company_id, professional_count, projects_linked, average_rating, total_reviews"),
     supabase
       .from("project_professionals")
@@ -99,7 +99,7 @@ async function loadAdminProfessionalsData() {
   if (metricsQuery.error) {
     logger.error(
       "Failed to load company metrics",
-      { view: "admin_company_professional_metrics" },
+      { view: "company_metrics" },
       metricsQuery.error
     )
     throw new Error("Failed to load company metrics")
