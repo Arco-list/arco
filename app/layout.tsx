@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Poppins } from "next/font/google"
+import Script from "next/script"
 import "./globals.css"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { RootProviders } from "@/components/root-providers"
@@ -55,6 +56,20 @@ export default async function RootLayout({
     <html lang="en" className={poppins.variable}>
       <body className={poppins.className}>
         <RootProviders initialSession={session}>{children}</RootProviders>
+        <Script
+          id="marker-io"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.markerConfig = {
+                project: '68fbacbc9e451201c9b6cb10',
+                source: 'snippet'
+              };
+
+              !function(e,r,a){if(!e.__Marker){e.__Marker={};var t=[],n={__cs:t};["show","hide","isVisible","capture","cancelCapture","unload","reload","isExtensionInstalled","setReporter","clearReporter","setCustomData","on","off"].forEach(function(e){n[e]=function(){var r=Array.prototype.slice.call(arguments);r.unshift(e),t.push(r)}}),e.Marker=n;var s=r.createElement("script");s.async=1,s.src="https://edge.marker.io/latest/shim.js";var i=r.getElementsByTagName("script")[0];i.parentNode.insertBefore(s,i)}}(window,document);
+            `,
+          }}
+        />
       </body>
     </html>
   )
