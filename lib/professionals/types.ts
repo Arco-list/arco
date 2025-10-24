@@ -2,6 +2,7 @@ export type ProfessionalCard = {
   id: string
   slug: string
   companyId: string
+  professionalId: string
   name: string
   profession: string
   location: string

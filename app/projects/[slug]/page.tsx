@@ -559,6 +559,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const projectProfessionals = invites.map((invite) => ({
     id: invite.id,
+    companyId: invite.company_id ?? invite.companies?.id,
     professionalId: invite.professional_id,
     serviceCategory: categoryMap.get(invite.invited_service_category_id)?.name ?? "Service",
     serviceCategoryId: invite.invited_service_category_id,

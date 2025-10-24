@@ -76,9 +76,10 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
   const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
 
   return {
-    id: row.id,
-    slug: row.id,
+    id: row.company_id,
+    slug: row.company_id,
     companyId: row.company_id,
+    professionalId: row.id,
     name,
     profession,
     location,
