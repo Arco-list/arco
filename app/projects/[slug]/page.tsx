@@ -380,18 +380,6 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const projectCategories: ProjectCategoryRow[] = projectCategoriesResult.data ?? []
   userHasLiked = Boolean(userLikeResult.data)
 
-  // Debug logging
-  console.log('Project professionals debug:', {
-    invitesCount: invites.length,
-    invites: invites.map(inv => ({
-      id: inv.id,
-      company_id: inv.company_id,
-      professional_id: inv.professional_id,
-      hasCompaniesJoin: !!inv.companies,
-      companyName: inv.companies?.name
-    }))
-  })
-
   const categoryIds = new Set<string>()
   const taxonomyIds = new Set<string>()
   const budgetLevels = new Set<string>()
