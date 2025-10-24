@@ -50,7 +50,7 @@ export function ProfessionalsSection() {
         ref={sectionRef}
         className="space-y-6"
       >
-        <h4 className="text-h4">Professionals who built it</h4>
+        <h4>Professionals who built it</h4>
 
         {summaryCards.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
@@ -67,8 +67,8 @@ export function ProfessionalsSection() {
                     <div className="w-full h-32 rounded-lg bg-gray-100"></div>
                   )}
                   <div className="space-y-1 flex-1">
-                    <h6 className="text-h6 text-gray-900">{professional.companyName}</h6>
-                    <p className="text-body-small text-gray-600">{professional.serviceCategory}</p>
+                    <h6 className="text-gray-900">{professional.companyName}</h6>
+                    <p className="text-xs leading-relaxed text-gray-600">{professional.serviceCategory}</p>
                   </div>
                   <Button 
                     variant="tertiary" 

@@ -30,7 +30,7 @@ export function ProfessionalsSidebar() {
                   <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
                 </div>
                 <Button 
-                  variant="default" 
+                  variant="tertiary" 
                   size="sm"
                   onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
                 >
@@ -62,7 +62,7 @@ export function ProfessionalsSidebar() {
                   <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
                 </div>
                 <Button 
-                  variant="default" 
+                  variant="tertiary" 
                   size="sm"
                   onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
                 >

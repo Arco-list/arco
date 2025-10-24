@@ -445,11 +445,17 @@ export default function NewProjectPage() {
           const { client_id: _clientId, ...rest } = projectPayload
           const projectUpdatePayload: TablesUpdate<"projects"> = rest
 
-          const { error } = await supabase
+          const updateQuery = supabase
             .from("projects")
             .update(projectUpdatePayload)
             .eq("id", nextProjectId)
-            .eq("client_id", userId)
+
+          // Only filter by client_id if not admin
+          if (!isAdmin) {
+            updateQuery.eq("client_id", userId)
+          }
+
+          const { error } = await updateQuery
           if (error) {
             throw error
           }

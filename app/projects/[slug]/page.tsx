@@ -522,7 +522,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const buildingTypeId = project.building_type ?? null
 
-  const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
+  const locationLabel = project.address_city ?? ""
   const locationSummaryRaw = locationLabel || project.location || project.address_formatted || null
   const locationSummary = locationSummaryRaw ? locationSummaryRaw.trim() : null
   const canViewExactLocation = (project.share_exact_location ?? false) || isOwner || isAdmin
@@ -1004,7 +1004,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
           <Header maxWidth="max-w-7xl" />
 
-          <main className="px-4 py-8 md:px-8">
+          <main className="px-4 py-8 md:px-8 pt-24 md:pt-8">
             <div className="max-w-7xl mx-auto">
             <div className="mb-6">
               <Link 
