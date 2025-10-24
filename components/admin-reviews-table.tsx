@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 import type { Database } from "@/lib/supabase/types"
-import { approveReviewAction, rejectReviewAction } from "@/app/admin/reviews/actions"
+import { approveReviewAction, rejectReviewAction, revertToPendingAction } from "@/app/admin/reviews/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,7 +23,7 @@ type ReviewStatus = Database["public"]["Enums"]["review_moderation_status"]
 
 export type AdminReviewRow = {
   id: string
-  professionalId: string
+  companyId: string
   professionalName: string
   reviewerName: string
   submittedAt: string | null
@@ -83,7 +83,6 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
   const [rejectDialog, setRejectDialog] = useState<{ reviewId: string; note: string } | null>(null)
 
   const isModerating = useMemo(() => Boolean(pendingReviewId) || isPending, [pendingReviewId, isPending])
-  const isPendingStatus = status === "pending"
 
   const handleApprove = (reviewId: string) => {
     setPendingReviewId(reviewId)
@@ -134,6 +133,27 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
     })
   }
 
+  const handleRevertToPending = (reviewId: string) => {
+    setPendingReviewId(reviewId)
+    startTransition(async () => {
+      const result = await revertToPendingAction({ reviewId })
+
+      if (!result.success) {
+        toast.error("Unable to revert review", {
+          description: result.error ?? "Please try again in a moment.",
+        })
+        setPendingReviewId(null)
+        return
+      }
+
+      toast.success("Review reverted to pending", {
+        description: "The review status has been changed to pending for re-review.",
+      })
+      setPendingReviewId(null)
+      router.refresh()
+    })
+  }
+
   if (reviews.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/40 px-8 py-16 text-center">
@@ -171,7 +191,7 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium text-foreground">{review.professionalName}</span>
-                      <span className="text-xs text-muted-foreground">{review.professionalId}</span>
+                      <span className="text-xs text-muted-foreground">{review.companyId}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -214,28 +234,66 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    {isPendingStatus ? (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleApprove(review.id)}
-                          disabled={isModerating}
-                        >
-                          {isRowPending && isModerating ? "Approving..." : "Approve"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => setRejectDialog({ reviewId: review.id, note: "" })}
-                          disabled={isModerating}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
+                    <div className="flex justify-end gap-2">
+                      {status === "pending" ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleApprove(review.id)}
+                            disabled={isModerating}
+                          >
+                            {isRowPending && isModerating ? "Processing..." : "Approve"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setRejectDialog({ reviewId: review.id, note: "" })}
+                            disabled={isModerating}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      ) : status === "approved" ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRevertToPending(review.id)}
+                            disabled={isModerating}
+                          >
+                            {isRowPending && isModerating ? "Processing..." : "Pending"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setRejectDialog({ reviewId: review.id, note: "" })}
+                            disabled={isModerating}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      ) : status === "rejected" ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleApprove(review.id)}
+                            disabled={isModerating}
+                          >
+                            {isRowPending && isModerating ? "Processing..." : "Approve"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRevertToPending(review.id)}
+                            disabled={isModerating}
+                          >
+                            {isRowPending && isModerating ? "Processing..." : "Pending"}
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               )

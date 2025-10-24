@@ -49,6 +49,7 @@ async function assertAdmin() {
 }
 
 const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated"])
+const companyPlanTierSchema = z.enum(["basic", "plus"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
   const idResult = uuidSchema.safeParse(inviteId)
@@ -104,6 +105,39 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
 
   if (updateError) {
     logger.error("admin-professionals", "Failed to update company status", {
+      companyId: parsedCompanyId.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
+export async function updateCompanyPlanTierAction(input: { companyId: string; planTier: z.infer<typeof companyPlanTierSchema> }) {
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
+  if (!parsedCompanyId.success) {
+    return { success: false, error: "Invalid company id" }
+  }
+
+  const parsedPlanTier = companyPlanTierSchema.safeParse(input.planTier)
+  if (!parsedPlanTier.success) {
+    return { success: false, error: "Invalid plan tier" }
+  }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update({ plan_tier: parsedPlanTier.data })
+    .eq("id", parsedCompanyId.data)
+
+  if (updateError) {
+    logger.error("admin-professionals", "Failed to update company plan tier", {
       companyId: parsedCompanyId.data,
       error: updateError.message,
     })

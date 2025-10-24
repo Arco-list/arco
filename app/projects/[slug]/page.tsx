@@ -339,16 +339,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       supabase
         .from("project_professionals")
         .select(`
-          id, 
-          invited_email, 
-          invited_service_category_id, 
-          status, 
+          id,
+          invited_email,
+          invited_service_category_id,
+          status,
           professional_id,
           company_id,
           professionals(id, title),
-          companies(id, name, logo_url)
+          companies!inner(id, name, logo_url)
         `)
         .eq("project_id", project.id)
+        .eq("companies.status", "listed")
         .neq("status", "rejected")
         .not("professional_id", "is", null),
       likeQuery,
@@ -378,6 +379,18 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const invites: ProjectProfessionalRow[] = invitesResult.data ?? []
   const projectCategories: ProjectCategoryRow[] = projectCategoriesResult.data ?? []
   userHasLiked = Boolean(userLikeResult.data)
+
+  // Debug logging
+  console.log('Project professionals debug:', {
+    invitesCount: invites.length,
+    invites: invites.map(inv => ({
+      id: inv.id,
+      company_id: inv.company_id,
+      professional_id: inv.professional_id,
+      hasCompaniesJoin: !!inv.companies,
+      companyName: inv.companies?.name
+    }))
+  })
 
   const categoryIds = new Set<string>()
   const taxonomyIds = new Set<string>()

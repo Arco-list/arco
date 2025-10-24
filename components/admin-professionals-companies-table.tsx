@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import {
   updateCompanyDetailsAction,
   updateCompanyStatusAction,
+  updateCompanyPlanTierAction,
   updateCompanyFeaturedAction,
   updateProfessionalFeaturedAction,
 } from "@/app/admin/professionals/actions"
@@ -102,6 +103,8 @@ type EditFormState = {
   email: string
   services: string[]
   isFeatured: boolean
+  status: CompanyStatus
+  planTier: PlanTier
   professionals: CompanyProfessional[]
 }
 
@@ -196,6 +199,8 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           email: editingCompany.contactEmail ?? "",
           services: editingCompany.servicesOffered ?? [],
           isFeatured: editingCompany.isFeatured,
+          status: editingCompany.status,
+          planTier: editingCompany.planTier,
           professionals: professionals ?? [],
         })
       }
@@ -300,7 +305,8 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
 
     startTransition(async () => {
       try {
-        const result = await updateCompanyDetailsAction({
+        // Update company details
+        const detailsResult = await updateCompanyDetailsAction({
           companyId: editingCompany.id,
           name: editForm.name.trim(),
           logoUrl: editForm.logoUrl.trim() || null,
@@ -309,9 +315,35 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           services: editForm.services,
         })
 
-        if (!result.success) {
-          toast.error(result.error ?? "Failed to update company")
+        if (!detailsResult.success) {
+          toast.error(detailsResult.error ?? "Failed to update company")
           return
+        }
+
+        // Update status if changed
+        if (editForm.status !== editingCompany.status) {
+          const statusResult = await updateCompanyStatusAction({
+            companyId: editingCompany.id,
+            status: editForm.status,
+          })
+
+          if (!statusResult.success) {
+            toast.error(statusResult.error ?? "Failed to update company status")
+            return
+          }
+        }
+
+        // Update plan tier if changed
+        if (editForm.planTier !== editingCompany.planTier) {
+          const planTierResult = await updateCompanyPlanTierAction({
+            companyId: editingCompany.id,
+            planTier: editForm.planTier,
+          })
+
+          if (!planTierResult.success) {
+            toast.error(planTierResult.error ?? "Failed to update plan tier")
+            return
+          }
         }
 
         toast.success(`${editingCompany.name} updated`)
@@ -584,6 +616,66 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                 checked={editForm?.isFeatured ?? false}
                 onCheckedChange={(checked) => toggleCompanyFeatured(checked === true)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-status">Company status</Label>
+              <Select
+                value={editForm?.status ?? "unlisted"}
+                onValueChange={(value) =>
+                  setEditForm((prev) => prev ? { ...prev, status: value as CompanyStatus } : prev)
+                }
+              >
+                <SelectTrigger id="company-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unlisted">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Unlisted</span>
+                      <span className="text-xs text-muted-foreground">Hidden from public directories</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="listed">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Listed</span>
+                      <span className="text-xs text-muted-foreground">Public and visible to homeowners</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="deactivated">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Deactivated</span>
+                      <span className="text-xs text-muted-foreground">Suspended and hidden</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-plan">Plan tier</Label>
+              <Select
+                value={editForm?.planTier ?? "basic"}
+                onValueChange={(value) =>
+                  setEditForm((prev) => prev ? { ...prev, planTier: value as PlanTier } : prev)
+                }
+              >
+                <SelectTrigger id="company-plan">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="basic">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Basic</span>
+                      <span className="text-xs text-muted-foreground">Standard features, not in directory</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="plus">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Plus</span>
+                      <span className="text-xs text-muted-foreground">Listed in professionals directory</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="company-name">Company name</Label>

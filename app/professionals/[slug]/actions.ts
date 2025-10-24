@@ -10,7 +10,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 const ratingSchema = z.number().int().min(1, "Select a rating").max(5, "Rating must be 5 or less")
 
 const reviewSchema = z.object({
-  professionalId: z.string().uuid("We couldn't identify that professional."),
+  companyId: z.string().uuid("We couldn't identify that company."),
   overallRating: ratingSchema,
   qualityRating: ratingSchema.nullable().optional(),
   reliabilityRating: ratingSchema.nullable().optional(),
@@ -92,7 +92,7 @@ export async function createReviewAction(rawInput: CreateReviewInput): Promise<R
   if (!rateLimit.success) {
     logger.warn("Rate limit triggered while creating review", {
       reviewerId: user.id,
-      professionalId: input.professionalId,
+      companyId: input.companyId,
       remaining: rateLimit.remaining,
       reset: rateLimit.reset,
     })
@@ -105,7 +105,7 @@ export async function createReviewAction(rawInput: CreateReviewInput): Promise<R
 
   const sanitizedComment = input.comment?.trim()
   const insertPayload = {
-    professional_id: input.professionalId,
+    company_id: input.companyId,
     reviewer_id: user.id,
     overall_rating: input.overallRating,
     quality_rating: input.qualityRating ?? null,
@@ -128,7 +128,7 @@ export async function createReviewAction(rawInput: CreateReviewInput): Promise<R
       "reviews",
       "Failed to create review",
       {
-        professionalId: input.professionalId,
+        companyId: input.companyId,
         reviewerId: user.id,
       },
       insertError,
@@ -137,7 +137,7 @@ export async function createReviewAction(rawInput: CreateReviewInput): Promise<R
     if (isAccessDenied(insertError.code, insertError.message)) {
       return {
         success: false,
-        error: "You can only review professionals you've worked with.",
+        error: "You can only review companies you've worked with.",
         code: insertError.code ?? undefined,
       }
     }
@@ -156,7 +156,7 @@ export async function createReviewAction(rawInput: CreateReviewInput): Promise<R
     }
   }
 
-  revalidatePath(`/professionals/${input.professionalId}`)
+  revalidatePath(`/professionals`)
   revalidatePath("/admin/reviews")
 
   return {

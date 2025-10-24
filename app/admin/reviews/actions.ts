@@ -62,10 +62,10 @@ const ensureAdmin = async (): Promise<{ supabase: SupabaseServerClient; user: Su
   return { supabase, user, isAdmin }
 }
 
-const revalidateReviewPaths = (professionalId?: string | null) => {
+const revalidateReviewPaths = (companySlug?: string | null) => {
   revalidatePath("/admin/reviews")
-  if (professionalId && UUID_REGEX.test(professionalId)) {
-    revalidatePath(`/professionals/${professionalId}`)
+  if (companySlug && companySlug.trim().length > 0) {
+    revalidatePath(`/professionals/${companySlug}`)
   }
 }
 
@@ -113,7 +113,7 @@ export const approveReviewAction = async (rawInput: z.infer<typeof reviewIdSchem
       is_verified: true,
     })
     .eq("id", parseResult.data.reviewId)
-    .select("id, professional_id")
+    .select("id, company_id, company:companies(slug)")
     .maybeSingle()
 
   if (error) {
@@ -127,7 +127,8 @@ export const approveReviewAction = async (rawInput: z.infer<typeof reviewIdSchem
     return { success: false, error: "Unable to approve review. Please try again." }
   }
 
-  revalidateReviewPaths(data?.professional_id)
+  const companySlug = (data?.company as any)?.slug ?? null
+  revalidateReviewPaths(companySlug)
 
   return { success: true }
 }
@@ -178,7 +179,7 @@ export const rejectReviewAction = async (rawInput: z.infer<typeof rejectSchema>)
       is_verified: false,
     })
     .eq("id", parseResult.data.reviewId)
-    .select("id, professional_id")
+    .select("id, company_id, company:companies(slug)")
     .maybeSingle()
 
   if (error) {
@@ -192,7 +193,72 @@ export const rejectReviewAction = async (rawInput: z.infer<typeof rejectSchema>)
     return { success: false, error: "Unable to reject review. Please try again." }
   }
 
-  revalidateReviewPaths(data?.professional_id)
+  const companySlug = (data?.company as any)?.slug ?? null
+  revalidateReviewPaths(companySlug)
+
+  return { success: true }
+}
+
+export const revertToPendingAction = async (rawInput: z.infer<typeof reviewIdSchema>): Promise<ActionResult> => {
+  const parseResult = reviewIdSchema.safeParse(rawInput)
+
+  if (!parseResult.success) {
+    return { success: false, error: parseResult.error.issues[0]?.message ?? "Invalid input." }
+  }
+
+  const { supabase, user, isAdmin } = await ensureAdmin()
+
+  if (!user) {
+    return { success: false, error: "You must be signed in to moderate reviews." }
+  }
+
+  if (!isAdmin) {
+    return { success: false, error: "You do not have permission to revert reviews." }
+  }
+
+  const rateLimit = await checkRateLimit(`review:moderate:${user.id}`, {
+    limit: 5,
+    window: 60,
+    prefix: "@arco/reviews/moderation",
+  })
+
+  if (!rateLimit.success) {
+    logger.warn("Rate limit triggered while reverting review to pending", {
+      moderatorId: user.id,
+      reviewId: parseResult.data.reviewId,
+      remaining: rateLimit.remaining,
+      reset: rateLimit.reset,
+    })
+    return { success: false, error: "You are moderating reviews too quickly. Please wait and try again." }
+  }
+
+  const { data, error } = await supabase
+    .from("reviews")
+    .update({
+      moderation_status: "pending",
+      moderated_at: null,
+      moderated_by: null,
+      moderation_notes: null,
+      is_published: false,
+      is_verified: false,
+    })
+    .eq("id", parseResult.data.reviewId)
+    .select("id, company_id, company:companies(slug)")
+    .maybeSingle()
+
+  if (error) {
+    logger.db(
+      "update",
+      "reviews",
+      "Failed to revert review to pending",
+      { reviewId: parseResult.data.reviewId, moderatorId: user.id },
+      error,
+    )
+    return { success: false, error: "Unable to revert review. Please try again." }
+  }
+
+  const companySlug = (data?.company as any)?.slug ?? null
+  revalidateReviewPaths(companySlug)
 
   return { success: true }
 }

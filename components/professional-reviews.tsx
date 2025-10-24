@@ -11,11 +11,12 @@ import { useRequireAuth } from "@/hooks/use-require-auth"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const PLACEHOLDER_AVATAR = "/placeholder.svg?height=40&width=40"
 
 type ProfessionalReviewsProps = {
-  professionalId: string
+  companyId: string
   professionalName: string
   ratings: ProfessionalRatingsBreakdown
   reviews: ProfessionalReviewSummary[]
@@ -52,7 +53,7 @@ const getRatingLabel = (rating: number) => {
   return labels[rating] || ""
 }
 
-export function ProfessionalReviews({ professionalId, professionalName, ratings, reviews, id }: ProfessionalReviewsProps) {
+export function ProfessionalReviews({ companyId, professionalName, ratings, reviews, id }: ProfessionalReviewsProps) {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
   const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set())
   const [reviewText, setReviewText] = useState("")
@@ -62,6 +63,7 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
   const [communicationRating, setCommunicationRating] = useState(0)
   const [workCarriedOut, setWorkCarriedOut] = useState<boolean | null>(null)
   const [isSubmitting, startTransition] = useTransition()
+  const [sortBy, setSortBy] = useState<"recent" | "highest" | "lowest">("recent")
 
   const router = useRouter()
   const pathname = usePathname()
@@ -86,6 +88,20 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
 
     return `${formatRating(ratings.overall)} · ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
   }, [ratings.overall, ratings.total])
+
+  const sortedReviews = useMemo(() => {
+    const sorted = [...reviews]
+    switch (sortBy) {
+      case "highest":
+        return sorted.sort((a, b) => b.rating - a.rating)
+      case "lowest":
+        return sorted.sort((a, b) => a.rating - b.rating)
+      case "recent":
+      default:
+        // Already sorted by date from the query
+        return sorted
+    }
+  }, [reviews, sortBy])
 
   useEffect(() => {
     const intent = searchParams?.get("intent")
@@ -136,7 +152,7 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
     }
 
     const payload = {
-      professionalId,
+      companyId,
       overallRating,
       qualityRating: qualityRating > 0 ? qualityRating : null,
       reliabilityRating: reliabilityRating > 0 ? reliabilityRating : null,
@@ -179,9 +195,23 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
             <Star className="h-5 w-5 fill-black text-black" />
             <span className="text-xl font-semibold">{ratingHeadline}</span>
           </div>
-          <Button variant="outline" onClick={handleOpenReviewModal} className="px-6 py-2">
-            Write a review
-          </Button>
+          <div className="flex items-center gap-3">
+            {reviews.length > 0 && (
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Most recent</SelectItem>
+                  <SelectItem value="highest">Highest rated</SelectItem>
+                  <SelectItem value="lowest">Lowest rated</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <Button variant="outline" onClick={handleOpenReviewModal} className="px-6 py-2">
+              Write a review
+            </Button>
+          </div>
         </div>
 
         <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-3">
@@ -189,32 +219,38 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
             <div className="mb-2 flex justify-center">
               <Award className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="mb-1 text-sm font-medium text-gray-900">Quality of work</h3>
+            <h3 className="mb-1 text-sm font-medium text-gray-900">
+              Quality of work {ratings.total > 0 && `(${ratings.total} ${ratings.total === 1 ? 'review' : 'reviews'})`}
+            </h3>
             <p className="text-2xl font-semibold">{formatRating(ratings.quality)}</p>
           </div>
           <div className="text-center">
             <div className="mb-2 flex justify-center">
               <Shield className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="mb-1 text-sm font-medium text-gray-900">Reliability</h3>
+            <h3 className="mb-1 text-sm font-medium text-gray-900">
+              Reliability {ratings.total > 0 && `(${ratings.total} ${ratings.total === 1 ? 'review' : 'reviews'})`}
+            </h3>
             <p className="text-2xl font-semibold">{formatRating(ratings.reliability)}</p>
           </div>
           <div className="text-center">
             <div className="mb-2 flex justify-center">
               <MessageCircle className="h-8 w-8 text-gray-600" />
             </div>
-            <h3 className="mb-1 text-sm font-medium text-gray-900">Communication</h3>
+            <h3 className="mb-1 text-sm font-medium text-gray-900">
+              Communication {ratings.total > 0 && `(${ratings.total} ${ratings.total === 1 ? 'review' : 'reviews'})`}
+            </h3>
             <p className="text-2xl font-semibold">{formatRating(ratings.communication)}</p>
           </div>
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-2">
-          {reviews.length === 0 ? (
+          {sortedReviews.length === 0 ? (
             <div className="col-span-full rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
               Reviews will appear here once homeowners share feedback.
             </div>
           ) : (
-            reviews.map((review) => (
+            sortedReviews.map((review) => (
               <div key={review.id} className="space-y-3">
                 <div className="flex items-center gap-3">
                   <img
@@ -268,7 +304,7 @@ export function ProfessionalReviews({ professionalId, professionalName, ratings,
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="bg-transparent px-6 py-2" disabled={reviews.length === 0}>
+          <Button variant="outline" className="bg-transparent px-6 py-2" disabled={sortedReviews.length === 0}>
             Show all reviews
           </Button>
           <button className="text-sm text-gray-500 underline hover:no-underline">Learn how reviews work</button>

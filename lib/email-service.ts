@@ -173,9 +173,15 @@ export async function checkUserAndGenerateInviteUrl(
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   
   // Look up user by email in auth.users (requires service role)
-  const { data: authUser, error: authError } = await supabase.auth.admin.getUserByEmail(email)
-  
-  if (authError || !authUser?.user) {
+  // Note: getUserByEmail() doesn't exist - we need to use listUsers() and filter
+  const { data: authData, error: authError } = await supabase.auth.admin.listUsers()
+    .then(({ data, error }) => {
+      if (error) return { data: null, error }
+      const user = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase())
+      return { data: user ? { user } : null, error: null }
+    })
+
+  if (authError || !authData?.user) {
     // New user - send to signup with redirect to create company
     const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
     return {
@@ -183,7 +189,7 @@ export async function checkUserAndGenerateInviteUrl(
       isExistingProfessional: false
     }
   }
-  
+
   // Get user's profile and professional status
   const { data: profile } = await supabase
     .from('profiles')
@@ -192,7 +198,7 @@ export async function checkUserAndGenerateInviteUrl(
       user_types,
       professionals(id, company_id)
     `)
-    .eq('id', authUser.user.id)
+    .eq('id', authData.user.id)
     .maybeSingle()
     
   if (profile) {
