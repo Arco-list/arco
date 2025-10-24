@@ -617,13 +617,15 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
         location,
         created_at
       ),
-      rating:professional_ratings (
-        overall_rating,
-        total_reviews,
-        quality_rating,
-        reliability_rating,
-        communication_rating,
-        last_review_at
+      companies!professionals_company_id_fkey (
+        company_ratings!company_ratings_company_id_fkey (
+          overall_rating,
+          total_reviews,
+          quality_rating,
+          reliability_rating,
+          communication_rating,
+          last_review_at
+        )
       ),
       specialties:professional_specialties (
         is_primary,
@@ -672,7 +674,7 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     supabase
       .from("reviews")
       .select("id, created_at, overall_rating, title, comment, work_completed, reviewer_id")
-      .eq("professional_id", professionalId)
+      .eq("company_id", companyId)
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -895,28 +897,29 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
   const companyLanguages = toNonEmptyStrings(company.languages)
   const languages = mergeUniqueStrings(company.languages, detailRow.languages_spoken)
 
+  const companyRating = detailRow.companies?.company_ratings
   const ratings: ProfessionalRatingsBreakdown = {
     overall:
-      typeof detailRow.rating?.overall_rating === "number" && !Number.isNaN(detailRow.rating.overall_rating)
-        ? detailRow.rating.overall_rating
+      typeof companyRating?.overall_rating === "number" && !Number.isNaN(companyRating.overall_rating)
+        ? companyRating.overall_rating
         : 0,
     total:
-      typeof detailRow.rating?.total_reviews === "number" && !Number.isNaN(detailRow.rating.total_reviews)
-        ? detailRow.rating.total_reviews
+      typeof companyRating?.total_reviews === "number" && !Number.isNaN(companyRating.total_reviews)
+        ? companyRating.total_reviews
         : 0,
     quality:
-      typeof detailRow.rating?.quality_rating === "number" && !Number.isNaN(detailRow.rating.quality_rating)
-        ? detailRow.rating.quality_rating
+      typeof companyRating?.quality_rating === "number" && !Number.isNaN(companyRating.quality_rating)
+        ? companyRating.quality_rating
         : 0,
     reliability:
-      typeof detailRow.rating?.reliability_rating === "number" && !Number.isNaN(detailRow.rating.reliability_rating)
-        ? detailRow.rating.reliability_rating
+      typeof companyRating?.reliability_rating === "number" && !Number.isNaN(companyRating.reliability_rating)
+        ? companyRating.reliability_rating
         : 0,
     communication:
-      typeof detailRow.rating?.communication_rating === "number" && !Number.isNaN(detailRow.rating.communication_rating)
-        ? detailRow.rating.communication_rating
+      typeof companyRating?.communication_rating === "number" && !Number.isNaN(companyRating.communication_rating)
+        ? companyRating.communication_rating
         : 0,
-    lastReviewAt: detailRow.rating?.last_review_at ?? null,
+    lastReviewAt: companyRating?.last_review_at ?? null,
   }
 
   return {

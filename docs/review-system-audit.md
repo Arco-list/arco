@@ -9,6 +9,15 @@
 
 The review system has the core infrastructure in place (database, moderation workflow, submission form), but is **missing critical user-facing features** including review sorting, pagination, and filter functionality. The system is approximately **70% complete**.
 
+### Architecture Note: Company-Based Reviews
+
+**IMPORTANT:** Reviews in this system are connected to **companies**, not individual professionals.
+
+- Professional detail pages display company data (a company can have multiple professionals)
+- Reviews are stored with `company_id` (NOT `professional_id`)
+- The `professional_ratings` aggregation table tracks ratings per company
+- When a user reviews on a professional page at `/professionals/[slug]`, they are reviewing the company behind that professional
+
 ---
 
 ## Current Implementation Status

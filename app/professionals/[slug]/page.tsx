@@ -19,8 +19,9 @@ type PageParams = {
 
 export const revalidate = 300
 
-export async function generateMetadata({ params }: { params: PageParams }): Promise<Metadata> {
-  const professional = await fetchProfessionalMetadata(params.slug)
+export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
+  const { slug } = await params
+  const professional = await fetchProfessionalMetadata(slug)
 
   if (!professional) {
     return {
@@ -45,8 +46,9 @@ export async function generateMetadata({ params }: { params: PageParams }): Prom
   }
 }
 
-export default async function ProfessionalDetailPage({ params }: { params: PageParams }) {
-  const professional = await fetchProfessionalDetail(params.slug)
+export default async function ProfessionalDetailPage({ params }: { params: Promise<PageParams> }) {
+  const { slug } = await params
+  const professional = await fetchProfessionalDetail(slug)
 
   if (!professional) {
     notFound()
@@ -61,7 +63,7 @@ export default async function ProfessionalDetailPage({ params }: { params: PageP
     <div className="min-h-screen bg-white">
       <Header />
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 xl:px-12">
+      <main className="mx-auto max-w-7xl px-4 py-8 pt-24 sm:px-6 lg:px-8 xl:px-12">
         <div className="mb-8">
           <ProfessionalGallery professionalName={professional.name} images={galleryImages} />
         </div>
@@ -85,7 +87,7 @@ export default async function ProfessionalDetailPage({ params }: { params: PageP
 
       <ProfessionalReviews
         id={REVIEWS_ANCHOR_ID}
-        professionalId={professional.id}
+        companyId={professional.id}
         professionalName={professional.name}
         ratings={professional.ratings}
         reviews={reviews}

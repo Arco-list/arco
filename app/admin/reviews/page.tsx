@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic"
 
 type ReviewRecord = {
   id: string
-  professional_id: string
+  company_id: string
   overall_rating: number
   quality_rating: number | null
   reliability_rating: number | null
@@ -44,12 +44,9 @@ type ReviewRecord = {
     last_name: string | null
     avatar_url: string | null
   } | null
-  professional: {
+  company: {
     id: string
-    title: string | null
-    company: {
-      name: string | null
-    } | null
+    name: string | null
   } | null
   moderator: {
     first_name: string | null
@@ -90,7 +87,7 @@ const loadReviews = async (status: Database["public"]["Enums"]["review_moderatio
       .select(
         `
           id,
-          professional_id,
+          company_id,
           overall_rating,
           quality_rating,
           reliability_rating,
@@ -106,12 +103,9 @@ const loadReviews = async (status: Database["public"]["Enums"]["review_moderatio
             last_name,
             avatar_url
           ),
-          professional:professionals (
+          company:companies (
             id,
-            title,
-            company:companies (
-              name
-            )
+            name
           ),
           moderator:profiles!reviews_moderated_by_fkey (
             first_name,
@@ -133,9 +127,8 @@ const loadReviews = async (status: Database["public"]["Enums"]["review_moderatio
   const rows = Array.isArray(reviewsResult.data) ? (reviewsResult.data as ReviewRecord[]) : []
 
   const reviews: AdminReviewRow[] = rows.map((row) => {
-    const companyName = row.professional?.company?.name?.trim()
-    const professionalTitle = row.professional?.title?.trim()
-    const professionalName = companyName && companyName.length > 0 ? companyName : professionalTitle ?? "Professional"
+    const companyName = row.company?.name?.trim()
+    const professionalName = companyName && companyName.length > 0 ? companyName : "Professional"
 
     const reviewerName = toDisplayName(row.reviewer?.first_name ?? null, row.reviewer?.last_name ?? null, "Verified homeowner")
     const moderatorName =
@@ -145,7 +138,7 @@ const loadReviews = async (status: Database["public"]["Enums"]["review_moderatio
 
     return {
       id: row.id,
-      professionalId: row.professional_id,
+      companyId: row.company_id,
       professionalName,
       reviewerName,
       submittedAt: row.created_at,
@@ -176,11 +169,12 @@ const resolveStatus = (raw?: string): Database["public"]["Enums"]["review_modera
 }
 
 type AdminReviewsPageProps = {
-  searchParams?: ReviewsPageSearchParams
+  searchParams?: Promise<ReviewsPageSearchParams>
 }
 
 export default async function AdminReviewsPage({ searchParams }: AdminReviewsPageProps) {
-  const status = resolveStatus(searchParams?.status)
+  const params = await searchParams
+  const status = resolveStatus(params?.status)
   const { reviews, counts } = await loadReviews(status)
 
   return (

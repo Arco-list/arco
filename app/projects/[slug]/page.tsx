@@ -339,16 +339,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       supabase
         .from("project_professionals")
         .select(`
-          id, 
-          invited_email, 
-          invited_service_category_id, 
-          status, 
+          id,
+          invited_email,
+          invited_service_category_id,
+          status,
           professional_id,
           company_id,
           professionals(id, title),
-          companies(id, name, logo_url)
+          companies!inner(id, name, logo_url)
         `)
         .eq("project_id", project.id)
+        .eq("companies.status", "listed")
         .neq("status", "rejected")
         .not("professional_id", "is", null),
       likeQuery,
