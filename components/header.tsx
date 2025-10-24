@@ -186,8 +186,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   size="sm"
                   className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium ${
                     transparent && !isScrolled
-                      ? "border-white text-white hover:bg-white/10 hover:text-white"
-                      : "border-black text-black hover:bg-gray-100"
+                      ? "border-white/20 text-white hover:bg-white/10 hover:text-white"
+                      : "border-gray-300 text-black hover:bg-gray-100"
                   }`}
                   aria-label="Open menu"
                   onClick={toggleMenu}
@@ -202,8 +202,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 size="sm"
                 className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium ${
                   transparent && !isScrolled
-                    ? "border-white text-white hover:bg-white/10 hover:text-white"
-                    : "border-black text-black hover:bg-gray-100"
+                    ? "border-white/20 text-white hover:bg-white/10 hover:text-white"
+                    : "border-gray-300 text-black hover:bg-gray-100"
                 }`}
                 aria-label="Open menu"
                 onClick={toggleMenu}

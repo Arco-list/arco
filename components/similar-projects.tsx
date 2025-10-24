@@ -80,13 +80,21 @@ export function SimilarProjects() {
     <div className="space-y-6" data-section="similar-projects">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-black">Similar projects</h2>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={scrollLeft} className="p-2 hover:bg-gray-100 rounded-full">
-            <ChevronLeft className="h-5 w-5 text-gray-600" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={scrollRight} className="p-2 hover:bg-gray-100 rounded-full">
-            <ChevronRight className="h-5 w-5 text-gray-600" />
-          </Button>
+        <div className="flex gap-2">
+          <button
+            onClick={scrollLeft}
+            className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            aria-label="Previous projects"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={scrollRight}
+            className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            aria-label="Next projects"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

@@ -552,7 +552,7 @@ export function ProfessionalsFilterBar() {
               </Button>
             </div>
 
-            <div className="hidden md:block flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden">
               <div
                 ref={desktopCarouselRef}
                 className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth"
@@ -580,14 +580,17 @@ export function ProfessionalsFilterBar() {
               </div>
             </div>
 
-            <Button
-              variant="quaternary"
-              className={`hidden md:flex h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
-              onClick={() => scrollCarousel("right")}
-              disabled={!canScrollRight}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            {/* Right scroll button - Only visible on desktop */}
+            <div className="hidden md:block">
+              <Button
+                variant="quaternary"
+                className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
+                onClick={() => scrollCarousel("right")}
+                disabled={!canScrollRight}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
 
             {activeFilterCount > 0 && (
               <Button
@@ -598,31 +601,6 @@ export function ProfessionalsFilterBar() {
                 Clear all
               </Button>
             )}
-          </div>
-
-          {/* Mobile carousel without chevron buttons */}
-          <div className="md:hidden mt-3">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-1">
-              {quickServiceItems.map((item) => {
-                const Icon = getServiceIcon(item.slug, item.name)
-                const isSelected = selectedServices.includes(item.id)
-                return (
-                  <Button
-                    key={item.id}
-                    onClick={() => toggleServiceSelection(item.id)}
-                    variant="quaternary"
-                    className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
-                      isSelected
-                        ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
-                        : ""
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="text-xs">{item.name}</span>
-                  </Button>
-                )
-              })}
-            </div>
           </div>
 
         </div>

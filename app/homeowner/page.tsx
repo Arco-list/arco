@@ -73,10 +73,10 @@ function HomeownerContent() {
           <h1 className="text-2xl font-semibold text-gray-900 mb-8">Homeowner</h1>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="mb-8 rounded-full p-1 gap-1">
-              <TabsTrigger value="saved-projects" className="rounded-full px-4">Saved Projects</TabsTrigger>
-              <TabsTrigger value="saved-professionals" className="rounded-full px-4">Saved Professionals</TabsTrigger>
-              <TabsTrigger value="account" className="rounded-full px-4">Account</TabsTrigger>
+            <TabsList className="mb-8 rounded-full p-1 gap-1 w-full sm:w-auto overflow-x-auto">
+              <TabsTrigger value="saved-projects" className="rounded-full px-4 whitespace-nowrap">Saved Projects</TabsTrigger>
+              <TabsTrigger value="saved-professionals" className="rounded-full px-4 whitespace-nowrap">Saved Professionals</TabsTrigger>
+              <TabsTrigger value="account" className="rounded-full px-4 whitespace-nowrap">Account</TabsTrigger>
             </TabsList>
 
             <TabsContent value="saved-projects">

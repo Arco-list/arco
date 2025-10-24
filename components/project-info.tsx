@@ -25,13 +25,13 @@ export function ProjectInfo() {
   const likesCount = projectId ? likeCounts[projectId] ?? initialLikesCount ?? 0 : initialLikesCount ?? 0
   const breadcrumbs = info.breadcrumbs.length > 0 ? info.breadcrumbs : [{ label: "Projects", href: "/projects" }]
   
-  // Description truncation logic
+  const descriptionHtml = info.descriptionHtml || ""
+  const descriptionPlain = info.descriptionPlain || ""
   const MAX_CHARS = 200
-  const description = info.descriptionPlain || ""
-  const shouldTruncate = description.length > MAX_CHARS
-  const displayDescription = shouldTruncate && !isDescriptionExpanded 
-    ? description.substring(0, MAX_CHARS) + "..."
-    : description
+  const shouldTruncate = descriptionPlain.length > MAX_CHARS
+  const displayDescriptionHtml = shouldTruncate && !isDescriptionExpanded 
+    ? descriptionPlain.substring(0, MAX_CHARS) + "..."
+    : descriptionHtml
 
   return (
     <div className="space-y-4">
@@ -58,7 +58,7 @@ export function ProjectInfo() {
           </nav>
 
           {/* Action buttons - moved to same row as breadcrumbs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant={isLiked ? "default" : "tertiary"}
               size="sm"
@@ -107,8 +107,11 @@ export function ProjectInfo() {
           </p>
         )}
 
-        {description && (
-          <p className="text-gray-700 leading-relaxed">{displayDescription}</p>
+        {descriptionHtml && (
+          <div 
+            className="text-gray-700 leading-relaxed prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:pl-1"
+            dangerouslySetInnerHTML={{ __html: displayDescriptionHtml }}
+          />
         )}
 
         {shouldTruncate && (

@@ -202,11 +202,11 @@ export function GroupedPicturesModal({
               </Button>
 
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={handleShare}>
+                {/* <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={handleShare}>
                   <Share className="w-4 h-4 mr-2" />
                   Share
-                </Button>
-                <Button
+                </Button> */}
+                {/* <Button
                   variant="ghost"
                   size="sm"
                   className={`hover:bg-gray-100 ${isSaved ? "text-blue-600" : "text-gray-700"}`}
@@ -214,7 +214,7 @@ export function GroupedPicturesModal({
                 >
                   <Bookmark className={`w-4 h-4 mr-2 ${isSaved ? "fill-current" : ""}`} />
                   Save
-                </Button>
+                </Button> */}
               </div>
             </div>
 
@@ -318,11 +318,11 @@ export function GroupedPicturesModal({
               </div>
 
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" onClick={handleShare} aria-label="Share project">
+                {/* <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" onClick={handleShare} aria-label="Share project">
                   <Share className="w-4 h-4 mr-2" />
                   Share
-                </Button>
-                <Button
+                </Button> */}
+                {/* <Button
                   variant="ghost"
                   size="sm"
                   className={`hover:bg-white/10 hover:text-white ${isSaved ? "text-blue-400" : "text-white"}`}
@@ -331,7 +331,7 @@ export function GroupedPicturesModal({
                 >
                   <Bookmark className={`w-4 h-4 mr-2 ${isSaved ? "fill-current" : ""}`} />
                   Save
-                </Button>
+                </Button> */}
               </div>
             </div>
 
