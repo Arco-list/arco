@@ -299,9 +299,10 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
   const image = company.logo_url || profile?.avatar_url || PLACEHOLDER_IMAGE
 
   return {
-    id: row.id,
-    slug: row.id,
+    id: company.id,
+    slug: company.id,
     companyId: company.id,
+    professionalId: row.id,
     name,
     profession,
     location,
@@ -378,9 +379,10 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): Profession
   const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
 
   return {
-    id: row.id,
-    slug: row.id,
+    id: row.company_id,
+    slug: row.company_id,
     companyId: row.company_id,
+    professionalId: row.id,
     name,
     profession,
     location,

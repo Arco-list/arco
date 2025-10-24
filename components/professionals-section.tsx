@@ -74,7 +74,7 @@ export function ProfessionalsSection() {
                     variant="tertiary" 
                     size="tertiary" 
                     className="self-start"
-                    onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
+                    onClick={() => professional.companyId && window.open(`/professionals/${professional.companyId}`, '_blank')}
                   >
                     Visit
                   </Button>
