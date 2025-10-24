@@ -123,7 +123,10 @@ type ProjectRow = Tables<"projects">
 type ProjectPhotoRow = Tables<"project_photos">
 type ProjectFeatureRow = Tables<"project_features">
 type ProjectProfessionalServiceRow = Tables<"project_professional_services">
-type ProjectProfessionalRow = Tables<"project_professionals">
+type ProjectProfessionalRow = Tables<"project_professionals"> & {
+  professionals: { id: string; title: string | null } | null
+  companies: { id: string; name: string | null; logo_url: string | null } | null
+}
 type ProjectCategoryRow = Tables<"project_categories">
 type CategoryRow = Tables<"categories">
 type TaxonomyOptionRow = Tables<"project_taxonomy_options">
@@ -557,9 +560,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     return acc
   }, new Map())
 
+  // Map project professionals with their company and professional details
+  // Note: company_id is the source of truth; companies join data is derived from this FK
   const projectProfessionals = invites.map((invite) => ({
     id: invite.id,
-    companyId: invite.company_id ?? invite.companies?.id,
+    companyId: invite.company_id,
     professionalId: invite.professional_id,
     serviceCategory: categoryMap.get(invite.invited_service_category_id)?.name ?? "Service",
     serviceCategoryId: invite.invited_service_category_id,

@@ -30,6 +30,8 @@ const PROFESSIONAL_CATEGORY_IMAGE_MAP: Record<string, string> = {
   "outdoor": "/landscape-designer-working-in-beautiful-garden.jpg",
 }
 
+const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
+
 const normalizeSlug = (value: string | null | undefined) =>
   (value ?? "")
     .toLowerCase()
@@ -102,7 +104,11 @@ async function loadLandingData() {
     supabase
       .from("mv_professional_summary")
       .select("id, company_id, first_name, last_name, title, primary_specialty, company_name, company_logo, company_city, user_location, display_rating, total_reviews, avatar_url")
-      .eq("is_featured", true)
+      .eq("is_verified", true)
+      .eq("is_available", true)
+      .not("company_id", "is", null)
+      .order("display_rating", { ascending: false })
+      .order("total_reviews", { ascending: false })
       .limit(6),
   ])
 
@@ -352,21 +358,29 @@ async function loadLandingData() {
     .slice(0, 5)
 
   const featuredProfessionals: FeaturedProfessional[] = featuredProfessionalsRaw
-    .filter((professional) => professional.company_id)
+    .filter((professional): professional is typeof professional & { company_id: string } => {
+      if (!professional.company_id && process.env.NODE_ENV === 'development') {
+        logger.warn('Professional without company_id filtered out from featured list', {
+          scope: 'landing',
+          professionalId: professional.id,
+        })
+      }
+      return professional.company_id !== null && professional.company_id !== undefined
+    })
     .map((professional) => {
       const fullName = `${professional.first_name || ''} ${professional.last_name || ''}`.trim()
       const name = professional.company_name || fullName
       const title = professional.title || professional.primary_specialty || 'Professional'
       const location = professional.company_city || professional.user_location || 'Location unavailable'
-      
+
       return {
-        id: professional.company_id!,
+        id: professional.company_id,
         name,
         title,
         location,
         rating: professional.display_rating || 0,
         reviews: professional.total_reviews || 0,
-        image: professional.company_logo || professional.avatar_url,
+        image: professional.company_logo || professional.avatar_url || PLACEHOLDER_IMAGE,
         href: `/professionals/${professional.company_id}`,
       }
     })

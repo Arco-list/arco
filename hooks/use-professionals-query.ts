@@ -19,6 +19,7 @@ type SearchProfessionalsRow = {
   title: string | null
   company_id: string | null
   company_name: string | null
+  company_slug: string | null
   company_logo: string | null
   company_domain: string | null
   company_city: string | null
@@ -77,7 +78,7 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
 
   return {
     id: row.company_id,
-    slug: row.company_id,
+    slug: row.company_slug || row.company_id,
     companyId: row.company_id,
     professionalId: row.id,
     name,

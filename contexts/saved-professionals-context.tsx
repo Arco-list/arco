@@ -66,7 +66,7 @@ const toProfessionalCard = (row: any): ProfessionalCard => {
 
   return {
     id: row.professional_id,
-    slug: row.company_domain && row.company_domain.length > 0 ? row.company_domain : row.professional_id,
+    slug: row.company_slug || row.company_id || row.professional_id,
     companyId: row.company_id ?? "",
     name,
     profession,
