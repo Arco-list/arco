@@ -256,11 +256,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                           Saved professionals
                         </Link>
                         <Link
-                          href="/homeowner?tab=settings"
+                          href="/homeowner?tab=account"
                           className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Settings
+                          Account
                         </Link>
                         {hasAdminRole && (
                           <Link

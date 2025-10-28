@@ -18,6 +18,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   const {
     selectedTypes,
     selectedStyles,
+    selectedLocation,
     selectedLocationFeatures,
     selectedBuildingFeatures,
     selectedMaterialFeatures,
@@ -28,6 +29,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
     buildingYearRange,
     setSelectedTypes,
     setSelectedStyles,
+    setSelectedLocation,
     setSelectedLocationFeatures,
     setSelectedBuildingFeatures,
     setSelectedMaterialFeatures,
@@ -199,7 +201,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
           ) : (
             <>
               <div>
-                <h3 className="text-base font-medium mb-3">Building Types</h3>
+                <h3 className="text-base mb-3">Building Types</h3>
                 <div className="space-y-4">
                   {typeSections.map((section) => (
                     <div key={section.id}>
@@ -240,10 +242,10 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                                     onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
                                     aria-checked={selectedTypes.includes(parentItem.id)}
                                   />
-                                  <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
+                                  <h4 className="text-sm text-gray-700">{section.name}</h4>
                                 </label>
                               ) : (
-                                <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
+                                <h4 className="text-sm text-gray-700">{section.name}</h4>
                               )}
                               {showToggle && (
                                 <button
@@ -273,7 +275,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Style</h3>
+                <h3 className="text-base mb-3">Style</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {styleOptions.slice(0, showAllStyles ? undefined : 6).map((style, index) => {
                     const value = style.id ?? style.slug ?? `${style.name}-${index}`
@@ -281,7 +283,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={value} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedStyles.includes(value)}
                           onChange={() => toggleSelection(value, selectedStyles, setSelectedStyles)}
                         />
@@ -299,7 +301,24 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Location feature</h3>
+                <h3 className="text-base mb-3">City</h3>
+                <select
+                  id="modal-location"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                  value={selectedLocation || ""}
+                  onChange={(e) => setSelectedLocation(e.target.value || "")}
+                >
+                  <option value="">All cities</option>
+                  {(taxonomy.cities ?? []).map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <h3 className="text-base mb-3">Location feature</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {locationFeatureOptions.slice(0, showAllLocationFeatures ? undefined : 6).map((feature, index) => {
                     const value = feature.id ?? feature.slug ?? feature.name
@@ -307,7 +326,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`location-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedLocationFeatures.includes(value)}
                           onChange={() => toggleSelection(value, selectedLocationFeatures, setSelectedLocationFeatures)}
                         />
@@ -325,7 +344,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Building feature</h3>
+                <h3 className="text-base mb-3">Building feature</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {buildingFeatureCategories.slice(0, showAllBuildingFeatures ? undefined : 6).map((feature, index) => {
                     const value = feature.id ?? feature.slug ?? feature.name
@@ -333,7 +352,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`building-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedBuildingFeatures.includes(value)}
                           onChange={() => toggleSelection(value, selectedBuildingFeatures, setSelectedBuildingFeatures)}
                         />
@@ -352,7 +371,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-medium">Material feature</h3>
+                  <h3 className="text-base">Material feature</h3>
                   <button
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
                     onClick={() => setShowAllMaterialFeatures(!showAllMaterialFeatures)}
@@ -368,7 +387,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`material-${index}`} className="flex items-center gap-3 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedMaterialFeatures.includes(value)}
                           onChange={() => toggleSelection(value, selectedMaterialFeatures, setSelectedMaterialFeatures)}
                         />
@@ -380,7 +399,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Building type</h3>
+                <h3 className="text-base mb-3">Building type</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {buildingTypeOptions.map((option, index) => {
                     const value = option.id ?? option.slug ?? option.name
@@ -388,7 +407,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`building-type-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedBuildingTypes.includes(value)}
                           onChange={() => toggleSelection(value, selectedBuildingTypes, setSelectedBuildingTypes)}
                         />
@@ -400,7 +419,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Size</h3>
+                <h3 className="text-base mb-3">Size</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {sizeOptions.map((size, index) => {
                     const value = size.id ?? size.slug ?? size.name
@@ -408,7 +427,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`size-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedSizes.includes(value)}
                           onChange={() => toggleSelection(value, selectedSizes, setSelectedSizes)}
                         />
@@ -420,7 +439,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Budget</h3>
+                <h3 className="text-base mb-3">Budget</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {budgetOptions.map((budget, index) => {
                     const value = budget.budget_level ?? budget.id ?? budget.slug ?? budget.name
@@ -428,7 +447,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`budget-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded"
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                           checked={selectedBudgets.includes(value as string)}
                           onChange={() => toggleSelection(value as string, selectedBudgets, setSelectedBudgets)}
                         />
@@ -440,7 +459,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Project year</h3>
+                <h3 className="text-base mb-3">Project year</h3>
                 <div className="px-2">
                   <input
                     type="range"
@@ -458,7 +477,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base font-medium mb-3">Building year</h3>
+                <h3 className="text-base mb-3">Building year</h3>
                 <div className="px-2">
                   <input
                     type="range"

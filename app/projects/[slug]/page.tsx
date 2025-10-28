@@ -1,11 +1,11 @@
 import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
 import type { Metadata } from "next"
 
 import { Header } from "@/components/header"
 import { ProjectGallery } from "@/components/project-gallery"
 import { ProjectInfo } from "@/components/project-info"
+import { ProjectActionButtons } from "@/components/project-action-buttons"
 import { ProfessionalsSidebar } from "@/components/professionals-sidebar"
 import { ProjectHighlights } from "@/components/project-highlights"
 import { ProjectFeatures } from "@/components/project-features"
@@ -1011,17 +1011,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
           <Header maxWidth="max-w-7xl" />
 
-          <main className="px-4 py-8 md:px-8 pt-24 md:pt-8">
+          <main className="px-4 py-8 md:px-8 pt-20 md:pt-20">
             <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-              <Link 
-                href="/projects" 
-                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back to search
-              </Link>
+            {/* Breadcrumb and Action Buttons Row */}
+            <div className="flex items-center justify-between mb-4 gap-4">
+              <nav className="text-sm text-gray-600" aria-label="Breadcrumb">
+                <ol className="flex items-center gap-2">
+                  <li>
+                    <Link href="/projects" className="hover:text-gray-900">
+                      Projects
+                    </Link>
+                  </li>
+                  <li className="text-gray-400">&gt;</li>
+                  <li className="text-gray-900 font-medium">{projectTitle}</li>
+                </ol>
+              </nav>
+
+              <ProjectActionButtons projectId={project.id} />
             </div>
+
             <div className="mb-8">
               <ProjectGallery />
             </div>

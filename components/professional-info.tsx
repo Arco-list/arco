@@ -1,14 +1,11 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useMemo } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Bookmark, Share, Star } from "lucide-react"
+import { Star } from "lucide-react"
 
-import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
-import type { ProfessionalCard, ProfessionalDetail } from "@/lib/professionals/types"
-import { Button } from "@/components/ui/button"
-import { ShareModal } from "./share-modal"
+import type { ProfessionalDetail } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -40,57 +37,11 @@ const formatArray = (values: string[], options?: { limit?: number }) => {
 }
 
 export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId }: ProfessionalInfoProps) {
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
-
-  const {
-    savedProfessionalIds,
-    mutatingProfessionalIds,
-    saveProfessional,
-    removeProfessional,
-  } = useSavedProfessionals()
-
   const coverImage =
     professional.gallery.find((image) => image.isCover)?.url ??
     professional.company.logoUrl ??
     professional.profile.avatarUrl ??
     PLACEHOLDER_IMAGE
-
-  const professionalCard = useMemo<ProfessionalCard>(() => {
-    const rating = Number(professional.ratings.overall.toFixed(2))
-    const professionLabel = professional.title || professional.services[0] || professional.specialties[0] || "Professional"
-
-    return {
-      id: professional.id,
-      slug: professional.slug,
-      companyId: professional.company.id,
-      name: professional.name,
-      profession: professionLabel,
-      location: professional.location ?? "Location unavailable",
-      rating,
-      reviewCount: professional.ratings.total,
-      image: coverImage || PLACEHOLDER_IMAGE,
-      specialties: professional.specialties,
-      isVerified: professional.isVerified,
-      domain: professional.company.domain ?? null,
-    }
-  }, [coverImage, professional])
-
-  const isSaved = savedProfessionalIds.has(professional.id)
-  const isMutating = mutatingProfessionalIds.has(professional.id)
-
-  const handleToggleSave = useCallback(async () => {
-    if (isSaved) {
-      await removeProfessional(professional.id)
-      return
-    }
-
-    await saveProfessional(professionalCard)
-  }, [isSaved, professional.id, professionalCard, removeProfessional, saveProfessional])
-
-  const breadcrumbs = useMemo(() => [
-    { label: "Professionals", href: "/professionals" },
-    { label: professional.name, href: null }
-  ], [professional.name])
 
   const ratingDisplay = useMemo(
     () => ({
@@ -154,43 +105,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-3">
-          <nav className="text-sm text-gray-500">
-            {breadcrumbs.map((crumb, index) => (
-              <span key={index}>
-                {crumb.href ? (
-                  <Link href={crumb.href} className="hover:text-gray-700 hover:underline">
-                    {crumb.label}
-                  </Link>
-                ) : (
-                  <span className="text-gray-900">{crumb.label}</span>
-                )}
-                {index < breadcrumbs.length - 1 && <span className="mx-2">&gt;</span>}
-              </span>
-            ))}
-          </nav>
-
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
-              <Share className="mr-2 h-4 w-4" />
-              Share
-            </Button>
-            <Button
-              variant={isSaved ? "default" : "outline"}
-              size="sm"
-              className={isSaved ? "bg-red-500 hover:bg-red-600 text-white" : ""}
-              onClick={handleToggleSave}
-              disabled={isMutating}
-            >
-              <Bookmark className={`mr-2 h-4 w-4 ${isSaved ? "fill-current" : ""}`} />
-              {isSaved ? "Saved" : "Save"}
-            </Button>
-          </div>
-        </div>
-
-      </div>
-
       <div className="flex items-start justify-between gap-6">
         <div className="space-y-3 flex-1">
           <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
@@ -254,15 +168,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
           </div>
         </div>
       </div>
-
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        title={professional.name}
-        subtitle={professional.title ?? ""}
-        imageUrl={coverImage}
-        shareUrl={shareUrl}
-      />
     </div>
   )
 }

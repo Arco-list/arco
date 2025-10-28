@@ -104,6 +104,9 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
           created_at: row.created_at,
           updated_at: row.updated_at,
           budget_display: row.budget_display,
+          // Include taxonomy fields for title construction
+          project_type: row.project_type ?? null,
+          style_preferences: row.style_preferences ?? null,
           // Add missing fields with null values to match ProjectSummaryRow type
           description: null,
           budget_level: null,
@@ -123,10 +126,8 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
           primary_category_icon: null,
           primary_category_slug: null,
           project_size: null,
-          project_type: null,
           project_year: null,
           status: null,
-          style_preferences: null,
           total_applications: null,
           views_count: null,
         } as ProjectSummaryRow & { id: string };

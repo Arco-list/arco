@@ -104,9 +104,9 @@ export function NavUser({ user, showSavedLinks = true }: Props) {
                 </>
               )}
               <DropdownMenuItem asChild>
-                <Link href="/admin/settings">
+                <Link href="/homeowner?tab=account">
                   <CreditCard />
-                  Settings
+                  Account
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>

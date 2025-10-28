@@ -137,7 +137,7 @@ export function SimilarProjects() {
 
               <div className="mt-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">{project.title}</h3>
+                  <p className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900 line-clamp-2 flex-1">{project.title}</p>
                   <button
                     type="button"
                     onClick={(event) => {
@@ -147,16 +147,16 @@ export function SimilarProjects() {
                     disabled={project.isMutatingLike}
                     aria-pressed={project.isLiked}
                     aria-label={project.isLiked ? "Unlike project" : "Like project"}
-                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-70"
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 disabled:opacity-70"
                   >
                     <ThumbsUp
-                      className={`h-3 w-3 ${project.isLiked ? "text-blue-600 fill-blue-600" : ""}`}
+                      className={`h-3 w-3 ${project.isLiked ? "text-red-500 fill-red-500" : ""}`}
                       fill={project.isLiked ? "currentColor" : "none"}
                     />
                     <span>{project.likes}</span>
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 line-clamp-1">{project.location || "Location unavailable"}</p>
+                <p className="text-xs font-normal text-gray-500 line-clamp-1">{project.location || "Location unavailable"}</p>
               </div>
             </Link>
           )

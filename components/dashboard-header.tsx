@@ -277,11 +277,11 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </Link>
                       <div className="border-t border-gray-100"></div>
                       <Link
-                        href="/homeowner?tab=settings"
+                        href="/homeowner?tab=account"
                         className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         onClick={() => setIsMenuOpen(false)}
                       >
-                        Settings
+                        Account
                       </Link>
                     </>
                   ) : canAccessProfessionalDashboard ? (

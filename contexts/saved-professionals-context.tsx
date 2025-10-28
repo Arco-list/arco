@@ -51,13 +51,17 @@ const toProfessionalCard = (row: any): ProfessionalCard => {
     : [];
 
   const name = row.company_name ?? row.title ?? "Professional";
-  const profession = row.title ?? row.primary_specialty ?? "Professional";
 
+  // Use primary_service_name (resolved category name) or fallback to primary_specialty
+  const profession = row.primary_service_name ?? row.primary_specialty ?? row.title ?? "Professional";
+
+  // Build location from company city first, or fallback to user location
   const location =
-    typeof row.user_location === "string" && row.user_location.length > 0
-      ? row.user_location
-      : "Location unavailable";
+    (row.company_city && row.company_city.length > 0 ? row.company_city : null) ??
+    (typeof row.user_location === "string" && row.user_location.length > 0 ? row.user_location : null) ??
+    "Location unavailable";
 
+  // Use cover photo first, fallback to logo
   const image = typeof row.cover_url === "string" && row.cover_url.length > 0
     ? row.cover_url
     : typeof row.logo_url === "string" && row.logo_url.length > 0

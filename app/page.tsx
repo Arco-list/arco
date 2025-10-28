@@ -103,7 +103,16 @@ async function loadLandingData() {
       .not("primary_specialty_slug", "is", null),
     supabase
       .from("companies")
-      .select("id, name, slug, city, country, logo_url, services_offered")
+      .select(`
+        id,
+        name,
+        slug,
+        city,
+        country,
+        logo_url,
+        primary_service_id,
+        primary_service:categories!companies_primary_service_id_fkey(name)
+      `)
       .eq("is_featured", true)
       .eq("status", "listed")
       .limit(6),
@@ -375,15 +384,24 @@ async function loadLandingData() {
     .filter((category): category is ProfessionalCategoryCard => Boolean(category))
     .slice(0, 5)
 
-  // Fetch rating data for featured companies
+  // Fetch rating data and cover photos for featured companies
   const featuredCompanyIds = featuredCompaniesRaw.map((company) => company.id)
   let companyMetrics: Map<string, { averageRating: number; totalReviews: number }> = new Map()
+  let companyCoverPhotos: Map<string, string> = new Map()
 
   if (featuredCompanyIds.length > 0) {
-    const metricsResult = await supabase
-      .from("company_metrics")
-      .select("company_id, average_rating, total_reviews")
-      .in("company_id", featuredCompanyIds)
+    const [metricsResult, photosResult] = await Promise.all([
+      supabase
+        .from("company_metrics")
+        .select("company_id, average_rating, total_reviews")
+        .in("company_id", featuredCompanyIds),
+      supabase
+        .from("company_photos")
+        .select("company_id, url, is_cover, order_index")
+        .in("company_id", featuredCompanyIds)
+        .order("is_cover", { ascending: false })
+        .order("order_index", { ascending: true })
+    ])
 
     if (!metricsResult.error && metricsResult.data) {
       metricsResult.data.forEach((metric) => {
@@ -393,17 +411,27 @@ async function loadLandingData() {
         })
       })
     }
+
+    if (!photosResult.error && photosResult.data) {
+      // Get first photo (prioritized by is_cover DESC, order_index ASC)
+      const photosByCompany = new Map<string, string>()
+      photosResult.data.forEach((photo) => {
+        if (!photosByCompany.has(photo.company_id)) {
+          photosByCompany.set(photo.company_id, photo.url)
+        }
+      })
+      companyCoverPhotos = photosByCompany
+    }
   }
 
   const featuredCompanies: FeaturedCompany[] = featuredCompaniesRaw.map((company) => {
     const location = [company.city, company.country].filter(Boolean).join(", ") || "Location unavailable"
     const slug = company.slug || company.id
     const metrics = companyMetrics.get(company.id) || { averageRating: 0, totalReviews: 0 }
+    const coverPhoto = companyCoverPhotos.get(company.id)
 
-    // Get first service offered as title
-    const title = Array.isArray(company.services_offered) && company.services_offered.length > 0
-      ? company.services_offered[0]
-      : "Professional services"
+    // Use primary service name as title
+    const title = (company.primary_service as { name: string } | null)?.name || "Professional services"
 
     return {
       id: company.id,
@@ -412,7 +440,7 @@ async function loadLandingData() {
       location,
       rating: metrics.averageRating,
       reviews: metrics.totalReviews,
-      image: company.logo_url || PLACEHOLDER_IMAGE,
+      image: coverPhoto || company.logo_url || PLACEHOLDER_IMAGE,
       href: `/professionals/${slug}`,
     }
   })

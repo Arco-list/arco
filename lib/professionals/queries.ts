@@ -260,32 +260,13 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim()
   const name = company.name || fullName || "Professional"
 
-  // Use services_offered if title appears to be a name (matches first_name or last_name)
-  const titleLooksLikeName =
-    row.title && profile && (
-      row.title.toLowerCase() === profile.first_name?.toLowerCase() ||
-      row.title.toLowerCase() === profile.last_name?.toLowerCase()
-    )
+  // Use primary service from company's primary_service_id (company-level data only)
+  // Note: For detail queries, we need to fetch this separately since it's not in the professionals table
+  const profession = "Professional services" // This will be enhanced when we add primary_service to detail query
 
-  // Get primary specialty name from specialties, or use services_offered as fallback
-  const primarySpecialty = Array.isArray(row.specialties)
-    ? row.specialties.find(s => s.is_primary)?.category?.name ||
-      row.specialties[0]?.category?.name
-    : null
-
-  const profession =
-    (row.title && !titleLooksLikeName)
-      ? row.title
-      : primarySpecialty ||
-        (Array.isArray(row.services_offered) && row.services_offered.length > 0
-          ? row.services_offered[0] ?? "Professional"
-          : "Professional")
-
+  // Use company location (city, country)
   const locationPieces = [company.city, company.country].filter(Boolean)
-  const location =
-    locationPieces.length > 0
-      ? locationPieces.join(", ")
-      : profile?.location || "Location unavailable"
+  const location = locationPieces.length > 0 ? locationPieces.join(", ") : "Location unavailable"
 
   const specialties = Array.isArray(row.services_offered)
     ? row.services_offered.filter((value): value is string => typeof value === "string" && value.length > 0)
@@ -349,10 +330,13 @@ type SearchProfessionalsRpcRow = {
   company_state_region: string | null
   company_city: string | null
   primary_specialty: string | null
+  primary_service_name: string | null
   services_offered: string[] | null
   display_rating: number | string | null
   total_reviews: number | null
   is_verified: boolean | null
+  cover_photo_url: string | null
+  avatar_url: string | null
 }
 
 const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): ProfessionalCard | null => {
@@ -361,10 +345,12 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): Profession
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
 
-  const profession = row.title || row.primary_specialty || "Professional"
+  // Use primary service from company's primary_service_id (company-level data only)
+  const profession = row.primary_service_name || "Professional services"
 
+  // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
-  const location = locationParts.length > 0 ? locationParts.join(", ") : row.user_location || "Location unavailable"
+  const location = locationParts.length > 0 ? locationParts.join(", ") : "Location unavailable"
 
   const specialties = Array.isArray(row.services_offered)
     ? row.services_offered.filter((value): value is string => Boolean(value))
@@ -390,7 +376,7 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): Profession
     location,
     rating,
     reviewCount,
-    image: row.company_logo ?? PLACEHOLDER_IMAGE,
+    image: row.cover_photo_url ?? row.company_logo ?? row.avatar_url ?? PLACEHOLDER_IMAGE,
     specialties,
     isVerified: Boolean(row.is_verified),
     domain: row.company_domain ?? null,

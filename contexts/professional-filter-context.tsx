@@ -126,8 +126,6 @@ const resolveTokensToIds = (tokens: string[], maps?: TokenMaps): string[] => {
 interface ProfessionalFilterState {
   selectedCategories: string[]
   selectedServices: string[]
-  selectedCountry: string | null
-  selectedState: string | null
   selectedCity: string | null
   keyword: string
 }
@@ -135,8 +133,6 @@ interface ProfessionalFilterState {
 const INITIAL_STATE: ProfessionalFilterState = {
   selectedCategories: [],
   selectedServices: [],
-  selectedCountry: null,
-  selectedState: null,
   selectedCity: null,
   keyword: "",
 }
@@ -144,8 +140,6 @@ const INITIAL_STATE: ProfessionalFilterState = {
 type ProfessionalFilterAction =
   | { type: "SET_CATEGORIES"; payload: string[] }
   | { type: "SET_SERVICES"; payload: string[] }
-  | { type: "SET_COUNTRY"; payload: string | null }
-  | { type: "SET_STATE"; payload: string | null }
   | { type: "SET_CITY"; payload: string | null }
   | { type: "SET_KEYWORD"; payload: string }
   | { type: "RESET" }
@@ -156,25 +150,6 @@ const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilte
       return { ...state, selectedCategories: action.payload }
     case "SET_SERVICES":
       return { ...state, selectedServices: action.payload }
-    case "SET_COUNTRY":
-      if (action.payload === state.selectedCountry) {
-        return { ...state, selectedCountry: action.payload }
-      }
-      return {
-        ...state,
-        selectedCountry: action.payload,
-        selectedState: null,
-        selectedCity: null,
-      }
-    case "SET_STATE":
-      if (action.payload === state.selectedState) {
-        return { ...state, selectedState: action.payload }
-      }
-      return {
-        ...state,
-        selectedState: action.payload,
-        selectedCity: null,
-      }
     case "SET_CITY":
       return { ...state, selectedCity: action.payload }
     case "SET_KEYWORD":
@@ -189,8 +164,6 @@ const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilte
 interface ProfessionalFilterContextValue extends ProfessionalFilterState {
   setSelectedCategories: (values: string[]) => void
   setSelectedServices: (values: string[]) => void
-  setSelectedCountry: (value: string | null) => void
-  setSelectedState: (value: string | null) => void
   setSelectedCity: (value: string | null) => void
   setKeyword: (value: string) => void
   clearAllFilters: () => void
@@ -198,7 +171,7 @@ interface ProfessionalFilterContextValue extends ProfessionalFilterState {
   hasActiveFilters: () => boolean
   taxonomy: ReturnType<typeof useProfessionalTaxonomy>
   taxonomyLabelMap: Map<string, string>
-  locationOptions: LocationOptions
+  cities: string[]
 }
 
 const ProfessionalFilterContext = createContext<ProfessionalFilterContextValue | undefined>(undefined)
@@ -206,9 +179,18 @@ const ProfessionalFilterContext = createContext<ProfessionalFilterContextValue |
 function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) {
   const taxonomy = useProfessionalTaxonomy()
   const [state, dispatch] = useReducer(filterReducer, INITIAL_STATE)
-  const { selectedCategories, selectedServices, selectedCountry, selectedState, selectedCity, keyword } = state
+  const { selectedCategories, selectedServices, selectedCity, keyword } = state
 
-  const locationOptions = taxonomy.locationOptions
+  // Extract unique cities from location facets
+  const cities = useMemo(() => {
+    const citySet = new Set<string>()
+    taxonomy.locationFacets.forEach((facet) => {
+      if (facet.city) {
+        citySet.add(facet.city)
+      }
+    })
+    return Array.from(citySet).sort((a, b) => a.localeCompare(b))
+  }, [taxonomy.locationFacets])
 
   const taxonomyLabelMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -267,11 +249,6 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     [dispatch],
   )
 
-  const setSelectedCountry = useCallback(
-    (value: string | null) => dispatch({ type: "SET_COUNTRY", payload: value ?? null }),
-    [],
-  )
-  const setSelectedState = useCallback((value: string | null) => dispatch({ type: "SET_STATE", payload: value ?? null }), [])
   const setSelectedCity = useCallback((value: string | null) => dispatch({ type: "SET_CITY", payload: value ?? null }), [])
   const setKeyword = useCallback((value: string) => dispatch({ type: "SET_KEYWORD", payload: value }), [])
   const clearAllFilters = useCallback(() => dispatch({ type: "RESET" }), [])
@@ -280,11 +257,9 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     () =>
       selectedCategories.length > 0 ||
       selectedServices.length > 0 ||
-      Boolean(selectedCountry) ||
-      Boolean(selectedState) ||
       Boolean(selectedCity) ||
       keyword.trim().length > 0,
-    [keyword, selectedCategories.length, selectedCity, selectedCountry, selectedServices.length, selectedState],
+    [keyword, selectedCategories.length, selectedCity, selectedServices.length],
   )
 
   const removeFilter = useCallback(
@@ -296,12 +271,6 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
         case "service":
           setSelectedServices(selectedServices.filter((item) => item !== value))
           break
-        case "country":
-          setSelectedCountry(null)
-          break
-        case "state":
-          setSelectedState(null)
-          break
         case "city":
           setSelectedCity(null)
           break
@@ -312,7 +281,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
           break
       }
     },
-    [selectedCategories, selectedServices, setKeyword, setSelectedCategories, setSelectedCity, setSelectedCountry, setSelectedServices, setSelectedState],
+    [selectedCategories, selectedServices, setKeyword, setSelectedCategories, setSelectedCity, setSelectedServices],
   )
 
   const router = useRouter()
@@ -354,14 +323,6 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       params.set("services", serviceTokens.join(","))
     }
 
-    if (selectedCountry) {
-      params.set("country", selectedCountry)
-    }
-
-    if (selectedState) {
-      params.set("state", selectedState)
-    }
-
     if (selectedCity) {
       params.set("city", selectedCity)
     }
@@ -383,9 +344,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     keyword,
     selectedCategories,
     selectedCity,
-    selectedCountry,
     selectedServices,
-    selectedState,
     serviceTokenMaps,
   ])
 
@@ -394,8 +353,6 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     if (!initializedRef.current || currentQuery !== lastParsedQueryRef.current) {
       const categoriesParam = parseCommaSeparatedParam(searchParams.get("categories"))
       const servicesParam = parseCommaSeparatedParam(searchParams.get("services"))
-      const countryParam = searchParams.get("country")
-      const stateParam = searchParams.get("state")
       const cityParam = searchParams.get("city")
       const keywordParam = searchParams.get("search") ?? searchParams.get("keyword") ?? ""
 
@@ -407,12 +364,6 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       }
       if (!areStringArraysEqual(resolvedServices, selectedServices)) {
         dispatch({ type: "SET_SERVICES", payload: resolvedServices })
-      }
-      if ((countryParam ?? null) !== selectedCountry) {
-        dispatch({ type: "SET_COUNTRY", payload: countryParam ?? null })
-      }
-      if ((stateParam ?? null) !== selectedState) {
-        dispatch({ type: "SET_STATE", payload: stateParam ?? null })
       }
       if ((cityParam ?? null) !== selectedCity) {
         dispatch({ type: "SET_CITY", payload: cityParam ?? null })
@@ -432,9 +383,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     searchParams,
     selectedCategories,
     selectedCity,
-    selectedCountry,
     selectedServices,
-    selectedState,
     serviceTokenMaps,
   ])
 
@@ -442,14 +391,10 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     () => ({
       selectedCategories,
       selectedServices,
-      selectedCountry,
-      selectedState,
       selectedCity,
       keyword,
       setSelectedCategories,
       setSelectedServices,
-      setSelectedCountry,
-      setSelectedState,
       setSelectedCity,
       setKeyword,
       clearAllFilters,
@@ -457,25 +402,21 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       hasActiveFilters,
       taxonomy,
       taxonomyLabelMap,
-      locationOptions,
+      cities,
     }),
     [
       clearAllFilters,
       hasActiveFilters,
       keyword,
-      locationOptions,
+      cities,
       removeFilter,
       selectedCategories,
       selectedCity,
-      selectedCountry,
       selectedServices,
-      selectedState,
       setKeyword,
       setSelectedCategories,
       setSelectedCity,
-      setSelectedCountry,
       setSelectedServices,
-      setSelectedState,
       taxonomy,
       taxonomyLabelMap,
     ],

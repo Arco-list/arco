@@ -9,6 +9,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 let taxonomyCache: {
   categories: CategoryRow[]
   taxonomyOptions: TaxonomyMap
+  cities: string[]
   fetchedAt: number
 } | null = null
 
@@ -34,6 +35,7 @@ type TaxonomyMap = Partial<Record<TaxonomyOptionRow["taxonomy_type"], TaxonomyOp
 interface ProjectTaxonomyState {
   categories: CategoryRow[]
   taxonomyOptions: TaxonomyMap
+  cities: string[]
   isLoading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -42,6 +44,7 @@ interface ProjectTaxonomyState {
 export function useProjectTaxonomy(): ProjectTaxonomyState {
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyMap>({})
+  const [cities, setCities] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,6 +52,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
     if (!cache) return
     setCategories(cache.categories)
     setTaxonomyOptions(cache.taxonomyOptions)
+    setCities(cache.cities)
   }
 
   const loadTaxonomy = useCallback(async (options: { force?: boolean } = {}) => {
@@ -72,7 +76,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
       const supabase = getBrowserSupabaseClient()
 
       const run = async () => {
-        const [categoriesResult, taxonomyResult] = await Promise.all([
+        const [categoriesResult, taxonomyResult, citiesResult] = await Promise.all([
           supabase
             .from("categories")
             .select(
@@ -91,6 +95,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
             .order("taxonomy_type", { ascending: true })
             .order("sort_order", { ascending: true, nullsFirst: false })
             .order("name", { ascending: true }),
+          supabase.rpc("get_project_cities"),
         ])
 
         if (categoriesResult.error) {
@@ -98,6 +103,9 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
         }
         if (taxonomyResult.error) {
           throw taxonomyResult.error
+        }
+        if (citiesResult.error) {
+          throw citiesResult.error
         }
 
         const nextCategories = (categoriesResult.data as CategoryRow[]) ?? []
@@ -110,9 +118,14 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           grouped[option.taxonomy_type]!.push(option)
         }
 
+        const nextCities = (citiesResult.data as Array<{ city: string }> | null)
+          ?.map((row) => row.city)
+          .filter((city): city is string => Boolean(city)) ?? []
+
         taxonomyCache = {
           categories: nextCategories,
           taxonomyOptions: grouped,
+          cities: nextCities,
           fetchedAt: Date.now(),
         }
 
@@ -138,6 +151,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
   return {
     categories,
     taxonomyOptions,
+    cities,
     isLoading,
     error,
     refresh: async () => {

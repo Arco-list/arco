@@ -1,9 +1,10 @@
 "use client"
 
-import { Heart, ChevronLeft, ChevronRight, Star } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { useRef } from "react"
+import { Button } from "@/components/ui/button"
+import { ProfessionalCard } from "@/components/professional-card"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { featuredItemToProfessionalCard } from "@/lib/professionals/utils"
 import { textButtonStyles } from "@/lib/utils"
@@ -70,65 +71,29 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
             </div>
           ) : (
             companies.map((company) => {
+              const professionalCard = featuredItemToProfessionalCard(company)
               const isSaved = savedProfessionalIds.has(company.id)
               const isMutating = mutatingProfessionalIds.has(company.id)
 
-              const handleSaveClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-                e.preventDefault()
-                e.stopPropagation()
-
-                if (isMutating) return
-
-                if (isSaved) {
-                  removeProfessional(company.id)
-                } else {
-                  saveProfessional(featuredItemToProfessionalCard(company))
-                }
-              }
-
               return (
-                <Link
+                <div
                   key={company.id}
-                  href={company.href}
-                  className="group cursor-pointer flex-none w-80 sm:w-72 md:w-60 lg:w-64 xl:w-72"
+                  className="flex-none w-80 sm:w-72 md:w-60 lg:w-64 xl:w-72"
                   style={{ scrollSnapAlign: "start" }}
                 >
-                  <div className="relative aspect-square rounded-lg overflow-hidden mb-3">
-                    <img
-                      src={company.image || "/placeholder.svg?height=300&width=300"}
-                      alt={company.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <button
-                      className="absolute top-3 right-3 p-1 text-gray-600 hover:text-red-500 transition-colors disabled:opacity-60"
-                      onClick={handleSaveClick}
-                      disabled={isMutating}
-                      aria-label={isSaved ? "Unsave professional" : "Save professional"}
-                      aria-pressed={isSaved}
-                    >
-                      <Heart className={`h-6 w-6 ${isSaved ? "fill-red-500 text-red-500" : ""}`} />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-medium text-gray-900 group-hover:text-gray-600 transition-colors">
-                      {company.name}
-                    </h3>
-                    <p className="text-sm text-gray-600">{company.location}</p>
-                    <div className="flex items-center gap-2">
-                      {company.rating > 0 ? (
-                        <>
-                          <div className="flex items-center gap-1">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm font-medium text-gray-900">{company.rating.toFixed(1)}</span>
-                          </div>
-                          <span className="text-sm text-gray-500">({company.reviews} reviews)</span>
-                        </>
-                      ) : (
-                        <span className="text-sm text-gray-500">No reviews yet</span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
+                  <ProfessionalCard
+                    professional={professionalCard}
+                    isSaved={isSaved}
+                    isMutating={isMutating}
+                    onToggleSave={(prof) => {
+                      if (isSaved) {
+                        removeProfessional(company.id)
+                      } else {
+                        saveProfessional(prof)
+                      }
+                    }}
+                  />
+                </div>
               )
             })
           )}
