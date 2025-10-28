@@ -100,7 +100,7 @@ export function HeaderSearch({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           onFocus={() => setIsFocused(true)}
-          className={`w-full rounded-full border px-3 py-1.5 pr-8 text-sm focus:outline-none focus:ring-2 ${inputClasses}`}
+          className={`w-full h-9 rounded-full border px-3 pr-8 text-sm focus:outline-none focus:ring-2 ${inputClasses}`}
         />
         <button
           type="submit"

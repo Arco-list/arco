@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useRef } from "react"
+import { textButtonStyles } from "@/lib/utils"
 
 const services = [
   {
@@ -58,13 +59,18 @@ export function PopularServices() {
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold text-gray-900">Popular professional services</h2>
-          <div className="hidden md:flex gap-2">
-            <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <div className="hidden md:flex items-center gap-2">
+            <Link href="/professionals" className={textButtonStyles}>
+              View all
+            </Link>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -91,14 +97,6 @@ export function PopularServices() {
               </div>
             </Link>
           ))}
-        </div>
-
-        <div className="text-center">
-          <Link href="/professionals">
-            <Button variant="outline" className="px-8 bg-transparent">
-              All professionals
-            </Button>
-          </Link>
         </div>
       </div>
     </section>

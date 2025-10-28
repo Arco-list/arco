@@ -26,7 +26,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
   const safeProjects = useMemo(() => (projects.length > 0 ? projects : []), [projects])
   const totalProjects = safeProjects.length
   const currentImage = safeProjects[currentImageIndex]
-  const heroTitle = currentImage?.title
+  const heroTitle = "World's finest architectural constructions"
 
   useEffect(() => {
     if (totalProjects <= 1) return
@@ -68,9 +68,9 @@ export function HeroSection({ projects }: HeroSectionProps) {
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-[1800px] px-4 pb-8 text-white md:px-8">
-        <div className="max-w-2xl">
+        <div className="max-w-2xl mb-4 md:mb-0">
           <Link href={currentImage.href}>
-            <h1 
+            <h1
               className="text-3xl leading-tight md:text-5xl lg:text-6xl xl:text-7xl hover:opacity-90 transition-opacity cursor-pointer"
               style={{
                 fontFamily: 'Figtree, sans-serif',
@@ -83,28 +83,32 @@ export function HeroSection({ projects }: HeroSectionProps) {
           </Link>
         </div>
 
-        <div className="absolute bottom-8 right-4 hidden items-center gap-3 text-sm text-white/80 md:flex md:right-8">
+        <div className="flex items-center justify-between md:absolute md:bottom-8 md:right-8 md:justify-end gap-3 text-sm text-white/80">
           {currentImage.caption ? (
-            <span className="text-sm font-medium text-white/90">{currentImage.caption}</span>
+            <Link href={currentImage.href} className="text-sm font-medium text-white/90 hover:opacity-80 transition-opacity">
+              {currentImage.caption}
+            </Link>
           ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
-            onClick={goToPrevious}
-            aria-label="Previous image"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
-            onClick={goToNext}
-            aria-label="Next image"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+              onClick={goToPrevious}
+              aria-label="Previous image"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+              onClick={goToNext}
+              aria-label="Next image"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </section>

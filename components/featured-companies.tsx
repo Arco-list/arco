@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRef } from "react"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { featuredItemToProfessionalCard } from "@/lib/professionals/utils"
+import { textButtonStyles } from "@/lib/utils"
 
 export type FeaturedCompany = {
   id: string
@@ -39,12 +40,12 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
   }
 
   return (
-    <section className="py-16 px-4 md:px-8">
+    <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold text-gray-900">Featured professionals</h2>
-          <div className="flex items-center gap-2">
-            <Link href="/professionals" className="text-sm text-gray-600 hover:text-gray-900 transition-colors mr-2">
+          <div className="hidden md:flex items-center gap-2">
+            <Link href="/professionals" className={textButtonStyles}>
               View all
             </Link>
             <div className="flex items-center gap-2">

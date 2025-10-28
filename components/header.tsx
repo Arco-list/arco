@@ -9,7 +9,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { signOutAction } from "@/app/(auth)/actions";
-import { Button } from "@/components/ui/button";
 import { HeaderSearch } from "@/components/header-search";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -81,8 +80,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
 
       toast.success("Signed out");
       setIsMenuOpen(false);
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     });
   };
 
@@ -128,7 +126,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
       <div className={`mx-auto ${maxWidth}`}>
         <div className="relative flex items-center justify-between">
           <div className="flex items-center space-x-8">
-            <Link href="/" className="transition-opacity hover:opacity-80">
+            <Link href="/">
               <img
                 src={
                   transparent && !isScrolled
@@ -140,23 +138,27 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               />
             </Link>
 
-            <div className="hidden items-center space-x-6 md:flex">
+            <div className="hidden items-center md:flex">
               <Link
                 href="/projects"
-                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                   pathname.startsWith("/projects")
-                    ? "text-red-500 border-red-500"
-                    : `${textColor} ${hoverColor} border-transparent`
+                    ? "text-red-500"
+                    : transparent && !isScrolled
+                      ? `${textColor} hover:bg-white/10`
+                      : `${textColor} hover:bg-gray-100`
                 }`}
               >
                 Projects
               </Link>
               <Link
                 href="/professionals"
-                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                   pathname.startsWith("/professionals")
-                    ? "text-red-500 border-red-500"
-                    : `${textColor} ${hoverColor} border-transparent`
+                    ? "text-red-500"
+                    : transparent && !isScrolled
+                      ? `${textColor} hover:bg-white/10`
+                      : `${textColor} hover:bg-gray-100`
                 }`}
               >
                 Professionals
@@ -172,45 +174,43 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
             textColor={textColor}
           />
 
-          <div className="relative flex items-center space-x-3" ref={menuRef}>
+          <div className="relative flex items-center gap-3" ref={menuRef}>
             {isLoggedIn ? (
               <>
                 <Link
                   href={hasProfessionalRole ? "/dashboard/company" : "/list-with-us"}
-                  className={`hidden md:block text-sm font-medium ${textColor} ${hoverColor} transition-colors`}
+                  className={`hidden md:block text-sm font-medium px-3 py-1.5 rounded-full ${
+                    transparent && !isScrolled
+                      ? `${textColor} hover:bg-white/10`
+                      : `${textColor} hover:bg-gray-100`
+                  }`}
                 >
                   {hasProfessionalRole ? "Switch to company" : "List with us"}
                 </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium ${
+                <button
+                  className={`flex items-center gap-2 h-9 rounded-full border px-3 ${
                     transparent && !isScrolled
-                      ? "border-white/20 text-white hover:bg-white/10 hover:text-white"
-                      : "border-gray-300 text-black hover:bg-gray-100"
+                      ? "border-white/20 text-white hover:bg-white/10"
+                      : "border-gray-300 hover:bg-gray-100"
                   }`}
-                  aria-label="Open menu"
                   onClick={toggleMenu}
                 >
-                  <span className={`${textColor} hidden md:inline`}>{menuLabel}</span>
+                  <span className="hidden text-sm md:inline">{menuLabel}</span>
                   <Menu className="h-5 w-5" />
-                </Button>
+                </button>
               </>
             ) : shouldRenderAuthTrigger ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium ${
+              <button
+                className={`flex items-center gap-2 h-9 rounded-full border px-3 ${
                   transparent && !isScrolled
-                    ? "border-white/20 text-white hover:bg-white/10 hover:text-white"
-                    : "border-gray-300 text-black hover:bg-gray-100"
+                    ? "border-white/20 text-white hover:bg-white/10"
+                    : "border-gray-300 hover:bg-gray-100"
                 }`}
-                aria-label="Open menu"
                 onClick={toggleMenu}
               >
-                <span className={`${textColor} hidden md:inline`}>{authTriggerLabel}</span>
+                <span className="hidden text-sm md:inline">{authTriggerLabel}</span>
                 <Menu className="h-5 w-5" />
-              </Button>
+              </button>
             ) : null}
 
             {isMenuOpen && (
@@ -220,14 +220,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   <div className="px-4 py-3">
                     <Link
                       href="/projects"
-                      className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                      className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Projects
                     </Link>
                     <Link
                       href="/professionals"
-                      className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                      className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Professionals
@@ -243,21 +243,21 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                       <>
                         <Link
                           href="/homeowner?tab=saved-projects"
-                          className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved projects
                         </Link>
                         <Link
                           href="/homeowner?tab=saved-professionals"
-                          className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved professionals
                         </Link>
                         <Link
                           href="/homeowner?tab=settings"
-                          className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Settings
@@ -265,7 +265,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {hasAdminRole && (
                           <Link
                             href="/admin"
-                            className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Admin
@@ -277,7 +277,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {shouldShowLoginLink && (
                           <Link
                             href={`/login${redirectQuery}`}
-                            className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Login
@@ -286,7 +286,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {shouldShowSignupLink && (
                           <Link
                             href={`/signup${redirectQuery}`}
-                            className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Sign up
@@ -304,7 +304,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     {hasProfessionalRole ? (
                       <Link
                         href="/dashboard/listings"
-                        className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                        className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         Switch to company
@@ -312,7 +312,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     ) : (
                       <Link
                         href="/list-with-us"
-                        className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                        className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         List with us
@@ -320,7 +320,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     )}
                     <Link
                       href="/help-center"
-                      className="block w-full text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 py-2"
+                      className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Help center
@@ -328,7 +328,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     {isLoggedIn && (
                       <button
                         type="button"
-                        className="block w-full text-left text-sm text-red-600 transition-colors hover:bg-red-50 py-2"
+                        className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
                         onClick={handleSignOut}
                         disabled={isSigningOut}
                       >

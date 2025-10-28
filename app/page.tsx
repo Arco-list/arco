@@ -45,28 +45,28 @@ const FALLBACK_HERO_PROJECTS: HeroProject[] = [
     title: "World's finest architectural constructions",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
-    caption: "Villa Ega, Marco van Veldhuizen",
+    caption: "Modern Villa in Amsterdam",
   },
   {
     id: "fallback-2",
-    title: "Contemporary living spaces",
+    title: "World's finest architectural constructions",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
-    caption: "Paradise Villa, Amsterdam",
+    caption: "Contemporary Residence in Rotterdam",
   },
   {
     id: "fallback-3",
-    title: "Innovative architectural design",
+    title: "World's finest architectural constructions",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
-    caption: "Villa Mel, Rotterdam",
+    caption: "Luxury Estate in Utrecht",
   },
   {
     id: "fallback-4",
-    title: "Luxury residential projects",
+    title: "World's finest architectural constructions",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
-    caption: "Garden House, Utrecht",
+    caption: "Minimalist Home in The Hague",
   },
 ]
 
@@ -261,33 +261,23 @@ async function loadLandingData() {
     }
   })
 
-  const heroProjectCards: HeroProject[] = heroProjects.map((project) => ({
-    id: project.id,
-    title: project.title ?? "Untitled project",
-    href: project.slug ? `/projects/${project.slug}` : "/projects",
-    imageUrl: project.primary_photo_url,
-    caption: [project.primary_category, project.location].filter(Boolean).join(" • ") || undefined,
-  }))
-
-  const resolvedHeroProjects = heroProjectCards.length > 0 ? heroProjectCards : FALLBACK_HERO_PROJECTS
-
   // Build mapping for title formatting (categories + taxonomy options)
   const allCategories = [...parentCategories, ...childCategories]
   const labelMap = new Map<string, string>()
-  
+
   // Add categories to the map
   allCategories.forEach(category => {
     if (category.id && category.name) {
       labelMap.set(category.id, category.name)
     }
   })
-  
+
   // Add taxonomy options to the map
   const taxonomyOptionsResult = await supabase
     .from("project_taxonomy_options")
     .select("id, name")
     .eq("is_active", true)
-  
+
   if (!taxonomyOptionsResult.error) {
     const taxonomyOptions = taxonomyOptionsResult.data ?? []
     taxonomyOptions.forEach(option => {
@@ -296,6 +286,37 @@ async function loadLandingData() {
       }
     })
   }
+
+  const heroProjectCards: HeroProject[] = heroProjects.map((project) => {
+    const style = project.style_preferences?.[0] || ""
+    const subType = project.project_type || ""
+    const location = project.location || ""
+
+    const parts = []
+    if (style) {
+      const styleLabel = labelMap.get(style) || style
+      parts.push(styleLabel)
+    }
+    if (subType) {
+      const subTypeLabel = labelMap.get(subType) || subType
+      parts.push(subTypeLabel)
+    }
+    if (location) {
+      parts.push(`in ${location}`)
+    }
+
+    const caption = parts.length > 0 ? parts.join(" ") : undefined
+
+    return {
+      id: project.id,
+      title: project.title ?? "Untitled project",
+      href: project.slug ? `/projects/${project.slug}` : "/projects",
+      imageUrl: project.primary_photo_url,
+      caption,
+    }
+  })
+
+  const resolvedHeroProjects = heroProjectCards.length > 0 ? heroProjectCards : FALLBACK_HERO_PROJECTS
 
   const popularProjectCards: PopularProjectCard[] = popularProjects.slice(0, 10).map((project) => {
     const style = project.style_preferences?.[0] || ""
@@ -418,7 +439,7 @@ export default async function HomePage() {
         <ProjectCategories categories={projectCategories} />
         <PopularProjects projects={popularProjects} />
         <FeaturesSection />
-        {/* <PopularServices /> */}
+        <PopularServices />
         <FeaturedCompanies companies={featuredCompanies} />
         <ProfessionalCategories categories={professionalCategories} />
         <ProjectTypes types={projectTypes} />

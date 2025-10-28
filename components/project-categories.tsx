@@ -38,11 +38,11 @@ export function ProjectCategories({ categories }: ProjectCategoriesProps) {
   }
 
   return (
-    <section className="py-16 px-4 md:px-8 bg-white">
+    <section className="py-10 px-4 md:px-8 bg-white">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-semibold text-gray-900">Project categories</h2>
-          <div className="flex gap-2">
+          <div className="hidden md:flex gap-2">
             <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
               <ChevronLeft className="h-4 w-4" />
             </Button>

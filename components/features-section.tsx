@@ -23,7 +23,7 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section className="py-16 px-4 md:px-8">
+    <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto rounded-lg p-8" style={{ backgroundColor: '#F8F4F4' }}>
         <h2 className="text-3xl font-bold text-gray-900 mb-4 text-left">Realize your next dream project</h2>
 

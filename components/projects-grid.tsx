@@ -231,13 +231,13 @@ export function ProjectsGrid() {
                   </button>
                 </div>
                 <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-start gap-2 mb-1">
                     <h7 className="text-gray-900 line-clamp-2 flex-1">
                       {(() => {
                         const style = project.style_preferences?.[0] || ""
                         const subType = project.project_type || ""
                         const location = project.location || "Location unavailable"
-                        
+
                         const parts = []
                         if (style) {
                           const styleLabel = filterContext.taxonomyLabelMap.get(style) || style
@@ -248,7 +248,7 @@ export function ProjectsGrid() {
                           parts.push(subTypeLabel)
                         }
                         parts.push(`in ${location}`)
-                        
+
                         return parts.join(" ")
                       })()}
                     </h7>
@@ -262,7 +262,7 @@ export function ProjectsGrid() {
                       disabled={!projectId || isMutatingLike}
                       aria-pressed={isLiked}
                       aria-label={isLiked ? "Unlike project" : "Like project"}
-                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-70"
+                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-70 flex-shrink-0"
                     >
                       <ThumbsUp
                         className={`h-3 w-3 ${isLiked ? "text-blue-600 fill-blue-600" : ""}`}
