@@ -1137,7 +1137,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <main className="px-4 py-8 md:px-8 pt-20 md:pt-20">
             <div className="max-w-7xl mx-auto">
             {/* Breadcrumb and Action Buttons Row */}
-            <div className="flex items-center justify-between mb-4 gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3 md:gap-4">
               <nav className="text-sm text-gray-600" aria-label="Breadcrumb">
                 <ol className="flex items-center gap-2">
                   <li>
@@ -1150,7 +1150,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 </ol>
               </nav>
 
-              <ProjectActionButtons projectId={project.id} />
+              <div className="self-end md:self-auto">
+                <ProjectActionButtons projectId={project.id} />
+              </div>
             </div>
 
             <div className="mb-8">

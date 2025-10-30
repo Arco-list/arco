@@ -33,8 +33,11 @@ export function MapSection() {
     const MAX_RETRIES = 50 // 5 seconds total (50 * 100ms)
     let retryCount = 0
     let timeoutId: NodeJS.Timeout | null = null
+    let cancelled = false
 
     const checkMapsLoaded = () => {
+      if (cancelled) return // Early exit if component unmounted
+
       if (window.google?.maps?.marker?.AdvancedMarkerElement) {
         setIsMapsLoaded(true)
         setMapError(null)
@@ -55,8 +58,9 @@ export function MapSection() {
 
     checkMapsLoaded()
 
-    // Cleanup function to prevent memory leaks
+    // Cleanup function to prevent memory leaks and setState on unmounted component
     return () => {
+      cancelled = true
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
@@ -84,7 +88,7 @@ export function MapSection() {
           mapTypeControl: false,
           streetViewControl: true,
           fullscreenControl: true,
-          mapId: 'ARCO_MAP_ID', // Required for AdvancedMarkerElement
+          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
         })
 
         markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
@@ -108,7 +112,7 @@ export function MapSection() {
               mapTypeControl: false,
               streetViewControl: false,
               fullscreenControl: true,
-              mapId: 'ARCO_MAP_ID', // Required for AdvancedMarkerElement
+              mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
             })
 
             markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({

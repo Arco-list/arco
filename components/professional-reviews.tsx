@@ -188,7 +188,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
   }
 
   return (
-    <div id={id} className="w-full bg-white py-8">
+    <div id={id} className="w-full bg-white py-8 px-4 md:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-2xl font-bold text-black">
@@ -253,7 +253,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
           </div>
         </div>
 
-        <div className="mb-6 flex items-center gap-6">
+        <div className="mb-6 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
           <div className="flex items-center gap-2">
             <Award className="h-4 w-4 text-gray-600" />
             <span className="text-sm text-gray-600">Quality of work</span>

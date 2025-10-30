@@ -440,32 +440,25 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
 
   const { primaryServiceId, servicesOffered, languages, certificates } = parsed.data
 
-  const { error: updateError } = await supabase
-    .from("companies")
-    .update({
-      primary_service_id: primaryServiceId || null,
-      services_offered: servicesOffered,
-      languages,
-      certificates,
-    })
-    .eq("id", company!.id)
+  // Use atomic function to update services and refresh materialized views
+  // This ensures data consistency - either both operations succeed or both fail
+  const { error: updateError } = await supabase.rpc("update_company_services", {
+    p_company_id: company!.id,
+    p_primary_service_id: primaryServiceId || null,
+    p_services_offered: servicesOffered,
+    p_languages: languages,
+    p_certificates: certificates,
+  })
 
   if (updateError) {
     logger.db(
-      "update",
-      "companies",
+      "rpc",
+      "update_company_services",
       "Failed to update company services",
       { companyId: company!.id },
       updateError
     )
     return { success: false, error: "Could not update services." }
-  }
-
-  // Refresh the materialized view to reflect the changes
-  const { error: refreshError } = await supabase.rpc("refresh_all_materialized_views")
-  if (refreshError) {
-    logger.warn("Failed to refresh materialized views after updating services", { companyId: company!.id }, refreshError)
-    // Don't fail - this will be refreshed on next scheduled refresh
   }
 
   revalidatePath("/dashboard/company")

@@ -457,8 +457,11 @@ export default function ListingEditorPage() {
     const MAX_RETRIES = 50 // 5 seconds total (50 * 100ms)
     let retryCount = 0
     let timeoutId: NodeJS.Timeout | null = null
+    let cancelled = false
 
     const checkMapsLoaded = () => {
+      if (cancelled) return // Early exit if component unmounted
+
       if (window.google?.maps?.marker?.AdvancedMarkerElement) {
         setIsMapsApiLoaded(true)
         setMapsError(null)
@@ -479,8 +482,9 @@ export default function ListingEditorPage() {
 
     checkMapsLoaded()
 
-    // Cleanup function to prevent memory leaks
+    // Cleanup function to prevent memory leaks and setState on unmounted component
     return () => {
+      cancelled = true
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
@@ -683,7 +687,7 @@ export default function ListingEditorPage() {
         fullscreenControl: false,
         streetViewControl: false,
         zoomControl: true,
-        mapId: 'ARCO_MAP_ID', // Required for AdvancedMarkerElement
+        mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
       })
 
       mapInstanceRef.current = map
@@ -698,13 +702,13 @@ export default function ListingEditorPage() {
       geocoderRef.current = new window.google.maps.Geocoder()
 
       marker.addListener("dragend", () => {
-        const position = marker.position as google.maps.LatLngLiteral
+        const position = marker.position as google.maps.LatLng
         if (!position) {
           return
         }
 
-        const lat = typeof position.lat === 'function' ? position.lat() : position.lat
-        const lng = typeof position.lng === 'function' ? position.lng() : position.lng
+        const lat = position.lat()
+        const lng = position.lng()
 
         setDetailsForm((prev) => ({
           ...prev,
