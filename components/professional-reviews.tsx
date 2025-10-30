@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Award, MessageCircle, Shield, Star, X } from "lucide-react"
+import { Award, ChevronDown, MessageCircle, Shield, Star, X } from "lucide-react"
 import { toast } from "sonner"
 
 import type { ProfessionalRatingsBreakdown, ProfessionalReviewSummary } from "@/lib/professionals/types"
@@ -11,7 +11,6 @@ import { useRequireAuth } from "@/hooks/use-require-auth"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const PLACEHOLDER_AVATAR = "/placeholder.svg?height=40&width=40"
 
@@ -64,6 +63,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
   const [workCarriedOut, setWorkCarriedOut] = useState<boolean | null>(null)
   const [isSubmitting, startTransition] = useTransition()
   const [sortBy, setSortBy] = useState<"recent" | "highest" | "lowest">("recent")
+  const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
 
   const router = useRouter()
   const pathname = usePathname()
@@ -188,63 +188,90 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
   }
 
   return (
-    <div id={id} className="w-full bg-white py-16">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Star className="h-5 w-5 fill-black text-black" />
-            <span className="text-xl font-semibold">{ratingHeadline}</span>
-          </div>
+    <div id={id} className="w-full bg-white py-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-2xl font-bold text-black">
+            <Star className="h-5 w-5 fill-black text-black inline-block mr-2 -mt-1" />
+            {ratingHeadline}
+          </h2>
           <div className="flex items-center gap-3">
             {reviews.length > 0 && (
-              <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="recent">Most recent</SelectItem>
-                  <SelectItem value="highest">Highest rated</SelectItem>
-                  <SelectItem value="lowest">Lowest rated</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+                  onClick={() => setIsSortDropdownOpen((open) => !open)}
+                >
+                  Sort: {sortBy === "recent" ? "Most recent" : sortBy === "highest" ? "Highest rated" : "Lowest rated"}
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+
+                {isSortDropdownOpen && (
+                  <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                    <div className="py-1">
+                      <button
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          setSortBy("recent")
+                          setIsSortDropdownOpen(false)
+                        }}
+                      >
+                        Most recent
+                      </button>
+                      <button
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          setSortBy("highest")
+                          setIsSortDropdownOpen(false)
+                        }}
+                      >
+                        Highest rated
+                      </button>
+                      <button
+                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          setSortBy("lowest")
+                          setIsSortDropdownOpen(false)
+                        }}
+                      >
+                        Lowest rated
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-            <Button variant="outline" onClick={handleOpenReviewModal} className="px-6 py-2">
+            <Button
+              variant="tertiary"
+              size="tertiary"
+              onClick={handleOpenReviewModal}
+            >
               Write a review
             </Button>
           </div>
         </div>
 
-        <div className="mb-12 grid grid-cols-1 gap-8 md:grid-cols-3">
-          <div className="text-center">
-            <div className="mb-2 flex justify-center">
-              <Award className="h-8 w-8 text-gray-600" />
-            </div>
-            <h3 className="mb-1 text-sm font-medium text-gray-900">
-              Quality of work {ratings.total > 0 && `(${ratings.total} ${ratings.total === 1 ? 'review' : 'reviews'})`}
-            </h3>
-            <p className="text-2xl font-semibold">{formatRating(ratings.quality)}</p>
+        <div className="mb-6 flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Award className="h-4 w-4 text-gray-600" />
+            <span className="text-sm text-gray-600">Quality of work</span>
+            <span className="text-sm font-semibold text-gray-900">{formatRating(ratings.quality)}</span>
           </div>
-          <div className="text-center">
-            <div className="mb-2 flex justify-center">
-              <Shield className="h-8 w-8 text-gray-600" />
-            </div>
-            <h3 className="mb-1 text-sm font-medium text-gray-900">
-              Reliability {ratings.total > 0 && `(${ratings.total} ${ratings.total === 1 ? 'review' : 'reviews'})`}
-            </h3>
-            <p className="text-2xl font-semibold">{formatRating(ratings.reliability)}</p>
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-gray-600" />
+            <span className="text-sm text-gray-600">Reliability</span>
+            <span className="text-sm font-semibold text-gray-900">{formatRating(ratings.reliability)}</span>
           </div>
-          <div className="text-center">
-            <div className="mb-2 flex justify-center">
-              <MessageCircle className="h-8 w-8 text-gray-600" />
-            </div>
-            <h3 className="mb-1 text-sm font-medium text-gray-900">
-              Communication {ratings.total > 0 && `(${ratings.total} ${ratings.total === 1 ? 'review' : 'reviews'})`}
-            </h3>
-            <p className="text-2xl font-semibold">{formatRating(ratings.communication)}</p>
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4 text-gray-600" />
+            <span className="text-sm text-gray-600">Communication</span>
+            <span className="text-sm font-semibold text-gray-900">{formatRating(ratings.communication)}</span>
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="mb-6 grid grid-cols-1 gap-8 md:grid-cols-2">
           {sortedReviews.length === 0 ? (
             <div className="col-span-full rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
               Reviews will appear here once homeowners share feedback.
@@ -259,7 +286,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                     className="h-10 w-10 rounded-full object-cover"
                   />
                   <div>
-                    <h4 className="font-medium text-gray-900">{review.reviewerName}</h4>
+                    <h4 className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900">{review.reviewerName}</h4>
                     {typeof review.yearsOnPlatform === "number" && review.yearsOnPlatform > 0 ? (
                       <p className="text-sm text-gray-500">
                         {review.yearsOnPlatform} year{review.yearsOnPlatform === 1 ? "" : "s"} on Arco
@@ -304,7 +331,11 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="outline" className="bg-transparent px-6 py-2" disabled={sortedReviews.length === 0}>
+          <Button
+            variant="tertiary"
+            size="tertiary"
+            disabled={sortedReviews.length === 0}
+          >
             Show all reviews
           </Button>
           <button className="text-sm text-gray-500 underline hover:no-underline">Learn how reviews work</button>

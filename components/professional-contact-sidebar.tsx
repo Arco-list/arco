@@ -1,14 +1,11 @@
 'use client'
 
-import Image from "next/image"
-import { Fragment, useState } from "react"
+import { useState } from "react"
 import {
   Facebook,
   Globe,
   Instagram,
   Linkedin,
-  Mail,
-  MapPin,
   Phone,
   type LucideIcon,
 } from "lucide-react"
@@ -17,7 +14,6 @@ import { IconBrandPinterest } from "@tabler/icons-react"
 import type { ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ReportModal } from "./report-modal"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=120&width=120"
 
@@ -57,7 +53,6 @@ const normalizeUrl = (value: string | null) => {
 }
 
 export function ProfessionalContactSidebar({ professional }: ProfessionalContactSidebarProps) {
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const company = professional.company
   const phone = company.phone ?? null
   const email = company.email ?? null
@@ -68,23 +63,11 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
 
   const primaryActions = [
     {
-      icon: Mail,
-      label: email ?? "Email unavailable",
-      href: email ? `mailto:${email}` : null,
-      disabled: !email,
-    },
-    {
       icon: Globe,
       label: website ? "Visit website" : "Website unavailable",
       href: website,
       disabled: !website,
       external: true,
-    },
-    {
-      icon: MapPin,
-      label: location ?? "Location unavailable",
-      href: null,
-      disabled: !location,
     },
   ]
 
@@ -106,47 +89,41 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
     .filter((entry): entry is { href: string; Icon: LucideIcon; platform: string } => Boolean(entry))
 
   return (
-    <div className="space-y-4">
-      <Card className="sticky top-24 z-10 space-y-6 p-6">
-        <div className="space-y-4 text-center">
-          <h3 className="text-lg font-semibold">Contact {displayName}</h3>
+    <div className="lg:sticky lg:top-24 lg:z-20">
+      <Card className="space-y-6 p-6">
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-black">Contact {displayName}</h2>
 
-
-          <div className="space-y-3 text-left">
-            <div className="space-y-2">
-              <div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Phone className="h-4 w-4" />
-                  {phone ? (
-                    <RevealPhoneNumber phone={phone} />
-                  ) : (
-                    <span className="text-gray-400">Phone unavailable</span>
-                  )}
-                </div>
+          <div className="space-y-3">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Phone className="h-4 w-4 flex-shrink-0" />
+                {phone ? (
+                  <RevealPhoneNumber phone={phone} />
+                ) : (
+                  <span className="text-gray-400">Phone unavailable</span>
+                )}
               </div>
 
               {primaryActions.map(({ icon: Icon, label, href, disabled, external }, index) => (
-                <Fragment key={index}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                  className="flex w-full items-center justify-start gap-2 px-2 py-2 text-left text-sm text-gray-600 hover:text-gray-900"
-                  asChild={Boolean(href)}
-                  disabled={disabled}
-                >
+                <div key={index} className="flex items-center gap-2 text-sm">
                   {href ? (
-                    <a href={href ?? ""} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}>
-                      <Icon className="h-4 w-4" />
+                    <a
+                      href={href ?? ""}
+                      target={external ? "_blank" : undefined}
+                      rel={external ? "noreferrer" : undefined}
+                      className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
                       <span>{label}</span>
                     </a>
                   ) : (
-                    <span className="inline-flex items-center gap-2 text-gray-400">
-                      <Icon className="h-4 w-4" />
+                    <span className="flex items-center gap-2 text-gray-400">
+                      <Icon className="h-4 w-4 flex-shrink-0" />
                       <span>{label}</span>
                     </span>
                   )}
-                  </Button>
-                </Fragment>
+                </div>
               ))}
             </div>
           </div>
@@ -154,7 +131,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
           {socialLinks.length > 0 ? (
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-gray-900">Follow</h4>
-              <div className="flex justify-center gap-2">
+              <div className="flex justify-start gap-2">
                 {socialLinks.map(({ href, Icon, platform }) => (
                   <a
                     key={platform}
@@ -178,17 +155,8 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
           >
             {email ? <a href={`mailto:${email}`}>Contact</a> : <span>Contact</span>}
           </Button>
-
-          <button
-            className="text-sm text-gray-500 underline transition hover:text-gray-700"
-            onClick={() => setIsReportModalOpen(true)}
-          >
-            Report this Professional
-          </button>
         </div>
       </Card>
-
-      <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />
     </div>
   )
 }

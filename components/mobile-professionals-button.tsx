@@ -16,10 +16,10 @@ export function MobileProfessionalsButton() {
   return (
     <>
       {/* Mobile sticky button */}
-      <div className="fixed bottom-4 left-4 right-4 z-50 lg:hidden">
-        <Button 
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 lg:hidden">
+        <Button
           onClick={() => setShowModal(true)}
-          className="w-full bg-red-600 hover:bg-red-700 text-white rounded-full py-3 px-6 font-medium shadow-lg"
+          className="bg-red-600 hover:bg-red-700 text-white rounded-full py-4 px-8 font-medium shadow-lg text-base"
         >
           Show professionals
         </Button>

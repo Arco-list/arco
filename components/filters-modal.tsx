@@ -242,10 +242,10 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                                     onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
                                     aria-checked={selectedTypes.includes(parentItem.id)}
                                   />
-                                  <h4 className="text-sm text-gray-700">{section.name}</h4>
+                                  <span className="text-sm">{section.name}</span>
                                 </label>
                               ) : (
-                                <h4 className="text-sm text-gray-700">{section.name}</h4>
+                                <span className="text-sm">{section.name}</span>
                               )}
                               {showToggle && (
                                 <button

@@ -346,7 +346,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           professional_id,
           company_id,
           professionals(id, title),
-          companies!inner(id, name, logo_url)
+          companies!inner(id, name, logo_url, slug)
         `)
         .eq("project_id", project.id)
         .eq("companies.status", "listed")
@@ -561,6 +561,38 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     return acc
   }, new Map())
 
+  // Get project counts for each company (only published/listed projects)
+  const companyIds = invites
+    .map(invite => invite.company_id)
+    .filter((id): id is string => Boolean(id))
+
+  const { data: projectCounts } = companyIds.length > 0
+    ? await supabase
+        .from("project_professionals")
+        .select("company_id, project_id, status, projects!inner(status)")
+        .in("company_id", companyIds)
+        .in("status", ["live_on_page", "listed"])
+        .eq("projects.status", "published")
+        .not("professional_id", "is", null)
+    : { data: [] }
+
+  // Count unique projects per company
+  const companyProjectCounts = new Map<string, Set<string>>()
+  projectCounts?.forEach(row => {
+    if (row.company_id && row.project_id) {
+      if (!companyProjectCounts.has(row.company_id)) {
+        companyProjectCounts.set(row.company_id, new Set())
+      }
+      companyProjectCounts.get(row.company_id)!.add(row.project_id)
+    }
+  })
+
+  // Convert to count
+  const companyProjectCountsMap = new Map<string, number>()
+  companyProjectCounts.forEach((projectSet, companyId) => {
+    companyProjectCountsMap.set(companyId, projectSet.size)
+  })
+
   // Map project professionals with their company and professional details
   // Note: company_id is the source of truth; companies join data is derived from this FK
   const projectProfessionals = invites.map((invite) => ({
@@ -570,8 +602,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     serviceCategory: categoryMap.get(invite.invited_service_category_id)?.name ?? "Service",
     serviceCategoryId: invite.invited_service_category_id,
     companyName: invite.companies?.name,
+    companySlug: invite.companies?.slug,
     companyLogo: invite.companies?.logo_url,
     professionalTitle: invite.professionals?.title,
+    projectsCount: invite.company_id ? (companyProjectCountsMap.get(invite.company_id) || 0) : 0,
     status: invite.status,
   }))
 
@@ -579,6 +613,29 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const createdAt = formatDate(project.created_at)
   const updatedAt = formatDate(project.updated_at)
   const projectTitle = project.title ?? "Untitled project"
+
+  // Build subtitle from style, sub-type, and location (matching card title format)
+  const subtitleParts = []
+  if (styleLabel) {
+    subtitleParts.push(styleLabel)
+  }
+  if (projectTypeLabel) {
+    subtitleParts.push(projectTypeLabel)
+  }
+  if (locationLabel) {
+    subtitleParts.push(`in ${locationLabel}`)
+  }
+  const projectSubtitle = subtitleParts.length > 0 ? subtitleParts.join(" ") : null
+
+  // Build third subtitle from building type and project year
+  const thirdSubtitleParts = []
+  if (buildingTypeLabel) {
+    thirdSubtitleParts.push(buildingTypeLabel)
+  }
+  if (project.project_year) {
+    thirdSubtitleParts.push(`in ${project.project_year}`)
+  }
+  const thirdSubtitle = thirdSubtitleParts.length > 0 ? thirdSubtitleParts.join(" ") : null
 
   const createProjectsHref = (params?: Record<string, string | null | undefined>) => {
     if (!params) {
@@ -765,19 +822,29 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const locationFeatureItems = buildFeatureItems("location_feature")
   const materialFeatureItems = buildFeatureItems("material_feature")
 
-  // Get materials value for metaDetails
-  const materialsValue = materialFeatureItems.map(item => item.label).join(", ")
+  // Get materials and location features for metaDetails (without modalGroupId requirement)
+  const allMaterialFeatures = selectionOptions
+    .filter(option => option.taxonomy_type === "material_feature")
+    .map(option => option.name)
+  const allLocationFeatures = selectionOptions
+    .filter(option => option.taxonomy_type === "location_feature")
+    .map(option => option.name)
 
+  const materialsValue = allMaterialFeatures.join(", ")
+  const locationFeaturesValue = allLocationFeatures.join(", ")
+
+  // Build metaDetails array - only include non-empty values
   const metaDetails = [
-    { label: "Category", value: primaryCategoryName ?? "" },
-    { label: "Style", value: styleLabel },
-    { label: "Size", value: projectSizeLabel },
-    { label: "Project year", value: project.project_year ? String(project.project_year) : "" },
-    { label: "Materials", value: materialsValue },
+    { label: "Category", value: parentCategory?.name ?? "" }, // Parent category like "Outdoor"
     { label: "Type", value: projectTypeLabel },
+    { label: "Style", value: styleLabel },
+    { label: "Project type", value: buildingTypeLabel },
+    { label: "Size", value: projectSizeLabel },
     { label: "Budget", value: budgetLabel },
+    { label: "Project year", value: project.project_year ? String(project.project_year) : "" },
     { label: "Building year", value: project.building_year ? String(project.building_year) : "" },
-    { label: "Location", value: locationLabel },
+    { label: "Materials", value: materialsValue },
+    { label: "Location", value: locationFeaturesValue },
   ].filter((detail) => detail.value !== null && detail.value !== undefined && detail.value !== "")
 
   let featureGroups: ProjectPreviewData["featureGroups"] = []
@@ -870,8 +937,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     similarFilters.push({ buildingTypeId })
   }
 
+  // Collect similar projects data first
+  const similarProjectsData: ProjectSummaryRow[] = []
   for (const filter of similarFilters) {
-    const remaining = SIMILAR_LIMIT - similarProjects.length
+    const remaining = SIMILAR_LIMIT - similarProjectsData.length
     if (remaining <= 0) {
       break
     }
@@ -884,7 +953,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     let query = supabase
       .from("mv_project_summary")
       .select(
-        "id, slug, title, location, likes_count, primary_photo_url, project_type, primary_category, building_type, created_at",
+        "id, slug, title, location, likes_count, primary_photo_url, project_type, primary_category, building_type, created_at, style_preferences",
       )
       .neq("id", project.id)
       .eq("status", "published")
@@ -912,27 +981,81 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
 
     const rows: ProjectSummaryRow[] = data ?? []
-
     rows.forEach((row) => {
       if (!row.id || seenSimilarIds.has(row.id) || !row.slug) {
         return
       }
-
       seenSimilarIds.add(row.id)
-      similarProjects.push({
-        id: row.id,
-        title: row.title ?? "Untitled project",
-        location: row.location,
-        imageUrl: row.primary_photo_url,
-        likes: row.likes_count ?? undefined,
-        href: row.slug ? `/projects/${row.slug}` : null,
-      })
+      similarProjectsData.push(row)
     })
 
-    if (similarProjects.length >= SIMILAR_LIMIT) {
+    if (similarProjectsData.length >= SIMILAR_LIMIT) {
       break
     }
   }
+
+  // Collect all taxonomy and category IDs from similar projects
+  const similarTaxonomyIds = new Set<string>()
+  const similarCategoryIds = new Set<string>()
+
+  similarProjectsData.forEach((row) => {
+    const primaryStyle = row.style_preferences?.[0]
+    if (isUuid(primaryStyle)) {
+      similarTaxonomyIds.add(primaryStyle)
+    }
+    if (isUuid(row.project_type)) {
+      similarCategoryIds.add(row.project_type)
+    }
+  })
+
+  // Fetch taxonomy and category data for similar projects
+  const [similarTaxonomyResult, similarCategoriesResult] = await Promise.all([
+    similarTaxonomyIds.size
+      ? supabase
+          .from("project_taxonomy_options")
+          .select("id, name, taxonomy_type, slug")
+          .in("id", Array.from(similarTaxonomyIds))
+      : Promise.resolve({ data: [] as TaxonomyOptionRow[], error: null }),
+    similarCategoryIds.size
+      ? supabase
+          .from("categories")
+          .select("id, name, slug")
+          .in("id", Array.from(similarCategoryIds))
+      : Promise.resolve({ data: [] as CategoryRow[], error: null }),
+  ])
+
+  const similarTaxonomyMap = new Map<string, TaxonomyOptionRow>()
+  ;(similarTaxonomyResult.data ?? []).forEach((row) => similarTaxonomyMap.set(row.id, row))
+
+  const similarCategoryMap = new Map<string, CategoryRow>()
+  ;(similarCategoriesResult.data ?? []).forEach((row) => similarCategoryMap.set(row.id, row))
+
+  // Now build the formatted similar projects
+  similarProjectsData.forEach((row) => {
+    const titleParts = []
+    const primaryStyle = row.style_preferences?.[0]
+    if (primaryStyle) {
+      const styleLabel = similarTaxonomyMap.get(primaryStyle)?.name || primaryStyle
+      titleParts.push(styleLabel)
+    }
+    if (row.project_type) {
+      const subTypeLabel = similarCategoryMap.get(row.project_type)?.name || row.project_type
+      titleParts.push(subTypeLabel)
+    }
+    if (row.location) {
+      titleParts.push(`in ${row.location}`)
+    }
+    const formattedTitle = titleParts.length > 0 ? titleParts.join(" ") : (row.title ?? "Untitled project")
+
+    similarProjects.push({
+      id: row.id,
+      title: formattedTitle,
+      slug: row.slug,
+      imageUrl: row.primary_photo_url,
+      likes: row.likes_count ?? 0,
+      href: row.slug ? `/projects/${row.slug}` : null,
+    })
+  })
 
   const previewData: ProjectPreviewData = {
     projectId: project.id,
@@ -960,8 +1083,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     info: {
       breadcrumbs,
       title: projectTitle,
-      subtitle: [styleLabel, projectTypeLabel].filter(Boolean).join(" • ") || null,
-      sponsoredLabel: project.project_year ? `Sponsored in ${project.project_year}` : null,
+      subtitle: projectSubtitle,
+      sponsoredLabel: thirdSubtitle,
       descriptionHtml: project.description,
       descriptionPlain: descriptionText,
     },
@@ -1044,14 +1167,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
                 <MapSection />
               </div>
 
-              <div className="lg:col-span-1">
+              <div className="hidden lg:block lg:col-span-1">
                 <ProfessionalsSidebar />
               </div>
             </div>
             </div>
           </main>
 
-          <div className="w-full bg-white py-16">
+          <div className="w-full bg-white">
             <div className="px-4 md:px-8">
               <div className="max-w-7xl mx-auto">
                 <SimilarProjects />

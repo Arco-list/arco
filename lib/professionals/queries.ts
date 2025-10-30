@@ -127,6 +127,8 @@ type ProjectSummaryRow = {
   likes_count: number | null
   project_year: number | null
   status: NullableString
+  style_preferences: NullableString[] | null
+  project_type: NullableString
 }
 
 type ReviewRow = {
@@ -546,8 +548,8 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
 
   // Query companies table first (company-centric approach)
   const companyQuery = isUuid(slugOrId)
-    ? supabase.from("companies").select("*").eq("id", slugOrId).maybeSingle()
-    : supabase.from("companies").select("*").eq("slug", slugOrId).maybeSingle()
+    ? supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name)").eq("id", slugOrId).maybeSingle()
+    : supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name)").eq("slug", slugOrId).maybeSingle()
 
   const companyResult = await companyQuery
 
@@ -721,7 +723,7 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
   if (uniqueProjectIds.length > 0) {
     const projectSummariesResult = await supabase
       .from("mv_project_summary")
-      .select("id, title, slug, location, primary_photo_url, likes_count, project_year, status")
+      .select("id, title, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type")
       .in("id", uniqueProjectIds)
 
     if (projectSummariesResult.error) {
@@ -741,10 +743,69 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
           .map((row) => [row.id, row])
       )
 
-      projects = uniqueProjectIds
+      const projectRows = uniqueProjectIds
         .map((id) => projectMap.get(id))
         .filter((row): row is ProjectSummaryRow => Boolean(row))
-        .map((row) => ({
+
+      // Collect all taxonomy IDs (styles and types) to resolve their names
+      const taxonomyIds = new Set<string>()
+      projectRows.forEach((row) => {
+        if (Array.isArray(row.style_preferences)) {
+          row.style_preferences.forEach((style) => {
+            if (isUuid(style)) {
+              taxonomyIds.add(style)
+            }
+          })
+        }
+        if (isUuid(row.project_type)) {
+          taxonomyIds.add(row.project_type)
+        }
+      })
+
+      // Fetch taxonomy names from categories/taxonomy tables
+      let taxonomyNameMap = new Map<string, string>()
+      if (taxonomyIds.size > 0) {
+        const [categoriesResult, taxonomyResult] = await Promise.all([
+          supabase
+            .from("categories")
+            .select("id, name")
+            .in("id", Array.from(taxonomyIds)),
+          supabase
+            .from("project_taxonomy_options")
+            .select("id, name")
+            .in("id", Array.from(taxonomyIds))
+        ])
+
+        if (categoriesResult.data) {
+          categoriesResult.data.forEach((cat) => {
+            if (cat.id && cat.name) {
+              taxonomyNameMap.set(cat.id, cat.name)
+            }
+          })
+        }
+
+        if (taxonomyResult.data) {
+          taxonomyResult.data.forEach((tax) => {
+            if (tax.id && tax.name) {
+              taxonomyNameMap.set(tax.id, tax.name)
+            }
+          })
+        }
+      }
+
+      // Map projects with resolved names
+      projects = projectRows.map((row) => {
+        const styleIds = Array.isArray(row.style_preferences) ? row.style_preferences : []
+        const resolvedStyles = styleIds
+          .map((id) => (isUuid(id) ? taxonomyNameMap.get(id) ?? id : id))
+          .filter(Boolean)
+
+        const projectType = row.project_type
+        const resolvedType = projectType && isUuid(projectType)
+          ? taxonomyNameMap.get(projectType) ?? projectType
+          : projectType
+
+        return {
           id: row.id,
           title: row.title ?? "Project",
           slug: row.slug ?? null,
@@ -752,7 +813,10 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
           image: row.primary_photo_url ?? null,
           likesCount: row.likes_count ?? null,
           projectYear: row.project_year ?? null,
-        }))
+          stylePreferences: resolvedStyles.length > 0 ? resolvedStyles : null,
+          projectType: resolvedType ?? null,
+        }
+      })
     }
   }
 
@@ -908,6 +972,8 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     lastReviewAt: companyRating?.last_review_at ?? null,
   }
 
+  const primaryServiceName = (company.primary_service as { name: string } | null)?.name ?? null
+
   return {
     id: company.id,
     slug: company.slug || company.id,
@@ -939,10 +1005,13 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
       phone: company.phone ?? null,
       website: company.website ?? null,
       domain: company.domain ?? null,
+      address: company.address ?? null,
       city: company.city ?? null,
       country: company.country ?? null,
+      primaryService: primaryServiceName,
       services: companyServices,
       languages: companyLanguages,
+      certificates: toNonEmptyStrings(company.certificates),
       teamSizeMin: company.team_size_min ?? null,
       teamSizeMax: company.team_size_max ?? null,
       foundedYear: company.founded_year ?? null,

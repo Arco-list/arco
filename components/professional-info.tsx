@@ -1,10 +1,12 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Star } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
+import { ReportModal } from "@/components/report-modal"
 import type { ProfessionalDetail } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
@@ -37,6 +39,9 @@ const formatArray = (values: string[], options?: { limit?: number }) => {
 }
 
 export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId }: ProfessionalInfoProps) {
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+
   const coverImage =
     professional.gallery.find((image) => image.isCover)?.url ??
     professional.company.logoUrl ??
@@ -74,41 +79,78 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     return null
   }
 
-  const primarySpecialty = professional.specialties[0] || professional.services[0] || null
+  // Combine primary service with other services (primary service first, company data only)
+  const primaryService = professional.company.primaryService
+  const allCompanyServices = professional.company.services
+  const combinedServices = useMemo(() => {
+    if (!primaryService) {
+      return allCompanyServices
+    }
+    // Filter out primary service from services array to avoid duplicates, then add it at the beginning
+    const otherServices = allCompanyServices.filter(s => s !== primaryService)
+    return [primaryService, ...otherServices]
+  }, [primaryService, allCompanyServices])
+
   const experience = formatExperience(professional.yearsExperience)
   const teamSize = formatTeamSize(professional.company.teamSizeMin, professional.company.teamSizeMax)
   const founded = professional.company.foundedYear ? professional.company.foundedYear.toString() : null
 
-  const leftSummaryItems = [
-    { label: "Specialization", value: primarySpecialty },
-    { label: "Experience", value: experience },
-    { label: "Services", value: formatArray(professional.services, { limit: 3 }) },
-    { label: "Languages", value: formatArray(professional.languages, { limit: 3 }) },
-    { label: "Team size", value: teamSize },
-  ].filter((item) => Boolean(item.value))
+  // Build address from company.address, city, and country
+  const addressParts = [
+    professional.company.address,
+    professional.company.city,
+    professional.company.country
+  ].filter(Boolean)
+  const address = addressParts.length > 0 ? addressParts.join(", ") : null
 
-  const rightSummaryItems = [
-    { label: "Location", value: professional.location },
+  const certificates = formatArray(professional.company.certificates)
+
+  // Build details in grid format (similar to project details)
+  const detailItems = [
+    { label: "Services", value: formatArray(combinedServices) || "⚠️ Missing primary service" },
+    { label: "Experience", value: experience },
+    { label: "Team size", value: teamSize },
+    { label: "Languages", value: formatArray(professional.company.languages) },
+    { label: "Address", value: address },
     { label: "Hourly rate", value: professional.hourlyRateDisplay },
     { label: "Founded", value: founded },
-    {
-      label: "Joined",
-      value: formatJoinedYear(professional.profile.joinedAt ?? null),
-    },
-    {
-      label: "Verified",
-      value: professional.isVerified ? "Yes" : undefined,
-    },
+    { label: "Certificates", value: certificates },
+    { label: "Joined", value: formatJoinedYear(professional.profile.joinedAt ?? null) },
+    { label: "Verified", value: professional.isVerified ? "Yes" : undefined },
   ].filter((item) => Boolean(item.value))
 
   const ratingHref = reviewsAnchorId ? `#${reviewsAnchorId}` : undefined
+
+  const subtitle = useMemo(() => {
+    // Use company's PRIMARY service (from primary_service_id), NOT the first item in services array
+    const service = professional.company.primaryService || professional.company.services[0]
+    const location = professional.location
+
+    if (service && location) {
+      return `${service} in ${location}`
+    }
+    if (service) {
+      return service
+    }
+    if (location) {
+      return location
+    }
+    return professional.title || null
+  }, [professional.company.primaryService, professional.company.services, professional.location, professional.title])
+
+  const description = professional.description || ""
+  const MAX_CHARS = 200
+  const shouldTruncate = description.length > MAX_CHARS
+  const displayDescription = shouldTruncate && !isDescriptionExpanded
+    ? description.substring(0, MAX_CHARS) + "..."
+    : description
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-6">
         <div className="space-y-3 flex-1">
           <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
-          {professional.title ? <h2 className="text-xl text-gray-600">{professional.title}</h2> : null}
+          {subtitle ? <h2 className="text-xl text-gray-600">{subtitle}</h2> : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -129,8 +171,19 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
             )}
           </div>
 
-          {professional.description ? (
-            <p className="max-w-3xl text-gray-700">{professional.description}</p>
+          {description ? (
+            <div className="space-y-2">
+              <p className="max-w-3xl text-gray-700">{displayDescription}</p>
+              {shouldTruncate && (
+                <Button
+                  variant="link"
+                  className="p-0 text-red-600 hover:text-red-700"
+                  onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                >
+                  {isDescriptionExpanded ? "Show less" : "Show more"}
+                </Button>
+              )}
+            </div>
           ) : null}
         </div>
 
@@ -145,28 +198,26 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
         </div>
       </div>
 
-      <div className="border-y border-gray-200 py-6">
-        <h3 className="mb-6 text-xl font-semibold text-black">Meet the professional</h3>
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold text-black">Meet the professional</h2>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="space-y-4">
-            {leftSummaryItems.map((item) => (
-              <div key={item.label}>
-                <h4 className="mb-1 text-sm font-medium text-gray-900">{item.label}</h4>
-                <p className="text-sm text-gray-600">{item.value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-4">
-            {rightSummaryItems.map((item) => (
-              <div key={item.label}>
-                <h4 className="mb-1 text-sm font-medium text-gray-900">{item.label}</h4>
-                <p className="text-sm text-gray-600">{item.value}</p>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {detailItems.map((detail) => (
+            <div key={detail.label} className="space-y-1">
+              <p className="text-sm text-gray-500">{detail.label}</p>
+              <p className="text-sm font-medium text-gray-900">{detail.value}</p>
+            </div>
+          ))}
         </div>
+
+        <button
+          className="text-sm text-gray-500 hover:text-gray-700 underline mt-4"
+          onClick={() => setIsReportModalOpen(true)}
+        >
+          Report this listing
+        </button>
+
+        <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />
       </div>
     </div>
   )

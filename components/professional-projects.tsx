@@ -1,43 +1,31 @@
 "use client"
 
-import Link from "next/link"
 import { useMemo, useState } from "react"
 
 import type { ProfessionalProjectSummary } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
-
-const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=400"
+import { ProjectCard } from "@/components/project-card"
+import { useSavedProjects } from "@/contexts/saved-projects-context"
+import { useProjectLikes } from "@/contexts/project-likes-context"
 
 type ProfessionalProjectsProps = {
   projects: ProfessionalProjectSummary[]
 }
 
-const formatProjectLocation = (project: ProfessionalProjectSummary) => {
-  if (project.location && project.projectYear) {
-    return `${project.location} • ${project.projectYear}`
-  }
-
-  if (project.location) {
-    return project.location
-  }
-
-  if (project.projectYear) {
-    return `${project.projectYear}`
-  }
-
-  return null
-}
-
-const resolveProjectHref = (project: ProfessionalProjectSummary) => {
-  if (project.slug) {
-    return `/projects/${project.slug}`
-  }
-
-  return `/projects/${project.id}`
-}
-
 export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
   const [visibleCount, setVisibleCount] = useState(6)
+  const {
+    savedProjectIds,
+    mutatingProjectIds: savedMutatingProjectIds,
+    saveProject,
+    removeProject,
+  } = useSavedProjects()
+  const {
+    likedProjectIds,
+    mutatingProjectIds: likeMutatingProjectIds,
+    likeCounts,
+    toggleLike,
+  } = useProjectLikes()
 
   const displayedProjects = useMemo(() => projects.slice(0, visibleCount), [projects, visibleCount])
   const hasMore = visibleCount < projects.length
@@ -56,27 +44,58 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
         <h2 className="text-2xl font-bold text-black">{projects.length} project{projects.length === 1 ? "" : "s"}</h2>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {displayedProjects.map((project) => {
-          const href = resolveProjectHref(project)
-          const locationLabel = formatProjectLocation(project)
+          const projectId = project.id
+          const isSaved = savedProjectIds.has(projectId)
+          const isMutatingSave = savedMutatingProjectIds.has(projectId)
+          const isLiked = likedProjectIds.has(projectId)
+          const isMutatingLike = likeMutatingProjectIds.has(projectId)
+          const likesCount = likeCounts[projectId] ?? project.likesCount ?? 0
+
+          // Build project title in format: [style] [type] in [location]
+          const style = project.stylePreferences?.[0] || ""
+          const type = project.projectType || ""
+          const location = project.location || "Location unavailable"
+
+          const titleParts = []
+          if (style) {
+            titleParts.push(style)
+          }
+          if (type) {
+            titleParts.push(type)
+          }
+          titleParts.push(`in ${location}`)
+          const formattedTitle = titleParts.join(" ")
+
+          const projectData = {
+            id: projectId,
+            title: formattedTitle,
+            slug: project.slug,
+            imageUrl: project.image,
+            imageAlt: formattedTitle,
+            location: project.location,
+            likes: project.likesCount,
+          }
 
           return (
-            <Link key={project.id} href={href} className="group block">
-              <div className="mb-3 overflow-hidden rounded-lg bg-gray-100">
-                <img
-                  src={project.image || PLACEHOLDER_IMAGE}
-                  alt={project.title}
-                  className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  onError={(event) => {
-                    event.currentTarget.onerror = null
-                    event.currentTarget.src = PLACEHOLDER_IMAGE
-                  }}
-                />
-              </div>
-              <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">{project.title}</h3>
-              {locationLabel ? <p className="text-xs text-gray-500">{locationLabel}</p> : null}
-            </Link>
+            <ProjectCard
+              key={project.id}
+              project={projectData}
+              isSaved={isSaved}
+              isLiked={isLiked}
+              isMutatingSave={isMutatingSave}
+              isMutatingLike={isMutatingLike}
+              likesCount={likesCount}
+              onToggleSave={(proj) => {
+                if (isSaved) {
+                  void removeProject(projectId)
+                } else {
+                  void saveProject(projectId)
+                }
+              }}
+              onToggleLike={(id, count) => void toggleLike(id, { currentCount: count })}
+            />
           )
         })}
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ChangeEvent, type DragEvent } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import {
   changeCompanyStatusAction,
@@ -33,7 +34,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Camera, ChevronRight, ImageIcon, MoreHorizontal, Trash2, User } from "lucide-react"
+import { Camera, ChevronLeft, ChevronRight, ImageIcon, Menu, MoreHorizontal, Trash2, User } from "lucide-react"
 import { toast } from "sonner"
 
 const languageOptions = ["Dutch", "English", "German", "French", "Spanish"] as const
@@ -101,10 +102,12 @@ const moveItem = <T,>(items: readonly T[], from: number, to: number): T[] => {
 }
 
 export function CompanySettingsShell({ company, socialLinks, photos, services, professionalId }: CompanySettingsShellProps) {
+  const router = useRouter()
   const [activeSection, setActiveSection] = useState<"profile" | "photos">("profile")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const [companyStatus, setCompanyStatus] = useState(company.status)
   const planTier = company.plan_tier
@@ -594,54 +597,42 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
   }
 
   const handlePreviewCompany = () => {
-    if (!professionalId) {
-      toast.error("Preview unavailable", {
-        description: "Professional profile not found for this company.",
-      })
-      return
-    }
-
-    const targetUrl = `/professionals/${professionalId}`
+    const companySlug = company.slug || company.id
+    const targetUrl = `/professionals/${companySlug}`
     window.open(targetUrl, "_blank", "noopener,noreferrer")
+  }
+
+  const getCurrentSectionTitle = () => {
+    const item = navItems.find((item) => item.id === activeSection)
+    return item?.label ?? "Company Settings"
   }
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Company</h1>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <Badge variant="secondary">{planBadgeText}</Badge>
-          {domainDisplay ? <span className="text-sm text-gray-500">Domain: {domainDisplay}</span> : null}
-        </div>
-      </header>
-
       <div className="flex flex-col gap-8 lg:flex-row">
-        <aside className="lg:w-64 lg:flex-shrink-0 lg:border-r lg:border-gray-200 lg:pr-6">
-          <Dialog
-            open={statusDialogOpen}
-            onOpenChange={(open) => {
-              setStatusDialogOpen(open)
-              if (open) {
-                setSelectedStatus(companyStatus === "deactivated" ? "unlisted" : (companyStatus as ListingStatus))
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <button
-                type="button"
-                className="w-full flex items-center justify-between px-[18px] py-3 rounded-full bg-quaternary text-quaternary-foreground hover:bg-quaternary-hover transition-all text-sm font-medium"
-              >
-                <div className="text-left">
+        <aside className="hidden lg:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
+          <div className="space-y-6">
+            <Dialog
+              open={statusDialogOpen}
+              onOpenChange={(open) => {
+                setStatusDialogOpen(open)
+                if (open) {
+                  setSelectedStatus(companyStatus === "deactivated" ? "unlisted" : (companyStatus as ListingStatus))
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button
+                  variant="tertiary"
+                  className="w-full justify-between"
+                >
                   <div className="flex items-center gap-2">
                     <span className={cn("h-2 w-2 rounded-full", statusIndicator)} />
                     <span>{statusLabel}</span>
                   </div>
-                </div>
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </DialogTrigger>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Company visibility</DialogTitle>
@@ -679,11 +670,12 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                 })}
               </div>
               <DialogFooter className="mt-6">
-                <Button type="button" variant="ghost" onClick={() => setStatusDialogOpen(false)} disabled={statusPending}>
+                <Button type="button" variant="tertiary" onClick={() => setStatusDialogOpen(false)} disabled={statusPending}>
                   Cancel
                 </Button>
                 <Button
                   type="button"
+                  variant="secondary"
                   onClick={() =>
                     performStatusUpdate(selectedStatus as CompanyStatus, {
                       onSuccess: () => setStatusDialogOpen(false),
@@ -699,61 +691,84 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           </Dialog>
 
           {/* Preview company */}
-          <div className="mt-4">
-            <Button 
-              className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3" 
+          <div>
+            <Button
+              className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3"
               onClick={handlePreviewCompany}
             >
               Preview company
             </Button>
           </div>
 
-          <div className="hidden lg:mt-8 lg:block">
-            <nav className="space-y-2">
-              {navItems.map((item) => {
-                const Icon = item.icon
-                const isActive = activeSection === item.id
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveSection(item.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 px-[18px] py-3 rounded-full text-left text-sm font-medium transition-all",
-                      isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                  </button>
-                )
-              })}
-            </nav>
+          {/* Navigation Items */}
+          <div className="space-y-2">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const isActive = activeSection === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveSection(item.id)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all text-sm font-medium",
+                    isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </div>
           </div>
         </aside>
 
-        <section className="flex-1 space-y-8">
-          <div className="lg:hidden">
-            <div className="grid grid-cols-2 gap-3">
-              {navItems.map((item) => {
-                const Icon = item.icon
-                const isActive = activeSection === item.id
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveSection(item.id)}
-                    className={cn(
-                      "flex items-center justify-center gap-2 rounded-lg border p-3 text-sm font-medium transition",
-                      isActive ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 bg-white hover:border-gray-300"
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span className="text-base font-medium">{item.label}</span>
-                  </button>
-                )
-              })}
+        <section className="flex-1 space-y-8 lg:pt-6">
+          {/* Mobile Status Button */}
+          <div className="lg:hidden mb-6 max-w-64">
+            <Dialog
+              open={statusDialogOpen}
+              onOpenChange={(open) => {
+                setStatusDialogOpen(open)
+                if (open) {
+                  setSelectedStatus(companyStatus === "deactivated" ? "unlisted" : (companyStatus as ListingStatus))
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button
+                  variant="tertiary"
+                  className="w-full justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={cn("h-2 w-2 rounded-full", statusIndicator)} />
+                    <span>{statusLabel}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+            </Dialog>
+          </div>
+
+          {/* Mobile Navigation Header */}
+          <div className="lg:hidden mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="tertiary"
+                size="icon"
+                onClick={() => setIsMobileMenuOpen(true)}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+              <h1 className="text-xl font-semibold text-gray-900">{getCurrentSectionTitle()}</h1>
             </div>
+            <Button
+              className="bg-gray-900 text-white hover:bg-gray-800"
+              onClick={handlePreviewCompany}
+            >
+              Preview
+            </Button>
           </div>
 
           {showUpgradeBanner && (
@@ -991,8 +1006,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                             <label
                               key={service.id}
                               className={cn(
-                                "flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm",
-                                disabled ? "opacity-60" : "hover:border-gray-300"
+                                "flex items-center gap-2 rounded-md px-3 py-2 text-sm",
+                                disabled ? "opacity-60" : ""
                               )}
                             >
                               <Checkbox
@@ -1016,7 +1031,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                           return (
                             <label
                               key={certificate}
-                              className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm hover:border-gray-300"
+                              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm"
                             >
                               <Checkbox
                                 checked={checked}
@@ -1038,7 +1053,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                           return (
                             <label
                               key={language}
-                              className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm hover:border-gray-300"
+                              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm"
                             >
                               <Checkbox
                                 checked={checked}
@@ -1219,6 +1234,38 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           )}
         </section>
       </div>
+
+      {/* Mobile Navigation Drawer */}
+      <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+        <DialogContent className="max-w-sm">
+          <div className="space-y-4">
+            {/* Navigation Items */}
+            <div className="space-y-2">
+              {navItems.map((item) => {
+                const Icon = item.icon
+                const isActive = activeSection === item.id
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveSection(item.id)
+                      setIsMobileMenuOpen(false)
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all text-sm font-medium",
+                      isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

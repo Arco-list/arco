@@ -114,6 +114,10 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           <div className="grid grid-cols-1 items-start gap-8 py-8 lg:grid-cols-3">
             <div className="space-y-8 lg:col-span-2">
               <ProfessionalInfo professional={professional} shareUrl={shareUrl} reviewsAnchorId={REVIEWS_ANCHOR_ID} />
+
+              <div id="projects-section">
+                <ProfessionalProjects projects={projects} />
+              </div>
             </div>
 
             <div className="lg:col-span-1">
@@ -122,14 +126,6 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           </div>
         </div>
       </main>
-
-      <div className="w-full bg-white py-16">
-        <div className="px-4 md:px-8">
-          <div className="max-w-7xl mx-auto">
-            <ProfessionalProjects projects={projects} />
-          </div>
-        </div>
-      </div>
 
       <ProfessionalReviews
         id={REVIEWS_ANCHOR_ID}

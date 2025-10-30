@@ -18,21 +18,23 @@ export function ProfessionalsSidebar() {
     <>
       <div className="lg:sticky lg:top-24 lg:z-20">
         <Card className="p-6 space-y-6">
-          <h3 className="text-lg font-semibold">Professionals who built it</h3>
+          <h2 className="text-2xl font-bold text-black">Professionals who built it</h2>
 
-          <div className="space-y-3">
+          <div className="divide-y divide-gray-200">
             {projectProfessionals.map((professional) => (
-              <div key={professional.id} className="flex items-start justify-between gap-3">
+              <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">
                     {professional.companyName}
                   </p>
-                  <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
+                  <p className="text-xs text-gray-500">
+                    {professional.serviceCategory} · {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                  </p>
                 </div>
-                <Button 
-                  variant="tertiary" 
+                <Button
+                  variant="tertiary"
                   size="sm"
-                  onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
+                  onClick={() => professional.companySlug && window.open(`/professionals/${professional.companySlug}`, '_blank')}
                 >
                   Visit
                 </Button>
@@ -52,19 +54,21 @@ export function ProfessionalsSidebar() {
             <DialogTitle className="text-lg font-semibold">Professionals who built it</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 py-4">
+          <div className="divide-y divide-gray-200 py-4">
             {projectProfessionals.map((professional) => (
-              <div key={professional.id} className="flex items-start justify-between gap-3">
+              <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">
                     {professional.companyName}
                   </p>
-                  <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
+                  <p className="text-xs text-gray-500">
+                    {professional.serviceCategory} · {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                  </p>
                 </div>
-                <Button 
-                  variant="tertiary" 
+                <Button
+                  variant="tertiary"
                   size="sm"
-                  onClick={() => professional.professionalId && window.open(`/professionals/${professional.professionalId}`, '_blank')}
+                  onClick={() => professional.companySlug && window.open(`/professionals/${professional.companySlug}`, '_blank')}
                 >
                   Visit
                 </Button>

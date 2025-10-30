@@ -29,10 +29,10 @@ export function ProfessionalActionButtons({
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2">
         <Button variant="tertiary" size="tertiary" onClick={() => setIsShareModalOpen(true)}>
-          <Share className="w-4 h-4 mr-2" />
-          Share
+          <Share className="w-4 h-4 md:mr-2" />
+          <span className="hidden md:inline">Share</span>
         </Button>
         <Button
           variant={isSaved ? "default" : "tertiary"}
@@ -48,8 +48,8 @@ export function ProfessionalActionButtons({
           disabled={!professional.companyId || isMutating}
           aria-pressed={isSaved}
         >
-          <Bookmark className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
-          {isSaved ? "Saved" : "Save"}
+          <Bookmark className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
+          <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
         </Button>
       </div>
 

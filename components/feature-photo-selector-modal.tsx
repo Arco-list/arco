@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react"
 import { AlertCircle, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -104,8 +105,8 @@ export function FeaturePhotoSelectorModal({
 
   return (
     <div className={overlayClassName}>
-      <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-lg bg-white">
-        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white p-6">
+      <div className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-lg bg-white overflow-hidden">
+        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white p-6 flex-shrink-0">
           <h2 className="text-xl font-semibold text-gray-900">Select photos for {featureName}</h2>
           <div className="flex items-center gap-3">
             {canDeleteFeature && onDeleteFeature && (
@@ -144,7 +145,7 @@ export function FeaturePhotoSelectorModal({
           </div>
         </div>
 
-        <div className="space-y-6 p-6 pb-8">
+        <div className="space-y-6 p-6 pb-8 overflow-y-auto overflow-x-hidden flex-1">
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Select from existing photos</h3>
@@ -178,13 +179,16 @@ export function FeaturePhotoSelectorModal({
                       event.target.value = ""
                     }}
                   />
-                  <span
-                    className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
-                      isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
-                    }`}
+                  <Button
+                    asChild
+                    variant="secondary"
+                    size="lg"
+                    disabled={isUploading}
                   >
-                    {isUploading ? "Uploading…" : "Browse Files"}
-                  </span>
+                    <span>
+                      {isUploading ? "Uploading…" : "Browse Files"}
+                    </span>
+                  </Button>
                 </label>
                 {modalUploadErrors.length > 0 && (
                   <ul className="mt-4 space-y-1 text-left text-sm text-red-600">
@@ -349,21 +353,23 @@ export function FeaturePhotoSelectorModal({
           )}
         </div>
 
-        <div className="sticky bottom-0 left-0 right-0 -mx-6 -mb-6 border-t border-gray-200 bg-white p-6 pt-4">
-          <div className="flex gap-3">
-            <button
+        <div className="border-t border-gray-200 bg-white p-6 pt-4 flex-shrink-0">
+          <div className="flex gap-4 justify-end">
+            <Button
               onClick={onCancel}
-              className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
+              variant="tertiary"
+              size="tertiary"
             >
               {cancelLabel}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => void onSave()}
               disabled={isSaving || saveDisabled}
-              className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              variant="secondary"
+              size="lg"
             >
               {isSaving ? "Saving…" : saveLabel}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -69,7 +69,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
         onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, 0) : undefined}
         className={cn(
           "group relative overflow-hidden rounded-xl bg-gray-100 transition-transform",
-          "aspect-[4/3] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
+          "h-[400px] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
           galleryIsInteractive
             ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
             : "cursor-default",
@@ -99,7 +99,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
               onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, index + 1) : undefined}
               className={cn(
                 "group relative overflow-hidden rounded-xl bg-gray-100",
-                "aspect-square",
+                "h-[180px] md:aspect-square md:h-auto",
                 galleryIsInteractive
                   ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   : "cursor-default",

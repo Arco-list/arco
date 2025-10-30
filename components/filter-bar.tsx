@@ -289,7 +289,7 @@ export function FilterBar() {
 
   const getButtonClassName = (hasSelection: boolean) => {
     return hasSelection
-      ? "data-[state=on] border-red-500 text-red-600 bg-red-50 hover:bg-red-100"
+      ? "border-[#222222] text-[#222222] bg-transparent"
       : ""
   }
 
@@ -376,10 +376,10 @@ export function FilterBar() {
                                       onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
                                       aria-checked={selectedTypes.includes(parentItem.id)}
                                     />
-                                    <h4 className="text-sm text-gray-700">{section.name}</h4>
+                                    <span className="text-sm">{section.name}</span>
                                   </label>
                                 ) : (
-                                  <h4 className="text-sm text-gray-700">{section.name}</h4>
+                                  <span className="text-sm">{section.name}</span>
                                 )}
                                 {showToggle && (
                                   <button
@@ -565,8 +565,8 @@ export function FilterBar() {
                     key={item.id}
                     onClick={() => toggleTypeSelection(item.id)}
                     variant="quaternary"
-                    className={isSelected 
-                      ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100" 
+                    className={isSelected
+                      ? "border-[#222222] text-[#222222] bg-transparent"
                       : ""
                     }
                   >

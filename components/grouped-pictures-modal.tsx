@@ -256,13 +256,13 @@ export function GroupedPicturesModal({
                             <img
                               src={group.images.find((img) => img.isPrimary)?.src || "/placeholder.svg"}
                               alt={group.images.find((img) => img.isPrimary)?.alt}
-                              className="w-full aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
+                              className="w-full aspect-[4/3] md:aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
                             />
                           </div>
                         )}
 
                         {/* Secondary Images Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {group.images
                             .filter((img) => !img.isPrimary)
                             .map((image, imageIndex) => {
@@ -276,7 +276,7 @@ export function GroupedPicturesModal({
                                   <img
                                     src={image.src || "/placeholder.svg"}
                                     alt={image.alt}
-                                    className="w-full aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
+                                    className="w-full aspect-[4/3] md:aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
                                   />
                                 </div>
                               )
@@ -313,7 +313,7 @@ export function GroupedPicturesModal({
                 Close
               </Button>
 
-              <div className="text-white font-medium">
+              <div className="absolute left-1/2 -translate-x-1/2 text-white font-medium">
                 {currentImageIndex + 1}/{allImages.length}
               </div>
 

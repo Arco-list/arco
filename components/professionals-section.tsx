@@ -1,92 +1,110 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { useState, useRef } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import Link from "next/link"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProfessionalsSection() {
   const [showModal, setShowModal] = useState(false)
-  const [isSticky, setIsSticky] = useState(true)
-  const sectionRef = useRef<HTMLDivElement>(null)
-  const { projectProfessionals, professionalsSummary } = useProjectPreview()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const { projectProfessionals } = useProjectPreview()
 
-  // Sticky positioning logic - stop being sticky when similar projects section is visible
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          // When similar projects section becomes visible, disable sticky
-          setIsSticky(!entry.isIntersecting)
-        })
-      },
-      { 
-        threshold: 0.1,
-        rootMargin: '0px 0px -10% 0px' // Trigger slightly before the section is fully visible
-      }
-    )
-
-    // Find the similar projects section
-    const similarProjectsSection = document.querySelector('[data-section="similar-projects"]')
-    if (similarProjectsSection) {
-      observer.observe(similarProjectsSection)
+  const scrollLeft = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: -320, behavior: "smooth" })
     }
+  }
 
-    return () => observer.disconnect()
-  }, [])
+  const scrollRight = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: 320, behavior: "smooth" })
+    }
+  }
 
   if (!projectProfessionals || projectProfessionals.length === 0) {
     return null
   }
 
-  const summaryCards = professionalsSummary && professionalsSummary.length > 0
-    ? professionalsSummary
-    : projectProfessionals.slice(0, 3)
-
   return (
     <>
-      <div 
-        ref={sectionRef}
-        className="space-y-6"
-      >
-        <h4>Professionals who built it</h4>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-black">Professionals who built it</h2>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowModal(true)}
+              className="text-sm text-gray-700 hover:text-gray-900 font-medium"
+            >
+              View all
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={scrollLeft}
+                className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                aria-label="Previous professionals"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={scrollRight}
+                className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                aria-label="Next professionals"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
 
-        {summaryCards.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            {summaryCards.map((professional) => (
-              <div key={professional.id}>
-                <div className="flex flex-col space-y-3 hover:opacity-80 transition-opacity h-full">
+        <div
+          ref={scrollRef}
+          className="flex gap-4 overflow-x-auto scrollbar-hide pb-2"
+          style={{ scrollSnapType: "x mandatory" }}
+        >
+          {projectProfessionals.map((professional) => {
+            const professionalHref = professional.companySlug
+              ? `/professionals/${professional.companySlug}`
+              : '#'
+            const projectsHref = `${professionalHref}#projects`
+
+            return (
+              <div
+                key={professional.id}
+                className="flex-none w-80"
+                style={{ scrollSnapAlign: "start" }}
+              >
+                <Link href={professionalHref}>
                   {professional.companyLogo ? (
-                    <img 
-                      src={professional.companyLogo} 
-                      alt={professional.companyName || 'Company'} 
-                      className="w-full h-32 rounded-lg object-cover"
+                    <img
+                      src={professional.companyLogo}
+                      alt={professional.companyName || 'Company'}
+                      className="aspect-square w-full object-cover rounded-lg transition-transform duration-300 hover:scale-105 mb-4"
                     />
                   ) : (
-                    <div className="w-full h-32 rounded-lg bg-gray-100"></div>
+                    <div className="aspect-square w-full rounded-lg bg-gray-100 transition-transform duration-300 hover:scale-105 mb-4"></div>
                   )}
-                  <div className="space-y-1 flex-1">
-                    <h6 className="text-gray-900">{professional.companyName}</h6>
-                    <p className="text-xs leading-relaxed text-gray-600">{professional.serviceCategory}</p>
-                  </div>
-                  <Button 
-                    variant="tertiary" 
-                    size="tertiary" 
-                    className="self-start"
-                    onClick={() => professional.companyId && window.open(`/professionals/${professional.companyId}`, '_blank')}
+                </Link>
+                <Link href={professionalHref}>
+                  <p className="text-sm font-medium text-gray-900 hover:text-gray-700 mb-1">
+                    {professional.companyName}
+                  </p>
+                </Link>
+                <p className="text-xs text-gray-600">
+                  {professional.serviceCategory}
+                  {' · '}
+                  <Link
+                    href={projectsHref}
+                    className="underline hover:text-gray-900"
                   >
-                    Visit
-                  </Button>
-                </div>
+                    {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                  </Link>
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-
-        <Button variant="default" onClick={() => setShowModal(true)}>
-          Show all professionals
-        </Button>
+            )
+          })}
+        </div>
       </div>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
@@ -96,27 +114,47 @@ export function ProfessionalsSection() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {projectProfessionals.map((professional) => (
-              <div key={professional.id} className="flex items-start gap-3 py-2">
-                {professional.companyLogo ? (
-                  <img 
-                    src={professional.companyLogo} 
-                    alt={professional.companyName || 'Company logo'} 
-                    className="w-12 h-12 rounded object-cover"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">
-                    Logo
+            {projectProfessionals.map((professional) => {
+              const professionalHref = professional.companySlug
+                ? `/professionals/${professional.companySlug}`
+                : '#'
+              const projectsHref = `${professionalHref}#projects`
+
+              return (
+                <div key={professional.id} className="flex items-start gap-3 py-2">
+                  <Link href={professionalHref}>
+                    {professional.companyLogo ? (
+                      <img
+                        src={professional.companyLogo}
+                        alt={professional.companyName || 'Company logo'}
+                        className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                        Logo
+                      </div>
+                    )}
+                  </Link>
+                  <div className="flex-1 min-w-0">
+                    <Link href={professionalHref}>
+                      <p className="text-sm font-medium text-gray-900 truncate hover:text-gray-700">
+                        {professional.companyName}
+                      </p>
+                    </Link>
+                    <p className="text-xs text-gray-600">
+                      {professional.serviceCategory}
+                      {' · '}
+                      <Link
+                        href={projectsHref}
+                        className="underline hover:text-gray-900"
+                      >
+                        {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                      </Link>
+                    </p>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {professional.companyName}
-                  </p>
-                  <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </DialogContent>
       </Dialog>

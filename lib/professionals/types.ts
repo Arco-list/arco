@@ -52,6 +52,8 @@ export type ProfessionalProjectSummary = {
   image: string | null
   likesCount: number | null
   projectYear: number | null
+  stylePreferences: string[] | null
+  projectType: string | null
 }
 
 export type ProfessionalReviewSummary = {
@@ -98,10 +100,13 @@ export type ProfessionalDetail = {
     phone: string | null
     website: string | null
     domain: string | null
+    address: string | null
     city: string | null
     country: string | null
+    primaryService: string | null
     services: string[]
     languages: string[]
+    certificates: string[]
     teamSizeMin: number | null
     teamSizeMax: number | null
     foundedYear: number | null

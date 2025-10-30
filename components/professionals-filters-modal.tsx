@@ -87,7 +87,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
                             checked={selectedCategories.includes(section.category.id ?? "")}
                             onChange={() => toggleCategorySelection(section.category.id ?? "")}
                           />
-                          <h4 className="text-sm text-gray-700">{section.category.name}</h4>
+                          <span className="text-sm">{section.category.name}</span>
                         </label>
 
                         {section.services.length > 0 && (

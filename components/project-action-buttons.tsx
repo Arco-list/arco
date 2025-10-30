@@ -38,12 +38,12 @@ export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
           disabled={!projectId || isMutatingLike}
           aria-pressed={isLiked}
         >
-          <ThumbsUp className="w-4 h-4 mr-2" fill={isLiked ? "currentColor" : "none"} />
-          {isLiked ? "Liked" : "Like"} • {likesCount}
+          <ThumbsUp className="w-4 h-4 md:mr-2" fill={isLiked ? "currentColor" : "none"} />
+          <span className="hidden md:inline">{isLiked ? "Liked" : "Like"} • {likesCount}</span>
         </Button>
         <Button variant="tertiary" size="tertiary" onClick={() => setIsShareModalOpen(true)}>
-          <Share className="w-4 h-4 mr-2" />
-          Share
+          <Share className="w-4 h-4 md:mr-2" />
+          <span className="hidden md:inline">Share</span>
         </Button>
         <Button
           variant={isSaved ? "default" : "tertiary"}
@@ -59,8 +59,8 @@ export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
           disabled={!projectId || isMutatingSave}
           aria-pressed={isSaved}
         >
-          <Heart className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
-          {isSaved ? "Saved" : "Save"}
+          <Heart className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
+          <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
         </Button>
       </div>
 

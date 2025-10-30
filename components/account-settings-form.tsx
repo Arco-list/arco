@@ -475,7 +475,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="tertiary"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploadingAvatar || isSavingProfile || isLoading}
                     >
@@ -548,6 +548,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
 
             <Button
               type="submit"
+              variant="secondary"
               className="w-full md:w-auto"
               disabled={isSavingProfile || isUploadingAvatar}
             >
@@ -610,6 +611,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
 
             <Button
               type="submit"
+              variant="secondary"
               className="w-full md:w-auto"
               disabled={isSavingPassword || !isEmailAuthUser}
             >

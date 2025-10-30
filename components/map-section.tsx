@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import Script from "next/script"
 
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
@@ -9,7 +8,7 @@ export function MapSection() {
   const { location } = useProjectPreview()
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
-  const markerRef = useRef<google.maps.Marker | null>(null)
+  const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
   const [isMapsLoaded, setIsMapsLoaded] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
 
@@ -29,6 +28,20 @@ export function MapSection() {
     typeof location.latitude === "number" &&
     typeof location.longitude === "number"
 
+  // Check if Google Maps API is loaded
+  useEffect(() => {
+    const checkMapsLoaded = () => {
+      if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+        setIsMapsLoaded(true)
+      } else {
+        // Retry after a short delay if not loaded yet
+        setTimeout(checkMapsLoaded, 100)
+      }
+    }
+
+    checkMapsLoaded()
+  }, [])
+
   useEffect(() => {
     if (!isMapsLoaded || !mapRef.current || !window.google?.maps) {
       return
@@ -41,7 +54,7 @@ export function MapSection() {
     try {
       if (hasExactCoordinates && location.latitude && location.longitude) {
         const position = { lat: location.latitude, lng: location.longitude }
-        
+
         mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
           center: position,
           zoom: 15,
@@ -50,9 +63,10 @@ export function MapSection() {
           mapTypeControl: false,
           streetViewControl: true,
           fullscreenControl: true,
+          mapId: 'ARCO_MAP_ID', // Required for AdvancedMarkerElement
         })
 
-        markerRef.current = new window.google.maps.Marker({
+        markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
           map: mapInstanceRef.current,
           position,
           title: label,
@@ -73,9 +87,10 @@ export function MapSection() {
               mapTypeControl: false,
               streetViewControl: false,
               fullscreenControl: true,
+              mapId: 'ARCO_MAP_ID', // Required for AdvancedMarkerElement
             })
 
-            markerRef.current = new window.google.maps.Marker({
+            markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
               map: mapInstanceRef.current,
               position,
               title: summaryLabel,
@@ -92,7 +107,7 @@ export function MapSection() {
 
     return () => {
       if (markerRef.current) {
-        markerRef.current.setMap(null)
+        markerRef.current.map = null
         markerRef.current = null
       }
       if (mapInstanceRef.current) {
@@ -116,48 +131,33 @@ export function MapSection() {
   }
 
   return (
-    <>
-      <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places`}
-        strategy="lazyOnload"
-        onLoad={() => {
-          if (window.google?.maps) {
-            setIsMapsLoaded(true)
-          }
-        }}
-        onError={() => {
-          setMapError("Failed to load Google Maps")
-        }}
-      />
-      
-      <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-black">Explore the area</h2>
-        {label && <p className="text-gray-600">{label}</p>}
+    <div className="space-y-4">
+      <h2 className="text-2xl font-bold text-black">Explore the area</h2>
+      {label && <p className="text-gray-600">{label}</p>}
 
-        <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
-          {!isMapsLoaded && !mapError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-              <div className="text-sm text-gray-600">Loading map...</div>
-            </div>
-          )}
-          
-          {mapError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-              <div className="text-sm text-red-600">{mapError}</div>
-            </div>
-          )}
+      <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
+        {!isMapsLoaded && !mapError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+            <div className="text-sm text-gray-600">Loading map...</div>
+          </div>
+        )}
 
-          <div ref={mapRef} className="w-full h-full" />
+        {mapError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+            <div className="text-sm text-red-600">{mapError}</div>
+          </div>
+        )}
 
-          {!location.shareExact && isMapsLoaded && !mapError && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-              <div className="bg-white px-4 py-2 rounded-lg shadow-lg text-center">
-                <p className="text-sm text-gray-600">Approximate location</p>
-              </div>
+        <div ref={mapRef} className="w-full h-full" />
+
+        {!location.shareExact && isMapsLoaded && !mapError && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+            <div className="bg-white px-4 py-2 rounded-lg shadow-lg text-center">
+              <p className="text-sm text-gray-600">Approximate location</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   )
 }

@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer"
 import { CompanySettingsShell } from "@/components/company-settings/company-settings-shell"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Database } from "@/lib/supabase/types"
+import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
 
 export default async function CompanySettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -27,6 +28,7 @@ export default async function CompanySettingsPage() {
     .select(
       `
         id,
+        slug,
         name,
         description,
         website,
@@ -58,7 +60,13 @@ export default async function CompanySettingsPage() {
     redirect("/create-company")
   }
 
-  const [{ data: socialLinks }, { data: photos }, { data: services }, { data: professional }] = await Promise.all([
+  // Create filter sets based on PROFESSIONAL_CATEGORY_CONFIG
+  const allowedCategorySlugs = new Set(PROFESSIONAL_CATEGORY_CONFIG.map((config) => config.slug))
+  const allowedServiceSlugs = new Set(
+    PROFESSIONAL_CATEGORY_CONFIG.flatMap((config) => config.services.map((service) => service.slug))
+  )
+
+  const [{ data: socialLinks }, { data: photos }, { data: allCategories }, { data: professional }] = await Promise.all([
     supabase
       .from("company_social_links")
       .select("id, platform, url")
@@ -71,9 +79,9 @@ export default async function CompanySettingsPage() {
       .order("order_index"),
     supabase
       .from("categories")
-      .select("id, name, slug")
+      .select("id, name, slug, parent_id, sort_order")
       .eq("is_active", true)
-      .is("parent_id", null)
+      .order("sort_order", { ascending: true, nullsFirst: false })
       .order("name"),
     supabase
       .from("professionals")
@@ -83,10 +91,15 @@ export default async function CompanySettingsPage() {
       .maybeSingle(),
   ])
 
-  const serviceOptions = (services ?? []).map((service) => ({
-    id: service.id,
-    name: service.name,
-    slug: service.slug,
+  // Filter categories and services based on whitelist
+  const categories = (allCategories ?? []).filter((cat) => cat.slug && allowedCategorySlugs.has(cat.slug))
+  const services = (allCategories ?? []).filter((cat) => cat.slug && allowedServiceSlugs.has(cat.slug))
+
+  // Combine both categories and services for the dropdown
+  const serviceOptions = [...categories, ...services].map((item) => ({
+    id: item.id,
+    name: item.name,
+    slug: item.slug,
   }))
 
   return (

@@ -69,7 +69,7 @@ export function ProjectFeatures() {
       <h2 className="text-2xl font-bold text-black">Features</h2>
 
       {featuredList.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           {featuredList.map((feature) => {
             const IconComponent = selectIconForFeature(feature, feature.groupId)
             return (
@@ -77,12 +77,10 @@ export function ProjectFeatures() {
                 key={feature.id}
                 type="button"
                 onClick={() => handleFeatureClick(feature)}
-                className="flex items-center gap-3 rounded-lg border border-transparent bg-white p-3 text-left shadow-sm transition duration-150 ease-in-out hover:border-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70"
+                className="flex items-center gap-2 text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600 transition-colors text-left"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                  <IconComponent className="h-4 w-4 text-gray-600" />
-                </span>
-                <span className="text-sm font-medium text-gray-900">{feature.label}</span>
+                <IconComponent className="h-4 w-4 flex-shrink-0" />
+                <span>{feature.label}</span>
               </button>
             )
           })}
@@ -105,7 +103,7 @@ export function ProjectFeatures() {
             {featureGroups.map((group) => (
               <div key={group.id}>
                 <h3 className="mb-3 text-sm font-medium text-gray-900">{group.name}</h3>
-                <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
                   {group.items.map((feature) => {
                     const modalFeature: FeatureWithGroup = { ...feature, groupId: group.id }
                     const IconComponent = selectIconForFeature(feature, group.id)
@@ -117,12 +115,10 @@ export function ProjectFeatures() {
                           handleFeatureClick(modalFeature)
                           setShowModal(false)
                         }}
-                        className="flex w-full items-center gap-3 rounded-md border border-transparent bg-white p-3 text-left transition duration-150 ease-in-out hover:border-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70"
+                        className="flex items-center gap-2 text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600 transition-colors"
                       >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100">
-                          <IconComponent className="h-4 w-4 text-gray-600" />
-                        </span>
-                        <span className="text-sm text-gray-900 underline">{feature.label}</span>
+                        <IconComponent className="h-4 w-4 flex-shrink-0" />
+                        <span>{feature.label}</span>
                       </button>
                     )
                   })}

@@ -39,7 +39,6 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { ProfessionalsFiltersModal } from "@/components/professionals-filters-modal"
 import type { Tables } from "@/lib/supabase/types"
 import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
@@ -273,7 +272,7 @@ export function ProfessionalsFilterBar() {
   const getButtonClassName = (hasSelection: boolean) =>
     `flex items-center gap-2 whitespace-nowrap rounded-full ${
       hasSelection
-        ? "border-red-500 text-red-600 bg-red-50 hover:bg-red-100"
+        ? "border-[#222222] text-[#222222] bg-transparent"
         : "bg-transparent border-gray-300 hover:border-gray-400"
     }`
 
@@ -379,9 +378,9 @@ export function ProfessionalsFilterBar() {
                                   onCheckedChange={() => toggleCategorySelection(section.category.id ?? "")}
                                 />
 
-                                <Label htmlFor={`category-${categoryKey}`} className="text-sm">
+                                <label htmlFor={`category-${categoryKey}`} className="text-sm cursor-pointer">
                                   {section.category.name}
-                                </Label>
+                                </label>
                               </div>
 
                               {section.services.length > 0 && (
@@ -411,9 +410,9 @@ export function ProfessionalsFilterBar() {
                                         checked={selectedServices.includes(service.id ?? "")}
                                         onCheckedChange={() => toggleServiceSelection(service.id ?? "")}
                                       />
-                                      <Label htmlFor={`service-${serviceKey}`} className="text-sm">
+                                      <label htmlFor={`service-${serviceKey}`} className="text-sm cursor-pointer">
                                         {service.name}
-                                      </Label>
+                                      </label>
                                     </div>
                                   )
                                 })}
@@ -537,7 +536,7 @@ export function ProfessionalsFilterBar() {
                       onClick={() => toggleServiceSelection(item.id)}
                       className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
                         isSelected
-                          ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
+                          ? "border-[#222222] text-[#222222] bg-transparent"
                           : ""
                       }`}
                     >

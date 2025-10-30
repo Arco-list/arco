@@ -79,22 +79,21 @@ function HomeownerContent() {
 
       <main className="flex-1 py-8 pt-20">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-8">Homeowner</h1>
-
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="mb-8 rounded-full p-1 gap-1 w-full sm:w-auto overflow-x-auto">
-              <TabsTrigger value="saved-projects" className="rounded-full px-4 whitespace-nowrap">Saved Projects</TabsTrigger>
-              <TabsTrigger value="saved-professionals" className="rounded-full px-4 whitespace-nowrap">Saved Professionals</TabsTrigger>
-              <TabsTrigger value="account" className="rounded-full px-4 whitespace-nowrap">Account</TabsTrigger>
+            <TabsList className="mb-8 rounded-full p-1 gap-1 w-fit overflow-x-auto h-auto">
+              <TabsTrigger value="saved-projects" className="rounded-full px-3 py-1.5 h-auto whitespace-nowrap">Saved Projects</TabsTrigger>
+              <TabsTrigger value="saved-professionals" className="rounded-full px-3 py-1.5 h-auto whitespace-nowrap">Saved Professionals</TabsTrigger>
+              <TabsTrigger value="account" className="rounded-full px-3 py-1.5 h-auto whitespace-nowrap">Account</TabsTrigger>
             </TabsList>
 
             <TabsContent value="saved-projects">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Saved Projects</h2>
               {savedProjectsError && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
                   {savedProjectsError}
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {savedProjects.map((entry) => {
                   const { projectId, summary } = entry
 
@@ -161,12 +160,13 @@ function HomeownerContent() {
             </TabsContent>
 
             <TabsContent value="saved-professionals">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Saved Professionals</h2>
               {savedProfessionalsError && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
                   {savedProfessionalsError}
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {savedProfessionalEntries.map((entry) => {
                   const { companyId, card } = entry
                   const isMutating = mutatingProfessionalIds.has(companyId)
@@ -200,6 +200,7 @@ function HomeownerContent() {
             </TabsContent>
 
             <TabsContent value="account">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Account</h2>
               <AccountSettingsForm />
             </TabsContent>
           </Tabs>

@@ -22,9 +22,9 @@ export function ProjectInfo() {
       <div className="space-y-2">
         <h1 className="text-3xl font-bold text-black">{info.title}</h1>
         {info.subtitle && <h2 className="text-xl text-gray-600">{info.subtitle}</h2>}
-        {(info.sponsoredLabel || locationLabel) && (
+        {info.sponsoredLabel && (
           <p className="text-sm text-gray-500">
-            {[info.sponsoredLabel, locationLabel].filter(Boolean).join(" • ")}
+            {info.sponsoredLabel}
           </p>
         )}
 

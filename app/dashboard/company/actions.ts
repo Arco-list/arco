@@ -461,7 +461,15 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
     return { success: false, error: "Could not update services." }
   }
 
+  // Refresh the materialized view to reflect the changes
+  const { error: refreshError } = await supabase.rpc("refresh_all_materialized_views")
+  if (refreshError) {
+    logger.warn("Failed to refresh materialized views after updating services", { companyId: company!.id }, refreshError)
+    // Don't fail - this will be refreshed on next scheduled refresh
+  }
+
   revalidatePath("/dashboard/company")
+  revalidatePath("/professionals")
   return { success: true }
 }
 
