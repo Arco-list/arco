@@ -30,16 +30,37 @@ export function MapSection() {
 
   // Check if Google Maps API is loaded
   useEffect(() => {
+    const MAX_RETRIES = 50 // 5 seconds total (50 * 100ms)
+    let retryCount = 0
+    let timeoutId: NodeJS.Timeout | null = null
+
     const checkMapsLoaded = () => {
       if (window.google?.maps?.marker?.AdvancedMarkerElement) {
         setIsMapsLoaded(true)
-      } else {
-        // Retry after a short delay if not loaded yet
-        setTimeout(checkMapsLoaded, 100)
+        setMapError(null)
+        return
       }
+
+      retryCount++
+
+      if (retryCount >= MAX_RETRIES) {
+        setMapError(
+          "Google Maps failed to load. Please check your internet connection and refresh the page."
+        )
+        return
+      }
+
+      timeoutId = setTimeout(checkMapsLoaded, 100)
     }
 
     checkMapsLoaded()
+
+    // Cleanup function to prevent memory leaks
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
   }, [])
 
   useEffect(() => {
