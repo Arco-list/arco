@@ -3,7 +3,6 @@
 import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import Script from "next/script"
 import {
   ChevronLeft,
   ChevronRight,
@@ -39,9 +38,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import ListingStatusModal, {
-  type ListingStatusModalOption,
-} from "@/components/listing-status-modal"
+import ListingStatusModal from "@/components/listing-status-modal"
+import {
+  type ProjectStatus,
+  type ListingStatusValue,
+  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_DOT_CLASS,
+  LISTING_STATUS_VALUES,
+  ACTIVE_STATUS_VALUES,
+  isListingStatusValue,
+  LISTING_STATUS_OPTIONS,
+} from "@/lib/project-status-config"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
@@ -50,6 +57,7 @@ import { ProjectMetricsFields } from "@/components/project-details/project-metri
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
 import { ProfessionalServiceCard } from "@/components/project-professional-service-card"
 import { FeaturePhotoSelectorModal } from "@/components/feature-photo-selector-modal"
+import { PhotoTourManager } from "@/components/photo-tour-manager"
 import {
   DEFAULT_LOCATION_ICONS,
   DEFAULT_MATERIAL_ICONS,
@@ -104,50 +112,6 @@ type ProjectLocationUpdate = Pick<
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
 const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+-])+(?:\.(?:[a-zA-Z0-9_'^&+-])+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
 
-const LISTING_STATUS_VALUES = ["published", "completed", "archived"] as const
-type ListingStatusValue = (typeof LISTING_STATUS_VALUES)[number]
-const ACTIVE_STATUS_VALUES: ReadonlyArray<ListingStatusValue> = ["published", "completed"]
-
-const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
-  draft: "In progress",
-  in_progress: "In review",
-  published: "Live on page",
-  completed: "Listed",
-  archived: "Unlisted",
-}
-
-const PROJECT_STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
-  draft: "bg-amber-500",
-  in_progress: "bg-blue-500",
-  published: "bg-emerald-500",
-  completed: "bg-teal-500",
-  archived: "bg-slate-400",
-}
-
-const isListingStatusValue = (status: ProjectStatus | string): status is ListingStatusValue =>
-  LISTING_STATUS_VALUES.includes(status as ListingStatusValue)
-
-const LISTING_STATUS_MODAL_OPTIONS: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
-  {
-    value: "published",
-    label: "Live on page",
-    description: "Appears on your company page",
-    colorClass: "bg-emerald-500",
-  },
-  {
-    value: "completed",
-    label: "Listed",
-    description: "Visible on the project page and searchable on Discover",
-    colorClass: "bg-teal-500",
-    requiresPlus: true,
-  },
-  {
-    value: "archived",
-    label: "Unlisted",
-    description: "Hidden from the project page and your company page",
-    colorClass: "bg-slate-400",
-  },
-]
 
 const getDomain = (email: string) => {
   const parts = email.split("@").map((part) => part.trim().toLowerCase())
@@ -409,6 +373,8 @@ export default function ListingEditorPage() {
     resetModalUploadErrors,
   } = useProjectPhotoTour({ supabase, projectId: hasProjectAccess ? projectId : null })
 
+  const photoTourHook = useProjectPhotoTour({ supabase, projectId: hasProjectAccess ? projectId : null })
+
   const statusModalProject = useMemo(() => {
     const coverPhotoUrl =
       getFeatureCoverPhoto(BUILDING_FEATURE_ID) ??
@@ -439,7 +405,7 @@ export default function ListingEditorPage() {
   const isPendingAdminReview = projectStatus === "in_progress"
   const limitReachedForNewActivation = false
   const selectedStatusOption = useMemo(
-    () => LISTING_STATUS_MODAL_OPTIONS.find((option) => option.value === selectedStatus),
+    () => LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus),
     [selectedStatus],
   )
   const requiresPlusForSelection = selectedStatusOption?.requiresPlus === true && !isPlus
@@ -486,6 +452,44 @@ export default function ListingEditorPage() {
   useEffect(() => {
     setAddressInputValue(detailsForm.address ?? "")
   }, [detailsForm.address])
+
+  useEffect(() => {
+    const MAX_RETRIES = 50 // 5 seconds total (50 * 100ms)
+    let retryCount = 0
+    let timeoutId: NodeJS.Timeout | null = null
+    let cancelled = false
+
+    const checkMapsLoaded = () => {
+      if (cancelled) return // Early exit if component unmounted
+
+      if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+        setIsMapsApiLoaded(true)
+        setMapsError(null)
+        return
+      }
+
+      retryCount++
+
+      if (retryCount >= MAX_RETRIES) {
+        setMapsError(
+          "Google Maps failed to load. Please check your internet connection and refresh the page."
+        )
+        return
+      }
+
+      timeoutId = setTimeout(checkMapsLoaded, 100)
+    }
+
+    checkMapsLoaded()
+
+    // Cleanup function to prevent memory leaks and setState on unmounted component
+    return () => {
+      cancelled = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -634,6 +638,22 @@ export default function ListingEditorPage() {
     }
   }, [projectId, supabase, userId])
 
+  // Set edit mode based on project status
+  // Only projects that have been submitted (in_progress or higher) should be editable here
+  // Projects in draft status should use /app/new-project/ instead
+  useEffect(() => {
+    if (!projectStatus) return
+
+    // For projects that were submitted and came back for editing
+    if (projectStatus === "in_progress") {
+      setIsEditMode(true)
+      setActiveSection("photo-tour")
+    } else if (["published", "completed", "archived"].includes(projectStatus)) {
+      setIsEditMode(false)
+      setActiveSection("preview")
+    }
+  }, [projectStatus])
+
   useEffect(() => {
     if (activeSection !== "location") {
       return
@@ -667,21 +687,22 @@ export default function ListingEditorPage() {
         fullscreenControl: false,
         streetViewControl: false,
         zoomControl: true,
+        mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
       })
 
       mapInstanceRef.current = map
 
-      const marker = new window.google.maps.Marker({
+      const marker = new window.google.maps.marker.AdvancedMarkerElement({
         map,
         position: startPosition,
-        draggable: true,
+        gmpDraggable: true,
       })
 
       markerRef.current = marker
       geocoderRef.current = new window.google.maps.Geocoder()
 
       marker.addListener("dragend", () => {
-        const position = marker.getPosition()
+        const position = marker.position as google.maps.LatLng
         if (!position) {
           return
         }
@@ -730,7 +751,7 @@ export default function ListingEditorPage() {
     } else {
       const marker = markerRef.current
       if (marker) {
-        marker.setPosition(startPosition)
+        marker.position = startPosition
       }
       if (mapInstanceRef.current) {
         mapInstanceRef.current.setCenter(startPosition)
@@ -781,7 +802,7 @@ export default function ListingEditorPage() {
         })
 
         if (markerRef.current) {
-          markerRef.current.setPosition({ lat, lng })
+          markerRef.current.position = { lat, lng }
         }
 
         if (mapInstanceRef.current) {
@@ -1358,7 +1379,7 @@ export default function ListingEditorPage() {
 
   const handleEditListing = async () => {
     if (!projectId) return
-    
+
     setIsEditMode(true)
     setActiveSection("photo-tour")
     setShowEditConfirmModal(false)
@@ -1369,18 +1390,24 @@ export default function ListingEditorPage() {
         return
       }
 
-      const { error } = await supabase
-        .from("projects")
-        .update({ status: "draft" })
-        .eq("id", projectId)
-        .eq("client_id", userId)
-      
-      if (error) {
-        toast.error("Failed to update project status")
-        console.error("Error updating project status:", error)
+      // Only change status to in_progress if it's a published/completed/archived listing
+      // Never change back to draft - that's only for projects that haven't been submitted yet
+      if (projectStatus && ["published", "completed", "archived"].includes(projectStatus)) {
+        const { error } = await supabase
+          .from("projects")
+          .update({ status: "in_progress" })
+          .eq("id", projectId)
+          .eq("client_id", userId)
+
+        if (error) {
+          toast.error("Failed to update project status")
+          console.error("Error updating project status:", error)
+        } else {
+          setProjectStatus("in_progress")
+          toast.success("Editing enabled - Project moved to review")
+        }
       } else {
-        setProjectStatus("draft")
-        toast.success("Editing enabled - Project moved to draft for review")
+        toast.success("Editing enabled")
       }
     } catch (err) {
       toast.error("Failed to enable editing")
@@ -1418,7 +1445,7 @@ export default function ListingEditorPage() {
     }
   }
 
-  const statusOptions = LISTING_STATUS_MODAL_OPTIONS
+  const statusOptions = LISTING_STATUS_OPTIONS
 
   const statusOptionByValue = useMemo(
     () => new Map(statusOptions.map((option) => [option.value, option])),
@@ -2159,334 +2186,19 @@ export default function ListingEditorPage() {
       )
     }
 
-    const photosRemaining = Math.max(0, MIN_PHOTOS_REQUIRED - uploadedPhotos.length)
-    const progressLabel =
-      photosRemaining > 0
-        ? `${photosRemaining} more photo${photosRemaining === 1 ? "" : "s"} needed`
-        : "Minimum met — add more to showcase your project"
-
     return (
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900">Photo tour</h2>
-            <p className="text-sm text-gray-500">
-              Add photos for every feature. Only features with photos appear on the published page.
-            </p>
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowAddMenu((state) => !state)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800"
-              aria-haspopup="menu"
-              aria-expanded={showAddMenu}
-            >
-              <span className="text-xl font-light">+</span>
-            </button>
-
-            {showAddMenu && (
-              <div className="absolute top-12 right-0 z-10 min-w-[160px] rounded-lg border border-gray-200 bg-white py-2 shadow-lg">
-                <label className="block cursor-pointer">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png"
-                    className="hidden"
-                    disabled={isUploading}
-                    onChange={(event) => {
-                      void handleFileUpload(event.target.files)
-                      event.target.value = ""
-                      setShowAddMenu(false)
-                    }}
-                  />
-                  <span
-                    className={`block px-4 py-2 text-sm transition-colors ${
-                      isUploading ? "cursor-not-allowed text-gray-400" : "text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {isUploading ? "Uploading…" : "Add photos"}
-                  </span>
-                </label>
-                <button
-                  onClick={() => {
-                    setShowAddFeatureModal(true)
-                    setShowAddMenu(false)
-                  }}
-                  disabled={isSavingFeatures}
-                  className={`block w-full px-4 py-2 text-left text-sm transition-colors ${
-                    isSavingFeatures ? "cursor-not-allowed text-gray-400" : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {isSavingFeatures ? "Saving…" : "Add feature"}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <section className="space-y-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">Photo categories</h3>
-              <p className="text-sm text-gray-500">Choose a category to add or manage photos.</p>
-            </div>
-          </div>
-
-          {featureMutationError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {featureMutationError}
-            </div>
-          )}
-
-          {featureError && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              {featureError}
-            </div>
-          )}
-
-          {isLoadingFeatures ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="h-32 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {displayFeatureIds.map((featureId) => {
-                const featureDisplay = getFeatureDisplay(featureId)
-                const FeatureIcon = featureDisplay.icon
-                const photoCount = getFeaturePhotoCount(featureId)
-                const coverPhoto = getFeatureCoverPhoto(featureId)
-
-                return (
-                  <div key={featureId} className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                    <button
-                      onClick={() => openPhotoSelector(featureId)}
-                      className="w-full text-left transition-colors hover:bg-gray-50"
-                    >
-                      <div className="relative aspect-square bg-gray-100">
-                        {coverPhoto ? (
-                          <img
-                            src={coverPhoto || "/placeholder.svg"}
-                            alt={featureDisplay.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full flex-col items-center justify-center">
-                            <ImageIcon className="mb-4 h-12 w-12 text-gray-400" />
-                            <span className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors">
-                              Select photos
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-4">
-                        <div className="mb-1 flex items-center gap-2">
-                          <FeatureIcon className="h-4 w-4 text-gray-600" />
-                          <h3 className="font-medium text-gray-900">{featureDisplay.name}</h3>
-                        </div>
-                        <p className="text-sm text-gray-500">
-                          {photoCount > 0 ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "Add photos"}
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">All photos</h3>
-              <p className="text-sm text-gray-500">
-                {uploadedPhotos.length} uploaded · {progressLabel}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div
-              className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                dragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
-              }`}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-            >
-              <ImageIcon className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-              <p className="font-medium text-gray-900">Drag and drop</p>
-              <p className="mb-4 text-sm text-gray-500">or browse for photos</p>
-              <label className="inline-block">
-                <input
-                  type="file"
-                  multiple
-                  accept="image/jpeg,image/png"
-                  className="hidden"
-                  disabled={isUploading}
-                  onChange={(event) => {
-                    void handleFileUpload(event.target.files)
-                    event.target.value = ""
-                  }}
-                />
-                <span
-                  className={`rounded-md px-6 py-2 text-sm font-medium text-white transition-colors ${
-                    isUploading ? "cursor-not-allowed bg-gray-600" : "bg-gray-900 hover:bg-gray-800"
-                  }`}
-                >
-                  {isUploading ? "Uploading…" : "Browse"}
-                </span>
-              </label>
-              {uploadErrors.length > 0 && (
-                <ul className="mt-4 space-y-1 text-left text-sm text-red-600">
-                  {uploadErrors.map((error, index) => (
-                    <li key={`${error}-${index}`}>{error}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {uploadedPhotos.map((photo) => (
-              <div
-                key={photo.id}
-                className="group relative"
-                draggable
-                onDragStart={(event) => handlePhotoDragStart(event, photo.id)}
-                onDragOver={handlePhotoDragOver}
-                onDrop={(event) => handlePhotoDropOnCard(event, photo.id)}
-                onDragEnd={handlePhotoDragEnd}
-              >
-                <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
-                  <img src={photo.url || "/placeholder.svg"} alt="Project photo" className="h-full w-full object-cover" />
-                </div>
-
-                {photo.isCover && (
-                  <div className="absolute left-2 top-2 rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
-                    Cover photo
-                  </div>
-                )}
-
-                <div className="absolute right-2 top-2">
-                  <button
-                    onClick={() => setOpenMenuId(openMenuId === photo.id ? null : photo.id)}
-                    className="rounded-full bg-white p-1 shadow-md transition-colors hover:bg-gray-50"
-                  >
-                    <MoreHorizontal className="h-4 w-4 text-gray-600" />
-                  </button>
-
-                  {openMenuId === photo.id && (
-                    <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                      <button
-                        onClick={() => setCoverPhoto(photo.id)}
-                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
-                      >
-                        Set as cover photo
-                      </button>
-                      <button
-                        onClick={() => deletePhoto(photo.id)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {showAddFeatureModal && (
-          <div className={OVERLAY_CLASSES}>
-            <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white">
-              <div className="flex items-center justify-between border-b border-gray-200 p-6">
-                <h2 className="text-xl font-semibold text-gray-900">Add feature</h2>
-                <button
-                  onClick={() => {
-                    setShowAddFeatureModal(false)
-                    setTempSelectedFeatures([])
-                  }}
-                  className="text-2xl leading-none text-gray-400 transition-colors hover:text-gray-600"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="p-6">
-                {isLoadingFeatures ? (
-                  <div className="mb-6 grid grid-cols-3 gap-4">
-                    {Array.from({ length: 6 }).map((_, index) => (
-                      <div key={index} className="h-24 rounded-lg border-2 border-dashed border-gray-200 animate-pulse" />
-                    ))}
-                  </div>
-                ) : orderedFeatureOptions.length === 0 ? (
-                  <div className="mb-6 rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                    No feature taxonomy available yet. Try again later.
-                  </div>
-                ) : (
-                  <div className="mb-6 grid grid-cols-3 gap-4">
-                    {orderedFeatureOptions.map((feature) => {
-                      const display = getFeatureDisplay(feature.id)
-                      const IconComponent = display.icon
-                      const isSelected = tempSelectedFeatures.includes(feature.id)
-                      const isAlreadyAdded = selectedFeatures.includes(feature.id)
-
-                      return (
-                        <button
-                          key={feature.id}
-                          onClick={() => !isAlreadyAdded && toggleTempFeature(feature.id)}
-                          disabled={isAlreadyAdded || isSavingFeatures}
-                          className={`rounded-lg border-2 p-4 text-left transition-all ${
-                            isAlreadyAdded
-                              ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-50"
-                              : isSelected
-                                ? "border-gray-900 bg-gray-50"
-                                : "border-gray-200 bg-white hover:border-gray-300"
-                          }`}
-                        >
-                          <IconComponent className="mb-2 h-6 w-6 text-gray-700" />
-                          <p className="text-sm font-medium text-gray-900">{display.name}</p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowAddFeatureModal(false)
-                      setTempSelectedFeatures([])
-                    }}
-                    className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void saveNewFeatures()}
-                    disabled={tempSelectedFeatures.length === 0 || isSavingFeatures}
-                    className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSavingFeatures ? "Adding…" : "Add selected"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {featurePhotoSelectorModal}
-      </div>
+      <PhotoTourManager
+        photoTour={photoTourHook}
+        showHeader={true}
+        title="Photo tour"
+        subtitle="Add photos for every feature. Only features with photos appear on the published page."
+      />
     )
   }
 
-const renderLocationSection = () => (
+  const renderLocationSection = () => (
     <div className="space-y-6">
-      <div>
+      <div className="hidden md:block">
         <h2 className="text-2xl text-gray-900 font-medium">Location</h2>
         <p className="text-gray-500 mt-1">Where is the project located?</p>
       </div>
@@ -2496,19 +2208,6 @@ const renderLocationSection = () => (
         <div className="relative">
           {googleMapsApiKey ? (
             <>
-              <Script
-                src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
-                strategy="lazyOnload"
-                onLoad={() => {
-                  if (window.google?.maps) {
-                    setIsMapsApiLoaded(true)
-                    setMapsError(null)
-                  } else {
-                    setMapsError("Google Maps failed to initialize. Refresh the page to try again.")
-                  }
-                }}
-                onError={() => setMapsError("We couldn't load Google Maps. Check your connection and try again.")}
-              />
               <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
                 <div ref={mapContainerRef} className="h-full w-full" />
                 <div className="pointer-events-none absolute top-4 left-0 right-0 z-10 flex justify-center px-4">
@@ -2609,7 +2308,7 @@ const renderLocationSection = () => (
     return (
       <div className="space-y-8">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="hidden md:block">
             <h2 className="text-2xl font-medium text-gray-900">Professionals</h2>
             <p className="mt-1 text-gray-500">Manage the professional services linked to this project.</p>
           </div>
@@ -2617,7 +2316,7 @@ const renderLocationSection = () => (
             type="button"
             onClick={openServiceModal}
             aria-label="Manage professional services"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800 ml-auto"
           >
             <Plus className="h-5 w-5" />
           </button>
@@ -2703,7 +2402,10 @@ const renderLocationSection = () => (
       onTaglineChange={setTempFeatureTagline}
       highlightValue={tempFeatureHighlight}
       onHighlightChange={setTempFeatureHighlight}
-      saveDisabled={tempSelectedPhotos.length === 0}
+      saveDisabled={false}
+      saveLabel={
+        tempSelectedPhotos.length > 0 ? `Save Selection (${tempSelectedPhotos.length})` : "Save selection"
+      }
     />
   )
 
@@ -2718,51 +2420,23 @@ const renderLocationSection = () => (
               {entitlementsError}
             </div>
           )}
-          {/* Mobile Status Switcher */}
-          <div className="md:hidden mb-6">
-            <button
-              onClick={() => setShowStatusModal(true)}
-              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
-                  <span className="font-medium text-gray-900">{currentStatusLabel}</span>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            </button>
-          </div>
-
           <div className="flex">
             {/* Sidebar - Hidden on mobile */}
             <div className="hidden md:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
               <div className="space-y-6">
-                {/* Navigation Button */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => router.push('/dashboard/listings')}
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-quaternary text-quaternary-foreground hover:bg-quaternary-hover transition-all"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm text-gray-600">Listing editor</span>
-                </div>
-
                 {/* Status Selector */}
                 <div>
-                  <button
+                  <Button
+                    variant="tertiary"
                     onClick={() => setShowStatusModal(true)}
-                    className="w-full flex items-center justify-between px-[18px] py-3 rounded-full bg-quaternary text-quaternary-foreground hover:bg-quaternary-hover transition-all text-sm font-medium"
+                    className="w-full justify-between"
                   >
-                    <div className="text-left">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
-                        <span>{currentStatusLabel}</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
+                      <span>{currentStatusLabel}</span>
                     </div>
                     <ChevronRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Edit/Submit buttons */}
@@ -2810,16 +2484,32 @@ const renderLocationSection = () => (
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 pt-6">
+            <div className="flex-1 md:pt-6">
+              {/* Mobile Status Button */}
+              <div className="md:hidden mb-8 max-w-64">
+                <Button
+                  variant="tertiary"
+                  onClick={() => setShowStatusModal(true)}
+                  className="w-full justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
+                    <span>{currentStatusLabel}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+
               {/* Mobile Navigation Header */}
               <div className="md:hidden mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <button
+                  <Button
+                    variant="tertiary"
+                    size="icon"
                     onClick={() => setIsMobileMenuOpen(true)}
-                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
                   >
-                    <Menu className="h-5 w-5 text-gray-600" />
-                  </button>
+                    <Menu className="h-5 w-5" />
+                  </Button>
                   <h1 className="text-xl font-semibold text-gray-900">{getCurrentSectionTitle()}</h1>
                 </div>
                 {!isEditMode && activeSection === "preview" && (
@@ -2994,17 +2684,16 @@ const renderLocationSection = () => (
           <p className="text-sm text-gray-600">
             Making edits will require admin approval again. The listing will be moved to draft status and needs to be reviewed before it can be published.
           </p>
-          <div className="flex gap-3 pt-4">
+          <div className="flex justify-end gap-3 pt-4">
             <Button
-              variant="outline"
+              variant="tertiary"
               onClick={() => setShowEditConfirmModal(false)}
-              className="flex-1"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
+              variant="secondary"
               onClick={handleEditListing}
-              className="flex-1"
             >
               Continue editing
             </Button>
@@ -3027,13 +2716,13 @@ const renderLocationSection = () => (
                 {professionalServices.map((service) => {
                   const isSelected = serviceSelectionDraft.includes(service.id)
                   const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
-                  const parentLabel = service.parentName ?? "Professional service"
                   return (
                     <button
                       key={service.id}
                       type="button"
                       onClick={() => toggleServiceInDraft(service.id)}
-                      className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-300 ${
+                      aria-pressed={isSelected}
+                      className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
                         isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
                     >
@@ -3041,7 +2730,6 @@ const renderLocationSection = () => (
                         aria-hidden
                         className={`mb-3 h-6 w-6 ${isSelected ? "text-gray-900" : "text-gray-700"}`}
                       />
-                      <span className="text-xs uppercase tracking-wide text-gray-500">{parentLabel}</span>
                       <span className="mt-2 text-sm font-medium text-gray-900">{service.name}</span>
                     </button>
                   )
@@ -3049,16 +2737,21 @@ const renderLocationSection = () => (
               </div>
             </div>
           )}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 justify-end">
             <Button
-              variant="outline"
+              variant="tertiary"
+              size="sm"
               onClick={() => handleServiceModalOpenChange(false)}
-              className="flex-1"
               disabled={isUpdatingServices}
             >
               Cancel
             </Button>
-            <Button onClick={() => void handleSaveServiceSelection()} disabled={isUpdatingServices} className="flex-1">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleSaveServiceSelection()}
+              disabled={isUpdatingServices}
+            >
               {isUpdatingServices ? "Saving…" : "Save"}
             </Button>
           </div>
@@ -3104,16 +2797,21 @@ const renderLocationSection = () => (
               </p>
             </div>
           </div>
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 justify-end">
             <Button
-              variant="outline"
+              variant="tertiary"
+              size="sm"
               onClick={() => handleInviteDialogChange(false)}
-              className="flex-1"
               disabled={isInviteMutating}
             >
               Cancel
             </Button>
-            <Button onClick={() => void handleInviteSubmit()} disabled={isInviteMutating} className="flex-1">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleInviteSubmit()}
+              disabled={isInviteMutating}
+            >
               {isInviteMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add to project
             </Button>
@@ -3124,70 +2822,7 @@ const renderLocationSection = () => (
       {/* Mobile Navigation Drawer */}
       <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              Navigation
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </DialogTitle>
-          </DialogHeader>
           <div className="space-y-4">
-            {/* Status Selector */}
-            <button
-              onClick={() => {
-                setShowStatusModal(true)
-                setIsMobileMenuOpen(false)
-              }}
-              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div className="text-left">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
-                  <span className="font-medium text-gray-900">{currentStatusLabel}</span>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            </button>
-
-            {/* Edit/Submit/Preview listing */}
-            {!isEditMode ? (
-              <Button 
-                className="w-full bg-gray-900 text-white hover:bg-gray-800" 
-                onClick={() => {
-                  setShowEditConfirmModal(true)
-                  setIsMobileMenuOpen(false)
-                }}
-              >
-                Edit listing
-              </Button>
-            ) : (
-              <>
-                <Button 
-                  className="w-full bg-gray-900 text-white hover:bg-gray-800" 
-                  onClick={() => {
-                    handleSubmitForReview()
-                    setIsMobileMenuOpen(false)
-                  }}
-                >
-                  Submit for review
-                </Button>
-                <Button 
-                  variant="outline"
-                  className="w-full" 
-                  onClick={() => {
-                    handlePreviewListing()
-                    setIsMobileMenuOpen(false)
-                  }}
-                >
-                  Preview listing
-                </Button>
-              </>
-            )}
-
             {/* Navigation Items */}
             <div className="space-y-2">
               {sidebarItems.map((item) => {

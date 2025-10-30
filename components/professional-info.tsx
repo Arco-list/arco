@@ -1,14 +1,13 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Bookmark, Share, Star } from "lucide-react"
+import { Star } from "lucide-react"
 
-import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
-import type { ProfessionalCard, ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
-import { ShareModal } from "./share-modal"
+import { ReportModal } from "@/components/report-modal"
+import type { ProfessionalDetail } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -40,57 +39,14 @@ const formatArray = (values: string[], options?: { limit?: number }) => {
 }
 
 export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId }: ProfessionalInfoProps) {
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
-
-  const {
-    savedProfessionalIds,
-    mutatingProfessionalIds,
-    saveProfessional,
-    removeProfessional,
-  } = useSavedProfessionals()
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
 
   const coverImage =
     professional.gallery.find((image) => image.isCover)?.url ??
     professional.company.logoUrl ??
     professional.profile.avatarUrl ??
     PLACEHOLDER_IMAGE
-
-  const professionalCard = useMemo<ProfessionalCard>(() => {
-    const rating = Number(professional.ratings.overall.toFixed(2))
-    const professionLabel = professional.title || professional.services[0] || professional.specialties[0] || "Professional"
-
-    return {
-      id: professional.id,
-      slug: professional.slug,
-      companyId: professional.company.id,
-      name: professional.name,
-      profession: professionLabel,
-      location: professional.location ?? "Location unavailable",
-      rating,
-      reviewCount: professional.ratings.total,
-      image: coverImage || PLACEHOLDER_IMAGE,
-      specialties: professional.specialties,
-      isVerified: professional.isVerified,
-      domain: professional.company.domain ?? null,
-    }
-  }, [coverImage, professional])
-
-  const isSaved = savedProfessionalIds.has(professional.id)
-  const isMutating = mutatingProfessionalIds.has(professional.id)
-
-  const handleToggleSave = useCallback(async () => {
-    if (isSaved) {
-      await removeProfessional(professional.id)
-      return
-    }
-
-    await saveProfessional(professionalCard)
-  }, [isSaved, professional.id, professionalCard, removeProfessional, saveProfessional])
-
-  const breadcrumbs = useMemo(() => [
-    { label: "Professionals", href: "/professionals" },
-    { label: professional.name, href: null }
-  ], [professional.name])
 
   const ratingDisplay = useMemo(
     () => ({
@@ -123,78 +79,78 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     return null
   }
 
-  const primarySpecialty = professional.specialties[0] || professional.services[0] || null
+  // Combine primary service with other services (primary service first, company data only)
+  const primaryService = professional.company.primaryService
+  const allCompanyServices = professional.company.services
+  const combinedServices = useMemo(() => {
+    if (!primaryService) {
+      return allCompanyServices
+    }
+    // Filter out primary service from services array to avoid duplicates, then add it at the beginning
+    const otherServices = allCompanyServices.filter(s => s !== primaryService)
+    return [primaryService, ...otherServices]
+  }, [primaryService, allCompanyServices])
+
   const experience = formatExperience(professional.yearsExperience)
   const teamSize = formatTeamSize(professional.company.teamSizeMin, professional.company.teamSizeMax)
   const founded = professional.company.foundedYear ? professional.company.foundedYear.toString() : null
 
-  const leftSummaryItems = [
-    { label: "Specialization", value: primarySpecialty },
-    { label: "Experience", value: experience },
-    { label: "Services", value: formatArray(professional.services, { limit: 3 }) },
-    { label: "Languages", value: formatArray(professional.languages, { limit: 3 }) },
-    { label: "Team size", value: teamSize },
-  ].filter((item) => Boolean(item.value))
+  // Build address from company.address, city, and country
+  const addressParts = [
+    professional.company.address,
+    professional.company.city,
+    professional.company.country
+  ].filter(Boolean)
+  const address = addressParts.length > 0 ? addressParts.join(", ") : null
 
-  const rightSummaryItems = [
-    { label: "Location", value: professional.location },
+  const certificates = formatArray(professional.company.certificates)
+
+  // Build details in grid format (similar to project details)
+  const detailItems = [
+    { label: "Services", value: formatArray(combinedServices) || "⚠️ Missing primary service" },
+    { label: "Experience", value: experience },
+    { label: "Team size", value: teamSize },
+    { label: "Languages", value: formatArray(professional.company.languages) },
+    { label: "Address", value: address },
     { label: "Hourly rate", value: professional.hourlyRateDisplay },
     { label: "Founded", value: founded },
-    {
-      label: "Joined",
-      value: formatJoinedYear(professional.profile.joinedAt ?? null),
-    },
-    {
-      label: "Verified",
-      value: professional.isVerified ? "Yes" : undefined,
-    },
+    { label: "Certificates", value: certificates },
+    { label: "Joined", value: formatJoinedYear(professional.profile.joinedAt ?? null) },
+    { label: "Verified", value: professional.isVerified ? "Yes" : undefined },
   ].filter((item) => Boolean(item.value))
 
   const ratingHref = reviewsAnchorId ? `#${reviewsAnchorId}` : undefined
 
+  const subtitle = useMemo(() => {
+    // Use company's PRIMARY service (from primary_service_id), NOT the first item in services array
+    const service = professional.company.primaryService || professional.company.services[0]
+    const location = professional.location
+
+    if (service && location) {
+      return `${service} in ${location}`
+    }
+    if (service) {
+      return service
+    }
+    if (location) {
+      return location
+    }
+    return professional.title || null
+  }, [professional.company.primaryService, professional.company.services, professional.location, professional.title])
+
+  const description = professional.description || ""
+  const MAX_CHARS = 200
+  const shouldTruncate = description.length > MAX_CHARS
+  const displayDescription = shouldTruncate && !isDescriptionExpanded
+    ? description.substring(0, MAX_CHARS) + "..."
+    : description
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-3">
-          <nav className="text-sm text-gray-500">
-            {breadcrumbs.map((crumb, index) => (
-              <span key={index}>
-                {crumb.href ? (
-                  <Link href={crumb.href} className="hover:text-gray-700 hover:underline">
-                    {crumb.label}
-                  </Link>
-                ) : (
-                  <span className="text-gray-900">{crumb.label}</span>
-                )}
-                {index < breadcrumbs.length - 1 && <span className="mx-2">&gt;</span>}
-              </span>
-            ))}
-          </nav>
-
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
-              <Share className="mr-2 h-4 w-4" />
-              Share
-            </Button>
-            <Button
-              variant={isSaved ? "default" : "outline"}
-              size="sm"
-              className={isSaved ? "bg-red-500 hover:bg-red-600 text-white" : ""}
-              onClick={handleToggleSave}
-              disabled={isMutating}
-            >
-              <Bookmark className={`mr-2 h-4 w-4 ${isSaved ? "fill-current" : ""}`} />
-              {isSaved ? "Saved" : "Save"}
-            </Button>
-          </div>
-        </div>
-
-      </div>
-
       <div className="flex items-start justify-between gap-6">
         <div className="space-y-3 flex-1">
           <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
-          {professional.title ? <h2 className="text-xl text-gray-600">{professional.title}</h2> : null}
+          {subtitle ? <h2 className="text-xl text-gray-600">{subtitle}</h2> : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -215,8 +171,19 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
             )}
           </div>
 
-          {professional.description ? (
-            <p className="max-w-3xl text-gray-700">{professional.description}</p>
+          {description ? (
+            <div className="space-y-2">
+              <p className="max-w-3xl text-gray-700">{displayDescription}</p>
+              {shouldTruncate && (
+                <Button
+                  variant="link"
+                  className="p-0 text-red-600 hover:text-red-700"
+                  onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                >
+                  {isDescriptionExpanded ? "Show less" : "Show more"}
+                </Button>
+              )}
+            </div>
           ) : null}
         </div>
 
@@ -231,38 +198,27 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
         </div>
       </div>
 
-      <div className="border-y border-gray-200 py-6">
-        <h3 className="mb-6 text-xl font-semibold text-black">Meet the professional</h3>
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold text-black">Meet the professional</h2>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="space-y-4">
-            {leftSummaryItems.map((item) => (
-              <div key={item.label}>
-                <h4 className="mb-1 text-sm font-medium text-gray-900">{item.label}</h4>
-                <p className="text-sm text-gray-600">{item.value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-4">
-            {rightSummaryItems.map((item) => (
-              <div key={item.label}>
-                <h4 className="mb-1 text-sm font-medium text-gray-900">{item.label}</h4>
-                <p className="text-sm text-gray-600">{item.value}</p>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {detailItems.map((detail) => (
+            <div key={detail.label} className="space-y-1">
+              <p className="text-sm text-gray-500">{detail.label}</p>
+              <p className="text-sm font-medium text-gray-900">{detail.value}</p>
+            </div>
+          ))}
         </div>
-      </div>
 
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        title={professional.name}
-        subtitle={professional.title ?? ""}
-        imageUrl={coverImage}
-        shareUrl={shareUrl}
-      />
+        <button
+          className="text-sm text-gray-500 hover:text-gray-700 underline mt-4"
+          onClick={() => setIsReportModalOpen(true)}
+        >
+          Report this listing
+        </button>
+
+        <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />
+      </div>
     </div>
   )
 }

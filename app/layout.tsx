@@ -52,10 +52,18 @@ export default async function RootLayout({
 
   const session = buildSession(sessionData.session, userData.user)
 
+  const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
   return (
     <html lang="en" className={poppins.variable}>
       <body className={poppins.className}>
         <RootProviders initialSession={session}>{children}</RootProviders>
+        {mapsApiKey && (
+          <Script
+            src={`https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places,marker&loading=async`}
+            strategy="afterInteractive"
+          />
+        )}
         <Script
           id="marker-io"
           strategy="afterInteractive"

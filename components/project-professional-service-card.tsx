@@ -111,7 +111,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
               aria-label={`Manage actions for ${service.name}`}
               disabled={isBusy}
             >
@@ -141,7 +141,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                   type="button"
                   onClick={() => onInvite(service.id)}
                   disabled={isBusy}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <MailPlus className="h-4 w-4" />
                   {emptyStateCtaLabel ?? DEFAULT_EMPTY_STATE_LABEL}
@@ -151,7 +151,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                     <button
                       type="button"
                       disabled={isBusy}
-                      className="inline-flex items-center justify-center border border-l-0 border-gray-200 px-2 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 rounded-r-md"
+                      className="inline-flex items-center justify-center bg-secondary text-secondary-foreground hover:bg-secondary/80 px-2 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60 rounded-r-full"
                       aria-label="Select professional from list"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,7 +182,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                 type="button"
                 onClick={() => onInvite(service.id)}
                 disabled={isBusy}
-                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <MailPlus className="h-4 w-4" />
                 {emptyStateCtaLabel ?? DEFAULT_EMPTY_STATE_LABEL}
@@ -190,7 +190,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
             )}
           </div>
         ) : (
-          <div className="flex flex-1 flex-col gap-3">
+          <div className="flex flex-1 flex-col justify-end gap-3">
             <div className="space-y-3">
               {invites.map((invite) => {
                 const inviteRecord = invite as Record<string, unknown>
@@ -213,7 +213,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                 const primaryLine = companyName ?? invite.email
                 const secondaryLine = companyName ? invite.email : null
                 return (
-                  <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
+                  <div key={invite.id} className="rounded-xl p-3">
                     <p className="text-sm font-medium text-gray-900">{primaryLine}</p>
                     {secondaryLine && <p className="text-xs text-gray-500">{secondaryLine}</p>}
                     <div className="mt-2 flex items-center justify-between gap-3">
@@ -229,7 +229,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                             type="button"
                             onClick={() => onInvite(service.id, invite)}
                             disabled={isBusy}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
                             aria-label={`Edit invite for ${invite.email}`}
                           >
                             <Pencil className="h-4 w-4" />
@@ -242,7 +242,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                               void onDeleteInvite(invite)
                             }}
                             disabled={isBusy}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
                             aria-label={`Remove invite for ${invite.email}`}
                           >
                             <XCircle className="h-4 w-4" />

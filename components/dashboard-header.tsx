@@ -7,7 +7,6 @@ import { useState, useTransition, useEffect, useRef, type FormEvent } from "reac
 import { toast } from "sonner"
 
 import { signOutAction } from "@/app/(auth)/actions"
-import { Button } from "@/components/ui/button"
 import { HeaderSearch } from "@/components/header-search"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -109,16 +108,24 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             </Link>
 
             {isHomeownerPage && (
-              <div className="hidden items-center space-x-6 md:flex">
+              <div className="hidden items-center md:flex">
                 <Link
                   href="/projects"
-                  className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                  className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                    pathname.startsWith("/projects")
+                      ? "text-red-500"
+                      : "text-black hover:bg-gray-100"
+                  }`}
                 >
                   Projects
                 </Link>
                 <Link
                   href="/professionals"
-                  className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                  className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                    pathname.startsWith("/professionals")
+                      ? "text-red-500"
+                      : "text-black hover:bg-gray-100"
+                  }`}
                 >
                   Professionals
                 </Link>
@@ -127,14 +134,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
           </div>
 
           {!isHomeownerPage && canAccessProfessionalDashboard && (
-            <div className="hidden items-center space-x-6 md:flex">
+            <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
               {isAdmin && (
                 <Link
                   href="/admin"
-                  className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
-                    isActive("/admin") 
-                      ? "text-red-500 border-red-500" 
-                      : "text-black hover:text-gray-600 border-transparent"
+                  className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                    isActive("/admin")
+                      ? "text-red-500"
+                      : "text-black hover:bg-gray-100"
                   }`}
                 >
                   Admin
@@ -142,20 +149,20 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
               )}
               <Link
                 href="/dashboard/listings"
-                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
-                  isActive("/dashboard/listings") 
-                    ? "text-red-500 border-red-500" 
-                    : "text-black hover:text-gray-600 border-transparent"
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                  isActive("/dashboard/listings")
+                    ? "text-red-500"
+                    : "text-black hover:bg-gray-100"
                 }`}
               >
                 Listings
               </Link>
               <Link
                 href="/dashboard/company"
-                className={`text-sm font-medium transition-colors border-b-2 pb-1 ${
-                  isActive("/dashboard/company") 
-                    ? "text-red-500 border-red-500" 
-                    : "text-black hover:text-gray-600 border-transparent"
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                  isActive("/dashboard/company")
+                    ? "text-red-500"
+                    : "text-black hover:bg-gray-100"
                 }`}
               >
                 Company
@@ -173,11 +180,11 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             />
           )}
 
-          <div className="relative flex items-center space-x-3" ref={menuRef}>
+          <div className="relative flex items-center gap-3" ref={menuRef}>
             {isHomeownerPage && (
               <Link
                 href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
-                className="hidden md:block text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-gray-100"
               >
                 {hasProfessionalRole ? "Add new project" : "List with us"}
               </Link>
@@ -185,21 +192,18 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             {!isHomeownerPage && canAccessProfessionalDashboard && (
               <Link
                 href="/new-project"
-                className="hidden md:block text-sm font-medium text-black hover:text-gray-600 transition-colors"
+                className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-gray-100"
               >
                 Add new project
               </Link>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center space-x-2 rounded-full border px-3 py-2 text-sm font-medium border-black text-black hover:bg-gray-100"
-              aria-label="Open menu"
+            <button
+              className="flex items-center gap-2 h-9 rounded-full border px-3 border-gray-300 hover:bg-gray-100"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              <span className="text-black">{menuLabel}</span>
+              <span className="hidden text-sm md:inline">{menuLabel}</span>
               <Menu className="h-5 w-5" />
-            </Button>
+            </button>
 
             {isMenuOpen && (
               <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
@@ -207,186 +211,213 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                   {isHomeownerPage ? (
                     <>
                       {/* Homeowner Dashboard Menu */}
-                      <div className="border-t border-gray-100 px-4 py-3 md:hidden">
-                        <form onSubmit={handleSearch} className="relative">
-                          <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="Search projects..."
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                          />
-                          <button
-                            type="submit"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 transform text-gray-500 hover:text-gray-700"
-                          >
-                            <Search className="h-4 w-4" />
-                          </button>
-                        </form>
+                      {/* Section 1: Projects / Professionals */}
+                      <div className="px-4 py-3">
+                        <Link
+                          href="/projects"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Projects
+                        </Link>
+                        <Link
+                          href="/professionals"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Professionals
+                        </Link>
                       </div>
-                      <Link
-                        href="/projects"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Projects
-                      </Link>
-                      <div className="border-t border-gray-100"></div>
-                      <Link
-                        href="/professionals"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Professionals
-                      </Link>
-                      <div className="border-t border-gray-100"></div>
-                      <Link
-                        href="/list-with-us"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        List with us
-                      </Link>
-                      {canAccessProfessionalDashboard && (
-                        <>
-                          <div className="border-t border-gray-100"></div>
+
+                      {/* Divider */}
+                      <div className="border-t border-gray-100" />
+
+                      {/* Section 2: Saved items */}
+                      <div className="px-4 py-3">
+                        <Link
+                          href="/homeowner?tab=saved-projects"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Saved projects
+                        </Link>
+                        <Link
+                          href="/homeowner?tab=saved-professionals"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Saved professionals
+                        </Link>
+                        <Link
+                          href="/homeowner?tab=account"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Account
+                        </Link>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t border-gray-100" />
+
+                      {/* Section 3: List with us / Dashboard / Help */}
+                      <div className="px-4 py-3">
+                        <Link
+                          href="/list-with-us"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          List with us
+                        </Link>
+                        {canAccessProfessionalDashboard && (
                           <Link
                             href={isAdmin ? "/admin" : "/dashboard/listings"}
-                            className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                             onClick={() => setIsMenuOpen(false)}
                           >
-                            {isAdmin ? "Admin Dashboard" : "Professional Dashboard"}
+                            {isAdmin ? "Admin" : "Switch to company"}
                           </Link>
-                        </>
-                      )}
-                      <div className="border-t border-gray-100"></div>
-                      <Link
-                        href="/homeowner?tab=saved-projects"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Saved Projects
-                      </Link>
-                      <div className="border-t border-gray-100"></div>
-                      <Link
-                        href="/homeowner?tab=saved-professionals"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Saved Professionals
-                      </Link>
-                      <div className="border-t border-gray-100"></div>
-                      <Link
-                        href="/homeowner?tab=settings"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Settings
-                      </Link>
+                        )}
+                        <Link
+                          href="/help-center"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Help center
+                        </Link>
+                        <button
+                          type="button"
+                          className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                          onClick={handleSignOut}
+                          disabled={isSigningOut}
+                        >
+                          {isSigningOut ? "Signing out..." : "Sign out"}
+                        </button>
+                      </div>
                     </>
                   ) : canAccessProfessionalDashboard ? (
                     <>
                       {/* Professional Dashboard Menu */}
-                      {/* Group 1: Listings & Company */}
-                      <Link
-                        href="/dashboard/listings"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Listings
-                      </Link>
-                      <Link
-                        href="/dashboard/company"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Company
-                      </Link>
-                      
-                      <div className="border-t border-gray-100"></div>
-                      
-                      {/* Group 2: Upgrade plan & Billing */}
-                      <Link
-                        href="/dashboard/pricing"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Upgrade plan
-                      </Link>
-                      <Link
-                        href="/dashboard/billing"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Billing
-                      </Link>
-                      
-                      <div className="border-t border-gray-100"></div>
-                      
-                      {/* Group 3: Settings */}
-                      <Link
-                        href="/dashboard/settings"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Settings
-                      </Link>
-                      
-                      <div className="border-t border-gray-100"></div>
-                      
-                      {/* Group 4: Help & Navigation */}
-                      <Link
-                        href="/help-center"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Help center
-                      </Link>
-                      <Link
-                        href="/homeowner"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Switch to homeowner
-                      </Link>
-                      {isAdmin && (
+                      {/* Section 1: Listings & Company */}
+                      <div className="px-4 py-3">
                         <Link
-                          href="/admin"
-                          className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          href="/dashboard/listings"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Admin
+                          Listings
                         </Link>
-                      )}
+                        <Link
+                          href="/dashboard/company"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Company
+                        </Link>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t border-gray-100" />
+
+                      {/* Section 2: Upgrade plan & Billing - COMMENTED OUT */}
+                      {/* <div className="px-4 py-3">
+                        <Link
+                          href="/dashboard/pricing"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Upgrade plan
+                        </Link>
+                        <Link
+                          href="/dashboard/billing"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Billing
+                        </Link>
+                      </div> */}
+
+                      {/* Divider */}
+                      {/* <div className="border-t border-gray-100" /> */}
+
+                      {/* Section 2: Account */}
+                      <div className="px-4 py-3">
+                        <Link
+                          href="/dashboard/settings"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Account
+                        </Link>
+
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t border-gray-100" />
+
+                      {/* Section 3: Help & Sign out */}
+                      <div className="px-4 py-3">
+                      <Link
+                          href="/homeowner"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Switch to homeowner
+                        </Link>
+                        <Link
+                          href="/help-center"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Help center
+                        </Link>
+                        {isAdmin && (
+                          <Link
+                            href="/admin"
+                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                            onClick={() => setIsMenuOpen(false)}
+                          >
+                            Admin
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                          onClick={handleSignOut}
+                          disabled={isSigningOut}
+                        >
+                          {isSigningOut ? "Signing out..." : "Sign out"}
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <>
-                      <Link
-                        href="/create-company"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Create company profile
-                      </Link>
-                      <div className="border-t border-gray-100"></div>
-                      <Link
-                        href="/homeowner"
-                        className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Homeowner Dashboard
-                      </Link>
+                      <div className="px-4 py-3">
+                        <Link
+                          href="/create-company"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Create company profile
+                        </Link>
+                        <Link
+                          href="/homeowner"
+                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Homeowner Dashboard
+                        </Link>
+                        <button
+                          type="button"
+                          className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                          onClick={handleSignOut}
+                          disabled={isSigningOut}
+                        >
+                          {isSigningOut ? "Signing out..." : "Sign out"}
+                        </button>
+                      </div>
                     </>
                   )}
-                <div className="border-t border-gray-100"></div>
-                <button
-                  type="button"
-                  className="block w-full px-4 py-3 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                  onClick={handleSignOut}
-                  disabled={isSigningOut}
-                >
-                  {isSigningOut ? "Signing out..." : "Sign out"}
-                </button>
                 </div>
               </div>
             )}

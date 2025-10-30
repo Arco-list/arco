@@ -35,7 +35,7 @@ export const FeatureCheckboxGrid = ({ title, items, selectedValues, onChange, er
               type="checkbox"
               checked={isSelected}
               onChange={() => onChange(item.value)}
-              className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
+              className="w-4 h-4 border-gray-300 rounded focus:ring-gray-900 accent-gray-900"
             />
             <IconComponent className="w-5 h-5 text-gray-600" />
             <span className="text-gray-900">{item.label}</span>

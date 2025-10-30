@@ -57,8 +57,10 @@ export type PreviewProjectProfessional = {
   serviceCategory: string
   serviceCategoryId: string
   companyName?: string | null
+  companySlug?: string | null
   companyLogo?: string | null
   professionalTitle?: string | null
+  projectsCount?: number
   status?: string | null
 }
 
@@ -75,6 +77,7 @@ export type PreviewBreadcrumb = {
 export type PreviewSimilarProject = {
   id: string
   title: string
+  slug?: string | null
   location?: string | null
   imageUrl?: string | null
   likes?: number

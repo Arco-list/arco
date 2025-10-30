@@ -217,6 +217,7 @@ export function FilterBar() {
     typeOptions.forEach((section) => {
       section.items.forEach((item) => {
         if (!item.isListable) return
+        if (item.isParent) return // Exclude parent items from carousel
         if (seen.has(item.id)) return
         items.push(item)
         seen.add(item.id)
@@ -278,22 +279,9 @@ export function FilterBar() {
     setLocationSearch("")
   }
 
-  const popularLocations = [
-    "Amsterdam",
-    "Rotterdam",
-    "The Hague",
-    "Utrecht",
-    "Eindhoven",
-    "Tilburg",
-    "Groningen",
-    "Almere",
-    "Breda",
-    "Nijmegen",
-    "Enschede",
-    "Haarlem",
-  ]
+  const availableCities = taxonomy.cities ?? []
 
-  const filteredLocations = popularLocations.filter((location) =>
+  const filteredLocations = availableCities.filter((location) =>
     location.toLowerCase().includes(locationSearch.toLowerCase()),
   )
 
@@ -301,7 +289,7 @@ export function FilterBar() {
 
   const getButtonClassName = (hasSelection: boolean) => {
     return hasSelection
-      ? "data-[state=on] border-red-500 text-red-600 bg-red-50 hover:bg-red-100"
+      ? "border-[#222222] text-[#222222] bg-transparent"
       : ""
   }
 
@@ -365,7 +353,7 @@ export function FilterBar() {
                                   onClick={(event) => handleTypeRadioClick(event, itemValue)}
                                   aria-checked={selectedTypes.includes(itemValue)}
                                 />
-                                <span className="text-sm text-gray-600">{item.name}</span>
+                                <span className="text-sm">{item.name}</span>
                               </label>
                             )
                           }
@@ -388,10 +376,10 @@ export function FilterBar() {
                                       onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
                                       aria-checked={selectedTypes.includes(parentItem.id)}
                                     />
-                                    <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
+                                    <span className="text-sm">{section.name}</span>
                                   </label>
                                 ) : (
-                                  <h4 className="text-sm font-medium text-gray-700">{section.name}</h4>
+                                  <span className="text-sm">{section.name}</span>
                                 )}
                                 {showToggle && (
                                   <button
@@ -458,7 +446,7 @@ export function FilterBar() {
                         <label key={value} className="flex items-center gap-3 cursor-pointer">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300"
+                            className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
                             checked={selectedStyles.includes(value)}
                             onChange={() => toggleStyleSelection(value)}
                           />
@@ -577,8 +565,8 @@ export function FilterBar() {
                     key={item.id}
                     onClick={() => toggleTypeSelection(item.id)}
                     variant="quaternary"
-                    className={isSelected 
-                      ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100" 
+                    className={isSelected
+                      ? "border-[#222222] text-[#222222] bg-transparent"
                       : ""
                     }
                   >

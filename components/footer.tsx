@@ -17,10 +17,7 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
       <div className={`${maxWidth} mx-auto`}>
         <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
           <div>
-            <Link
-              href="/"
-              className="mb-6 block hover:opacity-80 transition-opacity"
-            >
+            <Link href="/" className="mb-6 block">
               <img
                 src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                 alt="Arco Logo"
@@ -37,36 +34,36 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
             {Object.entries(footerLinks).map(([category, links]) => (
               <div key={category}>
-                <h6 className="text-gray-900 mb-4">{category}</h6>
+                <h6 className="text-gray-900 mb-4 px-3">{category}</h6>
                 <ul className="space-y-2">
                   {links.map((link) => (
                     <li key={link}>
                       {link === "Pricing" ? (
-                        <Link href="/pricing" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <Link href="/pricing" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </Link>
                       ) : link === "Projects" ? (
-                        <Link href="/projects" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <Link href="/projects" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </Link>
                       ) : link === "About" ? (
-                        <Link href="/about" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <Link href="/about" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </Link>
                       ) : link === "Help center" ? (
-                        <Link href="/help-center" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <Link href="/help-center" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </Link>
                       ) : link === "Professionals" ? (
-                        <Link href="/professionals" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <Link href="/professionals" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </Link>
                       ) : link === "List with us" ? (
-                        <Link href="/list-with-us" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <Link href="/list-with-us" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </Link>
                       ) : (
-                        <a href="#" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+                        <a href="#" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
                           {link}
                         </a>
                       )}
@@ -81,10 +78,10 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
         <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
           <div>©2025 ArcoGlobal BV. All rights reserved.</div>
           <div className="flex gap-6">
-            <Link href="/terms" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+            <Link href="/terms" className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
               Terms
             </Link>
-            <Link href="/privacy" className="text-sm text-gray-700 hover:text-gray-900 transition-colors">
+            <Link href="/privacy" className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
               Privacy
             </Link>
           </div>

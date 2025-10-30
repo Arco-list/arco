@@ -180,6 +180,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         categoryId: string | null
         tagline: string | null
         isHighlighted: boolean
+        name: string
       }
     >
   >({})
@@ -291,14 +292,113 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     async (projectFeatures: ProjectFeatureRow[], projectIdValue: string) => {
       let featureRows = [...projectFeatures]
 
+      // Fetch project type category to use for default feature
+      const { data: projectData, error: projectError } = await supabase
+        .from("projects")
+        .select("project_type_category_id, categories:project_type_category_id(id, name)")
+        .eq("id", projectIdValue)
+        .single()
+
+      if (projectError) {
+        console.error("Error fetching project type category:", projectError)
+        throw projectError
+      }
+
+      // Handle case where project might not have a type set yet (new projects)
+      const projectTypeCategoryId = projectData?.project_type_category_id || null
+      const projectTypeName = projectData?.categories?.name || "Building"
+
       let buildingFeature = featureRows.find((row) => row.is_building_default)
-      if (!buildingFeature) {
+
+      // If building feature exists, check if it needs to be synced with current project type
+      if (buildingFeature) {
+        const needsSync =
+          buildingFeature.category_id !== projectTypeCategoryId ||
+          buildingFeature.name !== projectTypeName
+
+        if (needsSync && projectTypeCategoryId) {
+          // Check if another feature already has this category_id or name
+          const categoryConflict = featureRows.find(
+            (row) => row.id !== buildingFeature!.id && row.category_id === projectTypeCategoryId
+          )
+          const nameConflict = featureRows.find(
+            (row) => row.id !== buildingFeature!.id && row.name === projectTypeName
+          )
+
+          // If there's a category conflict, delete the conflicting feature and merge its photos
+          if (categoryConflict) {
+            // Move photos from conflicting feature to building feature
+            const { error: movePhotosError } = await supabase
+              .from("project_photos")
+              .update({ feature_id: buildingFeature.id })
+              .eq("feature_id", categoryConflict.id)
+              .eq("project_id", projectIdValue)
+
+            if (movePhotosError) {
+              console.warn("Failed to move photos from conflicting feature:", movePhotosError)
+            }
+
+            // Delete the conflicting feature
+            const { error: deleteError } = await supabase
+              .from("project_features")
+              .delete()
+              .eq("id", categoryConflict.id)
+
+            if (deleteError) {
+              console.warn("Failed to delete conflicting feature:", deleteError)
+            } else {
+              // Remove from featureRows
+              featureRows = featureRows.filter((row) => row.id !== categoryConflict.id)
+            }
+          }
+
+          // Only sync if there's no name conflict (or we just resolved the category conflict)
+          const recheckNameConflict = featureRows.find(
+            (row) => row.id !== buildingFeature!.id && row.name === projectTypeName
+          )
+
+          if (!recheckNameConflict) {
+            const { error: syncError } = await supabase
+              .from("project_features")
+              .update({
+                name: projectTypeName,
+                category_id: projectTypeCategoryId
+              })
+              .eq("id", buildingFeature.id)
+
+            if (syncError) {
+              throw syncError
+            }
+
+            buildingFeature = {
+              ...buildingFeature,
+              name: projectTypeName,
+              category_id: projectTypeCategoryId,
+            }
+            featureRows = featureRows.map((row) => (row.id === buildingFeature!.id ? buildingFeature! : row))
+          }
+        }
+      } else {
+        // No building feature exists, check for legacy "Building" feature
         const legacyBuilding = featureRows.find((row) => row.name === "Building")
 
         if (legacyBuilding) {
+          // Check if another feature already has the project type name
+          const nameConflict = featureRows.find(
+            (row) => row.id !== legacyBuilding.id && row.name === projectTypeName
+          )
+
+          // Only rename to project type if no conflict, otherwise keep "Building"
+          const featureName = nameConflict ? "Building" : projectTypeName
+
           const { error: upgradeError } = await supabase
             .from("project_features")
-            .update({ is_building_default: true, order_index: legacyBuilding.order_index ?? 0 })
+            .update({
+              is_building_default: true,
+              order_index: legacyBuilding.order_index ?? 0,
+              name: featureName,
+              category_id: nameConflict ? null : projectTypeCategoryId
+            })
             .eq("id", legacyBuilding.id)
 
           if (upgradeError) {
@@ -309,20 +409,27 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             ...legacyBuilding,
             is_building_default: true,
             order_index: legacyBuilding.order_index ?? 0,
+            name: featureName,
+            category_id: nameConflict ? null : projectTypeCategoryId,
           }
           featureRows = featureRows.map((row) => (row.id === legacyBuilding.id ? buildingFeature! : row))
         } else {
+          // Create new default feature based on project type
+          // Check if another feature already has the project type name
+          const nameConflict = featureRows.find((row) => row.name === projectTypeName)
+          const featureName = nameConflict ? "Building" : projectTypeName
+
           const newId = generateUploadId()
           const timestamp = new Date().toISOString()
           const newBuilding: ProjectFeatureRow = {
             id: newId,
             project_id: projectIdValue,
-            name: "Building",
+            name: featureName,
             is_building_default: true,
             order_index: 0,
             created_at: timestamp,
             updated_at: timestamp,
-            category_id: null,
+            category_id: nameConflict ? null : projectTypeCategoryId,
             cover_photo_id: null,
             description: null,
             is_highlighted: false,
@@ -332,63 +439,145 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           const { error: buildingError } = await supabase.from("project_features").insert(newBuilding)
 
           if (buildingError) {
-            throw buildingError
-          }
+            // If duplicate, try to fetch the existing one instead of failing
+            if ("code" in buildingError && buildingError.code === "23505") {
+              const { data: existingBuilding } = await supabase
+                .from("project_features")
+                .select("*")
+                .eq("project_id", projectIdValue)
+                .eq("is_building_default", true)
+                .maybeSingle()
 
-          buildingFeature = newBuilding
-          featureRows = [...featureRows, newBuilding]
+              if (existingBuilding) {
+                buildingFeature = existingBuilding
+                featureRows = [...featureRows, existingBuilding]
+              } else {
+                throw buildingError
+              }
+            } else {
+              throw buildingError
+            }
+          } else {
+            buildingFeature = newBuilding
+            featureRows = [...featureRows, newBuilding]
+          }
         }
       }
 
       const maxOrderIndex = featureRows.reduce((max, row) => Math.max(max, row.order_index ?? 0), 0)
 
-      let additionalFeature = featureRows.find(
-        (row) => !row.is_building_default && !row.category_id && row.name === "Additional photos",
+      // Find all "Additional photos" features (there should only be one, but clean up duplicates)
+      const additionalFeatures = featureRows.filter(
+        (row) => !row.is_building_default && row.name === "Additional photos",
       )
 
-      if (!additionalFeature) {
-        const legacyAdditional = featureRows.find((row) => row.name === "Additional photos")
+      let additionalFeature: ProjectFeatureRow | undefined
 
-        if (legacyAdditional) {
+      if (additionalFeatures.length > 1) {
+        // Multiple "Additional photos" found - keep the first one with category_id = null, delete others
+        const canonical = additionalFeatures.find((row) => !row.category_id) ?? additionalFeatures[0]
+        const duplicates = additionalFeatures.filter((row) => row.id !== canonical.id)
+
+        // Delete duplicate features
+        if (duplicates.length > 0) {
+          const duplicateIds = duplicates.map((d) => d.id)
+          const { error: deleteError } = await supabase
+            .from("project_features")
+            .delete()
+            .in("id", duplicateIds)
+
+          if (deleteError) {
+            console.warn("Failed to delete duplicate Additional photos features", deleteError)
+          }
+
+          // Remove duplicates from featureRows
+          featureRows = featureRows.filter((row) => !duplicateIds.includes(row.id))
+        }
+
+        // Ensure canonical has correct properties
+        if (canonical.category_id !== null) {
+          const { error: updateError } = await supabase
+            .from("project_features")
+            .update({ category_id: null, order_index: canonical.order_index ?? maxOrderIndex + 1 })
+            .eq("id", canonical.id)
+
+          if (updateError) {
+            throw updateError
+          }
+
+          additionalFeature = {
+            ...canonical,
+            category_id: null,
+            order_index: canonical.order_index ?? maxOrderIndex + 1,
+          }
+          featureRows = featureRows.map((row) => (row.id === canonical.id ? additionalFeature! : row))
+        } else {
+          additionalFeature = canonical
+        }
+      } else if (additionalFeatures.length === 1) {
+        const existing = additionalFeatures[0]
+
+        // Ensure it has correct properties
+        if (existing.category_id !== null) {
           const { error: upgradeAdditionalError } = await supabase
             .from("project_features")
-            .update({ category_id: null, order_index: legacyAdditional.order_index ?? maxOrderIndex + 1 })
-            .eq("id", legacyAdditional.id)
+            .update({ category_id: null, order_index: existing.order_index ?? maxOrderIndex + 1 })
+            .eq("id", existing.id)
 
           if (upgradeAdditionalError) {
             throw upgradeAdditionalError
           }
 
           additionalFeature = {
-            ...legacyAdditional,
+            ...existing,
             category_id: null,
-            order_index: legacyAdditional.order_index ?? maxOrderIndex + 1,
+            order_index: existing.order_index ?? maxOrderIndex + 1,
           }
-          featureRows = featureRows.map((row) => (row.id === legacyAdditional.id ? additionalFeature! : row))
+          featureRows = featureRows.map((row) => (row.id === existing.id ? additionalFeature! : row))
         } else {
-          const newId = generateUploadId()
-          const timestamp = new Date().toISOString()
-          const newAdditional: ProjectFeatureRow = {
-            id: newId,
-            project_id: projectIdValue,
-            name: "Additional photos",
-            is_building_default: false,
-            order_index: maxOrderIndex + 1,
-            created_at: timestamp,
-            updated_at: timestamp,
-            category_id: null,
-            cover_photo_id: null,
-            description: null,
-            is_highlighted: false,
-            tagline: null,
-          }
+          additionalFeature = existing
+        }
+      } else {
+        // No "Additional photos" found - create one
+        const newId = generateUploadId()
+        const timestamp = new Date().toISOString()
+        const newAdditional: ProjectFeatureRow = {
+          id: newId,
+          project_id: projectIdValue,
+          name: "Additional photos",
+          is_building_default: false,
+          order_index: maxOrderIndex + 1,
+          created_at: timestamp,
+          updated_at: timestamp,
+          category_id: null,
+          cover_photo_id: null,
+          description: null,
+          is_highlighted: false,
+          tagline: null,
+        }
 
-          const { error: additionalError } = await supabase.from("project_features").insert(newAdditional)
+        const { error: additionalError } = await supabase.from("project_features").insert(newAdditional)
 
-          if (additionalError) {
+        if (additionalError) {
+          // If duplicate, try to fetch the existing one instead of failing
+          if ("code" in additionalError && additionalError.code === "23505") {
+            const { data: existingAdditional } = await supabase
+              .from("project_features")
+              .select("*")
+              .eq("project_id", projectIdValue)
+              .eq("name", "Additional photos")
+              .maybeSingle()
+
+            if (existingAdditional) {
+              additionalFeature = existingAdditional
+              featureRows = [...featureRows, existingAdditional]
+            } else {
+              throw additionalError
+            }
+          } else {
             throw additionalError
           }
-
+        } else {
           additionalFeature = newAdditional
           featureRows = [...featureRows, newAdditional]
         }
@@ -455,6 +644,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             categoryId: buildingFeature.category_id,
             tagline: buildingFeature.tagline ?? null,
             isHighlighted: buildingFeature.is_highlighted ?? false,
+            name: buildingFeature.name,
           }
         }
 
@@ -467,15 +657,30 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             categoryId: additionalFeature.category_id,
             tagline: additionalFeature.tagline ?? null,
             isHighlighted: additionalFeature.is_highlighted ?? false,
+            name: additionalFeature.name,
           }
         }
 
         featureRows.forEach((feature) => {
+          // Skip building default (already handled above)
           if (feature.is_building_default) {
             return
           }
 
+          // Skip "Additional photos" (already handled above as additionalFeature)
+          if (feature.id === additionalFeature?.id) {
+            return
+          }
+
           if (feature.category_id) {
+            // Skip if this category is already mapped to the building feature
+            // (This handles the case where we merged a duplicate)
+            if (buildingFeature?.category_id === feature.category_id) {
+              console.log(`Skipping duplicate feature "${feature.name}" - already mapped to building feature`)
+              return
+            }
+
+            console.log(`Loading feature "${feature.name}" with category_id:`, feature.category_id)
             uiKeyByFeatureId.set(feature.id, feature.category_id)
             idMap[feature.category_id] = feature.id
             metadata[feature.category_id] = {
@@ -484,11 +689,14 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               categoryId: feature.category_id,
               tagline: feature.tagline ?? null,
               isHighlighted: feature.is_highlighted ?? false,
+              name: feature.name,
             }
             taxonomySelection.add(feature.category_id)
             return
           }
 
+          // This should rarely/never happen - features without category_id should be building or additional
+          console.warn(`Feature "${feature.name}" (${feature.id}) has no category_id - using database ID as key`)
           uiKeyByFeatureId.set(feature.id, feature.id)
           idMap[feature.id] = feature.id
           metadata[feature.id] = {
@@ -497,6 +705,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             categoryId: feature.category_id,
             tagline: feature.tagline ?? null,
             isHighlighted: feature.is_highlighted ?? false,
+            name: feature.name,
           }
           taxonomySelection.add(feature.id)
         })
@@ -537,15 +746,42 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           nextFeaturePhotos[BUILDING_FEATURE_ID] = []
         }
 
+        // Build selectedFeatures array including the building feature's category if it has one
+        const buildingCategoryId = buildingFeature?.category_id
+        const allSelectedFeatures = [
+          BUILDING_FEATURE_ID,
+          ...(buildingCategoryId ? [buildingCategoryId] : []),
+          ...Array.from(taxonomySelection)
+        ]
+
+        console.log("Final taxonomySelection:", Array.from(taxonomySelection))
+        console.log("Building feature category_id:", buildingCategoryId)
+        console.log("Setting selectedFeatures to:", allSelectedFeatures)
+
+        // Recalculate Additional photos to only include truly unassigned photos
+        const allPhotoIds = nextUploadedPhotos.map((photo) => photo.id)
+        nextFeaturePhotos[ADDITIONAL_FEATURE_ID] = computeAdditionalPhotoIds(nextFeaturePhotos, allPhotoIds)
+
+        // Clear cover photo if Additional photos is empty
+        if (nextFeaturePhotos[ADDITIONAL_FEATURE_ID].length === 0) {
+          delete nextFeatureCoverPhotos[ADDITIONAL_FEATURE_ID]
+        }
+
         setResolvedProjectId(projectIdValue)
         setFeatureIdMap(idMap)
         setFeatureMetadata(metadata)
-        setSelectedFeatures([BUILDING_FEATURE_ID, ...Array.from(taxonomySelection)])
+        setSelectedFeatures(allSelectedFeatures)
         setUploadedPhotos(normaliseCoverFlag(nextUploadedPhotos))
         setFeaturePhotos(nextFeaturePhotos)
         setFeatureCoverPhotos(nextFeatureCoverPhotos)
       } catch (error) {
         console.error("Failed to load project photo context", error)
+        console.error("Error details:", {
+          errorType: typeof error,
+          isError: error instanceof Error,
+          errorString: String(error),
+          errorJSON: JSON.stringify(error),
+        })
         setProjectLoadError(
           error instanceof Error ? error.message : "We couldn't load your project photos. Please try again.",
         )
@@ -902,7 +1138,9 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const getFeatureDisplay = useCallback(
     (featureId: string): FeatureDisplay => {
       if (featureId === BUILDING_FEATURE_ID) {
-        return { id: featureId, name: "Building", icon: Home }
+        const buildingMetadata = featureMetadata[BUILDING_FEATURE_ID]
+        const name = buildingMetadata?.name ?? "Building"
+        return { id: featureId, name, icon: Home }
       }
       if (featureId === ADDITIONAL_FEATURE_ID) {
         return { id: featureId, name: "Additional photos", icon: Grid3x3 }
@@ -910,12 +1148,15 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
       const option = featureOptions.find((item) => item.id === featureId)
       const fallback = FALLBACK_FEATURES.find((item) => item.id === featureId)
-      const name = option?.name ?? fallback?.name ?? "Feature"
+
+      // Check if we have metadata with a name (for features created from database)
+      const metadataName = featureMetadata[featureId]?.name
+      const name = option?.name ?? fallback?.name ?? metadataName ?? "Unknown Feature"
       const slug = option?.slug ?? fallback?.slug ?? null
       const icon = resolveFeatureIcon(slug)
       return { id: featureId, name, icon }
     },
-    [featureOptions],
+    [featureOptions, featureMetadata],
   )
 
   const addFeatures = useCallback(
@@ -941,12 +1182,17 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           const next = { ...prev }
           featureIds.forEach((id) => {
             if (!next[id]) {
+              const option = featureOptions.find((item) => item.id === id)
+              const fallback = FALLBACK_FEATURES.find((item) => item.id === id)
+              const name = option?.name ?? fallback?.name ?? "Unknown"
+
               next[id] = {
                 featureId: id,
                 orderIndex: next[ADDITIONAL_FEATURE_ID]?.orderIndex ?? 0,
                 categoryId: isUuid(id) ? id : null,
                 tagline: null,
                 isHighlighted: false,
+                name,
               }
             }
           })
@@ -990,7 +1236,14 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         for (const featureKey of newFeatureIds) {
           const option = featureOptions.find((item) => item.id === featureKey)
           const fallback = FALLBACK_FEATURES.find((item) => item.id === featureKey)
-          const featureName = option?.name ?? fallback?.name ?? "Feature"
+          const featureName = option?.name ?? fallback?.name ?? null
+
+          // Skip features that don't have a valid name - they're invalid/deleted categories
+          if (!featureName) {
+            console.warn(`Skipping feature with invalid ID: ${featureKey}`)
+            continue
+          }
+
           const categoryId = isUuid(featureKey) ? featureKey : null
 
           const { data, error } = await supabase
@@ -1001,11 +1254,60 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               category_id: categoryId,
               order_index: nextOrder,
             })
-            .select("id, category_id, order_index, tagline, is_highlighted")
+            .select("id, category_id, order_index, tagline, is_highlighted, name")
             .single()
 
-          if (error || !data) {
-            throw error ?? new Error("Unable to create feature")
+          if (error) {
+            // Handle duplicate constraint violation - feature already exists
+            if ("code" in error && error.code === "23505") {
+              console.log(`Feature "${featureName}" already exists, fetching existing feature`)
+
+              // Try to fetch the existing feature by category_id first (most accurate)
+              let existingFeature = null
+              if (categoryId) {
+                const { data: existingData } = await supabase
+                  .from("project_features")
+                  .select("id, category_id, order_index, tagline, is_highlighted, name")
+                  .eq("project_id", resolvedProjectId)
+                  .eq("category_id", categoryId)
+                  .maybeSingle()
+
+                existingFeature = existingData
+              }
+
+              // If not found by category_id, try by name
+              if (!existingFeature) {
+                const { data: existingData } = await supabase
+                  .from("project_features")
+                  .select("id, category_id, order_index, tagline, is_highlighted, name")
+                  .eq("project_id", resolvedProjectId)
+                  .eq("name", featureName)
+                  .maybeSingle()
+
+                existingFeature = existingData
+              }
+
+              if (existingFeature) {
+                // Use the existing feature
+                idMapCopy[featureKey] = existingFeature.id
+                metadataCopy[featureKey] = {
+                  featureId: existingFeature.id,
+                  orderIndex: existingFeature.order_index ?? nextOrder,
+                  categoryId: existingFeature.category_id,
+                  tagline: existingFeature.tagline ?? null,
+                  isHighlighted: existingFeature.is_highlighted ?? false,
+                  name: existingFeature.name,
+                }
+                nextOrder += 1
+                continue
+              }
+            }
+
+            throw error
+          }
+
+          if (!data) {
+            throw new Error("Unable to create feature")
           }
 
           idMapCopy[featureKey] = data.id
@@ -1015,6 +1317,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             categoryId: data.category_id,
             tagline: data.tagline ?? null,
             isHighlighted: data.is_highlighted ?? false,
+            name: featureName,
           }
           nextOrder += 1
         }
@@ -1096,23 +1399,41 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       let success = true
 
       try {
+        // Reassign photos sequentially to avoid trigger conflicts with ensure_single_primary_photo_trigger
         if (photosToMove.length) {
-          const { error: reassignmentError } = await supabase
-            .from("project_photos")
-            .update({ feature_id: fallbackDbId })
-            .in("id", photosToMove)
+          for (const photoId of photosToMove) {
+            const { error: reassignmentError } = await supabase
+              .from("project_photos")
+              .update({ feature_id: fallbackDbId })
+              .eq("id", photoId)
+              .eq("project_id", resolvedProjectId)
 
-          if (reassignmentError) {
-            throw reassignmentError
+            if (reassignmentError) {
+              throw reassignmentError
+            }
           }
         }
 
-        const { error: deleteError } = await supabase.from("project_features").delete().eq("id", dbId)
+        console.log(`Deleting feature from database - featureId: ${featureId}, dbId: ${dbId}`)
+        const { data: deleteData, error: deleteError } = await supabase
+          .from("project_features")
+          .delete()
+          .eq("id", dbId)
+          .select()
+
+        console.log("Delete response:", { data: deleteData, error: deleteError })
+
         if (deleteError) {
+          console.error("Delete failed:", deleteError)
           throw deleteError
         }
+        console.log(`Feature deleted successfully from database`)
 
-        setSelectedFeatures((prev) => prev.filter((id) => id !== featureId))
+        setSelectedFeatures((prev) => {
+          const filtered = prev.filter((id) => id !== featureId)
+          console.log(`Updated selectedFeatures from ${prev.length} to ${filtered.length} items`)
+          return filtered
+        })
 
         setFeaturePhotos((prev) => {
           const next = { ...prev }
@@ -1136,7 +1457,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         delete metadataCopy[featureId]
         setFeatureMetadata(metadataCopy)
       } catch (error) {
-        console.error("Failed to remove feature", error)
+        console.error("Failed to remove feature:", error instanceof Error ? error.message : JSON.stringify(error), error)
         success = false
         setFeatureMutationError(
           error instanceof Error ? error.message : "We couldn't remove that feature. Please try again.",
@@ -1151,17 +1472,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   )
 
   const toggleFeature = useCallback(
-    (featureId: string) => {
+    async (featureId: string) => {
       if (featureId === BUILDING_FEATURE_ID) {
         return
       }
 
       if (selectedFeatures.includes(featureId)) {
-        void removeFeatureById(featureId)
-        return
+        await removeFeatureById(featureId)
+      } else {
+        await addFeatures([featureId])
       }
-
-      void addFeatures([featureId])
     },
     [addFeatures, removeFeatureById, selectedFeatures],
   )
@@ -1221,7 +1541,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     if (conflictingFeatures.size > 0) {
       const conflictNames = Array.from(conflictingFeatures).map((featureId) => {
         if (featureId === BUILDING_FEATURE_ID) {
-          return "Building"
+          const buildingMetadata = featureMetadata[BUILDING_FEATURE_ID]
+          return buildingMetadata?.name ?? "Building"
         }
         if (featureId === ADDITIONAL_FEATURE_ID) {
           return "Additional photos"
@@ -1422,10 +1743,10 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     )
   }, [])
 
-  const saveNewFeatures = useCallback(async () => {
+  const saveNewFeatures = useCallback(async (): Promise<boolean> => {
     if (tempSelectedFeatures.length === 0) {
       setShowAddFeatureModal(false)
-      return
+      return true
     }
 
     const success = await addFeatures(tempSelectedFeatures)
@@ -1433,6 +1754,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       setTempSelectedFeatures([])
       setShowAddFeatureModal(false)
     }
+    return success
   }, [addFeatures, tempSelectedFeatures])
 
   const deleteFeature = useCallback(
@@ -1446,9 +1768,24 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   )
 
   const displayFeatureIds = useMemo(() => {
-    const uniqueUserFeatures = Array.from(new Set(selectedFeatures.filter((id) => id !== BUILDING_FEATURE_ID)))
-    return [BUILDING_FEATURE_ID, ...uniqueUserFeatures, ADDITIONAL_FEATURE_ID]
-  }, [selectedFeatures])
+    // Get the building feature's category ID to exclude it from user features
+    const buildingCategoryId = featureMetadata[BUILDING_FEATURE_ID]?.categoryId
+
+    const uniqueUserFeatures = Array.from(
+      new Set(
+        selectedFeatures.filter(
+          (id) => id !== BUILDING_FEATURE_ID && id !== buildingCategoryId
+        )
+      )
+    )
+
+    // Only add ADDITIONAL_FEATURE_ID if it's not already in uniqueUserFeatures
+    if (!uniqueUserFeatures.includes(ADDITIONAL_FEATURE_ID)) {
+      return [BUILDING_FEATURE_ID, ...uniqueUserFeatures, ADDITIONAL_FEATURE_ID]
+    }
+
+    return [BUILDING_FEATURE_ID, ...uniqueUserFeatures]
+  }, [featureMetadata, selectedFeatures])
 
   const orderedFeatureOptions = useMemo(() => {
     return [...featureOptions].sort((a, b) => {
@@ -1486,15 +1823,27 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         return
       }
 
-      const updates = nextPhotos.map((photo, index) => ({
-        id: photo.id,
-        order_index: index,
-        project_id: resolvedProjectId,
-      }))
+      // Skip if there are no photos to update
+      if (nextPhotos.length === 0) {
+        return
+      }
 
-      const { error } = await supabase.from("project_photos").upsert(updates, { onConflict: "id" })
-      if (error) {
-        console.error("Failed to persist photo order", error)
+      // Update photos sequentially to avoid trigger conflicts with ensure_single_primary_photo_trigger
+      try {
+        for (let index = 0; index < nextPhotos.length; index++) {
+          const photo = nextPhotos[index]
+          const { error } = await supabase
+            .from("project_photos")
+            .update({ order_index: index })
+            .eq("id", photo.id)
+            .eq("project_id", resolvedProjectId)
+
+          if (error) {
+            throw error
+          }
+        }
+      } catch (error) {
+        console.error("Failed to persist photo order:", error instanceof Error ? error.message : JSON.stringify(error))
         if (nextPhotos.length === previousPhotos.length) {
           setUploadedPhotos(previousPhotos)
         }
@@ -1731,6 +2080,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     [photoAssignmentMap, uploadedPhotos],
   )
 
+  const getProjectTypeCategoryId = useCallback(() => {
+    return featureMetadata[BUILDING_FEATURE_ID]?.categoryId ?? null
+  }, [featureMetadata])
+
+  const refreshProjectContext = useCallback(() => {
+    if (resolvedProjectId) {
+      void loadProjectContext(resolvedProjectId)
+    }
+  }, [loadProjectContext, resolvedProjectId])
+
   return {
     projectId: resolvedProjectId,
     uploadedPhotos,
@@ -1771,6 +2130,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     getFeaturePhotoCount,
     getFeatureCoverPhoto,
     getSelectablePhotos,
+    getProjectTypeCategoryId,
+    refreshProjectContext,
     handleDragOver,
     handleDragLeave,
     handleDrop,

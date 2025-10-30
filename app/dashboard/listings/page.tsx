@@ -9,18 +9,26 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import type { Database, Enums } from "@/lib/supabase/types"
+import type { Database } from "@/lib/supabase/types"
 import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
 import { toast } from "sonner"
 import { useTableRLSValidation } from "@/hooks/useRLSValidation"
 import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
 import {
   ListingStatusModal,
-  type ListingStatusModalOption,
   type ListingStatusModalProject,
 } from "@/components/listing-status-modal"
-
-type ProjectStatus = Enums<"project_status">
+import {
+  type ProjectStatus,
+  type ListingStatusValue,
+  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_CHIP_CLASS,
+  LISTING_STATUS_VALUES,
+  ACTIVE_STATUS_VALUES,
+  BASIC_ACTIVE_LIMIT,
+  isListingStatusValue,
+  LISTING_STATUS_OPTIONS,
+} from "@/lib/project-status-config"
 
 type ProjectPhotoRow = Pick<
   Database["public"]["Tables"]["project_photos"]["Row"],
@@ -70,31 +78,8 @@ type ListingProject = {
 const isUuid = (value?: string | null): value is string =>
   !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
-const STATUS_CONFIG: Record<
-  ProjectStatus,
-  {
-    label: string
-    chipClass: string
-  }
-> = {
-  draft: { label: "In progress", chipClass: "bg-amber-100 text-amber-800" },
-  in_progress: { label: "In review", chipClass: "bg-blue-100 text-blue-800" },
-  published: { label: "Live on page", chipClass: "bg-green-100 text-green-800" },
-  completed: { label: "Listed", chipClass: "bg-emerald-100 text-emerald-800" },
-  archived: { label: "Unlisted", chipClass: "bg-slate-200 text-slate-700" },
-  rejected: { label: "Rejected", chipClass: "bg-red-100 text-red-800" },
-}
-
 const CURRENT_YEAR = new Date().getFullYear()
 const MIN_YEAR = 2000
-const LISTING_STATUS_VALUES = ["published", "completed", "archived"] as const
-type ListingStatusValue = (typeof LISTING_STATUS_VALUES)[number]
-
-const ACTIVE_STATUS_VALUES: ReadonlyArray<ListingStatusValue> = ["published", "completed"]
-const BASIC_ACTIVE_LIMIT = 3
-
-const isListingStatusValue = (status: ProjectStatus | string): status is ListingStatusValue =>
-  LISTING_STATUS_VALUES.includes(status as ListingStatusValue)
 
 export default function DashboardListingsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
@@ -192,10 +177,10 @@ export default function DashboardListingsPage() {
 
       setUserId(authData.user.id)
 
-      // Get professional record for this user
+      // Get professional record and company for this user
       const { data: professionalData, error: professionalError } = await supabase
         .from("professionals")
-        .select("id")
+        .select("id, company_id")
         .eq("user_id", authData.user.id)
         .maybeSingle()
 
@@ -208,7 +193,7 @@ export default function DashboardListingsPage() {
         return
       }
 
-      // Fetch ALL projects this professional is part of (owner or contributor)
+      // Fetch ALL projects for this COMPANY (not just this professional)
       const { data, error } = await supabase
         .from("project_professionals")
         .select(`
@@ -218,6 +203,7 @@ export default function DashboardListingsPage() {
           is_project_owner,
           invited_service_category_id,
           invited_service_category:categories!project_professionals_invited_service_category_id_fkey(name, slug),
+          professional_id,
           projects!inner(
             id,
             title,
@@ -236,7 +222,7 @@ export default function DashboardListingsPage() {
             project_photos(id, url, is_primary, order_index)
           )
         `)
-        .eq("professional_id", professionalData.id)
+        .eq("company_id", professionalData.company_id)
         .neq("status", "rejected")
         .order("created_at", { ascending: false })
 
@@ -340,10 +326,8 @@ export default function DashboardListingsPage() {
 
       const normalized: ListingProject[] = projectRows.map((project) => {
         const statusKey = project.status as ProjectStatus
-        const statusConfig = STATUS_CONFIG[statusKey] ?? {
-          label: statusKey,
-          chipClass: "bg-slate-200 text-slate-700",
-        }
+        const statusLabel = PROJECT_STATUS_LABELS[statusKey] ?? statusKey
+        const statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey] ?? "bg-slate-200 text-slate-700"
 
         const rawPhotos = project.project_photos ?? []
         const normalizedPhotos: ListingProjectPhoto[] = rawPhotos
@@ -394,8 +378,8 @@ export default function DashboardListingsPage() {
           id: project.id,
           title: project.title,
           status: statusKey,
-          statusLabel: statusConfig.label,
-          statusChipClass: statusConfig.chipClass,
+          statusLabel,
+          statusChipClass,
           slug: project.slug ?? null,
           subtitle,
           styleLabel: styleLabel || null,
@@ -528,7 +512,8 @@ export default function DashboardListingsPage() {
         throw error
       }
 
-      const statusConfig = STATUS_CONFIG[selectedStatus as ProjectStatus]
+      const newStatusLabel = PROJECT_STATUS_LABELS[selectedStatus as ProjectStatus]
+      const newStatusChipClass = PROJECT_STATUS_CHIP_CLASS[selectedStatus as ProjectStatus]
 
       setProjects((prev) =>
         prev.map((project) => {
@@ -539,8 +524,8 @@ export default function DashboardListingsPage() {
           return {
             ...project,
             status: selectedStatus,
-            statusLabel: statusConfig.label,
-            statusChipClass: statusConfig.chipClass,
+            statusLabel: newStatusLabel,
+            statusChipClass: newStatusChipClass,
           }
         }),
       )
@@ -635,7 +620,12 @@ export default function DashboardListingsPage() {
 
   const handleCardClick = (project: ListingProject) => {
     if (project.role === "owner") {
-      router.push(`/dashboard/edit/${project.id}`)
+      // If project is draft (never submitted), continue in new-project flow
+      if (project.status === "draft") {
+        router.push(`/new-project/details?projectId=${project.id}`)
+      } else {
+        router.push(`/dashboard/edit/${project.id}`)
+      }
     } else {
       if (project.slug) {
         window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer")
@@ -645,7 +635,12 @@ export default function DashboardListingsPage() {
 
   const handleEditListing = (project: ListingProject) => {
     setOpenDropdown(null)
-    router.push(`/dashboard/edit/${project.id}`)
+    // If project is draft (never submitted), continue in new-project flow
+    if (project.status === "draft") {
+      router.push(`/new-project/details?projectId=${project.id}`)
+    } else {
+      router.push(`/dashboard/edit/${project.id}`)
+    }
   }
 
   const handlePreviewListing = (project: ListingProject) => {
@@ -843,28 +838,7 @@ export default function DashboardListingsPage() {
     })
   }, [])
 
-  const statusOptions: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
-    {
-      value: "published",
-      label: "Live on page",
-      description: "Appears on your company page",
-      colorClass: "bg-emerald-500",
-    },
-    {
-      value: "completed",
-      label: "Listed",
-      description: "Visible on the project page and searchable on Discover",
-      colorClass: "bg-teal-500",
-      requiresPlus: true,
-    },
-    {
-      value: "archived",
-      label: "Unlisted",
-      description: "Hidden from the project page and your company page",
-      colorClass: "bg-slate-400",
-    },
-  ]
-  const selectedStatusOption = statusOptions.find((option) => option.value === selectedStatus)
+  const selectedStatusOption = LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus)
   const statusSelectionRequiresUpgrade = selectedStatusOption?.requiresPlus === true && !isPlus
   const statusSelectionHitsLimit =
     !isPlus && limitReachedForNewActivation && selectedStatusOption
@@ -878,7 +852,7 @@ export default function DashboardListingsPage() {
   const hasProjects = projects.length > 0
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen bg-white">
       <DashboardHeader />
 
       <main className="flex-1 py-8 pt-20 px-4 md:px-8">
@@ -889,11 +863,11 @@ export default function DashboardListingsPage() {
           </div>
         )}
         <div className="flex flex-col gap-4 mb-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h3 className="text-2xl font-semibold text-gray-900">Your projects</h3>
+          <div className="flex flex-row items-center justify-between gap-3">
+            <div className="flex-shrink-0">
+              <h3 className="text-xl md:text-2xl font-semibold text-gray-900">Your projects</h3>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <Button
                 variant="tertiary"
                 size="default"
@@ -931,7 +905,7 @@ export default function DashboardListingsPage() {
                   onClick={() => handleRemoveFilter("status", status)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
                 >
-                  <span>{STATUS_CONFIG[status].label}</span>
+                  <span>{PROJECT_STATUS_LABELS[status]}</span>
                   <X className="h-3 w-3" />
                 </button>
               ))}
@@ -1099,7 +1073,7 @@ export default function DashboardListingsPage() {
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   {project.role === "owner" && (
-                    <span className="text-xs text-black bg-white px-2 py-1 rounded">Project owner</span>
+                    <span className="text-xs font-medium text-gray-900 bg-white px-2 py-1 rounded-full">Project owner</span>
                   )}
                   <div className="relative dropdown-menu">
                     <button
@@ -1112,75 +1086,79 @@ export default function DashboardListingsPage() {
                       <MoreHorizontal className="w-4 h-4 text-gray-600" />
                     </button>
                     {openDropdown === cardKey && (
-                      <div className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border py-2 w-40 z-10">
-                        {project.role === "owner" ? (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleUpdateStatus(project)
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              Update status
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEditCoverImage(project)
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              Edit cover image
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEditListing(project)
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              Edit listing
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handlePreviewListing(project)
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              Preview listing
-                            </button>
-                            <div className="border-t border-gray-100 my-1" />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDeleteListing(project)
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              Delete listing
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleOptOut(project)
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                          >
-                            Opt out
-                          </button>
-                        )}
+                      <div className="absolute right-0 top-8 bg-white rounded-md shadow-lg border border-gray-200 w-48 z-10">
+                        <div className="py-1">
+                          {project.role === "owner" ? (
+                            <div className="px-4 py-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleUpdateStatus(project)
+                                }}
+                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                              >
+                                Update status
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleEditCoverImage(project)
+                                }}
+                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                              >
+                                Edit cover image
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleEditListing(project)
+                                }}
+                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                              >
+                                Edit listing
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handlePreviewListing(project)
+                                }}
+                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                              >
+                                Preview listing
+                              </button>
+                              <div className="border-t border-gray-100 my-1" />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteListing(project)
+                                }}
+                                className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                              >
+                                Delete listing
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="px-4 py-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOptOut(project)
+                                }}
+                                className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                              >
+                                Opt out
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
               <div className="mt-3">
-                <h7 className="font-medium text-gray-900">{project.title}</h7>
-                <p className="text-xs text-gray-500 mt-1">{project.subtitle}</p>
+                <p className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900 line-clamp-2">{project.title}</p>
+                <p className="text-xs font-normal text-gray-500 mt-1">{project.subtitle}</p>
                 {project.invitedServiceCategory && project.role === "contributor" && (
                   <p className="text-xs text-gray-600 mt-1 font-medium">
                     Service: {project.invitedServiceCategory}
@@ -1215,7 +1193,7 @@ export default function DashboardListingsPage() {
         companyPlan={companyPlan}
         selectedStatus={selectedStatus}
         onStatusChange={setSelectedStatus}
-        statusOptions={statusOptions}
+        statusOptions={LISTING_STATUS_OPTIONS}
         saveDisabled={isSavingStatus || !isValidStatusSelection}
         isPendingAdminReview={isPendingAdminReview}
         limitReachedForNewActivation={limitReachedForNewActivation}

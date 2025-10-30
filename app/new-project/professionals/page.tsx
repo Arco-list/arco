@@ -33,11 +33,13 @@ import {
   type InviteData,
 } from "@/lib/new-project/invite-professionals"
 import { sendProjectReviewEmail } from "@/lib/email-service"
-import { 
-  findProfessionalByEmailAction, 
+import {
+  findProfessionalByEmailAction,
   getUserEmailAction,
-  getAvailableProfessionalsAction 
+  getAvailableProfessionalsAction
 } from "@/app/new-project/actions"
+import { SegmentedProgressBar } from "@/components/new-project/segmented-progress-bar"
+import { Button } from "@/components/ui/button"
 
 const TOTAL_STEPS = 4
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
@@ -419,7 +421,7 @@ export default function ProfessionalsPage() {
       const buildingTypeLabel =
         buildingTypeResult.data?.name ?? (rawBuildingType && !isUuid(rawBuildingType) ? rawBuildingType : "")
 
-      const locationLabel = [project.address_city, project.address_region].filter(Boolean).join(", ")
+      const locationLabel = project.address_city || ""
 
       setProjectSummary({
         title: project.title ?? "",
@@ -542,7 +544,7 @@ export default function ProfessionalsPage() {
   const handleBack = () => {
     if (currentStep === 1) {
       if (projectId) {
-        router.push(`/new-project/photos?projectId=${projectId}`)
+        router.push(`/new-project/photos?projectId=${projectId}&step=4`)
       } else {
         router.push("/new-project/photos")
       }
@@ -662,11 +664,6 @@ export default function ProfessionalsPage() {
         }
 
         setSelectedServiceIds((prev) => prev.filter((id) => id !== serviceId))
-        setServiceRowLookup((prev) => {
-          const next = { ...prev }
-          delete next[serviceId]
-          return next
-        })
         setInvitesByService((prev) => {
           if (!prev[serviceId]) {
             return prev
@@ -941,7 +938,7 @@ export default function ProfessionalsPage() {
 
       <main className="container mx-auto max-w-4xl px-4 pb-32 pt-16">
         <div className="mb-10">
-          <ProgressIndicator currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+          <SegmentedProgressBar currentGlobalStep={9 + currentStep} />
         </div>
 
         {projectLoadError && (
@@ -1048,14 +1045,14 @@ function ProfessionalsHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-gray-700 transition-colors hover:text-gray-900"
+              className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
             >
               Questions?
             </a>
             <button
               onClick={onSaveAndExit}
               disabled={isDisabled}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-[13px] font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               {isDisabled ? "Saving..." : "Save and Exit"}
             </button>
@@ -1066,22 +1063,6 @@ function ProfessionalsHeader({
   )
 }
 
-function ProgressIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
-  return (
-    <div className="w-full">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-900">Step {currentStep} of {totalSteps}</span>
-        <span className="text-sm text-gray-500">{Math.round((currentStep / totalSteps) * 100)}% complete</span>
-      </div>
-      <div className="h-2 w-full rounded-full bg-gray-200">
-        <div
-          className="h-2 rounded-full bg-gray-900 transition-all duration-300 ease-out"
-          style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-        />
-      </div>
-    </div>
-  )
-}
 
 function IntroStep({ isLoading }: { isLoading: boolean }) {
   return (
@@ -1091,7 +1072,7 @@ function IntroStep({ isLoading }: { isLoading: boolean }) {
       ) : (
         <div className="max-w-2xl text-left">
           <div className="mb-8">
-            <MailPlus className="h-16 w-16 text-gray-900" />
+            <MailPlus className="h-12 w-12 text-gray-900" />
           </div>
           <h1 className="mb-4 text-3xl font-bold text-gray-900">Share who helped you realise it</h1>
           <p className="text-lg text-gray-600">Add the professionals that contributed to your project and we&apos;ll invite them once you publish.</p>
@@ -1268,7 +1249,7 @@ function InviteStep({
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
                       aria-label={`Manage actions for ${service.name}`}
                       disabled={isBusy}
                     >
@@ -1300,15 +1281,13 @@ function InviteStep({
               <div className="mt-4 flex flex-1 flex-col">
                 {invites.length === 0 ? (
                   <div className="flex flex-1 flex-col justify-end">
-                    {/* Debug: professionals count */}
-                    <div className="text-xs text-gray-400 mb-1">Debug: {professionals.length} professionals, user types: {userTypes.join(',')}</div>
                     {userTypes.includes('admin') || userTypes.includes('professional') ? (
                       <div className="mt-auto flex w-full">
                         <button
                           type="button"
                           onClick={() => onInvite(service.id)}
                           disabled={isBusy}
-                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <MailPlus className="h-4 w-4" />
                           Invite professional
@@ -1318,7 +1297,7 @@ function InviteStep({
                             <button
                               type="button"
                               disabled={isBusy}
-                              className="inline-flex items-center justify-center border border-l-0 border-gray-200 px-2 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 rounded-r-md"
+                              className="inline-flex items-center justify-center bg-secondary text-secondary-foreground hover:bg-secondary/80 px-2 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60 rounded-r-full"
                             >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1348,7 +1327,7 @@ function InviteStep({
                         type="button"
                         onClick={() => onInvite(service.id)}
                         disabled={isBusy}
-                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <MailPlus className="h-4 w-4" />
                         Invite professional
@@ -1356,7 +1335,7 @@ function InviteStep({
                     )}
                   </div>
                 ) : (
-                  <div className="flex flex-1 flex-col gap-3">
+                  <div className="flex flex-1 flex-col justify-end gap-3">
                     <div className="space-y-3">
                       {invites.map((invite) => {
                         // Check if this invite has a professional_id (selected professional)
@@ -1373,9 +1352,9 @@ function InviteStep({
                               className: "bg-blue-100 text-blue-800"
                             }
                           }
-                          
+
                           return (
-                            <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
+                            <div key={invite.id} className="rounded-xl p-3">
                               <p className="text-sm font-medium text-gray-900">{selectedProf.company.name}</p>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}>
@@ -1387,7 +1366,7 @@ function InviteStep({
                                     type="button"
                                     onClick={() => onDeleteInvite(invite)}
                                     disabled={isBusy}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
                                     aria-label={`Remove ${selectedProf.company.name}`}
                                   >
                                     <XCircle className="h-4 w-4" />
@@ -1400,7 +1379,7 @@ function InviteStep({
                           // Render email invite card
                           const statusMeta = getInviteStatusMeta(invite.status)
                           return (
-                            <div key={invite.id} className="rounded-xl border border-gray-200 p-3">
+                            <div key={invite.id} className="rounded-xl p-3">
                               <p className="text-sm font-medium text-gray-900">{invite.email}</p>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <span
@@ -1415,7 +1394,7 @@ function InviteStep({
                                       type="button"
                                       onClick={() => onInvite(service.id, invite)}
                                       disabled={isBusy}
-                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
                                       aria-label={`Edit invite for ${invite.email}`}
                                     >
                                       <Pencil className="h-4 w-4" />
@@ -1425,7 +1404,7 @@ function InviteStep({
                                     type="button"
                                     onClick={() => onDeleteInvite(invite)}
                                     disabled={isBusy}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
                                     aria-label={`Remove invite for ${invite.email}`}
                                   >
                                     <XCircle className="h-4 w-4" />
@@ -1497,91 +1476,74 @@ function PreviewStep({
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-gray-900">Yeah! It&apos;s time to preview</h1>
-        <p className="text-lg text-gray-600">Review everything before you invite the Arco team to approve it.</p>
+        <h1 className="text-3xl font-bold text-gray-900">Yeah! It&apos;s time to showcase your work</h1>
+        <p className="text-gray-500">This is what homeowners will see when they explore your project.</p>
       </div>
 
-      <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
-        <p className="font-medium text-blue-900">Ready to submit for review</p>
-        <p className="mt-1">
-          When you click <span className="font-semibold">Submit for review</span>, the Arco team checks your listing before it
-          goes live. You&apos;ll be notified once it&apos;s approved, and you can return here any time to make updates.
-        </p>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="relative h-72 w-full bg-gray-100">
-          {project.coverPhotoUrl ? (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left side - Actual project card preview */}
+        <div className="space-y-4">
+          <div className="relative overflow-hidden rounded-lg bg-gray-100">
             <img
-              src={project.coverPhotoUrl}
-              alt={project.title || "Project cover"}
-              className="h-full w-full object-cover"
+              src={project.coverPhotoUrl || "/placeholder.svg"}
+              alt={project.title || ""}
+              className="aspect-square w-full object-cover"
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-gray-400">
-              <ShieldAlert className="h-12 w-12" />
-            </div>
-          )}
-          <div className="absolute left-4 top-4 flex gap-2">
             <button
               onClick={onPreview}
               disabled={!hasPreview}
-              className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="absolute top-3 left-3 rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-[13px] font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               Show preview
             </button>
-            {!hasPreview && (
-              <div className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                <AlertTriangle className="h-4 w-4" />
-                Add a project title to generate a preview link.
-              </div>
-            )}
           </div>
+          <div className="mt-3">
+            <p className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900 line-clamp-2">
+              {subtitleParts.length > 0 && subtitleParts.join(" ")}
+              {project.locationLabel && ` in ${project.locationLabel}`}
+            </p>
+          </div>
+          {!hasPreview && (
+            <div className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              <AlertTriangle className="h-4 w-4" />
+              Add a project title to generate a preview link.
+            </div>
+          )}
         </div>
 
-        <div className="space-y-6 p-6">
-          <header className="space-y-2">
-            <h2 className="text-2xl font-semibold text-gray-900">{project.title || "Untitled project"}</h2>
-            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
-              {subtitleParts.length > 0 && <span>{subtitleParts.join(" • ")}</span>}
-              {project.locationLabel && subtitleParts.length > 0 && <span className="text-gray-300">|</span>}
-              {project.locationLabel && <span>{project.locationLabel}</span>}
-            </div>
-          </header>
+        {/* Right side - What's next */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-gray-900">What&apos;s next</h2>
 
-          {project.description ? (
-            <div className="space-y-2 text-sm text-gray-700">
-              <p className="font-medium text-gray-900">Intro</p>
-              <p className="line-clamp-4 leading-relaxed">
-                {project.description.replace(/<[^>]+>/g, " ") || "Project description will appear here."}
-              </p>
-            </div>
-          ) : null}
-
-          {detailItems.length > 0 && (
-            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {detailItems.map((detail) => (
-                <div key={detail.label} className="space-y-1 rounded-md border border-gray-100 bg-gray-50 p-3">
-                  <dt className="text-xs uppercase tracking-wide text-gray-500">{detail.label}</dt>
-                  <dd className="text-sm font-medium text-gray-900">{detail.value}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-
-          {services.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-900">Professional services involved</p>
-              <div className="flex flex-wrap gap-2">
-                {services.map((service) => (
-                  <span key={service} className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
-                    {service}
-                  </span>
-                ))}
+          <div className="space-y-6">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Your listing will be reviewed</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Our team will review your listing before it goes live. Once approved, you&apos;ll receive a notification and you can return here to make updates anytime.
+                </p>
               </div>
             </div>
-          )}
 
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Bring your collaborators onboard</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Each professional you invite will receive an email to join as a contributor. More collaborators mean more exposure, so get your invites accepted to maximize your reach.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1604,21 +1566,22 @@ function FooterNavigation({
   return (
     <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4 shadow-lg">
       <div className="container mx-auto max-w-4xl">
-        <div className="flex gap-4">
-          <button
+        <div className="flex gap-4 justify-center">
+          <Button
             onClick={onBack}
-            disabled={currentStep === 1}
-            className="flex-1 rounded-md border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            variant="tertiary"
+            size="tertiary"
           >
             Back
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onNext}
             disabled={isNextDisabled}
-            className="flex-1 rounded-md bg-gray-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="secondary"
+            size="lg"
           >
             {currentStep === totalSteps ? "Submit for review" : "Next"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -1740,20 +1703,22 @@ function InviteModal({
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
-          <button
+          <Button
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            variant="tertiary"
+            size="sm"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onSubmit}
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="secondary"
+            size="sm"
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Add to project
-          </button>
+          </Button>
         </div>
       </div>
     </div>

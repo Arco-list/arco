@@ -61,7 +61,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:items-stretch md:h-[420px] lg:h-[520px] xl:h-[560px]">
+    <div className="grid gap-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:items-stretch md:h-[480px] lg:h-[560px]">
       <div
         role={galleryIsInteractive ? "button" : undefined}
         tabIndex={galleryIsInteractive ? 0 : undefined}
@@ -69,7 +69,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
         onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, 0) : undefined}
         className={cn(
           "group relative overflow-hidden rounded-xl bg-gray-100 transition-transform",
-          "aspect-[4/3] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
+          "h-[400px] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
           galleryIsInteractive
             ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
             : "cursor-default",
@@ -86,7 +86,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:h-full md:min-h-0 md:grid-rows-[repeat(2,minmax(0,1fr))]">
+      <div className="grid grid-cols-2 gap-4 md:grid-rows-2">
         {displayImages.slice(1, 5).map((image, index) => {
           const resolvedImage = image ?? PLACEHOLDER_IMAGE
 
@@ -99,7 +99,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
               onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, index + 1) : undefined}
               className={cn(
                 "group relative overflow-hidden rounded-xl bg-gray-100",
-                "aspect-square md:aspect-auto md:h-full",
+                "h-[180px] md:aspect-square md:h-auto",
                 galleryIsInteractive
                   ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   : "cursor-default",

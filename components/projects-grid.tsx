@@ -1,9 +1,9 @@
 "use client"
 import { useMemo, useState } from "react"
-import { Heart, ChevronDown, ChevronRight, ThumbsUp, X } from "lucide-react"
-import Link from "next/link"
+import { ChevronDown, ChevronRight, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { ProjectCard } from "@/components/project-card"
 import { useFilters } from "@/contexts/filter-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
@@ -201,78 +201,50 @@ export function ProjectsGrid() {
               const isMutatingLike = projectId ? likeMutatingProjectIds.has(projectId) : false
               const likesCount = projectId ? likeCounts[projectId] ?? project.likes_count ?? 0 : project.likes_count ?? 0
 
+              // Build project title from style, type, and location
+              const style = project.style_preferences?.[0] || ""
+              const subType = project.project_type || ""
+              const location = project.location || "Location unavailable"
+              const parts = []
+              if (style) {
+                const styleLabel = filterContext.taxonomyLabelMap.get(style) || style
+                parts.push(styleLabel)
+              }
+              if (subType) {
+                const subTypeLabel = filterContext.taxonomyLabelMap.get(subType) || subType
+                parts.push(subTypeLabel)
+              }
+              parts.push(`in ${location}`)
+              const projectTitle = parts.join(" ")
+
+              const projectData = {
+                id: projectId,
+                title: projectTitle,
+                slug: project.slug,
+                imageUrl: imageSrc,
+                imageAlt,
+                location,
+                likes: project.likes_count,
+              }
+
               return (
-                <Link key={project.id} href={project.slug ? `/projects/${project.slug}` : "#"} className="group cursor-pointer">
-                <div className="relative overflow-hidden rounded-lg bg-gray-100">
-                  <img
-                    src={imageSrc}
-                    alt={imageAlt}
-                    className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <button
-                    onClick={(event) => {
-                      event.preventDefault()
-                      if (!projectId) return
-                      if (isSaved) {
-                        void removeProject(projectId)
-                      } else {
-                        void saveProject(projectId, project)
-                      }
-                    }}
-                    disabled={!projectId || isMutatingSave}
-                    aria-pressed={isSaved}
-                    aria-label={isSaved ? "Remove from saved projects" : "Save project"}
-                    className="absolute top-3 right-3 p-1.5 text-gray-600 hover:text-red-500 transition-all duration-200"
-                  >
-                    <Heart
-                      className={`h-6 w-6 ${isSaved ? "text-red-500 fill-red-500" : "text-gray-600 hover:text-red-500"}`}
-                      fill={isSaved ? "currentColor" : "none"}
-                    />
-                  </button>
-                </div>
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h7 className="text-gray-900 line-clamp-2 flex-1">
-                      {(() => {
-                        const style = project.style_preferences?.[0] || ""
-                        const subType = project.project_type || ""
-                        const location = project.location || "Location unavailable"
-                        
-                        const parts = []
-                        if (style) {
-                          const styleLabel = filterContext.taxonomyLabelMap.get(style) || style
-                          parts.push(styleLabel)
-                        }
-                        if (subType) {
-                          const subTypeLabel = filterContext.taxonomyLabelMap.get(subType) || subType
-                          parts.push(subTypeLabel)
-                        }
-                        parts.push(`in ${location}`)
-                        
-                        return parts.join(" ")
-                      })()}
-                    </h7>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault()
-                        if (!projectId) return
-                        void toggleLike(projectId, { currentCount: likesCount })
-                      }}
-                      disabled={!projectId || isMutatingLike}
-                      aria-pressed={isLiked}
-                      aria-label={isLiked ? "Unlike project" : "Like project"}
-                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-70"
-                    >
-                      <ThumbsUp
-                        className={`h-3 w-3 ${isLiked ? "text-blue-600 fill-blue-600" : ""}`}
-                        fill={isLiked ? "currentColor" : "none"}
-                      />
-                      <span>{likesCount}</span>
-                    </button>
-                  </div>
-                </div>
-              </Link>
+                <ProjectCard
+                  key={project.id}
+                  project={projectData}
+                  isSaved={isSaved}
+                  isLiked={isLiked}
+                  isMutatingSave={isMutatingSave}
+                  isMutatingLike={isMutatingLike}
+                  likesCount={likesCount}
+                  onToggleSave={(proj) => {
+                    if (isSaved) {
+                      void removeProject(projectId)
+                    } else {
+                      void saveProject(projectId, project)
+                    }
+                  }}
+                  onToggleLike={(id, count) => void toggleLike(id, { currentCount: count })}
+                />
               )
             })}
 

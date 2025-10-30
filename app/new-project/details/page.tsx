@@ -7,7 +7,6 @@ import { useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { useRouter, useSearchParams } from "next/navigation"
-import Script from "next/script"
 import {
   DEFAULT_LOCATION_ICONS,
   DEFAULT_MATERIAL_ICONS,
@@ -31,6 +30,7 @@ import { ProjectBasicsFields } from "@/components/project-details/project-basics
 import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
+import { SegmentedProgressBar } from "@/components/new-project/segmented-progress-bar"
 
 type ProjectStatus = Enums<"project_status">
 type ProjectBudgetLevel = Enums<"project_budget_level">
@@ -130,7 +130,9 @@ export default function NewProjectPage() {
     locationFeatureOptions,
     materialFeatureOptions,
   } = useProjectTaxonomyOptions(supabase)
-  const [currentStep, setCurrentStep] = useState(1)
+  const stepFromUrl = searchParams.get("step")
+  const initialStep = stepFromUrl ? parseInt(stepFromUrl, 10) : 1
+  const [currentStep, setCurrentStep] = useState(initialStep >= 1 && initialStep <= 5 ? initialStep : 1)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState<ProjectDetailsFormState>({
     category: "",
@@ -423,6 +425,57 @@ export default function NewProjectPage() {
               setProjectId(data.id)
               inserted = true
 
+              // Create project_professionals entry for the owner
+              // This ensures the project shows up in the listings page and pre-selects the owner in professionals step
+              try {
+                // Get user's email for the invite
+                const { data: authData } = await supabase.auth.getUser()
+                const userEmail = authData?.user?.email
+
+                if (!userEmail) {
+                  console.warn("Cannot create project_professionals: No user email found")
+                } else {
+                  // Get user's professional profile and company's primary service
+                  const { data: professionalData, error: profError } = await supabase
+                    .from("professionals")
+                    .select(`
+                      id,
+                      company_id,
+                      companies!professionals_company_id_fkey(primary_service_id)
+                    `)
+                    .eq("user_id", userId)
+                    .maybeSingle()
+
+                  if (profError) {
+                    console.error("Error fetching professional profile:", profError)
+                  } else if (!professionalData) {
+                    console.warn("Cannot create project_professionals: No professional profile found for user")
+                  } else {
+                    // Create project_professionals entry with owner status
+                    const primaryServiceId = professionalData.companies?.primary_service_id || null
+                    const { error: insertError } = await supabase.from("project_professionals").insert({
+                      project_id: data.id,
+                      professional_id: professionalData.id,
+                      company_id: professionalData.company_id,
+                      invited_email: userEmail,
+                      invited_service_category_id: primaryServiceId,
+                      status: "listed",
+                      is_project_owner: true,
+                      responded_at: new Date().toISOString(),
+                    })
+
+                    if (insertError) {
+                      console.error("Failed to insert project_professionals:", insertError)
+                    } else {
+                      console.log("Successfully created project_professionals entry for project:", data.id)
+                    }
+                  }
+                }
+              } catch (ppError) {
+                // Log but don't fail the project creation if this fails
+                console.error("Failed to create project_professionals entry:", ppError)
+              }
+
               if (typeof window !== "undefined") {
                 const url = new URL(window.location.href)
                 url.searchParams.set("projectId", data.id)
@@ -544,8 +597,40 @@ export default function NewProjectPage() {
   }, [formData.address])
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.google?.maps) {
-      setIsMapsApiLoaded(true)
+    const MAX_RETRIES = 50 // 5 seconds total (50 * 100ms)
+    let retryCount = 0
+    let timeoutId: NodeJS.Timeout | null = null
+    let cancelled = false
+
+    const checkMapsLoaded = () => {
+      if (cancelled) return // Early exit if component unmounted
+
+      if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+        setIsMapsApiLoaded(true)
+        setMapsError(null)
+        return
+      }
+
+      retryCount++
+
+      if (retryCount >= MAX_RETRIES) {
+        setMapsError(
+          "Google Maps failed to load. Please check your internet connection and refresh the page."
+        )
+        return
+      }
+
+      timeoutId = setTimeout(checkMapsLoaded, 100)
+    }
+
+    checkMapsLoaded()
+
+    // Cleanup function to prevent memory leaks and setState on unmounted component
+    return () => {
+      cancelled = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
   }, [])
 
@@ -758,21 +843,22 @@ export default function NewProjectPage() {
         fullscreenControl: false,
         streetViewControl: false,
         zoomControl: true,
+        mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
       })
 
       mapInstanceRef.current = map
 
-      const marker = new window.google.maps.Marker({
+      const marker = new window.google.maps.marker.AdvancedMarkerElement({
         map,
         position: startPosition,
-        draggable: true,
+        gmpDraggable: true,
       })
 
       markerRef.current = marker
       geocoderRef.current = new window.google.maps.Geocoder()
 
       marker.addListener("dragend", () => {
-        const position = marker.getPosition()
+        const position = marker.position as google.maps.LatLng
         if (!position) {
           return
         }
@@ -864,7 +950,7 @@ export default function NewProjectPage() {
         })
 
         if (markerRef.current) {
-          markerRef.current.setPosition({ lat, lng })
+          markerRef.current.position = { lat, lng }
         }
 
         if (mapInstanceRef.current) {
@@ -911,7 +997,7 @@ export default function NewProjectPage() {
     }
 
     const position = { lat: formData.latitude, lng: formData.longitude }
-    markerRef.current.setPosition(position)
+    markerRef.current.position = position
     mapInstanceRef.current.panTo(position)
   }, [currentStep, formData.latitude, formData.longitude])
 
@@ -1196,18 +1282,14 @@ export default function NewProjectPage() {
             </div>
           )}
           <div className="mb-12">
-            <ProgressIndicator
-              currentStep={currentStep}
-              totalSteps={5}
-              statusLabel={lastSavedLabel}
-            />
+            <SegmentedProgressBar currentGlobalStep={currentStep} />
           </div>
 
           {currentStep === 1 && (
             <>
               {/* Building icon */}
               <div className="mb-8">
-                <Building2 className="w-16 h-16 text-gray-900" strokeWidth={1.5} />
+                <Building2 className="w-12 h-12 text-gray-900" strokeWidth={1.5} />
               </div>
 
               {/* Main heading */}
@@ -1299,21 +1381,6 @@ export default function NewProjectPage() {
                 <div className="relative">
                   {googleMapsApiKey ? (
                     <>
-                      <Script
-                        src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
-                        strategy="lazyOnload"
-                        onLoad={() => {
-                          if (window.google?.maps) {
-                            setIsMapsApiLoaded(true)
-                            setMapsError(null)
-                          } else {
-                            setMapsError("Google Maps failed to initialize. Refresh the page to try again.")
-                          }
-                        }}
-                        onError={() =>
-                          setMapsError("We couldn't load Google Maps. Check your connection and try again.")
-                        }
-                      />
                       <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
                         <div ref={mapContainerRef} className="h-full w-full" />
                         <div className="pointer-events-none absolute top-4 left-0 right-0 z-10 flex justify-center px-4">
@@ -1386,20 +1453,22 @@ export default function NewProjectPage() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
         <div className="container mx-auto max-w-4xl">
-      <div className="flex gap-4">
-        <button
+      <div className="flex gap-4 justify-center">
+        <Button
           onClick={handleBack}
-          className="flex-1 bg-white text-gray-900 py-3 px-6 rounded-md font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
+          variant="tertiary"
+          size="tertiary"
         >
           Back
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => void handleNext()}
           disabled={isNextDisabled || isSaving}
-          className="flex-1 bg-gray-900 text-white py-3 px-6 rounded-md font-medium hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          variant="secondary"
+          size="lg"
         >
           {isSaving ? "Saving..." : currentStep === 5 ? "Complete" : "Next"}
-        </button>
+        </Button>
           </div>
         </div>
       </div>
@@ -1407,40 +1476,6 @@ export default function NewProjectPage() {
   )
 }
 
-function ProgressIndicator({
-  currentStep,
-  totalSteps,
-  statusLabel,
-}: {
-  currentStep: number
-  totalSteps: number
-  statusLabel?: string
-}) {
-  return (
-    <div className="w-full">
-      {statusLabel && (
-        <div className="mb-2">
-          <span className="text-sm text-gray-500">{statusLabel}</span>
-        </div>
-      )}
-      {/* Step counter */}
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium text-gray-900">
-          Step {currentStep} of {totalSteps}
-        </span>
-        <span className="text-sm text-gray-500">{Math.round((currentStep / totalSteps) * 100)}% complete</span>
-      </div>
-
-      {/* Progress bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className="bg-gray-900 h-2 rounded-full transition-all duration-300 ease-out"
-          style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-        />
-      </div>
-    </div>
-  )
-}
 
 function NewProjectHeader({
   isSaving,

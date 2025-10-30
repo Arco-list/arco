@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import Link from "next/link"
 
 import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
@@ -8,6 +9,7 @@ import { ProfessionalGallery } from "@/components/professional-gallery"
 import { ProfessionalInfo } from "@/components/professional-info"
 import { ProfessionalProjects } from "@/components/professional-projects"
 import { ProfessionalReviews } from "@/components/professional-reviews"
+import { ProfessionalActionButtons } from "@/components/professional-action-buttons"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
 
 const REVIEWS_ANCHOR_ID = "professional-reviews"
@@ -58,32 +60,74 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
   const galleryImages = professional.gallery
   const projects = professional.projects
   const reviews = professional.reviews
+  const coverImageUrl = galleryImages.find((img) => img.isCover)?.url ?? galleryImages[0]?.url ?? null
+
+  // Build ProfessionalCard for action buttons
+  const professionalCard = {
+    id: professional.company.id,
+    slug: professional.slug,
+    companyId: professional.company.id,
+    professionalId: professional.id,
+    name: professional.name,
+    profession: professional.title || professional.services[0] || professional.specialties[0] || "Professional",
+    location: professional.location ?? "Location unavailable",
+    rating: Number(professional.ratings.overall.toFixed(2)),
+    reviewCount: professional.ratings.total,
+    image: coverImageUrl || professional.company.logoUrl || professional.profile.avatarUrl || "/placeholder.svg",
+    specialties: professional.specialties,
+    isVerified: professional.isVerified,
+    domain: professional.company.domain ?? null,
+  }
 
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      <Header maxWidth="max-w-7xl" />
 
-      <main className="mx-auto max-w-7xl px-4 py-8 pt-24 sm:px-6 lg:px-8 xl:px-12">
-        <div className="mb-8">
-          <ProfessionalGallery professionalName={professional.name} images={galleryImages} />
-        </div>
+      <main className="px-4 py-8 md:px-8 pt-20 md:pt-20">
+        <div className="max-w-7xl mx-auto">
+          {/* Breadcrumb and Action Buttons Row */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3 md:gap-4">
+            <nav className="text-sm text-gray-600" aria-label="Breadcrumb">
+              <ol className="flex items-center gap-2">
+                <li>
+                  <Link href="/professionals" className="hover:text-gray-900">
+                    Professionals
+                  </Link>
+                </li>
+                <li className="text-gray-400">&gt;</li>
+                <li className="text-gray-900 font-medium">{professional.name}</li>
+              </ol>
+            </nav>
 
-        <div className="grid grid-cols-1 items-start gap-8 py-8 lg:grid-cols-3">
-          <div className="space-y-8 lg:col-span-2">
-            <ProfessionalInfo professional={professional} shareUrl={shareUrl} reviewsAnchorId={REVIEWS_ANCHOR_ID} />
+            <div className="self-end md:self-auto">
+              <ProfessionalActionButtons
+                professional={professionalCard}
+                professionalTitle={professional.title}
+                coverImageUrl={coverImageUrl}
+                shareUrl={shareUrl}
+              />
+            </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <ProfessionalContactSidebar professional={professional} />
+          <div className="mb-8">
+            <ProfessionalGallery professionalName={professional.name} images={galleryImages} />
+          </div>
+
+          <div className="grid grid-cols-1 items-start gap-8 py-8 lg:grid-cols-3">
+            <div className="space-y-8 lg:col-span-2">
+              <ProfessionalInfo professional={professional} shareUrl={shareUrl} reviewsAnchorId={REVIEWS_ANCHOR_ID} />
+
+              <div id="projects-section">
+                <ProfessionalProjects projects={projects} />
+              </div>
+            </div>
+
+            <div className="lg:col-span-1">
+              <ProfessionalContactSidebar professional={professional} />
+            </div>
           </div>
         </div>
       </main>
-
-      <section className="w-full bg-white py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
-          <ProfessionalProjects projects={projects} />
-        </div>
-      </section>
 
       <ProfessionalReviews
         id={REVIEWS_ANCHOR_ID}
@@ -93,7 +137,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
         reviews={reviews}
       />
 
-      <Footer />
+      <Footer maxWidth="max-w-7xl" />
     </div>
   )
 }

@@ -16,8 +16,6 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
   const {
     selectedCategories,
     selectedServices,
-    selectedCountry,
-    selectedState,
     selectedCity,
     keyword,
     removeFilter,
@@ -69,12 +67,12 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
         return `${labels.slice(0, -1).join(", ")} & ${labels[labels.length - 1]}`
       })()
 
-      const locationPart = selectedCountry ?? "all locations"
+      const locationPart = selectedCity ?? "all locations"
       return `${categoryPart} in ${locationPart}`
     }
 
-    if (selectedCountry) {
-      return `Professionals in ${selectedCountry}`
+    if (selectedCity) {
+      return `Professionals in ${selectedCity}`
     }
 
     return "Professionals in all locations"
@@ -91,24 +89,16 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
       tags.push({ type: "service", value: serviceId, label: taxonomyLabelMap.get(serviceId) ?? serviceId })
     })
 
-    if (selectedCountry) {
-      tags.push({ type: "country", value: selectedCountry, label: selectedCountry })
-    }
-
-    if (selectedState) {
-      tags.push({ type: "state", value: selectedState, label: selectedState })
-    }
-
     if (selectedCity) {
       tags.push({ type: "city", value: selectedCity, label: selectedCity })
     }
 
     if (keyword.trim()) {
-      tags.push({ type: "keyword", value: keyword.trim(), label: `Keyword: “${keyword.trim()}”` })
+      tags.push({ type: "keyword", value: keyword.trim(), label: `Keyword: "${keyword.trim()}"` })
     }
 
     return tags
-  }, [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState, taxonomyLabelMap])
+  }, [keyword, selectedCategories, selectedCity, selectedServices, taxonomyLabelMap])
 
   const handleSortSelect = (option: (typeof sortOptions)[number]) => {
     setSortBy(option)
@@ -190,7 +180,7 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
 
               return (
                 <ProfessionalCardComponent
-                  key={professional.id}
+                  key={`${professional.companyId}-${professional.professionalId}`}
                   professional={professional}
                   isSaved={isSaved}
                   isMutating={isMutating}

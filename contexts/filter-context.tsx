@@ -230,6 +230,7 @@ interface FilterContextType {
   taxonomy: {
     categories: ReturnType<typeof useProjectTaxonomy>["categories"]
     taxonomyOptions: ReturnType<typeof useProjectTaxonomy>["taxonomyOptions"]
+    cities: ReturnType<typeof useProjectTaxonomy>["cities"]
     isLoading: boolean
     error: string | null
     refresh: () => Promise<void>
@@ -240,7 +241,7 @@ interface FilterContextType {
 const FilterContext = createContext<FilterContextType | undefined>(undefined)
 
 function FilterProviderInner({ children }: { children: ReactNode }) {
-  const { categories, taxonomyOptions, isLoading: taxonomyLoading, error: taxonomyError, refresh } = useProjectTaxonomy()
+  const { categories, taxonomyOptions, cities, isLoading: taxonomyLoading, error: taxonomyError, refresh } = useProjectTaxonomy()
   const [state, dispatch] = useReducer(filterReducer, INITIAL_FILTER_STATE)
   const {
     selectedTypes,
@@ -772,6 +773,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
         taxonomy: {
           categories,
           taxonomyOptions,
+          cities,
           isLoading: taxonomyLoading,
           error: taxonomyError,
           refresh,

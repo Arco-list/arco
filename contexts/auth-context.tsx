@@ -137,8 +137,7 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
           setSession(null);
           setUser(null);
           setProfile(null);
-          router.push("/");
-          router.refresh();
+          window.location.href = "/";
           return;
         }
 

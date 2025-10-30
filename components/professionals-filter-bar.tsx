@@ -39,9 +39,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { ProfessionalsFiltersModal } from "@/components/professionals-filters-modal"
-import type { LocationOption } from "@/hooks/use-professional-taxonomy"
 import type { Tables } from "@/lib/supabase/types"
 import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
@@ -134,18 +132,14 @@ export function ProfessionalsFilterBar() {
   const {
     selectedCategories,
     selectedServices,
-    selectedCountry,
-    selectedState,
     selectedCity,
     keyword,
     setSelectedCategories,
     setSelectedServices,
-    setSelectedCountry,
-    setSelectedState,
     setSelectedCity,
     clearAllFilters,
     taxonomy,
-    locationOptions,
+    cities,
   } = useProfessionalFilters()
 
   const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null)
@@ -196,33 +190,11 @@ export function ProfessionalsFilterBar() {
     }).filter((section): section is NonNullable<typeof section> => Boolean(section))
   }, [taxonomy.categories, taxonomy.services])
 
-  const locationOptionsList = taxonomy.locationOptions.flatOptions
-
-  const selectedLocationLabel = useMemo(() => {
-    if (!selectedCountry && !selectedState && !selectedCity) {
-      return ""
-    }
-
-    const matchedOption = locationOptionsList.find(
-      (option) =>
-        option.country === selectedCountry &&
-        option.stateRegion === selectedState &&
-        option.city === selectedCity,
-    )
-
-    if (matchedOption) {
-      return matchedOption.label
-    }
-
-    const parts = [selectedCity, selectedState, selectedCountry].filter((value): value is string => Boolean(value))
-    return parts.join(", ")
-  }, [locationOptionsList, selectedCity, selectedCountry, selectedState])
-
-  const filteredLocationItems = useMemo(() => {
+  const filteredCities = useMemo(() => {
     const term = locationSearch.trim().toLowerCase()
-    if (term.length === 0) return locationOptionsList
-    return locationOptionsList.filter((option) => option.label.toLowerCase().includes(term))
-  }, [locationOptionsList, locationSearch])
+    if (term.length === 0) return cities
+    return cities.filter((city) => city.toLowerCase().includes(term))
+  }, [cities, locationSearch])
 
   const quickServiceItems = useMemo(() => {
     const seen = new Set<string>()
@@ -293,14 +265,14 @@ export function ProfessionalsFilterBar() {
     setTimeout(() => updateCarouselScrollState(), 400)
   }
 
-  const locationFilterCount = selectedCountry || selectedState || selectedCity ? 1 : 0
+  const locationFilterCount = selectedCity ? 1 : 0
   const activeFilterCount =
     selectedCategories.length + selectedServices.length + locationFilterCount + (keyword.trim().length > 0 ? 1 : 0)
 
   const getButtonClassName = (hasSelection: boolean) =>
     `flex items-center gap-2 whitespace-nowrap rounded-full ${
       hasSelection
-        ? "border-red-500 text-red-600 bg-red-50 hover:bg-red-100"
+        ? "border-[#222222] text-[#222222] bg-transparent"
         : "bg-transparent border-gray-300 hover:border-gray-400"
     }`
 
@@ -308,7 +280,7 @@ export function ProfessionalsFilterBar() {
     setActiveDropdown((current) => {
       const next = current === name ? null : name
       if (next === "location") {
-        setLocationSearch(selectedLocationLabel ?? "")
+        setLocationSearch(selectedCity ?? "")
       }
       return next
     })
@@ -338,17 +310,13 @@ export function ProfessionalsFilterBar() {
     }))
   }
 
-  const selectLocationOption = (option: LocationOption) => {
-    setSelectedCountry(option.country)
-    setSelectedState(option.stateRegion)
-    setSelectedCity(option.city)
-    setLocationSearch(option.label)
+  const selectCity = (city: string) => {
+    setSelectedCity(city)
+    setLocationSearch(city)
     setActiveDropdown(null)
   }
 
   const clearLocationFilter = () => {
-    setSelectedCountry(null)
-    setSelectedState(null)
     setSelectedCity(null)
     setLocationSearch("")
   }
@@ -410,9 +378,9 @@ export function ProfessionalsFilterBar() {
                                   onCheckedChange={() => toggleCategorySelection(section.category.id ?? "")}
                                 />
 
-                                <Label htmlFor={`category-${categoryKey}`} className="text-sm font-medium">
+                                <label htmlFor={`category-${categoryKey}`} className="text-sm cursor-pointer">
                                   {section.category.name}
-                                </Label>
+                                </label>
                               </div>
 
                               {section.services.length > 0 && (
@@ -442,9 +410,9 @@ export function ProfessionalsFilterBar() {
                                         checked={selectedServices.includes(service.id ?? "")}
                                         onCheckedChange={() => toggleServiceSelection(service.id ?? "")}
                                       />
-                                      <Label htmlFor={`service-${serviceKey}`} className="text-sm font-medium">
+                                      <label htmlFor={`service-${serviceKey}`} className="text-sm cursor-pointer">
                                         {service.name}
-                                      </Label>
+                                      </label>
                                     </div>
                                   )
                                 })}
@@ -481,9 +449,9 @@ export function ProfessionalsFilterBar() {
                 <Button
                   variant="quaternary"
                   onClick={() => toggleDropdown("location")}
-                  className={getButtonClassName(Boolean(selectedCountry || selectedState || selectedCity))}
+                  className={getButtonClassName(Boolean(selectedCity))}
                 >
-                  {selectedLocationLabel || "Location"}
+                  {selectedCity || "City"}
                   <ChevronDown className="h-4 w-4" />
                 </Button>
 
@@ -494,7 +462,7 @@ export function ProfessionalsFilterBar() {
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Search locations..."
+                          placeholder="Search cities..."
                           className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                           value={locationSearch}
                           onChange={(event) => setLocationSearch(event.target.value)}
@@ -502,18 +470,18 @@ export function ProfessionalsFilterBar() {
                       </div>
 
                       <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {filteredLocationItems.length > 0 ? (
-                          filteredLocationItems.map((option) => (
+                        {filteredCities.length > 0 ? (
+                          filteredCities.map((city) => (
                             <button
-                              key={option.key}
+                              key={city}
                               className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors"
-                              onClick={() => selectLocationOption(option)}
+                              onClick={() => selectCity(city)}
                             >
-                              {option.label}
+                              {city}
                             </button>
                           ))
                         ) : (
-                          <div className="px-3 py-2 text-sm text-gray-500">No locations found</div>
+                          <div className="px-3 py-2 text-sm text-gray-500">No cities found</div>
                         )}
                       </div>
 
@@ -568,7 +536,7 @@ export function ProfessionalsFilterBar() {
                       onClick={() => toggleServiceSelection(item.id)}
                       className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
                         isSelected
-                          ? "text-red-600 bg-red-50 border-red-500 hover:bg-red-100"
+                          ? "border-[#222222] text-[#222222] bg-transparent"
                           : ""
                       }`}
                     >

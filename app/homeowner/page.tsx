@@ -2,7 +2,6 @@
 import { useState, useEffect, Suspense } from "react"
 
 import { useSearchParams, useRouter } from "next/navigation"
-import { ThumbsUp, X } from "lucide-react"
 
 import { AccountSettingsForm } from "@/components/account-settings-form"
 import { Header } from "@/components/header"
@@ -11,8 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/auth-context"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
+import { useProjectLikes } from "@/contexts/project-likes-context"
 import { ProfessionalCard } from "@/components/professional-card"
-import Link from "next/link"
+import { ProjectCard } from "@/components/project-card"
+import { useFilters } from "@/contexts/filter-context"
+import { FilterProvider } from "@/contexts/filter-context"
 
 function HomeownerContent() {
   const searchParams = useSearchParams()
@@ -32,6 +34,13 @@ function HomeownerContent() {
     mutatingProfessionalIds: mutatingProfessionalIds,
     removeProfessional,
   } = useSavedProfessionals()
+  const {
+    likedProjectIds,
+    mutatingProjectIds: likeMutatingProjectIds,
+    likeCounts,
+    toggleLike,
+  } = useProjectLikes()
+  const { taxonomyLabelMap } = useFilters()
   const initialTab = searchParams.get("tab") || "saved-projects"
   const [activeTab, setActiveTab] = useState(initialTab)
 
@@ -70,66 +79,71 @@ function HomeownerContent() {
 
       <main className="flex-1 py-8 pt-20">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-8">Homeowner</h1>
-
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-            <TabsList className="mb-8 rounded-full p-1 gap-1 w-full sm:w-auto overflow-x-auto">
-              <TabsTrigger value="saved-projects" className="rounded-full px-4 whitespace-nowrap">Saved Projects</TabsTrigger>
-              <TabsTrigger value="saved-professionals" className="rounded-full px-4 whitespace-nowrap">Saved Professionals</TabsTrigger>
-              <TabsTrigger value="account" className="rounded-full px-4 whitespace-nowrap">Account</TabsTrigger>
+            <TabsList className="mb-8 rounded-full p-1 gap-1 w-fit overflow-x-auto h-auto">
+              <TabsTrigger value="saved-projects" className="rounded-full px-3 py-1.5 h-auto whitespace-nowrap">Saved Projects</TabsTrigger>
+              <TabsTrigger value="saved-professionals" className="rounded-full px-3 py-1.5 h-auto whitespace-nowrap">Saved Professionals</TabsTrigger>
+              <TabsTrigger value="account" className="rounded-full px-3 py-1.5 h-auto whitespace-nowrap">Account</TabsTrigger>
             </TabsList>
 
             <TabsContent value="saved-projects">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Saved Projects</h2>
               {savedProjectsError && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
                   {savedProjectsError}
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {savedProjects.map((entry) => {
                   const { projectId, summary } = entry
-                  const projectTitle = summary?.title ?? "Untitled project"
+
+                  // Build project title from style, type, and location (EXACT SAME as /projects page)
+                  const style = summary?.style_preferences?.[0] || ""
+                  const subType = summary?.project_type || ""
+                  const location = summary?.location || "Location unavailable"
+                  const parts = []
+                  if (style) {
+                    const styleLabel = taxonomyLabelMap.get(style) || style
+                    parts.push(styleLabel)
+                  }
+                  if (subType) {
+                    const subTypeLabel = taxonomyLabelMap.get(subType) || subType
+                    parts.push(subTypeLabel)
+                  }
+                  parts.push(`in ${location}`)
+                  const projectTitle = parts.join(" ")
+
                   const projectSlug = summary?.slug ?? null
                   const projectImage = summary?.primary_photo_url ?? "/placeholder.svg"
                   const projectAlt = summary?.primary_photo_alt ?? projectTitle
-                  const projectLocation = summary?.location ?? "Location unavailable"
                   const projectLikes = summary?.likes_count ?? 0
-                  const isMutating = mutatingProjectIds.has(projectId)
+                  const isMutatingSave = mutatingProjectIds.has(projectId)
+                  const isLiked = likedProjectIds.has(projectId)
+                  const isMutatingLike = likeMutatingProjectIds.has(projectId)
+                  const likesCount = likeCounts[projectId] ?? projectLikes
+
+                  const projectData = {
+                    id: projectId,
+                    title: projectTitle,
+                    slug: projectSlug,
+                    imageUrl: projectImage,
+                    imageAlt: projectAlt,
+                    location,
+                    likes: projectLikes,
+                  }
 
                   return (
-                    <div key={projectId} className="group cursor-pointer relative">
-                      <Link href={projectSlug ? `/projects/${projectSlug}` : "#"} aria-disabled={!projectSlug}>
-                        <div className="relative overflow-hidden rounded-lg bg-gray-100">
-                          <img
-                            src={projectImage}
-                            alt={projectAlt ?? projectTitle}
-                            className="h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          />
-                        </div>
-                        <div className="mt-3 flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="text-sm font-medium text-gray-900 line-clamp-2">{projectTitle}</h3>
-                            <p className="text-xs text-gray-500 mt-1">{projectLocation}</p>
-                          </div>
-                          <div className="ml-3 flex items-center gap-1 text-sm text-gray-500">
-                            <ThumbsUp className="h-3 w-3" />
-                            <span>{projectLikes}</span>
-                          </div>
-                        </div>
-                      </Link>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          unsaveProject(projectId)
-                        }}
-                        disabled={isMutating}
-                        aria-label="Remove from saved projects"
-                        className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors disabled:opacity-70"
-                      >
-                        <X className="h-4 w-4 text-gray-600 hover:text-red-500" />
-                      </button>
-                    </div>
+                    <ProjectCard
+                      key={projectId}
+                      project={projectData}
+                      isSaved={true}
+                      isLiked={isLiked}
+                      isMutatingSave={isMutatingSave}
+                      isMutatingLike={isMutatingLike}
+                      likesCount={likesCount}
+                      onToggleSave={() => unsaveProject(projectId)}
+                      onToggleLike={(id, count) => toggleLike(id, { currentCount: count })}
+                    />
                   )
                 })}
               </div>
@@ -146,12 +160,13 @@ function HomeownerContent() {
             </TabsContent>
 
             <TabsContent value="saved-professionals">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Saved Professionals</h2>
               {savedProfessionalsError && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
                   {savedProfessionalsError}
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {savedProfessionalEntries.map((entry) => {
                   const { companyId, card } = entry
                   const isMutating = mutatingProfessionalIds.has(companyId)
@@ -185,6 +200,7 @@ function HomeownerContent() {
             </TabsContent>
 
             <TabsContent value="account">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6">Account</h2>
               <AccountSettingsForm />
             </TabsContent>
           </Tabs>
@@ -199,7 +215,9 @@ function HomeownerContent() {
 export default function Homeowner() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-      <HomeownerContent />
+      <FilterProvider>
+        <HomeownerContent />
+      </FilterProvider>
     </Suspense>
   )
 }

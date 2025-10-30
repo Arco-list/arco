@@ -16,10 +16,13 @@ export function getSupportEmail(type: 'privacy' | 'legal' = 'privacy'): string {
     privacy: 'privacy@arco.com',
     legal: 'legal@arco.com'
   }
-  
+
   if (type === 'privacy') {
     return process.env.NEXT_PUBLIC_PRIVACY_EMAIL || defaultEmails.privacy
   }
-  
+
   return process.env.NEXT_PUBLIC_LEGAL_EMAIL || defaultEmails.legal
 }
+
+// Shared button styles
+export const textButtonStyles = "inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"

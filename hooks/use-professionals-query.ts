@@ -26,11 +26,13 @@ type SearchProfessionalsRow = {
   company_state_region: string | null
   company_country: string | null
   primary_specialty: string | null
+  primary_service_name: string | null
   services_offered: string[] | null
   display_rating: number | string | null
   total_reviews: number | null
   hourly_rate_display: string | null
   is_verified: boolean | null
+  cover_photo_url: string | null
 }
 
 interface UseProfessionalsQueryResult {
@@ -64,10 +66,12 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
 
-  const profession = row.title || row.primary_specialty || "Professional"
+  // Use primary service from company's primary_service_id (company-level data only)
+  const profession = row.primary_service_name || "Professional services"
 
+  // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
-  const location = locationParts.length > 0 ? locationParts.join(", ") : row.user_location || "Location unavailable"
+  const location = locationParts.length > 0 ? locationParts.join(", ") : "Location unavailable"
 
   const specialties = Array.isArray(row.services_offered)
     ? row.services_offered.filter((value): value is string => Boolean(value))
@@ -86,7 +90,7 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
     location,
     rating,
     reviewCount,
-    image: row.company_logo || PLACEHOLDER_IMAGE,
+    image: row.cover_photo_url || row.company_logo || row.avatar_url || PLACEHOLDER_IMAGE,
     specialties,
     isVerified: Boolean(row.is_verified),
     domain: row.company_domain ?? null,
@@ -97,8 +101,6 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
   const {
     selectedCategories,
     selectedServices,
-    selectedCountry,
-    selectedState,
     selectedCity,
     keyword,
   } = useProfessionalFilters()
@@ -136,8 +138,8 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
           "search_professionals",
           {
             search_query: keyword.trim().length > 0 ? keyword.trim() : null,
-            country_filter: selectedCountry ?? null,
-            state_filter: selectedState ?? null,
+            country_filter: null,
+            state_filter: null,
             city_filter: selectedCity ?? null,
             category_filters: selectedCategories.length > 0 ? selectedCategories : null,
             service_filters: selectedServices.length > 0 ? selectedServices : null,
@@ -184,7 +186,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
         }
       }
     },
-    [keyword, selectedCategories, selectedCity, selectedCountry, selectedServices, selectedState],
+    [keyword, selectedCategories, selectedCity, selectedServices],
   )
 
   useEffect(() => {

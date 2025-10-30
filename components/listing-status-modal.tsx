@@ -93,12 +93,7 @@ export function ListingStatusModal<TStatus extends string>({
               className="w-16 h-16 rounded-lg object-cover bg-gray-100"
             />
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium text-gray-900">{project.title}</h3>
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${planBadgeClass}`}>
-                  {planBadgeLabel}
-                </span>
-              </div>
+              <h3 className="font-medium text-gray-900">{project.title}</h3>
               <p className="text-sm text-gray-500">{project.descriptor}</p>
             </div>
           </div>
@@ -208,10 +203,10 @@ export function ListingStatusModal<TStatus extends string>({
           </div>
 
           <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose} className="flex-1">
+            <Button variant="tertiary" onClick={onClose} className="flex-1">
               Cancel
             </Button>
-            <Button onClick={onSave} className="flex-1" disabled={saveDisabled}>
+            <Button variant="secondary" onClick={onSave} className="flex-1" disabled={saveDisabled}>
               Save
             </Button>
           </div>

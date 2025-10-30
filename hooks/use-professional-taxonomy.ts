@@ -131,11 +131,14 @@ const buildLocationOptions = (facets: LocationFacet[]): LocationOptions => {
     sortedCitiesByCountryState.set(country, sortedStateMap)
   })
 
-  const flatOptions: LocationOption[] = facets.map((facet) => ({
-    ...facet,
-    key: [facet.country ?? "", facet.stateRegion ?? "", facet.city ?? ""].join("|"),
-    label: formatLocationLabel(facet),
-  }))
+  // Only include locations that have a city (no country-only or state-only options)
+  const flatOptions: LocationOption[] = facets
+    .filter((facet) => facet.city !== null)
+    .map((facet) => ({
+      ...facet,
+      key: [facet.country ?? "", facet.stateRegion ?? "", facet.city ?? ""].join("|"),
+      label: formatLocationLabel(facet),
+    }))
 
   return {
     countries,
