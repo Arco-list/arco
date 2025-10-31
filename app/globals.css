@@ -13,114 +13,223 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.133 0 0);
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --quaternary: oklch(0.92 0 0);
-  --quaternary-foreground: oklch(0.13 0 0);
-  --quaternary-hover: oklch(0.95 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* Primary Colors */
+  --primary: #FF333A;
+  --primary-hover: #EC2D34;
+  --primary-active: #FF333A;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary Colors */
+  --secondary: #222222;
+  --secondary-hover: #000000;
+  --secondary-foreground: #FFFFFF;
+
+  /* Tertiary Colors */
+  --tertiary: #F2F2F2;
+  --tertiary-hover: #EBEBEB;
+  --tertiary-foreground: #222222;
+
+  /* Neutral Colors */
+  --background: #FFFFFF;
+  --foreground: #222222;
+  --surface: #F5F5F5;
+  --border: #EBEBEB;
+  --text-primary: #222222;
+  --text-secondary: #6A6A6A;
+  --text-disabled: #8C8C8C;
+
+  /* Card colors */
+  --card: #FFFFFF;
+  --card-foreground: #222222;
+
+  /* Popover colors */
+  --popover: #FFFFFF;
+  --popover-foreground: #222222;
+
+  /* Muted colors */
+  --muted: #F5F5F5;
+  --muted-foreground: #6A6A6A;
+
+  /* Accent colors */
+  --accent: #F2F2F2;
+  --accent-foreground: #222222;
+
+  /* Destructive colors */
+  --destructive: #FF333A;
+  --destructive-foreground: #FFFFFF;
+
+  /* Input & Ring */
+  --input: #EBEBEB;
+  --ring: #FF333A;
+
+  /* Legacy quaternary (map to tertiary) */
+  --quaternary: #F2F2F2;
+  --quaternary-foreground: #222222;
+  --quaternary-hover: #EBEBEB;
+
+  /* Chart colors */
+  --chart-1: #FF333A;
+  --chart-2: #222222;
+  --chart-3: #6A6A6A;
+  --chart-4: #F2F2F2;
+  --chart-5: #EBEBEB;
+
+  /* Radius */
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #222222;
+  --sidebar-primary: #FF333A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F5F5F5;
+  --sidebar-accent-foreground: #222222;
+  --sidebar-border: #EBEBEB;
+  --sidebar-ring: #FF333A;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --quaternary: oklch(0.269 0 0);
-  --quaternary-foreground: oklch(0.985 0 0);
-  --quaternary-hover: oklch(0.3 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* Primary Colors - Keep same for brand consistency */
+  --primary: #FF333A;
+  --primary-hover: #EC2D34;
+  --primary-active: #FF333A;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary Colors - Inverted */
+  --secondary: #FFFFFF;
+  --secondary-hover: #F5F5F5;
+  --secondary-foreground: #222222;
+
+  /* Tertiary Colors - Dark variants */
+  --tertiary: #333333;
+  --tertiary-hover: #404040;
+  --tertiary-foreground: #FFFFFF;
+
+  /* Neutral Colors - Inverted */
+  --background: #1A1A1A;
+  --foreground: #FFFFFF;
+  --surface: #2C2C2C;
+  --border: #404040;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0A0A0;
+  --text-disabled: #666666;
+
+  /* Card colors */
+  --card: #2C2C2C;
+  --card-foreground: #FFFFFF;
+
+  /* Popover colors */
+  --popover: #2C2C2C;
+  --popover-foreground: #FFFFFF;
+
+  /* Muted colors */
+  --muted: #333333;
+  --muted-foreground: #A0A0A0;
+
+  /* Accent colors */
+  --accent: #333333;
+  --accent-foreground: #FFFFFF;
+
+  /* Destructive colors */
+  --destructive: #FF333A;
+  --destructive-foreground: #FFFFFF;
+
+  /* Input & Ring */
+  --input: #404040;
+  --ring: #FF333A;
+
+  /* Legacy quaternary (map to tertiary) */
+  --quaternary: #333333;
+  --quaternary-foreground: #FFFFFF;
+  --quaternary-hover: #404040;
+
+  /* Chart colors */
+  --chart-1: #FF333A;
+  --chart-2: #FFFFFF;
+  --chart-3: #A0A0A0;
+  --chart-4: #333333;
+  --chart-5: #404040;
+
+  /* Sidebar */
+  --sidebar: #1A1A1A;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #FF333A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #333333;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #404040;
+  --sidebar-ring: #FF333A;
 }
 
 @theme inline {
+  /* Primary Colors */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+
+  /* Secondary Colors */
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Tertiary Colors */
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-hover: var(--tertiary-hover);
+  --color-tertiary-foreground: var(--tertiary-foreground);
+
+  /* Neutral Colors */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-disabled: var(--text-disabled);
+
+  /* Card Colors */
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+
+  /* Popover Colors */
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Muted Colors */
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+
+  /* Accent Colors */
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+
+  /* Destructive Colors */
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
+
+  /* Input & Ring */
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Legacy quaternary */
+  --color-quaternary: var(--quaternary);
+  --color-quaternary-foreground: var(--quaternary-foreground);
+  --color-quaternary-hover: var(--quaternary-hover);
+
+  /* Chart Colors */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-quaternary: var(--quaternary);
-  --color-quaternary-foreground: var(--quaternary-foreground);
-  --color-quaternary-hover: var(--quaternary-hover);
+
+  /* Radius */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Sidebar Colors */
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -130,8 +239,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Added Poppins as the main font family */
+  /* Font Families */
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: 'Figtree', ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -142,35 +252,320 @@
     @apply bg-background text-foreground font-sans;
   }
   
-  /* Typography Scale - Using Tailwind utilities */
+  /* Typography Scale - Using Tailwind Utilities */
+
+  /* H1 - Hero image */
   h1 {
-    @apply text-6xl md:text-7xl lg:text-8xl font-semibold tracking-tight leading-none;
-    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+    @apply font-semibold tracking-tight leading-none;
+    font-family: var(--font-heading);
+    @apply text-6xl md:text-7xl;
   }
-  
+
+  /* H2 - Category cards */
   h2 {
-    @apply text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight leading-tight;
-    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+    @apply font-semibold tracking-tight leading-tight;
+    font-family: var(--font-heading);
+    @apply text-3xl md:text-4xl;
   }
-  
+
+  /* H3 - Page titles */
   h3 {
-    @apply text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight leading-tight;
-    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+    @apply font-semibold tracking-tight leading-tight;
+    font-family: var(--font-heading);
+    @apply text-2xl md:text-3xl;
   }
-  
+
+  /* H4 - Section titles */
   h4 {
-    @apply text-lg md:text-xl font-semibold tracking-tight leading-tight;
-    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+    @apply font-semibold tracking-normal leading-tight;
+    font-family: var(--font-heading);
+    @apply text-base md:text-xl;
   }
-  
+
+  /* H5 - Card titles */
   h5 {
-    @apply text-base font-semibold leading-tight;
-    font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+    @apply font-semibold tracking-normal leading-tight;
+    font-family: var(--font-heading);
+    @apply text-xs md:text-base;
   }
-  
+
+  /* H6 - Regular headings */
   h6 {
-    @apply text-sm font-medium leading-tight;
+    @apply font-medium text-base tracking-normal leading-tight;
     font-family: var(--font-sans);
+  }
+
+  /* Body Regular */
+  body {
+    @apply text-base font-normal tracking-normal leading-normal;
+  }
+}
+
+/* Typography utility classes - Using Tailwind */
+
+/* H7 - Small headings (use class="h7") */
+.h7 {
+  @apply font-medium text-sm tracking-normal leading-tight;
+  font-family: var(--font-sans);
+}
+
+/* Body Small (use class="body-small") */
+.body-small {
+  @apply font-normal text-sm tracking-normal leading-normal;
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  /* Button Base - Pure Tailwind */
+  .btn {
+    @apply inline-flex items-center justify-center;
+    @apply transition-colors duration-200;
+    @apply font-sans font-medium;
+    @apply py-3 px-6 rounded-full;
+    cursor: pointer;
+    border: none;
+    outline: none;
+  }
+
+  .btn:focus-visible {
+    @apply ring-2 ring-offset-2 ring-ring;
+  }
+
+  /* Primary Button - Pure Tailwind */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground text-base;
+    /* text-base = 16px, py-3 = 12px, px-6 = 24px */
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-primary-hover;
+  }
+
+  .btn-primary:disabled {
+    @apply bg-border text-primary-foreground;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Secondary Button - Pure Tailwind */
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground text-sm;
+    @apply py-3 px-4;
+    /* text-sm = 14px, py-3 = 12px, px-4 = 16px (vs spec 18px) */
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    @apply bg-secondary-hover;
+  }
+
+  .btn-secondary:disabled {
+    @apply bg-border text-secondary-foreground;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Tertiary Button - Pure Tailwind */
+  .btn-tertiary {
+    @apply bg-tertiary text-tertiary-foreground text-sm;
+    @apply py-3 px-4;
+    /* text-sm = 14px, py-3 = 12px, px-4 = 16px (vs spec 18px) */
+  }
+
+  .btn-tertiary:hover:not(:disabled) {
+    @apply bg-tertiary-hover;
+  }
+
+  .btn-tertiary:disabled {
+    @apply bg-transparent border border-border text-border;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Quaternary Button - Pure Tailwind */
+  .btn-quaternary {
+    @apply bg-transparent border border-border text-foreground text-sm font-normal;
+    @apply py-1.5 px-3;
+    /* text-sm = 14px (vs spec 13px), py-1.5 px-3 = 6px/12px (exact match!) */
+  }
+
+  .btn-quaternary:hover:not(:disabled) {
+    @apply bg-tertiary;
+  }
+
+  .btn-quaternary:active:not(:disabled) {
+    @apply bg-transparent border-foreground text-foreground;
+  }
+
+  .btn-quaternary:disabled {
+    @apply bg-transparent border-border text-border;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Text Button - Pure Tailwind */
+  .btn-text {
+    @apply bg-transparent text-foreground text-sm font-medium;
+    @apply py-0 px-0 rounded-full;
+    /* text-sm = 14px (vs spec 13px) */
+  }
+
+  .btn-text:hover:not(:disabled) {
+    @apply bg-tertiary py-1.5 px-3;
+    /* py-1.5 = 6px, px-3 = 12px */
+  }
+
+  .btn-text:active:not(:disabled) {
+    @apply text-primary;
+  }
+
+  /* Text Button Listed Variant - for footer/menu */
+  .btn-text-listed {
+    @apply bg-transparent text-foreground text-sm font-normal;
+    @apply py-0 px-0 rounded-full;
+  }
+
+  .btn-text-listed:hover:not(:disabled) {
+    @apply text-text-secondary bg-tertiary py-1.5 px-3;
+  }
+
+  .btn-text-listed:active:not(:disabled) {
+    @apply text-primary;
+  }
+
+  /* Primary Button - Client Exact Spec (for comparison) */
+  .btn-primary-exact {
+    @apply bg-primary text-primary-foreground font-medium rounded-full;
+    @apply inline-flex items-center justify-center transition-colors duration-200;
+    font-size: 15px;
+    padding: 12px 24px;
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-primary-exact:hover:not(:disabled) {
+    @apply bg-primary-hover;
+  }
+
+  .btn-primary-exact:disabled {
+    @apply bg-border text-primary-foreground;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Secondary Button - Client Exact Spec (for comparison) */
+  .btn-secondary-exact {
+    @apply bg-secondary text-secondary-foreground font-medium rounded-full;
+    @apply inline-flex items-center justify-center transition-colors duration-200;
+    font-size: 13px;
+    padding: 12px 18px;
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-secondary-exact:hover:not(:disabled) {
+    @apply bg-secondary-hover;
+  }
+
+  .btn-secondary-exact:disabled {
+    @apply bg-border text-secondary-foreground;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Tertiary Button - Client Exact Spec (for comparison) */
+  .btn-tertiary-exact {
+    @apply bg-tertiary text-tertiary-foreground rounded-full;
+    @apply inline-flex items-center justify-center transition-colors duration-200;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 12px 18px;
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-tertiary-exact:hover:not(:disabled) {
+    @apply bg-tertiary-hover;
+  }
+
+  .btn-tertiary-exact:disabled {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--border);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Quaternary Button - Client Exact Spec (for comparison) */
+  .btn-quaternary-exact {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 400;
+    padding: 6px 12px;
+    @apply rounded-full inline-flex items-center justify-center transition-colors duration-200;
+    cursor: pointer;
+  }
+
+  .btn-quaternary-exact:hover:not(:disabled) {
+    background: var(--tertiary);
+  }
+
+  .btn-quaternary-exact:active:not(:disabled) {
+    background: transparent;
+    border: 1px solid var(--foreground);
+    color: var(--foreground);
+  }
+
+  .btn-quaternary-exact:disabled {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--border);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Text Button - Client Exact Spec (for comparison) */
+  .btn-text-exact {
+    background: transparent;
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 0;
+    @apply rounded-full inline-flex items-center justify-center transition-all duration-200;
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-text-exact:hover:not(:disabled) {
+    background: var(--tertiary);
+    padding: 6px 12px;
+  }
+
+  .btn-text-exact:active:not(:disabled) {
+    color: var(--primary);
+  }
+
+  /* Text Button Listed - Client Exact Spec (for footer/menu) */
+  .btn-text-listed-exact {
+    background: transparent;
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 400;
+    padding: 0;
+    @apply rounded-full inline-flex items-center justify-center transition-all duration-200;
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-text-listed-exact:hover:not(:disabled) {
+    color: var(--text-secondary);
+    background: var(--tertiary);
+    padding: 6px 12px;
+  }
+
+  .btn-text-listed-exact:active:not(:disabled) {
+    color: var(--primary);
   }
 }
 

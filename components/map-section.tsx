@@ -8,7 +8,7 @@ export function MapSection() {
   const { location } = useProjectPreview()
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
-  const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
+  const markerRef = useRef<google.maps.Marker | null>(null)
   const [isMapsLoaded, setIsMapsLoaded] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
 
@@ -38,7 +38,7 @@ export function MapSection() {
     const checkMapsLoaded = () => {
       if (cancelled) return // Early exit if component unmounted
 
-      if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+      if (window.google?.maps?.Map && window.google?.maps?.Marker) {
         setIsMapsLoaded(true)
         setMapError(null)
         return
@@ -88,10 +88,9 @@ export function MapSection() {
           mapTypeControl: false,
           streetViewControl: true,
           fullscreenControl: true,
-          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
         })
 
-        markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
+        markerRef.current = new window.google.maps.Marker({
           map: mapInstanceRef.current,
           position,
           title: label,
@@ -112,10 +111,9 @@ export function MapSection() {
               mapTypeControl: false,
               streetViewControl: false,
               fullscreenControl: true,
-              mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
             })
 
-            markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
+            markerRef.current = new window.google.maps.Marker({
               map: mapInstanceRef.current,
               position,
               title: summaryLabel,
@@ -132,7 +130,7 @@ export function MapSection() {
 
     return () => {
       if (markerRef.current) {
-        markerRef.current.map = null
+        markerRef.current.setMap(null)
         markerRef.current = null
       }
       if (mapInstanceRef.current) {

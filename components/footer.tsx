@@ -13,7 +13,7 @@ interface FooterProps {
 
 export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
   return (
-    <footer className="bg-white border-t border-gray-200 py-12 px-4 md:px-8">
+    <footer className="bg-[#F5F5F5] border-t border-gray-200 py-12 px-4 md:px-8">
       <div className={`${maxWidth} mx-auto`}>
         <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
           <div>
