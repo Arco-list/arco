@@ -109,25 +109,70 @@ This project is automatically synced with v0.app:
 
 ## Database Architecture
 
+### ⚠️ CRITICAL: Terminology for AI Agents
+
+**IMPORTANT:** This platform is **COMPANY-CENTRIC**, not professional-centric. Understanding this is essential:
+
+| Term | What It Means | What It Does NOT Mean |
+|------|---------------|----------------------|
+| **`/professionals` page** | Browse COMPANIES (not individuals) | Individual professional profiles |
+| **Professional listing** | Company listing in marketplace | Individual user listing |
+| **`professionals` table** | Team members (users) within companies | Standalone professionals |
+| **`companies` table** | PRIMARY marketplace entity | Secondary metadata |
+| **`professional_id`** | User reference (team member) | Company reference |
+
+**Key Architecture Rules:**
+1. **Companies** are the marketplace entity (what clients browse and hire)
+2. **Team members** (professionals table) are individual users who belong to companies
+3. The `/professionals` route displays **companies**, not individual people
+4. All public-facing features show **company** data (name, logo, services, projects)
+5. Individual user emails are used for invites, but companies are what get hired
+
+**Example Flow:**
+- User browses `/professionals` → sees **companies**
+- User clicks company → sees **company** profile with team members
+- User invites company to project → invite sent to **user email** (team member)
+- Team member accepts → **company** is added to project (not individual)
+
 ### Supabase Database Structure
 This project uses Supabase as the backend database with a comprehensive schema for the Arco professional services marketplace platform.
 
-#### Core Tables (15 total)
-- **`auth.users`** - Supabase built-in authentication
-- **`profiles`** - Extended user data with type (client/professional/admin)
-- **`companies`** - Professional organization profiles
-- **`professionals`** - Service provider profiles with ratings
-- **`projects`** - Client project listings with photos and applications
-- **`categories`** - Service categories (22 pre-populated categories)
-- **`professional_specialties`** - Many-to-many professional-category relationships
+#### Core Tables
+
+**Primary Entities:**
+- **`companies`** - PRIMARY marketplace entity (name, services, ratings, photos)
+- **`professionals`** - Team members (individual users) within companies ⚠️ *Will be renamed to `team_members`*
+- **`profiles`** - Extended user data with types array (client/professional/admin)
+- **`projects`** - Client project listings with photos and location
+
+**Categories & Taxonomy:**
+- **`categories`** - Service categories hierarchy
+- **`project_taxonomy_options`** - Project filters (styles, sizes, features)
+- **`project_taxonomy_selections`** - Selected options per project
 - **`project_categories`** - Many-to-many project-category relationships
-- **`project_photos`** - Multiple photos per project with primary designation
-- **`project_applications`** - Professional applications to projects
-- **`reviews`** - Multi-dimensional rating system
-- **`messages`** - Project-based communication
+- **`professional_specialties`** - Team member specialties (minimal use)
+
+**Project Management:**
+- **`project_photos`** - Multiple photos per project with features
+- **`project_features`** - Rooms/spaces for photo organization
+- **`project_professionals`** - Invite system (email-based, links users & companies)
+- **`project_professional_services`** - Services needed per project
+
+**Reviews & Engagement:**
+- **`reviews`** - Multi-dimensional rating system for companies
+- **`company_ratings`** - Aggregated company ratings
 - **`saved_projects`** - User bookmarks for projects
-- **`saved_professionals`** - User bookmarks for professionals
-- **`notifications`** - System notifications
+- **`saved_companies`** - User bookmarks for companies
+
+**Company Data:**
+- **`company_photos`** - Company gallery photos
+- **`company_social_links`** - Social media profiles
+
+**Removed/Unused:**
+- ~~`project_applications`~~ - Never implemented ❌
+- ~~`notifications`~~ - Never implemented ❌
+- ~~`saved_professionals`~~ - Replaced by `saved_companies` ❌
+- ~~`messages`~~ - Placeholder (0 rows)
 
 #### Performance Optimizations
 - **Materialized Views**:
@@ -159,11 +204,16 @@ project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
 - **Anonymous Key**: Use `mcp__supabase__get_anon_key` for client-side connections
 - **TypeScript Types**: Generate with `mcp__supabase__generate_typescript_types`
 
-#### Migration Status
-All 9 migrations successfully applied:
-- 001-007: Core schema, tables, RLS policies
-- 008: Performance optimizations with materialized views
-- 009: Cleanup of unnecessary view abstractions
+#### Migration Status & Refactoring Plan
+
+**Current:** 89 migrations applied (up to 089_fix_critical_security_issues.sql)
+
+**Upcoming Refactoring:** (See REFACTORING_PLAN.md for details)
+- **Phase 1:** Drop unused tables (project_applications, notifications, saved_professionals)
+- **Phase 2A:** Rename `professionals` → `team_members` + add VIEW for compatibility
+- **Phase 2B:** Remove VIEW after testing
+
+**Rationale:** Clarify company-centric architecture and reduce AI agent confusion
 
 #### Usage Patterns
 \`\`\`sql

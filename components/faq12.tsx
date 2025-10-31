@@ -71,7 +71,7 @@ const faqItems: FAQItem[] = [
     category: "Features",
     question: "Can I save projects I'm interested in?",
     answer:
-      "Yes, you can save projects to your favorites list and create custom collections. You can also share projects with others and get notifications about similar projects.",
+      "Yes, you can save projects to your favorites list and create custom collections. You can also share projects with others.",
   },
   // Security Questions
   {
