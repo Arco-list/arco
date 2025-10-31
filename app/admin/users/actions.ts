@@ -524,10 +524,9 @@ export async function checkUserDeletionAction(input: { userId: string }): Promis
       serviceClient.from("messages").select("id", { count: "exact", head: true }).or(`sender_id.eq.${parsed.data.userId},recipient_id.eq.${parsed.data.userId}`),
       Promise.all([
         serviceClient.from("saved_projects").select("user_id", { count: "exact", head: true }).eq("user_id", parsed.data.userId),
-        serviceClient.from("saved_professionals").select("user_id", { count: "exact", head: true }).eq("user_id", parsed.data.userId),
         serviceClient.from("saved_companies").select("user_id", { count: "exact", head: true }).eq("user_id", parsed.data.userId),
       ]).then(results => {
-        const total = (results[0].count ?? 0) + (results[1].count ?? 0) + (results[2].count ?? 0)
+        const total = (results[0].count ?? 0) + (results[1].count ?? 0)
         return { count: total }
       })
     ])
