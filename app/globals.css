@@ -405,13 +405,13 @@
   /* Text Button - Pure Tailwind */
   .btn-text {
     @apply bg-transparent text-foreground text-sm font-medium;
-    @apply py-0 px-0 rounded-full;
+    @apply py-1.5 px-3 rounded-full;
     /* text-sm = 14px (vs spec 13px) */
+    /* Always has padding to prevent layout shift on hover */
   }
 
   .btn-text:hover:not(:disabled) {
-    @apply bg-tertiary py-1.5 px-3;
-    /* py-1.5 = 6px, px-3 = 12px */
+    @apply bg-tertiary;
   }
 
   .btn-text:active:not(:disabled) {
@@ -421,11 +421,12 @@
   /* Text Button Listed Variant - for footer/menu */
   .btn-text-listed {
     @apply bg-transparent text-foreground text-sm font-normal;
-    @apply py-0 px-0 rounded-full;
+    @apply py-1.5 px-3 rounded-full;
+    /* Always has padding to prevent layout shift on hover */
   }
 
   .btn-text-listed:hover:not(:disabled) {
-    @apply text-text-secondary bg-tertiary py-1.5 px-3;
+    @apply text-text-secondary bg-tertiary;
   }
 
   .btn-text-listed:active:not(:disabled) {
