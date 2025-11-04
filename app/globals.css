@@ -316,7 +316,7 @@
 }
 
 @layer components {
-  /* Button Base - Pure Tailwind */
+  /* Button Base */
   .btn {
     @apply inline-flex items-center justify-center;
     @apply transition-colors duration-200;
@@ -331,10 +331,9 @@
     @apply ring-2 ring-offset-2 ring-ring;
   }
 
-  /* Primary Button - Pure Tailwind */
+  /* Primary Button */
   .btn-primary {
     @apply bg-primary text-primary-foreground text-base;
-    /* text-base = 16px, py-3 = 12px, px-6 = 24px */
   }
 
   .btn-primary:hover:not(:disabled) {
@@ -347,11 +346,10 @@
     opacity: 1;
   }
 
-  /* Secondary Button - Pure Tailwind */
+  /* Secondary Button */
   .btn-secondary {
     @apply bg-secondary text-secondary-foreground text-sm;
     @apply py-3 px-4;
-    /* text-sm = 14px, py-3 = 12px, px-4 = 16px (vs spec 18px) */
   }
 
   .btn-secondary:hover:not(:disabled) {
@@ -364,11 +362,10 @@
     opacity: 1;
   }
 
-  /* Tertiary Button - Pure Tailwind */
+  /* Tertiary Button */
   .btn-tertiary {
     @apply bg-tertiary text-tertiary-foreground text-sm;
     @apply py-3 px-4;
-    /* text-sm = 14px, py-3 = 12px, px-4 = 16px (vs spec 18px) */
   }
 
   .btn-tertiary:hover:not(:disabled) {
@@ -381,11 +378,10 @@
     opacity: 1;
   }
 
-  /* Quaternary Button - Pure Tailwind */
+  /* Quaternary Button */
   .btn-quaternary {
     @apply bg-transparent border border-border text-foreground text-sm font-normal;
     @apply py-1.5 px-3;
-    /* text-sm = 14px (vs spec 13px), py-1.5 px-3 = 6px/12px (exact match!) */
   }
 
   .btn-quaternary:hover:not(:disabled) {
@@ -402,12 +398,10 @@
     opacity: 1;
   }
 
-  /* Text Button - Pure Tailwind */
+  /* Text Button */
   .btn-text {
     @apply bg-transparent text-foreground text-sm font-medium;
     @apply py-1.5 px-3 rounded-full;
-    /* text-sm = 14px (vs spec 13px) */
-    /* Always has padding to prevent layout shift on hover */
   }
 
   .btn-text:hover:not(:disabled) {
@@ -418,11 +412,10 @@
     @apply text-primary;
   }
 
-  /* Text Button Listed Variant - for footer/menu */
+  /* Text Button Listed - for footer/menu */
   .btn-text-listed {
     @apply bg-transparent text-foreground text-sm font-normal;
     @apply py-1.5 px-3 rounded-full;
-    /* Always has padding to prevent layout shift on hover */
   }
 
   .btn-text-listed:hover:not(:disabled) {
@@ -431,142 +424,6 @@
 
   .btn-text-listed:active:not(:disabled) {
     @apply text-primary;
-  }
-
-  /* Primary Button - Client Exact Spec (for comparison) */
-  .btn-primary-exact {
-    @apply bg-primary text-primary-foreground font-medium rounded-full;
-    @apply inline-flex items-center justify-center transition-colors duration-200;
-    font-size: 15px;
-    padding: 12px 24px;
-    cursor: pointer;
-    border: none;
-  }
-
-  .btn-primary-exact:hover:not(:disabled) {
-    @apply bg-primary-hover;
-  }
-
-  .btn-primary-exact:disabled {
-    @apply bg-border text-primary-foreground;
-    cursor: not-allowed;
-    opacity: 1;
-  }
-
-  /* Secondary Button - Client Exact Spec (for comparison) */
-  .btn-secondary-exact {
-    @apply bg-secondary text-secondary-foreground font-medium rounded-full;
-    @apply inline-flex items-center justify-center transition-colors duration-200;
-    font-size: 13px;
-    padding: 12px 18px;
-    cursor: pointer;
-    border: none;
-  }
-
-  .btn-secondary-exact:hover:not(:disabled) {
-    @apply bg-secondary-hover;
-  }
-
-  .btn-secondary-exact:disabled {
-    @apply bg-border text-secondary-foreground;
-    cursor: not-allowed;
-    opacity: 1;
-  }
-
-  /* Tertiary Button - Client Exact Spec (for comparison) */
-  .btn-tertiary-exact {
-    @apply bg-tertiary text-tertiary-foreground rounded-full;
-    @apply inline-flex items-center justify-center transition-colors duration-200;
-    font-size: 13px;
-    font-weight: 500;
-    padding: 12px 18px;
-    cursor: pointer;
-    border: none;
-  }
-
-  .btn-tertiary-exact:hover:not(:disabled) {
-    @apply bg-tertiary-hover;
-  }
-
-  .btn-tertiary-exact:disabled {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--border);
-    cursor: not-allowed;
-    opacity: 1;
-  }
-
-  /* Quaternary Button - Client Exact Spec (for comparison) */
-  .btn-quaternary-exact {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--foreground);
-    font-size: 13px;
-    font-weight: 400;
-    padding: 6px 12px;
-    @apply rounded-full inline-flex items-center justify-center transition-colors duration-200;
-    cursor: pointer;
-  }
-
-  .btn-quaternary-exact:hover:not(:disabled) {
-    background: var(--tertiary);
-  }
-
-  .btn-quaternary-exact:active:not(:disabled) {
-    background: transparent;
-    border: 1px solid var(--foreground);
-    color: var(--foreground);
-  }
-
-  .btn-quaternary-exact:disabled {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--border);
-    cursor: not-allowed;
-    opacity: 1;
-  }
-
-  /* Text Button - Client Exact Spec (for comparison) */
-  .btn-text-exact {
-    background: transparent;
-    color: var(--foreground);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 0;
-    @apply rounded-full inline-flex items-center justify-center transition-all duration-200;
-    cursor: pointer;
-    border: none;
-  }
-
-  .btn-text-exact:hover:not(:disabled) {
-    background: var(--tertiary);
-    padding: 6px 12px;
-  }
-
-  .btn-text-exact:active:not(:disabled) {
-    color: var(--primary);
-  }
-
-  /* Text Button Listed - Client Exact Spec (for footer/menu) */
-  .btn-text-listed-exact {
-    background: transparent;
-    color: var(--foreground);
-    font-size: 13px;
-    font-weight: 400;
-    padding: 0;
-    @apply rounded-full inline-flex items-center justify-center transition-all duration-200;
-    cursor: pointer;
-    border: none;
-  }
-
-  .btn-text-listed-exact:hover:not(:disabled) {
-    color: var(--text-secondary);
-    background: var(--tertiary);
-    padding: 6px 12px;
-  }
-
-  .btn-text-listed-exact:active:not(:disabled) {
-    color: var(--primary);
   }
 }
 
