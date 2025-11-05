@@ -1289,11 +1289,11 @@ export default function NewProjectPage() {
             <>
               {/* Building icon */}
               <div className="mb-8">
-                <Building2 className="w-12 h-12 text-gray-900" strokeWidth={1.5} />
+                <Building2 className="w-12 h-12 text-foreground" strokeWidth={1.5} />
               </div>
 
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-6 leading-tight">What project have you realised?</h1>
+              <h1 className="text-3xl font-bold text-foreground mb-6 leading-tight">What project have you realised?</h1>
 
               <ProjectBasicsFields
                 formData={formData}
@@ -1315,7 +1315,7 @@ export default function NewProjectPage() {
           {currentStep === 2 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-12 leading-tight">
+              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">
                 Describe the location and materials used
               </h1>
 
@@ -1334,7 +1334,7 @@ export default function NewProjectPage() {
           {currentStep === 3 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-12 leading-tight">Add some details</h1>
+              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">Add some details</h1>
 
               <ProjectMetricsFields
                 formData={formData}
@@ -1352,7 +1352,7 @@ export default function NewProjectPage() {
           {currentStep === 4 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-12 leading-tight">
+              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">
                 Give your project a title and description
               </h1>
 
@@ -1373,7 +1373,7 @@ export default function NewProjectPage() {
           {currentStep === 5 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-12 leading-tight">Where is the project located?</h1>
+              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">Where is the project located?</h1>
 
               {/* Form */}
               <div className="space-y-8">
@@ -1381,7 +1381,7 @@ export default function NewProjectPage() {
                 <div className="relative">
                   {googleMapsApiKey ? (
                     <>
-                      <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
+                      <div className="relative w-full h-96 bg-surface rounded-lg overflow-hidden">
                         <div ref={mapContainerRef} className="h-full w-full" />
                         <div className="pointer-events-none absolute top-4 left-0 right-0 z-10 flex justify-center px-4">
                           <input
@@ -1390,11 +1390,11 @@ export default function NewProjectPage() {
                             value={addressInputValue}
                             onChange={(event) => handleInputChange("address", event.target.value)}
                             placeholder="Search for your address"
-                            className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-gray-300 rounded-md shadow-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+                            className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-border rounded-md shadow-sm text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
                           />
                         </div>
                         {!isMapsApiLoaded && !mapsError && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-gray-700">
+                          <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-foreground">
                             Loading map...
                           </div>
                         )}
@@ -1406,16 +1406,16 @@ export default function NewProjectPage() {
                       autocomplete and map selection.
                     </div>
                   )}
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-sm text-text-secondary mt-2">
                     Search for your project location or drag the pin on the map to fine-tune it
                   </p>
                   {mapsError && <p className="text-sm text-red-600 mt-2">{mapsError}</p>}
                   {validationErrors.address && (
                     <p className="text-sm text-red-600 mt-2">{validationErrors.address}</p>
                   )}
-                  <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-sm font-medium text-gray-900">Selected address</p>
-                    <p className="mt-1 text-sm text-gray-700">
+                  <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+                    <p className="text-sm font-medium text-foreground">Selected address</p>
+                    <p className="mt-1 text-sm text-foreground">
                       {formData.address
                         ? formData.address
                         : "Start typing in the search box or drag the map pin to capture the address."}
@@ -1424,12 +1424,12 @@ export default function NewProjectPage() {
                 </div>
 
                 {/* Share exact location toggle */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                   <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-1">
+                    <h3 className="text-base font-medium text-foreground mb-1">
                       Share the exact location of the project
                     </h3>
-                    <p className="text-sm text-gray-500">Allow others to see the precise location of your project</p>
+                    <p className="text-sm text-text-secondary">Allow others to see the precise location of your project</p>
                   </div>
                   <button
                     type="button"
@@ -1451,7 +1451,7 @@ export default function NewProjectPage() {
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border p-4 shadow-lg">
         <div className="container mx-auto max-w-4xl">
       <div className="flex gap-4 justify-center">
         <Button
@@ -1485,7 +1485,7 @@ function NewProjectHeader({
   onSaveAndExit: () => void
 }) {
   return (
-    <header className="bg-white border-b border-gray-200">
+    <header className="bg-white border-b border-border">
       <div className="container mx-auto px-4 md:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo on the left */}
@@ -1504,7 +1504,7 @@ function NewProjectHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-black hover:text-gray-600 transition-colors"
+              className="text-sm font-medium text-black hover:text-text-secondary transition-colors"
             >
               Questions?
             </a>

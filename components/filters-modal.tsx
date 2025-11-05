@@ -186,16 +186,16 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold">Filters</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-surface rounded">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {isTaxonomyLoading ? (
-            <div className="text-sm text-gray-500">Loading filter options…</div>
+            <div className="text-sm text-text-secondary">Loading filter options…</div>
           ) : taxonomyError && typeSections.length === 0 ? (
             <div className="text-sm text-red-600">We couldn’t load filter options. Please try again later.</div>
           ) : (
@@ -214,7 +214,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                             <input
                               type="radio"
                               name="modal-type-filter"
-                              className="h-4 w-4 rounded-full border-gray-300 text-black focus:ring-black"
+                              className="h-4 w-4 rounded-full border-border text-black focus:ring-black"
                               checked={selectedTypes.includes(item.id)}
                               onChange={() => handleTypeSelection(item.id)}
                               onClick={(event) => handleTypeRadioClick(event, item.id)}
@@ -236,7 +236,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                                   <input
                                     type="radio"
                                     name="modal-type-filter"
-                                    className="h-4 w-4 rounded-full border-gray-300 text-black focus:ring-black"
+                                    className="h-4 w-4 rounded-full border-border text-black focus:ring-black"
                                     checked={selectedTypes.includes(parentItem.id)}
                                     onChange={() => handleTypeSelection(parentItem.id)}
                                     onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
@@ -249,7 +249,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                               )}
                               {showToggle && (
                                 <button
-                                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                                  className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                                   onClick={() => toggleProjectTypeExpansion(section.id)}
                                 >
                                   {isExpanded ? "Show less" : "View all"}
@@ -283,7 +283,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={value} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedStyles.includes(value)}
                           onChange={() => toggleSelection(value, selectedStyles, setSelectedStyles)}
                         />
@@ -293,7 +293,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                   })}
                 </div>
                 <button
-                  className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
+                  className="text-sm text-text-secondary hover:text-foreground mt-2 underline"
                   onClick={() => setShowAllStyles(!showAllStyles)}
                 >
                   {showAllStyles ? "Show less" : "Show all"}
@@ -304,7 +304,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                 <h3 className="text-base mb-3">City</h3>
                 <select
                   id="modal-location"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                   value={selectedLocation || ""}
                   onChange={(e) => setSelectedLocation(e.target.value || "")}
                 >
@@ -326,7 +326,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`location-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedLocationFeatures.includes(value)}
                           onChange={() => toggleSelection(value, selectedLocationFeatures, setSelectedLocationFeatures)}
                         />
@@ -336,7 +336,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                   })}
                 </div>
                 <button
-                  className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
+                  className="text-sm text-text-secondary hover:text-foreground mt-2 underline"
                   onClick={() => setShowAllLocationFeatures(!showAllLocationFeatures)}
                 >
                   {showAllLocationFeatures ? "Show less" : "Show all"}
@@ -352,7 +352,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`building-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedBuildingFeatures.includes(value)}
                           onChange={() => toggleSelection(value, selectedBuildingFeatures, setSelectedBuildingFeatures)}
                         />
@@ -362,7 +362,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                   })}
                 </div>
                 <button
-                  className="text-sm text-gray-600 hover:text-gray-800 mt-2 underline"
+                  className="text-sm text-text-secondary hover:text-foreground mt-2 underline"
                   onClick={() => setShowAllBuildingFeatures(!showAllBuildingFeatures)}
                 >
                   {showAllBuildingFeatures ? "Show less" : "Show all"}
@@ -373,7 +373,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-base">Material feature</h3>
                   <button
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                    className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                     onClick={() => setShowAllMaterialFeatures(!showAllMaterialFeatures)}
                   >
                     {showAllMaterialFeatures ? "Show less" : "View all"}
@@ -387,7 +387,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`material-${index}`} className="flex items-center gap-3 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedMaterialFeatures.includes(value)}
                           onChange={() => toggleSelection(value, selectedMaterialFeatures, setSelectedMaterialFeatures)}
                         />
@@ -407,7 +407,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`building-type-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedBuildingTypes.includes(value)}
                           onChange={() => toggleSelection(value, selectedBuildingTypes, setSelectedBuildingTypes)}
                         />
@@ -427,7 +427,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`size-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedSizes.includes(value)}
                           onChange={() => toggleSelection(value, selectedSizes, setSelectedSizes)}
                         />
@@ -447,7 +447,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                       <label key={`budget-${index}`} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                          className="h-4 w-4 rounded border-border text-black focus:ring-black"
                           checked={selectedBudgets.includes(value as string)}
                           onChange={() => toggleSelection(value as string, selectedBudgets, setSelectedBudgets)}
                         />
@@ -469,7 +469,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                     onChange={(e) => setProjectYearRange([projectYearRange[0], Number.parseInt(e.target.value, 10)])}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                   />
-                  <div className="flex justify-between text-sm text-gray-600 mt-1">
+                  <div className="flex justify-between text-sm text-text-secondary mt-1">
                     <span>{DEFAULT_YEAR_MIN}</span>
                     <span>{projectYearRange[1] ?? DEFAULT_YEAR_MAX}</span>
                   </div>
@@ -487,7 +487,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                     onChange={(e) => setBuildingYearRange([buildingYearRange[0], Number.parseInt(e.target.value, 10)])}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                   />
-                  <div className="flex justify-between text-sm text-gray-600 mt-1">
+                  <div className="flex justify-between text-sm text-text-secondary mt-1">
                     <span>{DEFAULT_YEAR_MIN}</span>
                     <span>{buildingYearRange[1] ?? DEFAULT_YEAR_MAX}</span>
                   </div>
@@ -497,8 +497,8 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
           )}
         </div>
 
-        <div className="border-t border-gray-200 p-4 flex gap-3">
-          <Button variant="outline" onClick={clearAllFilters} className="flex-1 bg-transparent">
+        <div className="border-t border-border p-4 flex gap-3">
+          <Button variant="quaternary" size="quaternary" onClick={clearAllFilters} className="flex-1 bg-transparent">
             Clear filters
           </Button>
           <Button onClick={applyFilters} className="flex-1 bg-black text-white hover:bg-gray-800">

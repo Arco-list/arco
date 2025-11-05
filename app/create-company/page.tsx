@@ -87,8 +87,8 @@ export default function CreateCompanyPage() {
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Create a company</h1>
-          <p className="text-sm text-gray-500">Description</p>
+          <h1 className="text-2xl font-bold text-foreground mb-1">Create a company</h1>
+          <p className="text-sm text-text-secondary">Description</p>
         </div>
 
         {/* Form */}
@@ -104,12 +104,12 @@ export default function CreateCompanyPage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <Upload className="w-8 h-8 text-gray-400" />
+                  <Upload className="w-8 h-8 text-muted-foreground" />
                 )}
               </div>
             </div>
             <label htmlFor="logo-upload">
-              <Button type="button" variant="outline" size="sm" className="cursor-pointer bg-transparent" asChild>
+              <Button type="button" variant="quaternary" size="quaternary" className="cursor-pointer bg-transparent" asChild>
                 <span>Change logo</span>
               </Button>
               <input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
@@ -118,7 +118,7 @@ export default function CreateCompanyPage() {
 
           {/* Company Name */}
           <div className="space-y-2">
-            <Label htmlFor="company-name" className="text-sm font-medium text-gray-900">
+            <Label htmlFor="company-name" className="text-sm font-medium text-foreground">
               Company name
             </Label>
             <Input
@@ -128,12 +128,12 @@ export default function CreateCompanyPage() {
               onChange={(e) => setCompanyName(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-gray-500">Helper</p>
+            <p className="text-xs text-text-secondary">Helper</p>
           </div>
 
           {/* Domain */}
           <div className="space-y-2">
-            <Label htmlFor="domain" className="text-sm font-medium text-gray-900">
+            <Label htmlFor="domain" className="text-sm font-medium text-foreground">
               Domain
             </Label>
             <Input
@@ -143,12 +143,12 @@ export default function CreateCompanyPage() {
               onChange={(e) => setDomain(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-gray-500">Your domain need to be the same as your account email address</p>
+            <p className="text-xs text-text-secondary">Your domain need to be the same as your account email address</p>
           </div>
 
           {/* Email */}
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-gray-900">
+            <Label htmlFor="email" className="text-sm font-medium text-foreground">
               Email
             </Label>
             <Input
@@ -159,12 +159,12 @@ export default function CreateCompanyPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-gray-500">This email will be listed on your company page</p>
+            <p className="text-xs text-text-secondary">This email will be listed on your company page</p>
           </div>
 
           {/* Phone */}
           <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-medium text-gray-900">
+            <Label htmlFor="phone" className="text-sm font-medium text-foreground">
               Phone
             </Label>
             <Input
@@ -175,12 +175,12 @@ export default function CreateCompanyPage() {
               onChange={(e) => setPhone(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-gray-500">This phone number will be visible on your company page</p>
+            <p className="text-xs text-text-secondary">This phone number will be visible on your company page</p>
           </div>
 
           {/* Primary Service */}
           <div className="space-y-2">
-            <Label htmlFor="primary-service" className="text-sm font-medium text-gray-900">
+            <Label htmlFor="primary-service" className="text-sm font-medium text-foreground">
               Primary service
             </Label>
             <Select value={primaryService} onValueChange={setPrimaryService}>
@@ -200,7 +200,7 @@ export default function CreateCompanyPage() {
                 <SelectItem value="outdoor-garden">Garden</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500">Additional services can be added later</p>
+            <p className="text-xs text-text-secondary">Additional services can be added later</p>
           </div>
 
           {formError ? <p className="text-sm text-red-600">{formError}</p> : null}

@@ -45,14 +45,14 @@ export function ProjectHighlights() {
         <div className="flex gap-2">
           <button
             onClick={scrollLeft}
-            className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
             aria-label="Previous highlights"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={scrollRight}
-            className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
             aria-label="Next highlights"
           >
             <ChevronRight className="w-4 h-4" />
@@ -78,8 +78,8 @@ export function ProjectHighlights() {
               alt={highlight.title}
               className="aspect-square w-full object-cover rounded-lg transition-transform duration-300 hover:scale-105"
             />
-            <p className="text-sm font-medium text-gray-900">{highlight.title}</p>
-            {highlight.description && <p className="text-xs text-gray-600">{highlight.description}</p>}
+            <p className="text-sm font-medium text-foreground">{highlight.title}</p>
+            {highlight.description && <p className="text-xs text-text-secondary">{highlight.description}</p>}
           </button>
         ))}
       </div>

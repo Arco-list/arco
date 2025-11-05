@@ -72,11 +72,11 @@ export function HeaderSearch({
 
   const inputClasses = transparent
     ? "border-white/20 bg-white/10 text-white placeholder-white/70 backdrop-blur-sm focus:ring-red-200/60"
-    : "border-gray-300 bg-white text-black placeholder-gray-500 focus:ring-red-500";
+    : "border-border bg-white text-black placeholder-gray-500 focus:ring-red-500";
 
   const dropdownClasses = transparent
     ? "border-white/20 bg-white/90 text-black backdrop-blur"
-    : "border-gray-200 bg-white text-gray-900";
+    : "border-border bg-white text-foreground";
 
   const containerClasses = centered
     ? "absolute left-1/2 w-48 -translate-x-1/2 transform md:w-80"

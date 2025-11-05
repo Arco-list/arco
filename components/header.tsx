@@ -111,13 +111,13 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
   const headerClasses = transparent
     ? `fixed top-0 left-0 right-0 z-50 px-4 md:px-8 transition-all duration-200 ${
         isScrolled 
-          ? "bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm py-3 md:py-4" 
+          ? "bg-white/95 backdrop-blur-md border-b border-border shadow-sm py-3 md:py-4" 
           : "py-4"
       }`
-    : "fixed top-0 left-0 right-0 z-50 border-b border-gray-200 px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4";
+    : "fixed top-0 left-0 right-0 z-50 border-b border-border px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4";
 
   const textColor = transparent && !isScrolled ? "text-white" : "text-black";
-  const hoverColor = transparent && !isScrolled ? "hover:text-gray-300" : "hover:text-gray-600";
+  const hoverColor = transparent && !isScrolled ? "hover:text-gray-300" : "hover:text-text-secondary";
 
   const redirectQuery = pathname ? `?redirectTo=${encodeURIComponent(pathname)}` : "";
 
@@ -146,7 +146,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     ? "text-red-500"
                     : transparent && !isScrolled
                       ? `${textColor} hover:bg-white/10`
-                      : `${textColor} hover:bg-gray-100`
+                      : `${textColor} hover:bg-surface`
                 }`}
               >
                 Projects
@@ -158,7 +158,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     ? "text-red-500"
                     : transparent && !isScrolled
                       ? `${textColor} hover:bg-white/10`
-                      : `${textColor} hover:bg-gray-100`
+                      : `${textColor} hover:bg-surface`
                 }`}
               >
                 Professionals
@@ -182,7 +182,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   className={`hidden md:block text-sm font-medium px-3 py-1.5 rounded-full ${
                     transparent && !isScrolled
                       ? `${textColor} hover:bg-white/10`
-                      : `${textColor} hover:bg-gray-100`
+                      : `${textColor} hover:bg-surface`
                   }`}
                 >
                   {hasProfessionalRole ? "Switch to company" : "List with us"}
@@ -191,7 +191,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   className={`flex items-center gap-2 h-9 rounded-full border px-3 ${
                     transparent && !isScrolled
                       ? "border-white/20 text-white hover:bg-white/10"
-                      : "border-gray-300 hover:bg-gray-100"
+                      : "border-border hover:bg-surface"
                   }`}
                   onClick={toggleMenu}
                 >
@@ -204,7 +204,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 className={`flex items-center gap-2 h-9 rounded-full border px-3 ${
                   transparent && !isScrolled
                     ? "border-white/20 text-white hover:bg-white/10"
-                    : "border-gray-300 hover:bg-gray-100"
+                    : "border-border hover:bg-surface"
                 }`}
                 onClick={toggleMenu}
               >
@@ -214,20 +214,20 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
             ) : null}
 
             {isMenuOpen && (
-              <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-border bg-white shadow-lg">
                 <div className="py-1">
                   {/* Section 1: Projects / Professionals */}
                   <div className="px-4 py-3">
                     <Link
                       href="/projects"
-                      className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                      className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Projects
                     </Link>
                     <Link
                       href="/professionals"
-                      className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                      className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Professionals
@@ -243,21 +243,21 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                       <>
                         <Link
                           href="/homeowner?tab=saved-projects"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved projects
                         </Link>
                         <Link
                           href="/homeowner?tab=saved-professionals"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved professionals
                         </Link>
                         <Link
                           href="/homeowner?tab=account"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Account
@@ -265,7 +265,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {hasAdminRole && (
                           <Link
                             href="/admin"
-                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Admin
@@ -277,7 +277,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {shouldShowLoginLink && (
                           <Link
                             href={`/login${redirectQuery}`}
-                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Login
@@ -286,7 +286,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {shouldShowSignupLink && (
                           <Link
                             href={`/signup${redirectQuery}`}
-                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Sign up
@@ -304,7 +304,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     {hasProfessionalRole ? (
                       <Link
                         href="/dashboard/listings"
-                        className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                        className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         Switch to company
@@ -312,7 +312,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     ) : (
                       <Link
                         href="/list-with-us"
-                        className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                        className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         List with us
@@ -320,7 +320,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     )}
                     <Link
                       href="/help-center"
-                      className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                      className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Help center

@@ -29,7 +29,7 @@ export class FilterErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         this.props.fallback ?? (
-          <div className="py-16 text-center text-sm text-gray-500">
+          <div className="py-16 text-center text-sm text-text-secondary">
             We couldn’t load the filters. Please refresh the page.
           </div>
         )

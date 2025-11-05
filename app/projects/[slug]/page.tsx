@@ -1,11 +1,14 @@
 import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import type { Metadata } from "next"
+import { ChevronLeft } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { Header } from "@/components/header"
 import { ProjectGallery } from "@/components/project-gallery"
 import { ProjectInfo } from "@/components/project-info"
 import { ProjectActionButtons } from "@/components/project-action-buttons"
+import { BreadcrumbWithTooltip } from "@/components/breadcrumb-with-tooltip"
 import { ProfessionalsSidebar } from "@/components/professionals-sidebar"
 import { ProjectHighlights } from "@/components/project-highlights"
 import { ProjectFeatures } from "@/components/project-features"
@@ -1136,21 +1139,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
           <main className="px-4 py-8 md:px-8 pt-20 md:pt-20">
             <div className="max-w-7xl mx-auto">
-            {/* Breadcrumb and Action Buttons Row */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3 md:gap-4">
-              <nav className="text-sm text-gray-600" aria-label="Breadcrumb">
-                <ol className="flex items-center gap-2">
-                  <li>
-                    <Link href="/projects" className="hover:text-gray-900">
-                      Projects
-                    </Link>
-                  </li>
-                  <li className="text-gray-400">&gt;</li>
-                  <li className="text-gray-900 font-medium">{projectTitle}</li>
-                </ol>
-              </nav>
+            {/* Back Button and Action Buttons */}
+            <div className="flex flex-row items-center justify-between mb-4 gap-3 md:gap-4 mt-8">
+              <Button variant="tertiary" size="tertiary" asChild className="w-20 min-w-[5rem] max-w-[5rem]">
+                <Link href="/projects">
+                  <ChevronLeft className="w-4 h-4" />
+                  Back
+                </Link>
+              </Button>
 
-              <div className="self-end md:self-auto">
+              <div>
                 <ProjectActionButtons projectId={project.id} />
               </div>
             </div>
@@ -1159,7 +1157,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
               <ProjectGallery />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 py-8">
+            {/* Breadcrumb Row */}
+            <div className="mb-2">
+              <BreadcrumbWithTooltip items={breadcrumbs} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 py-4">
               <div className="lg:col-span-2 space-y-8">
                 <ProjectInfo />
                 <ProjectHighlights />

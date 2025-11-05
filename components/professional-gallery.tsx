@@ -1,12 +1,14 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronLeft, ChevronRight, ArrowLeft, Share, Heart } from "lucide-react"
+import { ChevronLeft, ChevronRight, ArrowLeft, Share, Bookmark } from "lucide-react"
 
 import type { ProfessionalGalleryImage } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { GalleryGrid } from "@/components/gallery-grid"
+import { ShareModal } from "./share-modal"
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 
 const PLACEHOLDER_IMAGE = {
   src: "/placeholder.svg",
@@ -16,11 +18,20 @@ const PLACEHOLDER_IMAGE = {
 type ProfessionalGalleryProps = {
   professionalName: string
   images: ProfessionalGalleryImage[]
+  companyId?: string
+  coverImageUrl?: string | null
+  shareUrl?: string
 }
 
-export function ProfessionalGallery({ professionalName, images }: ProfessionalGalleryProps) {
+export function ProfessionalGallery({ professionalName, images, companyId, coverImageUrl, shareUrl }: ProfessionalGalleryProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+
+  const { savedProfessionalIds, mutatingProfessionalIds, saveProfessional, removeProfessional } = useSavedProfessionals()
+
+  const isSaved = companyId ? savedProfessionalIds.has(companyId) : false
+  const isMutating = companyId ? mutatingProfessionalIds.has(companyId) : false
 
   const galleryImages = useMemo(() => {
     if (images.length === 0) {
@@ -75,30 +86,63 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
           className="!max-w-none !w-screen !h-screen p-0 bg-black border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
         >
           <div className="relative flex h-full w-full flex-col">
-            <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/90 to-transparent p-4 md:p-6">
+            <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between p-3 md:p-4 bg-gradient-to-b from-black/90 to-transparent">
               <Button
-                variant="ghost"
-                size="sm"
+                variant="tertiary"
+                size="tertiary"
                 className="text-white hover:bg-white/10 hover:text-white"
                 onClick={() => setIsModalOpen(false)}
                 aria-label="Close gallery"
               >
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="w-4 h-4" />
                 Back
               </Button>
 
-              <div className="text-white font-medium">
+              <div className="absolute left-1/2 -translate-x-1/2 text-white font-medium">
                 {totalImages > 0 ? `${currentPhotoIndex + 1}/${totalImages}` : ""}
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" aria-label="Share professional">
-                  <Share className="mr-2 h-4 w-4" />
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/10 hover:text-white border-none bg-transparent"
+                  onClick={() => setIsShareModalOpen(true)}
+                >
+                  <Share className="w-4 h-4 mr-2" />
                   Share
                 </Button>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" aria-label="Save professional">
-                  <Heart className="mr-2 h-4 w-4" />
-                  Save
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={isSaved ? "text-white bg-white/20 hover:bg-white/30 border-none" : "text-white hover:bg-white/10 border-none bg-transparent"}
+                  onClick={() => {
+                    if (!companyId) return
+                    if (isSaved) {
+                      void removeProfessional(companyId)
+                    } else {
+                      void saveProfessional({
+                        id: companyId,
+                        companyId: companyId,
+                        name: professionalName,
+                        slug: shareUrl?.split('/').pop() || '',
+                        profession: '',
+                        location: '',
+                        rating: 0,
+                        reviewCount: 0,
+                        image: coverImageUrl || '',
+                        specialties: [],
+                        isVerified: false,
+                        domain: null,
+                        professionalId: ''
+                      })
+                    }
+                  }}
+                  disabled={!companyId || isMutating}
+                  aria-pressed={isSaved}
+                >
+                  <Bookmark className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
+                  {isSaved ? "Saved" : "Save"}
                 </Button>
               </div>
             </div>
@@ -137,6 +181,16 @@ export function ProfessionalGallery({ professionalName, images }: ProfessionalGa
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        title={professionalName}
+        subtitle=""
+        imageUrl={coverImageUrl ?? "/placeholder.svg?height=64&width=64"}
+        shareUrl={typeof window !== "undefined" ? window.location.href : shareUrl ?? ""}
+      />
     </div>
   )
 }

@@ -177,20 +177,20 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
               <X className="h-4 w-4" />
             </Button>
           </DialogTitle>
-          <DialogDescription className="text-sm text-gray-600">
+          <DialogDescription className="text-sm text-text-secondary">
             Quickly share this project with clients or collaborators.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-gray-100 bg-surface/60 p-3 mb-6">
           <img
             src={imageUrl || "/placeholder.svg"}
             alt={title}
             className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
           />
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-sm font-medium text-gray-900 line-clamp-2">{title}</span>
-            {displaySubtitle ? <span className="text-xs text-gray-600 line-clamp-2">{displaySubtitle}</span> : null}
+            <span className="text-sm font-medium text-foreground line-clamp-2">{title}</span>
+            {displaySubtitle ? <span className="text-xs text-text-secondary line-clamp-2">{displaySubtitle}</span> : null}
           </div>
         </div>
 
@@ -204,7 +204,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
           {shareOptions.map(({ key, label, icon: Icon, onClick, status }) => (
             <Button
               key={key}
-              variant="outline"
+              variant="quaternary" size="quaternary"
               className="flex items-center justify-start gap-3 h-12 px-4 bg-transparent"
               onClick={onClick}
             >

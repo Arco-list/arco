@@ -412,7 +412,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                         <div className="flex items-center gap-2 font-medium">
                           {company.name}
                           {company.isVerified ? (
-                            <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
+                            <Badge variant="quaternary" size="quaternary" className="border-green-200 bg-green-50 text-green-700">
                               Verified
                             </Badge>
                           ) : null}
@@ -435,7 +435,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                       <Badge variant={status.badgeTone}>{status.label}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="uppercase tracking-wide">
+                      <Badge variant="quaternary" size="quaternary" className="uppercase tracking-wide">
                         {planLabels[company.planTier]}
                       </Badge>
                     </TableCell>
@@ -533,8 +533,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           </div>
           <div className="flex items-center gap-1">
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage(0)}
               disabled={currentPage === 0}
@@ -542,8 +541,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
               First
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage((prev) => Math.max(0, prev - 1))}
               disabled={currentPage === 0}
@@ -554,8 +552,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
               Page {currentPage + 1} of {pageCount}
             </span>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage((prev) => Math.min(pageCount - 1, prev + 1))}
               disabled={currentPage + 1 >= pageCount}
@@ -563,8 +560,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
               Next
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage(pageCount - 1)}
               disabled={currentPage + 1 >= pageCount}
@@ -823,7 +819,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingCompany(null)} disabled={isPending}>
+            <Button variant="quaternary" size="quaternary" onClick={() => setEditingCompany(null)} disabled={isPending}>
               Cancel
             </Button>
             <Button onClick={handleEditSubmit} disabled={isPending || !editForm?.name.trim()}>

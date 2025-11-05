@@ -96,15 +96,15 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
   }
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-5">
+    <div className="flex h-full flex-col rounded-2xl border border-border bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-secondary">
             <IconComponent aria-hidden className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">{service.name}</h2>
-            {service.parentName && <p className="text-xs text-gray-500">{service.parentName}</p>}
+            <h2 className="text-base font-semibold text-foreground">{service.name}</h2>
+            {service.parentName && <p className="text-xs text-text-secondary">{service.parentName}</p>}
           </div>
         </div>
         <DropdownMenu>
@@ -171,7 +171,7 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                       ))
                     ) : (
                       <DropdownMenuItem disabled>
-                        <div className="text-sm text-gray-500">No professionals available</div>
+                        <div className="text-sm text-text-secondary">No professionals available</div>
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
@@ -214,8 +214,8 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                 const secondaryLine = companyName ? invite.email : null
                 return (
                   <div key={invite.id} className="rounded-xl p-3">
-                    <p className="text-sm font-medium text-gray-900">{primaryLine}</p>
-                    {secondaryLine && <p className="text-xs text-gray-500">{secondaryLine}</p>}
+                    <p className="text-sm font-medium text-foreground">{primaryLine}</p>
+                    {secondaryLine && <p className="text-xs text-text-secondary">{secondaryLine}</p>}
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <span
                         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}

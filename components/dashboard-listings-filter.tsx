@@ -71,7 +71,7 @@ function FilterContent({
   const checkboxSpacing = isDesktop ? "space-y-2" : "space-y-3"
   const checkboxGap = isDesktop ? "gap-2.5" : "gap-3"
   const yearLayout = isDesktop ? "grid grid-cols-2 gap-3" : "space-y-4"
-  const yearLabelClass = isDesktop ? "text-xs text-gray-600 mb-1 block" : "text-sm text-gray-600 mb-1 block"
+  const yearLabelClass = isDesktop ? "text-xs text-text-secondary mb-1 block" : "text-sm text-text-secondary mb-1 block"
 
   return (
     <div className={sectionSpacing}>
@@ -79,11 +79,11 @@ function FilterContent({
       <div>
         <h3 className={headingClass}>Search</h3>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search by title or type..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -138,7 +138,7 @@ function FilterContent({
               max={yearTo}
               value={yearFrom}
               onChange={(e) => setYearFrom(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
           <div>
@@ -149,7 +149,7 @@ function FilterContent({
               max={CURRENT_YEAR}
               value={yearTo}
               onChange={(e) => setYearTo(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
         </div>
@@ -244,11 +244,11 @@ export function DashboardListingsFilter({
             className="relative w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col max-h-[85vh]"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 id="filter-dialog-title" className="text-lg font-semibold">
                 Filters
               </h2>
-              <button onClick={onClose} aria-label="Close filter dialog" className="p-1 hover:bg-gray-100 rounded">
+              <button onClick={onClose} aria-label="Close filter dialog" className="p-1 hover:bg-surface rounded">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -259,9 +259,9 @@ export function DashboardListingsFilter({
             </div>
 
             {/* Footer */}
-            <div className="border-t border-gray-200 px-6 py-4 flex gap-3">
+            <div className="border-t border-border px-6 py-4 flex gap-3">
               <Button
-                variant="outline"
+                variant="quaternary" size="quaternary"
                 onClick={handleClearAll}
                 className="flex-1 bg-transparent"
                 disabled={!hasActiveFilters}
@@ -285,11 +285,11 @@ export function DashboardListingsFilter({
           className="fixed inset-0 z-50 bg-white flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between p-4 border-b border-border">
             <h2 id="filter-drawer-title" className="text-lg font-semibold">
               Filters
             </h2>
-            <button onClick={onClose} aria-label="Close filter drawer" className="p-1 hover:bg-gray-100 rounded">
+            <button onClick={onClose} aria-label="Close filter drawer" className="p-1 hover:bg-surface rounded">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -300,9 +300,9 @@ export function DashboardListingsFilter({
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 p-4 flex gap-3">
+          <div className="border-t border-border p-4 flex gap-3">
             <Button
-              variant="outline"
+              variant="quaternary" size="quaternary"
               onClick={handleClearAll}
               className="flex-1 bg-transparent"
               disabled={!hasActiveFilters}

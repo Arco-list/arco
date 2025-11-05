@@ -18,7 +18,7 @@ export default function ServiceUnavailableError() {
             Try Again
           </Button>
           
-          <Button variant="outline" asChild className="w-full">
+          <Button variant="quaternary" size="quaternary" asChild className="w-full">
             <Link href="/">
               Go Home
             </Link>

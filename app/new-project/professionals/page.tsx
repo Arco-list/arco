@@ -111,7 +111,7 @@ const INVITE_STATUS_META: Partial<
   invited: { label: "Invite pending", className: "bg-amber-100 text-amber-800" },
   listed: { label: "Listed", className: "bg-green-100 text-green-800" },
   live_on_page: { label: "Active", className: "bg-green-100 text-green-800" },
-  unlisted: { label: "Unlisted", className: "bg-gray-200 text-gray-700" },
+  unlisted: { label: "Unlisted", className: "bg-gray-200 text-foreground" },
   removed: { label: "Removed", className: "bg-red-100 text-red-800" },
   rejected: { label: "Opted out", className: "bg-red-100 text-red-800" },
 } as const
@@ -123,7 +123,7 @@ const formatInviteStatusLabel = (status: ProjectProfessionalRow["status"]) =>
     .join(" ")
 
 const getInviteStatusMeta = (status: ProjectProfessionalRow["status"]) =>
-  INVITE_STATUS_META[status] ?? { label: formatInviteStatusLabel(status), className: "bg-gray-100 text-gray-800" }
+  INVITE_STATUS_META[status] ?? { label: formatInviteStatusLabel(status), className: "bg-surface text-foreground" }
 
 export default function ProfessionalsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
@@ -1030,7 +1030,7 @@ function ProfessionalsHeader({
   isDisabled: boolean
 }) {
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="border-b border-border bg-white">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex-shrink-0">
@@ -1045,14 +1045,14 @@ function ProfessionalsHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+              className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
             >
               Questions?
             </a>
             <button
               onClick={onSaveAndExit}
               disabled={isDisabled}
-              className="rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-[13px] font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
+              className="rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-sm font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               {isDisabled ? "Saving..." : "Save and Exit"}
             </button>
@@ -1068,14 +1068,14 @@ function IntroStep({ isLoading }: { isLoading: boolean }) {
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
       {isLoading ? (
-        <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
+        <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
       ) : (
         <div className="max-w-2xl text-left">
           <div className="mb-8">
-            <MailPlus className="h-12 w-12 text-gray-900" />
+            <MailPlus className="h-12 w-12 text-foreground" />
           </div>
-          <h1 className="mb-4 text-3xl font-bold text-gray-900">Share who helped you realise it</h1>
-          <p className="text-lg text-gray-600">Add the professionals that contributed to your project and we&apos;ll invite them once you publish.</p>
+          <h1 className="mb-4 text-3xl font-bold text-foreground">Share who helped you realise it</h1>
+          <p className="text-lg text-text-secondary">Add the professionals that contributed to your project and we&apos;ll invite them once you publish.</p>
         </div>
       )}
     </div>
@@ -1095,7 +1095,7 @@ function ServiceSelectionStep({
 }) {
   if (services.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+      <div className="rounded-lg border border-border bg-surface p-6 text-sm text-text-secondary">
         No professional services available yet. Try again later.
       </div>
     )
@@ -1104,8 +1104,8 @@ function ServiceSelectionStep({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="mb-4 text-3xl font-bold text-gray-900">Tell us what professionals helped you realise it</h1>
-        <p className="text-lg text-gray-600">You can add more services after you publish your project.</p>
+        <h1 className="mb-4 text-3xl font-bold text-foreground">Tell us what professionals helped you realise it</h1>
+        <p className="text-lg text-text-secondary">You can add more services after you publish your project.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1120,14 +1120,14 @@ function ServiceSelectionStep({
               disabled={isBusy}
               aria-pressed={isSelected}
               className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
-                isSelected ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:border-gray-300"
+                isSelected ? "border-gray-900 bg-surface" : "border-border bg-white hover:border-border"
               } disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <IconComponent
                 aria-hidden
-                className={`mb-3 h-6 w-6 ${isSelected ? "text-gray-900" : "text-gray-700"}`}
+                className={`mb-3 h-6 w-6 ${isSelected ? "text-foreground" : "text-foreground"}`}
               />
-              <span className="mt-2 text-sm font-medium text-gray-900">{service.name}</span>
+              <span className="mt-2 text-sm font-medium text-foreground">{service.name}</span>
             </button>
           )
         })}
@@ -1171,15 +1171,15 @@ function InviteStep({
 
   if (selectedServices.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-6">
+      <div className="rounded-lg border border-border bg-surface p-6">
         <div className="flex items-start gap-4">
           <AlertTriangle className="h-6 w-6 text-amber-500" />
           <div>
-            <p className="font-medium text-gray-900">No professional services selected yet</p>
-            <p className="mt-1 text-sm text-gray-600">Select one or more services first to invite your collaborators.</p>
+            <p className="font-medium text-foreground">No professional services selected yet</p>
+            <p className="mt-1 text-sm text-text-secondary">Select one or more services first to invite your collaborators.</p>
             <button
               onClick={goToServiceSelection}
-              className="mt-4 inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface"
             >
               <Plus className="h-4 w-4" /> Add professional services
             </button>
@@ -1193,8 +1193,8 @@ function InviteStep({
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="mb-2 text-3xl font-bold text-gray-900">Invite professionals</h1>
-          <p className="text-lg text-gray-600">We&apos;ll email them once your project is published.</p>
+          <h1 className="mb-2 text-3xl font-bold text-foreground">Invite professionals</h1>
+          <p className="text-lg text-text-secondary">We&apos;ll email them once your project is published.</p>
         </div>
         <button
           onClick={goToServiceSelection}
@@ -1233,16 +1233,16 @@ function InviteStep({
           return (
             <div
               key={service.id}
-              className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-5"
+              className="flex h-full flex-col rounded-2xl border border-border bg-white p-5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-secondary">
                     <IconComponent aria-hidden className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-gray-900">{service.name}</h2>
-                    {service.parentName && <p className="text-xs text-gray-500">{service.parentName}</p>}
+                    <h2 className="text-base font-semibold text-foreground">{service.name}</h2>
+                    {service.parentName && <p className="text-xs text-text-secondary">{service.parentName}</p>}
                   </div>
                 </div>
                 <DropdownMenu>
@@ -1316,7 +1316,7 @@ function InviteStep({
                               ))
                             ) : (
                               <DropdownMenuItem disabled>
-                                <div className="text-sm text-gray-500">No professionals available</div>
+                                <div className="text-sm text-text-secondary">No professionals available</div>
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -1355,7 +1355,7 @@ function InviteStep({
 
                           return (
                             <div key={invite.id} className="rounded-xl p-3">
-                              <p className="text-sm font-medium text-gray-900">{selectedProf.company.name}</p>
+                              <p className="text-sm font-medium text-foreground">{selectedProf.company.name}</p>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}>
                                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -1380,7 +1380,7 @@ function InviteStep({
                           const statusMeta = getInviteStatusMeta(invite.status)
                           return (
                             <div key={invite.id} className="rounded-xl p-3">
-                              <p className="text-sm font-medium text-gray-900">{invite.email}</p>
+                              <p className="text-sm font-medium text-foreground">{invite.email}</p>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <span
                                   className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
@@ -1443,18 +1443,18 @@ function PreviewStep({
   if (isLoading && !project) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-gray-400" />
+        <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   if (!project) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-6">
-        <div className="flex items-start gap-3 text-sm text-gray-600">
+      <div className="rounded-lg border border-border bg-surface p-6">
+        <div className="flex items-start gap-3 text-sm text-text-secondary">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
           <div>
-            <p className="font-medium text-gray-900">We need a bit more info</p>
+            <p className="font-medium text-foreground">We need a bit more info</p>
             <p className="mt-1">
               Save your project details first so we can build an accurate preview. Once the basics are filled in, your
               cover photo, summary, and project sections will appear here.
@@ -1476,14 +1476,14 @@ function PreviewStep({
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-gray-900">Yeah! It&apos;s time to showcase your work</h1>
-        <p className="text-gray-500">This is what homeowners will see when they explore your project.</p>
+        <h1 className="text-3xl font-bold text-foreground">Yeah! It&apos;s time to showcase your work</h1>
+        <p className="text-text-secondary">This is what homeowners will see when they explore your project.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left side - Actual project card preview */}
         <div className="space-y-4">
-          <div className="relative overflow-hidden rounded-lg bg-gray-100">
+          <div className="relative overflow-hidden rounded-lg bg-surface">
             <img
               src={project.coverPhotoUrl || "/placeholder.svg"}
               alt={project.title || ""}
@@ -1492,13 +1492,13 @@ function PreviewStep({
             <button
               onClick={onPreview}
               disabled={!hasPreview}
-              className="absolute top-3 left-3 rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-[13px] font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
+              className="absolute top-3 left-3 rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-sm font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               Show preview
             </button>
           </div>
           <div className="mt-3">
-            <p className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900 line-clamp-2">
+            <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">
               {subtitleParts.length > 0 && subtitleParts.join(" ")}
               {project.locationLabel && ` in ${project.locationLabel}`}
             </p>
@@ -1513,7 +1513,7 @@ function PreviewStep({
 
         {/* Right side - What's next */}
         <div className="space-y-6">
-          <h2 className="text-xl font-bold text-gray-900">What&apos;s next</h2>
+          <h2 className="text-xl font-bold text-foreground">What&apos;s next</h2>
 
           <div className="space-y-6">
             <div className="flex gap-3">
@@ -1523,8 +1523,8 @@ function PreviewStep({
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Your listing will be reviewed</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">
+                <h3 className="text-lg font-semibold text-foreground mb-2">Your listing will be reviewed</h3>
+                <p className="text-sm text-text-secondary leading-relaxed">
                   Our team will review your listing before it goes live. Once approved, you&apos;ll receive a notification and you can return here to make updates anytime.
                 </p>
               </div>
@@ -1537,8 +1537,8 @@ function PreviewStep({
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Bring your collaborators onboard</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">
+                <h3 className="text-lg font-semibold text-foreground mb-2">Bring your collaborators onboard</h3>
+                <p className="text-sm text-text-secondary leading-relaxed">
                   Each professional you invite will receive an email to join as a contributor. More collaborators mean more exposure, so get your invites accepted to maximize your reach.
                 </p>
               </div>
@@ -1564,7 +1564,7 @@ function FooterNavigation({
   isNextDisabled: boolean
 }) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white p-4 shadow-lg">
+    <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-white p-4 shadow-lg">
       <div className="container mx-auto max-w-4xl">
         <div className="flex gap-4 justify-center">
           <Button
@@ -1604,7 +1604,7 @@ function ProfessionalDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="w-full rounded-md border border-gray-300 px-3 py-2 text-left text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40">
+        <button className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40">
           {selectedProfessional ? selectedProfessional.company.name : "Choose professional..."}
         </button>
       </DropdownMenuTrigger>
@@ -1616,11 +1616,11 @@ function ProfessionalDropdown({
           >
             <div>
               <div className="font-medium">{professional.company.name}</div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-text-secondary">
                 {professional.name} - {professional.title}
               </div>
               {(professional.company.city || professional.company.country) && (
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-muted-foreground">
                   {[professional.company.city, professional.company.country].filter(Boolean).join(', ')}
                 </div>
               )}
@@ -1664,21 +1664,21 @@ function InviteModal({
       <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-lg font-semibold text-foreground">
               {isEditing ? "Update invite" : "Invite professional"}
             </h3>
             {service && (
-              <p className="mt-1 text-sm text-gray-500">Service: {service.name}</p>
+              <p className="mt-1 text-sm text-text-secondary">Service: {service.name}</p>
             )}
           </div>
-          <button onClick={onClose} className="rounded-md p-2 text-gray-500 transition-colors hover:bg-gray-100">
+          <button onClick={onClose} className="rounded-md p-2 text-text-secondary transition-colors hover:bg-surface">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="invite-email" className="mb-2 block text-sm font-medium text-gray-700">
+            <label htmlFor="invite-email" className="mb-2 block text-sm font-medium text-foreground">
               Company email address
             </label>
             <input
@@ -1688,7 +1688,7 @@ function InviteModal({
               onChange={(event) => onEmailChange(event.target.value)}
               placeholder="name@company.com"
               className={`w-full rounded-md border px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
-                error ? 'border-red-300' : 'border-gray-300'
+                error ? 'border-red-300' : 'border-border'
               }`}
             />
             {error && (
@@ -1696,7 +1696,7 @@ function InviteModal({
                 {error}
               </p>
             )}
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-text-secondary">
               No invites are sent until the project is approved by Arco.
             </p>
           </div>

@@ -13,7 +13,7 @@ interface FooterProps {
 
 export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
   return (
-    <footer className="bg-[#F5F5F5] border-t border-gray-200 py-12 px-4 md:px-8">
+    <footer className="bg-[#F5F5F5] border-t border-border py-12 px-4 md:px-8">
       <div className={`${maxWidth} mx-auto`}>
         <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
           <div>
@@ -25,45 +25,45 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
               />
             </Link>
             <div className="flex gap-4">
-              <Instagram className="h-5 w-5 text-gray-600 hover:text-gray-900 cursor-pointer" />
-              <Linkedin className="h-5 w-5 text-gray-600 hover:text-gray-900 cursor-pointer" />
-              <Twitter className="h-5 w-5 text-gray-600 hover:text-gray-900 cursor-pointer" />
+              <Instagram className="h-5 w-5 text-text-secondary hover:text-foreground cursor-pointer" />
+              <Linkedin className="h-5 w-5 text-text-secondary hover:text-foreground cursor-pointer" />
+              <Twitter className="h-5 w-5 text-text-secondary hover:text-foreground cursor-pointer" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
             {Object.entries(footerLinks).map(([category, links]) => (
               <div key={category}>
-                <h6 className="text-gray-900 mb-4 px-3">{category}</h6>
+                <h6 className="text-foreground mb-4 px-3">{category}</h6>
                 <ul className="space-y-2">
                   {links.map((link) => (
                     <li key={link}>
                       {link === "Pricing" ? (
-                        <Link href="/pricing" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <Link href="/pricing" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "Projects" ? (
-                        <Link href="/projects" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <Link href="/projects" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "About" ? (
-                        <Link href="/about" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <Link href="/about" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "Help center" ? (
-                        <Link href="/help-center" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <Link href="/help-center" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "Professionals" ? (
-                        <Link href="/professionals" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <Link href="/professionals" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "List with us" ? (
-                        <Link href="/list-with-us" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <Link href="/list-with-us" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : (
-                        <a href="#" className="inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+                        <a href="#" className="inline-block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </a>
                       )}
@@ -75,13 +75,13 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
           </div>
         </div>
 
-        <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-600">
+        <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-text-secondary">
           <div>©2025 ArcoGlobal BV. All rights reserved.</div>
           <div className="flex gap-6">
-            <Link href="/terms" className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+            <Link href="/terms" className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
               Terms
             </Link>
-            <Link href="/privacy" className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600">
+            <Link href="/privacy" className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
               Privacy
             </Link>
           </div>

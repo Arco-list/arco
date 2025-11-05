@@ -24,10 +24,10 @@ export function ProfessionalsSidebar() {
             {projectProfessionals.map((professional) => (
               <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {professional.companyName}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-text-secondary">
                     {professional.serviceCategory} · {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
                   </p>
                 </div>
@@ -58,10 +58,10 @@ export function ProfessionalsSidebar() {
             {projectProfessionals.map((professional) => (
               <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {professional.companyName}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-text-secondary">
                     {professional.serviceCategory} · {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
                   </p>
                 </div>

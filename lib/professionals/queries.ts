@@ -423,6 +423,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   description: string | null
   location: string | null
   coverImageUrl: string | null
+  primaryService: string | null
+  primaryServiceId: string | null
 } | null> => {
   const supabase = await createServerSupabaseClient()
 
@@ -441,6 +443,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
           plan_tier,
           plan_expires_at,
           status,
+          primary_service_id,
+          primary_service:categories!companies_primary_service_id_fkey(name),
           professionals (
             id,
             title,
@@ -469,6 +473,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
           plan_tier,
           plan_expires_at,
           status,
+          primary_service_id,
+          primary_service:categories!companies_primary_service_id_fkey(name),
           professionals (
             id,
             title,
@@ -533,13 +539,18 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
     coverImageUrl = coverPhoto?.url || photos[0]?.url || null
   }
 
+  const primaryServiceName = (company.primary_service as { name: string } | null)?.name ?? null
+  const primaryServiceId = company.primary_service_id ?? null
+
   return {
     id: company.id,
     slug: company.slug || company.id,
     name,
     description,
     location,
-    coverImageUrl
+    coverImageUrl,
+    primaryService: primaryServiceName,
+    primaryServiceId
   }
 }
 

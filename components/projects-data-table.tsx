@@ -125,12 +125,12 @@ const projectsColumns: ColumnDef<z.infer<typeof projectSchema>>[] = [
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
         {row.original.features.slice(0, 2).map((feature) => (
-          <Badge key={feature} variant="outline" className="text-xs">
+          <Badge key={feature} variant="quaternary" size="quaternary" className="text-xs">
             {feature}
           </Badge>
         ))}
         {row.original.features.length > 2 && (
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="quaternary" size="quaternary" className="text-xs">
             +{row.original.features.length - 2}
           </Badge>
         )}
@@ -371,7 +371,7 @@ export function ProjectsDataTable({
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="quaternary" size="quaternary">
                 <IconLayoutColumns />
                 <span className="hidden lg:inline">Customize Columns</span>
                 <span className="lg:hidden">Columns</span>
@@ -468,7 +468,7 @@ export function ProjectsDataTable({
             </div>
             <div className="ml-auto flex items-center gap-2 lg:ml-0">
               <Button
-                variant="outline"
+                variant="quaternary" size="quaternary"
                 className="hidden h-8 w-8 p-0 lg:flex bg-transparent"
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
@@ -477,7 +477,7 @@ export function ProjectsDataTable({
                 <IconChevronsLeft />
               </Button>
               <Button
-                variant="outline"
+                variant="quaternary"
                 className="size-8 bg-transparent"
                 size="icon"
                 onClick={() => table.previousPage()}
@@ -487,7 +487,7 @@ export function ProjectsDataTable({
                 <IconChevronLeft />
               </Button>
               <Button
-                variant="outline"
+                variant="quaternary"
                 className="size-8 bg-transparent"
                 size="icon"
                 onClick={() => table.nextPage()}
@@ -497,7 +497,7 @@ export function ProjectsDataTable({
                 <IconChevronRight />
               </Button>
               <Button
-                variant="outline"
+                variant="quaternary"
                 className="hidden size-8 lg:flex bg-transparent"
                 size="icon"
                 onClick={() => table.setPageIndex(table.getPageCount() - 1)}

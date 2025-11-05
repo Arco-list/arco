@@ -70,7 +70,7 @@ const statusIndicatorMap: Record<CompanyStatus, string> = {
   deactivated: "bg-gray-400",
 }
 
-const sectionCardClass = "rounded-xl border border-gray-200 bg-white p-6"
+const sectionCardClass = "rounded-xl border border-border bg-white p-6"
 
 type CompanyStatus = Database["public"]["Tables"]["companies"]["Row"]["status"]
 type ListingStatus = Extract<CompanyStatus, "listed" | "unlisted">
@@ -610,7 +610,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-8 lg:flex-row">
-        <aside className="hidden lg:block w-64 bg-white border-r border-gray-200 p-6 mr-8">
+        <aside className="hidden lg:block w-64 bg-white border-r border-border p-6 mr-8">
           <div className="space-y-6">
             <Dialog
               open={statusDialogOpen}
@@ -648,20 +648,20 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       onClick={() => setSelectedStatus(option.value)}
                       className={cn(
                         "w-full rounded-lg border px-4 py-3 text-left transition",
-                        isActive ? "border-gray-900 bg-gray-900/5" : "border-gray-200 hover:border-gray-300",
+                        isActive ? "border-gray-900 bg-gray-900/5" : "border-border hover:border-border",
                         statusPending && "pointer-events-none opacity-60"
                       )}
                       disabled={statusPending}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="font-medium text-gray-900">{option.title}</p>
-                          <p className="text-sm text-gray-600">{option.description}</p>
+                          <p className="font-medium text-foreground">{option.title}</p>
+                          <p className="text-sm text-text-secondary">{option.description}</p>
                         </div>
                         <span
                           className={cn(
                             "h-4 w-4 rounded-full border",
-                            isActive ? "border-gray-900 bg-gray-900" : "border-gray-300"
+                            isActive ? "border-gray-900 bg-gray-900" : "border-border"
                           )}
                         />
                       </div>
@@ -761,7 +761,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <h1 className="text-xl font-semibold text-gray-900">{getCurrentSectionTitle()}</h1>
+              <h1 className="text-xl font-semibold text-foreground">{getCurrentSectionTitle()}</h1>
             </div>
             <Button
               className="bg-gray-900 text-white hover:bg-gray-800"
@@ -772,11 +772,11 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           </div>
 
           {showUpgradeBanner && (
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Upgrade to appear in homeowner searches</h3>
-                    <p className="text-sm text-gray-600">Become findable by thousands of homeowners</p>
+                    <h3 className="text-lg font-semibold text-foreground">Upgrade to appear in homeowner searches</h3>
+                    <p className="text-sm text-text-secondary">Become findable by thousands of homeowners</p>
                   </div>
                 <Button asChild className="bg-red-500 text-white hover:bg-red-600">
                   <Link href="/dashboard/pricing">View plans</Link>
@@ -811,14 +811,13 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       onChange={handleLogoFileChange}
                     />
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="quaternary" size="quaternary"
                       onClick={() => logoInputRef.current?.click()}
                       disabled={logoPending}
                     >
                       {logoPending ? "Uploading..." : "Change logo"}
                     </Button>
-                    <p className="text-xs text-gray-500">JPG, PNG or SVG. Up to 5MB.</p>
+                    <p className="text-xs text-text-secondary">JPG, PNG or SVG. Up to 5MB.</p>
                   </div>
                 </div>
               </div>
@@ -826,8 +825,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Company information</h2>
-                    <p className="text-sm text-gray-600">Update how your business appears on your public company page.</p>
+                    <h2 className="text-lg font-semibold text-foreground">Company information</h2>
+                    <p className="text-sm text-text-secondary">Update how your business appears on your public company page.</p>
                   </div>
                   <div className="grid gap-6">
                     <div className="space-y-2">
@@ -863,8 +862,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Contact information</h2>
-                    <p className="text-sm text-gray-600">Displayed on your public page so homeowners can reach you.</p>
+                    <h2 className="text-lg font-semibold text-foreground">Contact information</h2>
+                    <p className="text-sm text-text-secondary">Displayed on your public page so homeowners can reach you.</p>
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
@@ -875,7 +874,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                         value={profileState.domain}
                         onChange={(event) => setProfileState((prev) => ({ ...prev, domain: event.target.value }))}
                       />
-                      <p className="text-xs text-gray-500">Used for verification and login restrictions.</p>
+                      <p className="text-xs text-text-secondary">Used for verification and login restrictions.</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="company-email">Contact email</Label>
@@ -975,15 +974,15 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Services & features</h2>
-                    <p className="text-sm text-gray-600">Highlight what you specialise in so we can match you to relevant projects.</p>
+                    <h2 className="text-lg font-semibold text-foreground">Services & features</h2>
+                    <p className="text-sm text-text-secondary">Highlight what you specialise in so we can match you to relevant projects.</p>
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="primary-service">Primary service</Label>
                       <select
                         id="primary-service"
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                        className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
                         value={profileState.primaryServiceId}
                         onChange={(event) => handlePrimaryServiceChange(event.target.value)}
                       >
@@ -997,7 +996,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Other services</Label>
-                      <p className="text-xs text-gray-500">Select additional services that apply to your company.</p>
+                      <p className="text-xs text-text-secondary">Select additional services that apply to your company.</p>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {services.map((service) => {
                           const checked = profileState.servicesOffered.includes(service.id)
@@ -1017,7 +1016,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                                   toggleServiceSelection(service.id, checkedState === true)
                                 }
                               />
-                              <span className="text-gray-700">{service.name}</span>
+                              <span className="text-foreground">{service.name}</span>
                             </label>
                           )
                         })}
@@ -1039,7 +1038,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                                   toggleCertificateSelection(certificate, checkedState === true)
                                 }
                               />
-                              <span className="text-gray-700">{certificate}</span>
+                              <span className="text-foreground">{certificate}</span>
                             </label>
                           )
                         })}
@@ -1061,7 +1060,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                                   toggleLanguageSelection(language, checkedState === true)
                                 }
                               />
-                              <span className="text-gray-700">{language}</span>
+                              <span className="text-foreground">{language}</span>
                             </label>
                           )
                         })}
@@ -1084,13 +1083,13 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Account status</h2>
-                    <p className="text-sm text-gray-600">Control whether your company page is visible to homeowners.</p>
+                    <h2 className="text-lg font-semibold text-foreground">Account status</h2>
+                    <p className="text-sm text-text-secondary">Control whether your company page is visible to homeowners.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-4">
                     {isCompanyActive ? (
                       <Button
-                        variant="outline"
+                        variant="quaternary" size="quaternary"
                         className="border-red-200 text-red-600 hover:bg-red-50"
                         onClick={() => performStatusUpdate("deactivated", { message: "Company deactivated" })}
                         disabled={statusPending}
@@ -1099,7 +1098,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       </Button>
                     ) : (
                       <Button
-                        variant="outline"
+                        variant="quaternary" size="quaternary"
                         className="border-green-200 text-green-600 hover:bg-green-50"
                         onClick={() => performStatusUpdate("unlisted", { message: "Company activated" })}
                         disabled={statusPending}
@@ -1115,8 +1114,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           ) : (
             <div className="space-y-8">
               <header>
-                <h2 className="text-xl font-semibold text-gray-900">Company photos</h2>
-                <p className="text-sm text-gray-600">
+                <h2 className="text-xl font-semibold text-foreground">Company photos</h2>
+                <p className="text-sm text-text-secondary">
                   Showcase up to five photos on your company page. Drag to reorder; the first photo appears as the cover.
                 </p>
               </header>
@@ -1125,7 +1124,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                 {/* Upload card - first in grid */}
                 <div
                   className={cn(
-                    "aspect-square flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center transition",
+                    "aspect-square flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-surface p-8 text-center transition",
                     dragOver && "border-gray-400",
                     (!canUploadMorePhotos || photoPending) && "cursor-not-allowed opacity-60"
                   )}
@@ -1142,19 +1141,18 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     className="hidden"
                     onChange={handlePhotoInputChange}
                   />
-                  <ImageIcon className="h-8 w-8 text-gray-400" />
-                  <div className="text-sm font-medium text-gray-900">Drag and drop</div>
-                  <div className="text-sm text-gray-500">or browse for photos</div>
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-sm font-medium text-foreground">Drag and drop</div>
+                  <div className="text-sm text-text-secondary">or browse for photos</div>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="quaternary" size="quaternary"
                     className="mt-2"
                     onClick={() => photoInputRef.current?.click()}
                     disabled={photoPending || !canUploadMorePhotos}
                   >
                     {photoPending ? "Uploading..." : "Browse"}
                   </Button>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-text-secondary">
                     {photoSlotsRemaining > 0
                       ? `${photoSlotsRemaining} photo slot${photoSlotsRemaining > 1 ? "s" : ""} remaining.`
                       : "Maximum of 5 photos reached."}
@@ -1179,7 +1177,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     }}
                     onDragEnd={handlePhotoDragEnd}
                   >
-                    <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+                    <div className="aspect-square rounded-lg overflow-hidden bg-surface">
                       <Image
                         src={photo.url}
                         alt={photo.alt_text ?? company.name}
@@ -1199,17 +1197,17 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       <button
                         type="button"
                         onClick={() => handlePhotoMenu(photo.id)}
-                        className="bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
+                        className="bg-white rounded-full p-1 shadow-md hover:bg-surface transition-colors"
                         disabled={photoPending}
                       >
-                        <MoreHorizontal className="h-4 w-4 text-gray-600" />
+                        <MoreHorizontal className="h-4 w-4 text-text-secondary" />
                       </button>
 
                       {openMenuId === photo.id && (
-                        <div className="absolute top-8 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[160px]">
+                        <div className="absolute top-8 right-0 bg-white rounded-lg shadow-lg border border-border py-1 z-10 min-w-[160px]">
                           <button
                             type="button"
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-surface transition-colors"
                             onClick={() => setCoverPhoto(photo.id)}
                             disabled={coverPhotoId === photo.id || photoPending}
                           >
@@ -1217,7 +1215,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                           </button>
                           <button
                             type="button"
-                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-surface transition-colors flex items-center gap-2"
                             onClick={() => deletePhoto(photo.id)}
                             disabled={photoPending}
                           >

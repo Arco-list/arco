@@ -44,16 +44,16 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
     <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900">Featured professionals</h2>
+          <h2 className="text-2xl font-semibold text-foreground">Featured professionals</h2>
           <div className="hidden md:flex items-center gap-2">
             <Link href="/professionals" className={textButtonStyles}>
               View all
             </Link>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
+              <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
+              <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -66,7 +66,7 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
           style={{ scrollSnapType: "x mandatory" }}
         >
           {companies.length === 0 ? (
-            <div className="col-span-full text-center py-8 text-gray-500">
+            <div className="col-span-full text-center py-8 text-text-secondary">
               No featured companies available.
             </div>
           ) : (

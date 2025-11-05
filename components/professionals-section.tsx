@@ -35,21 +35,21 @@ export function ProfessionalsSection() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowModal(true)}
-              className="text-sm text-gray-700 hover:text-gray-900 font-medium"
+              className="text-sm text-foreground hover:text-foreground font-medium"
             >
               View all
             </button>
             <div className="flex gap-2">
               <button
                 onClick={scrollLeft}
-                className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
                 aria-label="Previous professionals"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={scrollRight}
-                className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
                 aria-label="Next professionals"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -83,20 +83,20 @@ export function ProfessionalsSection() {
                       className="aspect-square w-full object-cover rounded-lg transition-transform duration-300 hover:scale-105 mb-4"
                     />
                   ) : (
-                    <div className="aspect-square w-full rounded-lg bg-gray-100 transition-transform duration-300 hover:scale-105 mb-4"></div>
+                    <div className="aspect-square w-full rounded-lg bg-surface transition-transform duration-300 hover:scale-105 mb-4"></div>
                   )}
                 </Link>
                 <Link href={professionalHref}>
-                  <p className="text-sm font-medium text-gray-900 hover:text-gray-700 mb-1">
+                  <p className="text-sm font-medium text-foreground hover:text-foreground mb-1">
                     {professional.companyName}
                   </p>
                 </Link>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-text-secondary">
                   {professional.serviceCategory}
                   {' · '}
                   <Link
                     href={projectsHref}
-                    className="underline hover:text-gray-900"
+                    className="underline hover:text-foreground"
                   >
                     {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
                   </Link>
@@ -130,23 +130,23 @@ export function ProfessionalsSection() {
                         className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                      <div className="w-12 h-12 rounded bg-surface flex items-center justify-center text-xs text-muted-foreground">
                         Logo
                       </div>
                     )}
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link href={professionalHref}>
-                      <p className="text-sm font-medium text-gray-900 truncate hover:text-gray-700">
+                      <p className="text-sm font-medium text-foreground truncate hover:text-foreground">
                         {professional.companyName}
                       </p>
                     </Link>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-text-secondary">
                       {professional.serviceCategory}
                       {' · '}
                       <Link
                         href={projectsHref}
-                        className="underline hover:text-gray-900"
+                        className="underline hover:text-foreground"
                       >
                         {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
                       </Link>

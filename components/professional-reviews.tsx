@@ -201,7 +201,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-foreground"
                   onClick={() => setIsSortDropdownOpen((open) => !open)}
                 >
                   Sort: {sortBy === "recent" ? "Most recent" : sortBy === "highest" ? "Highest rated" : "Lowest rated"}
@@ -209,10 +209,10 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 </Button>
 
                 {isSortDropdownOpen && (
-                  <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-border bg-white shadow-lg">
                     <div className="py-1">
                       <button
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy("recent")
                           setIsSortDropdownOpen(false)
@@ -221,7 +221,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                         Most recent
                       </button>
                       <button
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy("highest")
                           setIsSortDropdownOpen(false)
@@ -230,7 +230,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                         Highest rated
                       </button>
                       <button
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy("lowest")
                           setIsSortDropdownOpen(false)
@@ -255,25 +255,25 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
 
         <div className="mb-6 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
           <div className="flex items-center gap-2">
-            <Award className="h-4 w-4 text-gray-600" />
-            <span className="text-sm text-gray-600">Quality of work</span>
-            <span className="text-sm font-semibold text-gray-900">{formatRating(ratings.quality)}</span>
+            <Award className="h-4 w-4 text-text-secondary" />
+            <span className="text-sm text-text-secondary">Quality of work</span>
+            <span className="text-sm font-semibold text-foreground">{formatRating(ratings.quality)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-gray-600" />
-            <span className="text-sm text-gray-600">Reliability</span>
-            <span className="text-sm font-semibold text-gray-900">{formatRating(ratings.reliability)}</span>
+            <Shield className="h-4 w-4 text-text-secondary" />
+            <span className="text-sm text-text-secondary">Reliability</span>
+            <span className="text-sm font-semibold text-foreground">{formatRating(ratings.reliability)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <MessageCircle className="h-4 w-4 text-gray-600" />
-            <span className="text-sm text-gray-600">Communication</span>
-            <span className="text-sm font-semibold text-gray-900">{formatRating(ratings.communication)}</span>
+            <MessageCircle className="h-4 w-4 text-text-secondary" />
+            <span className="text-sm text-text-secondary">Communication</span>
+            <span className="text-sm font-semibold text-foreground">{formatRating(ratings.communication)}</span>
           </div>
         </div>
 
         <div className="mb-6 grid grid-cols-1 gap-8 md:grid-cols-2">
           {sortedReviews.length === 0 ? (
-            <div className="col-span-full rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+            <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center text-sm text-text-secondary">
               Reviews will appear here once homeowners share feedback.
             </div>
           ) : (
@@ -286,9 +286,9 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                     className="h-10 w-10 rounded-full object-cover"
                   />
                   <div>
-                    <h4 className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900">{review.reviewerName}</h4>
+                    <h4 className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground">{review.reviewerName}</h4>
                     {typeof review.yearsOnPlatform === "number" && review.yearsOnPlatform > 0 ? (
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-text-secondary">
                         {review.yearsOnPlatform} year{review.yearsOnPlatform === 1 ? "" : "s"} on Arco
                       </p>
                     ) : null}
@@ -298,7 +298,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 <div className="flex items-center gap-2">
                   {renderStars(review.rating)}
                   {review.createdAt ? (
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-text-secondary">
                       {new Intl.DateTimeFormat("en-GB", {
                         day: "numeric",
                         month: "short",
@@ -308,10 +308,10 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   ) : null}
                 </div>
 
-                {review.title ? <h5 className="text-sm font-semibold text-gray-900">{review.title}</h5> : null}
+                {review.title ? <h5 className="text-sm font-semibold text-foreground">{review.title}</h5> : null}
 
                 <div>
-                  <p className="text-gray-700">
+                  <p className="text-foreground">
                     {review.comment && review.comment.length > 160 && !expandedReviews.has(review.id)
                       ? `${review.comment.substring(0, 160)}…`
                       : review.comment}
@@ -319,7 +319,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   {review.comment && review.comment.length > 160 ? (
                     <button
                       onClick={() => toggleExpanded(review.id)}
-                      className="mt-1 text-sm font-medium text-gray-900 underline hover:no-underline"
+                      className="mt-1 text-sm font-medium text-foreground underline hover:no-underline"
                     >
                       {expandedReviews.has(review.id) ? "Show less" : "Show more"}
                     </button>
@@ -338,7 +338,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
           >
             Show all reviews
           </Button>
-          <button className="text-sm text-gray-500 underline hover:no-underline">Learn how reviews work</button>
+          <button className="text-sm text-text-secondary underline hover:no-underline">Learn how reviews work</button>
         </div>
 
         <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
@@ -346,7 +346,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
             <div className="p-6">
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-xl font-semibold">How was your experience with {professionalName}?</h2>
-                <button onClick={() => setIsReviewModalOpen(false)} className="rounded-full p-1 hover:bg-gray-100">
+                <button onClick={() => setIsReviewModalOpen(false)} className="rounded-full p-1 hover:bg-surface">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -356,21 +356,21 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   {renderStars(overallRating, true, setOverallRating, "red")}
                 </div>
                 {overallRating > 0 ? (
-                  <p className="text-lg font-medium text-gray-900">{getRatingLabel(overallRating)}</p>
+                  <p className="text-lg font-medium text-foreground">{getRatingLabel(overallRating)}</p>
                 ) : null}
               </div>
 
-              <hr className="mb-6 border-gray-200" />
+              <hr className="mb-6 border-border" />
 
               <div className="mb-6">
-                <h3 className="mb-3 font-medium text-gray-900">Was any work carried out?</h3>
+                <h3 className="mb-3 font-medium text-foreground">Was any work carried out?</h3>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setWorkCarriedOut(true)}
                     className={`rounded-full px-4 py-2 border ${
                       workCarriedOut === true
                         ? "border-black bg-black text-white"
-                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                        : "border-border bg-white text-foreground hover:border-gray-400"
                     }`}
                   >
                     Yes
@@ -380,7 +380,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                     className={`rounded-full px-4 py-2 border ${
                       workCarriedOut === false
                         ? "border-black bg-black text-white"
-                        : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                        : "border-border bg-white text-foreground hover:border-gray-400"
                     }`}
                   >
                     No
@@ -388,42 +388,42 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 </div>
               </div>
 
-              <hr className="mb-6 border-gray-200" />
+              <hr className="mb-6 border-border" />
 
               <div className="mb-6">
-                <h3 className="mb-2 font-medium text-gray-900">Rate your experience in these areas</h3>
-                <p className="mb-4 text-sm text-gray-500">
+                <h3 className="mb-2 font-medium text-foreground">Rate your experience in these areas</h3>
+                <p className="mb-4 text-sm text-text-secondary">
                   You’ve provided an overall rating. Let them know what they did great and where they can improve.
                 </p>
 
                 <div className="space-y-4">
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="font-medium text-gray-900">Quality of work</span>
+                      <span className="font-medium text-foreground">Quality of work</span>
                     </div>
                     {renderStars(qualityRating, true, setQualityRating, "red")}
                   </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="font-medium text-gray-900">Reliability</span>
+                      <span className="font-medium text-foreground">Reliability</span>
                     </div>
                     {renderStars(reliabilityRating, true, setReliabilityRating, "red")}
                   </div>
 
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="font-medium text-gray-900">Communication</span>
+                      <span className="font-medium text-foreground">Communication</span>
                     </div>
                     {renderStars(communicationRating, true, setCommunicationRating, "red")}
                   </div>
                 </div>
               </div>
 
-              <hr className="mb-6 border-gray-200" />
+              <hr className="mb-6 border-border" />
 
               <div className="mb-6">
-                <h3 className="mb-3 font-medium text-gray-900">Tell us about your experience</h3>
+                <h3 className="mb-3 font-medium text-foreground">Tell us about your experience</h3>
                 <Textarea
                   placeholder="Please share more to help understand your rating"
                   value={reviewText}
@@ -432,12 +432,12 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   maxLength={500}
                 />
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-sm text-gray-400">{reviewText.length}/500</span>
+                  <span className="text-sm text-muted-foreground">{reviewText.length}/500</span>
                 </div>
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setIsReviewModalOpen(false)} className="flex-1">
+                <Button variant="quaternary" size="quaternary" onClick={() => setIsReviewModalOpen(false)} className="flex-1">
                   Cancel
                 </Button>
                 <Button

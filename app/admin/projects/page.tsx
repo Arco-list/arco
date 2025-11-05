@@ -205,7 +205,7 @@ export default async function ProjectsPage() {
             </Breadcrumb>
           </div>
           <div className="ml-auto px-4">
-            <Button asChild size="sm" variant="outline">
+            <Button asChild variant="quaternary" size="quaternary">
               <a href="/admin/projects">Refresh</a>
             </Button>
           </div>

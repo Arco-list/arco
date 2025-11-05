@@ -106,8 +106,8 @@ export function FeaturePhotoSelectorModal({
   return (
     <div className={overlayClassName}>
       <div className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-lg bg-white overflow-hidden">
-        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white p-6 flex-shrink-0">
-          <h2 className="text-xl font-semibold text-gray-900">Select photos for {featureName}</h2>
+        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-white p-6 flex-shrink-0">
+          <h2 className="text-xl font-semibold text-foreground">Select photos for {featureName}</h2>
           <div className="flex items-center gap-3">
             {canDeleteFeature && onDeleteFeature && (
               <AlertDialog>
@@ -139,7 +139,7 @@ export function FeaturePhotoSelectorModal({
                 </ConfirmationDialogContent>
               </AlertDialog>
             )}
-            <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-600">
+            <button onClick={onClose} className="text-2xl leading-none text-muted-foreground hover:text-text-secondary">
               ×
             </button>
           </div>
@@ -148,8 +148,8 @@ export function FeaturePhotoSelectorModal({
         <div className="space-y-6 p-6 pb-8 overflow-y-auto overflow-x-hidden flex-1">
           <div>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Select from existing photos</h3>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <h3 className="text-lg font-semibold text-foreground">Select from existing photos</h3>
+              <div className="flex items-center gap-4 text-sm text-text-secondary">
                 {coverSelected && <span className="font-medium text-blue-600">Cover photo selected</span>}
                 <span>{selectedCount} selected</span>
               </div>
@@ -158,15 +158,15 @@ export function FeaturePhotoSelectorModal({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
               <div
                 className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                  modalDragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
+                  modalDragOver ? "border-gray-400 bg-surface" : "border-border"
                 }`}
                 onDrop={onModalDrop}
                 onDragOver={onModalDragOver}
                 onDragLeave={onModalDragLeave}
               >
-                <ImageIcon className="mb-3 h-8 w-8 text-gray-400" />
-                <p className="font-medium text-gray-900">Upload new photos</p>
-                <p className="mb-4 text-sm text-gray-500">Drag and drop or browse for photos</p>
+                <ImageIcon className="mb-3 h-8 w-8 text-muted-foreground" />
+                <p className="font-medium text-foreground">Upload new photos</p>
+                <p className="mb-4 text-sm text-text-secondary">Drag and drop or browse for photos</p>
                 <label className="inline-block">
                   <input
                     type="file"
@@ -213,7 +213,7 @@ export function FeaturePhotoSelectorModal({
                       className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
                         isSelected
                           ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
-                          : "border-gray-200 hover:border-gray-300"
+                          : "border-border hover:border-border"
                       }`}
                     >
                       <img src={photo.url || "/placeholder.svg"} alt="Project photo" className="h-full w-full object-cover" />
@@ -233,13 +233,13 @@ export function FeaturePhotoSelectorModal({
                       <div className="absolute right-2 top-2">
                         <button
                           onClick={() => setOpenMenuId(openMenuId === photo.id ? null : photo.id)}
-                          className="rounded-full bg-white p-1 shadow-md transition-colors hover:bg-gray-50"
+                          className="rounded-full bg-white p-1 shadow-md transition-colors hover:bg-surface"
                         >
-                          <MoreHorizontal className="h-4 w-4 text-gray-600" />
+                          <MoreHorizontal className="h-4 w-4 text-text-secondary" />
                         </button>
 
                         {openMenuId === photo.id && (
-                          <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                          <div className="absolute right-0 top-8 min-w-[160px] rounded-lg border border-border bg-white py-1 shadow-lg">
                             <button
                               onClick={() => {
                                 if (isSelected && !isCoverPhoto) {
@@ -250,8 +250,8 @@ export function FeaturePhotoSelectorModal({
                               disabled={!isSelected || isCoverPhoto}
                               className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
                                 !isSelected || isCoverPhoto
-                                  ? "cursor-not-allowed text-gray-400"
-                                  : "text-gray-700 hover:bg-gray-50"
+                                  ? "cursor-not-allowed text-muted-foreground"
+                                  : "text-foreground hover:bg-surface"
                               }`}
                             >
                               Set as cover
@@ -281,7 +281,7 @@ export function FeaturePhotoSelectorModal({
             </div>
 
             {selectablePhotos.length === 0 && (
-              <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">
+              <div className="mt-4 rounded-lg border border-dashed border-border bg-surface p-4 text-sm text-text-secondary">
                 {uploadedPhotosCount === 0
                   ? "Upload photos to get started"
                   : "All photos are assigned. Upload more to add to this feature."}
@@ -293,7 +293,7 @@ export function FeaturePhotoSelectorModal({
             <div className="space-y-4">
               {onTaglineChange && (
                 <div>
-                  <label htmlFor={taglineInputId} className="block text-sm font-medium text-gray-900">
+                  <label htmlFor={taglineInputId} className="block text-sm font-medium text-foreground">
                     Feature tagline
                   </label>
                   <Input
@@ -304,7 +304,7 @@ export function FeaturePhotoSelectorModal({
                     maxLength={200}
                     className="mt-2"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-text-secondary">
                     Displayed below the feature title in the Highlights section on the project page.
                   </p>
                 </div>
@@ -313,11 +313,11 @@ export function FeaturePhotoSelectorModal({
               {onHighlightChange && (
                 <label
                   htmlFor={highlightToggleId}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
                 >
                   <div className="mr-4">
-                    <p className="text-sm font-medium text-gray-900">Highlight this feature</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-medium text-foreground">Highlight this feature</p>
+                    <p className="text-xs text-text-secondary">
                       Toggle to feature this category in the Highlights section on the project page.
                     </p>
                   </div>
@@ -353,7 +353,7 @@ export function FeaturePhotoSelectorModal({
           )}
         </div>
 
-        <div className="border-t border-gray-200 bg-white p-6 pt-4 flex-shrink-0">
+        <div className="border-t border-border bg-white p-6 pt-4 flex-shrink-0">
           <div className="flex gap-4 justify-end">
             <Button
               onClick={onCancel}

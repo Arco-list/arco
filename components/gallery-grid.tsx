@@ -2,7 +2,7 @@
 
 import { useMemo, type KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal } from "lucide-react"
+import { Expand } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -61,15 +61,16 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:items-stretch md:h-[480px] lg:h-[560px]">
+    <div className="relative grid gap-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:items-stretch md:h-[480px] lg:h-[560px]">
       <div
         role={galleryIsInteractive ? "button" : undefined}
         tabIndex={galleryIsInteractive ? 0 : undefined}
         onClick={galleryIsInteractive ? () => handleOpen(0) : undefined}
         onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, 0) : undefined}
         className={cn(
-          "group relative overflow-hidden rounded-xl bg-gray-100 transition-transform",
-          "h-[400px] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
+          "group relative overflow-hidden bg-surface transition-transform",
+          "h-[480px] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
+          "rounded-xl md:rounded-l-xl md:rounded-r-none",
           galleryIsInteractive
             ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
             : "cursor-default",
@@ -86,9 +87,28 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-rows-2">
+      <div className="hidden md:grid grid-cols-2 gap-2 md:grid-rows-2">
         {displayImages.slice(1, 5).map((image, index) => {
           const resolvedImage = image ?? PLACEHOLDER_IMAGE
+          // Determine border radius based on position
+          // index 0 = top-left (no radius)
+          // index 1 = top-right (top-right radius)
+          // index 2 = bottom-left (no radius)
+          // index 3 = bottom-right (bottom-right radius)
+          let roundedClass = ""
+          if (index === 0) {
+            // Top-left of grid - no radius
+            roundedClass = ""
+          } else if (index === 1) {
+            // Top-right of grid - top-right radius
+            roundedClass = "rounded-tr-xl"
+          } else if (index === 2) {
+            // Bottom-left of grid - no radius
+            roundedClass = ""
+          } else if (index === 3) {
+            // Bottom-right of grid - bottom-right radius
+            roundedClass = "rounded-br-xl"
+          }
 
           return (
             <div
@@ -98,8 +118,9 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
               onClick={galleryIsInteractive ? () => handleOpen(index + 1) : undefined}
               onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, index + 1) : undefined}
               className={cn(
-                "group relative overflow-hidden rounded-xl bg-gray-100",
-                "h-[180px] md:aspect-square md:h-auto",
+                "group relative overflow-hidden bg-surface",
+                "md:h-full",
+                roundedClass,
                 galleryIsInteractive
                   ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
                   : "cursor-default",
@@ -116,24 +137,24 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
                   galleryIsInteractive && "group-hover:scale-105",
                 )}
               />
-
-              {showOverlay && index === 3 && galleryIsInteractive && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-black text-white hover:bg-gray-800"
-                    onClick={() => handleOpen(index + 1)}
-                  >
-                    <MoreHorizontal className="mr-2 h-4 w-4" />
-                    Show all photos
-                  </Button>
-                </div>
-              )}
             </div>
           )
         })}
       </div>
+
+      {/* Show all photos button - floating bottom right */}
+      {showOverlay && galleryIsInteractive && (
+        <div className="hidden md:block absolute bottom-4 right-4 z-10">
+          <Button
+            variant="tertiary"
+            size="tertiary"
+            onClick={() => handleOpen(0)}
+          >
+            <Expand className="w-4 h-4" />
+            Show all photos
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

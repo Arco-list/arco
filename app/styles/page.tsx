@@ -1,8 +1,22 @@
 import { Heart, Bed, Mail, User, MapPin, Search, Star, Calendar } from "lucide-react"
+import { redirect } from "next/navigation"
+import { Button } from "@/components/ui/button"
 
 export default function StylesPage() {
+  // Only allow access in development
+  if (process.env.NODE_ENV === "production") {
+    redirect("/")
+  }
+
   return (
     <div className="min-h-screen bg-background">
+      {/* Development Only Banner */}
+      <div className="bg-secondary text-secondary-foreground py-2 px-8 text-center">
+        <p className="text-sm font-medium">
+          🔧 Development Only - This page is not accessible in production
+        </p>
+      </div>
+
       {/* Header */}
       <div className="bg-primary text-primary-foreground py-16 px-8">
         <div className="max-w-6xl mx-auto">
@@ -188,43 +202,43 @@ export default function StylesPage() {
           <div className="space-y-8 bg-surface p-8 rounded-lg">
             <div className="space-y-2 border-b border-border pb-6">
               <h1>Heading 1 - Hero Image</h1>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 72px mobile → 96px desktop</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 72px mobile → 96px desktop (text-7xl md:text-8xl)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h1>Your Text</h1>'}</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h2>Heading 2 - Category Cards</h2>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 48px mobile → 56px desktop</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 36px mobile → 48px desktop (text-4xl md:text-5xl)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h2>Your Text</h2>'}</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h3>Heading 3 - Page Titles</h3>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 36px mobile → 48px desktop</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 24px mobile → 30px desktop (text-2xl md:text-3xl)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h3>Your Text</h3>'}</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h4>Heading 4 - Section Titles</h4>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 16px mobile → 24px desktop</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 16px mobile → 20px desktop (text-base md:text-xl)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h4>Your Text</h4>'}</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h5>Heading 5 - Card Titles</h5>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 12px mobile → 16px desktop</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 12px mobile → 16px desktop (text-xs md:text-base)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h5>Your Text</h5>'}</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h6>Heading 6 - Regular Headings</h6>
-              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 16px</p>
+              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 16px (text-base)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h6>Your Text</h6>'}</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <p className="h7">Heading 7 - Small Headings</p>
-              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 14px</p>
+              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 14px (text-sm)</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<p className="h7">Your Text</p>'}</code>
             </div>
 
@@ -273,12 +287,12 @@ export default function StylesPage() {
               <p className="text-text-secondary text-sm">Main call-to-action button</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <button className="btn btn-primary">Default</button>
-              <button className="btn btn-primary" disabled>Disabled</button>
+              <Button variant="primary">Default</Button>
+              <Button variant="primary" disabled>Disabled</Button>
             </div>
             <div className="bg-surface p-3 rounded">
               <code className="text-xs">
-                {'<button className="btn btn-primary">Label</button>'}
+                {'<Button variant="primary">Label</Button>'}
               </code>
             </div>
             <div className="text-sm space-y-1">
@@ -295,12 +309,12 @@ export default function StylesPage() {
               <p className="text-text-secondary text-sm">Secondary actions, same size as tertiary</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <button className="btn btn-secondary">Default</button>
-              <button className="btn btn-secondary" disabled>Disabled</button>
+              <Button variant="secondary" size="sm">Default</Button>
+              <Button variant="secondary" size="sm" disabled>Disabled</Button>
             </div>
             <div className="bg-surface p-3 rounded">
               <code className="text-xs">
-                {'<button className="btn btn-secondary">Label</button>'}
+                {'<Button variant="secondary" size="sm">Label</Button>'}
               </code>
             </div>
             <div className="text-sm space-y-1">
@@ -317,12 +331,12 @@ export default function StylesPage() {
               <p className="text-text-secondary text-sm">Alternative actions, same size as secondary</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <button className="btn btn-tertiary">Default</button>
-              <button className="btn btn-tertiary" disabled>Disabled</button>
+              <Button variant="tertiary" size="tertiary">Default</Button>
+              <Button variant="tertiary" size="tertiary" disabled>Disabled</Button>
             </div>
             <div className="bg-surface p-3 rounded">
               <code className="text-xs">
-                {'<button className="btn btn-tertiary">Label</button>'}
+                {'<Button variant="tertiary" size="tertiary">Label</Button>'}
               </code>
             </div>
             <div className="text-sm space-y-1">
@@ -339,13 +353,13 @@ export default function StylesPage() {
               <p className="text-text-secondary text-sm">Tags, filters, and chip-style buttons</p>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <button className="btn btn-quaternary">Filter Tag</button>
-              <button className="btn btn-quaternary"><Bed className="h-4 w-4 mr-2" />With Icon</button>
-              <button className="btn btn-quaternary" disabled>Disabled</button>
+              <Button variant="quaternary" size="quaternary">Filter Tag</Button>
+              <Button variant="quaternary" size="quaternary"><Bed className="h-4 w-4" />With Icon</Button>
+              <Button variant="quaternary" size="quaternary" disabled>Disabled</Button>
             </div>
             <div className="bg-surface p-3 rounded">
               <code className="text-xs">
-                {'<button className="btn btn-quaternary">Label</button>'}
+                {'<Button variant="quaternary" size="quaternary">Label</Button>'}
               </code>
             </div>
             <div className="text-sm space-y-1">
@@ -362,13 +376,13 @@ export default function StylesPage() {
               <p className="text-text-secondary text-sm">Minimal text-only buttons for navigation</p>
             </div>
             <div className="flex gap-4 flex-wrap">
-              <button className="btn btn-text">Projects</button>
-              <button className="btn btn-text">Professionals</button>
-              <button className="btn btn-text">Account</button>
+              <Button variant="ghost" size="xs">Projects</Button>
+              <Button variant="ghost" size="xs">Professionals</Button>
+              <Button variant="ghost" size="xs">Account</Button>
             </div>
             <div className="bg-surface p-3 rounded">
               <code className="text-xs">
-                {'<button className="btn btn-text">Label</button>'}
+                {'<Button variant="ghost" size="xs">Label</Button>'}
               </code>
             </div>
             <div className="text-sm space-y-1">
@@ -385,13 +399,13 @@ export default function StylesPage() {
               <p className="text-text-secondary text-sm">For vertical lists in footers and menus</p>
             </div>
             <div className="flex flex-col gap-2 items-start">
-              <button className="btn btn-text-listed">Projects</button>
-              <button className="btn btn-text-listed">Professionals</button>
-              <button className="btn btn-text-listed">About Us</button>
+              <Button variant="link" size="xs">Projects</Button>
+              <Button variant="link" size="xs">Professionals</Button>
+              <Button variant="link" size="xs">About Us</Button>
             </div>
             <div className="bg-surface p-3 rounded">
               <code className="text-xs">
-                {'<button className="btn btn-text-listed">Label</button>'}
+                {'<Button variant="link" size="xs">Label</Button>'}
               </code>
             </div>
             <div className="text-sm space-y-1">

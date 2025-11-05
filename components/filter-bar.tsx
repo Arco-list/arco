@@ -295,12 +295,13 @@ export function FilterBar() {
 
   return (
     <>
-      <div className="w-full border-b border-gray-200 bg-white/95 backdrop-blur-md sticky top-14 z-40 h-16">
+      <div className="w-full border-b border-border bg-white/95 backdrop-blur-md sticky top-14 z-40 h-16">
       <div className="mx-auto max-w-[1800px] px-4">
         <div className="flex items-center gap-2 py-3 min-h-[64px]">
           {/* Filters Button */}
           <Button
             variant="quaternary"
+            size="quaternary"
             className={getButtonClassName(hasActiveFilters())}
             onClick={() => setIsFiltersModalOpen(true)}
           >
@@ -312,6 +313,7 @@ export function FilterBar() {
           <div className="relative hidden md:block" ref={typeDropdownRef}>
             <Button
               variant="quaternary"
+              size="quaternary"
               className={getButtonClassName(selectedTypes.length > 0)}
               onClick={toggleTypeDropdown}
               disabled={taxonomyLoading && topLevelCategories.length === 0}
@@ -321,7 +323,7 @@ export function FilterBar() {
             </Button>
 
             {taxonomyLoading && topLevelCategories.length === 0 && activeDropdown === "type" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
                 <div className="p-4 space-y-3">
                   <div className="h-4 w-32 animate-pulse rounded bg-gray-200" />
                   <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
@@ -331,7 +333,7 @@ export function FilterBar() {
             )}
 
             {!taxonomyLoading && activeDropdown === "type" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
                 <div className="p-4">
                   <div className="space-y-3">
                     {typeOptions.map((section) => (
@@ -347,7 +349,7 @@ export function FilterBar() {
                                 <input
                                   type="radio"
                                   name="type-filter"
-                                  className="h-4 w-4 rounded-full border-gray-300 text-black focus:ring-black"
+                                  className="h-4 w-4 rounded-full border-border text-black focus:ring-black"
                                   checked={selectedTypes.includes(itemValue)}
                                   onChange={() => toggleTypeSelection(itemValue)}
                                   onClick={(event) => handleTypeRadioClick(event, itemValue)}
@@ -370,7 +372,7 @@ export function FilterBar() {
                                     <input
                                       type="radio"
                                       name="type-filter"
-                                      className="h-4 w-4 rounded-full border-gray-300 text-black focus:ring-black"
+                                      className="h-4 w-4 rounded-full border-border text-black focus:ring-black"
                                       checked={selectedTypes.includes(parentItem.id)}
                                       onChange={() => toggleTypeSelection(parentItem.id)}
                                       onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
@@ -383,7 +385,7 @@ export function FilterBar() {
                                 )}
                                 {showToggle && (
                                   <button
-                                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                                    className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                                     onClick={() => toggleSection(section.id)}
                                   >
                                     {isExpanded ? "Show less" : "View all"}
@@ -409,7 +411,7 @@ export function FilterBar() {
                   </div>
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="outline" size="sm" onClick={clearFilters} className="flex-1 bg-transparent">
+                    <Button variant="quaternary" size="quaternary" onClick={clearFilters} className="flex-1 bg-transparent">
                       Clear filter
                     </Button>
                     <Button
@@ -429,6 +431,7 @@ export function FilterBar() {
           <div className="relative hidden md:block" ref={styleDropdownRef}>
             <Button
               variant="quaternary"
+              size="quaternary"
               className={getButtonClassName(selectedStyles.length > 0)}
               onClick={toggleStyleDropdown}
             >
@@ -437,7 +440,7 @@ export function FilterBar() {
             </Button>
 
             {activeDropdown === "style" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
                 <div className="p-4">
                   <div className="space-y-3 max-h-80 overflow-y-auto">
                     {projectStyles.map((style) => {
@@ -446,7 +449,7 @@ export function FilterBar() {
                         <label key={value} className="flex items-center gap-3 cursor-pointer">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                            className="h-4 w-4 rounded border-border text-black focus:ring-black"
                             checked={selectedStyles.includes(value)}
                             onChange={() => toggleStyleSelection(value)}
                           />
@@ -457,7 +460,7 @@ export function FilterBar() {
                   </div>
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="outline" size="sm" onClick={clearStyleFilters} className="flex-1 bg-transparent">
+                    <Button variant="quaternary" size="quaternary" onClick={clearStyleFilters} className="flex-1 bg-transparent">
                       Clear filter
                     </Button>
                     <Button
@@ -477,6 +480,7 @@ export function FilterBar() {
           <div className="relative hidden md:block" ref={locationDropdownRef}>
             <Button
               variant="quaternary"
+              size="quaternary"
               className={getButtonClassName(selectedLocation !== "")}
               onClick={toggleLocationDropdown}
             >
@@ -485,14 +489,14 @@ export function FilterBar() {
             </Button>
 
             {activeDropdown === "location" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
                 <div className="p-4">
                   <div className="relative mb-4">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
                       placeholder="Search locations..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                       value={locationSearch}
                       onChange={(e) => setLocationSearch(e.target.value)}
                     />
@@ -503,19 +507,19 @@ export function FilterBar() {
                       filteredLocations.map((location) => (
                         <button
                           key={location}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-surface rounded-md transition-colors"
                           onClick={() => selectLocation(location)}
                         >
                           {location}
                         </button>
                       ))
                     ) : (
-                      <div className="px-3 py-2 text-sm text-gray-500">No locations found</div>
+                      <div className="px-3 py-2 text-sm text-text-secondary">No locations found</div>
                     )}
                   </div>
 
                   <div className="mt-4 flex gap-3">
-                    <Button variant="outline" size="sm" onClick={clearLocationFilter} className="flex-1 bg-transparent">
+                    <Button variant="quaternary" size="quaternary" onClick={clearLocationFilter} className="flex-1 bg-transparent">
                       Clear filter
                     </Button>
                     <Button
@@ -565,6 +569,7 @@ export function FilterBar() {
                     key={item.id}
                     onClick={() => toggleTypeSelection(item.id)}
                     variant="quaternary"
+                    size="quaternary"
                     className={isSelected
                       ? "border-[#222222] text-[#222222] bg-transparent"
                       : ""

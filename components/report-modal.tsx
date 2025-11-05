@@ -74,7 +74,7 @@ export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) 
           </div>
 
           <div className="flex gap-2 pt-4">
-            <Button variant="outline" onClick={onClose} className="flex-1 bg-transparent">
+            <Button variant="tertiary" size="tertiary" onClick={onClose} className="flex-1 bg-transparent">
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={!selectedReason} className="flex-1">

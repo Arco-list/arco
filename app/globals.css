@@ -254,18 +254,18 @@
   
   /* Typography Scale - Using Tailwind Utilities */
 
-  /* H1 - Hero image */
+  /* H1 - Hero image - 72px mobile → 96px desktop */
   h1 {
     @apply font-semibold tracking-tight leading-none;
     font-family: var(--font-heading);
-    @apply text-6xl md:text-7xl;
+    @apply text-7xl md:text-8xl;
   }
 
   /* H2 - Category cards */
   h2 {
     @apply font-semibold tracking-tight leading-tight;
     font-family: var(--font-heading);
-    @apply text-3xl md:text-4xl;
+    @apply text-4xl md:text-5xl;
   }
 
   /* H3 - Page titles */
@@ -316,6 +316,15 @@
 }
 
 @layer components {
+  /* ============================================
+   * DESIGN SYSTEM BUTTON SPECIFICATIONS
+   * ============================================
+   * These classes define the official design system
+   * button styles. The <Button> component from
+   * @/components/ui/button implements these exact
+   * specifications.
+   * ============================================ */
+
   /* Button Base */
   .btn {
     @apply inline-flex items-center justify-center;

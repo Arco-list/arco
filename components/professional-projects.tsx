@@ -32,7 +32,7 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
 
   if (projects.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center text-sm text-gray-500">
+      <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text-secondary">
         Projects by this professional will appear here once they go live.
       </div>
     )
@@ -102,7 +102,7 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
 
       {hasMore ? (
         <div className="flex justify-center pt-4">
-          <Button variant="outline" onClick={() => setVisibleCount((previous) => Math.min(previous + 6, projects.length))}>
+          <Button variant="quaternary" size="quaternary" onClick={() => setVisibleCount((previous) => Math.min(previous + 6, projects.length))}>
             Load more projects
           </Button>
         </div>

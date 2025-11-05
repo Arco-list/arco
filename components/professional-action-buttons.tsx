@@ -35,8 +35,9 @@ export function ProfessionalActionButtons({
           <span className="hidden md:inline">Share</span>
         </Button>
         <Button
-          variant={isSaved ? "default" : "tertiary"}
+          variant="tertiary"
           size="tertiary"
+          className={isSaved ? "!bg-primary !text-white hover:!bg-primary-hover" : ""}
           onClick={() => {
             if (!professional.companyId) return
             if (isSaved) {

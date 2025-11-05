@@ -156,7 +156,7 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
       </div>
       <input type="hidden" defaultValue={safeRedirectTo ?? ""} {...form.register("redirectTo")} />
       <input type="hidden" defaultValue={invitedEmail ?? ""} {...form.register("invitedEmail")} />
-      <Button type="submit" variant="secondary" className="w-full" disabled={isSubmitting}>
+      <Button type="submit" variant="secondary" size="sm" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Creating account..." : "Create account"}
       </Button>
     </form>

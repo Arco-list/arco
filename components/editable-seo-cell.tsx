@@ -107,8 +107,7 @@ export function EditableSeoCell({ projectId, projectTitle, field, value, onUpdat
           )}
           {field === 'slug' && (
             <Button
-              size="sm"
-              variant="outline"
+                            variant="quaternary" size="quaternary"
               onClick={handleGenerateSlug}
               disabled={isPending}
               className="shrink-0"
@@ -127,8 +126,7 @@ export function EditableSeoCell({ projectId, projectTitle, field, value, onUpdat
             <Check className="h-3 w-3" />
           </Button>
           <Button
-            size="sm"
-            variant="outline"
+                        variant="quaternary" size="quaternary"
             onClick={handleCancel}
             disabled={isPending}
             className="h-7 px-2"

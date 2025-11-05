@@ -273,7 +273,7 @@ export function ProfessionalsFilterBar() {
     `flex items-center gap-2 whitespace-nowrap rounded-full ${
       hasSelection
         ? "border-[#222222] text-[#222222] bg-transparent"
-        : "bg-transparent border-gray-300 hover:border-gray-400"
+        : "bg-transparent border-border hover:border-gray-400"
     }`
 
   const toggleDropdown = (name: ActiveDropdown) => {
@@ -337,11 +337,12 @@ export function ProfessionalsFilterBar() {
 
   return (
     <>
-      <div className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-14 z-40 h-16">
+      <div className="bg-white/95 backdrop-blur-md border-b border-border sticky top-14 z-40 h-16">
         <div className="max-w-[1800px] mx-auto px-4 py-3 min-h-[64px]">
           <div className="flex items-center gap-2">
             <Button
               variant="quaternary"
+              size="quaternary"
               className={getButtonClassName(activeFilterCount > 0)}
               onClick={() => setIsModalOpen(true)}
             >
@@ -354,6 +355,7 @@ export function ProfessionalsFilterBar() {
               <div className="relative" ref={serviceDropdownRef}>
                 <Button
                   variant="quaternary"
+                  size="quaternary"
                   onClick={() => toggleDropdown("service")}
                   className={getButtonClassName(selectedCategories.length + selectedServices.length > 0)}
                 >
@@ -362,7 +364,7 @@ export function ProfessionalsFilterBar() {
                 </Button>
 
                 {activeDropdown === "service" && (
-                  <div className="absolute z-50 mt-2 w-80 bg-white border border-gray-200 rounded-md shadow-lg">
+                  <div className="absolute z-50 mt-2 w-80 bg-white border border-border rounded-md shadow-lg">
                     <div className="p-4 space-y-4 max-h-[360px] overflow-y-auto">
                       {sections.map((section) => {
                         const categoryKey = getCategoryKey(section.category)
@@ -386,7 +388,7 @@ export function ProfessionalsFilterBar() {
                               {section.services.length > 0 && (
                                 <button
                                   type="button"
-                                  className="text-xs text-gray-500 hover:text-gray-700"
+                                  className="text-xs text-text-secondary hover:text-foreground"
                                   onClick={() => toggleCategoryExpansion(categoryKey)}
                                 >
                                   <span className="flex items-center gap-1">
@@ -423,9 +425,10 @@ export function ProfessionalsFilterBar() {
                       })}
                     </div>
 
-                    <div className="border-t border-gray-200 p-3 flex gap-2">
+                    <div className="border-t border-border p-3 flex gap-2">
                       <Button
                         variant="quaternary"
+                        size="quaternary"
                         onClick={() => {
                           handleClearServiceFilters()
                           setActiveDropdown(null)
@@ -448,6 +451,7 @@ export function ProfessionalsFilterBar() {
               <div className="relative" ref={locationDropdownRef}>
                 <Button
                   variant="quaternary"
+                  size="quaternary"
                   onClick={() => toggleDropdown("location")}
                   className={getButtonClassName(Boolean(selectedCity))}
                 >
@@ -456,14 +460,14 @@ export function ProfessionalsFilterBar() {
                 </Button>
 
                 {activeDropdown === "location" && (
-                  <div className="absolute z-50 mt-2 w-72 bg-white border border-gray-200 rounded-md shadow-lg">
+                  <div className="absolute z-50 mt-2 w-72 bg-white border border-border rounded-md shadow-lg">
                     <div className="p-4 space-y-4">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <input
                           type="text"
                           placeholder="Search cities..."
-                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                          className="w-full pl-10 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                           value={locationSearch}
                           onChange={(event) => setLocationSearch(event.target.value)}
                         />
@@ -474,19 +478,19 @@ export function ProfessionalsFilterBar() {
                           filteredCities.map((city) => (
                             <button
                               key={city}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-surface rounded-md transition-colors"
                               onClick={() => selectCity(city)}
                             >
                               {city}
                             </button>
                           ))
                         ) : (
-                          <div className="px-3 py-2 text-sm text-gray-500">No cities found</div>
+                          <div className="px-3 py-2 text-sm text-text-secondary">No cities found</div>
                         )}
                       </div>
 
                       <div className="mt-4 flex gap-2">
-                        <Button variant="quaternary" onClick={clearLocationFilter} className="flex-1 bg-transparent">
+                        <Button variant="quaternary" size="quaternary" onClick={clearLocationFilter} className="flex-1 bg-transparent">
                           Clear filter
                         </Button>
                         <Button
@@ -533,6 +537,7 @@ export function ProfessionalsFilterBar() {
                     <Button
                       key={item.id}
                       variant="quaternary"
+                      size="quaternary"
                       onClick={() => toggleServiceSelection(item.id)}
                       className={`flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
                         isSelected
@@ -541,7 +546,7 @@ export function ProfessionalsFilterBar() {
                       }`}
                     >
                       <Icon className="h-4 w-4" />
-                      <span className="text-xs">{item.name}</span>
+                      <span>{item.name}</span>
                     </Button>
                   )
                 })}
@@ -563,8 +568,9 @@ export function ProfessionalsFilterBar() {
             {activeFilterCount > 0 && (
               <Button
                 variant="quaternary"
+                size="quaternary"
                 onClick={handleClearAllFilters}
-                className="hidden md:flex text-sm text-gray-600 hover:text-gray-900"
+                className="hidden md:flex text-sm text-text-secondary hover:text-foreground"
               >
                 Clear all
               </Button>
