@@ -422,6 +422,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   name: string
   description: string | null
   location: string | null
+  city: string | null
+  country: string | null
   coverImageUrl: string | null
   primaryService: string | null
   primaryServiceId: string | null
@@ -548,6 +550,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
     name,
     description,
     location,
+    city: company.city,
+    country: company.country,
     coverImageUrl,
     primaryService: primaryServiceName,
     primaryServiceId

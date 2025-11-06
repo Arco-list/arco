@@ -109,12 +109,12 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
   const [professionals, setProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
   const [hasMore, setHasMore] = useState(initialProfessionals.length === PAGE_SIZE)
   const [currentOffset, setCurrentOffset] = useState(initialProfessionals.length)
-  const [isLoading, setIsLoading] = useState(true) // Always start as loading
+  const [isLoading, setIsLoading] = useState(false) // Start with SSR data
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
-  const skipInitialFetchRef = useRef(false) // Don't skip initial fetch
+  const hasInitialDataRef = useRef(initialProfessionals.length > 0)
 
   const fetchPage = useCallback(
     async (offset: number, replace: boolean) => {
@@ -211,16 +211,27 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
       return
     }
 
-    if (skipInitialFetchRef.current) {
-      skipInitialFetchRef.current = false
+    // Check if we have any active filters
+    const hasFilters =
+      selectedCategories.length > 0 ||
+      selectedServices.length > 0 ||
+      selectedCity !== null ||
+      keyword.trim().length > 0
+
+    // If we have initial SSR data and no filters, don't fetch
+    if (hasInitialDataRef.current && !hasFilters) {
+      hasInitialDataRef.current = false
       return
     }
+
+    // Clear the flag for subsequent filter changes
+    hasInitialDataRef.current = false
 
     setProfessionals([])
     setHasMore(true)
     setCurrentOffset(0)
     void fetchPage(0, true)
-  }, [fetchPage, taxonomy.isLoading])
+  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCity, keyword])
 
   const loadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) {
