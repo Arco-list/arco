@@ -61,7 +61,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
   }
 
   return (
-    <div className="relative grid gap-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:items-stretch md:h-[480px] lg:h-[560px]">
+    <div className="relative grid gap-2 h-[480px] max-h-[480px] min-h-0 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:h-[560px] lg:max-h-[560px]">
       <div
         role={galleryIsInteractive ? "button" : undefined}
         tabIndex={galleryIsInteractive ? 0 : undefined}
@@ -69,7 +69,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
         onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, 0) : undefined}
         className={cn(
           "group relative overflow-hidden bg-surface transition-transform",
-          "h-[480px] md:aspect-auto md:h-full md:min-h-0 lg:min-h-0",
+          "h-full max-h-full min-h-0",
           "rounded-xl md:rounded-l-xl md:rounded-r-none",
           galleryIsInteractive
             ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
@@ -81,13 +81,13 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
           src={displayImages[0]?.src || PLACEHOLDER_IMAGE.src}
           alt={displayImages[0]?.alt || PLACEHOLDER_IMAGE.alt}
           className={cn(
-            "h-full w-full object-cover transition-transform duration-300 ease-out",
+            "h-full max-h-full min-h-0 w-full object-cover transition-transform duration-300 ease-out",
             galleryIsInteractive && "group-hover:scale-105",
           )}
         />
       </div>
 
-      <div className="hidden md:grid grid-cols-2 gap-2 md:grid-rows-2">
+      <div className="hidden md:grid grid-cols-2 gap-2 md:grid-rows-2 h-full max-h-full min-h-0">
         {displayImages.slice(1, 5).map((image, index) => {
           const resolvedImage = image ?? PLACEHOLDER_IMAGE
           // Determine border radius based on position
@@ -119,7 +119,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
               onKeyDown={galleryIsInteractive ? (event) => handleKeyActivate(event, index + 1) : undefined}
               className={cn(
                 "group relative overflow-hidden bg-surface",
-                "md:h-full",
+                "h-full max-h-full min-h-0",
                 roundedClass,
                 galleryIsInteractive
                   ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black"
@@ -133,7 +133,7 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
                 src={resolvedImage.src}
                 alt={resolvedImage.alt}
                 className={cn(
-                  "h-full w-full object-cover transition-transform duration-300 ease-out",
+                  "h-full max-h-full min-h-0 w-full object-cover transition-transform duration-300 ease-out",
                   galleryIsInteractive && "group-hover:scale-105",
                 )}
               />

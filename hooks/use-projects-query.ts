@@ -1,5 +1,5 @@
 "use client"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables } from "@/lib/supabase/types"
@@ -58,6 +58,7 @@ const applyTypeFilters = (query: any, selectedTypes: string[], buildingFeatureCa
 
 interface UseProjectsQueryOptions {
   pageSize?: number
+  initialProjects?: ProjectSummaryRow[]
 }
 
 const DEFAULT_PAGE_SIZE = 12
@@ -92,7 +93,10 @@ interface UseProjectsQueryResult {
   typePhotoOverrides: Record<string, { url: string; alt?: string | null }>
 }
 
-export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQueryOptions = {}): UseProjectsQueryResult {
+export function useProjectsQuery({
+  pageSize = DEFAULT_PAGE_SIZE,
+  initialProjects = []
+}: UseProjectsQueryOptions = {}): UseProjectsQueryResult {
   const {
     selectedTypes,
     selectedStyles,
@@ -110,13 +114,15 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
     keyword,
   } = useFilters()
 
-  const [projects, setProjects] = useState<ProjectSummaryRow[]>([])
-  const [total, setTotal] = useState(0)
+  const [projects, setProjects] = useState<ProjectSummaryRow[]>(initialProjects)
+  const [total, setTotal] = useState(initialProjects.length)
   const [page, setPage] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(false)
+  const [hasMore, setHasMore] = useState(initialProjects.length === DEFAULT_PAGE_SIZE)
   const [typePhotoOverrides, setTypePhotoOverrides] = useState<Record<string, { url: string; alt?: string | null }>>({})
+
+  const hasInitialDataRef = useRef(initialProjects.length > 0)
 
   const categories = taxonomy.categories as CategoryRow[]
 
@@ -458,6 +464,33 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      // Check if we have any active filters
+      const hasFilters =
+        typeFilterValues.length > 0 ||
+        selectedStyles.length > 0 ||
+        selectedLocation !== null ||
+        selectedFeatures.length > 0 ||
+        selectedBuildingTypes.length > 0 ||
+        selectedLocationFeatures.length > 0 ||
+        selectedBuildingFeatures.length > 0 ||
+        selectedMaterialFeatures.length > 0 ||
+        selectedSizes.length > 0 ||
+        selectedBudgets.length > 0 ||
+        projectYearRange[0] !== null ||
+        projectYearRange[1] !== null ||
+        buildingYearRange[0] !== null ||
+        buildingYearRange[1] !== null ||
+        keyword.trim().length > 0
+
+      // If we have initial SSR data and no filters, don't fetch
+      if (hasInitialDataRef.current && !hasFilters) {
+        hasInitialDataRef.current = false
+        return
+      }
+
+      // Clear the flag for subsequent filter changes
+      hasInitialDataRef.current = false
+
       setIsLoading(true)
       setError(null)
       setProjects([])
@@ -499,7 +532,24 @@ export function useProjectsQuery({ pageSize = DEFAULT_PAGE_SIZE }: UseProjectsQu
     return () => {
       cancelled = true
     }
-  }, [fetchProjects, fetchTypePhotoOverrides, imageCategorySearchOrder])
+  }, [
+    fetchProjects,
+    fetchTypePhotoOverrides,
+    imageCategorySearchOrder,
+    typeFilterValues.length,
+    selectedStyles.length,
+    selectedLocation,
+    selectedFeatures.length,
+    selectedBuildingTypes.length,
+    selectedLocationFeatures.length,
+    selectedBuildingFeatures.length,
+    selectedMaterialFeatures.length,
+    selectedSizes.length,
+    selectedBudgets.length,
+    projectYearRange,
+    buildingYearRange,
+    keyword
+  ])
 
   const loadMore = useCallback(async () => {
     if (isLoading || !hasMore) return

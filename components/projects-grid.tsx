@@ -13,10 +13,24 @@ const sortOptions = ["Most recent", "Most liked", "Alphabetical"] as const
 
 type SortOption = (typeof sortOptions)[number]
 
-export function ProjectsGrid() {
+type ProjectSummaryRow = {
+  id: string
+  slug: string | null
+  title: string
+  location: string | null
+  likes_count: number | null
+  primary_photo_url: string | null
+  created_at: string | null
+  [key: string]: unknown
+}
+
+export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: ProjectSummaryRow[] }) {
   const filterContext = useFilters()
   const { removeFilter, taxonomy } = filterContext
-  const { projects, isLoading, error, hasMore, loadMore, typePhotoOverrides } = useProjectsQuery({ pageSize: 12 })
+  const { projects, isLoading, error, hasMore, loadMore, typePhotoOverrides } = useProjectsQuery({
+    pageSize: 12,
+    initialProjects
+  })
   const {
     savedProjectIds,
     mutatingProjectIds: savedMutatingProjectIds,
