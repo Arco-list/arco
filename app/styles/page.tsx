@@ -3,17 +3,18 @@ import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
 export default function StylesPage() {
-  // Only allow access in development
-  if (process.env.NODE_ENV === "production") {
+  // Only allow access in development and preview deployments
+  if (process.env.NODE_ENV === "production" &&
+      process.env.NEXT_PUBLIC_VERCEL_ENV === "production") {
     redirect("/")
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Development Only Banner */}
+      {/* Development & Preview Banner */}
       <div className="bg-secondary text-secondary-foreground py-2 px-8 text-center">
         <p className="text-sm font-medium">
-          🔧 Development Only - This page is not accessible in production
+          🔧 Internal Only - This page is accessible in development and preview deployments
         </p>
       </div>
 

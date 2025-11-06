@@ -14,9 +14,10 @@ This page provides a comprehensive visual reference for:
 
 ## Access Control
 
-**Development Only**: This page is only accessible in development mode (`NODE_ENV=development`).
+**Internal Use**: This page is accessible in development and preview deployments, but blocked in production.
 
 - ✅ **Development**: Accessible at `http://localhost:3000/styles`
+- ✅ **Preview Deployments**: Accessible on Vercel preview links
 - ❌ **Production**: Automatically redirects to homepage
 - 🤖 **Search Engines**: Blocked via `robots.txt`
 
