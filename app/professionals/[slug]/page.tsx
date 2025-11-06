@@ -74,14 +74,11 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
   // Base: Professionals
   breadcrumbs.push({ label: "Professionals", href: "/professionals" })
 
-  // Location: City, Country
-  if (metadata?.location) {
-    const locationParam = new URLSearchParams()
-    if (metadata.city) {
-      locationParam.set("city", metadata.city)
-    }
+  // Location: City only (matches filter)
+  if (metadata?.city) {
+    const locationParam = new URLSearchParams({ city: metadata.city })
     breadcrumbs.push({
-      label: metadata.location,
+      label: metadata.city,
       href: `/professionals?${locationParam.toString()}`
     })
   }
