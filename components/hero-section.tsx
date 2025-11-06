@@ -84,18 +84,18 @@ export function HeroSection({ projects }: HeroSectionProps) {
           ) : null}
           <div className="flex items-center gap-3">
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+              className="h-8 w-8 bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={goToPrevious}
               aria-label="Previous image"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+              className="h-8 w-8 bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={goToNext}
               aria-label="Next image"
             >

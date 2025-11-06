@@ -67,7 +67,7 @@ export function AboutContent({ projects }: AboutContentProps) {
           <p className="text-base md:text-lg lg:text-xl text-text-secondary mb-6 md:mb-8 max-w-4xl mx-auto leading-relaxed px-2">
             Inspiring the world to build beautifully through the most inspiring portfolio of architectural achievements.
           </p>
-          <Button asChild size="lg">
+          <Button asChild>
             <a href="mailto:info@arcolist.com">Get in touch</a>
           </Button>
         </div>
@@ -198,7 +198,7 @@ export function AboutContent({ projects }: AboutContentProps) {
           <p className="text-base md:text-lg lg:text-xl mb-6 md:mb-8 text-text-secondary leading-relaxed px-2">
             At Arco, we're on a mission to transform how dreams become homes. Join us and help bring inspiring spaces to life. Together, we can build something extraordinary.
           </p>
-          <Button asChild size="lg">
+          <Button asChild>
             <a href="mailto:info@arcolist.com">Get in touch</a>
           </Button>
         </div>

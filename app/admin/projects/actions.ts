@@ -7,6 +7,7 @@ import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } fro
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 import { generateUniqueSlug, isValidSlug } from "@/lib/seo-utils"
+import { getSiteUrl } from "@/lib/utils"
 import { sendProjectStatusEmail, sendProfessionalInviteEmail, checkUserAndGenerateInviteUrl } from "@/lib/email-service"
 import { 
   ActionResult, 
@@ -245,7 +246,7 @@ export async function setProjectStatusAction(input: {
       
       const ownerFirstName = project?.profiles?.first_name || ''
       const ownerFullName = [project?.profiles?.first_name, project?.profiles?.last_name].filter(Boolean).join(' ') || ownerEmail || 'Project Owner'
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+      const baseUrl = getSiteUrl()
 
       if (statusResult.data === "rejected") {
         // Send rejection email to project owner

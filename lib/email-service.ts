@@ -169,8 +169,9 @@ export async function checkUserAndGenerateInviteUrl(
   projectId: string
 ): Promise<{ confirmUrl: string; isExistingProfessional: boolean }> {
   const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
+  const { getSiteUrl } = await import('@/lib/utils')
   const supabase = createServiceRoleSupabaseClient()
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  const baseUrl = getSiteUrl()
   
   // Look up user by email in profiles table (avoids pagination issues with listUsers)
   const { data: profile, error: profileError } = await supabase

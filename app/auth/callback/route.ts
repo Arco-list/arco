@@ -10,12 +10,14 @@ export async function GET(request: NextRequest) {
   const redirectParam = requestUrl.searchParams.get('redirect_to');
   const redirectTo = resolveRedirectPath(redirectParam);
   const inviteType = requestUrl.searchParams.get('invite');
+  const type = requestUrl.searchParams.get('type');
   const callbackId = Math.random().toString(36).substring(7);
 
   logger.auth('callback', 'Auth callback started', {
     callbackId,
     hasCode: !!code,
     redirectTo,
+    type,
     url: requestUrl.href,
   });
 
@@ -45,6 +47,16 @@ export async function GET(request: NextRequest) {
         hasSession: !!data.session,
         emailConfirmed: data.user?.email_confirmed_at ? true : false,
       });
+
+      // Handle password recovery flow - redirect directly to update-password page
+      if (type === 'recovery' || redirectTo === '/update-password') {
+        logger.auth('callback', 'Password recovery detected, redirecting to update-password', {
+          callbackId,
+          userId: data.user?.id,
+        });
+
+        return NextResponse.redirect(`${requestUrl.origin}/update-password`);
+      }
 
       // Check if user has a profile, if not create one (for email confirmation flow)
       if (data.user) {

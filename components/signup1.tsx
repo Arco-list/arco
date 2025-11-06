@@ -41,15 +41,15 @@ const Signup1 = ({
   const isPasswordValid = hasMinLength && hasSymbol && hasNumber
 
   return (
-    <section className="bg-muted h-screen">
+    <section className="bg-background h-screen">
       <div className="flex h-full items-center justify-center">
         {/* Logo */}
         <div className="flex flex-col items-center gap-6 lg:justify-start">
           <Link href={logo.url}>
             <img src={logo.src || "/placeholder.svg"} alt={logo.alt} title={logo.title} className="h-10 dark:invert" />
           </Link>
-          <div className="min-w-sm border-muted bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md">
-            {heading && <h1 className="text-xl font-semibold">{heading}</h1>}
+          <div className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md">
+            {heading && <h3>{heading}</h3>}
             <Input type="email" placeholder="Email" className="text-sm" required />
             <div className="w-full space-y-2">
               <Input

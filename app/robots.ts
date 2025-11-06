@@ -1,12 +1,15 @@
 import { MetadataRoute } from 'next'
+import { getSiteUrl } from '@/lib/utils'
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = getSiteUrl()
+
   return {
     rules: {
       userAgent: '*',
       allow: '/',
       disallow: ['/styles', '/admin', '/dashboard'],
     },
-    sitemap: 'https://arco.com/sitemap.xml',
+    sitemap: `${baseUrl}/sitemap.xml`,
   }
 }

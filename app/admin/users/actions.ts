@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { ensureAdminUserTypes, isSuperAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
+import { getSiteUrl } from "@/lib/utils"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 
 type ActionResult<T = void> =
@@ -112,15 +113,7 @@ export async function inviteAdminUserAction(input: { email: string; role: "admin
   const serviceClient = createServiceRoleSupabaseClient()
   const invitedAt = new Date().toISOString()
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    process.env.SITE_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-
-  if (!siteUrl) {
-    logger.warn("admin-invite", "Missing NEXT_PUBLIC_SITE_URL environment variable for invite redirect")
-    return { success: false, error: "Server configuration error. Contact support." }
-  }
+  const siteUrl = getSiteUrl()
 
   const onboardingPath = `/auth/admin-onboarding?redirectTo=/admin/users&email=${encodeURIComponent(parsed.data.email)}`
   const inviteRedirectUrl = new URL("/auth/invite-callback", siteUrl)

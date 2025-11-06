@@ -18,6 +18,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 import { isAdminUser } from "@/lib/auth-utils"
+import { getSiteUrl } from "@/lib/utils"
 import { toast } from "sonner"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
@@ -585,7 +586,7 @@ export default function ProfessionalsPage() {
           Project_name: project?.title || '',
           Project_title: project?.title || '',
           project_name: project?.title || '',
-          dashboard_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/dashboard/listings`
+          dashboard_link: `${getSiteUrl()}/dashboard/listings`
         })
       }
 

@@ -19,21 +19,26 @@ interface EmailConfirmedPageProps {
 export default async function EmailConfirmedPage({ searchParams }: EmailConfirmedPageProps) {
   const params = (await searchParams) ?? {}
   const redirectParam = getFirstSearchParamValue(params.redirectTo)
-  const redirectTo = resolveRedirectPath(redirectParam)
+  let redirectTo = resolveRedirectPath(redirectParam)
+
+  // Prevent redirect loop: if redirectTo is the signup confirm page, go to dashboard instead
+  if (redirectTo === '/signup/confirm') {
+    redirectTo = '/dashboard'
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-muted/30 px-4 py-16">
-          <div className="mx-auto w-full max-w-lg rounded-2xl bg-background p-8 shadow-lg">
+        <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-background px-4 py-16">
+          <div className="mx-auto w-full max-w-lg rounded-2xl bg-background border border-border p-8 shadow-lg">
             <div className="text-center space-y-6">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
                 <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" aria-hidden="true" />
               </div>
 
               <div className="space-y-2">
-                <h1 className="text-2xl font-semibold text-foreground">Email confirmed!</h1>
+                <h3>Email confirmed!</h3>
                 <p className="text-muted-foreground text-sm">
                   Your email has been successfully verified. You can now access all features of your account.
                 </p>
@@ -57,7 +62,7 @@ export default async function EmailConfirmedPage({ searchParams }: EmailConfirme
               </div>
             </div>
 
-            <div className="mt-8 p-4 bg-muted/50 rounded-lg">
+            <div className="mt-8 p-4 bg-surface rounded-lg">
               <h2 className="text-sm font-medium text-foreground mb-2">What&apos;s next?</h2>
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• Complete your profile to get started</li>

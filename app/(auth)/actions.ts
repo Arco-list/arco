@@ -495,3 +495,32 @@ export const signOutAction = async (): Promise<AuthActionResult<{ success: true 
 
   return { data: { success: true } };
 };
+
+export const resetPasswordAction = async (
+  email: string
+): Promise<AuthActionResult<{ success: true }>> => {
+  if (!email || !email.trim()) {
+    return {
+      error: {
+        message: 'Email is required',
+        code: 'VALIDATION_ERROR',
+      },
+    };
+  }
+
+  const supabase = await createServerActionSupabaseClient();
+  const baseUrl = await getBaseUrl();
+  const redirectTo = `${baseUrl}/update-password`;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  const normalizedError = normalizeError(error);
+
+  if (normalizedError) {
+    return { error: normalizedError };
+  }
+
+  return { data: { success: true } };
+};
