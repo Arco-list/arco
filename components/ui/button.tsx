@@ -29,10 +29,16 @@ const buttonVariants = cva(
         // Text Button Listed - Footer/menu variant (Design System: 14px, 6px/12px padding)
         link:
           "bg-transparent text-foreground text-sm font-normal hover:bg-tertiary hover:text-text-secondary active:text-primary",
-        // Destructive - Kept for compatibility
+
+        // ========================================
+        // LEGACY VARIANTS - AVOID IN NEW CODE
+        // ========================================
+        // @deprecated Use variant="primary" with custom destructive styling if needed
+        // Kept for backward compatibility - Will be removed in future version
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50",
-        // Outline - Kept for compatibility
+        // @deprecated Use variant="quaternary" instead
+        // Kept for backward compatibility - Will be removed in future version
         outline:
           "border border-border bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50",
       },
@@ -42,12 +48,20 @@ const buttonVariants = cva(
         lg: "py-3 px-6", // Alias for primary
         // Secondary/Tertiary size: 12px/16px padding
         sm: "py-3 px-4",
-        tertiary: "py-3 px-4", // Kept for backward compatibility with variant="tertiary"
         // Quaternary/Text size: 6px/12px padding
         xs: "py-1.5 px-3",
-        quaternary: "py-1.5 px-3", // Kept for backward compatibility with variant="quaternary"
         // Icon button
         icon: "size-9",
+
+        // ========================================
+        // LEGACY SIZES - REDUNDANT WITH VARIANTS
+        // ========================================
+        // @deprecated Redundant - variant="tertiary" already implies correct size (sm)
+        // Kept for backward compatibility - Can be removed safely
+        tertiary: "py-3 px-4",
+        // @deprecated Redundant - variant="quaternary" already implies correct size (xs)
+        // Kept for backward compatibility - Can be removed safely
+        quaternary: "py-1.5 px-3",
       },
     },
     defaultVariants: {
