@@ -79,8 +79,8 @@ export function HeaderSearch({
     : "border-border bg-white text-foreground";
 
   const containerClasses = centered
-    ? "absolute left-1/2 w-48 -translate-x-1/2 transform md:w-80"
-    : "w-48 md:w-80";
+    ? "absolute left-1/2 w-48 -translate-x-1/2 transform md:left-[55%] md:w-40 lg:left-1/2 lg:w-64"
+    : "w-48 md:w-40 lg:w-64";
 
   return (
     <div

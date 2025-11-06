@@ -42,7 +42,7 @@ export default async function SignupConfirmPage({ searchParams }: SignupConfirmP
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <MailCheck className="h-8 w-8 text-primary" aria-hidden="true" />
               </div>
-              <h1 className="text-2xl font-semibold">Confirm your email</h1>
+              <h3>Confirm your email</h3>
               <p className="text-muted-foreground text-sm">
                 We just sent a confirmation link{email ? (
                   <>

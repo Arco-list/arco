@@ -21,6 +21,7 @@ export type Database = {
           description: string | null
           icon: string | null
           id: string
+          image_url: string | null
           is_active: boolean | null
           name: string
           parent_id: string | null
@@ -34,6 +35,7 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean | null
           name: string
           parent_id?: string | null
@@ -47,6 +49,7 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean | null
           name?: string
           parent_id?: string | null
@@ -250,6 +253,13 @@ export type Database = {
             referencedRelation: "mv_professional_summary"
             referencedColumns: ["company_id_full"]
           },
+          {
+            foreignKeyName: "company_photos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
         ]
       }
       company_ratings: {
@@ -315,6 +325,13 @@ export type Database = {
             referencedRelation: "mv_professional_summary"
             referencedColumns: ["company_id_full"]
           },
+          {
+            foreignKeyName: "company_ratings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
         ]
       }
       company_social_links: {
@@ -369,6 +386,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "company_social_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
             referencedColumns: ["company_id_full"]
           },
         ]
@@ -430,6 +454,20 @@ export type Database = {
             foreignKeyName: "messages_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -484,6 +522,13 @@ export type Database = {
             columns: ["professional_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professional_specialties_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
             referencedColumns: ["id"]
           },
           {
@@ -580,6 +625,13 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
           {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
             foreignKeyName: "professionals_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
@@ -673,6 +725,20 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_categories_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_categories_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
             referencedColumns: ["id"]
           },
           {
@@ -778,6 +844,20 @@ export type Database = {
             foreignKeyName: "project_features_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_features_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_features_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -800,6 +880,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_likes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_likes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_likes_project_id_fkey"
             columns: ["project_id"]
@@ -877,6 +971,20 @@ export type Database = {
             foreignKeyName: "project_photos_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_photos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_photos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -905,6 +1013,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_professional_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professional_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_professional_services_project_id_fkey"
             columns: ["project_id"]
@@ -994,6 +1116,13 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
           {
+            foreignKeyName: "project_professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
             foreignKeyName: "project_professionals_invited_service_category_id_fkey"
             columns: ["invited_service_category_id"]
             isOneToOne: false
@@ -1011,7 +1140,28 @@ export type Database = {
             foreignKeyName: "project_professionals_professional_id_fkey"
             columns: ["professional_id"]
             isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_professional_id_fkey"
+            columns: ["professional_id"]
+            isOneToOne: false
             referencedRelation: "professionals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_professionals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
             referencedColumns: ["id"]
           },
           {
@@ -1046,6 +1196,20 @@ export type Database = {
           project_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_redirects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_redirects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_redirects_project_id_fkey"
             columns: ["project_id"]
@@ -1138,6 +1302,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_taxonomy_selections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_taxonomy_selections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_taxonomy_selections_project_id_fkey"
             columns: ["project_id"]
@@ -1411,10 +1589,31 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
           {
+            foreignKeyName: "reviews_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
             foreignKeyName: "reviews_moderated_by_fkey"
             columns: ["moderated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
             referencedColumns: ["id"]
           },
           {
@@ -1482,6 +1681,13 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
           {
+            foreignKeyName: "saved_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
             foreignKeyName: "saved_companies_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -1510,6 +1716,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "saved_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "saved_projects_project_id_fkey"
             columns: ["project_id"]
@@ -1628,6 +1848,7 @@ export type Database = {
           portfolio_url: string | null
           primary_service_name: string | null
           primary_specialty: string | null
+          primary_specialty_slug: string | null
           quality_rating: number | null
           reliability_rating: number | null
           searchable_city: string | null
@@ -1673,6 +1894,13 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
           {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
             foreignKeyName: "professionals_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
@@ -1680,6 +1908,183 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mv_project_summary: {
+        Row: {
+          budget_display: string | null
+          budget_level:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          budget_max: number | null
+          budget_min: number | null
+          building_type: string | null
+          building_year: number | null
+          client_avatar: string | null
+          client_first_name: string | null
+          client_last_name: string | null
+          created_at: string | null
+          description: string | null
+          features: string[] | null
+          id: string | null
+          is_featured: boolean | null
+          likes_count: number | null
+          location: string | null
+          photo_count: number | null
+          primary_category: string | null
+          primary_category_color: string | null
+          primary_category_icon: string | null
+          primary_category_slug: string | null
+          primary_photo_alt: string | null
+          primary_photo_url: string | null
+          project_size: string | null
+          project_type: string | null
+          project_year: number | null
+          slug: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          style_preferences: string[] | null
+          title: string | null
+          updated_at: string | null
+          views_count: number | null
+        }
+        Relationships: []
+      }
+      professional_search_documents: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          communication_rating: number | null
+          company_city: string | null
+          company_country: string | null
+          company_domain: string | null
+          company_id: string | null
+          company_id_full: string | null
+          company_is_featured: boolean | null
+          company_logo: string | null
+          company_name: string | null
+          company_plan_expires_at: string | null
+          company_plan_tier:
+            | Database["public"]["Enums"]["company_plan_tier"]
+            | null
+          company_slug: string | null
+          company_state_region: string | null
+          company_status: Database["public"]["Enums"]["company_status"] | null
+          cover_photo_url: string | null
+          created_at: string | null
+          display_rating: number | null
+          first_name: string | null
+          hourly_rate_display: string | null
+          hourly_rate_max: number | null
+          hourly_rate_min: number | null
+          id: string | null
+          is_available: boolean | null
+          is_verified: boolean | null
+          languages_spoken: string[] | null
+          last_name: string | null
+          last_review_at: string | null
+          portfolio_url: string | null
+          primary_service_name: string | null
+          primary_specialty: string | null
+          primary_specialty_slug: string | null
+          quality_rating: number | null
+          reliability_rating: number | null
+          search_vector: unknown
+          searchable_city: string | null
+          searchable_country: string | null
+          searchable_state_region: string | null
+          services_offered: string[] | null
+          specialty_ids: string[] | null
+          specialty_parent_ids: string[] | null
+          title: string | null
+          total_reviews: number | null
+          updated_at: string | null
+          user_id: string | null
+          user_location: string | null
+          years_experience: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_company_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "professionals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_search_documents: {
+        Row: {
+          budget_display: string | null
+          budget_level:
+            | Database["public"]["Enums"]["project_budget_level"]
+            | null
+          budget_max: number | null
+          budget_min: number | null
+          building_type: string | null
+          building_year: number | null
+          client_avatar: string | null
+          client_first_name: string | null
+          client_last_name: string | null
+          created_at: string | null
+          description: string | null
+          features: string[] | null
+          id: string | null
+          is_featured: boolean | null
+          likes_count: number | null
+          location: string | null
+          photo_count: number | null
+          primary_category: string | null
+          primary_category_color: string | null
+          primary_category_icon: string | null
+          primary_category_slug: string | null
+          primary_photo_alt: string | null
+          primary_photo_url: string | null
+          project_size: string | null
+          project_type: string | null
+          project_year: number | null
+          search_vector: unknown
+          slug: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          style_preferences: string[] | null
+          title: string | null
+          updated_at: string | null
+          views_count: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {

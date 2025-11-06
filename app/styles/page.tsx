@@ -19,8 +19,8 @@ export default function StylesPage() {
 
       {/* Header */}
       <div className="bg-primary text-primary-foreground py-16 px-8">
-        <div className="max-w-6xl mx-auto">
-          <h1 className="mb-4">Arco Design System</h1>
+        <div className="max-w-6xl mx-auto mb-4">
+          <h1>Arco Design System</h1>
           <p className="text-lg opacity-90 max-w-2xl">
             A comprehensive style guide documenting all design elements, components, and patterns used in the Arco platform.
           </p>
@@ -31,14 +31,14 @@ export default function StylesPage() {
 
         {/* Color Palette */}
         <section className="space-y-6">
-          <div>
-            <h2 className="mb-2">Color Palette</h2>
+          <div className="mb-2">
+            <h2>Color Palette</h2>
             <p className="text-text-secondary">Brand colors and semantic color system</p>
           </div>
 
           {/* Primary Colors */}
-          <div>
-            <h4 className="mb-4">Primary Colors</h4>
+          <div className="mb-4">
+            <h4>Primary Colors</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <div className="h-24 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-semibold">
@@ -64,8 +64,8 @@ export default function StylesPage() {
           </div>
 
           {/* Secondary Colors */}
-          <div>
-            <h4 className="mb-4">Secondary Colors</h4>
+          <div className="mb-4">
+            <h4>Secondary Colors</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <div className="h-24 rounded-lg bg-secondary flex items-center justify-center text-secondary-foreground font-semibold">
@@ -91,8 +91,8 @@ export default function StylesPage() {
           </div>
 
           {/* Tertiary Colors */}
-          <div>
-            <h4 className="mb-4">Tertiary Colors</h4>
+          <div className="mb-4">
+            <h4>Tertiary Colors</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <div className="h-24 rounded-lg bg-tertiary border border-border flex items-center justify-center text-tertiary-foreground font-semibold">
@@ -118,8 +118,8 @@ export default function StylesPage() {
           </div>
 
           {/* Neutral Colors */}
-          <div>
-            <h4 className="mb-4">Neutral Colors</h4>
+          <div className="mb-4">
+            <h4>Neutral Colors</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <div className="h-24 rounded-lg bg-background border-2 border-border flex items-center justify-center text-foreground font-semibold">
@@ -155,8 +155,8 @@ export default function StylesPage() {
           </div>
 
           {/* Text Colors */}
-          <div>
-            <h4 className="mb-4">Text Colors</h4>
+          <div className="mb-4">
+            <h4>Text Colors</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <div className="h-24 rounded-lg bg-surface border border-border flex items-center justify-center">
@@ -194,64 +194,73 @@ export default function StylesPage() {
 
         {/* Typography */}
         <section className="space-y-6">
-          <div>
-            <h2 className="mb-2">Typography</h2>
+          <div className="mb-2">
+            <h2>Typography</h2>
             <p className="text-text-secondary">Font hierarchy and text styles</p>
           </div>
 
           <div className="space-y-8 bg-surface p-8 rounded-lg">
             <div className="space-y-2 border-b border-border pb-6">
               <h1>Heading 1 - Hero Image</h1>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 72px mobile → 96px desktop (text-7xl md:text-8xl)</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 48px → 60px (md) → 96px (lg) • Letter-spacing: -2px • Line-height: 1</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h1>Your Text</h1>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-5xl md:text-6xl lg:text-8xl</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h2>Heading 2 - Category Cards</h2>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 36px mobile → 48px desktop (text-4xl md:text-5xl)</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 36px → 48px (md) • Letter-spacing: -1px • Line-height: 1.2</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h2>Your Text</h2>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-4xl md:text-5xl</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h3>Heading 3 - Page Titles</h3>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 24px mobile → 30px desktop (text-2xl md:text-3xl)</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 24px → 30px (md) • Letter-spacing: -0.5px • Line-height: 1.2</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h3>Your Text</h3>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-2xl md:text-3xl</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h4>Heading 4 - Section Titles</h4>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 16px mobile → 20px desktop (text-base md:text-xl)</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 16px → 20px (md) • Letter-spacing: -0.3px • Line-height: 1.2</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h4>Your Text</h4>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-base md:text-xl</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h5>Heading 5 - Card Titles</h5>
-              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 12px mobile → 16px desktop (text-xs md:text-base)</p>
+              <p className="text-text-secondary text-sm">Font: Figtree Semibold (600) • Size: 12px → 16px (md) • Letter-spacing: 0 • Line-height: 1.2</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h5>Your Text</h5>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-xs md:text-base</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <h6>Heading 6 - Regular Headings</h6>
-              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 16px (text-base)</p>
+              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 16px • Letter-spacing: 0 • Line-height: 1.2</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<h6>Your Text</h6>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-base</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <p className="h7">Heading 7 - Small Headings</p>
-              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 14px (text-sm)</p>
+              <p className="text-text-secondary text-sm">Font: Poppins Medium (500) • Size: 14px • Letter-spacing: 0 • Line-height: 1.2</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<p className="h7">Your Text</p>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-sm</code>
             </div>
 
             <div className="space-y-2 border-b border-border pb-6">
               <p>Body Regular - Default paragraph text</p>
               <p className="text-text-secondary text-sm">Font: Poppins Regular (400) • Size: 16px</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<p>Your Text</p>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-base</code>
             </div>
 
             <div className="space-y-2">
               <p className="body-small">Body Small - Smaller body text</p>
               <p className="text-text-secondary text-sm">Font: Poppins Regular (400) • Size: 14px</p>
               <code className="text-xs bg-background px-2 py-1 rounded">{'<p className="body-small">Your Text</p>'}</code>
+              <code className="text-xs bg-background px-2 py-1 rounded ml-2">text-sm</code>
             </div>
           </div>
 
@@ -275,15 +284,15 @@ export default function StylesPage() {
 
         {/* Buttons */}
         <section className="space-y-6">
-          <div>
-            <h2 className="mb-2">Buttons</h2>
+          <div className="mb-2">
+            <h2>Buttons</h2>
             <p className="text-text-secondary">All button variants and states</p>
           </div>
 
           {/* Primary Button */}
           <div className="bg-background border border-border p-6 rounded-lg space-y-4">
-            <div>
-              <h4 className="mb-1">Primary Button</h4>
+            <div className="mb-1">
+              <h4>Primary Button</h4>
               <p className="text-text-secondary text-sm">Main call-to-action button</p>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -304,8 +313,8 @@ export default function StylesPage() {
 
           {/* Secondary Button */}
           <div className="bg-background border border-border p-6 rounded-lg space-y-4">
-            <div>
-              <h4 className="mb-1">Secondary Button</h4>
+            <div className="mb-1">
+              <h4>Secondary Button</h4>
               <p className="text-text-secondary text-sm">Secondary actions, same size as tertiary</p>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -326,8 +335,8 @@ export default function StylesPage() {
 
           {/* Tertiary Button */}
           <div className="bg-background border border-border p-6 rounded-lg space-y-4">
-            <div>
-              <h4 className="mb-1">Tertiary Button</h4>
+            <div className="mb-1">
+              <h4>Tertiary Button</h4>
               <p className="text-text-secondary text-sm">Alternative actions, same size as secondary</p>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -348,8 +357,8 @@ export default function StylesPage() {
 
           {/* Quaternary Button */}
           <div className="bg-background border border-border p-6 rounded-lg space-y-4">
-            <div>
-              <h4 className="mb-1">Quaternary Button</h4>
+            <div className="mb-1">
+              <h4>Quaternary Button</h4>
               <p className="text-text-secondary text-sm">Tags, filters, and chip-style buttons</p>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -371,8 +380,8 @@ export default function StylesPage() {
 
           {/* Text Button */}
           <div className="bg-background border border-border p-6 rounded-lg space-y-4">
-            <div>
-              <h4 className="mb-1">Text Button</h4>
+            <div className="mb-1">
+              <h4>Text Button</h4>
               <p className="text-text-secondary text-sm">Minimal text-only buttons for navigation</p>
             </div>
             <div className="flex gap-4 flex-wrap">
@@ -394,8 +403,8 @@ export default function StylesPage() {
 
           {/* Text Listed Button */}
           <div className="bg-background border border-border p-6 rounded-lg space-y-4">
-            <div>
-              <h4 className="mb-1">Text Listed Button</h4>
+            <div className="mb-1">
+              <h4>Text Listed Button</h4>
               <p className="text-text-secondary text-sm">For vertical lists in footers and menus</p>
             </div>
             <div className="flex flex-col gap-2 items-start">
@@ -417,8 +426,8 @@ export default function StylesPage() {
 
         {/* Spacing & Layout */}
         <section className="space-y-6">
-          <div>
-            <h2 className="mb-2">Spacing & Border Radius</h2>
+          <div className="mb-2">
+            <h2>Spacing & Border Radius</h2>
             <p className="text-text-secondary">Consistent spacing and rounding values</p>
           </div>
 
@@ -484,8 +493,8 @@ export default function StylesPage() {
 
         {/* Icons */}
         <section className="space-y-6">
-          <div>
-            <h2 className="mb-2">Icons</h2>
+          <div className="mb-2">
+            <h2>Icons</h2>
             <p className="text-text-secondary">Lucide React icon library</p>
           </div>
 
@@ -535,8 +544,8 @@ export default function StylesPage() {
 
         {/* Component Examples */}
         <section className="space-y-6">
-          <div>
-            <h2 className="mb-2">Component Examples</h2>
+          <div className="mb-2">
+            <h2>Component Examples</h2>
             <p className="text-text-secondary">Real-world component usage</p>
           </div>
 

@@ -144,11 +144,11 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
         )}
         {passwordValue && (
           <ul className="text-xs text-muted-foreground space-y-1">
-            <li className={/^[\s\S]{7,}$/.test(passwordValue) ? "text-emerald-600" : undefined}>
+            <li className={/^[\s\S]{7,}$/.test(passwordValue) ? "text-success" : undefined}>
               • At least 7 characters
             </li>
-            <li className={/[0-9]/.test(passwordValue) ? "text-emerald-600" : undefined}>• Includes a number</li>
-            <li className={/[!@#$%^&*(),.?":{}|<>]/.test(passwordValue) ? "text-emerald-600" : undefined}>
+            <li className={/[0-9]/.test(passwordValue) ? "text-success" : undefined}>• Includes a number</li>
+            <li className={/[!@#$%^&*(),.?":{}|<>]/.test(passwordValue) ? "text-success" : undefined}>
               • Includes a symbol
             </li>
           </ul>

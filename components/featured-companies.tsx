@@ -44,7 +44,7 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
     <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-semibold text-foreground">Featured professionals</h2>
+          <h4>Featured professionals</h4>
           <div className="hidden md:flex items-center gap-2">
             <Link href="/professionals" className={textButtonStyles}>
               View all
