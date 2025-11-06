@@ -467,7 +467,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                     max={DEFAULT_YEAR_MAX}
                     value={projectYearRange[1] ?? DEFAULT_YEAR_MAX}
                     onChange={(e) => setProjectYearRange([projectYearRange[0], Number.parseInt(e.target.value, 10)])}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer"
                   />
                   <div className="flex justify-between text-sm text-text-secondary mt-1">
                     <span>{DEFAULT_YEAR_MIN}</span>
@@ -485,7 +485,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                     max={DEFAULT_YEAR_MAX}
                     value={buildingYearRange[1] ?? DEFAULT_YEAR_MAX}
                     onChange={(e) => setBuildingYearRange([buildingYearRange[0], Number.parseInt(e.target.value, 10)])}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer"
                   />
                   <div className="flex justify-between text-sm text-text-secondary mt-1">
                     <span>{DEFAULT_YEAR_MIN}</span>
@@ -501,7 +501,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
           <Button variant="quaternary" size="quaternary" onClick={clearAllFilters} className="flex-1 bg-transparent">
             Clear filters
           </Button>
-          <Button onClick={applyFilters} className="flex-1 bg-black text-white hover:bg-gray-800">
+          <Button onClick={applyFilters} className="flex-1 bg-black text-white hover:bg-secondary-hover">
             Show projects
           </Button>
         </div>

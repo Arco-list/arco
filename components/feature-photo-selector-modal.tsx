@@ -158,7 +158,7 @@ export function FeaturePhotoSelectorModal({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
               <div
                 className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-                  modalDragOver ? "border-gray-400 bg-surface" : "border-border"
+                  modalDragOver ? "border-border bg-surface" : "border-border"
                 }`}
                 onDrop={onModalDrop}
                 onDragOver={onModalDragOver}
@@ -212,13 +212,13 @@ export function FeaturePhotoSelectorModal({
                       }}
                       className={`relative block aspect-square w-full overflow-hidden rounded-lg border-2 transition-all ${
                         isSelected
-                          ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2"
+                          ? "border-foreground ring-2 ring-gray-900 ring-offset-2"
                           : "border-border hover:border-border"
                       }`}
                     >
                       <img src={photo.url || "/placeholder.svg"} alt="Project photo" className="h-full w-full object-cover" />
                       {isSelected && (
-                        <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-sm font-medium text-white shadow">
+                        <div className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-sm font-medium text-white shadow">
                           ✓
                         </div>
                       )}

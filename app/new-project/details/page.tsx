@@ -1390,7 +1390,7 @@ export default function NewProjectPage() {
                             value={addressInputValue}
                             onChange={(event) => handleInputChange("address", event.target.value)}
                             placeholder="Search for your address"
-                            className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-border rounded-md shadow-sm text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+                            className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-border rounded-md shadow-sm text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
                           />
                         </div>
                         {!isMapsApiLoaded && !mapsError && (
@@ -1435,7 +1435,7 @@ export default function NewProjectPage() {
                     type="button"
                     onClick={() => handleToggleChange(!formData.shareExactLocation)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 ${
-                      formData.shareExactLocation ? "bg-gray-900" : "bg-gray-200"
+                      formData.shareExactLocation ? "bg-secondary" : "bg-surface"
                     }`}
                   >
                     <span

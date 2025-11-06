@@ -69,7 +69,7 @@ const STATUS_LABELS: Record<ProjectStatusValue, { label: string; tone: string }>
   in_progress: { label: "In review", tone: "bg-blue-100 text-blue-800" },
   published: { label: "Live", tone: "bg-green-100 text-green-800" },
   completed: { label: "Listed", tone: "bg-emerald-100 text-emerald-800" },
-  archived: { label: "Unlisted", tone: "bg-slate-200 text-slate-700" },
+  archived: { label: "Unlisted", tone: "bg-surface text-text-secondary" },
   rejected: { label: "Rejected", tone: "bg-red-100 text-red-700" },
 }
 

@@ -162,7 +162,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
           >
             Clear filters
           </Button>
-          <Button onClick={onClose} className="flex-1 bg-black text-white hover:bg-gray-800">
+          <Button onClick={onClose} className="flex-1 bg-black text-white hover:bg-secondary-hover">
             Apply
           </Button>
         </div>

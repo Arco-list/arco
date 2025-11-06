@@ -182,7 +182,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-gray-100 bg-surface/60 p-3 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-border bg-surface/60 p-3 mb-6">
           <img
             src={imageUrl || "/placeholder.svg"}
             alt={title}

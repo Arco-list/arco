@@ -268,7 +268,7 @@ export function DashboardListingsFilter({
               >
                 Clear filters
               </Button>
-              <Button onClick={handleApply} className="flex-1 bg-black text-white hover:bg-gray-800">
+              <Button onClick={handleApply} className="flex-1 bg-black text-white hover:bg-secondary-hover">
                 Apply filters
               </Button>
             </div>
@@ -309,7 +309,7 @@ export function DashboardListingsFilter({
             >
               Clear filters
             </Button>
-            <Button onClick={handleApply} className="flex-1 bg-black text-white hover:bg-gray-800">
+            <Button onClick={handleApply} className="flex-1 bg-black text-white hover:bg-secondary-hover">
               Apply filters
             </Button>
           </div>

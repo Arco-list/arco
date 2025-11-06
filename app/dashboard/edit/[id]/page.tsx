@@ -205,7 +205,7 @@ const getInviteStatusMeta = (invite: ProfessionalInviteSummary) => {
     case "live_on_page":
       return { label: "Active", className: "bg-green-100 text-green-800" }
     case "unlisted":
-      return { label: "Unlisted", className: "bg-gray-200 text-foreground" }
+      return { label: "Unlisted", className: "bg-surface text-foreground" }
     case "removed":
       return { label: "Removed", className: "bg-red-100 text-red-800" }
     case "rejected":
@@ -1469,7 +1469,7 @@ export default function ListingEditorPage() {
     if (projectStatus) {
       return PROJECT_STATUS_DOT_CLASS[projectStatus]
     }
-    return "bg-gray-400"
+    return "bg-muted-foreground"
   }, [currentStatusValue, projectStatus, statusOptionByValue])
 
   const loadProfessionalServiceOptions = useCallback(async () => {
@@ -2217,7 +2217,7 @@ export default function ListingEditorPage() {
                     value={addressInputValue}
                     onChange={(event) => handleLocationInputChange("address", event.target.value)}
                     placeholder="Search for your address"
-                    className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-border rounded-md shadow-sm text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+                    className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-border rounded-md shadow-sm text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
                   />
                 </div>
                 {!isMapsApiLoaded && !mapsError && (
@@ -2238,7 +2238,7 @@ export default function ListingEditorPage() {
                 value={addressInputValue}
                 onChange={(event) => handleLocationInputChange("address", event.target.value)}
                 placeholder="Enter your project address"
-                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
               />
             </div>
           )}
@@ -2267,7 +2267,7 @@ export default function ListingEditorPage() {
             type="button"
             onClick={() => handleLocationToggleChange("shareExactLocation", !detailsForm.shareExactLocation)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 ${
-              detailsForm.shareExactLocation ? "bg-gray-900" : "bg-gray-200"
+              detailsForm.shareExactLocation ? "bg-secondary" : "bg-surface"
             }`}
           >
             <span
@@ -2316,7 +2316,7 @@ export default function ListingEditorPage() {
             type="button"
             onClick={openServiceModal}
             aria-label="Manage professional services"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800 ml-auto"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-white transition-colors hover:bg-secondary-hover ml-auto"
           >
             <Plus className="h-5 w-5" />
           </button>
@@ -2443,7 +2443,7 @@ export default function ListingEditorPage() {
                 {!isEditMode ? (
                   <div>
                     <Button 
-                      className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3" 
+                      className="w-full bg-secondary text-white hover:bg-secondary-hover h-auto px-[18px] py-3" 
                       onClick={() => setShowEditConfirmModal(true)}
                     >
                       Edit listing
@@ -2452,7 +2452,7 @@ export default function ListingEditorPage() {
                 ) : (
                   <div>
                     <Button 
-                      className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3" 
+                      className="w-full bg-secondary text-white hover:bg-secondary-hover h-auto px-[18px] py-3" 
                       onClick={handleSubmitForReview}
                     >
                       Submit for review
@@ -2514,14 +2514,14 @@ export default function ListingEditorPage() {
                 </div>
                 {!isEditMode && activeSection === "preview" && (
                   <Button 
-                    className="bg-gray-900 text-white hover:bg-gray-800" 
+                    className="bg-secondary text-white hover:bg-secondary-hover" 
                     onClick={() => setShowEditConfirmModal(true)}
                   >
                     Edit
                   </Button>
                 )}
                 {isEditMode && (
-                  <Button className="bg-gray-900 text-white hover:bg-gray-800" onClick={handlePreviewListing}>
+                  <Button className="bg-secondary text-white hover:bg-secondary-hover" onClick={handlePreviewListing}>
                     Preview
                   </Button>
                 )}
@@ -2723,7 +2723,7 @@ export default function ListingEditorPage() {
                       onClick={() => toggleServiceInDraft(service.id)}
                       aria-pressed={isSelected}
                       className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
-                        isSelected ? "border-gray-900 bg-surface" : "border-border bg-white hover:border-border"
+                        isSelected ? "border-foreground bg-surface" : "border-border bg-white hover:border-border"
                       }`}
                     >
                       <IconComponent

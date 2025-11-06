@@ -66,7 +66,7 @@ export function FeatureSelectionGrid({
                 isAlreadyAdded
                   ? "border-border bg-surface opacity-50 cursor-not-allowed"
                   : isInTempSelection
-                    ? "border-gray-900 bg-surface"
+                    ? "border-foreground bg-surface"
                     : "border-border bg-white hover:border-border"
               } ${isSaving ? "opacity-60" : ""}`}
             >

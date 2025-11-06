@@ -61,7 +61,7 @@ export const CustomDropdown = ({
         }}
         disabled={isDisabled}
         className={`w-full px-4 py-3 border border-border rounded-md bg-white text-left text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors ${
-          isDisabled ? "cursor-not-allowed opacity-60" : "hover:border-gray-400"
+          isDisabled ? "cursor-not-allowed opacity-60" : "hover:border-border"
         }`}
       >
         <span className={selectedOption ? "text-foreground" : "text-text-secondary"}>{buttonLabel}</span>

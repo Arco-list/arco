@@ -34,4 +34,4 @@ export function getSupportEmail(type: 'privacy' | 'legal' = 'privacy'): string {
 }
 
 // Shared button styles
-export const textButtonStyles = "inline-block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+export const textButtonStyles = "inline-block text-sm text-text-secondary px-3 py-1.5 rounded-full hover:bg-surface hover:text-muted-foreground"

@@ -39,7 +39,7 @@ const renderStars = (
             ? color === "red"
               ? "fill-red-500 text-red-500"
               : "fill-black text-black"
-            : "text-gray-300"
+            : "text-border"
         } ${interactive ? "cursor-pointer hover:text-red-500" : ""}`}
         onClick={interactive && onRatingChange ? () => onRatingChange(star) : undefined}
       />
@@ -370,7 +370,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                     className={`rounded-full px-4 py-2 border ${
                       workCarriedOut === true
                         ? "border-black bg-black text-white"
-                        : "border-border bg-white text-foreground hover:border-gray-400"
+                        : "border-border bg-white text-foreground hover:border-foreground"
                     }`}
                   >
                     Yes
@@ -380,7 +380,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                     className={`rounded-full px-4 py-2 border ${
                       workCarriedOut === false
                         ? "border-black bg-black text-white"
-                        : "border-border bg-white text-foreground hover:border-gray-400"
+                        : "border-border bg-white text-foreground hover:border-foreground"
                     }`}
                   >
                     No
@@ -443,7 +443,8 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 <Button
                   onClick={handleSubmitReview}
                   disabled={isSubmitting || overallRating === 0 || workCarriedOut === null}
-                  className="flex-1 bg-black hover:bg-gray-800"
+                  variant="secondary"
+                  className="flex-1"
                 >
                   Submit
                 </Button>

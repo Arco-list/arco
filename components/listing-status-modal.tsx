@@ -61,7 +61,7 @@ export function ListingStatusModal<TStatus extends string>({
 
   const planBadgeLabel = project.planBadgeLabel ?? (companyPlan === "plus" ? "Plus plan" : "Basic plan")
   const planBadgeClass =
-    companyPlan === "plus" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"
+    companyPlan === "plus" ? "bg-emerald-100 text-emerald-700" : "bg-surface text-text-secondary"
 
   return (
     <Dialog
@@ -139,7 +139,7 @@ export function ListingStatusModal<TStatus extends string>({
                 <label
                   key={option.value}
                   className={`block p-4 border rounded-lg transition-colors ${
-                    isSelected ? "border-gray-900 bg-surface" : "border-border hover:border-border"
+                    isSelected ? "border-foreground bg-surface" : "border-border hover:border-border"
                   } ${isDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                   aria-disabled={isDisabled}
                 >

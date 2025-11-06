@@ -112,7 +112,7 @@ const INVITE_STATUS_META: Partial<
   invited: { label: "Invite pending", className: "bg-amber-100 text-amber-800" },
   listed: { label: "Listed", className: "bg-green-100 text-green-800" },
   live_on_page: { label: "Active", className: "bg-green-100 text-green-800" },
-  unlisted: { label: "Unlisted", className: "bg-gray-200 text-foreground" },
+  unlisted: { label: "Unlisted", className: "bg-surface text-foreground" },
   removed: { label: "Removed", className: "bg-red-100 text-red-800" },
   rejected: { label: "Opted out", className: "bg-red-100 text-red-800" },
 } as const
@@ -1121,7 +1121,7 @@ function ServiceSelectionStep({
               disabled={isBusy}
               aria-pressed={isSelected}
               className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
-                isSelected ? "border-gray-900 bg-surface" : "border-border bg-white hover:border-border"
+                isSelected ? "border-foreground bg-surface" : "border-border bg-white hover:border-border"
               } disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <IconComponent
@@ -1199,7 +1199,7 @@ function InviteStep({
         </div>
         <button
           onClick={goToServiceSelection}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-800"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-white transition-colors hover:bg-secondary-hover"
         >
           <Plus className="h-5 w-5" />
         </button>

@@ -186,7 +186,7 @@ export function GroupedPicturesModal({
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="flex flex-col w-full h-screen">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center justify-between p-3 md:p-4 border-b border-border flex-shrink-0">
               <Button variant="tertiary" size="tertiary" onClick={onClose}>
                 <ArrowLeft className="w-4 h-4" />
                 Back

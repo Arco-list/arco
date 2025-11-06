@@ -163,7 +163,7 @@ export function ProfessionalsGrid({ professionals }: { professionals: Profession
                 <button
                   key={`${tag.type}-${tag.value}-${index}`}
                   onClick={() => removeFilter(tag.type, tag.value)}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground text-sm rounded-full hover:bg-gray-200 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground text-sm rounded-full hover:bg-surface transition-colors"
                 >
                   {tag.label}
                   <X className="h-3 w-3" />

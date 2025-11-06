@@ -327,7 +327,7 @@ export default function DashboardListingsPage() {
       const normalized: ListingProject[] = projectRows.map((project) => {
         const statusKey = project.status as ProjectStatus
         const statusLabel = PROJECT_STATUS_LABELS[statusKey] ?? statusKey
-        const statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey] ?? "bg-slate-200 text-slate-700"
+        const statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey] ?? "bg-surface text-text-secondary"
 
         const rawPhotos = project.project_photos ?? []
         const normalizedPhotos: ListingProjectPhoto[] = rawPhotos
@@ -893,7 +893,7 @@ export default function DashboardListingsPage() {
               {filters.keyword && (
                 <button
                   onClick={() => handleRemoveFilter("keyword")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-gray-200 rounded-full text-sm text-foreground transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>&ldquo;{filters.keyword}&rdquo;</span>
                   <X className="h-3 w-3" />
@@ -903,7 +903,7 @@ export default function DashboardListingsPage() {
                 <button
                   key={status}
                   onClick={() => handleRemoveFilter("status", status)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-gray-200 rounded-full text-sm text-foreground transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>{PROJECT_STATUS_LABELS[status]}</span>
                   <X className="h-3 w-3" />
@@ -913,7 +913,7 @@ export default function DashboardListingsPage() {
                 <button
                   key={role}
                   onClick={() => handleRemoveFilter("role", role)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-gray-200 rounded-full text-sm text-foreground transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>{role === "owner" ? "Project owner" : "Contributor"}</span>
                   <X className="h-3 w-3" />
@@ -922,7 +922,7 @@ export default function DashboardListingsPage() {
               {(filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR) && (
                 <button
                   onClick={() => handleRemoveFilter("year")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-gray-200 rounded-full text-sm text-foreground transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>
                     {filters.yearFrom}-{filters.yearTo}
@@ -1000,9 +1000,9 @@ export default function DashboardListingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="animate-pulse">
-                <div className="aspect-square w-full bg-gray-200 rounded-lg" />
+                <div className="aspect-square w-full bg-surface rounded-lg" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
+                  <div className="h-4 bg-surface rounded w-3/4" />
                   <div className="h-3 bg-surface rounded w-1/2" />
                 </div>
               </div>
@@ -1125,7 +1125,7 @@ export default function DashboardListingsPage() {
                               >
                                 Preview listing
                               </button>
-                              <div className="border-t border-gray-100 my-1" />
+                              <div className="border-t border-border my-1" />
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()

@@ -139,7 +139,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`Visit ${platform} profile`}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-gray-900 hover:text-foreground"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-foreground hover:text-foreground"
                   >
                     <Icon className="h-4 w-4" />
                   </a>

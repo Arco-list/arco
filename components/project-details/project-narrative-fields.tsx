@@ -44,7 +44,7 @@ export const ProjectNarrativeFields = ({
         value={formData.projectTitle}
         onChange={(event) => onInputChange("projectTitle", event.target.value)}
         placeholder="Project title"
-        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
       />
       <div className="flex items-center justify-between mt-2">
         <p className="text-sm text-text-secondary">Give your project a memorable and descriptive title</p>

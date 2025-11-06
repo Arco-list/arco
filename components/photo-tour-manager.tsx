@@ -137,7 +137,7 @@ export function PhotoTourManager({
           <div className="relative md:ml-auto ml-auto">
             <button
               onClick={() => setShowAddMenu((state) => !state)}
-              className="bg-gray-900 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-gray-800 transition-colors"
+              className="bg-secondary text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-secondary-hover transition-colors"
               aria-haspopup="menu"
               aria-expanded={showAddMenu}
             >

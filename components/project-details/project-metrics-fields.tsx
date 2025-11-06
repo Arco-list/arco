@@ -79,7 +79,7 @@ export const ProjectMetricsFields = ({
         placeholder="2022"
         min="1800"
         max={currentYear}
-        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
       />
       <p className="text-sm text-text-secondary mt-2">Enter the year when construction was completed</p>
       {validationErrors.yearBuilt && <p className="text-sm text-red-600 mt-2">{validationErrors.yearBuilt}</p>}
@@ -96,7 +96,7 @@ export const ProjectMetricsFields = ({
         placeholder="1930"
         min="1800"
         max={currentYear}
-        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
       />
       <p className="text-sm text-text-secondary mt-2">Enter the original construction year if different from completion</p>
       {validationErrors.buildingYear && (

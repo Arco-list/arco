@@ -117,7 +117,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
     : "fixed top-0 left-0 right-0 z-50 border-b border-border px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4";
 
   const textColor = transparent && !isScrolled ? "text-white" : "text-black";
-  const hoverColor = transparent && !isScrolled ? "hover:text-gray-300" : "hover:text-text-secondary";
+  const hoverColor = transparent && !isScrolled ? "hover:text-white/80" : "hover:text-text-secondary";
 
   const redirectQuery = pathname ? `?redirectTo=${encodeURIComponent(pathname)}` : "";
 
@@ -235,7 +235,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   </div>
                   
                   {/* Divider */}
-                  <div className="border-t border-gray-100" />
+                  <div className="border-t border-border" />
                   
                   {/* Section 2: Login/Signup OR Saved projects/Saved professionals/Account */}
                   <div className="px-4 py-3">
@@ -297,7 +297,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   </div>
                   
                   {/* Divider */}
-                  <div className="border-t border-gray-100" />
+                  <div className="border-t border-border" />
                   
                   {/* Section 3: List with us/Help center/Sign out */}
                   <div className="px-4 py-3">

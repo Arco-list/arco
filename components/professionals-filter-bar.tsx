@@ -273,7 +273,7 @@ export function ProfessionalsFilterBar() {
     `flex items-center gap-2 whitespace-nowrap rounded-full ${
       hasSelection
         ? "border-[#222222] text-[#222222] bg-transparent"
-        : "bg-transparent border-border hover:border-gray-400"
+        : "bg-transparent border-border hover:border-border"
     }`
 
   const toggleDropdown = (name: ActiveDropdown) => {
@@ -439,7 +439,7 @@ export function ProfessionalsFilterBar() {
                       </Button>
                       <Button
                         onClick={() => setActiveDropdown(null)}
-                        className="flex-1 bg-black text-white hover:bg-gray-800"
+                        className="flex-1 bg-black text-white hover:bg-secondary-hover"
                       >
                         Filter
                       </Button>
@@ -495,7 +495,7 @@ export function ProfessionalsFilterBar() {
                         </Button>
                         <Button
                           onClick={() => setActiveDropdown(null)}
-                          className="flex-1 bg-black text-white hover:bg-gray-800"
+                          className="flex-1 bg-black text-white hover:bg-secondary-hover"
                         >
                           Apply
                         </Button>
@@ -507,10 +507,10 @@ export function ProfessionalsFilterBar() {
             </div>
 
             {/* Divider - Hidden on mobile */}
-            <div className="h-6 w-px bg-gray-200 flex-shrink-0 self-center hidden md:block"></div>
+            <div className="h-6 w-px bg-surface flex-shrink-0 self-center hidden md:block"></div>
 
             {/* Divider for mobile */}
-            <div className="h-6 w-px bg-gray-200 flex-shrink-0 self-center md:hidden"></div>
+            <div className="h-6 w-px bg-surface flex-shrink-0 self-center md:hidden"></div>
 
             {/* Left scroll button - Only visible on desktop */}
             <div className="hidden md:block">

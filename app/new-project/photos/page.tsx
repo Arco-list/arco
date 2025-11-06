@@ -201,7 +201,7 @@ export default function PhotoTourPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragOver ? "border-gray-400 bg-surface" : "border-border"
+              dragOver ? "border-border bg-surface" : "border-border"
             }`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -223,8 +223,8 @@ export default function PhotoTourPage() {
                 }}
               />
               <span
-                className={`bg-gray-900 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isUploading ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-800 cursor-pointer"
+                className={`bg-secondary text-white px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isUploading ? "opacity-60 cursor-not-allowed" : "hover:bg-secondary-hover cursor-pointer"
                 }`}
               >
                 {isUploading ? "Uploading..." : "Browse"}
@@ -258,7 +258,7 @@ export default function PhotoTourPage() {
               </div>
 
               {photo.isCover && (
-                <div className="absolute top-2 left-2 bg-gray-900 text-white px-2 py-1 rounded text-xs font-medium">
+                <div className="absolute top-2 left-2 bg-secondary text-white px-2 py-1 rounded text-xs font-medium">
                   Cover photo
                 </div>
               )}
@@ -322,7 +322,7 @@ export default function PhotoTourPage() {
             <button
               onClick={() => void saveNewFeatures()}
               disabled={isSavingFeatures}
-              className="w-full bg-gray-900 text-white py-3 px-6 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-secondary text-white py-3 px-6 rounded-md text-sm font-medium hover:bg-secondary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSavingFeatures ? "Saving..." : `Save selected (${tempSelectedFeatures.length})`}
             </button>

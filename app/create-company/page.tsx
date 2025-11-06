@@ -96,7 +96,7 @@ export default function CreateCompanyPage() {
           {/* Company Logo Upload */}
           <div className="flex flex-col items-center mb-8">
             <div className="relative mb-4">
-              <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+              <div className="w-24 h-24 rounded-full bg-surface flex items-center justify-center overflow-hidden">
                 {logoPreview ? (
                   <img
                     src={logoPreview || "/placeholder.svg"}
@@ -207,7 +207,7 @@ export default function CreateCompanyPage() {
 
           {/* Submit Button */}
           <div className="flex justify-end pt-4">
-            <Button type="submit" className="bg-black text-white hover:bg-gray-800 px-8" disabled={isPending}>
+            <Button type="submit" className="bg-black text-white hover:bg-secondary-hover px-8" disabled={isPending}>
               {isPending ? "Saving..." : "Next"}
             </Button>
           </div>

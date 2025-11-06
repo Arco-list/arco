@@ -49,9 +49,9 @@ const inviteStatusStyles: Record<InviteStatus, { label: string; tone: string; ic
   invited: { label: "Not claimed", tone: "bg-amber-100 text-amber-800", icon: Clock3 },
   listed: { label: "Listed", tone: "bg-blue-100 text-blue-800", icon: ListChecks },
   live_on_page: { label: "Live", tone: "bg-emerald-100 text-emerald-700", icon: Sparkles },
-  unlisted: { label: "Unlisted", tone: "bg-slate-200 text-slate-700", icon: Archive },
+  unlisted: { label: "Unlisted", tone: "bg-surface text-text-secondary", icon: Archive },
   rejected: { label: "Rejected", tone: "bg-rose-100 text-rose-700", icon: XCircle },
-  removed: { label: "Removed", tone: "bg-gray-200 text-foreground", icon: Ban },
+  removed: { label: "Removed", tone: "bg-surface text-foreground", icon: Ban },
 }
 
 const STATUS_FILTER_OPTIONS = [

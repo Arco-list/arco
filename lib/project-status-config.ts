@@ -26,7 +26,7 @@ export const PROJECT_STATUS_CHIP_CLASS: Record<ProjectStatus, string> = {
   in_progress: "bg-blue-100 text-blue-800",
   published: "bg-green-100 text-green-800",
   completed: "bg-emerald-100 text-emerald-800",
-  archived: "bg-slate-200 text-slate-700",
+  archived: "bg-surface text-text-secondary",
   rejected: "bg-red-100 text-red-800",
 }
 
@@ -35,7 +35,7 @@ export const PROJECT_STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
   in_progress: "bg-blue-500",
   published: "bg-emerald-500",
   completed: "bg-teal-500",
-  archived: "bg-slate-400",
+  archived: "bg-muted-foreground",
   rejected: "bg-red-500",
 }
 
@@ -44,7 +44,7 @@ export const LISTING_STATUS_OPTIONS: ReadonlyArray<ListingStatusModalOption<List
     value: "archived",
     label: "Unpublished",
     description: "Project is not visible to users.",
-    colorClass: "bg-slate-400",
+    colorClass: "bg-muted-foreground",
   },
   {
     value: "published",

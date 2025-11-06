@@ -230,7 +230,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 2: Saved items */}
                       <div className="px-4 py-3">
@@ -258,7 +258,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 3: List with us / Dashboard / Help */}
                       <div className="px-4 py-3">
@@ -317,7 +317,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 2: Upgrade plan & Billing - COMMENTED OUT */}
                       {/* <div className="px-4 py-3">
@@ -338,7 +338,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div> */}
 
                       {/* Divider */}
-                      {/* <div className="border-t border-gray-100" /> */}
+                      {/* <div className="border-t border-border" /> */}
 
                       {/* Section 2: Account */}
                       <div className="px-4 py-3">
@@ -353,7 +353,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 3: Help & Sign out */}
                       <div className="px-4 py-3">

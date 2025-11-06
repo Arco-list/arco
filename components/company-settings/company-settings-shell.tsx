@@ -66,8 +66,8 @@ const statusDescriptionMap: Record<CompanyStatus, string> = {
 
 const statusIndicatorMap: Record<CompanyStatus, string> = {
   listed: "bg-emerald-500",
-  unlisted: "bg-gray-400",
-  deactivated: "bg-gray-400",
+  unlisted: "bg-muted-foreground",
+  deactivated: "bg-muted-foreground",
 }
 
 const sectionCardClass = "rounded-xl border border-border bg-white p-6"
@@ -648,7 +648,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       onClick={() => setSelectedStatus(option.value)}
                       className={cn(
                         "w-full rounded-lg border px-4 py-3 text-left transition",
-                        isActive ? "border-gray-900 bg-gray-900/5" : "border-border hover:border-border",
+                        isActive ? "border-foreground bg-secondary/5" : "border-border hover:border-border",
                         statusPending && "pointer-events-none opacity-60"
                       )}
                       disabled={statusPending}
@@ -661,7 +661,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                         <span
                           className={cn(
                             "h-4 w-4 rounded-full border",
-                            isActive ? "border-gray-900 bg-gray-900" : "border-border"
+                            isActive ? "border-foreground bg-secondary" : "border-border"
                           )}
                         />
                       </div>
@@ -693,7 +693,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           {/* Preview company */}
           <div>
             <Button
-              className="w-full bg-gray-900 text-white hover:bg-gray-800 h-auto px-[18px] py-3"
+              className="w-full bg-secondary text-white hover:bg-secondary-hover h-auto px-[18px] py-3"
               onClick={handlePreviewCompany}
             >
               Preview company
@@ -764,7 +764,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <h1 className="text-xl font-semibold text-foreground">{getCurrentSectionTitle()}</h1>
             </div>
             <Button
-              className="bg-gray-900 text-white hover:bg-gray-800"
+              className="bg-secondary text-white hover:bg-secondary-hover"
               onClick={handlePreviewCompany}
             >
               Preview
@@ -798,7 +798,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       className="h-24 w-24 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gray-900 text-2xl font-semibold text-white">
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-secondary text-2xl font-semibold text-white">
                       {profileState.name.slice(0, 2).toUpperCase()}
                     </div>
                   )}
@@ -849,7 +849,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   </div>
                   <div className="flex justify-end">
                     <Button
-                      className="bg-gray-900 text-white hover:bg-gray-800"
+                      className="bg-secondary text-white hover:bg-secondary-hover"
                       onClick={handleSaveProfile}
                       disabled={profilePending}
                     >
@@ -961,7 +961,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   </div>
                   <div className="flex justify-end">
                     <Button
-                      className="bg-gray-900 text-white hover:bg-gray-800"
+                      className="bg-secondary text-white hover:bg-secondary-hover"
                       onClick={handleSaveContact}
                       disabled={contactPending}
                     >
@@ -982,7 +982,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                       <Label htmlFor="primary-service">Primary service</Label>
                       <select
                         id="primary-service"
-                        className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
+                        className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm focus:border-border focus:outline-none"
                         value={profileState.primaryServiceId}
                         onChange={(event) => handlePrimaryServiceChange(event.target.value)}
                       >
@@ -1069,7 +1069,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   </div>
                   <div className="flex justify-end">
                     <Button
-                      className="bg-gray-900 text-white hover:bg-gray-800"
+                      className="bg-secondary text-white hover:bg-secondary-hover"
                       onClick={handleSaveServices}
                       disabled={servicesPending}
                     >
@@ -1125,7 +1125,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                 <div
                   className={cn(
                     "aspect-square flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-surface p-8 text-center transition",
-                    dragOver && "border-gray-400",
+                    dragOver && "border-border",
                     (!canUploadMorePhotos || photoPending) && "cursor-not-allowed opacity-60"
                   )}
                   onDragOver={handleDragOver}
@@ -1188,7 +1188,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     </div>
 
                     {photo.is_cover && (
-                      <div className="absolute top-2 left-2 bg-gray-900 text-white px-2 py-1 rounded text-xs font-medium">
+                      <div className="absolute top-2 left-2 bg-secondary text-white px-2 py-1 rounded text-xs font-medium">
                         Cover photo
                       </div>
                     )}

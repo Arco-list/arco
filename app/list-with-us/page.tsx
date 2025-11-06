@@ -180,7 +180,7 @@ export default function ListWithUsPage() {
             <div className="bg-white rounded-2xl p-8 md:p-12 shadow-lg text-center relative">
               <button
                 onClick={prevTestimonial}
-                className="absolute left-4 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-surface hover:bg-gray-200 transition-colors"
+                className="absolute left-4 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-surface hover:bg-surface transition-colors"
               >
                 <ChevronLeft className="w-5 h-5 text-text-secondary" />
               </button>
@@ -200,7 +200,7 @@ export default function ListWithUsPage() {
 
               <button
                 onClick={nextTestimonial}
-                className="absolute right-4 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-surface hover:bg-gray-200 transition-colors"
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-surface hover:bg-surface transition-colors"
               >
                 <ChevronRight className="w-5 h-5 text-text-secondary" />
               </button>
@@ -211,7 +211,7 @@ export default function ListWithUsPage() {
                     key={index}
                     onClick={() => setCurrentTestimonial(index)}
                     className={`w-2 h-2 rounded-full transition-colors ${
-                      index === currentTestimonial ? "bg-gray-800" : "bg-gray-300"
+                      index === currentTestimonial ? "bg-secondary-hover" : "bg-surface"
                     }`}
                   />
                 ))}

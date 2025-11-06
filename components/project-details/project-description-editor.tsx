@@ -27,7 +27,7 @@ export const ProjectDescriptionEditor = ({
 }: ProjectDescriptionEditorProps) => {
   const getFormattingButtonClass = (active: boolean) => {
     return `flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-gray-900 ${
-      active ? "bg-gray-200 text-foreground" : "text-text-secondary hover:bg-surface"
+      active ? "bg-surface text-foreground" : "text-text-secondary hover:bg-surface"
     } disabled:cursor-not-allowed disabled:opacity-40`
   }
 
@@ -76,7 +76,7 @@ export const ProjectDescriptionEditor = ({
             >
               <span className="underline">U</span>
             </button>
-            <span className="mx-1 h-8 w-px bg-gray-200" aria-hidden="true" />
+            <span className="mx-1 h-8 w-px bg-surface" aria-hidden="true" />
             <button
               type="button"
               className={getFormattingButtonClass(editor.isActive("bulletList"))}

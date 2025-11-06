@@ -325,9 +325,9 @@ export function FilterBar() {
             {taxonomyLoading && topLevelCategories.length === 0 && activeDropdown === "type" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
                 <div className="p-4 space-y-3">
-                  <div className="h-4 w-32 animate-pulse rounded bg-gray-200" />
-                  <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
-                  <div className="h-4 w-28 animate-pulse rounded bg-gray-200" />
+                  <div className="h-4 w-32 animate-pulse rounded bg-surface" />
+                  <div className="h-4 w-40 animate-pulse rounded bg-surface" />
+                  <div className="h-4 w-28 animate-pulse rounded bg-surface" />
                 </div>
               </div>
             )}
@@ -417,7 +417,7 @@ export function FilterBar() {
                     <Button
                       size="sm"
                       onClick={toggleTypeDropdown}
-                      className="flex-1 bg-black text-white hover:bg-gray-800"
+                      className="flex-1 bg-black text-white hover:bg-secondary-hover"
                     >
                       Filter
                     </Button>
@@ -466,7 +466,7 @@ export function FilterBar() {
                     <Button
                       size="sm"
                       onClick={toggleStyleDropdown}
-                      className="flex-1 bg-black text-white hover:bg-gray-800"
+                      className="flex-1 bg-black text-white hover:bg-secondary-hover"
                     >
                       Filter
                     </Button>
@@ -525,7 +525,7 @@ export function FilterBar() {
                     <Button
                       size="sm"
                       onClick={toggleLocationDropdown}
-                      className="flex-1 bg-black text-white hover:bg-gray-800"
+                      className="flex-1 bg-black text-white hover:bg-secondary-hover"
                     >
                       Apply
                     </Button>
@@ -536,10 +536,10 @@ export function FilterBar() {
           </div>
 
           {/* Divider - Hidden on mobile */}
-          <div className="h-6 w-px bg-gray-200 flex-shrink-0 self-center hidden md:block"></div>
+          <div className="h-6 w-px bg-surface flex-shrink-0 self-center hidden md:block"></div>
 
           {/* Divider for mobile */}
-          <div className="h-6 w-px bg-gray-200 flex-shrink-0 self-center md:hidden"></div>
+          <div className="h-6 w-px bg-surface flex-shrink-0 self-center md:hidden"></div>
 
           {/* Left scroll button - Only visible on desktop */}
           <div className="hidden md:block">

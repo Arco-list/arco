@@ -158,7 +158,7 @@ export function MapSection() {
       <h2 className="text-2xl font-bold text-black">Explore the area</h2>
       {label && <p className="text-text-secondary">{label}</p>}
 
-      <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
+      <div className="relative h-64 bg-surface rounded-lg overflow-hidden">
         {!isMapsLoaded && !mapError && (
           <div className="absolute inset-0 flex items-center justify-center bg-surface">
             <div className="text-sm text-text-secondary">Loading map...</div>
