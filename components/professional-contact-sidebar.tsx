@@ -96,12 +96,12 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
 
           <div className="space-y-3">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-sm text-text-secondary">
                 <Phone className="h-4 w-4 flex-shrink-0" />
                 {phone ? (
                   <RevealPhoneNumber phone={phone} />
                 ) : (
-                  <span className="text-gray-400">Phone unavailable</span>
+                  <span className="text-muted-foreground">Phone unavailable</span>
                 )}
               </div>
 
@@ -112,13 +112,13 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
                       href={href ?? ""}
                       target={external ? "_blank" : undefined}
                       rel={external ? "noreferrer" : undefined}
-                      className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+                      className="flex items-center gap-2 text-text-secondary hover:text-foreground"
                     >
                       <Icon className="h-4 w-4 flex-shrink-0" />
                       <span>{label}</span>
                     </a>
                   ) : (
-                    <span className="flex items-center gap-2 text-gray-400">
+                    <span className="flex items-center gap-2 text-muted-foreground">
                       <Icon className="h-4 w-4 flex-shrink-0" />
                       <span>{label}</span>
                     </span>
@@ -130,7 +130,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
 
           {socialLinks.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-900">Follow</h4>
+              <h4 className="text-sm font-medium text-foreground">Follow</h4>
               <div className="flex justify-start gap-2">
                 {socialLinks.map(({ href, Icon, platform }) => (
                   <a
@@ -139,7 +139,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
                     target="_blank"
                     rel="noreferrer"
                     aria-label={`Visit ${platform} profile`}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition hover:border-gray-900 hover:text-gray-900"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-foreground hover:text-foreground"
                   >
                     <Icon className="h-4 w-4" />
                   </a>
@@ -166,7 +166,7 @@ const RevealPhoneNumber = ({ phone }: { phone: string }) => {
 
   if (isVisible) {
     return (
-      <a href={`tel:${phone.replace(/\s+/g, "")}`} className="font-medium text-gray-900">
+      <a href={`tel:${phone.replace(/\s+/g, "")}`} className="font-medium text-foreground">
         {phone}
       </a>
     )
@@ -176,7 +176,7 @@ const RevealPhoneNumber = ({ phone }: { phone: string }) => {
     <button
       type="button"
       onClick={() => setIsVisible(true)}
-      className="text-sm font-medium text-gray-900 underline hover:no-underline"
+      className="text-sm font-medium text-foreground underline hover:no-underline"
     >
       Show phone number
     </button>

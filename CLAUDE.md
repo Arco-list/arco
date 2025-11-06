@@ -200,9 +200,50 @@ project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
 \`\`\`
 
 #### Database Connection
-- **Project URL**: Use `mcp__supabase__get_project_url` to get the API endpoint
-- **Anonymous Key**: Use `mcp__supabase__get_anon_key` for client-side connections
-- **TypeScript Types**: Generate with `mcp__supabase__generate_typescript_types`
+
+**MCP Server:** This project uses the `supabase-arco` MCP server to interact with the Arco database.
+
+**IMPORTANT:** Use `mcp__supabase__*` tools (the MCP server name doesn't affect tool names).
+
+**Arco Project Details:**
+- **Project ID**: `ogvobdcrectqsegqrquz`
+- **Project URL**: `https://ogvobdcrectqsegqrquz.supabase.co`
+
+**Examples:**
+```javascript
+// Get project details
+mcp__supabase__get_project(project_id: "ogvobdcrectqsegqrquz")
+
+// Get API URL
+mcp__supabase__get_project_url(project_id: "ogvobdcrectqsegqrquz")
+
+// Get publishable keys for client-side connections
+mcp__supabase__get_publishable_keys(project_id: "ogvobdcrectqsegqrquz")
+
+// Generate TypeScript types
+mcp__supabase__generate_typescript_types(project_id: "ogvobdcrectqsegqrquz")
+
+// Execute SQL queries
+mcp__supabase__execute_sql(
+  project_id: "ogvobdcrectqsegqrquz",
+  query: "SELECT * FROM companies LIMIT 10"
+)
+
+// Apply database migrations
+mcp__supabase__apply_migration(
+  project_id: "ogvobdcrectqsegqrquz",
+  name: "add_new_feature",
+  query: "ALTER TABLE companies ADD COLUMN new_field TEXT"
+)
+
+// List all accessible projects
+mcp__supabase__list_projects()
+```
+
+**Key Points:**
+- ✅ Always use `project_id: "ogvobdcrectqsegqrquz"` for Arco project operations
+- ✅ The `supabase-arco` MCP server is configured with Arco's credentials in `claude_desktop_config.json`
+- ✅ Tool names are always `mcp__supabase__*` regardless of which MCP server is being used
 
 #### Migration Status & Refactoring Plan
 

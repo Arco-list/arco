@@ -95,7 +95,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
   }, [searchParamQuery])
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 border-b border-gray-200 px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4">
+    <header className="fixed top-0 left-0 right-0 z-50 border-b border-border px-4 md:px-8 bg-white/95 backdrop-blur-md py-3 md:py-4">
       <div className={`mx-auto ${maxWidth}`}>
         <div className="relative flex items-center justify-between">
           <div className="flex items-center space-x-8">
@@ -114,7 +114,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                   className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                     pathname.startsWith("/projects")
                       ? "text-red-500"
-                      : "text-black hover:bg-gray-100"
+                      : "text-black hover:bg-surface"
                   }`}
                 >
                   Projects
@@ -124,7 +124,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                   className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                     pathname.startsWith("/professionals")
                       ? "text-red-500"
-                      : "text-black hover:bg-gray-100"
+                      : "text-black hover:bg-surface"
                   }`}
                 >
                   Professionals
@@ -141,7 +141,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                   className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                     isActive("/admin")
                       ? "text-red-500"
-                      : "text-black hover:bg-gray-100"
+                      : "text-black hover:bg-surface"
                   }`}
                 >
                   Admin
@@ -152,7 +152,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                 className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                   isActive("/dashboard/listings")
                     ? "text-red-500"
-                    : "text-black hover:bg-gray-100"
+                    : "text-black hover:bg-surface"
                 }`}
               >
                 Listings
@@ -162,7 +162,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                 className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                   isActive("/dashboard/company")
                     ? "text-red-500"
-                    : "text-black hover:bg-gray-100"
+                    : "text-black hover:bg-surface"
                 }`}
               >
                 Company
@@ -184,7 +184,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             {isHomeownerPage && (
               <Link
                 href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
-                className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-gray-100"
+                className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-surface"
               >
                 {hasProfessionalRole ? "Add new project" : "List with us"}
               </Link>
@@ -192,13 +192,13 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             {!isHomeownerPage && canAccessProfessionalDashboard && (
               <Link
                 href="/new-project"
-                className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-gray-100"
+                className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-surface"
               >
                 Add new project
               </Link>
             )}
             <button
-              className="flex items-center gap-2 h-9 rounded-full border px-3 border-gray-300 hover:bg-gray-100"
+              className="flex items-center gap-2 h-9 rounded-full border px-3 border-border hover:bg-surface"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               <span className="hidden text-sm md:inline">{menuLabel}</span>
@@ -206,7 +206,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
             </button>
 
             {isMenuOpen && (
-              <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-gray-200 bg-white shadow-lg">
+              <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-border bg-white shadow-lg">
                 <div className="py-1">
                   {isHomeownerPage ? (
                     <>
@@ -215,14 +215,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       <div className="px-4 py-3">
                         <Link
                           href="/projects"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Projects
                         </Link>
                         <Link
                           href="/professionals"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Professionals
@@ -230,27 +230,27 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 2: Saved items */}
                       <div className="px-4 py-3">
                         <Link
                           href="/homeowner?tab=saved-projects"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved projects
                         </Link>
                         <Link
                           href="/homeowner?tab=saved-professionals"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved professionals
                         </Link>
                         <Link
                           href="/homeowner?tab=account"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Account
@@ -258,13 +258,13 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 3: List with us / Dashboard / Help */}
                       <div className="px-4 py-3">
                         <Link
                           href="/list-with-us"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           List with us
@@ -272,7 +272,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                         {canAccessProfessionalDashboard && (
                           <Link
                             href={isAdmin ? "/admin" : "/dashboard/listings"}
-                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             {isAdmin ? "Admin" : "Switch to company"}
@@ -280,7 +280,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                         )}
                         <Link
                           href="/help-center"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Help center
@@ -302,14 +302,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       <div className="px-4 py-3">
                         <Link
                           href="/dashboard/listings"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Listings
                         </Link>
                         <Link
                           href="/dashboard/company"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Company
@@ -317,20 +317,20 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 2: Upgrade plan & Billing - COMMENTED OUT */}
                       {/* <div className="px-4 py-3">
                         <Link
                           href="/dashboard/pricing"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Upgrade plan
                         </Link>
                         <Link
                           href="/dashboard/billing"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Billing
@@ -338,13 +338,13 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div> */}
 
                       {/* Divider */}
-                      {/* <div className="border-t border-gray-100" /> */}
+                      {/* <div className="border-t border-border" /> */}
 
                       {/* Section 2: Account */}
                       <div className="px-4 py-3">
                         <Link
                           href="/dashboard/settings"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Account
@@ -353,20 +353,20 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       </div>
 
                       {/* Divider */}
-                      <div className="border-t border-gray-100" />
+                      <div className="border-t border-border" />
 
                       {/* Section 3: Help & Sign out */}
                       <div className="px-4 py-3">
                       <Link
                           href="/homeowner"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Switch to homeowner
                         </Link>
                         <Link
                           href="/help-center"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Help center
@@ -374,7 +374,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                         {isAdmin && (
                           <Link
                             href="/admin"
-                            className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Admin
@@ -395,14 +395,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       <div className="px-4 py-3">
                         <Link
                           href="/create-company"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Create company profile
                         </Link>
                         <Link
                           href="/homeowner"
-                          className="block text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Homeowner Dashboard

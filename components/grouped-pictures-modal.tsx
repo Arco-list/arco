@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import {
   ArrowLeft,
   Share,
-  Bookmark,
+  Heart,
   ChevronLeft,
   ChevronRight,
   X,
@@ -14,6 +14,9 @@ import {
   ZoomOut,
 } from "lucide-react"
 import { toast } from "sonner"
+import { ShareModal } from "./share-modal"
+import { useProjectPreview } from "@/contexts/project-preview-context"
+import { useSavedProjects } from "@/contexts/saved-projects-context"
 
 interface ImageGroup {
   id: string
@@ -43,9 +46,15 @@ export function GroupedPicturesModal({
 }: GroupedPicturesModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
-  const [isSaved, setIsSaved] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const groupRefs = useRef(new Map<string, HTMLDivElement>())
+
+  const { projectId, info, shareImageUrl, shareUrl } = useProjectPreview()
+  const { savedProjectIds, mutatingProjectIds, saveProject, removeProject } = useSavedProjects()
+
+  const isSaved = projectId ? savedProjectIds.has(projectId) : false
+  const isMutating = projectId ? mutatingProjectIds.has(projectId) : false
 
   // Flatten all images for lightbox navigation
   const allImages = useMemo(
@@ -130,31 +139,13 @@ export function GroupedPicturesModal({
     }
   }, [imageGroups, isOpen, selectedGroupId])
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: title,
-          text: `Check out this ${title}`,
-          url: window.location.href,
-        })
-      } catch (err) {
-        // User cancelled sharing
-      }
-    } else {
-      // Fallback to copying link
-      try {
-        await navigator.clipboard.writeText(window.location.href)
-        toast.success("Link copied to clipboard")
-      } catch (err) {
-        toast.error("Failed to share")
-      }
-    }
-  }
-
   const handleSave = () => {
-    setIsSaved(!isSaved)
-    toast.success(isSaved ? "Removed from saved" : "Added to saved collection")
+    if (!projectId) return
+    if (isSaved) {
+      void removeProject(projectId)
+    } else {
+      void saveProject(projectId, null)
+    }
   }
 
   // Keyboard navigation
@@ -195,26 +186,28 @@ export function GroupedPicturesModal({
           <DialogTitle className="sr-only">{title}</DialogTitle>
           <div className="flex flex-col w-full h-screen">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-100 flex-shrink-0">
-              <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={onClose}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
+            <div className="flex items-center justify-between p-3 md:p-4 border-b border-border flex-shrink-0">
+              <Button variant="tertiary" size="tertiary" onClick={onClose}>
+                <ArrowLeft className="w-4 h-4" />
                 Back
               </Button>
 
-              <div className="flex items-center gap-2">
-                {/* <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-100" onClick={handleShare}>
-                  <Share className="w-4 h-4 mr-2" />
-                  Share
-                </Button> */}
-                {/* <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`hover:bg-gray-100 ${isSaved ? "text-blue-600" : "text-gray-700"}`}
+              <div className="flex gap-2">
+                <Button variant="tertiary" size="tertiary" onClick={() => setIsShareModalOpen(true)}>
+                  <Share className="w-4 h-4 md:mr-2" />
+                  <span className="hidden md:inline">Share</span>
+                </Button>
+                <Button
+                  variant="tertiary"
+                  size="tertiary"
+                  className={isSaved ? "!bg-primary !text-white hover:!bg-primary-hover" : ""}
                   onClick={handleSave}
+                  disabled={!projectId || isMutating}
+                  aria-pressed={isSaved}
                 >
-                  <Bookmark className={`w-4 h-4 mr-2 ${isSaved ? "fill-current" : ""}`} />
-                  Save
-                </Button> */}
+                  <Heart className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
+                  <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
+                </Button>
               </div>
             </div>
 
@@ -236,52 +229,25 @@ export function GroupedPicturesModal({
                     >
                       {/* Category Header */}
                       <div className="space-y-1">
-                        <h2 className="text-xl font-semibold text-gray-900">{group.category}</h2>
-                        {group.description && <p className="text-gray-600 text-sm">{group.description}</p>}
+                        <h2 className="text-xl font-semibold text-foreground">{group.category}</h2>
+                        {group.description && <p className="text-text-secondary text-sm">{group.description}</p>}
                       </div>
 
-                      {/* Images Grid */}
-                      <div className="space-y-4">
-                        {/* Primary Image */}
-                        {group.images.find((img) => img.isPrimary) && (
+                      {/* Images - Full Width Stacked */}
+                      <div className="space-y-3">
+                        {group.images.map((image, imageIndex) => (
                           <div
-                            className="cursor-pointer"
-                            onClick={() =>
-                              handleImageClick(
-                                groupIndex,
-                                group.images.findIndex((img) => img.isPrimary),
-                              )
-                            }
+                            key={imageIndex}
+                            className="cursor-pointer w-full"
+                            onClick={() => handleImageClick(groupIndex, imageIndex)}
                           >
                             <img
-                              src={group.images.find((img) => img.isPrimary)?.src || "/placeholder.svg"}
-                              alt={group.images.find((img) => img.isPrimary)?.alt}
-                              className="w-full aspect-[4/3] md:aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
+                              src={image.src || "/placeholder.svg"}
+                              alt={image.alt}
+                              className="w-full h-auto object-cover rounded-lg hover:opacity-95 transition-opacity"
                             />
                           </div>
-                        )}
-
-                        {/* Secondary Images Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                          {group.images
-                            .filter((img) => !img.isPrimary)
-                            .map((image, imageIndex) => {
-                              const actualIndex = group.images.findIndex((img) => img === image)
-                              return (
-                                <div
-                                  key={imageIndex}
-                                  className="cursor-pointer"
-                                  onClick={() => handleImageClick(groupIndex, actualIndex)}
-                                >
-                                  <img
-                                    src={image.src || "/placeholder.svg"}
-                                    alt={image.alt}
-                                    className="w-full aspect-[4/3] md:aspect-[2/1] object-cover rounded-lg hover:opacity-95 transition-opacity"
-                                  />
-                                </div>
-                              )
-                            })}
-                        </div>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -317,21 +283,29 @@ export function GroupedPicturesModal({
                 {currentImageIndex + 1}/{allImages.length}
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 hover:text-white" onClick={handleShare} aria-label="Share project">
-                  <Share className="w-4 h-4 mr-2" />
-                  Share
-                </Button> */}
-                {/* <Button
+              <div className="flex gap-2">
+                <Button
                   variant="ghost"
                   size="sm"
-                  className={`hover:bg-white/10 hover:text-white ${isSaved ? "text-blue-400" : "text-white"}`}
+                  className="text-white hover:bg-white/10 hover:text-white border-none bg-transparent"
+                  onClick={() => setIsShareModalOpen(true)}
+                  aria-label="Share project"
+                >
+                  <Share className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={isSaved ? "text-white bg-white/20 hover:bg-white/30 border-none" : "text-white hover:bg-white/10 border-none bg-transparent"}
                   onClick={handleSave}
+                  disabled={!projectId || isMutating}
+                  aria-pressed={isSaved}
                   aria-label={isSaved ? "Remove from saved" : "Save project"}
                 >
-                  <Bookmark className={`w-4 h-4 mr-2 ${isSaved ? "fill-current" : ""}`} />
-                  Save
-                </Button> */}
+                  <Heart className="w-4 h-4 mr-2" fill={isSaved ? "currentColor" : "none"} />
+                  {isSaved ? "Saved" : "Save"}
+                </Button>
               </div>
             </div>
 
@@ -390,6 +364,16 @@ export function GroupedPicturesModal({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        title={info.title}
+        subtitle={info.subtitle ?? ""}
+        imageUrl={shareImageUrl ?? "/placeholder.svg?height=64&width=64"}
+        shareUrl={typeof window !== "undefined" ? window.location.href : shareUrl ?? ""}
+      />
     </>
   )
 }

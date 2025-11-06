@@ -144,7 +144,7 @@ export default function SettingsPage() {
                     <AvatarImage src={profile?.avatar_url ?? "/placeholder.svg?height=80&width=80"} />
                     <AvatarFallback className="text-lg">{initials}</AvatarFallback>
                   </Avatar>
-                  <Button variant="outline" size="sm" disabled>
+                  <Button variant="quaternary" size="quaternary" disabled>
                     <Camera className="mr-2 h-4 w-4" />
                     Change Photo
                   </Button>

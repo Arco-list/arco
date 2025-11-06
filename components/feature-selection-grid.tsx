@@ -37,14 +37,14 @@ export function FeatureSelectionGrid({
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="h-28 rounded-lg border-2 border-dashed border-gray-200 animate-pulse" />
+          <div key={index} className="h-28 rounded-lg border-2 border-dashed border-border animate-pulse" />
         ))}
       </div>
     )
   }
 
   if (features.length === 0) {
-    return <p className="text-sm text-gray-500">No features available yet.</p>
+    return <p className="text-sm text-text-secondary">No features available yet.</p>
   }
 
   return (
@@ -64,14 +64,14 @@ export function FeatureSelectionGrid({
               disabled={isAlreadyAdded || isSaving}
               className={`p-4 rounded-lg border-2 transition-all text-left ${
                 isAlreadyAdded
-                  ? "border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed"
+                  ? "border-border bg-surface opacity-50 cursor-not-allowed"
                   : isInTempSelection
-                    ? "border-gray-900 bg-gray-50"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    ? "border-foreground bg-surface"
+                    : "border-border bg-white hover:border-border"
               } ${isSaving ? "opacity-60" : ""}`}
             >
-              <IconComponent className="w-6 h-6 text-gray-700 mb-2" />
-              <p className="font-medium text-gray-900 text-sm">{feature.name}</p>
+              <IconComponent className="w-6 h-6 text-foreground mb-2" />
+              <p className="font-medium text-foreground text-sm">{feature.name}</p>
             </button>
           )
         })}

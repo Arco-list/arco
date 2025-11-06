@@ -60,18 +60,18 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold">Filters</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-surface rounded">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {taxonomy.isLoading ? (
-            <div className="text-sm text-gray-500">Loading filter options…</div>
+            <div className="text-sm text-text-secondary">Loading filter options…</div>
           ) : sections.length === 0 ? (
-            <div className="text-sm text-gray-500">No categories available at the moment.</div>
+            <div className="text-sm text-text-secondary">No categories available at the moment.</div>
           ) : (
             <>
               <div>
@@ -83,7 +83,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
                         <label className="flex items-center gap-3 cursor-pointer">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                            className="h-4 w-4 rounded border-border text-black focus:ring-black"
                             checked={selectedCategories.includes(section.category.id ?? "")}
                             onChange={() => toggleCategorySelection(section.category.id ?? "")}
                           />
@@ -92,7 +92,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
 
                         {section.services.length > 0 && (
                           <button
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                            className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                             onClick={() =>
                               setExpandedCategories((prev) => ({
                                 ...prev,
@@ -116,7 +116,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
                             <label key={service.id} className="flex items-center gap-3 cursor-pointer">
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                                className="h-4 w-4 rounded border-border text-black focus:ring-black"
                                 checked={selectedServices.includes(service.id ?? "")}
                                 onChange={() => toggleServiceSelection(service.id ?? "")}
                               />
@@ -134,7 +134,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
                 <h3 className="text-base mb-3">City</h3>
                 <select
                   id="modal-city"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                  className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                   value={selectedCity || ""}
                   onChange={(e) => setSelectedCity(e.target.value || null)}
                 >
@@ -150,9 +150,9 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
           )}
         </div>
 
-        <div className="border-t border-gray-200 p-4 flex gap-3">
+        <div className="border-t border-border p-4 flex gap-3">
           <Button
-            variant="outline"
+            variant="quaternary" size="quaternary"
             onClick={() => {
               clearAllFilters()
               setExpandedCategories({})
@@ -162,7 +162,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
           >
             Clear filters
           </Button>
-          <Button onClick={onClose} className="flex-1 bg-black text-white hover:bg-gray-800">
+          <Button onClick={onClose} className="flex-1 bg-black text-white hover:bg-secondary-hover">
             Apply
           </Button>
         </div>

@@ -678,7 +678,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 </div>
               </div>
               <DialogFooter className="gap-2 sm:justify-end">
-                <Button variant="outline" onClick={() => setInviteDialogOpen(false)} disabled={isInviting}>
+                <Button variant="quaternary" size="quaternary" onClick={() => setInviteDialogOpen(false)} disabled={isInviting}>
                   Cancel
                 </Button>
                 <Button onClick={handleSendInvite} disabled={inviteDisabled || isInviting}>
@@ -809,8 +809,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </div>
             <div className="flex items-center gap-1.5">
               <Button
-                variant="outline"
-                size="icon"
+                variant="quaternary" size="quaternary"
                 className="h-8 w-8"
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
@@ -818,8 +817,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 ‹
               </Button>
               <Button
-                variant="outline"
-                size="icon"
+                variant="quaternary" size="quaternary"
                 className="h-8 w-8"
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
@@ -888,7 +886,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </div>
           )}
           <DialogFooter className="gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setRoleDialogUser(null)} disabled={isUpdatingRole}>
+            <Button variant="quaternary" size="quaternary" onClick={() => setRoleDialogUser(null)} disabled={isUpdatingRole}>
               Cancel
             </Button>
             <Button onClick={handleConfirmRole} disabled={isUpdatingRole}>
@@ -923,7 +921,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </div>
           )}
           <DialogFooter className="gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setStatusDialog(null)} disabled={isUpdatingStatus}>
+            <Button variant="quaternary" size="quaternary" onClick={() => setStatusDialog(null)} disabled={isUpdatingStatus}>
               Cancel
             </Button>
             <Button
@@ -1000,7 +998,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           )}
           <DialogFooter className="gap-2 sm:justify-end">
             <Button
-              variant="outline"
+              variant="quaternary" size="quaternary"
               onClick={() => setDeleteDialog(null)}
               disabled={isDeletingUser || deleteDialog?.isChecking}
             >

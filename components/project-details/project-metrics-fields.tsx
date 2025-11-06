@@ -35,7 +35,7 @@ export const ProjectMetricsFields = ({
 }: ProjectMetricsFieldsProps) => (
   <div className="space-y-8">
     <div>
-      <label className="block text-base font-medium text-gray-900 mb-3">
+      <label className="block text-base font-medium text-foreground mb-3">
         Size <span className="text-red-500">*</span>
       </label>
       <CustomDropdown
@@ -47,12 +47,12 @@ export const ProjectMetricsFields = ({
         openDropdown={openDropdown}
         setOpenDropdown={setOpenDropdown}
       />
-      <p className="text-sm text-gray-500 mt-2">Choose the overall size category of your project</p>
+      <p className="text-sm text-text-secondary mt-2">Choose the overall size category of your project</p>
       {validationErrors.size && <p className="text-sm text-red-600 mt-2">{validationErrors.size}</p>}
     </div>
 
     <div>
-      <label className="block text-base font-medium text-gray-900 mb-3">
+      <label className="block text-base font-medium text-foreground mb-3">
         Budget <span className="text-red-500">*</span>
       </label>
       <CustomDropdown
@@ -64,12 +64,12 @@ export const ProjectMetricsFields = ({
         openDropdown={openDropdown}
         setOpenDropdown={setOpenDropdown}
       />
-      <p className="text-sm text-gray-500 mt-2">Select the tier that best represents your total investment</p>
+      <p className="text-sm text-text-secondary mt-2">Select the tier that best represents your total investment</p>
       {validationErrors.budget && <p className="text-sm text-red-600 mt-2">{validationErrors.budget}</p>}
     </div>
 
     <div>
-      <label className="block text-base font-medium text-gray-900 mb-3">
+      <label className="block text-base font-medium text-foreground mb-3">
         Year built <span className="text-red-500">*</span>
       </label>
       <input
@@ -79,14 +79,14 @@ export const ProjectMetricsFields = ({
         placeholder="2022"
         min="1800"
         max={currentYear}
-        className="w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
       />
-      <p className="text-sm text-gray-500 mt-2">Enter the year when construction was completed</p>
+      <p className="text-sm text-text-secondary mt-2">Enter the year when construction was completed</p>
       {validationErrors.yearBuilt && <p className="text-sm text-red-600 mt-2">{validationErrors.yearBuilt}</p>}
     </div>
 
     <div>
-      <label className="block text-base font-medium text-gray-900 mb-3">
+      <label className="block text-base font-medium text-foreground mb-3">
         Building year <span className="text-red-500">*</span>
       </label>
       <input
@@ -96,9 +96,9 @@ export const ProjectMetricsFields = ({
         placeholder="1930"
         min="1800"
         max={currentYear}
-        className="w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
       />
-      <p className="text-sm text-gray-500 mt-2">Enter the original construction year if different from completion</p>
+      <p className="text-sm text-text-secondary mt-2">Enter the original construction year if different from completion</p>
       {validationErrors.buildingYear && (
         <p className="text-sm text-red-600 mt-2">{validationErrors.buildingYear}</p>
       )}

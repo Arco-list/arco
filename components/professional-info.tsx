@@ -150,22 +150,22 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
       <div className="flex items-start justify-between gap-6">
         <div className="space-y-3 flex-1">
           <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
-          {subtitle ? <h2 className="text-xl text-gray-600">{subtitle}</h2> : null}
+          {subtitle ? <h2 className="text-xl text-text-secondary">{subtitle}</h2> : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-semibold text-gray-900">{ratingDisplay.value.toFixed(2)}</span>
+              <span className="text-sm font-semibold text-foreground">{ratingDisplay.value.toFixed(2)}</span>
             </div>
 
-            <span className="text-sm text-gray-500">·</span>
+            <span className="text-sm text-text-secondary">·</span>
 
             {ratingHref ? (
-              <a href={ratingHref} className="text-sm text-gray-500 underline hover:text-gray-700">
+              <a href={ratingHref} className="text-sm text-text-secondary underline hover:text-foreground">
                 {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
               </a>
             ) : (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-text-secondary">
                 {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
               </span>
             )}
@@ -173,7 +173,7 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
 
           {description ? (
             <div className="space-y-2">
-              <p className="max-w-3xl text-gray-700">{displayDescription}</p>
+              <p className="max-w-3xl text-foreground">{displayDescription}</p>
               {shouldTruncate && (
                 <Button
                   variant="link"
@@ -204,14 +204,14 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {detailItems.map((detail) => (
             <div key={detail.label} className="space-y-1">
-              <p className="text-sm text-gray-500">{detail.label}</p>
-              <p className="text-sm font-medium text-gray-900">{detail.value}</p>
+              <p className="text-sm text-text-secondary">{detail.label}</p>
+              <p className="text-sm font-medium text-foreground">{detail.value}</p>
             </div>
           ))}
         </div>
 
         <button
-          className="text-sm text-gray-500 hover:text-gray-700 underline mt-4"
+          className="text-sm text-text-secondary hover:text-foreground underline mt-4"
           onClick={() => setIsReportModalOpen(true)}
         >
           Report this listing

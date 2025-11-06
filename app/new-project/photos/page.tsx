@@ -167,12 +167,12 @@ export default function PhotoTourPage() {
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="text-left max-w-2xl">
         <div className="mb-8">
-          <ImageIcon className="w-10 h-10 text-gray-900 mb-6" />
+          <ImageIcon className="w-10 h-10 text-foreground mb-6" />
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-6 leading-tight">Create a photo tour</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-6 leading-tight">Create a photo tour</h1>
 
-        <p className="text-gray-600 text-lg leading-relaxed">
+        <p className="text-text-secondary text-lg leading-relaxed">
           Define the building features of the project and add photos for every feature. We will help you out
         </p>
       </div>
@@ -188,28 +188,28 @@ export default function PhotoTourPage() {
 
     return (
       <div className="text-left">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">Add photos of your project</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-4 leading-tight">Add photos of your project</h1>
 
-        <p className="text-gray-500 text-base mb-2">
+        <p className="text-text-secondary text-base mb-2">
           Upload at least {MIN_PHOTOS_REQUIRED} high-quality JPG or PNG images (1200px+). Drag to reorder once
           uploaded.
         </p>
-        <p className="text-sm font-medium text-gray-700 mb-8">
+        <p className="text-sm font-medium text-foreground mb-8">
           {uploadedPhotos.length} uploaded · {progressLabel}
         </p>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragOver ? "border-gray-400 bg-gray-50" : "border-gray-300"
+              dragOver ? "border-border bg-surface" : "border-border"
             }`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
-            <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-900 font-medium mb-1">Drag and drop</p>
-            <p className="text-gray-500 text-sm mb-4">or browse for photos</p>
+            <ImageIcon className="w-8 h-8 text-muted-foreground mx-auto mb-4" />
+            <p className="text-foreground font-medium mb-1">Drag and drop</p>
+            <p className="text-text-secondary text-sm mb-4">or browse for photos</p>
             <label className="inline-block">
               <input
                 type="file"
@@ -223,8 +223,8 @@ export default function PhotoTourPage() {
                 }}
               />
               <span
-                className={`bg-gray-900 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isUploading ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-800 cursor-pointer"
+                className={`bg-secondary text-white px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isUploading ? "opacity-60 cursor-not-allowed" : "hover:bg-secondary-hover cursor-pointer"
                 }`}
               >
                 {isUploading ? "Uploading..." : "Browse"}
@@ -249,7 +249,7 @@ export default function PhotoTourPage() {
               onDrop={(event) => handlePhotoDropOnCard(event, photo.id)}
               onDragEnd={handlePhotoDragEnd}
             >
-              <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
+              <div className="aspect-square rounded-lg overflow-hidden bg-surface">
                 <img
                   src={photo.url || "/placeholder.svg"}
                   alt="Uploaded project photo"
@@ -258,7 +258,7 @@ export default function PhotoTourPage() {
               </div>
 
               {photo.isCover && (
-                <div className="absolute top-2 left-2 bg-gray-900 text-white px-2 py-1 rounded text-xs font-medium">
+                <div className="absolute top-2 left-2 bg-secondary text-white px-2 py-1 rounded text-xs font-medium">
                   Cover photo
                 </div>
               )}
@@ -266,22 +266,22 @@ export default function PhotoTourPage() {
               <div className="absolute top-2 right-2">
                 <button
                   onClick={() => setOpenMenuId(openMenuId === photo.id ? null : photo.id)}
-                  className="bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
+                  className="bg-white rounded-full p-1 shadow-md hover:bg-surface transition-colors"
                 >
-                  <MoreHorizontal className="w-4 h-4 text-gray-600" />
+                  <MoreHorizontal className="w-4 h-4 text-text-secondary" />
                 </button>
 
                 {openMenuId === photo.id && (
-                  <div className="absolute top-8 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[160px]">
+                  <div className="absolute top-8 right-0 bg-white rounded-lg shadow-lg border border-border py-1 z-10 min-w-[160px]">
                     <button
                       onClick={() => setCoverPhoto(photo.id)}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-surface transition-colors"
                     >
                       Set as cover photo
                     </button>
                     <button
                       onClick={() => deletePhoto(photo.id)}
-                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-surface transition-colors flex items-center gap-2"
                     >
                       <Trash2 className="w-3 h-3" />
                       Delete
@@ -299,9 +299,9 @@ export default function PhotoTourPage() {
   const renderStep3 = () => {
     return (
       <div className="text-left">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4 leading-tight">Tell us what your project has to offer</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-4 leading-tight">Tell us what your project has to offer</h1>
 
-        <p className="text-gray-500 text-base mb-6">
+        <p className="text-text-secondary text-base mb-6">
           Select the spaces that best describe your project — you can adjust these later.
         </p>
 
@@ -322,7 +322,7 @@ export default function PhotoTourPage() {
             <button
               onClick={() => void saveNewFeatures()}
               disabled={isSavingFeatures}
-              className="w-full bg-gray-900 text-white py-3 px-6 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-secondary text-white py-3 px-6 rounded-md text-sm font-medium hover:bg-secondary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSavingFeatures ? "Saving..." : `Save selected (${tempSelectedFeatures.length})`}
             </button>
@@ -428,7 +428,7 @@ export default function PhotoTourPage() {
         {currentStep === 4 && renderStep4()}
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border p-4 shadow-lg">
         <div className="container mx-auto max-w-4xl">
           <div className="flex gap-4 justify-center">
             <Button
@@ -462,7 +462,7 @@ function PhotoTourHeader({
   isDisabled: boolean
 }) {
   return (
-    <header className="bg-white border-b border-gray-200">
+    <header className="bg-white border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex-shrink-0">
@@ -478,7 +478,7 @@ function PhotoTourHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+              className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
             >
               Questions?
             </a>
@@ -486,7 +486,7 @@ function PhotoTourHeader({
             <button
               onClick={onSaveAndExit}
               disabled={isDisabled}
-              className="bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] text-[13px] font-medium px-[18px] py-3 rounded-full disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
+              className="bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] text-sm font-medium px-[18px] py-3 rounded-full disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               {isDisabled ? "Saving..." : "Save and Exit"}
             </button>

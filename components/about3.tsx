@@ -113,7 +113,7 @@ const About3 = ({
                   <p className="mb-2 text-lg font-semibold">{breakout.title}</p>
                   <p className="text-muted-foreground">{breakout.description}</p>
                 </div>
-                <Button variant="outline" className="mr-auto bg-transparent" asChild>
+                <Button variant="quaternary" size="quaternary" className="mr-auto bg-transparent" asChild>
                   <a href={breakout.buttonUrl} target="_blank" rel="noreferrer">
                     {breakout.buttonText}
                   </a>

@@ -35,33 +35,33 @@ export function SegmentedProgressBar({ currentGlobalStep }: SegmentedProgressBar
       <div className="flex h-2 w-full gap-1">
         {/* Details section */}
         <div
-          className="relative h-2 rounded-full bg-gray-200 overflow-hidden"
+          className="relative h-2 rounded-full bg-surface overflow-hidden"
           style={{ width: `${detailsWidth}%` }}
         >
           <div
-            className="h-full rounded-full bg-gray-900 transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-secondary transition-all duration-300 ease-out"
             style={{ width: `${detailsProgress}%` }}
           />
         </div>
 
         {/* Photos section */}
         <div
-          className="relative h-2 rounded-full bg-gray-200 overflow-hidden"
+          className="relative h-2 rounded-full bg-surface overflow-hidden"
           style={{ width: `${photosWidth}%` }}
         >
           <div
-            className="h-full rounded-full bg-gray-900 transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-secondary transition-all duration-300 ease-out"
             style={{ width: `${photosProgress}%` }}
           />
         </div>
 
         {/* Professionals section */}
         <div
-          className="relative h-2 rounded-full bg-gray-200 overflow-hidden"
+          className="relative h-2 rounded-full bg-surface overflow-hidden"
           style={{ width: `${professionalsWidth}%` }}
         >
           <div
-            className="h-full rounded-full bg-gray-900 transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-secondary transition-all duration-300 ease-out"
             style={{ width: `${professionalsProgress}%` }}
           />
         </div>

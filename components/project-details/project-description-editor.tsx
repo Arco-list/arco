@@ -27,7 +27,7 @@ export const ProjectDescriptionEditor = ({
 }: ProjectDescriptionEditorProps) => {
   const getFormattingButtonClass = (active: boolean) => {
     return `flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-gray-900 ${
-      active ? "bg-gray-200 text-gray-900" : "text-gray-600 hover:bg-gray-100"
+      active ? "bg-surface text-foreground" : "text-text-secondary hover:bg-surface"
     } disabled:cursor-not-allowed disabled:opacity-40`
   }
 
@@ -43,12 +43,12 @@ export const ProjectDescriptionEditor = ({
       className={`rounded-md border bg-white transition-colors focus-within:ring-2 ${
         validationError
           ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-500"
-          : "border-gray-300 focus-within:border-transparent focus-within:ring-gray-900"
+          : "border-border focus-within:border-transparent focus-within:ring-gray-900"
       }`}
     >
       {editor ? (
         <>
-          <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-1 border-b border-border bg-surface px-3 py-2">
             <button
               type="button"
               className={getFormattingButtonClass(editor.isActive("bold"))}
@@ -76,7 +76,7 @@ export const ProjectDescriptionEditor = ({
             >
               <span className="underline">U</span>
             </button>
-            <span className="mx-1 h-8 w-px bg-gray-200" aria-hidden="true" />
+            <span className="mx-1 h-8 w-px bg-surface" aria-hidden="true" />
             <button
               type="button"
               className={getFormattingButtonClass(editor.isActive("bulletList"))}
@@ -100,24 +100,24 @@ export const ProjectDescriptionEditor = ({
             <EditorContent
               editor={editor}
               aria-label="Project description editor"
-              className="px-4 py-3 text-gray-900 focus:outline-none [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:break-words [&_.ProseMirror]:outline-none [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-base [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:space-y-4 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:pl-1"
+              className="px-4 py-3 text-foreground focus:outline-none [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:break-words [&_.ProseMirror]:outline-none [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-base [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:space-y-4 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:pl-1"
             />
             {plainTextLength === 0 && (
-              <span className="pointer-events-none absolute left-4 top-3 text-sm text-gray-400">{placeholder}</span>
+              <span className="pointer-events-none absolute left-4 top-3 text-sm text-muted-foreground">{placeholder}</span>
             )}
           </div>
         </>
       ) : (
-        <div className="px-4 py-6 text-sm text-gray-500">Loading editor…</div>
+        <div className="px-4 py-6 text-sm text-text-secondary">Loading editor…</div>
       )}
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-text-secondary">
           Provide a detailed description of your project, including key features and design elements
         </p>
-        <div className="flex items-center gap-4 text-sm text-gray-400">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <span>{wordCount} words</span>
-          <span className={isTooShort ? "text-red-600" : "text-gray-400"}>
+          <span className={isTooShort ? "text-red-600" : "text-muted-foreground"}>
             {plainTextLength}/{minDescriptionLength}+ characters
           </span>
         </div>

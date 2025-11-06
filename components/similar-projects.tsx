@@ -55,14 +55,14 @@ export function SimilarProjects() {
         <div className="flex gap-2">
           <button
             onClick={scrollLeft}
-            className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
             aria-label="Previous projects"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={scrollRight}
-            className="p-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
             aria-label="Next projects"
           >
             <ChevronRight className="w-4 h-4" />

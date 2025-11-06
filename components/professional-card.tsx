@@ -33,7 +33,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
 
   return (
     <Link href={`/professionals/${professional.slug}`} className={`group cursor-pointer ${className}`}>
-      <div className="relative overflow-hidden rounded-lg bg-gray-100">
+      <div className="relative overflow-hidden rounded-lg bg-surface">
         <img
           src={imageSrc}
           alt={professional.name}
@@ -46,7 +46,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
 
         <button
           onClick={handleToggle}
-          className="absolute top-3 right-3 p-1 text-gray-600 hover:text-red-500 transition-colors disabled:opacity-60"
+          className="absolute top-3 right-3 p-1 text-text-secondary hover:text-red-500 transition-colors disabled:opacity-60"
           aria-pressed={isSaved}
           aria-label={isSaved ? "Unsave professional" : "Save professional"}
           disabled={isMutating}
@@ -56,14 +56,14 @@ export const ProfessionalCard = memo(function ProfessionalCard({
       </div>
 
       <div className="mt-3">
-        <p className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900 line-clamp-2">{professional.name}</p>
-        <p className="text-xs font-normal text-gray-500 mt-1">
+        <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{professional.name}</p>
+        <p className="text-xs font-normal text-text-secondary mt-1">
           {professional.profession} in {professional.location}
         </p>
         <div className="flex items-center gap-1 mt-1">
           <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-          <span className="text-xs font-normal text-gray-600">{professional.rating}</span>
-          <span className="text-xs font-normal text-gray-500">({professional.reviewCount})</span>
+          <span className="text-xs font-normal text-text-secondary">{professional.rating}</span>
+          <span className="text-xs font-normal text-text-secondary">({professional.reviewCount})</span>
         </div>
       </div>
     </Link>

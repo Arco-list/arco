@@ -8,7 +8,7 @@ export function MapSection() {
   const { location } = useProjectPreview()
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
-  const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
+  const markerRef = useRef<google.maps.Marker | null>(null)
   const [isMapsLoaded, setIsMapsLoaded] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
 
@@ -38,7 +38,7 @@ export function MapSection() {
     const checkMapsLoaded = () => {
       if (cancelled) return // Early exit if component unmounted
 
-      if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+      if (window.google?.maps?.Map && window.google?.maps?.Marker) {
         setIsMapsLoaded(true)
         setMapError(null)
         return
@@ -88,10 +88,9 @@ export function MapSection() {
           mapTypeControl: false,
           streetViewControl: true,
           fullscreenControl: true,
-          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
         })
 
-        markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
+        markerRef.current = new window.google.maps.Marker({
           map: mapInstanceRef.current,
           position,
           title: label,
@@ -112,10 +111,9 @@ export function MapSection() {
               mapTypeControl: false,
               streetViewControl: false,
               fullscreenControl: true,
-              mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID, // Required for AdvancedMarkerElement
             })
 
-            markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
+            markerRef.current = new window.google.maps.Marker({
               map: mapInstanceRef.current,
               position,
               title: summaryLabel,
@@ -132,7 +130,7 @@ export function MapSection() {
 
     return () => {
       if (markerRef.current) {
-        markerRef.current.map = null
+        markerRef.current.setMap(null)
         markerRef.current = null
       }
       if (mapInstanceRef.current) {
@@ -145,9 +143,9 @@ export function MapSection() {
     return (
       <div className="space-y-4">
         <h2 className="text-2xl font-bold text-black">Explore the area</h2>
-        {label && <p className="text-gray-600">{label}</p>}
-        <div className="relative h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-          <p className="text-sm text-gray-500">
+        {label && <p className="text-text-secondary">{label}</p>}
+        <div className="relative h-64 bg-surface rounded-lg flex items-center justify-center">
+          <p className="text-sm text-text-secondary">
             Add a Google Maps API key to display map
           </p>
         </div>
@@ -158,17 +156,17 @@ export function MapSection() {
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold text-black">Explore the area</h2>
-      {label && <p className="text-gray-600">{label}</p>}
+      {label && <p className="text-text-secondary">{label}</p>}
 
-      <div className="relative h-64 bg-gray-200 rounded-lg overflow-hidden">
+      <div className="relative h-64 bg-surface rounded-lg overflow-hidden">
         {!isMapsLoaded && !mapError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-            <div className="text-sm text-gray-600">Loading map...</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-surface">
+            <div className="text-sm text-text-secondary">Loading map...</div>
           </div>
         )}
 
         {mapError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+          <div className="absolute inset-0 flex items-center justify-center bg-surface">
             <div className="text-sm text-red-600">{mapError}</div>
           </div>
         )}
@@ -178,7 +176,7 @@ export function MapSection() {
         {!location.shareExact && isMapsLoaded && !mapError && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
             <div className="bg-white px-4 py-2 rounded-lg shadow-lg text-center">
-              <p className="text-sm text-gray-600">Approximate location</p>
+              <p className="text-sm text-text-secondary">Approximate location</p>
             </div>
           </div>
         )}

@@ -42,16 +42,16 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
     <section className="py-10 px-4 md:px-8 bg-white">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900">Popular professional services</h2>
+          <h4>Popular professional services</h4>
           <div className="hidden md:flex items-center gap-2">
-            <Link href="/professionals" className="text-sm text-gray-600 hover:text-gray-900 transition-colors mr-2">
+            <Link href="/professionals" className="text-sm text-text-secondary hover:text-foreground transition-colors mr-2">
               View all
             </Link>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
+              <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="outline" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
+              <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollRight}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -77,7 +77,7 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
-                <h3 className="absolute bottom-4 left-4 text-white text-4xl" style={{ fontFamily: 'Figtree', fontWeight: 600, letterSpacing: '-2px' }}>{category.title}</h3>
+                <h2 className="absolute top-4 left-4 text-white">{category.title}</h2>
               </div>
             </Link>
           ))}

@@ -253,7 +253,7 @@ const Faq12 = () => {
                   ref={(el) => {
                     categoryRefs.current[category] = el
                   }}
-                  className={cn(`rounded-xl`, activeCategory === category ? "bg-gray-100" : "bg-gray-50", "px-6")}
+                  className={cn(`rounded-xl`, activeCategory === category ? "bg-surface" : "bg-surface", "px-6")}
                   style={{
                     scrollMargin: `${TOP_PADDING}px`,
                   }}

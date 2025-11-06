@@ -46,15 +46,15 @@ export function MobileProfessionalsButton() {
                       className="w-12 h-12 rounded object-cover"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                    <div className="w-12 h-12 rounded bg-surface flex items-center justify-center text-xs text-muted-foreground">
                       Logo
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {professional.companyName}
                     </p>
-                    <p className="text-xs text-gray-500">{professional.serviceCategory}</p>
+                    <p className="text-xs text-text-secondary">{professional.serviceCategory}</p>
                   </div>
                 </>
               )
@@ -63,7 +63,7 @@ export function MobileProfessionalsButton() {
                 <Link
                   key={professional.id}
                   href={professionalHref}
-                  className="flex items-start gap-3 py-2 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors"
+                  className="flex items-start gap-3 py-2 hover:bg-surface -mx-2 px-2 rounded-lg transition-colors"
                   onClick={() => setShowModal(false)}
                 >
                   {content}

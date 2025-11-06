@@ -126,7 +126,7 @@ export function ProjectsGrid() {
         <div className="max-w-[1800px] mx-auto py-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h4 className="text-gray-900">
+              <h4 className="text-foreground">
                 {headingText}
               </h4>
             </div>
@@ -135,7 +135,7 @@ export function ProjectsGrid() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+                className="flex items-center gap-2 text-sm text-text-secondary hover:text-foreground"
                 onClick={() => setIsSortDropdownOpen((open) => !open)}
               >
                 Sort: {sortBy}
@@ -143,12 +143,12 @@ export function ProjectsGrid() {
               </Button>
 
               {isSortDropdownOpen && (
-                <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-gray-200 bg-white shadow-lg">
+                <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-border bg-white shadow-lg">
                   <div className="py-1">
                     {sortOptions.map((option) => (
                       <button
                         key={option}
-                        className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy(option)
                           setIsSortDropdownOpen(false)
@@ -169,7 +169,7 @@ export function ProjectsGrid() {
                 <button
                   key={`${tag.type}-${tag.value}-${index}`}
                   onClick={() => removeFilter(tag.type, tag.value)}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full hover:bg-gray-200 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground text-sm rounded-full hover:bg-surface transition-colors"
                 >
                   {tag.label}
                   <X className="h-3 w-3" />
@@ -250,14 +250,14 @@ export function ProjectsGrid() {
 
             {isLoading && (
               <div className="col-span-full flex justify-center py-12">
-                <p className="text-sm text-gray-500">Loading projects…</p>
+                <p className="text-sm text-text-secondary">Loading projects…</p>
               </div>
             )}
           </div>
 
           {!isLoading && sortedProjects.length === 0 && !error && (
             <div className="text-center py-12">
-              <p className="text-gray-500">No projects found matching your filters.</p>
+              <p className="text-text-secondary">No projects found matching your filters.</p>
             </div>
           )}
 

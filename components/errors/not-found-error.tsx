@@ -20,7 +20,7 @@ export default function NotFoundError() {
             </Link>
           </Button>
           
-          <Button variant="outline" asChild className="w-full">
+          <Button variant="quaternary" size="quaternary" asChild className="w-full">
             <Link href="/projects">
               Browse Projects
             </Link>

@@ -20,17 +20,17 @@ export function ProjectInfo() {
     <div className="space-y-4">
       {/* Project title and description */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold text-black">{info.title}</h1>
-        {info.subtitle && <h2 className="text-xl text-gray-600">{info.subtitle}</h2>}
+        <h1 className="text-2xl md:text-3xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', lineHeight: '1.2' }}>{info.title}</h1>
+        {info.subtitle && <h2 className="text-base md:text-xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.3px', lineHeight: '1.2' }}>{info.subtitle}</h2>}
         {info.sponsoredLabel && (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-text-secondary">
             {info.sponsoredLabel}
           </p>
         )}
 
         {descriptionHtml && (
           <div 
-            className="text-gray-700 leading-relaxed prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:pl-1"
+            className="text-foreground leading-relaxed prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:pl-1"
             dangerouslySetInnerHTML={{ __html: displayDescriptionHtml }}
           />
         )}

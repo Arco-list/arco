@@ -130,14 +130,14 @@ export function PhotoTourManager({
       {showHeader && (
         <div className="flex items-center justify-between mb-4">
           <div className="hidden md:block">
-            <h2 className="text-2xl font-semibold text-gray-900">{title}</h2>
-            <p className="text-sm text-gray-500">{subtitle}</p>
+            <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
+            <p className="text-sm text-text-secondary">{subtitle}</p>
           </div>
 
           <div className="relative md:ml-auto ml-auto">
             <button
               onClick={() => setShowAddMenu((state) => !state)}
-              className="bg-gray-900 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-gray-800 transition-colors"
+              className="bg-secondary text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-secondary-hover transition-colors"
               aria-haspopup="menu"
               aria-expanded={showAddMenu}
             >
@@ -145,7 +145,7 @@ export function PhotoTourManager({
             </button>
 
             {showAddMenu && (
-              <div className="absolute top-12 right-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10 min-w-[160px]">
+              <div className="absolute top-12 right-0 bg-white rounded-lg shadow-lg border border-border py-2 z-10 min-w-[160px]">
                 <label className="block cursor-pointer">
                   <input
                     type="file"
@@ -161,7 +161,7 @@ export function PhotoTourManager({
                   />
                   <span
                     className={`w-full text-left px-4 py-2 text-sm transition-colors block ${
-                      isUploading ? "text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-gray-50"
+                      isUploading ? "text-muted-foreground cursor-not-allowed" : "text-foreground hover:bg-surface"
                     }`}
                   >
                     {isUploading ? "Uploading…" : "Add photos"}
@@ -174,7 +174,7 @@ export function PhotoTourManager({
                   }}
                   disabled={isSavingFeatures}
                   className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                    isSavingFeatures ? "text-gray-400 cursor-not-allowed" : "text-gray-700 hover:bg-gray-50"
+                    isSavingFeatures ? "text-muted-foreground cursor-not-allowed" : "text-foreground hover:bg-surface"
                   }`}
                 >
                   {isSavingFeatures ? "Saving…" : "Add feature"}
@@ -193,12 +193,12 @@ export function PhotoTourManager({
           const coverPhoto = getFeatureCoverPhoto(featureId)
 
           return (
-            <div key={featureId} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div key={featureId} className="bg-white rounded-lg border border-border overflow-hidden">
               <button
                 onClick={() => openPhotoSelector(featureId)}
-                className="w-full text-left hover:bg-gray-50 transition-colors"
+                className="w-full text-left hover:bg-surface transition-colors"
               >
-                <div className="aspect-square bg-gray-100 relative">
+                <div className="aspect-square bg-surface relative">
                   {coverPhoto ? (
                     <img
                       src={coverPhoto || "/placeholder.svg"}
@@ -207,8 +207,8 @@ export function PhotoTourManager({
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center">
-                      <ImageIcon className="w-12 h-12 text-gray-400 mb-4" />
-                      <span className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                      <ImageIcon className="w-12 h-12 text-muted-foreground mb-4" />
+                      <span className="bg-white border border-border text-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-surface transition-colors">
                         Select photos
                       </span>
                     </div>
@@ -232,15 +232,15 @@ export function PhotoTourManager({
       {showAddFeatureModal && (
         <div className={OVERLAY_CLASSES}>
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-6 border-b border-border">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Add feature</h2>
+                <h2 className="text-xl font-semibold text-foreground">Add feature</h2>
                 <button
                   onClick={() => {
                     setShowAddFeatureModal(false)
                     handleClearTempFeatureSelection()
                   }}
-                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                  className="text-muted-foreground hover:text-text-secondary text-2xl leading-none"
                 >
                   ×
                 </button>

@@ -49,9 +49,9 @@ const inviteStatusStyles: Record<InviteStatus, { label: string; tone: string; ic
   invited: { label: "Not claimed", tone: "bg-amber-100 text-amber-800", icon: Clock3 },
   listed: { label: "Listed", tone: "bg-blue-100 text-blue-800", icon: ListChecks },
   live_on_page: { label: "Live", tone: "bg-emerald-100 text-emerald-700", icon: Sparkles },
-  unlisted: { label: "Unlisted", tone: "bg-slate-200 text-slate-700", icon: Archive },
+  unlisted: { label: "Unlisted", tone: "bg-surface text-text-secondary", icon: Archive },
   rejected: { label: "Rejected", tone: "bg-rose-100 text-rose-700", icon: XCircle },
-  removed: { label: "Removed", tone: "bg-gray-200 text-gray-700", icon: Ban },
+  removed: { label: "Removed", tone: "bg-surface text-foreground", icon: Ban },
 }
 
 const STATUS_FILTER_OPTIONS = [
@@ -178,7 +178,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" className="h-9 gap-2" onClick={() => router.refresh()}>
+          <Button variant="quaternary" size="quaternary" className="h-9 gap-2" onClick={() => router.refresh()}>
             <RefreshCcw className="h-4 w-4" />
             Refresh
           </Button>
@@ -250,7 +250,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant="outline"
+                        variant="quaternary" size="quaternary"
                         className={cn("inline-flex items-center gap-1.5 border-none px-2.5 py-1 text-xs font-medium", statusInfo.tone)}
                       >
                         <StatusIcon className="h-3.5 w-3.5" />
@@ -259,8 +259,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="quaternary" size="quaternary"
                         className="h-8 gap-1.5"
                         disabled={isPending && pendingId === invite.id}
                         onClick={() => handleResend(invite.id, invite.invitedEmail)}
@@ -301,8 +300,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
           </div>
           <div className="flex items-center gap-1">
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage(0)}
               disabled={currentPage === 0}
@@ -310,8 +308,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
               First
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage((prev) => Math.max(0, prev - 1))}
               disabled={currentPage === 0}
@@ -322,8 +319,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
               Page {currentPage + 1} of {pageCount}
             </span>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage((prev) => Math.min(pageCount - 1, prev + 1))}
               disabled={currentPage + 1 >= pageCount}
@@ -331,8 +327,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
               Next
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage(pageCount - 1)}
               disabled={currentPage + 1 >= pageCount}

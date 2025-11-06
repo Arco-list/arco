@@ -69,7 +69,7 @@ const STATUS_LABELS: Record<ProjectStatusValue, { label: string; tone: string }>
   in_progress: { label: "In review", tone: "bg-blue-100 text-blue-800" },
   published: { label: "Live", tone: "bg-green-100 text-green-800" },
   completed: { label: "Listed", tone: "bg-emerald-100 text-emerald-800" },
-  archived: { label: "Unlisted", tone: "bg-slate-200 text-slate-700" },
+  archived: { label: "Unlisted", tone: "bg-surface text-text-secondary" },
   rejected: { label: "Rejected", tone: "bg-red-100 text-red-700" },
 }
 
@@ -751,7 +751,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => handleFilterDialogChange(true)}>
+          <Button variant="quaternary" size="quaternary" onClick={() => handleFilterDialogChange(true)}>
             Filters
             {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-2">{activeFiltersCount}</Badge>}
           </Button>
@@ -761,7 +761,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
             </Label>
             <Switch id="seo-view-toggle" checked={showSeoView} onCheckedChange={setShowSeoView} />
           </div>
-          <Button variant="outline" onClick={handleExportCsv}>Export CSV</Button>
+          <Button variant="quaternary" size="quaternary" onClick={handleExportCsv}>Export CSV</Button>
           <Button asChild variant="secondary">
             <Link href="/new-project/details">
               <Sparkles className="mr-2 h-4 w-4" />
@@ -979,7 +979,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {featurePreview.map((feature) => (
-                          <Badge key={feature} variant="outline" className="text-xs">
+                          <Badge key={feature} variant="quaternary" size="quaternary" className="text-xs">
                             {feature}
                           </Badge>
                         ))}
@@ -990,7 +990,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col text-sm">
-                        <span className={showPreciseLocation ? "text-gray-900" : "text-muted-foreground"}>
+                        <span className={showPreciseLocation ? "text-foreground" : "text-muted-foreground"}>
                           {preciseLocation ?? locationSummary}
                         </span>
                         {showPreciseLocation && (
@@ -1107,8 +1107,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
           </div>
           <div className="flex items-center gap-1">
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage(0)}
               disabled={currentPage === 0}
@@ -1116,8 +1115,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
               First
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage((prev) => Math.max(0, prev - 1))}
               disabled={currentPage === 0}
@@ -1128,8 +1126,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
               Page {currentPage + 1} of {pageCount}
             </span>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage((prev) => Math.min(pageCount - 1, prev + 1))}
               disabled={currentPage + 1 >= pageCount}
@@ -1137,8 +1134,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
               Next
             </Button>
             <Button
-              variant="outline"
-              size="sm"
+              variant="quaternary" size="quaternary"
               className="h-8"
               onClick={() => setPage(pageCount - 1)}
               disabled={currentPage + 1 >= pageCount}
@@ -1246,11 +1242,11 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
             </div>
           </div>
           <DialogFooter className="flex items-center justify-between sm:justify-between">
-            <Button variant="outline" onClick={handleClearFilters}>
+            <Button variant="quaternary" size="quaternary" onClick={handleClearFilters}>
               Clear all
             </Button>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => handleFilterDialogChange(false)}>
+              <Button variant="quaternary" size="quaternary" onClick={() => handleFilterDialogChange(false)}>
                 Cancel
               </Button>
               <Button onClick={handleApplyFilters}>Apply filters</Button>
@@ -1292,7 +1288,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
           </div>
           <DialogFooter>
             <Button
-              variant="outline"
+              variant="quaternary" size="quaternary"
               onClick={() => {
                 setChangeOwnerProject(null)
                 setChangeOwnerEmail("")
@@ -1362,7 +1358,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeStatusDialog}>
+            <Button variant="quaternary" size="quaternary" onClick={closeStatusDialog}>
               Cancel
             </Button>
             <Button onClick={handleStatusSubmit} disabled={isPending}>
@@ -1390,7 +1386,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
           </DialogHeader>
           <DialogFooter>
             <Button
-              variant="outline"
+              variant="quaternary" size="quaternary"
               onClick={() => {
                 setDeleteProject(null)
               }}
@@ -1446,7 +1442,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                         </p>
                       </div>
                       <Badge 
-                        variant="outline" 
+                        variant="quaternary" size="quaternary" 
                         className={`text-xs ${
                           professional.is_project_owner 
                             ? 'bg-blue-100 text-blue-800 border-blue-200' 
@@ -1471,7 +1467,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
 
           <DialogFooter>
             <Button 
-              variant="outline" 
+              variant="quaternary" size="quaternary" 
               onClick={() => setApprovalModalProject(null)} 
               disabled={isApprovePending}
             >

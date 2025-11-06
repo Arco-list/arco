@@ -62,23 +62,23 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-surface">
       <DashboardHeader />
 
       <main className="flex-1 pt-20 pb-8">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <h1 className="mb-6 text-2xl font-semibold text-gray-900">Pricing</h1>
+          <h1 className="mb-6 text-2xl font-semibold text-foreground">Pricing</h1>
 
           <div className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-center">
-            <p className="max-w-3xl text-sm text-gray-600 md:text-base">
+            <p className="max-w-3xl text-sm text-text-secondary md:text-base">
               Choose the plan that fits your studio. Plus unlocks public project listings, premium placement in
               discovery, and unlimited portfolio publishing.
             </p>
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 Save up to 20% with yearly billing
               </span>
-              <div className="flex h-11 w-fit shrink-0 items-center rounded-md border border-gray-200 bg-white p-1 text-lg">
+              <div className="flex h-11 w-fit shrink-0 items-center rounded-md border border-border bg-white p-1 text-lg">
                 <RadioGroup
                   defaultValue="monthly"
                   className="h-full grid-cols-2"
@@ -94,7 +94,7 @@ export default function PricingPage() {
                     />
                     <Label
                       htmlFor="monthly"
-                      className="flex h-full cursor-pointer items-center justify-center px-7 text-sm font-semibold text-gray-500 transition-colors peer-data-[state=checked]:text-gray-900"
+                      className="flex h-full cursor-pointer items-center justify-center px-7 text-sm font-semibold text-text-secondary transition-colors peer-data-[state=checked]:text-foreground"
                     >
                       Monthly
                     </Label>
@@ -107,7 +107,7 @@ export default function PricingPage() {
                     />
                     <Label
                       htmlFor="annually"
-                      className="flex h-full cursor-pointer items-center justify-center gap-1 px-7 text-sm font-semibold text-gray-500 transition-colors peer-data-[state=checked]:text-gray-900"
+                      className="flex h-full cursor-pointer items-center justify-center gap-1 px-7 text-sm font-semibold text-text-secondary transition-colors peer-data-[state=checked]:text-foreground"
                     >
                       Yearly
                     </Label>
@@ -118,56 +118,56 @@ export default function PricingPage() {
           </div>
 
           <div className="flex w-full flex-col items-stretch gap-6 md:flex-row">
-            <div className="flex w-full flex-col rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-sm">
-              <Badge variant="outline" className="mb-6 w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+            <div className="flex w-full flex-col rounded-2xl border border-border bg-white p-6 text-left shadow-sm">
+              <Badge variant="quaternary" size="quaternary" className="mb-6 w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide">
                 Basic
               </Badge>
               <span className="text-4xl font-medium">$0</span>
               <p className="text-muted-foreground invisible">Per month</p>
               <Separator className="my-6" />
               <div className="flex flex-1 flex-col justify-between gap-6">
-                <ul className="space-y-3 text-sm text-gray-600">
+                <ul className="space-y-3 text-sm text-text-secondary">
                   <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-gray-400" />
+                    <Check className="h-4 w-4 text-muted-foreground" />
                     <span>Up to 3 projects</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-gray-400" />
+                    <Check className="h-4 w-4 text-muted-foreground" />
                     <span>Company page with project portfolio</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-gray-400" />
+                    <Check className="h-4 w-4 text-muted-foreground" />
                     <span>Review collection</span>
                   </li>
                 </ul>
-                <Button variant="outline" className="w-full" disabled>
+                <Button variant="quaternary" size="quaternary" className="w-full" disabled>
                   {isPlus ? "Included in Plus" : "Current plan"}
                 </Button>
               </div>
             </div>
-            <div className="flex w-full flex-col rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-lg">
+            <div className="flex w-full flex-col rounded-2xl border border-border bg-white p-6 text-left shadow-lg">
               <Badge className="mb-6 w-fit rounded-full bg-red-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-700">
                 Plus
               </Badge>
               {isAnnually ? (
                 <>
                   <div className="flex items-center gap-3">
-                    <span className="text-4xl font-semibold text-gray-900">€39</span>
-                    <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+                    <span className="text-4xl font-semibold text-foreground">€39</span>
+                    <Badge variant="quaternary" size="quaternary" className="border-red-200 bg-red-50 text-red-700">
                       20% off
                     </Badge>
                   </div>
-                  <p className="text-sm text-gray-500">Per year</p>
+                  <p className="text-sm text-text-secondary">Per year</p>
                 </>
               ) : (
                 <>
-                  <span className="text-4xl font-semibold text-gray-900">€39</span>
-                  <p className="text-sm text-gray-500">Per month</p>
+                  <span className="text-4xl font-semibold text-foreground">€39</span>
+                  <p className="text-sm text-text-secondary">Per month</p>
                 </>
               )}
               <Separator className="my-6" />
               <div className="flex flex-1 flex-col justify-between gap-6">
-                <ul className="space-y-3 text-sm text-gray-700">
+                <ul className="space-y-3 text-sm text-foreground">
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-red-400" />
                     <span>Unlimited projects</span>
@@ -202,7 +202,7 @@ export default function PricingPage() {
                   )}
                 </Button>
                 {!canAttemptUpgrade && !isPlus && (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-text-secondary">
                     Upgrades are temporarily unavailable. Contact support if you need help activating Plus.
                   </p>
                 )}
@@ -214,9 +214,9 @@ export default function PricingPage() {
           <div className="mt-12 pt-8 border-t">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Billing</h2>
-                <p className="mt-2 text-sm font-medium text-gray-900">You are on the {currentPlanLabel} plan</p>
-                <p className="mt-1 text-sm text-gray-500">
+                <h2 className="text-xl font-semibold text-foreground">Billing</h2>
+                <p className="mt-2 text-sm font-medium text-foreground">You are on the {currentPlanLabel} plan</p>
+                <p className="mt-1 text-sm text-text-secondary">
                   {isPlus
                     ? renewalLabel
                       ? `Plan renews on ${renewalLabel}.`
@@ -224,7 +224,7 @@ export default function PricingPage() {
                     : "Upgrade to unlock public listings and search visibility."}
                 </p>
               </div>
-              <Button variant="outline" className="w-full sm:w-auto" disabled={!isPlus || loading}>
+              <Button variant="quaternary" size="quaternary" className="w-full sm:w-auto" disabled={!isPlus || loading}>
                 Manage subscription
               </Button>
             </div>

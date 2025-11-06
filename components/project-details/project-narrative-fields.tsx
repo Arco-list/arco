@@ -36,7 +36,7 @@ export const ProjectNarrativeFields = ({
 }: ProjectNarrativeFieldsProps) => (
   <div className="space-y-8">
     <div>
-      <label className="block text-base font-medium text-gray-900 mb-3">
+      <label className="block text-base font-medium text-foreground mb-3">
         Project title <span className="text-red-500">*</span>
       </label>
       <input
@@ -44,11 +44,11 @@ export const ProjectNarrativeFields = ({
         value={formData.projectTitle}
         onChange={(event) => onInputChange("projectTitle", event.target.value)}
         placeholder="Project title"
-        className="w-full px-4 py-3 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-gray-400 transition-colors"
+        className="w-full px-4 py-3 border border-border rounded-md bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
       />
       <div className="flex items-center justify-between mt-2">
-        <p className="text-sm text-gray-500">Give your project a memorable and descriptive title</p>
-        <span className={`text-sm ${formData.projectTitle.length > maxTitleLength ? "text-red-600" : "text-gray-400"}`}>
+        <p className="text-sm text-text-secondary">Give your project a memorable and descriptive title</p>
+        <span className={`text-sm ${formData.projectTitle.length > maxTitleLength ? "text-red-600" : "text-muted-foreground"}`}>
           {formData.projectTitle.length}/{maxTitleLength}
         </span>
       </div>
@@ -56,7 +56,7 @@ export const ProjectNarrativeFields = ({
     </div>
 
     <div>
-      <label className="block text-base font-medium text-gray-900 mb-3">
+      <label className="block text-base font-medium text-foreground mb-3">
         Project description <span className="text-red-500">*</span>
       </label>
       <ProjectDescriptionEditor

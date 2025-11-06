@@ -327,7 +327,7 @@ export default function DashboardListingsPage() {
       const normalized: ListingProject[] = projectRows.map((project) => {
         const statusKey = project.status as ProjectStatus
         const statusLabel = PROJECT_STATUS_LABELS[statusKey] ?? statusKey
-        const statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey] ?? "bg-slate-200 text-slate-700"
+        const statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey] ?? "bg-surface text-text-secondary"
 
         const rawPhotos = project.project_photos ?? []
         const normalizedPhotos: ListingProjectPhoto[] = rawPhotos
@@ -865,7 +865,7 @@ export default function DashboardListingsPage() {
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-row items-center justify-between gap-3">
             <div className="flex-shrink-0">
-              <h3 className="text-xl md:text-2xl font-semibold text-gray-900">Your projects</h3>
+              <h3 className="text-xl md:text-2xl font-semibold text-foreground">Your projects</h3>
             </div>
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <Button
@@ -893,7 +893,7 @@ export default function DashboardListingsPage() {
               {filters.keyword && (
                 <button
                   onClick={() => handleRemoveFilter("keyword")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>&ldquo;{filters.keyword}&rdquo;</span>
                   <X className="h-3 w-3" />
@@ -903,7 +903,7 @@ export default function DashboardListingsPage() {
                 <button
                   key={status}
                   onClick={() => handleRemoveFilter("status", status)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>{PROJECT_STATUS_LABELS[status]}</span>
                   <X className="h-3 w-3" />
@@ -913,7 +913,7 @@ export default function DashboardListingsPage() {
                 <button
                   key={role}
                   onClick={() => handleRemoveFilter("role", role)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>{role === "owner" ? "Project owner" : "Contributor"}</span>
                   <X className="h-3 w-3" />
@@ -922,7 +922,7 @@ export default function DashboardListingsPage() {
               {(filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR) && (
                 <button
                   onClick={() => handleRemoveFilter("year")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
                 >
                   <span>
                     {filters.yearFrom}-{filters.yearTo}
@@ -932,7 +932,7 @@ export default function DashboardListingsPage() {
               )}
               <button
                 onClick={handleClearAllFilters}
-                className="text-sm text-gray-600 hover:text-gray-900 underline ml-2"
+                className="text-sm text-text-secondary hover:text-foreground underline ml-2"
               >
                 Clear all
               </button>
@@ -979,8 +979,7 @@ export default function DashboardListingsPage() {
                 </div>
               </div>
               <Button
-                variant="outline"
-                size="sm"
+                variant="quaternary" size="quaternary"
                 onClick={handleRetryMetadata}
                 disabled={isRetrying}
                 className="ml-4 border-amber-300 text-amber-900 hover:bg-amber-100"
@@ -1001,10 +1000,10 @@ export default function DashboardListingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="animate-pulse">
-                <div className="aspect-square w-full bg-gray-200 rounded-lg" />
+                <div className="aspect-square w-full bg-surface rounded-lg" />
                 <div className="mt-3 space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                  <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  <div className="h-4 bg-surface rounded w-3/4" />
+                  <div className="h-3 bg-surface rounded w-1/2" />
                 </div>
               </div>
             ))}
@@ -1024,7 +1023,7 @@ export default function DashboardListingsPage() {
                 }
               }}
             >
-              <div className="relative overflow-hidden rounded-lg bg-gray-100">
+              <div className="relative overflow-hidden rounded-lg bg-surface">
                 <img
                   src={project.coverImageUrl}
                   alt={project.title}
@@ -1073,7 +1072,7 @@ export default function DashboardListingsPage() {
                 </div>
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   {project.role === "owner" && (
-                    <span className="text-xs font-medium text-gray-900 bg-white px-2 py-1 rounded-full">Project owner</span>
+                    <span className="text-xs font-medium text-foreground bg-white px-2 py-1 rounded-full">Project owner</span>
                   )}
                   <div className="relative dropdown-menu">
                     <button
@@ -1081,12 +1080,12 @@ export default function DashboardListingsPage() {
                         e.stopPropagation()
                         setOpenDropdown(openDropdown === cardKey ? null : cardKey)
                       }}
-                      className="p-1 bg-white rounded-full shadow-sm hover:bg-gray-50"
+                      className="p-1 bg-white rounded-full shadow-sm hover:bg-surface"
                     >
-                      <MoreHorizontal className="w-4 h-4 text-gray-600" />
+                      <MoreHorizontal className="w-4 h-4 text-text-secondary" />
                     </button>
                     {openDropdown === cardKey && (
-                      <div className="absolute right-0 top-8 bg-white rounded-md shadow-lg border border-gray-200 w-48 z-10">
+                      <div className="absolute right-0 top-8 bg-white rounded-md shadow-lg border border-border w-48 z-10">
                         <div className="py-1">
                           {project.role === "owner" ? (
                             <div className="px-4 py-3">
@@ -1095,7 +1094,7 @@ export default function DashboardListingsPage() {
                                   e.stopPropagation()
                                   handleUpdateStatus(project)
                                 }}
-                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                               >
                                 Update status
                               </button>
@@ -1104,7 +1103,7 @@ export default function DashboardListingsPage() {
                                   e.stopPropagation()
                                   handleEditCoverImage(project)
                                 }}
-                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                               >
                                 Edit cover image
                               </button>
@@ -1113,7 +1112,7 @@ export default function DashboardListingsPage() {
                                   e.stopPropagation()
                                   handleEditListing(project)
                                 }}
-                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                               >
                                 Edit listing
                               </button>
@@ -1122,11 +1121,11 @@ export default function DashboardListingsPage() {
                                   e.stopPropagation()
                                   handlePreviewListing(project)
                                 }}
-                                className="block w-full text-left text-sm text-gray-700 px-3 py-1.5 rounded-full hover:bg-gray-100 hover:text-gray-600"
+                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                               >
                                 Preview listing
                               </button>
-                              <div className="border-t border-gray-100 my-1" />
+                              <div className="border-t border-border my-1" />
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -1157,10 +1156,10 @@ export default function DashboardListingsPage() {
                 </div>
               </div>
               <div className="mt-3">
-                <p className="text-[13px] font-medium leading-[1.2] tracking-[0] text-gray-900 line-clamp-2">{project.title}</p>
-                <p className="text-xs font-normal text-gray-500 mt-1">{project.subtitle}</p>
+                <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{project.title}</p>
+                <p className="text-xs font-normal text-text-secondary mt-1">{project.subtitle}</p>
                 {project.invitedServiceCategory && project.role === "contributor" && (
-                  <p className="text-xs text-gray-600 mt-1 font-medium">
+                  <p className="text-xs text-text-secondary mt-1 font-medium">
                     Service: {project.invitedServiceCategory}
                   </p>
                 )}
@@ -1170,9 +1169,9 @@ export default function DashboardListingsPage() {
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-            <h2 className="text-lg font-medium text-gray-900">Add your first project</h2>
-            <p className="text-sm text-gray-500 mt-2">
+          <div className="rounded-xl border border-dashed border-border bg-white p-12 text-center">
+            <h2 className="text-lg font-medium text-foreground">Add your first project</h2>
+            <p className="text-sm text-text-secondary mt-2">
               Kick off your first listing to showcase your work and connect with professionals.
             </p>
             <div className="mt-6">
@@ -1208,8 +1207,8 @@ export default function DashboardListingsPage() {
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Delete listing?</h2>
-                <p className="mt-1 text-sm text-gray-600">
+                <h2 className="text-lg font-semibold text-foreground">Delete listing?</h2>
+                <p className="mt-1 text-sm text-text-secondary">
                   This will remove <span className="font-medium">{pendingDeleteProject.title}</span> from your dashboard. You can
                   always create the listing again later.
                 </p>
@@ -1217,7 +1216,7 @@ export default function DashboardListingsPage() {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={handleCancelDelete} className="flex-1">
+              <Button variant="quaternary" size="quaternary" onClick={handleCancelDelete} className="flex-1">
                 Cancel
               </Button>
               <Button variant="destructive" onClick={handleConfirmDelete} className="flex-1">
@@ -1232,13 +1231,13 @@ export default function DashboardListingsPage() {
         <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Edit cover photo</h2>
-              <button onClick={closeCoverPhotoModal} className="text-gray-400 hover:text-gray-600">
+              <h2 className="text-xl font-semibold text-foreground">Edit cover photo</h2>
+              <button onClick={closeCoverPhotoModal} className="text-muted-foreground hover:text-text-secondary">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-text-secondary mb-6">
               This photo will be displayed with the project on your company portfolio
             </p>
 
@@ -1254,18 +1253,18 @@ export default function DashboardListingsPage() {
                       type="button"
                       onClick={() => setSelectedCoverPhoto(photo.id)}
                       className={`relative h-32 w-full overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary ${
-                        isSelected ? "border-primary ring-2 ring-primary/20" : "border-transparent hover:border-gray-200"
+                        isSelected ? "border-primary ring-2 ring-primary/20" : "border-transparent hover:border-border"
                       }`}
                     >
                       <img src={photo.url} alt={selectedProject.title} className="h-full w-full object-cover" />
                       {isCurrentCover && (
-                        <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-xs font-medium text-gray-700">
+                        <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-xs font-medium text-foreground">
                           Current cover
                         </span>
                       )}
                       {isSelected && (
                         <div className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-sm">
-                          <Check className="w-4 h-4 text-gray-900" />
+                          <Check className="w-4 h-4 text-foreground" />
                         </div>
                       )}
                     </button>
@@ -1273,13 +1272,13 @@ export default function DashboardListingsPage() {
                 })}
               </div>
             ) : (
-              <div className="mb-6 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+              <div className="mb-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center text-sm text-text-secondary">
                 Upload project photos in the listing editor to choose a cover image.
               </div>
             )}
 
             <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={closeCoverPhotoModal}>
+              <Button variant="quaternary" size="quaternary" onClick={closeCoverPhotoModal}>
                 Cancel
               </Button>
               <Button onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto}>
@@ -1298,8 +1297,8 @@ export default function DashboardListingsPage() {
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Opt out of project?</h2>
-                <p className="mt-1 text-sm text-gray-600">
+                <h2 className="text-lg font-semibold text-foreground">Opt out of project?</h2>
+                <p className="mt-1 text-sm text-text-secondary">
                   You will no longer be listed as a contributor on{" "}
                   <span className="font-medium">{projectToOptOut.title}</span> for <span className="font-medium">{projectToOptOut.invitedServiceCategory}</span>. The project owner can see
                   that you opted out and may re-invite you later.
@@ -1308,7 +1307,7 @@ export default function DashboardListingsPage() {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={handleCancelOptOut} className="flex-1" disabled={isOptingOut}>
+              <Button variant="quaternary" size="quaternary" onClick={handleCancelOptOut} className="flex-1" disabled={isOptingOut}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={handleConfirmOptOut} className="flex-1" disabled={isOptingOut}>

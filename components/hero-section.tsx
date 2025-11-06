@@ -57,7 +57,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
   }
 
   return (
-    <section className="relative flex h-[50vh] md:h-[60vh] lg:h-[70vh] items-end justify-start overflow-hidden">
+    <section className="relative flex h-[60vh] md:h-[70vh] lg:h-[80vh] items-end justify-start overflow-hidden">
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 ease-in-out"
         style={{
@@ -70,14 +70,7 @@ export function HeroSection({ projects }: HeroSectionProps) {
       <div className="relative z-10 mx-auto w-full max-w-[1800px] px-4 pb-8 text-white md:px-8">
         <div className="max-w-2xl mb-4 md:mb-0">
           <Link href={currentImage.href}>
-            <h1
-              className="text-3xl leading-tight md:text-5xl lg:text-6xl xl:text-7xl hover:opacity-90 transition-opacity cursor-pointer"
-              style={{
-                fontFamily: 'Figtree, sans-serif',
-                fontWeight: 600,
-                letterSpacing: '-2px'
-              }}
-            >
+            <h1 className="hover:opacity-90 transition-opacity cursor-pointer">
               {heroTitle}
             </h1>
           </Link>
@@ -91,18 +84,18 @@ export function HeroSection({ projects }: HeroSectionProps) {
           ) : null}
           <div className="flex items-center gap-3">
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+              className="h-8 w-8 bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={goToPrevious}
               aria-label="Previous image"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-full bg-white/10 p-0 text-white hover:bg-white/20"
+              className="h-8 w-8 bg-white/10 p-0 text-white hover:bg-white/20 hover:text-white"
               onClick={goToNext}
               aria-label="Next image"
             >

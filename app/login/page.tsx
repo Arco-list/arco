@@ -44,7 +44,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-muted/30 px-4 py-16">
           <div className="mx-auto w-full max-w-md rounded-2xl bg-background p-8 shadow-lg">
             <div className="mb-6 text-center space-y-2">
-              <h1 className="text-2xl font-semibold">Welcome back</h1>
+              <h3>Welcome back</h3>
               <p className="text-muted-foreground text-sm">
                 Sign in to access your saved projects, professionals, and dashboards.
               </p>

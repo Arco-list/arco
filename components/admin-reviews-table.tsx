@@ -238,16 +238,14 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
                       {status === "pending" ? (
                         <>
                           <Button
-                            size="sm"
-                            variant="outline"
+                                                        variant="quaternary" size="quaternary"
                             onClick={() => handleApprove(review.id)}
                             disabled={isModerating}
                           >
                             {isRowPending && isModerating ? "Processing..." : "Approve"}
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
+                                                        variant="quaternary" size="quaternary"
                             onClick={() => setRejectDialog({ reviewId: review.id, note: "" })}
                             disabled={isModerating}
                           >
@@ -257,16 +255,14 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
                       ) : status === "approved" ? (
                         <>
                           <Button
-                            size="sm"
-                            variant="outline"
+                                                        variant="quaternary" size="quaternary"
                             onClick={() => handleRevertToPending(review.id)}
                             disabled={isModerating}
                           >
                             {isRowPending && isModerating ? "Processing..." : "Pending"}
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
+                                                        variant="quaternary" size="quaternary"
                             onClick={() => setRejectDialog({ reviewId: review.id, note: "" })}
                             disabled={isModerating}
                           >
@@ -276,16 +272,14 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
                       ) : status === "rejected" ? (
                         <>
                           <Button
-                            size="sm"
-                            variant="outline"
+                                                        variant="quaternary" size="quaternary"
                             onClick={() => handleApprove(review.id)}
                             disabled={isModerating}
                           >
                             {isRowPending && isModerating ? "Processing..." : "Approve"}
                           </Button>
                           <Button
-                            size="sm"
-                            variant="outline"
+                                                        variant="quaternary" size="quaternary"
                             onClick={() => handleRevertToPending(review.id)}
                             disabled={isModerating}
                           >
@@ -322,7 +316,7 @@ export const AdminReviewsTable = ({ reviews, status }: AdminReviewsTableProps) =
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
-              variant="outline"
+              variant="quaternary" size="quaternary"
               onClick={() => setRejectDialog(null)}
               disabled={isModerating}
             >

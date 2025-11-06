@@ -29,8 +29,9 @@ export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
     <>
       <div className="flex flex-wrap gap-2">
         <Button
-          variant={isLiked ? "default" : "tertiary"}
+          variant="tertiary"
           size="tertiary"
+          className={isLiked ? "!bg-primary !text-white hover:!bg-primary-hover" : ""}
           onClick={() => {
             if (!projectId) return
             void toggleLike(projectId, { currentCount: likesCount })
@@ -46,8 +47,9 @@ export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
           <span className="hidden md:inline">Share</span>
         </Button>
         <Button
-          variant={isSaved ? "default" : "tertiary"}
+          variant="tertiary"
           size="tertiary"
+          className={isSaved ? "!bg-primary !text-white hover:!bg-primary-hover" : ""}
           onClick={() => {
             if (!projectId) return
             if (isSaved) {

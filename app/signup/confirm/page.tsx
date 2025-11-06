@@ -36,13 +36,13 @@ export default async function SignupConfirmPage({ searchParams }: SignupConfirmP
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-muted/30 px-4 py-16">
-          <div className="mx-auto w-full max-w-lg rounded-2xl bg-background p-8 shadow-lg">
+        <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-background px-4 py-16">
+          <div className="mx-auto w-full max-w-lg rounded-2xl bg-background border border-border p-8 shadow-lg">
             <div className="text-center space-y-4">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <MailCheck className="h-8 w-8 text-primary" aria-hidden="true" />
               </div>
-              <h1 className="text-2xl font-semibold">Confirm your email</h1>
+              <h3>Confirm your email</h3>
               <p className="text-muted-foreground text-sm">
                 We just sent a confirmation link{email ? (
                   <>

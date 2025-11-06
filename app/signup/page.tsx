@@ -37,7 +37,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
         <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-muted/30 px-4 py-16">
           <div className="mx-auto w-full max-w-md rounded-2xl bg-background p-8 shadow-lg">
             <div className="mb-6 text-center space-y-2">
-              <h1 className="text-2xl font-semibold">Create your account</h1>
+              <h3>Create your account</h3>
               <p className="text-muted-foreground text-sm">
                 Sign up to save projects, collaborate with professionals, and manage your workspace.
               </p>

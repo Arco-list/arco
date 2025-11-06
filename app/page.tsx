@@ -6,7 +6,6 @@ import { HeroSection, type HeroProject } from "@/components/hero-section"
 import { ProjectCategories, type ProjectCategoryCard } from "@/components/project-categories"
 import { PopularProjects, type PopularProjectCard } from "@/components/popular-projects"
 import { FeaturesSection } from "@/components/features-section"
-import { PopularServices } from "@/components/popular-services"
 import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
 import { ProfessionalCategories, type ProfessionalCategoryCard } from "@/components/professional-categories"
 import { ProjectTypes, type ProjectTypeCard } from "@/components/project-types"
@@ -22,13 +21,6 @@ type CategoryWithChildren = CategoryRow & {
   children: CategoryRow[]
 }
 
-const PROFESSIONAL_CATEGORY_IMAGE_MAP: Record<string, string> = {
-  "design-planning": "/professional-architect-working-on-blueprints.jpg",
-  "construction": "/construction-manager-at-building-site.jpg",
-  "systems": "/structural-engineer-working-on-technical-drawings.jpg",
-  "finishing": "/interior-designer-working-on-modern-room-design.jpg",
-  "outdoor": "/landscape-designer-working-in-beautiful-garden.jpg",
-}
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -92,7 +84,7 @@ async function loadLandingData() {
       .order("name", { ascending: true }),
     supabase
       .from("categories")
-      .select("id,name,slug,parent_id,sort_order")
+      .select("id,name,slug,parent_id,sort_order,image_url")
       .eq("is_active", true)
       .is("parent_id", null)
       .order("sort_order", { ascending: true, nullsFirst: false })
@@ -366,7 +358,7 @@ async function loadLandingData() {
   const professionalCategoryCards: ProfessionalCategoryCard[] = professionalCategoriesRaw
     .map((category) => {
       const normalizedSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
-      const image = PROFESSIONAL_CATEGORY_IMAGE_MAP[normalizedSlug]
+      const image = (category as any).image_url
       if (!image) return null
 
       const count = professionalCategoryCounts.get(normalizedSlug)
@@ -467,9 +459,8 @@ export default async function HomePage() {
         <ProjectCategories categories={projectCategories} />
         <PopularProjects projects={popularProjects} />
         <FeaturesSection />
-        <PopularServices />
-        <FeaturedCompanies companies={featuredCompanies} />
         <ProfessionalCategories categories={professionalCategories} />
+        <FeaturedCompanies companies={featuredCompanies} />
         <ProjectTypes types={projectTypes} />
       </main>
       <Footer />
