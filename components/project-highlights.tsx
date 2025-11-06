@@ -70,7 +70,7 @@ export function ProjectHighlights() {
             key={highlight.id}
             type="button"
             onClick={() => handleHighlightClick(highlight.id)}
-            className="flex-none w-64 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
+            className="flex-none w-80 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
             style={{ scrollSnapAlign: "start" }}
           >
             <img
