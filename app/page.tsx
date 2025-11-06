@@ -368,7 +368,7 @@ async function loadLandingData() {
       return {
         id: category.id,
         title: category.name,
-        href: `/professionals?category=${encodeURIComponent(normalizedSlug)}`,
+        href: `/professionals?categories=${encodeURIComponent(normalizedSlug)}`,
         imageUrl: image,
         countLabel,
       }

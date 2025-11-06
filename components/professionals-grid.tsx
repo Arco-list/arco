@@ -12,7 +12,7 @@ import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
 
 const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"] as const
 
-export function ProfessionalsGrid({ professionals }: { professionals: ProfessionalCard[] }) {
+export function ProfessionalsGrid({ professionals = [] }: { professionals?: ProfessionalCard[] }) {
   const {
     selectedCategories,
     selectedServices,

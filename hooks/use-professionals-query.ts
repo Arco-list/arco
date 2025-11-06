@@ -103,17 +103,18 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     selectedServices,
     selectedCity,
     keyword,
+    taxonomy,
   } = useProfessionalFilters()
 
   const [professionals, setProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
   const [hasMore, setHasMore] = useState(initialProfessionals.length === PAGE_SIZE)
   const [currentOffset, setCurrentOffset] = useState(initialProfessionals.length)
-  const [isLoading, setIsLoading] = useState(initialProfessionals.length === 0)
+  const [isLoading, setIsLoading] = useState(true) // Always start as loading
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
-  const skipInitialFetchRef = useRef(initialProfessionals.length > 0)
+  const skipInitialFetchRef = useRef(false) // Don't skip initial fetch
 
   const fetchPage = useCallback(
     async (offset: number, replace: boolean) => {
@@ -134,6 +135,21 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
       try {
         const supabase = getBrowserSupabaseClient()
 
+        // Validate that filters are UUIDs, not slugs
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        const isUuid = (value: string) => UUID_REGEX.test(value)
+
+        const validCategories = selectedCategories.filter(isUuid)
+        const validServices = selectedServices.filter(isUuid)
+
+        // Log validation for debugging
+        if (selectedCategories.length !== validCategories.length) {
+          console.warn('Non-UUID categories filtered out:', selectedCategories.filter(c => !isUuid(c)))
+        }
+        if (selectedServices.length !== validServices.length) {
+          console.warn('Non-UUID services filtered out:', selectedServices.filter(s => !isUuid(s)))
+        }
+
         const { data, error: rpcError } = await supabase.rpc(
           "search_professionals",
           {
@@ -141,8 +157,8 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
             country_filter: null,
             state_filter: null,
             city_filter: selectedCity ?? null,
-            category_filters: selectedCategories.length > 0 ? selectedCategories : null,
-            service_filters: selectedServices.length > 0 ? selectedServices : null,
+            category_filters: validCategories.length > 0 ? validCategories : null,
+            service_filters: validServices.length > 0 ? validServices : null,
             min_rating: null,
             max_hourly_rate: null,
             verified_only: false,
@@ -190,6 +206,11 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
   )
 
   useEffect(() => {
+    // Don't fetch until taxonomy is loaded
+    if (taxonomy.isLoading) {
+      return
+    }
+
     if (skipInitialFetchRef.current) {
       skipInitialFetchRef.current = false
       return
@@ -199,7 +220,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     setHasMore(true)
     setCurrentOffset(0)
     void fetchPage(0, true)
-  }, [fetchPage])
+  }, [fetchPage, taxonomy.isLoading])
 
   const loadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) {

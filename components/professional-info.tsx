@@ -149,8 +149,8 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-6">
         <div className="space-y-3 flex-1">
-          <h1 className="text-3xl font-bold text-black">{professional.name}</h1>
-          {subtitle ? <h2 className="text-xl text-text-secondary">{subtitle}</h2> : null}
+          <h1 className="text-2xl md:text-3xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', lineHeight: '1.2' }}>{professional.name}</h1>
+          {subtitle ? <h2 className="text-base md:text-xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.3px', lineHeight: '1.2' }}>{subtitle}</h2> : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">

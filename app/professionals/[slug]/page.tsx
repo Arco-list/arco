@@ -76,7 +76,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
   // Location: City, Country
   if (metadata?.location) {
-    const locationParam = new URLSearchParams({ location: metadata.location })
+    const locationParam = new URLSearchParams({ city: metadata.location })
     breadcrumbs.push({
       label: metadata.location,
       href: `/professionals?${locationParam.toString()}`
@@ -87,9 +87,9 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
   if (metadata?.primaryService && metadata?.primaryServiceId) {
     const serviceParam = new URLSearchParams()
     if (metadata.location) {
-      serviceParam.set("location", metadata.location)
+      serviceParam.set("city", metadata.location)
     }
-    serviceParam.set("service", metadata.primaryServiceId)
+    serviceParam.set("services", metadata.primaryServiceId)
     breadcrumbs.push({
       label: metadata.primaryService,
       href: `/professionals?${serviceParam.toString()}`
