@@ -1293,7 +1293,7 @@ export default function NewProjectPage() {
               </div>
 
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-foreground mb-6 leading-tight">What project have you realised?</h1>
+              <h1 className="h3 mb-6">What project have you realised?</h1>
 
               <ProjectBasicsFields
                 formData={formData}
@@ -1315,7 +1315,7 @@ export default function NewProjectPage() {
           {currentStep === 2 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">
+              <h1 className="h3 mb-12">
                 Describe the location and materials used
               </h1>
 
@@ -1334,7 +1334,7 @@ export default function NewProjectPage() {
           {currentStep === 3 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">Add some details</h1>
+              <h1 className="h3 mb-12">Add some details</h1>
 
               <ProjectMetricsFields
                 formData={formData}
@@ -1352,7 +1352,7 @@ export default function NewProjectPage() {
           {currentStep === 4 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">
+              <h1 className="h3 mb-12">
                 Give your project a title and description
               </h1>
 
@@ -1373,7 +1373,7 @@ export default function NewProjectPage() {
           {currentStep === 5 && (
             <>
               {/* Main heading */}
-              <h1 className="text-3xl font-bold text-foreground mb-12 leading-tight">Where is the project located?</h1>
+              <h1 className="h3 mb-12">Where is the project located?</h1>
 
               {/* Form */}
               <div className="space-y-8">
@@ -1504,7 +1504,7 @@ function NewProjectHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-black hover:text-text-secondary transition-colors"
+              className="text-sm font-medium text-foreground hover:text-text-secondary transition-colors"
             >
               Questions?
             </a>

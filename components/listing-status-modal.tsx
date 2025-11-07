@@ -28,7 +28,7 @@ type ListingStatusModalProps<TStatus extends string> = {
   open: boolean
   onClose: () => void
   onSave: () => void
-  project: ListingStatusModalProject<TStatus> | null
+  project: ListingStatusModalProject | null
   companyPlan: PlanTier
   selectedStatus: TStatus | ""
   onStatusChange: (status: TStatus) => void
@@ -37,6 +37,7 @@ type ListingStatusModalProps<TStatus extends string> = {
   isPendingAdminReview?: boolean
   limitReachedForNewActivation?: boolean
   activeStatusValues?: ReadonlyArray<TStatus>
+  role?: "owner" | "contributor"
 }
 
 export function ListingStatusModal<TStatus extends string>({
@@ -52,6 +53,7 @@ export function ListingStatusModal<TStatus extends string>({
   isPendingAdminReview = false,
   limitReachedForNewActivation = false,
   activeStatusValues = [],
+  role = "owner",
 }: ListingStatusModalProps<TStatus>) {
   const activeStatusSet = useMemo(() => new Set(activeStatusValues), [activeStatusValues])
 
@@ -75,7 +77,9 @@ export function ListingStatusModal<TStatus extends string>({
       <DialogContent className="max-w-md border-none bg-transparent p-0 shadow-none">
         <div className="bg-white rounded-lg max-w-md w-full p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-foreground">Listing status</h2>
+            <h4 className="text-foreground">
+              {role === "contributor" ? "Update listing status" : "Listing status"}
+            </h4>
             <button
               type="button"
               onClick={onClose}
@@ -93,7 +97,7 @@ export function ListingStatusModal<TStatus extends string>({
               className="w-16 h-16 rounded-lg object-cover bg-surface"
             />
             <div className="space-y-1">
-              <h3 className="font-medium text-foreground">{project.title}</h3>
+              <h6 className="text-foreground">{project.title}</h6>
               <p className="text-sm text-text-secondary">{project.descriptor}</p>
             </div>
           </div>

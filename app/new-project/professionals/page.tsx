@@ -109,12 +109,12 @@ type InviteSummary = {
 const INVITE_STATUS_META: Partial<
   Record<ProjectProfessionalRow["status"], { label: string; className: string }>
 > = {
-  invited: { label: "Invite pending", className: "bg-amber-100 text-amber-800" },
-  listed: { label: "Listed", className: "bg-green-100 text-green-800" },
-  live_on_page: { label: "Active", className: "bg-green-100 text-green-800" },
-  unlisted: { label: "Unlisted", className: "bg-surface text-foreground" },
+  invited: { label: "Invited", className: "bg-blue-100 text-blue-800" },
+  listed: { label: "Published", className: "bg-green-100 text-green-800" },
+  live_on_page: { label: "Featured", className: "bg-teal-100 text-teal-800" },
+  unlisted: { label: "Unpublished", className: "bg-surface text-foreground" },
   removed: { label: "Removed", className: "bg-red-100 text-red-800" },
-  rejected: { label: "Opted out", className: "bg-red-100 text-red-800" },
+  rejected: { label: "Declined", className: "bg-red-100 text-red-800" },
 } as const
 
 const formatInviteStatusLabel = (status: ProjectProfessionalRow["status"]) =>
@@ -595,7 +595,10 @@ export default function ProfessionalsPage() {
       })
 
       setIsMutating(false)
-      router.push("/dashboard/listings")
+
+      // Redirect admin users to admin projects page, others to dashboard listings
+      const redirectPath = isAdminUser(userTypes) ? "/admin/projects" : "/dashboard/listings"
+      router.push(redirectPath)
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "We couldn't submit your listing for review. Please try again."
@@ -1075,7 +1078,7 @@ function IntroStep({ isLoading }: { isLoading: boolean }) {
           <div className="mb-8">
             <MailPlus className="h-12 w-12 text-foreground" />
           </div>
-          <h1 className="mb-4 text-3xl font-bold text-foreground">Share who helped you realise it</h1>
+          <h1 className="h3 mb-4">Share who helped you realise it</h1>
           <p className="text-lg text-text-secondary">Add the professionals that contributed to your project and we&apos;ll invite them once you publish.</p>
         </div>
       )}
@@ -1105,7 +1108,7 @@ function ServiceSelectionStep({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="mb-4 text-3xl font-bold text-foreground">Tell us what professionals helped you realise it</h1>
+        <h1 className="h3 mb-4">Tell us what professionals helped you realise it</h1>
         <p className="text-lg text-text-secondary">You can add more services after you publish your project.</p>
       </div>
 
@@ -1194,7 +1197,7 @@ function InviteStep({
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="mb-2 text-3xl font-bold text-foreground">Invite professionals</h1>
+          <h1 className="h3 mb-2">Invite professionals</h1>
           <p className="text-lg text-text-secondary">We&apos;ll email them once your project is published.</p>
         </div>
         <button
@@ -1477,7 +1480,7 @@ function PreviewStep({
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-foreground">Yeah! It&apos;s time to showcase your work</h1>
+        <h1 className="h3">Yeah! It&apos;s time to showcase your work</h1>
         <p className="text-text-secondary">This is what homeowners will see when they explore your project.</p>
       </div>
 

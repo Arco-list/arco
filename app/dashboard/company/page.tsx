@@ -95,12 +95,14 @@ export default async function CompanySettingsPage() {
   const categories = (allCategories ?? []).filter((cat) => cat.slug && allowedCategorySlugs.has(cat.slug))
   const services = (allCategories ?? []).filter((cat) => cat.slug && allowedServiceSlugs.has(cat.slug))
 
-  // Combine both categories and services for the dropdown
-  const serviceOptions = [...categories, ...services].map((item) => ({
-    id: item.id,
-    name: item.name,
-    slug: item.slug,
-  }))
+  // Combine both categories and services for the dropdown and sort alphabetically
+  const serviceOptions = [...categories, ...services]
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div className="flex min-h-screen flex-col bg-white">

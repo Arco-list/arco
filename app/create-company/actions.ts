@@ -80,6 +80,19 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
   const currentTypes = Array.isArray(profile?.user_types) ? profile?.user_types ?? [] : [];
   const desiredTypes = Array.from(new Set(["client", ...currentTypes, "professional"]));
 
+  // Convert primaryService slug to category ID
+  let primaryServiceId: string | null = null;
+  if (primaryService) {
+    const { data: category } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("slug", primaryService)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    primaryServiceId = category?.id ?? null;
+  }
+
   // Create or update the company record
   const { data: existingCompany, error: existingCompanyError } = await supabase
     .from("companies")
@@ -108,6 +121,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
         website: domain,
         email,
         phone,
+        primary_service_id: primaryServiceId || null,
       })
       .eq("id", existingCompany.id);
 
@@ -116,7 +130,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
         "update",
         "companies",
         "Failed to update existing company",
-        { userId: user.id, payload: sanitizeForLogging({ companyName, domain, email, phone }) },
+        { userId: user.id, payload: sanitizeForLogging({ companyName, domain, email, phone, primaryServiceId }) },
         updateCompanyError
       );
       return { success: false, error: "Unable to update your company details." };
@@ -130,6 +144,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
         website: domain,
         email,
         phone,
+        primary_service_id: primaryServiceId || null,
       })
       .select("id")
       .single();
@@ -139,7 +154,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
         "insert",
         "companies",
         "Failed to create company",
-        { userId: user.id, payload: sanitizeForLogging({ companyName, domain, email, phone }) },
+        { userId: user.id, payload: sanitizeForLogging({ companyName, domain, email, phone, primaryServiceId }) },
         insertCompanyError
       );
       return { success: false, error: "Unable to create your company." };
@@ -166,7 +181,8 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
     return { success: false, error: "Unable to load your professional profile." };
   }
 
-  const servicesOffered = primaryService ? [primaryService] : null;
+  // Also save primary service to professionals.services_offered for backwards compatibility
+  const servicesOffered = primaryServiceId ? [primaryServiceId] : null;
 
   if (professional) {
     const { error: updateProfessionalError } = await supabase

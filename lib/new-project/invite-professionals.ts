@@ -79,20 +79,20 @@ export async function findProfessionalByEmail(
 }
 
 /**
- * Create invite with status based on professional existence
+ * Create invite with initial 'invited' status
  * Status logic:
- * - 'listed': Email belongs to existing professional user (has professional_id)
- * - 'invited': Email is not a professional user yet (professional_id is null)
+ * - Initial status is always 'invited' regardless of whether professional exists
+ * - Professional updates status when they respond to invitation
+ * - They can choose: unlisted, listed, or live_on_page
  */
 export async function createInvite(
   supabase: SupabaseClient,
   inviteData: InviteData
 ): Promise<{ data: Tables<'project_professionals'> | null; error: any }> {
   try {
-    // Determine status based on whether we have a professional_id
-    // listed = professional exists and is linked
-    // invited = email doesn't match a professional user yet
-    const status = inviteData.professional_id ? 'listed' : 'invited'
+    // Always start with 'invited' status
+    // Professional will update when they respond to the invitation
+    const status = 'invited'
     
     const { data, error } = await supabase
       .from('project_professionals')

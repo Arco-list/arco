@@ -95,8 +95,45 @@ export async function setProjectFeaturedAction(
     )
   }
 
+  // Refresh materialized view to update search results and homepage hero
+  const serviceClient = createServiceRoleSupabaseClient()
+  const warnings: string[] = []
+
+  const { error: refreshError } = await retryOperation(
+    async () => {
+      const { error } = await serviceClient.rpc("refresh_project_summary")
+      if (error) throw error
+    },
+    {
+      maxAttempts: 3,
+      onRetry: (attempt) => {
+        logger.warn(
+          `Retrying materialized view refresh (attempt ${attempt})`,
+          { scope: "admin-projects-featured", projectId: parseResult.data }
+        )
+      }
+    }
+  )
+
+  if (refreshError) {
+    logger.error(
+      "Failed to refresh project summary after featured status update",
+      {
+        scope: "admin-projects-featured",
+        projectId: parseResult.data,
+        featured: input.featured,
+        error: getErrorMessage(refreshError)
+      }
+    )
+    warnings.push("Featured status updated successfully, but search index refresh failed. It will be updated automatically soon.")
+  }
+
   revalidatePath("/admin/projects")
-  return createSuccessResponse({ projectId: parseResult.data, featured: input.featured })
+  revalidatePath("/") // Revalidate homepage to show updated featured projects
+  return createSuccessResponse(
+    { projectId: parseResult.data, featured: input.featured },
+    warnings
+  )
 }
 
 const statusSchema = z.enum(["draft", "in_progress", "published", "completed", "archived", "rejected"])
@@ -338,12 +375,35 @@ export async function setProjectStatusAction(input: {
           }
 
           try {
+            // Check if email belongs to existing professional and link them
+            const { findProfessionalByEmailAction } = await import('@/app/new-project/actions')
+            const { data: existingProfessional } = await findProfessionalByEmailAction(invite.invited_email)
+
+            if (existingProfessional) {
+              // Update the invite record to link professional_id and company_id
+              await serviceClient
+                .from('project_professionals')
+                .update({
+                  professional_id: existingProfessional.id,
+                  company_id: existingProfessional.company_id
+                })
+                .eq('id', invite.id)
+
+              logger.info("Linked existing professional to invite", {
+                scope: "admin-projects",
+                projectId: idResult.data,
+                inviteId: invite.id,
+                professionalId: existingProfessional.id,
+                companyId: existingProfessional.company_id
+              })
+            }
+
             // Generate smart URL based on user type
             const { confirmUrl } = await checkUserAndGenerateInviteUrl(
               invite.invited_email,
               idResult.data
             )
-            
+
             await sendProfessionalInviteEmail(
               invite.invited_email,
               {
@@ -353,7 +413,7 @@ export async function setProjectStatusAction(input: {
                 confirmUrl
               }
             )
-            
+
             logger.info("Professional invite email sent", {
               scope: "admin-projects",
               projectId: idResult.data,
