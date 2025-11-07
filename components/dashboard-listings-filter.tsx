@@ -25,9 +25,9 @@ export interface FilterState {
 const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: "draft", label: "In progress" },
   { value: "in_progress", label: "In review" },
-  { value: "published", label: "Live on page" },
-  { value: "completed", label: "Listed" },
-  { value: "archived", label: "Unlisted" },
+  { value: "published", label: "Published" },
+  { value: "archived", label: "Unpublished" },
+  { value: "rejected", label: "Rejected" },
 ]
 
 const ROLE_OPTIONS: { value: "owner" | "contributor"; label: string }[] = [

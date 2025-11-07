@@ -170,7 +170,7 @@ export default function PhotoTourPage() {
           <ImageIcon className="w-10 h-10 text-foreground mb-6" />
         </div>
 
-        <h1 className="text-3xl font-bold text-foreground mb-6 leading-tight">Create a photo tour</h1>
+        <h1 className="h3 mb-6">Create a photo tour</h1>
 
         <p className="text-text-secondary text-lg leading-relaxed">
           Define the building features of the project and add photos for every feature. We will help you out
@@ -188,7 +188,7 @@ export default function PhotoTourPage() {
 
     return (
       <div className="text-left">
-        <h1 className="text-3xl font-bold text-foreground mb-4 leading-tight">Add photos of your project</h1>
+        <h1 className="h3 mb-4">Add photos of your project</h1>
 
         <p className="text-text-secondary text-base mb-2">
           Upload at least {MIN_PHOTOS_REQUIRED} high-quality JPG or PNG images (1200px+). Drag to reorder once
@@ -299,7 +299,7 @@ export default function PhotoTourPage() {
   const renderStep3 = () => {
     return (
       <div className="text-left">
-        <h1 className="text-3xl font-bold text-foreground mb-4 leading-tight">Tell us what your project has to offer</h1>
+        <h1 className="h3 mb-4">Tell us what your project has to offer</h1>
 
         <p className="text-text-secondary text-base mb-6">
           Select the spaces that best describe your project — you can adjust these later.

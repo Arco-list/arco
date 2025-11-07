@@ -186,11 +186,12 @@ export async function findProfessionalByEmailAction(
 ): Promise<{ data: ProfessionalOption | null; error: any }> {
   try {
     const supabase = createServiceRoleSupabaseClient()
-    
+
     // Get user by email from auth.users (requires service role)
-    const { data: authUser, error: authError } = await supabase.auth.admin.getUserByEmail(email)
-    
-    if (authError || !authUser.user) {
+    const { data: { users }, error: authError } = await supabase.auth.admin.listUsers()
+    const authUser = users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+
+    if (authError || !authUser) {
       // Email doesn't exist in system
       return { data: null, error: null }
     }
@@ -199,7 +200,7 @@ export async function findProfessionalByEmailAction(
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('user_types')
-      .eq('id', authUser.user.id)
+      .eq('id', authUser.id)
       .maybeSingle()
     
     if (profileError || !profile) {
@@ -234,7 +235,7 @@ export async function findProfessionalByEmailAction(
           status
         )
       `)
-      .eq('user_id', authUser.user.id)
+      .eq('user_id', authUser.id)
       .maybeSingle()
     
     if (professionalError || !professional || !professional.companies) {
@@ -248,7 +249,7 @@ export async function findProfessionalByEmailAction(
       user_id: professional.user_id,
       name: `${professional.profiles?.first_name || ''} ${professional.profiles?.last_name || ''}`.trim() || 'Professional',
       title: professional.title || 'Professional',
-      email: authUser.user.email!,
+      email: authUser.email!,
       company_id: professional.companies.id,
       company: {
         id: professional.companies.id,

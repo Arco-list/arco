@@ -353,7 +353,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         `)
         .eq("project_id", project.id)
         .eq("companies.status", "listed")
-        .neq("status", "rejected")
+        .in("status", ["live_on_page", "listed"])
         .not("professional_id", "is", null),
       likeQuery,
     ])

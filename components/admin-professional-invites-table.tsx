@@ -149,7 +149,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold leading-none tracking-tight">Invites</h2>
+        <h3>Invites</h3>
         <p className="text-sm text-muted-foreground">
           Review pending invitations and keep company listings in sync with project statuses.
         </p>

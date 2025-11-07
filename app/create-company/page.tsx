@@ -14,6 +14,19 @@ import Image from "next/image"
 import { createCompanyAction } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
 
+const serviceOptions = [
+  { value: "design-planning-architecture", label: "Architecture" },
+  { value: "design-planning-interior-design", label: "Interior design" },
+  { value: "design-planning-garden-design", label: "Garden design" },
+  { value: "construction-general-contractor", label: "General contractor" },
+  { value: "construction-kitchen", label: "Kitchen" },
+  { value: "construction-tiles-and-stone", label: "Tiles and stone" },
+  { value: "systems-lighting", label: "Lighting" },
+  { value: "systems-electrical-systems", label: "Electrical systems" },
+  { value: "finishing-interior-styling", label: "Interior styling" },
+  { value: "outdoor-garden", label: "Garden" },
+].sort((a, b) => a.label.localeCompare(b.label))
+
 export default function CreateCompanyPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState("")
@@ -188,16 +201,11 @@ export default function CreateCompanyPage() {
                 <SelectValue placeholder="Select company services" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="design-planning-architecture">Architecture</SelectItem>
-                <SelectItem value="design-planning-interior-design">Interior design</SelectItem>
-                <SelectItem value="design-planning-garden-design">Garden design</SelectItem>
-                <SelectItem value="construction-general-contractor">General contractor</SelectItem>
-                <SelectItem value="construction-kitchen">Kitchen</SelectItem>
-                <SelectItem value="construction-tiles-and-stone">Tiles and stone</SelectItem>
-                <SelectItem value="systems-lighting">Lighting</SelectItem>
-                <SelectItem value="systems-electrical-systems">Electrical systems</SelectItem>
-                <SelectItem value="finishing-interior-styling">Interior styling</SelectItem>
-                <SelectItem value="outdoor-garden">Garden</SelectItem>
+                {serviceOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-text-secondary">Additional services can be added later</p>

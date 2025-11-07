@@ -172,20 +172,23 @@ export async function checkUserAndGenerateInviteUrl(
   const { getSiteUrl } = await import('@/lib/utils')
   const supabase = createServiceRoleSupabaseClient()
   const baseUrl = getSiteUrl()
-  
-  // Look up user by email in profiles table (avoids pagination issues with listUsers)
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select(`
-      id,
-      email,
-      user_types,
-      professionals(id, company_id)
-    `)
-    .eq('email', email.toLowerCase())
-    .maybeSingle()
 
-  if (profileError || !profile) {
+  // Look up user by email using admin API
+  const { data: { users: allUsers }, error: authError } = await supabase.auth.admin.listUsers()
+
+  if (authError) {
+    console.error('Failed to list users:', authError)
+    // Fallback to new user signup on error
+    const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
+    return {
+      confirmUrl: signupUrl,
+      isExistingProfessional: false
+    }
+  }
+
+  const user = allUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+
+  if (!user) {
     // New user - send to signup with redirect to create company
     const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
     return {
@@ -194,26 +197,41 @@ export async function checkUserAndGenerateInviteUrl(
     }
   }
 
+  // Now look up profile by user ID
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select(`
+      id,
+      user_types,
+      professionals(id, company_id)
+    `)
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError || !profile) {
+    // User exists but no profile - send to create company
+    return {
+      confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
+      isExistingProfessional: false
+    }
+  }
+
   // Check user's professional status
-  if (profile) {
-    const userTypes = profile.user_types || []
-    const isProfessional = userTypes.includes('professional')
-    
-    if (isProfessional) {
-      // Existing professional - send to dashboard
-      return {
-        confirmUrl: `${baseUrl}/dashboard/listings`,
-        isExistingProfessional: true
-      }
-    } else {
-      // Existing user but not professional - send to create company
-      return {
-        confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
-        isExistingProfessional: false
-      }
+  const userTypes = profile.user_types || []
+  const isProfessional = userTypes.includes('professional')
+  // professionals can be null, an object, or an array depending on the join
+  const hasProfessionalRecord = profile.professionals
+    ? (Array.isArray(profile.professionals) ? profile.professionals.length > 0 : true)
+    : false
+
+  if (isProfessional && hasProfessionalRecord) {
+    // Existing professional - send to dashboard
+    return {
+      confirmUrl: `${baseUrl}/dashboard/listings`,
+      isExistingProfessional: true
     }
   } else {
-    // User exists but no profile - send to create company
+    // Existing user but not professional - send to create company
     return {
       confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
       isExistingProfessional: false

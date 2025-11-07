@@ -29,6 +29,12 @@ import {
   isListingStatusValue,
   LISTING_STATUS_OPTIONS,
 } from "@/lib/project-status-config"
+import {
+  type ContributorStatus,
+  CONTRIBUTOR_STATUS_LABELS,
+  CONTRIBUTOR_STATUS_CHIP_CLASS,
+  CONTRIBUTOR_STATUS_OPTIONS,
+} from "@/lib/contributor-status-config"
 
 type ProjectPhotoRow = Pick<
   Database["public"]["Tables"]["project_photos"]["Row"],
@@ -55,7 +61,7 @@ type ListingProjectPhoto = {
 type ListingProject = {
   id: string
   title: string
-  status: ProjectStatus
+  status: ProjectStatus | ContributorStatus
   statusLabel: string
   statusChipClass: string
   slug: string | null
@@ -112,9 +118,8 @@ export default function DashboardListingsPage() {
     yearFrom: MIN_YEAR,
     yearTo: CURRENT_YEAR,
   })
-  const [optOutModalOpen, setOptOutModalOpen] = useState(false)
-  const [projectToOptOut, setProjectToOptOut] = useState<ListingProject | null>(null)
-  const [isOptingOut, setIsOptingOut] = useState(false)
+  const [contributorStatusModalOpen, setContributorStatusModalOpen] = useState(false)
+  const [selectedContributorStatus, setSelectedContributorStatus] = useState<ContributorStatus | "">("")
   // LRU-style cache with size limit to prevent unbounded memory growth
   const taxonomyCacheRef = useRef<{
     styles: Map<string, string>
@@ -325,9 +330,24 @@ export default function DashboardListingsPage() {
       const styleMap = taxonomyCache.styles
 
       const normalized: ListingProject[] = projectRows.map((project) => {
-        const statusKey = project.status as ProjectStatus
-        const statusLabel = PROJECT_STATUS_LABELS[statusKey] ?? statusKey
-        const statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey] ?? "bg-surface text-text-secondary"
+        // Determine role based on is_project_owner flag from project_professionals
+        const isProjectOwner = project.project_professionals?.some((pp) => pp.is_project_owner) ?? false
+        const role: "owner" | "contributor" = isProjectOwner ? "owner" : "contributor"
+
+        // For contributors, show their contributor status; for owners, show project status
+        let statusKey: ProjectStatus | ContributorStatus
+        let statusLabel: string
+        let statusChipClass: string
+
+        if (role === "contributor" && project.project_professional_status) {
+          statusKey = project.project_professional_status as ContributorStatus
+          statusLabel = CONTRIBUTOR_STATUS_LABELS[statusKey as ContributorStatus] ?? statusKey
+          statusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[statusKey as ContributorStatus] ?? "bg-surface text-text-secondary"
+        } else {
+          statusKey = project.status as ProjectStatus
+          statusLabel = PROJECT_STATUS_LABELS[statusKey as ProjectStatus] ?? statusKey
+          statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey as ProjectStatus] ?? "bg-surface text-text-secondary"
+        }
 
         const rawPhotos = project.project_photos ?? []
         const normalizedPhotos: ListingProjectPhoto[] = rawPhotos
@@ -369,10 +389,6 @@ export default function DashboardListingsPage() {
         const subtitle = [styleType, locationParts ? `in ${locationParts}` : null]
           .filter(Boolean)
           .join(" ") || "Add more project details"
-
-        // Determine role based on is_project_owner flag from project_professionals
-        const isProjectOwner = project.project_professionals?.some((pp) => pp.is_project_owner) ?? false
-        const role: "owner" | "contributor" = isProjectOwner ? "owner" : "contributor"
 
         return {
           id: project.id,
@@ -608,14 +624,39 @@ export default function DashboardListingsPage() {
     setPendingDeleteProject(null)
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!pendingDeleteProject) {
       return
     }
 
-    console.log(`Deleting project ${pendingDeleteProject.id}`)
-    setPendingDeleteProject(null)
-    setSelectedProject((prev) => (prev?.id === pendingDeleteProject.id ? null : prev))
+    setIsSavingStatus(true)
+
+    try {
+      // Delete the project (RLS will ensure user can only delete their own projects)
+      const { error } = await supabase
+        .from("projects")
+        .delete()
+        .eq("id", pendingDeleteProject.id)
+        .eq("client_id", userId)
+
+      if (error) {
+        throw error
+      }
+
+      // Remove from local state
+      setProjects((prev) => prev.filter((p) => p.id !== pendingDeleteProject.id))
+
+      // Clear selected project if it was the deleted one
+      setSelectedProject((prev) => (prev?.id === pendingDeleteProject.id ? null : prev))
+
+      toast.success("Listing deleted successfully")
+      setPendingDeleteProject(null)
+    } catch (error) {
+      console.error("Failed to delete project", error)
+      toast.error("Failed to delete listing. Please try again.")
+    } finally {
+      setIsSavingStatus(false)
+    }
   }
 
   const handleCardClick = (project: ListingProject) => {
@@ -666,47 +707,60 @@ export default function DashboardListingsPage() {
     router.push(targetUrl)
   }
 
-  const handleOptOut = (project: ListingProject) => {
-    setProjectToOptOut(project)
-    setOptOutModalOpen(true)
+  const handleUpdateContributorStatus = (project: ListingProject) => {
+    setSelectedProject(project)
+    setSelectedContributorStatus((project.projectProfessionalStatus as ContributorStatus) || "invited")
+    setContributorStatusModalOpen(true)
     setOpenDropdown(null)
   }
 
-  const handleConfirmOptOut = async () => {
-    if (!projectToOptOut || !projectToOptOut.projectProfessionalId) {
+  const handleSaveContributorStatus = async () => {
+    if (!selectedProject?.projectProfessionalId || !selectedContributorStatus) {
       return
     }
 
-    setIsOptingOut(true)
+    setIsSavingStatus(true)
 
     try {
       const { error } = await supabase
         .from("project_professionals")
         .update({
-          status: "rejected",
+          status: selectedContributorStatus,
           responded_at: new Date().toISOString()
         })
-        .eq("id", projectToOptOut.projectProfessionalId)
+        .eq("id", selectedProject.projectProfessionalId)
 
       if (error) {
         throw error
       }
 
-      setProjects((prev) => prev.filter((p) => p.id !== projectToOptOut.id))
-      toast.success("You've opted out of this project")
-      setOptOutModalOpen(false)
-      setProjectToOptOut(null)
-    } catch (error) {
-      console.error("Failed to opt out", error)
-      toast.error("We couldn't opt you out of this project. Please try again.")
-    } finally {
-      setIsOptingOut(false)
-    }
-  }
+      // Update local state with new contributor status and derived display fields
+      const newStatusLabel = CONTRIBUTOR_STATUS_LABELS[selectedContributorStatus as ContributorStatus]
+      const newStatusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[selectedContributorStatus as ContributorStatus]
 
-  const handleCancelOptOut = () => {
-    setOptOutModalOpen(false)
-    setProjectToOptOut(null)
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === selectedProject.id
+            ? {
+                ...p,
+                projectProfessionalStatus: selectedContributorStatus,
+                status: selectedContributorStatus as ContributorStatus,
+                statusLabel: newStatusLabel,
+                statusChipClass: newStatusChipClass
+              }
+            : p
+        )
+      )
+
+      toast.success("Listing status updated")
+      setContributorStatusModalOpen(false)
+      setSelectedProject(null)
+    } catch (error) {
+      console.error("Failed to update status", error)
+      toast.error("Failed to update listing status. Please try again.")
+    } finally {
+      setIsSavingStatus(false)
+    }
   }
 
   // Client-side filtering with debouncing
@@ -1141,11 +1195,11 @@ export default function DashboardListingsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  handleOptOut(project)
+                                  handleUpdateContributorStatus(project)
                                 }}
-                                className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                                className="block w-full text-left text-sm px-3 py-1.5 rounded-full hover:bg-surface"
                               >
-                                Opt out
+                                Update listing status
                               </button>
                             </div>
                           )}
@@ -1216,11 +1270,22 @@ export default function DashboardListingsPage() {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="quaternary" size="quaternary" onClick={handleCancelDelete} className="flex-1">
+              <Button
+                variant="quaternary"
+                size="quaternary"
+                onClick={handleCancelDelete}
+                className="flex-1"
+                disabled={isSavingStatus}
+              >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleConfirmDelete} className="flex-1">
-                Delete listing
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                className="flex-1"
+                disabled={isSavingStatus}
+              >
+                {isSavingStatus ? "Deleting..." : "Delete listing"}
               </Button>
             </div>
           </div>
@@ -1289,34 +1354,29 @@ export default function DashboardListingsPage() {
         </div>
       )}
 
-      {optOutModalOpen && projectToOptOut && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 border border-red-100 shadow-lg">
-            <div className="flex items-start gap-3 mb-6">
-              <div className="rounded-full bg-red-50 p-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Opt out of project?</h2>
-                <p className="mt-1 text-sm text-text-secondary">
-                  You will no longer be listed as a contributor on{" "}
-                  <span className="font-medium">{projectToOptOut.title}</span> for <span className="font-medium">{projectToOptOut.invitedServiceCategory}</span>. The project owner can see
-                  that you opted out and may re-invite you later.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Button variant="quaternary" size="quaternary" onClick={handleCancelOptOut} className="flex-1" disabled={isOptingOut}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleConfirmOptOut} className="flex-1" disabled={isOptingOut}>
-                {isOptingOut ? "Opting out..." : "Opt out"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ListingStatusModal
+        open={contributorStatusModalOpen}
+        onClose={() => {
+          setContributorStatusModalOpen(false)
+          setSelectedProject(null)
+        }}
+        onSave={handleSaveContributorStatus}
+        project={
+          selectedProject
+            ? {
+                title: selectedProject.title,
+                descriptor: selectedProject.invitedServiceCategory || "Service",
+                coverImageUrl: selectedProject.coverImageUrl || "/placeholder.jpg",
+              }
+            : null
+        }
+        companyPlan={companyPlan}
+        selectedStatus={selectedContributorStatus}
+        onStatusChange={setSelectedContributorStatus}
+        statusOptions={CONTRIBUTOR_STATUS_OPTIONS}
+        saveDisabled={!selectedContributorStatus || selectedContributorStatus === "invited"}
+        role="contributor"
+      />
 
       <Footer maxWidth="max-w-7xl" />
 

@@ -351,6 +351,15 @@
 
 /* Typography utility classes - Using Tailwind */
 
+/* H3 - Page titles utility class (use class="h3") */
+.h3 {
+  @apply font-semibold;
+  font-family: var(--font-heading);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  @apply text-2xl md:text-3xl;
+}
+
 /* H7 - Small headings (use class="h7") */
 .h7 {
   @apply font-medium text-sm;

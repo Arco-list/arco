@@ -361,7 +361,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
     <div className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold leading-none tracking-tight">Companies</h2>
+          <h3>Companies</h3>
           <p className="text-sm text-muted-foreground">
             Manage professional company profiles surfaced across marketing pages.
           </p>

@@ -36,11 +36,11 @@ const buttonVariants = cva(
         // @deprecated Use variant="primary" with custom destructive styling if needed
         // Kept for backward compatibility - Will be removed in future version
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50",
+          "bg-destructive text-destructive-foreground text-base hover:bg-primary-hover disabled:bg-border disabled:text-destructive-foreground disabled:opacity-100 disabled:cursor-not-allowed",
         // @deprecated Use variant="quaternary" instead
         // Kept for backward compatibility - Will be removed in future version
         outline:
-          "border border-border bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50",
+          "bg-transparent border border-border text-foreground text-sm font-normal hover:bg-tertiary disabled:bg-transparent disabled:border-border disabled:text-border disabled:opacity-100 disabled:cursor-not-allowed",
       },
       size: {
         // Primary size: 12px/24px padding

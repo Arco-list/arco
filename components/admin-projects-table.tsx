@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link"
 import { format, formatDistanceToNow } from "date-fns"
 import {
+  ArrowUpDown,
   Ban,
   CheckCircle,
   Eye,
@@ -62,14 +63,13 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-type ProjectStatusValue = "draft" | "in_progress" | "published" | "completed" | "archived" | "rejected"
+type ProjectStatusValue = "draft" | "in_progress" | "published" | "archived" | "rejected"
 
 const STATUS_LABELS: Record<ProjectStatusValue, { label: string; tone: string }> = {
   draft: { label: "In progress", tone: "bg-amber-100 text-amber-800" },
   in_progress: { label: "In review", tone: "bg-blue-100 text-blue-800" },
-  published: { label: "Live", tone: "bg-green-100 text-green-800" },
-  completed: { label: "Listed", tone: "bg-emerald-100 text-emerald-800" },
-  archived: { label: "Unlisted", tone: "bg-surface text-text-secondary" },
+  published: { label: "Published", tone: "bg-green-100 text-green-800" },
+  archived: { label: "Unpublished", tone: "bg-surface text-text-secondary" },
   rejected: { label: "Rejected", tone: "bg-red-100 text-red-700" },
 }
 
@@ -86,17 +86,12 @@ const STATUS_CHOICES: Array<{ value: ProjectStatusValue; label: string; descript
   },
   {
     value: "published",
-    label: "Live",
+    label: "Published",
     description: "Listing is published and visible on the homeowner site.",
   },
   {
-    value: "completed",
-    label: "Listed",
-    description: "Listing appears on both the project and company pages as an active showcase.",
-  },
-  {
     value: "archived",
-    label: "Unlisted",
+    label: "Unpublished",
     description: "Listing remains in the account but is hidden from public discovery.",
   },
   {
@@ -144,11 +139,27 @@ interface AdminProjectsTableProps {
   projects: AdminProjectRow[]
 }
 
+type SortColumn =
+  | "title"
+  | "status"
+  | "type"
+  | "location"
+  | "images"
+  | "year"
+  | "created"
+  | "modified"
+  | "likes"
+  | "featured"
+
+type SortDirection = "asc" | "desc"
+
 export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [featuredOnly, setFeaturedOnly] = useState(false)
   const [showSeoView, setShowSeoView] = useState(false)
+  const [sortColumn, setSortColumn] = useState<SortColumn>("modified")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([])
   const [selectedStyles, setSelectedStyles] = useState<string[]>([])
@@ -305,6 +316,15 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     return Array.from(values).sort((a, b) => a.localeCompare(b))
   }, [projects])
 
+  const handleSort = useCallback((column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+    } else {
+      setSortColumn(column)
+      setSortDirection(column === "modified" || column === "created" ? "desc" : "asc")
+    }
+  }, [sortColumn, sortDirection])
+
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLowerCase()
     const fromDate = dateFrom ? new Date(dateFrom) : null
@@ -407,6 +427,53 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     maxImages,
   ])
 
+  const sortedProjects = useMemo(() => {
+    const sorted = [...filteredProjects]
+
+    sorted.sort((a, b) => {
+      let comparison = 0
+
+      switch (sortColumn) {
+        case "title":
+          comparison = a.title.localeCompare(b.title)
+          break
+        case "status":
+          comparison = a.status.localeCompare(b.status)
+          break
+        case "type":
+          comparison = (a.projectType || "").localeCompare(b.projectType || "")
+          break
+        case "location":
+          comparison = (a.location || "").localeCompare(b.location || "")
+          break
+        case "images":
+          comparison = (a.imageCount || 0) - (b.imageCount || 0)
+          break
+        case "year":
+          comparison = (a.projectYear || 0) - (b.projectYear || 0)
+          break
+        case "created":
+          comparison = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+          break
+        case "modified":
+          const aModified = a.statusUpdatedAt || a.createdAt || ""
+          const bModified = b.statusUpdatedAt || b.createdAt || ""
+          comparison = new Date(aModified).getTime() - new Date(bModified).getTime()
+          break
+        case "likes":
+          comparison = (a.likesCount || 0) - (b.likesCount || 0)
+          break
+        case "featured":
+          comparison = (a.isFeatured ? 1 : 0) - (b.isFeatured ? 1 : 0)
+          break
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison
+    })
+
+    return sorted
+  }, [filteredProjects, sortColumn, sortDirection])
+
   const locationFilterKey = selectedLocations.join("|")
   const featureFilterKey = selectedFeatures.join("|")
   const styleFilterKey = selectedStyles.join("|")
@@ -431,15 +498,15 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     maxImages,
   ])
 
-  const pageCount = Math.max(1, Math.ceil(filteredProjects.length / pageSize))
+  const pageCount = Math.max(1, Math.ceil(sortedProjects.length / pageSize))
   const currentPage = Math.min(page, pageCount - 1)
   const pageItems = useMemo(
     () =>
-      filteredProjects.slice(
+      sortedProjects.slice(
         currentPage * pageSize,
         currentPage * pageSize + pageSize,
       ),
-    [filteredProjects, currentPage, pageSize],
+    [sortedProjects, currentPage, pageSize],
   )
 
   useEffect(() => {
@@ -449,7 +516,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
   }, [currentPage, page])
 
   const handleExportCsv = useCallback(() => {
-    if (filteredProjects.length === 0) {
+    if (sortedProjects.length === 0) {
       toast.error("No projects to export")
       return
     }
@@ -490,7 +557,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       return `"${String(stringValue).replace(/"/g, '""')}"`
     }
 
-    const rows = filteredProjects.map((project) => {
+    const rows = sortedProjects.map((project) => {
       const base = [
         project.title,
         project.slug ?? "",
@@ -525,7 +592,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
     link.remove()
     URL.revokeObjectURL(url)
     toast.success("Export generated")
-  }, [filteredProjects, showSeoView])
+  }, [sortedProjects, showSeoView])
 
   const handleFilterDialogChange = (open: boolean) => {
     if (open) {
@@ -785,15 +852,106 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                 </>
               ) : (
                 <>
-                  <TableHead className="w-[80px] text-center">Featured</TableHead>
-                  <TableHead>Project</TableHead>
+                  <TableHead className="w-[80px] text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("featured")}
+                    >
+                      Featured
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("title")}
+                    >
+                      Project
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Features</TableHead>
-                  <TableHead className="w-[160px]">Location</TableHead>
-                  <TableHead className="w-[90px] text-center">Images</TableHead>
-                  <TableHead className="w-[80px]">Year</TableHead>
-                  <TableHead className="w-[140px]">Created</TableHead>
-                  <TableHead className="w-[120px]">Status</TableHead>
-                  <TableHead className="w-[80px] text-right">Likes</TableHead>
+                  <TableHead className="w-[160px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("location")}
+                    >
+                      Location
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[90px] text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("images")}
+                    >
+                      Images
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[80px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("year")}
+                    >
+                      Year
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[140px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("created")}
+                    >
+                      Created
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[140px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("modified")}
+                    >
+                      Modified
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[120px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("status")}
+                    >
+                      Status
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-3 h-8 data-[state=open]:bg-accent"
+                      onClick={() => handleSort("likes")}
+                    >
+                      Likes
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead className="w-[70px]" />
                 </>
               )}
@@ -802,7 +960,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
           <TableBody>
             {filteredProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={showSeoView ? 5 : 10} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={showSeoView ? 5 : 11} className="py-10 text-center text-sm text-muted-foreground">
                   No projects match your filters.
                 </TableCell>
               </TableRow>
@@ -1005,6 +1163,11 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                     <TableCell>{project.projectYear ?? "—"}</TableCell>
                     <TableCell>
                       {project.createdAt ? format(new Date(project.createdAt), "PP") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {project.statusUpdatedAt || project.createdAt
+                        ? format(new Date(project.statusUpdatedAt || project.createdAt!), "PP")
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <span className={cn("rounded-md px-2 py-1 text-xs font-medium", statusInfo.tone)}>
@@ -1441,21 +1604,33 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
                           {professional.email}
                         </p>
                       </div>
-                      <Badge 
-                        variant="quaternary" size="quaternary" 
+                      <Badge
+                        variant="quaternary" size="quaternary"
                         className={`text-xs ${
-                          professional.is_project_owner 
-                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                          professional.is_project_owner
+                            ? 'bg-blue-100 text-blue-800 border-blue-200'
                             : professional.status === 'listed'
                             ? 'bg-green-100 text-green-800 border-green-200'
-                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                            : professional.status === 'live_on_page'
+                            ? 'bg-teal-100 text-teal-800 border-teal-200'
+                            : professional.status === 'unlisted'
+                            ? 'bg-surface text-foreground border-border'
+                            : professional.status === 'rejected'
+                            ? 'bg-red-100 text-red-800 border-red-200'
+                            : 'bg-blue-100 text-blue-800 border-blue-200'
                         }`}
                       >
-                        {professional.is_project_owner 
-                          ? 'Project owner' 
+                        {professional.is_project_owner
+                          ? 'Project owner'
                           : professional.status === 'listed'
-                          ? 'Listed'
-                          : 'Invite pending'
+                          ? 'Published'
+                          : professional.status === 'live_on_page'
+                          ? 'Featured'
+                          : professional.status === 'unlisted'
+                          ? 'Unpublished'
+                          : professional.status === 'rejected'
+                          ? 'Declined'
+                          : 'Invited'
                         }
                       </Badge>
                     </div>
