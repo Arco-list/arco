@@ -74,7 +74,7 @@ function HomeownerContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface">
+    <div className="flex flex-col min-h-screen bg-white">
       <Header />
 
       <main className="flex-1 py-8 pt-20">

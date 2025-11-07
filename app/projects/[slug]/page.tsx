@@ -128,7 +128,7 @@ type ProjectFeatureRow = Tables<"project_features">
 type ProjectProfessionalServiceRow = Tables<"project_professional_services">
 type ProjectProfessionalRow = Tables<"project_professionals"> & {
   professionals: { id: string; title: string | null } | null
-  companies: { id: string; name: string | null; logo_url: string | null } | null
+  companies: { id: string; name: string | null; slug: string | null } | null
 }
 type ProjectCategoryRow = Tables<"project_categories">
 type CategoryRow = Tables<"categories">
@@ -349,7 +349,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           professional_id,
           company_id,
           professionals(id, title),
-          companies!inner(id, name, logo_url, slug)
+          companies!inner(id, name, slug)
         `)
         .eq("project_id", project.id)
         .eq("companies.status", "listed")
@@ -569,15 +569,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     .map(invite => invite.company_id)
     .filter((id): id is string => Boolean(id))
 
-  const { data: projectCounts } = companyIds.length > 0
-    ? await supabase
-        .from("project_professionals")
-        .select("company_id, project_id, status, projects!inner(status)")
-        .in("company_id", companyIds)
-        .in("status", ["live_on_page", "listed"])
-        .eq("projects.status", "published")
-        .not("professional_id", "is", null)
-    : { data: [] }
+  const [{ data: projectCounts }, { data: companyCoverPhotos }] = await Promise.all([
+    companyIds.length > 0
+      ? supabase
+          .from("project_professionals")
+          .select("company_id, project_id, status, projects!inner(status)")
+          .in("company_id", companyIds)
+          .in("status", ["live_on_page", "listed"])
+          .eq("projects.status", "published")
+          .not("professional_id", "is", null)
+      : Promise.resolve({ data: [] }),
+    companyIds.length > 0
+      ? supabase
+          .from("company_photos")
+          .select("company_id, url, is_cover, order_index")
+          .in("company_id", companyIds)
+          .order("is_cover", { ascending: false })
+          .order("order_index", { ascending: true })
+      : Promise.resolve({ data: [] })
+  ])
 
   // Count unique projects per company
   const companyProjectCounts = new Map<string, Set<string>>()
@@ -596,6 +606,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     companyProjectCountsMap.set(companyId, projectSet.size)
   })
 
+  // Map company IDs to their cover photos
+  const companyCoverPhotoMap = new Map<string, string>()
+  companyCoverPhotos?.forEach(photo => {
+    if (photo.company_id && photo.url && !companyCoverPhotoMap.has(photo.company_id)) {
+      companyCoverPhotoMap.set(photo.company_id, photo.url)
+    }
+  })
+
   // Map project professionals with their company and professional details
   // Note: company_id is the source of truth; companies join data is derived from this FK
   const projectProfessionals = invites.map((invite) => ({
@@ -606,7 +624,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     serviceCategoryId: invite.invited_service_category_id,
     companyName: invite.companies?.name,
     companySlug: invite.companies?.slug,
-    companyLogo: invite.companies?.logo_url,
+    companyLogo: invite.company_id ? companyCoverPhotoMap.get(invite.company_id) ?? null : null,
     professionalTitle: invite.professionals?.title,
     projectsCount: invite.company_id ? (companyProjectCountsMap.get(invite.company_id) || 0) : 0,
     status: invite.status,
@@ -1140,7 +1158,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <main className="px-4 py-8 md:px-8 pt-20 md:pt-20">
             <div className="max-w-7xl mx-auto">
             {/* Back Button and Action Buttons */}
-            <div className="flex flex-row items-center justify-between mb-4 gap-3 md:gap-4 mt-8">
+            <div className="flex flex-row items-center justify-between mb-4 gap-3 md:gap-4 mt-4">
               <Button variant="tertiary" size="tertiary" asChild className="w-20 min-w-[5rem] max-w-[5rem]">
                 <Link href="/projects">
                   <ChevronLeft className="w-4 h-4" />

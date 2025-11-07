@@ -45,11 +45,11 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h4>Featured professionals</h4>
-          <div className="hidden md:flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Link href="/professionals" className={textButtonStyles}>
               View all
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>

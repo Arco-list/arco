@@ -52,7 +52,7 @@ export function SimilarProjects() {
     <div className="space-y-6" data-section="similar-projects">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-black">Similar projects</h2>
-        <div className="flex gap-2">
+        <div className="hidden md:flex gap-2">
           <button
             onClick={scrollLeft}
             className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
@@ -72,7 +72,7 @@ export function SimilarProjects() {
 
       <div
         ref={scrollRef}
-        className="flex gap-6 overflow-x-auto scrollbar-hide pb-4"
+        className="flex gap-4 overflow-x-auto scrollbar-hide pb-4"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {initialProjects.map((project) => {

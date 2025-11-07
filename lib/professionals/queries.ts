@@ -427,6 +427,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   coverImageUrl: string | null
   primaryService: string | null
   primaryServiceId: string | null
+  parentCategory: { id: string; name: string; slug: string | null } | null
 } | null> => {
   const supabase = await createServerSupabaseClient()
 
@@ -446,7 +447,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
           plan_expires_at,
           status,
           primary_service_id,
-          primary_service:categories!companies_primary_service_id_fkey(name),
+          primary_service:categories!companies_primary_service_id_fkey(name, parent_id),
           professionals (
             id,
             title,
@@ -476,7 +477,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
           plan_expires_at,
           status,
           primary_service_id,
-          primary_service:categories!companies_primary_service_id_fkey(name),
+          primary_service:categories!companies_primary_service_id_fkey(name, parent_id),
           professionals (
             id,
             title,
@@ -541,8 +542,27 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
     coverImageUrl = coverPhoto?.url || photos[0]?.url || null
   }
 
-  const primaryServiceName = (company.primary_service as { name: string } | null)?.name ?? null
+  const primaryServiceName = (company.primary_service as { name: string; parent_id?: string | null } | null)?.name ?? null
   const primaryServiceId = company.primary_service_id ?? null
+  const parentCategoryId = (company.primary_service as { name: string; parent_id?: string | null } | null)?.parent_id ?? null
+
+  // Fetch parent category if it exists
+  let parentCategory: { id: string; name: string; slug: string | null } | null = null
+  if (parentCategoryId) {
+    const { data: parentData } = await supabase
+      .from("categories")
+      .select("id, name, slug")
+      .eq("id", parentCategoryId)
+      .maybeSingle()
+
+    if (parentData) {
+      parentCategory = {
+        id: parentData.id,
+        name: parentData.name,
+        slug: parentData.slug
+      }
+    }
+  }
 
   return {
     id: company.id,
@@ -554,7 +574,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
     country: company.country,
     coverImageUrl,
     primaryService: primaryServiceName,
-    primaryServiceId
+    primaryServiceId,
+    parentCategory
   }
 }
 

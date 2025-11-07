@@ -20,9 +20,7 @@ import {
 import { PROJECT_TYPE_FILTERS } from "@/lib/project-type-filter-map"
 import type { Tables } from "@/lib/supabase/types"
 
-type CategoryWithAttributes = Tables<"categories"> & {
-  project_category_attributes: Tables<"project_category_attributes"> | null
-}
+type CategoryWithAttributes = Tables<"categories">
 
 type ProjectTaxonomyOption = Tables<"project_taxonomy_options">
 
@@ -96,7 +94,7 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
 
       const { data, error } = await supabase
         .from("categories")
-        .select("id,name,slug,sort_order,parent_id,project_category_attributes(is_listable,is_building_feature)")
+        .select("id,name,slug,sort_order,parent_id,is_listing_type")
         .eq("is_active", true)
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true })
@@ -159,7 +157,7 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
       const parentOptions: ProjectDetailsDropdownOption[] = []
       const groupedProjectTypes: Record<string, ProjectDetailsDropdownOption[]> = {}
       const isListable = (record: CategoryWithAttributes | null | undefined) =>
-        record?.project_category_attributes?.is_listable === true
+        record?.is_listing_type === true
 
       Object.keys(PROJECT_TYPE_FILTERS).forEach((typeName, typeIndex) => {
         const parentRecord = nameIndex.get(normalize(typeName)) ?? slugIndex.get(slugify(typeName))

@@ -67,7 +67,7 @@ export default function PricingPage() {
 
       <main className="flex-1 pt-20 pb-8">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <h1 className="mb-6 text-2xl font-semibold text-foreground">Pricing</h1>
+          <h3 className="mb-6 font-semibold text-foreground">Pricing</h3>
 
           <div className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-center">
             <p className="max-w-3xl text-sm text-text-secondary md:text-base">
@@ -214,7 +214,7 @@ export default function PricingPage() {
           <div className="mt-12 pt-8 border-t">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-xl font-semibold text-foreground">Billing</h2>
+                <h4 className="font-semibold text-foreground">Billing</h4>
                 <p className="mt-2 text-sm font-medium text-foreground">You are on the {currentPlanLabel} plan</p>
                 <p className="mt-1 text-sm text-text-secondary">
                   {isPlus

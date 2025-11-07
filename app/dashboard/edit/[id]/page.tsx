@@ -3,6 +3,7 @@
 import type React from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import Link from "next/link"
 import {
   ChevronLeft,
   ChevronRight,
@@ -2197,9 +2198,9 @@ export default function ListingEditorPage() {
   }
 
   const renderLocationSection = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 md:pb-0">
       <div className="hidden md:block">
-        <h2 className="text-2xl text-foreground font-medium">Location</h2>
+        <h3 className="font-medium text-foreground">Location</h3>
         <p className="text-text-secondary mt-1">Where is the project located?</p>
       </div>
 
@@ -2260,7 +2261,7 @@ export default function ListingEditorPage() {
         {/* Share exact location toggle */}
         <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
           <div>
-            <h3 className="text-base font-medium text-foreground mb-1">Share the exact location of the project</h3>
+            <h4 className="font-medium text-foreground mb-1">Share the exact location of the project</h4>
             <p className="text-sm text-text-secondary">Allow others to see the precise location of your project</p>
           </div>
           <button
@@ -2278,8 +2279,9 @@ export default function ListingEditorPage() {
           </button>
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={() => void handleSaveLocation()} disabled={locationSaving}>
+        {/* Save Button - Sticky on Mobile */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-border md:static md:border-0 md:p-0 md:flex md:justify-end z-10">
+          <Button variant="secondary" size="sm" onClick={() => void handleSaveLocation()} disabled={locationSaving} className="w-full md:w-auto">
             {locationSaving ? "Saving…" : "Save location"}
           </Button>
         </div>
@@ -2309,7 +2311,7 @@ export default function ListingEditorPage() {
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div className="hidden md:block">
-            <h2 className="text-2xl font-medium text-foreground">Professionals</h2>
+            <h3 className="font-medium text-foreground">Professionals</h3>
             <p className="mt-1 text-text-secondary">Manage the professional services linked to this project.</p>
           </div>
           <button
@@ -2428,6 +2430,7 @@ export default function ListingEditorPage() {
                 <div>
                   <Button
                     variant="tertiary"
+                    size="sm"
                     onClick={() => setShowStatusModal(true)}
                     className="w-full justify-between"
                   >
@@ -2485,10 +2488,21 @@ export default function ListingEditorPage() {
 
             {/* Main Content */}
             <div className="flex-1 md:pt-6">
+              {/* Back Button - Mobile Only */}
+              <div className="md:hidden mb-4">
+                <Button variant="tertiary" size="sm" asChild className="w-20 min-w-[5rem] max-w-[5rem]">
+                  <Link href="/dashboard/listings">
+                    <ChevronLeft className="w-4 h-4" />
+                    Back
+                  </Link>
+                </Button>
+              </div>
+
               {/* Mobile Status Button */}
               <div className="md:hidden mb-8 max-w-64">
                 <Button
                   variant="tertiary"
+                  size="sm"
                   onClick={() => setShowStatusModal(true)}
                   className="w-full justify-between"
                 >
@@ -2510,7 +2524,7 @@ export default function ListingEditorPage() {
                   >
                     <Menu className="h-5 w-5" />
                   </Button>
-                  <h1 className="text-xl font-semibold text-foreground">{getCurrentSectionTitle()}</h1>
+                  <h4 className="font-semibold text-foreground">{getCurrentSectionTitle()}</h4>
                 </div>
                 {!isEditMode && activeSection === "preview" && (
                   <Button 
@@ -2529,9 +2543,9 @@ export default function ListingEditorPage() {
               {activeSection === "preview" && (
                 <div className="flex items-center justify-center min-h-[60vh]">
                   <div className="text-center max-w-md">
-                    <h2 className="text-2xl font-semibold text-foreground mb-3">
+                    <h3 className="font-semibold text-foreground mb-3">
                       Ready to edit your listing?
-                    </h2>
+                    </h3>
                     <p className="text-text-secondary mb-8">
                       Click "Edit listing" in the sidebar to make changes to your project.
                     </p>
@@ -2541,7 +2555,7 @@ export default function ListingEditorPage() {
               {activeSection === "photo-tour" && renderPhotoTourSection()}
               {activeSection === "professionals" && renderProfessionalsSection()}
               {activeSection === "details" && (
-                <div className="space-y-8">
+                <div className="space-y-8 pb-24 md:pb-0">
                   {detailsFeedback && (
                     <div
                       className={`rounded-md border p-4 text-sm ${
@@ -2564,7 +2578,7 @@ export default function ListingEditorPage() {
                     <div className="space-y-12">
                       <section className="space-y-6">
                         <div>
-                          <h2 className="text-2xl font-semibold text-foreground">Project basics</h2>
+                          <h3 className="font-semibold text-foreground">Project basics</h3>
                           <p className="text-sm text-text-secondary">
                             Update the core classification of your project.
                           </p>
@@ -2587,7 +2601,7 @@ export default function ListingEditorPage() {
 
                       <section className="space-y-6">
                         <div>
-                          <h2 className="text-2xl font-semibold text-foreground">Features</h2>
+                          <h3 className="font-semibold text-foreground">Features</h3>
                           <p className="text-sm text-text-secondary">
                             Highlight the location and material characteristics that define this project.
                           </p>
@@ -2605,7 +2619,7 @@ export default function ListingEditorPage() {
 
                       <section className="space-y-6">
                         <div>
-                          <h2 className="text-2xl font-semibold text-foreground">Project metrics</h2>
+                          <h3 className="font-semibold text-foreground">Project metrics</h3>
                           <p className="text-sm text-text-secondary">
                             Capture scale, investment level, and timeline details.
                           </p>
@@ -2624,7 +2638,7 @@ export default function ListingEditorPage() {
 
                       <section className="space-y-6">
                         <div>
-                          <h2 className="text-2xl font-semibold text-foreground">Storytelling</h2>
+                          <h3 className="font-semibold text-foreground">Storytelling</h3>
                           <p className="text-sm text-text-secondary">
                             Craft a narrative that helps prospects understand the scope and highlights.
                           </p>
@@ -2642,9 +2656,9 @@ export default function ListingEditorPage() {
                         />
                       </section>
 
-                      <div className="flex flex-col gap-4 border-t border-border pt-6 md:flex-row md:items-center md:justify-between">
-                        <span className="text-sm text-text-secondary">{detailsLastSavedLabel}</span>
-                        <Button onClick={() => void handleSaveDetails()} disabled={detailsSaving} className="md:w-auto">
+                      {/* Save Button - Sticky on Mobile */}
+                      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-border md:static md:border-t md:pt-6 md:mt-6 md:flex md:justify-end z-10">
+                        <Button variant="secondary" size="sm" onClick={() => void handleSaveDetails()} disabled={detailsSaving} className="w-full md:w-auto">
                           {detailsSaving ? "Saving…" : "Save details"}
                         </Button>
                       </div>
@@ -2693,6 +2707,7 @@ export default function ListingEditorPage() {
             </Button>
             <Button
               variant="secondary"
+              size="sm"
               onClick={handleEditListing}
             >
               Continue editing
