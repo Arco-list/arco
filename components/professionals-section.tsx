@@ -39,7 +39,7 @@ export function ProfessionalsSection() {
             >
               View all
             </button>
-            <div className="flex gap-2">
+            <div className="hidden md:flex gap-2">
               <button
                 onClick={scrollLeft}
                 className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
@@ -75,16 +75,18 @@ export function ProfessionalsSection() {
                 className="flex-none w-80"
                 style={{ scrollSnapAlign: "start" }}
               >
-                <Link href={professionalHref}>
-                  {professional.companyLogo ? (
-                    <img
-                      src={professional.companyLogo}
-                      alt={professional.companyName || 'Company'}
-                      className="aspect-square w-full object-cover rounded-lg transition-transform duration-300 hover:scale-105 mb-4"
-                    />
-                  ) : (
-                    <div className="aspect-square w-full rounded-lg bg-surface transition-transform duration-300 hover:scale-105 mb-4"></div>
-                  )}
+                <Link href={professionalHref} className="group">
+                  <div className="relative overflow-hidden rounded-lg mb-4">
+                    {professional.companyLogo ? (
+                      <img
+                        src={professional.companyLogo}
+                        alt={professional.companyName || 'Company'}
+                        className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="aspect-square w-full bg-surface transition-transform duration-300 group-hover:scale-105"></div>
+                    )}
+                  </div>
                 </Link>
                 <Link href={professionalHref}>
                   <p className="text-sm font-medium text-foreground hover:text-foreground mb-1">

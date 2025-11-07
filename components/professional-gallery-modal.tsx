@@ -6,55 +6,54 @@ import { Button } from "@/components/ui/button"
 import {
   ArrowLeft,
   Share,
-  Heart,
+  Bookmark,
   ChevronLeft,
   ChevronRight,
   X,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react"
-import { toast } from "sonner"
 import { ShareModal } from "./share-modal"
-import { useProjectPreview } from "@/contexts/project-preview-context"
-import { useSavedProjects } from "@/contexts/saved-projects-context"
+import { useProfessionalGalleryData } from "@/contexts/professional-gallery-modal-context"
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 
-interface ImageGroup {
-  id: string
-  category: string
-  description?: string
-  images: {
-    src: string
-    alt: string
-    isPrimary?: boolean
-  }[]
-}
-
-interface GroupedPicturesModalProps {
+interface ProfessionalGalleryModalProps {
   isOpen: boolean
   onClose: () => void
-  imageGroups: ImageGroup[]
-  title?: string
   selectedGroupId?: string
 }
 
-export function GroupedPicturesModal({
+export function ProfessionalGalleryModal({
   isOpen,
   onClose,
-  imageGroups,
-  title = "Project Gallery",
   selectedGroupId,
-}: GroupedPicturesModalProps) {
+}: ProfessionalGalleryModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const groupRefs = useRef(new Map<string, HTMLDivElement>())
 
-  const { projectId, info, shareImageUrl, shareUrl } = useProjectPreview()
-  const { savedProjectIds, mutatingProjectIds, saveProject, removeProject } = useSavedProjects()
+  const { professionalName, companyId, coverImageUrl, shareUrl, groups } = useProfessionalGalleryData()
+  const { savedProfessionalIds, mutatingProfessionalIds, saveProfessional, removeProfessional } =
+    useSavedProfessionals()
 
-  const isSaved = projectId ? savedProjectIds.has(projectId) : false
-  const isMutating = projectId ? mutatingProjectIds.has(projectId) : false
+  const isSaved = companyId ? savedProfessionalIds.has(companyId) : false
+  const isMutating = companyId ? mutatingProfessionalIds.has(companyId) : false
+
+  // Transform groups to match the modal's expected format
+  const imageGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        id: group.id,
+        category: group.title,
+        description: group.description,
+        images: group.photos.map((photo) => ({
+          src: photo.url,
+          alt: photo.alt,
+          isPrimary: photo.isCover,
+        })),
+      })),
+    [groups],
+  )
 
   // Flatten all images for lightbox navigation
   const allImages = useMemo(
@@ -140,11 +139,25 @@ export function GroupedPicturesModal({
   }, [imageGroups, isOpen, selectedGroupId])
 
   const handleSave = () => {
-    if (!projectId) return
+    if (!companyId) return
     if (isSaved) {
-      void removeProject(projectId)
+      void removeProfessional(companyId)
     } else {
-      void saveProject(projectId, null)
+      void saveProfessional({
+        id: companyId,
+        companyId: companyId,
+        name: professionalName,
+        slug: shareUrl?.split("/").pop() || "",
+        profession: "",
+        location: "",
+        rating: 0,
+        reviewCount: 0,
+        image: coverImageUrl || "",
+        specialties: [],
+        isVerified: false,
+        domain: null,
+        professionalId: "",
+      })
     }
   }
 
@@ -177,13 +190,13 @@ export function GroupedPicturesModal({
 
   return (
     <>
-      {/* Main Modal */}
+      {/* Main Modal - Overview */}
       <Dialog open={isOpen && !isLightboxOpen} onOpenChange={onClose}>
         <DialogContent
           showCloseButton={false}
           className="!max-w-none !w-screen !h-screen p-0 bg-white border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
         >
-          <DialogTitle className="sr-only">{title}</DialogTitle>
+          <DialogTitle className="sr-only">{`${professionalName} Gallery`}</DialogTitle>
           <div className="flex flex-col w-full h-screen">
             {/* Header */}
             <div className="flex items-center justify-between p-3 md:p-4 border-b border-border flex-shrink-0">
@@ -202,10 +215,10 @@ export function GroupedPicturesModal({
                   size="tertiary"
                   className={isSaved ? "!bg-primary !text-white hover:!bg-primary-hover" : ""}
                   onClick={handleSave}
-                  disabled={!projectId || isMutating}
+                  disabled={!companyId || isMutating}
                   aria-pressed={isSaved}
                 >
-                  <Heart className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
+                  <Bookmark className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
                   <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
                 </Button>
               </div>
@@ -264,7 +277,7 @@ export function GroupedPicturesModal({
           showCloseButton={false}
           className="!max-w-none !w-screen !h-screen p-0 bg-black border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
         >
-          <DialogTitle className="sr-only">{`${title} lightbox`}</DialogTitle>
+          <DialogTitle className="sr-only">{`${professionalName} Gallery lightbox`}</DialogTitle>
           <div className="relative w-full h-screen flex flex-col">
             {/* Lightbox Header */}
             <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 md:p-6 bg-gradient-to-b from-black/90 to-transparent">
@@ -289,7 +302,7 @@ export function GroupedPicturesModal({
                   size="sm"
                   className="text-white hover:bg-white/10 hover:text-white border-none bg-transparent"
                   onClick={() => setIsShareModalOpen(true)}
-                  aria-label="Share project"
+                  aria-label="Share professional"
                 >
                   <Share className="w-4 h-4 md:mr-2" />
                   <span className="hidden md:inline">Share</span>
@@ -297,13 +310,17 @@ export function GroupedPicturesModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={isSaved ? "text-white bg-white/20 hover:bg-white/30 border-none" : "text-white hover:bg-white/10 border-none bg-transparent"}
+                  className={
+                    isSaved
+                      ? "text-white bg-white/20 hover:bg-white/30 border-none"
+                      : "text-white hover:bg-white/10 border-none bg-transparent"
+                  }
                   onClick={handleSave}
-                  disabled={!projectId || isMutating}
+                  disabled={!companyId || isMutating}
                   aria-pressed={isSaved}
-                  aria-label={isSaved ? "Remove from saved" : "Save project"}
+                  aria-label={isSaved ? "Remove from saved" : "Save professional"}
                 >
-                  <Heart className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
+                  <Bookmark className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
                   <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
                 </Button>
               </div>
@@ -324,7 +341,7 @@ export function GroupedPicturesModal({
                   }}
                   onClick={toggleZoom}
                   role="img"
-                  aria-label={`${allImages[currentImageIndex]?.alt || "Project image"} - ${currentImageIndex + 1} of ${allImages.length}`}
+                  aria-label={`${allImages[currentImageIndex]?.alt || "Professional photo"} - ${currentImageIndex + 1} of ${allImages.length}`}
                 />
               </div>
             </div>
@@ -353,7 +370,7 @@ export function GroupedPicturesModal({
             </Button>
 
             {/* Category Label */}
-            <div 
+            <div
               className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm"
               role="status"
               aria-live="polite"
@@ -368,9 +385,9 @@ export function GroupedPicturesModal({
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
-        title={info.title}
-        subtitle={info.subtitle ?? ""}
-        imageUrl={shareImageUrl ?? "/placeholder.svg?height=64&width=64"}
+        title={professionalName}
+        subtitle=""
+        imageUrl={coverImageUrl ?? "/placeholder.svg?height=64&width=64"}
         shareUrl={typeof window !== "undefined" ? window.location.href : shareUrl ?? ""}
       />
     </>

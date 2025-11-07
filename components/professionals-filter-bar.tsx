@@ -338,8 +338,8 @@ export function ProfessionalsFilterBar() {
   return (
     <>
       <div className="bg-white/95 backdrop-blur-md border-b border-border sticky top-14 z-40 h-16">
-        <div className="max-w-[1800px] mx-auto px-4 py-3 min-h-[64px]">
-          <div className="flex items-center gap-2">
+        <div className="max-w-[1800px] mx-auto px-4">
+          <div className="flex items-center gap-2 py-3 min-h-[64px]">
             <Button
               variant="quaternary"
               size="quaternary"

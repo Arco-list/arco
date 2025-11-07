@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -17,29 +18,43 @@ export function ProfessionalsSidebar() {
   return (
     <>
       <div className="lg:sticky lg:top-24 lg:z-20">
-        <Card className="p-6 space-y-6">
+        <Card className="p-6 space-y-4">
           <h2 className="text-2xl font-bold text-black">Professionals who built it</h2>
 
           <div className="divide-y divide-gray-200">
-            {projectProfessionals.map((professional) => (
-              <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {professional.companyName}
-                  </p>
-                  <p className="text-xs text-text-secondary">
-                    {professional.serviceCategory} · {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
-                  </p>
+            {projectProfessionals.map((professional) => {
+              const professionalHref = professional.companySlug
+                ? `/professionals/${professional.companySlug}`
+                : '#'
+              const projectsHref = `${professionalHref}#projects`
+
+              return (
+                <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-normal text-foreground truncate">
+                      {professional.companyName}
+                    </p>
+                    <p className="text-base font-normal text-text-secondary">
+                      {professional.serviceCategory}
+                      {' · '}
+                      <Link
+                        href={projectsHref}
+                        className="underline hover:text-foreground"
+                      >
+                        {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                      </Link>
+                    </p>
+                  </div>
+                  <Button
+                    variant="tertiary"
+                    size="sm"
+                    onClick={() => professional.companySlug && window.open(`/professionals/${professional.companySlug}`, '_blank')}
+                  >
+                    Visit
+                  </Button>
                 </div>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onClick={() => professional.companySlug && window.open(`/professionals/${professional.companySlug}`, '_blank')}
-                >
-                  Visit
-                </Button>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <Button variant="default" className="w-full" onClick={() => setShowModal(true)}>
@@ -55,25 +70,39 @@ export function ProfessionalsSidebar() {
           </DialogHeader>
 
           <div className="divide-y divide-gray-200 py-4">
-            {projectProfessionals.map((professional) => (
-              <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {professional.companyName}
-                  </p>
-                  <p className="text-xs text-text-secondary">
-                    {professional.serviceCategory} · {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
-                  </p>
+            {projectProfessionals.map((professional) => {
+              const professionalHref = professional.companySlug
+                ? `/professionals/${professional.companySlug}`
+                : '#'
+              const projectsHref = `${professionalHref}#projects`
+
+              return (
+                <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-normal text-foreground truncate">
+                      {professional.companyName}
+                    </p>
+                    <p className="text-base font-normal text-text-secondary">
+                      {professional.serviceCategory}
+                      {' · '}
+                      <Link
+                        href={projectsHref}
+                        className="underline hover:text-foreground"
+                      >
+                        {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                      </Link>
+                    </p>
+                  </div>
+                  <Button
+                    variant="tertiary"
+                    size="sm"
+                    onClick={() => professional.companySlug && window.open(`/professionals/${professional.companySlug}`, '_blank')}
+                  >
+                    Visit
+                  </Button>
                 </div>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onClick={() => professional.companySlug && window.open(`/professionals/${professional.companySlug}`, '_blank')}
-                >
-                  Visit
-                </Button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </DialogContent>
       </Dialog>

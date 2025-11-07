@@ -200,17 +200,29 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 </button>
               </>
             ) : shouldRenderAuthTrigger ? (
-              <button
-                className={`flex items-center gap-2 h-9 rounded-full border px-3 ${
-                  transparent && !isScrolled
-                    ? "border-white/20 text-white hover:bg-white/10"
-                    : "border-border hover:bg-surface"
-                }`}
-                onClick={toggleMenu}
-              >
-                <span className="hidden text-sm md:inline">{authTriggerLabel}</span>
-                <Menu className="h-5 w-5" />
-              </button>
+              <>
+                <Link
+                  href="/list-with-us"
+                  className={`hidden md:block text-sm font-medium px-3 py-1.5 rounded-full ${
+                    transparent && !isScrolled
+                      ? `${textColor} hover:bg-white/10`
+                      : `${textColor} hover:bg-surface`
+                  }`}
+                >
+                  List with us
+                </Link>
+                <button
+                  className={`flex items-center gap-2 h-9 rounded-full border px-3 ${
+                    transparent && !isScrolled
+                      ? "border-white/20 text-white hover:bg-white/10"
+                      : "border-border hover:bg-surface"
+                  }`}
+                  onClick={toggleMenu}
+                >
+                  <span className="hidden text-sm md:inline">{authTriggerLabel}</span>
+                  <Menu className="h-5 w-5" />
+                </button>
+              </>
             ) : null}
 
             {isMenuOpen && (

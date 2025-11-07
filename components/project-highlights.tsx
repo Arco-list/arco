@@ -42,7 +42,7 @@ export function ProjectHighlights() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-black">Highlights</h2>
-        <div className="flex gap-2">
+        <div className="hidden md:flex gap-2">
           <button
             onClick={scrollLeft}
             className="p-2 rounded-full border border-border hover:bg-surface transition-colors"
@@ -70,14 +70,16 @@ export function ProjectHighlights() {
             key={highlight.id}
             type="button"
             onClick={() => handleHighlightClick(highlight.id)}
-            className="flex-none w-80 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
+            className="group flex-none w-80 space-y-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 rounded-lg"
             style={{ scrollSnapAlign: "start" }}
           >
-            <img
-              src={highlight.imageUrl || "/placeholder.svg"}
-              alt={highlight.title}
-              className="aspect-square w-full object-cover rounded-lg transition-transform duration-300 hover:scale-105"
-            />
+            <div className="relative overflow-hidden rounded-lg">
+              <img
+                src={highlight.imageUrl || "/placeholder.svg"}
+                alt={highlight.title}
+                className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            </div>
             <p className="text-sm font-medium text-foreground">{highlight.title}</p>
             {highlight.description && <p className="text-xs text-text-secondary">{highlight.description}</p>}
           </button>

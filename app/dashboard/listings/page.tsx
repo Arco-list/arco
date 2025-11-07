@@ -865,12 +865,12 @@ export default function DashboardListingsPage() {
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-row items-center justify-between gap-3">
             <div className="flex-shrink-0">
-              <h3 className="text-xl md:text-2xl font-semibold text-foreground">Your projects</h3>
+              <h4 className="font-semibold text-foreground">Your projects</h4>
             </div>
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <Button
                 variant="tertiary"
-                size="default"
+                size="sm"
                 onClick={() => setIsFilterOpen(true)}
                 className={hasActiveFilters ? "border-red-500 text-red-600 bg-red-50" : ""}
               >
@@ -881,7 +881,7 @@ export default function DashboardListingsPage() {
                   </span>
                 )}
               </Button>
-              <Button asChild variant="secondary">
+              <Button asChild variant="secondary" size="sm">
                 <Link href="/new-project">Add project</Link>
               </Button>
             </div>

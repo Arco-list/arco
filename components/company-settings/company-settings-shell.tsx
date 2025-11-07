@@ -28,13 +28,9 @@ import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Camera, ChevronLeft, ChevronRight, ImageIcon, Menu, MoreHorizontal, Trash2, User } from "lucide-react"
+import { Camera, ChevronLeft, ChevronRight, ImageIcon, Menu, MoreHorizontal, Trash2, User, X } from "lucide-react"
 import { toast } from "sonner"
 
 const languageOptions = ["Dutch", "English", "German", "French", "Spanish"] as const
@@ -45,16 +41,18 @@ const navItems = [
   { id: "photos", label: "Photos", icon: Camera },
 ] as const
 
-const statusOptions: ReadonlyArray<{ value: ListingStatus; title: string; description: string }> = [
+const statusOptions: ReadonlyArray<{ value: ListingStatus; title: string; description: string; colorClass: string }> = [
   {
     value: "listed",
     title: "Listed",
     description: "Your company page is public and visible to homeowners and on project profiles.",
+    colorClass: "bg-emerald-500",
   },
   {
     value: "unlisted",
     title: "Unlisted",
     description: "Hide your company page from search while keeping data ready to reactivate at any time.",
+    colorClass: "bg-muted-foreground",
   },
 ]
 
@@ -633,67 +631,117 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Company visibility</DialogTitle>
-                <DialogDescription>Select how your company page appears to homeowners.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3">
-                {statusOptions.map((option) => {
-                  const isActive = selectedStatus === option.value
-                  return (
-                    <button
-                      type="button"
-                      key={option.value}
-                      onClick={() => setSelectedStatus(option.value)}
-                      className={cn(
-                        "w-full rounded-lg border px-4 py-3 text-left transition",
-                        isActive ? "border-foreground bg-secondary/5" : "border-border hover:border-border",
-                        statusPending && "pointer-events-none opacity-60"
-                      )}
-                      disabled={statusPending}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-foreground">{option.title}</p>
-                          <p className="text-sm text-text-secondary">{option.description}</p>
+            <DialogContent className="max-w-md border-none bg-transparent p-0 shadow-none">
+              <div className="bg-white rounded-lg max-w-md w-full p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h4 className="font-semibold text-foreground">Company visibility</h4>
+                  <button
+                    type="button"
+                    onClick={() => setStatusDialogOpen(false)}
+                    className="text-muted-foreground transition-colors hover:text-text-secondary"
+                    aria-label="Close company visibility"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 mb-6">
+                  {logoUrl ? (
+                    <Image
+                      src={logoUrl}
+                      alt={profileState.name}
+                      width={64}
+                      height={64}
+                      className="w-16 h-16 rounded-lg object-cover bg-surface"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-secondary text-xl font-semibold text-white">
+                      {profileState.name.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <h3 className="font-medium text-foreground">{profileState.name}</h3>
+                    <p className="text-sm text-text-secondary">{statusDescription}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  {statusOptions.map((option) => {
+                    const isSelected = selectedStatus === option.value
+                    const isDisabled = statusPending
+                    return (
+                      <label
+                        key={option.value}
+                        className={cn(
+                          "block p-4 border rounded-lg transition-colors",
+                          isSelected ? "border-foreground bg-surface" : "border-border hover:border-border",
+                          isDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                        )}
+                        aria-disabled={isDisabled}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="company-status"
+                            value={option.value}
+                            checked={isSelected}
+                            onChange={() => {
+                              if (!isDisabled) {
+                                setSelectedStatus(option.value)
+                              }
+                            }}
+                            disabled={isDisabled}
+                            className="sr-only"
+                          />
+                          <div className="flex flex-1 flex-col gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className={cn("w-2 h-2 rounded-full", option.colorClass)} />
+                              <span className="font-medium text-foreground">{option.title}</span>
+                            </div>
+                            <p className="text-sm text-text-secondary">{option.description}</p>
+                          </div>
                         </div>
-                        <span
-                          className={cn(
-                            "h-4 w-4 rounded-full border",
-                            isActive ? "border-foreground bg-secondary" : "border-border"
-                          )}
-                        />
-                      </div>
-                    </button>
-                  )
-                })}
+                      </label>
+                    )
+                  })}
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="tertiary"
+                    size="tertiary"
+                    onClick={() => setStatusDialogOpen(false)}
+                    disabled={statusPending}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      performStatusUpdate(selectedStatus as CompanyStatus, {
+                        onSuccess: () => setStatusDialogOpen(false),
+                        message: selectedStatus === "listed" ? "Company listed" : "Company hidden from homeowners",
+                      })
+                    }
+                    disabled={!isStatusDirty || statusPending}
+                    className="flex-1"
+                  >
+                    {statusPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
               </div>
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="tertiary" onClick={() => setStatusDialogOpen(false)} disabled={statusPending}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() =>
-                    performStatusUpdate(selectedStatus as CompanyStatus, {
-                      onSuccess: () => setStatusDialogOpen(false),
-                      message: selectedStatus === "listed" ? "Company listed" : "Company hidden from homeowners",
-                    })
-                  }
-                  disabled={!isStatusDirty || statusPending}
-                >
-                  {statusPending ? "Updating..." : "Save status"}
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
 
           {/* Preview company */}
           <div>
             <Button
-              className="w-full bg-secondary text-white hover:bg-secondary-hover h-auto px-[18px] py-3"
+              variant="secondary"
+              className="w-full"
               onClick={handlePreviewCompany}
             >
               Preview company
@@ -761,10 +809,11 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <h1 className="text-xl font-semibold text-foreground">{getCurrentSectionTitle()}</h1>
+              <h4 className="font-semibold text-foreground">{getCurrentSectionTitle()}</h4>
             </div>
             <Button
-              className="bg-secondary text-white hover:bg-secondary-hover"
+              variant="secondary"
+              size="sm"
               onClick={handlePreviewCompany}
             >
               Preview
@@ -775,7 +824,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">Upgrade to appear in homeowner searches</h3>
+                    <h4 className="font-semibold text-foreground">Upgrade to appear in homeowner searches</h4>
                     <p className="text-sm text-text-secondary">Become findable by thousands of homeowners</p>
                   </div>
                 <Button asChild className="bg-red-500 text-white hover:bg-red-600">
@@ -825,7 +874,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Company information</h2>
+                    <h4 className="font-semibold text-foreground">Company information</h4>
                     <p className="text-sm text-text-secondary">Update how your business appears on your public company page.</p>
                   </div>
                   <div className="grid gap-6">
@@ -862,7 +911,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Contact information</h2>
+                    <h4 className="font-semibold text-foreground">Contact information</h4>
                     <p className="text-sm text-text-secondary">Displayed on your public page so homeowners can reach you.</p>
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
@@ -974,7 +1023,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Services & features</h2>
+                    <h4 className="font-semibold text-foreground">Services & features</h4>
                     <p className="text-sm text-text-secondary">Highlight what you specialise in so we can match you to relevant projects.</p>
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
@@ -1083,7 +1132,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Account status</h2>
+                    <h4 className="font-semibold text-foreground">Account status</h4>
                     <p className="text-sm text-text-secondary">Control whether your company page is visible to homeowners.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-4">
@@ -1114,7 +1163,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           ) : (
             <div className="space-y-8">
               <header>
-                <h2 className="text-xl font-semibold text-foreground">Company photos</h2>
+                <h4 className="font-semibold text-foreground">Company photos</h4>
                 <p className="text-sm text-text-secondary">
                   Showcase up to five photos on your company page. Drag to reorder; the first photo appears as the cover.
                 </p>
