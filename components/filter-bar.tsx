@@ -411,13 +411,13 @@ export function FilterBar() {
                   </div>
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="quaternary" size="quaternary" onClick={clearFilters} className="flex-1 bg-transparent">
+                    <Button variant="quaternary" onClick={clearFilters} className="flex-1">
                       Clear filter
                     </Button>
                     <Button
-                      size="sm"
+                      variant="secondary"
                       onClick={toggleTypeDropdown}
-                      className="flex-1 bg-black text-white hover:bg-secondary-hover"
+                      className="flex-1"
                     >
                       Filter
                     </Button>
@@ -460,13 +460,13 @@ export function FilterBar() {
                   </div>
 
                   <div className="mt-6 flex gap-3">
-                    <Button variant="quaternary" size="quaternary" onClick={clearStyleFilters} className="flex-1 bg-transparent">
+                    <Button variant="quaternary" onClick={clearStyleFilters} className="flex-1">
                       Clear filter
                     </Button>
                     <Button
-                      size="sm"
+                      variant="secondary"
                       onClick={toggleStyleDropdown}
-                      className="flex-1 bg-black text-white hover:bg-secondary-hover"
+                      className="flex-1"
                     >
                       Filter
                     </Button>
@@ -519,13 +519,13 @@ export function FilterBar() {
                   </div>
 
                   <div className="mt-4 flex gap-3">
-                    <Button variant="quaternary" size="quaternary" onClick={clearLocationFilter} className="flex-1 bg-transparent">
+                    <Button variant="quaternary" onClick={clearLocationFilter} className="flex-1">
                       Clear filter
                     </Button>
                     <Button
-                      size="sm"
+                      variant="secondary"
                       onClick={toggleLocationDropdown}
-                      className="flex-1 bg-black text-white hover:bg-secondary-hover"
+                      className="flex-1"
                     >
                       Apply
                     </Button>

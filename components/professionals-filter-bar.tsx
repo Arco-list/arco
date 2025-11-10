@@ -428,18 +428,18 @@ export function ProfessionalsFilterBar() {
                     <div className="border-t border-border p-3 flex gap-2">
                       <Button
                         variant="quaternary"
-                        size="quaternary"
                         onClick={() => {
                           handleClearServiceFilters()
                           setActiveDropdown(null)
                         }}
-                        className="flex-1 bg-transparent"
+                        className="flex-1"
                       >
                         Clear filter
                       </Button>
                       <Button
+                        variant="secondary"
                         onClick={() => setActiveDropdown(null)}
-                        className="flex-1 bg-black text-white hover:bg-secondary-hover"
+                        className="flex-1"
                       >
                         Filter
                       </Button>
@@ -490,12 +490,13 @@ export function ProfessionalsFilterBar() {
                       </div>
 
                       <div className="mt-4 flex gap-2">
-                        <Button variant="quaternary" size="quaternary" onClick={clearLocationFilter} className="flex-1 bg-transparent">
+                        <Button variant="quaternary" onClick={clearLocationFilter} className="flex-1">
                           Clear filter
                         </Button>
                         <Button
+                          variant="secondary"
                           onClick={() => setActiveDropdown(null)}
-                          className="flex-1 bg-black text-white hover:bg-secondary-hover"
+                          className="flex-1"
                         >
                           Apply
                         </Button>

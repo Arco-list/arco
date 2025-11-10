@@ -187,7 +187,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg font-semibold">Filters</h2>
+          <h6 className="font-semibold">Filters</h6>
           <button onClick={onClose} className="p-1 hover:bg-surface rounded">
             <X className="h-5 w-5" />
           </button>
@@ -201,7 +201,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
           ) : (
             <>
               <div>
-                <h3 className="text-base mb-3">Building Types</h3>
+                <h6 className="mb-3">Building Types</h6>
                 <div className="space-y-4">
                   {typeSections.map((section) => (
                     <div key={section.id}>
@@ -275,7 +275,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Style</h3>
+                <h6 className="mb-3">Style</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {styleOptions.slice(0, showAllStyles ? undefined : 6).map((style, index) => {
                     const value = style.id ?? style.slug ?? `${style.name}-${index}`
@@ -301,7 +301,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">City</h3>
+                <h6 className="mb-3">City</h6>
                 <select
                   id="modal-location"
                   className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
@@ -318,7 +318,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Location feature</h3>
+                <h6 className="mb-3">Location feature</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {locationFeatureOptions.slice(0, showAllLocationFeatures ? undefined : 6).map((feature, index) => {
                     const value = feature.id ?? feature.slug ?? feature.name
@@ -344,7 +344,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Building feature</h3>
+                <h6 className="mb-3">Building feature</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {buildingFeatureCategories.slice(0, showAllBuildingFeatures ? undefined : 6).map((feature, index) => {
                     const value = feature.id ?? feature.slug ?? feature.name
@@ -371,7 +371,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base">Material feature</h3>
+                  <h6>Material feature</h6>
                   <button
                     className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                     onClick={() => setShowAllMaterialFeatures(!showAllMaterialFeatures)}
@@ -399,7 +399,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Building type</h3>
+                <h6 className="mb-3">Building type</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {buildingTypeOptions.map((option, index) => {
                     const value = option.id ?? option.slug ?? option.name
@@ -419,7 +419,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Size</h3>
+                <h6 className="mb-3">Size</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {sizeOptions.map((size, index) => {
                     const value = size.id ?? size.slug ?? size.name
@@ -439,7 +439,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Budget</h3>
+                <h6 className="mb-3">Budget</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {budgetOptions.map((budget, index) => {
                     const value = budget.budget_level ?? budget.id ?? budget.slug ?? budget.name
@@ -459,7 +459,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Project year</h3>
+                <h6 className="mb-3">Project year</h6>
                 <div className="px-2">
                   <input
                     type="range"
@@ -477,7 +477,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h3 className="text-base mb-3">Building year</h3>
+                <h6 className="mb-3">Building year</h6>
                 <div className="px-2">
                   <input
                     type="range"
@@ -498,10 +498,10 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
         </div>
 
         <div className="border-t border-border p-4 flex gap-3">
-          <Button variant="quaternary" size="quaternary" onClick={clearAllFilters} className="flex-1 bg-transparent">
+          <Button variant="quaternary" onClick={clearAllFilters} className="flex-1">
             Clear filters
           </Button>
-          <Button onClick={applyFilters} className="flex-1 bg-black text-white hover:bg-secondary-hover">
+          <Button variant="secondary" onClick={applyFilters} className="flex-1">
             Show projects
           </Button>
         </div>
