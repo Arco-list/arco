@@ -61,7 +61,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg font-semibold">Filters</h2>
+          <h6 className="font-semibold">Filters</h6>
           <button onClick={onClose} className="p-1 hover:bg-surface rounded">
             <X className="h-5 w-5" />
           </button>
@@ -75,7 +75,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
           ) : (
             <>
               <div>
-                <h3 className="text-base mb-3">Service Categories</h3>
+                <h6 className="mb-3">Service Categories</h6>
                 <div className="space-y-4">
                   {sections.map((section) => (
                     <div key={section.category.id}>
@@ -131,7 +131,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
               </div>
 
               <div>
-                <h3 className="text-base mb-3">City</h3>
+                <h6 className="mb-3">City</h6>
                 <select
                   id="modal-city"
                   className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
@@ -152,17 +152,17 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
 
         <div className="border-t border-border p-4 flex gap-3">
           <Button
-            variant="quaternary" size="quaternary"
+            variant="quaternary"
             onClick={() => {
               clearAllFilters()
               setExpandedCategories({})
               onClose()
             }}
-            className="flex-1 bg-transparent"
+            className="flex-1"
           >
             Clear filters
           </Button>
-          <Button onClick={onClose} className="flex-1 bg-black text-white hover:bg-secondary-hover">
+          <Button variant="secondary" onClick={onClose} className="flex-1">
             Apply
           </Button>
         </div>
