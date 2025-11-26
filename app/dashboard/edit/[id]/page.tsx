@@ -703,13 +703,13 @@ export default function ListingEditorPage() {
       geocoderRef.current = new window.google.maps.Geocoder()
 
       marker.addListener("dragend", () => {
-        const position = marker.position as google.maps.LatLng
+        const position = marker.position as google.maps.LatLngLiteral
         if (!position) {
           return
         }
 
-        const lat = position.lat()
-        const lng = position.lng()
+        const lat = position.lat
+        const lng = position.lng
 
         setDetailsForm((prev) => ({
           ...prev,
