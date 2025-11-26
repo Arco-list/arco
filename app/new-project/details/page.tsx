@@ -858,13 +858,15 @@ export default function NewProjectPage() {
       geocoderRef.current = new window.google.maps.Geocoder()
 
       marker.addListener("dragend", () => {
-        const position = marker.position as google.maps.LatLng
+        const position = marker.position
         if (!position) {
           return
         }
 
-        const lat = position.lat()
-        const lng = position.lng()
+        // Handle both LatLng and LatLngLiteral types
+        const { lat, lng } = position instanceof google.maps.LatLng
+          ? position.toJSON()
+          : position
 
         setFormData((prev) => ({
           ...prev,
