@@ -21,6 +21,13 @@ const AVATAR_MIME_TO_EXTENSION: Record<string, string> = {
 }
 const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024
 
+// RFC 5322 compliant email regex (simplified)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email.trim())
+}
+
 interface ProfileFormState {
   firstName: string
   lastName: string
@@ -288,6 +295,13 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
       return
     }
 
+    if (!isValidEmail(trimmedEmail)) {
+      toast.error("Invalid email format", {
+        description: "Please enter a valid email address.",
+      })
+      return
+    }
+
     setIsSavingProfile(true)
 
     try {
@@ -331,7 +345,9 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
           }
         }
 
-        const { error: authError } = await supabase.auth.updateUser(authPayload)
+        const { error: authError } = await supabase.auth.updateUser(authPayload, {
+          emailRedirectTo: window.location.origin,
+        })
 
         if (authError) {
           toast.error("Could not update account", {
@@ -543,6 +559,8 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                 }
                 placeholder="Enter your email address"
                 disabled={isLoading || isSavingProfile}
+                required
+                pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
               />
             </div>
 

@@ -60,14 +60,14 @@ export async function sendTransactionalEmail(
   dataVariables?: EmailVariables
 ): Promise<LoopsResponse> {
   const apiKey = process.env.LOOPS_API_KEY
-  
+
   if (!apiKey) {
     console.error('LOOPS_API_KEY environment variable is required')
     return { success: false, message: 'Email service not configured' }
   }
 
   const transactionalId = EMAIL_TEMPLATES[template]
-  
+
   if (!transactionalId) {
     console.error(`Template ${template} not found in EMAIL_TEMPLATES`)
     return { success: false, message: `Template ${template} not configured` }
@@ -95,7 +95,7 @@ export async function sendTransactionalEmail(
     }
 
     const result = await response.json() as LoopsResponse
-    
+
     if (!result.success) {
       console.error('Loops email sending failed:', result.message)
       return { success: false, message: result.message || 'Email sending failed' }

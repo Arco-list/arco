@@ -11,11 +11,13 @@ export async function GET(request: NextRequest) {
   const redirectTo = resolveRedirectPath(redirectParam);
   const inviteType = requestUrl.searchParams.get('invite');
   const type = requestUrl.searchParams.get('type');
+  const message = requestUrl.searchParams.get('message');
   const callbackId = Math.random().toString(36).substring(7);
 
   logger.auth('callback', 'Auth callback started', {
     callbackId,
     hasCode: !!code,
+    hasMessage: !!message,
     redirectTo,
     type,
     url: requestUrl.href,

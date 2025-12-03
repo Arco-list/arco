@@ -3,7 +3,7 @@ import Link from "next/link"
 
 const footerLinks = {
   Products: ["Projects", "Professionals"], // Removed "Products" from the Products array
-  "For Business": ["List with us", "Pricing"], // Removed "Partner" from "For Business"
+  "For Business": ["List with us" /*, "Pricing" */], // Removed "Partner" from "For Business", Pricing commented out (Issue 8)
   Arco: ["About", "Help center"], // Removed "Blog" from "Arco"
 }
 
@@ -38,11 +38,13 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
                 <ul className="space-y-2">
                   {links.map((link) => (
                     <li key={link}>
+                      {/* COMMENTED OUT: Pricing link (Issue 8)
                       {link === "Pricing" ? (
                         <Link href="/pricing" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
-                      ) : link === "Projects" ? (
+                      ) : */}
+                      {link === "Projects" ? (
                         <Link href="/projects" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
