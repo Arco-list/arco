@@ -80,7 +80,7 @@ export default async function RootLayout({
         />
         <Script
           id="apollo-tracking"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           dangerouslySetInnerHTML={{
             __html: `
               function initApollo(){
@@ -100,7 +100,7 @@ export default async function RootLayout({
         />
         <Script
           id="posthog-analytics"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           dangerouslySetInnerHTML={{
             __html: `
               !function(t,e){
