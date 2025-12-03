@@ -331,7 +331,9 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
           }
         }
 
-        const { error: authError } = await supabase.auth.updateUser(authPayload)
+        const { error: authError } = await supabase.auth.updateUser(authPayload, {
+          emailRedirectTo: window.location.origin,
+        })
 
         if (authError) {
           toast.error("Could not update account", {

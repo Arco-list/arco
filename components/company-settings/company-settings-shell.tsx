@@ -820,6 +820,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
             </Button>
           </div>
 
+          {/* COMMENTED OUT: Upgrade banner (Issue 7)
           {showUpgradeBanner && (
               <div className="rounded-xl border border-border bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -833,6 +834,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               </div>
             </div>
           )}
+          */}
 
           {activeSection === "profile" ? (
             <div className="space-y-8">

@@ -676,8 +676,8 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
       const { data: professionals } = await supabase
         .from('project_professionals')
         .select(`
-          invited_email, 
-          status, 
+          invited_email,
+          status,
           professional_id,
           is_project_owner,
           professionals(
@@ -685,7 +685,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
           )
         `)
         .eq('project_id', project.id)
-      
+
       const processedProfessionals = (professionals || []).map(prof => ({
         email: prof.invited_email,
         status: prof.status,
@@ -693,7 +693,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
         is_project_owner: prof.is_project_owner,
         company_name: prof.professionals?.companies?.name || null
       }))
-      
+
       setApprovalProfessionals(processedProfessionals)
     } catch (error) {
       console.error('Failed to load professionals:', error)

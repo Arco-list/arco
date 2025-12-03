@@ -50,7 +50,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface">
+    <div className="flex min-h-screen flex-col bg-white">
       <DashboardHeader />
 
       <main className="flex-1 pt-20 pb-8">
@@ -80,8 +80,8 @@ export default function PricingPage() {
                     <span>Collect user reviews</span>
                   </li>
                 </ul>
-                <Button variant="quaternary" size="quaternary" className="w-full" disabled>
-                  Current plan
+                <Button variant="tertiary" size="tertiary" className="w-full" disabled={isPlus}>
+                  {isPlus ? "Downgrade to Basic" : "Current plan"}
                 </Button>
               </div>
             </div>

@@ -657,6 +657,18 @@ export default function ProfessionalsPage() {
 
     try {
       if (currentlySelected) {
+        // Delete all professional invites for this service category
+        const { error: professionalsError } = await supabase
+          .from("project_professionals")
+          .delete()
+          .eq("project_id", projectId)
+          .eq("invited_service_category_id", serviceId)
+
+        if (professionalsError) {
+          throw professionalsError
+        }
+
+        // Delete the service selection
         const { error } = await supabase
           .from("project_professional_services")
           .delete()

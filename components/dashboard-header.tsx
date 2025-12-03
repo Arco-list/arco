@@ -319,29 +319,15 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       {/* Divider */}
                       <div className="border-t border-border" />
 
-                      {/* Section 2: Upgrade plan & Billing - COMMENTED OUT */}
-                      {/* <div className="px-4 py-3">
+                      {/* Section 2: Pricing & Account */}
+                      <div className="px-4 py-3">
                         <Link
                           href="/dashboard/pricing"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Upgrade plan
+                          Pricing
                         </Link>
-                        <Link
-                          href="/dashboard/billing"
-                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
-                          onClick={() => setIsMenuOpen(false)}
-                        >
-                          Billing
-                        </Link>
-                      </div> */}
-
-                      {/* Divider */}
-                      {/* <div className="border-t border-border" /> */}
-
-                      {/* Section 2: Account */}
-                      <div className="px-4 py-3">
                         <Link
                           href="/dashboard/settings"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
@@ -349,7 +335,6 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                         >
                           Account
                         </Link>
-
                       </div>
 
                       {/* Divider */}
