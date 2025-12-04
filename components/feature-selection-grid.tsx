@@ -44,12 +44,12 @@ export function FeatureSelectionGrid({
   }
 
   if (features.length === 0) {
-    return <p className="text-sm text-text-secondary">No features available yet.</p>
+    return <p className="body-small text-text-secondary">No features available yet.</p>
   }
 
   return (
     <>
-      {errorMessage && <p className="text-sm text-amber-600 mb-4">{errorMessage}</p>}
+      {errorMessage && <p className="body-small text-amber-600 mb-4">{errorMessage}</p>}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {features.map((feature) => {
@@ -71,7 +71,7 @@ export function FeatureSelectionGrid({
               } ${isSaving ? "opacity-60" : ""}`}
             >
               <IconComponent className="w-6 h-6 text-foreground mb-2" />
-              <p className="font-medium text-foreground text-sm">{feature.name}</p>
+              <p className="font-medium text-foreground body-small">{feature.name}</p>
             </button>
           )
         })}

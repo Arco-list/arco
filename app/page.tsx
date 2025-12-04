@@ -350,9 +350,15 @@ async function loadLandingData() {
   professionalSpecialties.forEach((entry) => {
     const specialtySlug = normalizeSlug(entry.primary_specialty_slug)
     if (!specialtySlug) return
+
+    // Check if this is a child category with a parent
     const parentSlug = parentSlugByChildSlug.get(specialtySlug)
-    if (!parentSlug) return
-    professionalCategoryCounts.set(parentSlug, (professionalCategoryCounts.get(parentSlug) ?? 0) + 1)
+
+    // If it has a parent, count towards the parent category
+    // If no parent found, it's a root category - count it directly
+    const categoryToCount = parentSlug || specialtySlug
+
+    professionalCategoryCounts.set(categoryToCount, (professionalCategoryCounts.get(categoryToCount) ?? 0) + 1)
   })
 
   const professionalCategoryCards: ProfessionalCategoryCard[] = professionalCategoriesRaw
@@ -368,7 +374,7 @@ async function loadLandingData() {
       return {
         id: category.id,
         title: category.name,
-        href: `/professionals?categories=${encodeURIComponent(normalizedSlug)}`,
+        href: `/professionals?categories=${encodeURIComponent(category.id)}`,
         imageUrl: image,
         countLabel,
       }

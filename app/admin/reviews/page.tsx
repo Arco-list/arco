@@ -201,8 +201,8 @@ export default async function AdminReviewsPage({ searchParams }: AdminReviewsPag
         <div className="space-y-6 p-4 pt-0">
           <div className="flex flex-col gap-4">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Reviews</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="heading-4 font-semibold tracking-tight">Reviews</h1>
+              <p className="body-small text-muted-foreground">
                 Review homeowner feedback before it goes live on professional profiles.
               </p>
             </div>

@@ -70,15 +70,15 @@ export function HeroSection({ projects }: HeroSectionProps) {
       <div className="relative z-10 mx-auto w-full max-w-[1800px] px-4 pb-8 text-white md:px-8">
         <div className="max-w-2xl mb-4 md:mb-0">
           <Link href={currentImage.href}>
-            <h1 className="hover:opacity-90 transition-opacity cursor-pointer">
+            <h1 className="heading-1 hover:opacity-90 transition-opacity cursor-pointer">
               {heroTitle}
             </h1>
           </Link>
         </div>
 
-        <div className="flex items-center justify-between md:absolute md:bottom-8 md:right-8 md:justify-end gap-3 text-sm text-white/80">
+        <div className="flex items-center justify-between md:absolute md:bottom-8 md:right-8 md:justify-end gap-3 body-small text-white/80">
           {currentImage.caption ? (
-            <Link href={currentImage.href} className="text-sm font-medium text-white/90 hover:opacity-80 transition-opacity">
+            <Link href={currentImage.href} className="body-small font-medium text-white/90 hover:opacity-80 transition-opacity">
               {currentImage.caption}
             </Link>
           ) : null}

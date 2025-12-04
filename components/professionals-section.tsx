@@ -31,11 +31,11 @@ export function ProfessionalsSection() {
     <>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-black">Professionals who built it</h2>
+          <h2 className="heading-3 text-black">Professionals who built it</h2>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowModal(true)}
-              className="text-sm text-foreground hover:text-foreground font-medium"
+              className="body-small text-foreground hover:text-foreground font-medium"
             >
               View all
             </button>
@@ -89,11 +89,11 @@ export function ProfessionalsSection() {
                   </div>
                 </Link>
                 <Link href={professionalHref}>
-                  <p className="text-sm font-medium text-foreground hover:text-foreground mb-1">
+                  <p className="body-small font-medium text-foreground hover:text-foreground mb-1">
                     {professional.companyName}
                   </p>
                 </Link>
-                <p className="text-xs text-text-secondary">
+                <p className="body-small text-text-secondary">
                   {professional.serviceCategory}
                   {' · '}
                   <Link
@@ -112,7 +112,7 @@ export function ProfessionalsSection() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md mx-auto">
           <DialogHeader className="pb-4 border-b">
-            <DialogTitle className="text-lg font-semibold">Professionals who built it</DialogTitle>
+            <DialogTitle className="heading-5">Professionals who built it</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
@@ -132,18 +132,18 @@ export function ProfessionalsSection() {
                         className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded bg-surface flex items-center justify-center text-xs text-muted-foreground">
+                      <div className="w-12 h-12 rounded bg-surface flex items-center justify-center body-small text-muted-foreground">
                         Logo
                       </div>
                     )}
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link href={professionalHref}>
-                      <p className="text-sm font-medium text-foreground truncate hover:text-foreground">
+                      <p className="body-small font-medium text-foreground truncate hover:text-foreground">
                         {professional.companyName}
                       </p>
                     </Link>
-                    <p className="text-xs text-text-secondary">
+                    <p className="body-small text-text-secondary">
                       {professional.serviceCategory}
                       {' · '}
                       <Link

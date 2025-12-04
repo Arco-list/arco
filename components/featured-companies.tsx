@@ -44,7 +44,7 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
     <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h4>Featured professionals</h4>
+          <h4 className="heading-4">Featured professionals</h4>
           <div className="flex items-center gap-2">
             <Link href="/professionals" className={textButtonStyles}>
               View all
@@ -66,7 +66,7 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
           style={{ scrollSnapType: "x mandatory" }}
         >
           {companies.length === 0 ? (
-            <div className="col-span-full text-center py-8 text-text-secondary">
+            <div className="col-span-full text-center py-8 body-regular text-text-secondary">
               No featured companies available.
             </div>
           ) : (

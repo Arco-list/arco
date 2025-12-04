@@ -77,7 +77,7 @@ export function ListingStatusModal<TStatus extends string>({
       <DialogContent className="max-w-md border-none bg-transparent p-0 shadow-none">
         <div className="bg-white rounded-lg max-w-md w-full p-6">
           <div className="flex justify-between items-center mb-6">
-            <h4 className="text-foreground">
+            <h4 className="heading-5 text-foreground">
               {role === "contributor" ? "Update listing status" : "Listing status"}
             </h4>
             <button
@@ -97,13 +97,13 @@ export function ListingStatusModal<TStatus extends string>({
               className="w-16 h-16 rounded-lg object-cover bg-surface"
             />
             <div className="space-y-1">
-              <h6 className="text-foreground">{project.title}</h6>
-              <p className="text-sm text-text-secondary">{project.descriptor}</p>
+              <h6 className="heading-6 text-foreground">{project.title}</h6>
+              <p className="body-small text-text-secondary">{project.descriptor}</p>
             </div>
           </div>
 
           {isPendingAdminReview && (
-            <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-5 text-sm text-blue-800">
+            <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-5 body-small text-blue-800">
               <AlertTriangle className="h-5 w-5 mt-0.5 text-blue-600" />
               <div>
                 <p className="font-medium">Under review by the Arco team</p>
@@ -115,7 +115,7 @@ export function ListingStatusModal<TStatus extends string>({
           )}
 
           {limitReachedForNewActivation && !isPendingAdminReview && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-5 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-5 body-small text-amber-800">
               <AlertTriangle className="h-5 w-5 mt-0.5" />
               <div>
                 <p className="font-medium">You&apos;ve reached the Basic plan limit.</p>
@@ -177,15 +177,15 @@ export function ListingStatusModal<TStatus extends string>({
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-text-secondary">{description}</p>
+                      <p className="body-small text-text-secondary">{description}</p>
                       {showUpgradeLink && (
-                        <div className="flex items-center gap-2 text-sm text-amber-700">
+                        <div className="flex items-center gap-2 body-small text-amber-700">
                           <AlertTriangle className="h-4 w-4" />
                           <span>Upgrade to Plus to unlock this status.</span>
                         </div>
                       )}
                       {hitsActiveLimit && (
-                        <div className="flex items-center gap-2 text-sm text-red-600">
+                        <div className="flex items-center gap-2 body-small text-red-600">
                           <AlertTriangle className="h-4 w-4" />
                           <span>Basic plan allows up to three live listings.</span>
                         </div>
@@ -194,7 +194,7 @@ export function ListingStatusModal<TStatus extends string>({
                     {showUpgradeLink && (
                       <Link
                         href="/dashboard/pricing"
-                        className="text-sm font-semibold text-emerald-600 hover:text-emerald-700"
+                        className="body-small font-semibold text-emerald-600 hover:text-emerald-700"
                         onClick={(event) => event.stopPropagation()}
                       >
                         Upgrade

@@ -42,9 +42,9 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
     <section className="py-10 px-4 md:px-8 bg-white">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h4>Popular professional services</h4>
+          <h4 className="heading-4">Popular professional services</h4>
           <div className="flex items-center gap-2">
-            <Link href="/professionals" className="text-sm text-text-secondary hover:text-foreground transition-colors mr-2">
+            <Link href="/professionals" className="body-small text-text-secondary hover:text-foreground transition-colors mr-2">
               View all
             </Link>
             <div className="hidden md:flex items-center gap-2">
@@ -77,7 +77,7 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
-                <h2 className="absolute top-4 left-4 text-white">{category.title}</h2>
+                <h2 className="heading-2 absolute top-4 left-4 text-white">{category.title}</h2>
               </div>
             </Link>
           ))}

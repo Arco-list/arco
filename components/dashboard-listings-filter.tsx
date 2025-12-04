@@ -67,11 +67,11 @@ function FilterContent({
 }: FilterContentProps) {
   const isDesktop = variant === "desktop"
   const sectionSpacing = isDesktop ? "space-y-5" : "space-y-6"
-  const headingClass = isDesktop ? "text-sm font-medium mb-2" : "text-base font-medium mb-3"
+  const headingClass = isDesktop ? "heading-7 mb-2" : "heading-6 mb-3"
   const checkboxSpacing = isDesktop ? "space-y-2" : "space-y-3"
   const checkboxGap = isDesktop ? "gap-2.5" : "gap-3"
   const yearLayout = isDesktop ? "grid grid-cols-2 gap-3" : "space-y-4"
-  const yearLabelClass = isDesktop ? "text-xs text-text-secondary mb-1 block" : "text-sm text-text-secondary mb-1 block"
+  const yearLabelClass = isDesktop ? "text-xs text-text-secondary mb-1 block" : "body-small text-text-secondary mb-1 block"
 
   return (
     <div className={sectionSpacing}>
@@ -102,7 +102,7 @@ function FilterContent({
                 checked={selectedStatuses.includes(option.value)}
                 onChange={() => toggleStatus(option.value)}
               />
-              <span className="text-sm">{option.label}</span>
+              <span className="body-small">{option.label}</span>
             </label>
           ))}
         </div>
@@ -120,7 +120,7 @@ function FilterContent({
                 checked={selectedRoles.includes(option.value)}
                 onChange={() => toggleRole(option.value)}
               />
-              <span className="text-sm">{option.label}</span>
+              <span className="body-small">{option.label}</span>
             </label>
           ))}
         </div>
@@ -245,7 +245,7 @@ export function DashboardListingsFilter({
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 id="filter-dialog-title" className="text-lg font-semibold">
+              <h2 id="filter-dialog-title" className="heading-5">
                 Filters
               </h2>
               <button onClick={onClose} aria-label="Close filter dialog" className="p-1 hover:bg-surface rounded">
@@ -286,7 +286,7 @@ export function DashboardListingsFilter({
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border">
-            <h2 id="filter-drawer-title" className="text-lg font-semibold">
+            <h2 id="filter-drawer-title" className="heading-5">
               Filters
             </h2>
             <button onClick={onClose} aria-label="Close filter drawer" className="p-1 hover:bg-surface rounded">

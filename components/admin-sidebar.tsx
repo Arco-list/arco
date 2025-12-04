@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { NavUser } from "@/components/nav-user"
-import { Users, FolderOpen, UserCheck, Settings, MessageSquare } from "lucide-react"
+import { Users, FolderOpen, UserCheck, Settings, MessageSquare, FolderTree } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -42,6 +42,11 @@ const NAV_ITEMS = [
     icon: UserCheck,
   },
   {
+    title: "Categories",
+    url: "/admin/categories",
+    icon: FolderTree,
+  },
+  {
     title: "Settings",
     url: "/admin/settings",
     icon: Settings,
@@ -67,13 +72,13 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
       <Sidebar collapsible="icon" {...props}>
         <SidebarHeader>
           <div className="flex items-center gap-3 px-3 py-4">
-            <Link href="/" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3 min-w-0">
               <img
                 src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                 alt="Arco Logo"
-                className="h-8 w-auto"
+                className="h-8 w-auto max-w-full object-contain group-data-[collapsible=icon]:h-6"
               />
-              <span className="font-semibold text-lg">Admin</span>
+              <span className="font-semibold heading-6 group-data-[collapsible=icon]:hidden">Admin</span>
             </Link>
           </div>
         </SidebarHeader>
@@ -85,7 +90,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
-                    className={`h-12 px-4 text-base ${
+                    className={`h-12 px-4 body-regular ${
                       isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
                     }`}
                   >

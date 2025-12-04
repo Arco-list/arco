@@ -211,7 +211,7 @@ export default async function ProjectsPage() {
           </div>
         </header>
         <Separator className="w-full" />
-        <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex flex-1 flex-col gap-6 p-6 overflow-hidden">
           <AdminProjectsTable projects={projects} />
         </div>
       </SidebarInset>

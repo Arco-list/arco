@@ -100,8 +100,8 @@ export default function CreateCompanyPage() {
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-1">Create a company</h1>
-          <p className="text-sm text-text-secondary">Description</p>
+          <h1 className="heading-3 text-foreground mb-1">Create a company</h1>
+          <p className="body-small text-text-secondary">Description</p>
         </div>
 
         {/* Form */}
@@ -141,7 +141,7 @@ export default function CreateCompanyPage() {
               onChange={(e) => setCompanyName(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-text-secondary">Helper</p>
+            <p className="body-small text-text-secondary">Helper</p>
           </div>
 
           {/* Domain */}
@@ -156,7 +156,7 @@ export default function CreateCompanyPage() {
               onChange={(e) => setDomain(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-text-secondary">Your domain need to be the same as your account email address</p>
+            <p className="body-small text-text-secondary">Your domain need to be the same as your account email address</p>
           </div>
 
           {/* Email */}
@@ -172,7 +172,7 @@ export default function CreateCompanyPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-text-secondary">This email will be listed on your company page</p>
+            <p className="body-small text-text-secondary">This email will be listed on your company page</p>
           </div>
 
           {/* Phone */}
@@ -188,7 +188,7 @@ export default function CreateCompanyPage() {
               onChange={(e) => setPhone(e.target.value)}
               className="w-full"
             />
-            <p className="text-xs text-text-secondary">This phone number will be visible on your company page</p>
+            <p className="body-small text-text-secondary">This phone number will be visible on your company page</p>
           </div>
 
           {/* Primary Service */}
@@ -208,10 +208,10 @@ export default function CreateCompanyPage() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-text-secondary">Additional services can be added later</p>
+            <p className="body-small text-text-secondary">Additional services can be added later</p>
           </div>
 
-          {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+          {formError ? <p className="body-small text-red-600">{formError}</p> : null}
 
           {/* Submit Button */}
           <div className="flex justify-end pt-4">

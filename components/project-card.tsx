@@ -81,7 +81,7 @@ export const ProjectCard = memo(function ProjectCard({
       </div>
       <div className="mt-3">
         <div className="flex items-start gap-2 mb-1">
-          <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2 flex-1">
+          <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2 flex-1">
             {project.title}
           </p>
           <button
@@ -90,7 +90,7 @@ export const ProjectCard = memo(function ProjectCard({
             disabled={isMutatingLike}
             aria-pressed={isLiked}
             aria-label={isLiked ? "Unlike project" : "Like project"}
-            className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground disabled:opacity-70 flex-shrink-0"
+            className="flex items-center gap-1 body-small text-text-secondary hover:text-foreground disabled:opacity-70 flex-shrink-0"
           >
             <ThumbsUp
               className={`h-3 w-3 ${isLiked ? "text-red-500 fill-red-500" : ""}`}

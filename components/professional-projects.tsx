@@ -58,7 +58,7 @@ export function ProfessionalProjects({ projects, id }: ProfessionalProjectsProps
     return (
       <div id={id} className="w-full bg-white py-8 px-4 md:px-8">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text-secondary">
+          <div className="rounded-lg border border-dashed border-border p-8 text-center body-small text-text-secondary">
             Projects by this professional will appear here once they go live.
           </div>
         </div>
@@ -70,14 +70,14 @@ export function ProfessionalProjects({ projects, id }: ProfessionalProjectsProps
     <div id={id} className="w-full bg-white py-8 px-4 md:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold text-black">
+          <h2 className="heading-4 font-bold text-black">
             {projects.length} project{projects.length === 1 ? "" : "s"}
           </h2>
           <div className="relative">
             <Button
               variant="ghost"
               size="sm"
-              className="flex items-center gap-2 text-sm text-text-secondary hover:text-foreground"
+              className="flex items-center gap-2 body-small text-text-secondary hover:text-foreground"
               onClick={() => setIsSortDropdownOpen((open) => !open)}
             >
               Sort: {sortBy}
@@ -90,7 +90,7 @@ export function ProfessionalProjects({ projects, id }: ProfessionalProjectsProps
                   {sortOptions.map((option) => (
                     <button
                       key={option}
-                      className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                      className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
                       onClick={() => {
                         setSortBy(option)
                         setIsSortDropdownOpen(false)

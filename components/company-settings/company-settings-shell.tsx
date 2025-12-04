@@ -634,7 +634,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
             <DialogContent className="max-w-md border-none bg-transparent p-0 shadow-none">
               <div className="bg-white rounded-lg max-w-md w-full p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h4 className="font-semibold text-foreground">Company visibility</h4>
+                  <h4 className="heading-5 text-foreground">Company visibility</h4>
                   <button
                     type="button"
                     onClick={() => setStatusDialogOpen(false)}
@@ -660,8 +660,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     </div>
                   )}
                   <div className="space-y-1">
-                    <h3 className="font-medium text-foreground">{profileState.name}</h3>
-                    <p className="text-sm text-text-secondary">{statusDescription}</p>
+                    <h3 className="heading-6 text-foreground">{profileState.name}</h3>
+                    <p className="body-small text-text-secondary">{statusDescription}</p>
                   </div>
                 </div>
 
@@ -696,9 +696,9 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                           <div className="flex flex-1 flex-col gap-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <div className={cn("w-2 h-2 rounded-full", option.colorClass)} />
-                              <span className="font-medium text-foreground">{option.title}</span>
+                              <span className="body-small font-medium text-foreground">{option.title}</span>
                             </div>
-                            <p className="text-sm text-text-secondary">{option.description}</p>
+                            <p className="body-small text-text-secondary">{option.description}</p>
                           </div>
                         </div>
                       </label>
@@ -741,6 +741,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           <div>
             <Button
               variant="secondary"
+              size="lg"
               className="w-full"
               onClick={handlePreviewCompany}
             >
@@ -809,7 +810,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <h4 className="font-semibold text-foreground">{getCurrentSectionTitle()}</h4>
+              <h4 className="heading-5 text-foreground">{getCurrentSectionTitle()}</h4>
             </div>
             <Button
               variant="secondary"
@@ -876,8 +877,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h4 className="font-semibold text-foreground">Company information</h4>
-                    <p className="text-sm text-text-secondary">Update how your business appears on your public company page.</p>
+                    <h4 className="heading-5 text-foreground">Company information</h4>
+                    <p className="body-small text-text-secondary">Update how your business appears on your public company page.</p>
                   </div>
                   <div className="grid gap-6">
                     <div className="space-y-2">
@@ -900,7 +901,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   </div>
                   <div className="flex justify-end">
                     <Button
-                      className="bg-secondary text-white hover:bg-secondary-hover"
+                      variant="secondary"
+                      size="lg"
                       onClick={handleSaveProfile}
                       disabled={profilePending}
                     >
@@ -913,8 +915,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h4 className="font-semibold text-foreground">Contact information</h4>
-                    <p className="text-sm text-text-secondary">Displayed on your public page so homeowners can reach you.</p>
+                    <h4 className="heading-5 text-foreground">Contact information</h4>
+                    <p className="body-small text-text-secondary">Displayed on your public page so homeowners can reach you.</p>
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
@@ -1012,7 +1014,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   </div>
                   <div className="flex justify-end">
                     <Button
-                      className="bg-secondary text-white hover:bg-secondary-hover"
+                      variant="secondary"
+                      size="lg"
                       onClick={handleSaveContact}
                       disabled={contactPending}
                     >
@@ -1025,8 +1028,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h4 className="font-semibold text-foreground">Services & features</h4>
-                    <p className="text-sm text-text-secondary">Highlight what you specialise in so we can match you to relevant projects.</p>
+                    <h4 className="heading-5 text-foreground">Services & features</h4>
+                    <p className="body-small text-text-secondary">Highlight what you specialise in so we can match you to relevant projects.</p>
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2">
@@ -1120,7 +1123,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                   </div>
                   <div className="flex justify-end">
                     <Button
-                      className="bg-secondary text-white hover:bg-secondary-hover"
+                      variant="secondary"
+                      size="lg"
                       onClick={handleSaveServices}
                       disabled={servicesPending}
                     >
@@ -1134,8 +1138,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
               <div className={sectionCardClass}>
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h4 className="font-semibold text-foreground">Account status</h4>
-                    <p className="text-sm text-text-secondary">Control whether your company page is visible to homeowners.</p>
+                    <h4 className="heading-5 text-foreground">Account status</h4>
+                    <p className="body-small text-text-secondary">Control whether your company page is visible to homeowners.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-4">
                     {isCompanyActive ? (
@@ -1165,8 +1169,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
           ) : (
             <div className="space-y-8">
               <header>
-                <h4 className="font-semibold text-foreground">Company photos</h4>
-                <p className="text-sm text-text-secondary">
+                <h4 className="heading-5 text-foreground">Company photos</h4>
+                <p className="body-small text-text-secondary">
                   Showcase up to five photos on your company page. Drag to reorder; the first photo appears as the cover.
                 </p>
               </header>
@@ -1193,8 +1197,8 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                     onChange={handlePhotoInputChange}
                   />
                   <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                  <div className="text-sm font-medium text-foreground">Drag and drop</div>
-                  <div className="text-sm text-text-secondary">or browse for photos</div>
+                  <div className="body-small font-medium text-foreground">Drag and drop</div>
+                  <div className="body-small text-text-secondary">or browse for photos</div>
                   <Button
                     variant="quaternary" size="quaternary"
                     className="mt-2"
@@ -1258,7 +1262,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                         <div className="absolute top-8 right-0 bg-white rounded-lg shadow-lg border border-border py-1 z-10 min-w-[160px]">
                           <button
                             type="button"
-                            className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-surface transition-colors"
+                            className="w-full text-left px-3 py-2 body-small text-foreground hover:bg-surface transition-colors"
                             onClick={() => setCoverPhoto(photo.id)}
                             disabled={coverPhotoId === photo.id || photoPending}
                           >
@@ -1266,7 +1270,7 @@ export function CompanySettingsShell({ company, socialLinks, photos, services, p
                           </button>
                           <button
                             type="button"
-                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-surface transition-colors flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 body-small text-red-600 hover:bg-surface transition-colors flex items-center gap-2"
                             onClick={() => deletePhoto(photo.id)}
                             disabled={photoPending}
                           >

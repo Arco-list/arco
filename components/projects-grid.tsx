@@ -140,7 +140,7 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
         <div className="max-w-[1800px] mx-auto py-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h4 className="text-foreground">
+              <h4 className="heading-5 text-foreground">
                 {headingText}
               </h4>
             </div>
@@ -149,7 +149,7 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
               <Button
                 variant="ghost"
                 size="sm"
-                className="flex items-center gap-2 text-sm text-text-secondary hover:text-foreground"
+                className="flex items-center gap-2 body-small text-text-secondary hover:text-foreground"
                 onClick={() => setIsSortDropdownOpen((open) => !open)}
               >
                 Sort: {sortBy}
@@ -162,7 +162,7 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
                     {sortOptions.map((option) => (
                       <button
                         key={option}
-                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy(option)
                           setIsSortDropdownOpen(false)
@@ -183,7 +183,7 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
                 <button
                   key={`${tag.type}-${tag.value}-${index}`}
                   onClick={() => removeFilter(tag.type, tag.value)}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground text-sm rounded-full hover:bg-surface transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground body-small rounded-full hover:bg-surface transition-colors"
                 >
                   {tag.label}
                   <X className="h-3 w-3" />
@@ -264,14 +264,14 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
 
             {isLoading && (
               <div className="col-span-full flex justify-center py-12">
-                <p className="text-sm text-text-secondary">Loading projects…</p>
+                <p className="body-small text-text-secondary">Loading projects…</p>
               </div>
             )}
           </div>
 
           {!isLoading && sortedProjects.length === 0 && !error && (
             <div className="text-center py-12">
-              <p className="text-text-secondary">No projects found matching your filters.</p>
+              <p className="body-regular text-text-secondary">No projects found matching your filters.</p>
             </div>
           )}
 

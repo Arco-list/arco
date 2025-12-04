@@ -37,13 +37,13 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
         <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-muted/30 px-4 py-16">
           <div className="mx-auto w-full max-w-md rounded-2xl bg-background p-8 shadow-lg">
             <div className="mb-6 text-center space-y-2">
-              <h3>Create your account</h3>
-              <p className="text-muted-foreground text-sm">
+              <h3 className="heading-3">Create your account</h3>
+              <p className="body-small text-muted-foreground">
                 Sign up to save projects, collaborate with professionals, and manage your workspace.
               </p>
             </div>
             <SignupForm redirectTo={redirectTo} invitedEmail={invitedEmail} />
-            <div className="mt-6 text-sm text-center text-muted-foreground">
+            <div className="mt-6 body-small text-center text-muted-foreground">
               <span>Already have an account?</span>{" "}
               <Link href={`/login${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`} className="text-primary font-medium">
                 Sign in instead

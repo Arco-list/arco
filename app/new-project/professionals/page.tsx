@@ -958,19 +958,19 @@ export default function ProfessionalsPage() {
         </div>
 
         {projectLoadError && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 body-small text-red-700">
             {projectLoadError}
           </div>
         )}
 
         {serviceLoadError && (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 body-small text-amber-800">
             {serviceLoadError}
           </div>
         )}
 
         {mutationError && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 body-small text-red-700">
             {mutationError}
           </div>
         )}
@@ -1061,14 +1061,14 @@ function ProfessionalsHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+              className="body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
             >
               Questions?
             </a>
             <button
               onClick={onSaveAndExit}
               disabled={isDisabled}
-              className="rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-sm font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
+              className="rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 body-small font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               {isDisabled ? "Saving..." : "Save and Exit"}
             </button>
@@ -1090,7 +1090,7 @@ function IntroStep({ isLoading }: { isLoading: boolean }) {
           <div className="mb-8">
             <MailPlus className="h-12 w-12 text-foreground" />
           </div>
-          <h1 className="h3 mb-4">Share who helped you realise it</h1>
+          <h1 className="heading-3 mb-4">Share who helped you realise it</h1>
           <p className="text-lg text-text-secondary">Add the professionals that contributed to your project and we&apos;ll invite them once you publish.</p>
         </div>
       )}
@@ -1111,7 +1111,7 @@ function ServiceSelectionStep({
 }) {
   if (services.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-6 text-sm text-text-secondary">
+      <div className="rounded-lg border border-border bg-surface p-6 body-small text-text-secondary">
         No professional services available yet. Try again later.
       </div>
     )
@@ -1120,7 +1120,7 @@ function ServiceSelectionStep({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="h3 mb-4">Tell us what professionals helped you realise it</h1>
+        <h1 className="heading-3 mb-4">Tell us what professionals helped you realise it</h1>
         <p className="text-lg text-text-secondary">You can add more services after you publish your project.</p>
       </div>
 
@@ -1143,7 +1143,7 @@ function ServiceSelectionStep({
                 aria-hidden
                 className={`mb-3 h-6 w-6 ${isSelected ? "text-foreground" : "text-foreground"}`}
               />
-              <span className="mt-2 text-sm font-medium text-foreground">{service.name}</span>
+              <span className="mt-2 body-small font-medium text-foreground">{service.name}</span>
             </button>
           )
         })}
@@ -1192,10 +1192,10 @@ function InviteStep({
           <AlertTriangle className="h-6 w-6 text-amber-500" />
           <div>
             <p className="font-medium text-foreground">No professional services selected yet</p>
-            <p className="mt-1 text-sm text-text-secondary">Select one or more services first to invite your collaborators.</p>
+            <p className="mt-1 body-small text-text-secondary">Select one or more services first to invite your collaborators.</p>
             <button
               onClick={goToServiceSelection}
-              className="mt-4 inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface"
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 body-small font-medium text-foreground transition-colors hover:bg-surface"
             >
               <Plus className="h-4 w-4" /> Add professional services
             </button>
@@ -1209,7 +1209,7 @@ function InviteStep({
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="h3 mb-2">Invite professionals</h1>
+          <h1 className="heading-3 mb-2">Invite professionals</h1>
           <p className="text-lg text-text-secondary">We&apos;ll email them once your project is published.</p>
         </div>
         <button
@@ -1257,7 +1257,7 @@ function InviteStep({
                     <IconComponent aria-hidden className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-foreground">{service.name}</h2>
+                    <h2 className="body-regular font-semibold text-foreground">{service.name}</h2>
                     {service.parentName && <p className="text-xs text-text-secondary">{service.parentName}</p>}
                   </div>
                 </div>
@@ -1303,7 +1303,7 @@ function InviteStep({
                           type="button"
                           onClick={() => onInvite(service.id)}
                           disabled={isBusy}
-                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-l-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 body-small font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <MailPlus className="h-4 w-4" />
                           Invite professional
@@ -1332,7 +1332,7 @@ function InviteStep({
                               ))
                             ) : (
                               <DropdownMenuItem disabled>
-                                <div className="text-sm text-text-secondary">No professionals available</div>
+                                <div className="body-small text-text-secondary">No professionals available</div>
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -1343,7 +1343,7 @@ function InviteStep({
                         type="button"
                         onClick={() => onInvite(service.id)}
                         disabled={isBusy}
-                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 px-4 py-2 body-small font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <MailPlus className="h-4 w-4" />
                         Invite professional
@@ -1371,7 +1371,7 @@ function InviteStep({
 
                           return (
                             <div key={invite.id} className="rounded-xl p-3">
-                              <p className="text-sm font-medium text-foreground">{selectedProf.company.name}</p>
+                              <p className="body-small font-medium text-foreground">{selectedProf.company.name}</p>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}>
                                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -1396,7 +1396,7 @@ function InviteStep({
                           const statusMeta = getInviteStatusMeta(invite.status)
                           return (
                             <div key={invite.id} className="rounded-xl p-3">
-                              <p className="text-sm font-medium text-foreground">{invite.email}</p>
+                              <p className="body-small font-medium text-foreground">{invite.email}</p>
                               <div className="mt-2 flex items-center justify-between gap-3">
                                 <span
                                   className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.className}`}
@@ -1467,7 +1467,7 @@ function PreviewStep({
   if (!project) {
     return (
       <div className="rounded-lg border border-border bg-surface p-6">
-        <div className="flex items-start gap-3 text-sm text-text-secondary">
+        <div className="flex items-start gap-3 body-small text-text-secondary">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
           <div>
             <p className="font-medium text-foreground">We need a bit more info</p>
@@ -1492,7 +1492,7 @@ function PreviewStep({
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
-        <h1 className="h3">Yeah! It&apos;s time to showcase your work</h1>
+        <h1 className="heading-3">Yeah! It&apos;s time to showcase your work</h1>
         <p className="text-text-secondary">This is what homeowners will see when they explore your project.</p>
       </div>
 
@@ -1508,13 +1508,13 @@ function PreviewStep({
             <button
               onClick={onPreview}
               disabled={!hasPreview}
-              className="absolute top-3 left-3 rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 text-sm font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
+              className="absolute top-3 left-3 rounded-full bg-[#F2F2F2] text-[#222222] hover:bg-[#EBEBEB] px-[18px] py-3 body-small font-medium leading-[1.2] tracking-[0] transition-colors disabled:cursor-not-allowed disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
             >
               Show preview
             </button>
           </div>
           <div className="mt-3">
-            <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">
+            <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">
               {subtitleParts.length > 0 && subtitleParts.join(" ")}
               {project.locationLabel && ` in ${project.locationLabel}`}
             </p>
@@ -1540,7 +1540,7 @@ function PreviewStep({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Your listing will be reviewed</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">
+                <p className="body-small text-text-secondary leading-relaxed">
                   Our team will review your listing before it goes live. Once approved, you&apos;ll receive a notification and you can return here to make updates anytime.
                 </p>
               </div>
@@ -1554,7 +1554,7 @@ function PreviewStep({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Bring your collaborators onboard</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">
+                <p className="body-small text-text-secondary leading-relaxed">
                   Each professional you invite will receive an email to join as a contributor. More collaborators mean more exposure, so get your invites accepted to maximize your reach.
                 </p>
               </div>
@@ -1620,7 +1620,7 @@ function ProfessionalDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40">
+        <button className="w-full rounded-md border border-border px-3 py-2 text-left body-small focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40">
           {selectedProfessional ? selectedProfessional.company.name : "Choose professional..."}
         </button>
       </DropdownMenuTrigger>
@@ -1632,7 +1632,7 @@ function ProfessionalDropdown({
           >
             <div>
               <div className="font-medium">{professional.company.name}</div>
-              <div className="text-sm text-text-secondary">
+              <div className="body-small text-text-secondary">
                 {professional.name} - {professional.title}
               </div>
               {(professional.company.city || professional.company.country) && (
@@ -1684,7 +1684,7 @@ function InviteModal({
               {isEditing ? "Update invite" : "Invite professional"}
             </h3>
             {service && (
-              <p className="mt-1 text-sm text-text-secondary">Service: {service.name}</p>
+              <p className="mt-1 body-small text-text-secondary">Service: {service.name}</p>
             )}
           </div>
           <button onClick={onClose} className="rounded-md p-2 text-text-secondary transition-colors hover:bg-surface">
@@ -1694,7 +1694,7 @@ function InviteModal({
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="invite-email" className="mb-2 block text-sm font-medium text-foreground">
+            <label htmlFor="invite-email" className="mb-2 block body-small font-medium text-foreground">
               Company email address
             </label>
             <input
@@ -1703,16 +1703,16 @@ function InviteModal({
               value={email}
               onChange={(event) => onEmailChange(event.target.value)}
               placeholder="name@company.com"
-              className={`w-full rounded-md border px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
+              className={`w-full rounded-md border px-3 py-2 body-small focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
                 error ? 'border-red-300' : 'border-border'
               }`}
             />
             {error && (
-              <p className="mt-2 text-sm text-red-600">
+              <p className="mt-2 body-small text-red-600">
                 {error}
               </p>
             )}
-            <p className="mt-2 text-sm text-text-secondary">
+            <p className="mt-2 body-small text-text-secondary">
               No invites are sent until the project is approved by Arco.
             </p>
           </div>

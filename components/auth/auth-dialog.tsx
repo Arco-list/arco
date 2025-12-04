@@ -62,7 +62,7 @@ export const AuthDialog = ({ open, onOpenChange, mode = "login", redirectTo }: A
         {currentMode === "login" && (
           <div className="space-y-4">
             <LoginForm redirectTo={safeRedirectTo} onSuccess={() => handleClose(false)} />
-            <div className="text-sm text-muted-foreground text-center">
+            <div className="body-small text-muted-foreground text-center">
               <span>Need an account? </span>
               <Button
                 type="button"
@@ -89,7 +89,7 @@ export const AuthDialog = ({ open, onOpenChange, mode = "login", redirectTo }: A
         {currentMode === "signup" && (
           <div className="space-y-4">
             <SignupForm redirectTo={safeRedirectTo} onSuccess={() => handleClose(false)} />
-            <div className="text-sm text-muted-foreground text-center">
+            <div className="body-small text-muted-foreground text-center">
               <span>Already have an account? </span>
               <Button
                 type="button"
@@ -106,7 +106,7 @@ export const AuthDialog = ({ open, onOpenChange, mode = "login", redirectTo }: A
         {currentMode === "otp" && (
           <div className="space-y-4">
             <OtpForm redirectTo={safeRedirectTo} onSuccess={() => handleClose(false)} />
-            <div className="text-sm text-muted-foreground text-center">
+            <div className="body-small text-muted-foreground text-center">
               <Button
                 type="button"
                 variant="link"

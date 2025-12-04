@@ -26,7 +26,7 @@ export const ProjectDescriptionEditor = ({
   placeholder = "Describe the project, its scope, and unique details",
 }: ProjectDescriptionEditorProps) => {
   const getFormattingButtonClass = (active: boolean) => {
-    return `flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-gray-900 ${
+    return `flex h-8 w-8 items-center justify-center rounded-md body-small font-semibold focus:outline-none focus:ring-2 focus:ring-gray-900 ${
       active ? "bg-surface text-foreground" : "text-text-secondary hover:bg-surface"
     } disabled:cursor-not-allowed disabled:opacity-40`
   }
@@ -100,29 +100,29 @@ export const ProjectDescriptionEditor = ({
             <EditorContent
               editor={editor}
               aria-label="Project description editor"
-              className="px-4 py-3 text-foreground focus:outline-none [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:break-words [&_.ProseMirror]:outline-none [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:text-base [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:space-y-4 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:pl-1"
+              className="px-4 py-3 text-foreground focus:outline-none [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:break-words [&_.ProseMirror]:outline-none [&_.ProseMirror]:focus:outline-none [&_.ProseMirror]:body-regular [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:space-y-4 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-6 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-6 [&_.ProseMirror_li]:pl-1"
             />
             {plainTextLength === 0 && (
-              <span className="pointer-events-none absolute left-4 top-3 text-sm text-muted-foreground">{placeholder}</span>
+              <span className="pointer-events-none absolute left-4 top-3 body-small text-muted-foreground">{placeholder}</span>
             )}
           </div>
         </>
       ) : (
-        <div className="px-4 py-6 text-sm text-text-secondary">Loading editor…</div>
+        <div className="px-4 py-6 body-small text-text-secondary">Loading editor…</div>
       )}
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2">
-        <p className="text-sm text-text-secondary">
+        <p className="body-small text-text-secondary">
           Provide a detailed description of your project, including key features and design elements
         </p>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-4 body-small text-muted-foreground">
           <span>{wordCount} words</span>
           <span className={isTooShort ? "text-red-600" : "text-muted-foreground"}>
             {plainTextLength}/{minDescriptionLength}+ characters
           </span>
         </div>
       </div>
-      {validationError && <p className="px-4 pb-4 text-sm text-red-600">{validationError}</p>}
+      {validationError && <p className="px-4 pb-4 body-small text-red-600">{validationError}</p>}
     </div>
   )
 }

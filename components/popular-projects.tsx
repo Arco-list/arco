@@ -56,7 +56,7 @@ export function PopularProjects({ projects }: PopularProjectsProps) {
     <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h4>Be inspired by amazing projects</h4>
+          <h4 className="heading-4">Be inspired by amazing projects</h4>
           <div className="flex items-center gap-2">
             <Link href="/projects" className={textButtonStyles}>
               View all

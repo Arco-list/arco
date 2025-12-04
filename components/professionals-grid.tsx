@@ -110,13 +110,13 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
       <div className="px-4 md:px-8">
         <div className="max-w-[1800px] mx-auto py-8">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-foreground">{getPageTitle()}</h4>
+            <h4 className="heading-5 text-foreground">{getPageTitle()}</h4>
 
             <div className="relative">
               <Button
                 variant="ghost"
                 size="sm"
-                className="flex items-center gap-2 text-sm text-text-secondary hover:text-foreground"
+                className="flex items-center gap-2 body-small text-text-secondary hover:text-foreground"
                 onClick={() => setIsSortDropdownOpen((open) => !open)}
               >
                 Sort: {sortBy}
@@ -129,7 +129,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
                     {sortOptions.map((option) => (
                       <button
                         key={option}
-                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
                         onClick={() => handleSortSelect(option)}
                       >
                         {option}
@@ -142,14 +142,14 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
           </div>
 
           {isLoading && (
-            <div className="flex items-center gap-2 text-sm text-text-secondary mb-4">
+            <div className="flex items-center gap-2 body-small text-text-secondary mb-4">
               <Loader2 className="h-4 w-4 animate-spin" />
               Updating results…
             </div>
           )}
 
           {error && (
-            <div className="mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 body-small text-red-700">
               <span>{error}</span>
               <Button variant="quaternary" size="quaternary" onClick={refetch} className="text-red-700 border-red-200">
                 Retry
@@ -163,7 +163,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
                 <button
                   key={`${tag.type}-${tag.value}-${index}`}
                   onClick={() => removeFilter(tag.type, tag.value)}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground text-sm rounded-full hover:bg-surface transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground body-small rounded-full hover:bg-surface transition-colors"
                 >
                   {tag.label}
                   <X className="h-3 w-3" />
@@ -197,7 +197,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
           </div>
 
           {!isLoading && sortedProfessionals.length === 0 && (
-            <div className="text-center text-text-secondary">No professionals match your filters yet. Try adjusting them.</div>
+            <div className="text-center body-regular text-text-secondary">No professionals match your filters yet. Try adjusting them.</div>
           )}
 
           {hasMore && (

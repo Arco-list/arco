@@ -42,9 +42,9 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
     <section className="py-16 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-semibold text-foreground">Featured professionals</h2>
+          <h2 className="heading-4 font-semibold text-foreground">Featured professionals</h2>
           <div className="flex items-center gap-2">
-            <Link href="/professionals" className="text-sm text-text-secondary hover:text-foreground transition-colors mr-2">
+            <Link href="/professionals" className="body-small text-text-secondary hover:text-foreground transition-colors mr-2">
               View all
             </Link>
             <div className="hidden md:flex items-center gap-2">
@@ -64,7 +64,7 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
           style={{ scrollSnapType: "x mandatory" }}
         >
           {professionals.length === 0 ? (
-            <div className="col-span-full text-center py-8 text-text-secondary">
+            <div className="col-span-full text-center py-8 body-regular text-text-secondary">
               No featured professionals available.
             </div>
           ) : (
@@ -109,21 +109,21 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
                     </button>
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-lg font-medium text-foreground group-hover:text-text-secondary transition-colors">
+                    <h3 className="heading-5 font-medium text-foreground group-hover:text-text-secondary transition-colors">
                       {professional.name}
                     </h3>
-                    <p className="text-sm text-text-secondary">{professional.location}</p>
+                    <p className="body-small text-text-secondary">{professional.location}</p>
                     <div className="flex items-center gap-2">
                       {professional.rating > 0 ? (
                         <>
                           <div className="flex items-center gap-1">
                             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm font-medium text-foreground">{professional.rating.toFixed(1)}</span>
+                            <span className="body-small font-medium text-foreground">{professional.rating.toFixed(1)}</span>
                           </div>
-                          <span className="text-sm text-text-secondary">({professional.reviews} reviews)</span>
+                          <span className="body-small text-text-secondary">({professional.reviews} reviews)</span>
                         </>
                       ) : (
-                        <span className="text-sm text-text-secondary">No reviews yet</span>
+                        <span className="body-small text-text-secondary">No reviews yet</span>
                       )}
                     </div>
                   </div>

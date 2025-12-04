@@ -1279,7 +1279,7 @@ export default function NewProjectPage() {
       <main className="container mx-auto px-4 py-16 max-w-4xl pb-32">
         <div className="text-left">
           {saveError && (
-            <div className="mb-8 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="mb-8 rounded-md border border-red-200 bg-red-50 p-4 body-small text-red-700">
               {saveError}
             </div>
           )}
@@ -1295,7 +1295,7 @@ export default function NewProjectPage() {
               </div>
 
               {/* Main heading */}
-              <h1 className="h3 mb-6">What project have you realised?</h1>
+              <h1 className="heading-3 mb-6">What project have you realised?</h1>
 
               <ProjectBasicsFields
                 formData={formData}
@@ -1317,7 +1317,7 @@ export default function NewProjectPage() {
           {currentStep === 2 && (
             <>
               {/* Main heading */}
-              <h1 className="h3 mb-12">
+              <h1 className="heading-3 mb-12">
                 Describe the location and materials used
               </h1>
 
@@ -1336,7 +1336,7 @@ export default function NewProjectPage() {
           {currentStep === 3 && (
             <>
               {/* Main heading */}
-              <h1 className="h3 mb-12">Add some details</h1>
+              <h1 className="heading-3 mb-12">Add some details</h1>
 
               <ProjectMetricsFields
                 formData={formData}
@@ -1354,7 +1354,7 @@ export default function NewProjectPage() {
           {currentStep === 4 && (
             <>
               {/* Main heading */}
-              <h1 className="h3 mb-12">
+              <h1 className="heading-3 mb-12">
                 Give your project a title and description
               </h1>
 
@@ -1375,7 +1375,7 @@ export default function NewProjectPage() {
           {currentStep === 5 && (
             <>
               {/* Main heading */}
-              <h1 className="h3 mb-12">Where is the project located?</h1>
+              <h1 className="heading-3 mb-12">Where is the project located?</h1>
 
               {/* Form */}
               <div className="space-y-8">
@@ -1403,21 +1403,21 @@ export default function NewProjectPage() {
                       </div>
                     </>
                   ) : (
-                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 body-small text-amber-800">
                       Add your Google Maps API key to `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to enable address
                       autocomplete and map selection.
                     </div>
                   )}
-                  <p className="text-sm text-text-secondary mt-2">
+                  <p className="body-small text-text-secondary mt-2">
                     Search for your project location or drag the pin on the map to fine-tune it
                   </p>
-                  {mapsError && <p className="text-sm text-red-600 mt-2">{mapsError}</p>}
+                  {mapsError && <p className="body-small text-red-600 mt-2">{mapsError}</p>}
                   {validationErrors.address && (
-                    <p className="text-sm text-red-600 mt-2">{validationErrors.address}</p>
+                    <p className="body-small text-red-600 mt-2">{validationErrors.address}</p>
                   )}
                   <div className="mt-4 rounded-lg border border-border bg-surface p-4">
-                    <p className="text-sm font-medium text-foreground">Selected address</p>
-                    <p className="mt-1 text-sm text-foreground">
+                    <p className="body-small font-medium text-foreground">Selected address</p>
+                    <p className="mt-1 body-small text-foreground">
                       {formData.address
                         ? formData.address
                         : "Start typing in the search box or drag the map pin to capture the address."}
@@ -1428,10 +1428,10 @@ export default function NewProjectPage() {
                 {/* Share exact location toggle */}
                 <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
                   <div>
-                    <h3 className="text-base font-medium text-foreground mb-1">
+                    <h3 className="body-regular font-medium text-foreground mb-1">
                       Share the exact location of the project
                     </h3>
-                    <p className="text-sm text-text-secondary">Allow others to see the precise location of your project</p>
+                    <p className="body-small text-text-secondary">Allow others to see the precise location of your project</p>
                   </div>
                   <button
                     type="button"
@@ -1506,7 +1506,7 @@ function NewProjectHeader({
               href="/help-center"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-foreground hover:text-text-secondary transition-colors"
+              className="body-small font-medium text-foreground hover:text-text-secondary transition-colors"
             >
               Questions?
             </a>

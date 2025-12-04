@@ -90,7 +90,7 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
             {...form.register("firstName")}
           />
           {form.formState.errors.firstName && (
-            <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
+            <p className="body-small text-destructive">{form.formState.errors.firstName.message}</p>
           )}
         </div>
         <div className="space-y-2">
@@ -104,7 +104,7 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
             {...form.register("lastName")}
           />
           {form.formState.errors.lastName && (
-            <p className="text-sm text-destructive">{form.formState.errors.lastName.message}</p>
+            <p className="body-small text-destructive">{form.formState.errors.lastName.message}</p>
           )}
         </div>
       </div>
@@ -121,12 +121,12 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
           {...form.register("email")}
         />
         {invitedEmail && (
-          <p className="text-sm text-muted-foreground">
+          <p className="body-small text-muted-foreground">
             This email was used for your professional invitation. You can change it later in your profile settings.
           </p>
         )}
         {form.formState.errors.email && (
-          <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+          <p className="body-small text-destructive">{form.formState.errors.email.message}</p>
         )}
       </div>
       <div className="space-y-2">
@@ -140,7 +140,7 @@ export const SignupForm = ({ redirectTo, invitedEmail, onSuccess }: SignupFormPr
           {...form.register("password")}
         />
         {form.formState.errors.password && (
-          <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+          <p className="body-small text-destructive">{form.formState.errors.password.message}</p>
         )}
         {passwordValue && (
           <ul className="text-xs text-muted-foreground space-y-1">

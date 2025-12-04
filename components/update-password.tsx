@@ -116,8 +116,8 @@ const UpdatePassword = ({
             onSubmit={handleSubmit}
             className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md"
           >
-            <h3>{heading}</h3>
-            <p className="text-muted-foreground text-sm text-center">{description}</p>
+            <h3 className="heading-3">{heading}</h3>
+            <p className="body-small text-muted-foreground text-center">{description}</p>
             <Input
               type="password"
               placeholder="New Password"
@@ -142,7 +142,7 @@ const UpdatePassword = ({
               {isLoading ? "Updating..." : buttonText}
             </Button>
           </form>
-          <div className="text-muted-foreground flex justify-center gap-1 text-sm">
+          <div className="body-small text-muted-foreground flex justify-center gap-1">
             <p>Remember your password?</p>
             <Link href={loginUrl} className="text-primary font-medium hover:underline">
               Login

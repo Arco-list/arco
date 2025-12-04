@@ -41,7 +41,7 @@ export function ProjectHighlights() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-black">Highlights</h2>
+        <h2 className="heading-3 font-bold text-black">Highlights</h2>
         <div className="hidden md:flex gap-2">
           <button
             onClick={scrollLeft}
@@ -80,7 +80,7 @@ export function ProjectHighlights() {
                 className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             </div>
-            <p className="text-sm font-medium text-foreground">{highlight.title}</p>
+            <p className="body-small font-medium text-foreground">{highlight.title}</p>
             {highlight.description && <p className="text-xs text-text-secondary">{highlight.description}</p>}
           </button>
         ))}

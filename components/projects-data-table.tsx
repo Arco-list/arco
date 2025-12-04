@@ -113,7 +113,7 @@ const projectsColumns: ColumnDef<z.infer<typeof projectSchema>>[] = [
         </div>
         <div>
           <div className="font-medium">{row.original.title}</div>
-          <div className="text-sm text-muted-foreground">{row.original.subType}</div>
+          <div className="body-small text-muted-foreground">{row.original.subType}</div>
         </div>
       </div>
     ),
@@ -140,12 +140,12 @@ const projectsColumns: ColumnDef<z.infer<typeof projectSchema>>[] = [
   {
     accessorKey: "year",
     header: "Year",
-    cell: ({ row }) => <div className="text-sm">{row.original.year}</div>,
+    cell: ({ row }) => <div className="body-small">{row.original.year}</div>,
   },
   {
     accessorKey: "dateCreated",
     header: "Date Created",
-    cell: ({ row }) => <div className="text-sm">{new Date(row.original.dateCreated).toLocaleDateString()}</div>,
+    cell: ({ row }) => <div className="body-small">{new Date(row.original.dateCreated).toLocaleDateString()}</div>,
   },
   {
     id: "actions",
@@ -221,7 +221,7 @@ const seoColumns: ColumnDef<z.infer<typeof projectSchema>>[] = [
     accessorKey: "metaTitle",
     header: "Meta Title",
     cell: ({ row }) => (
-      <div className="max-w-xs truncate text-sm" title={row.original.metaTitle}>
+      <div className="max-w-xs truncate body-small" title={row.original.metaTitle}>
         {row.original.metaTitle}
       </div>
     ),
@@ -230,7 +230,7 @@ const seoColumns: ColumnDef<z.infer<typeof projectSchema>>[] = [
     accessorKey: "metaDescription",
     header: "Meta Description",
     cell: ({ row }) => (
-      <div className="max-w-sm truncate text-sm text-muted-foreground" title={row.original.metaDescription}>
+      <div className="max-w-sm truncate body-small text-muted-foreground" title={row.original.metaDescription}>
         {row.original.metaDescription}
       </div>
     ),
@@ -239,7 +239,7 @@ const seoColumns: ColumnDef<z.infer<typeof projectSchema>>[] = [
     accessorKey: "urlSlug",
     header: "URL Slug",
     cell: ({ row }) => (
-      <div className="max-w-xs truncate text-sm font-mono" title={row.original.urlSlug}>
+      <div className="max-w-xs truncate body-small font-mono" title={row.original.urlSlug}>
         /{row.original.urlSlug}
       </div>
     ),
@@ -436,13 +436,13 @@ export function ProjectsDataTable({
         </div>
 
         <div className="flex items-center justify-between px-4">
-          <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
+          <div className="text-muted-foreground hidden flex-1 body-small lg:flex">
             {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} project(s)
             selected.
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium">
+              <Label htmlFor="rows-per-page" className="heading-7">
                 Rows per page
               </Label>
               <Select
@@ -463,7 +463,7 @@ export function ProjectsDataTable({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
+            <div className="flex w-fit items-center justify-center body-small font-medium">
               Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
             </div>
             <div className="ml-auto flex items-center gap-2 lg:ml-0">

@@ -11,7 +11,7 @@ export default function DashboardSettings() {
 
       <main className="flex-1 pt-20 pb-8">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <h3 className="mb-8 font-semibold text-foreground">Settings</h3>
+          <h3 className="heading-4 mb-8 text-foreground">Settings</h3>
 
           <AccountSettingsForm />
         </div>

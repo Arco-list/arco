@@ -18,7 +18,7 @@ type FeatureCheckboxGridProps = {
 
 export const FeatureCheckboxGrid = ({ title, items, selectedValues, onChange, error }: FeatureCheckboxGridProps) => (
   <div>
-    <label className="block text-base font-medium text-foreground mb-4">
+    <label className="block body-regular font-medium text-foreground mb-4">
       {title} <span className="text-red-500">*</span>
     </label>
     <div className="grid grid-cols-2 gap-4">
@@ -43,6 +43,6 @@ export const FeatureCheckboxGrid = ({ title, items, selectedValues, onChange, er
         )
       })}
     </div>
-    {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+    {error && <p className="body-small text-red-600 mt-3">{error}</p>}
   </div>
 )

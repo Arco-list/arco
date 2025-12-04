@@ -20,10 +20,10 @@ export function ProjectInfo() {
     <div className="space-y-4">
       {/* Project title and description */}
       <div className="space-y-2">
-        <h1 className="text-2xl md:text-3xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', lineHeight: '1.2' }}>{info.title}</h1>
-        {info.subtitle && <h2 className="text-base md:text-xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.3px', lineHeight: '1.2' }}>{info.subtitle}</h2>}
+        <h1 className="heading-2 md:heading-1 font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', lineHeight: '1.2' }}>{info.title}</h1>
+        {info.subtitle && <h2 className="body-large md:heading-5 font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.3px', lineHeight: '1.2' }}>{info.subtitle}</h2>}
         {info.sponsoredLabel && (
-          <p className="text-sm text-text-secondary">
+          <p className="body-small text-text-secondary">
             {info.sponsoredLabel}
           </p>
         )}

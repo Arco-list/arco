@@ -141,7 +141,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
             <div className="hidden items-center md:flex">
               <Link
                 href="/projects"
-                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                className={`body-small font-medium px-3 py-1.5 rounded-full ${
                   pathname.startsWith("/projects")
                     ? "text-red-500"
                     : transparent && !isScrolled
@@ -153,7 +153,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               </Link>
               <Link
                 href="/professionals"
-                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                className={`body-small font-medium px-3 py-1.5 rounded-full ${
                   pathname.startsWith("/professionals")
                     ? "text-red-500"
                     : transparent && !isScrolled
@@ -179,7 +179,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               <>
                 <Link
                   href={hasProfessionalRole ? "/dashboard/company" : "/list-with-us"}
-                  className={`hidden md:block text-sm font-medium px-3 py-1.5 rounded-full ${
+                  className={`hidden md:block body-small font-medium px-3 py-1.5 rounded-full ${
                     transparent && !isScrolled
                       ? `${textColor} hover:bg-white/10`
                       : `${textColor} hover:bg-surface`
@@ -195,7 +195,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   }`}
                   onClick={toggleMenu}
                 >
-                  <span className="hidden text-sm md:inline">{menuLabel}</span>
+                  <span className="hidden body-small md:inline">{menuLabel}</span>
                   <Menu className="h-5 w-5" />
                 </button>
               </>
@@ -203,7 +203,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
               <>
                 <Link
                   href="/list-with-us"
-                  className={`hidden md:block text-sm font-medium px-3 py-1.5 rounded-full ${
+                  className={`hidden md:block body-small font-medium px-3 py-1.5 rounded-full ${
                     transparent && !isScrolled
                       ? `${textColor} hover:bg-white/10`
                       : `${textColor} hover:bg-surface`
@@ -219,7 +219,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   }`}
                   onClick={toggleMenu}
                 >
-                  <span className="hidden text-sm md:inline">{authTriggerLabel}</span>
+                  <span className="hidden body-small md:inline">{authTriggerLabel}</span>
                   <Menu className="h-5 w-5" />
                 </button>
               </>
@@ -232,14 +232,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                   <div className="px-4 py-3">
                     <Link
                       href="/projects"
-                      className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                      className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Projects
                     </Link>
                     <Link
                       href="/professionals"
-                      className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                      className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Professionals
@@ -255,21 +255,21 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                       <>
                         <Link
                           href="/homeowner?tab=saved-projects"
-                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                          className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved projects
                         </Link>
                         <Link
                           href="/homeowner?tab=saved-professionals"
-                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                          className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Saved professionals
                         </Link>
                         <Link
                           href="/homeowner?tab=account"
-                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                          className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           Account
@@ -277,7 +277,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {hasAdminRole && (
                           <Link
                             href="/admin"
-                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                            className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Admin
@@ -289,7 +289,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {shouldShowLoginLink && (
                           <Link
                             href={`/login${redirectQuery}`}
-                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                            className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Login
@@ -298,7 +298,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                         {shouldShowSignupLink && (
                           <Link
                             href={`/signup${redirectQuery}`}
-                            className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                            className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
                             Sign up
@@ -316,7 +316,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     {hasProfessionalRole ? (
                       <Link
                         href="/dashboard/listings"
-                        className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                        className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         Switch to company
@@ -324,7 +324,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     ) : (
                       <Link
                         href="/list-with-us"
-                        className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                        className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         List with us
@@ -332,7 +332,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     )}
                     <Link
                       href="/help-center"
-                      className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                      className="block body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       Help center
@@ -340,7 +340,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                     {isLoggedIn && (
                       <button
                         type="button"
-                        className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
+                        className="block w-full text-left body-small text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
                         onClick={handleSignOut}
                         disabled={isSigningOut}
                       >

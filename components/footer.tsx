@@ -34,38 +34,38 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
           <div className="grid grid-cols-3 gap-4 md:gap-8">
             {Object.entries(footerLinks).map(([category, links]) => (
               <div key={category}>
-                <h6 className="text-foreground mb-4 px-2 text-sm md:text-base md:px-3">{category}</h6>
+                <h6 className="heading-6 text-foreground mb-4 px-2 md:px-3">{category}</h6>
                 <ul className="space-y-2">
                   {links.map((link) => (
                     <li key={link}>
                       {/* COMMENTED OUT: Pricing link (Issue 8)
                       {link === "Pricing" ? (
-                        <Link href="/pricing" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <Link href="/pricing" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : */}
                       {link === "Projects" ? (
-                        <Link href="/projects" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <Link href="/projects" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "About" ? (
-                        <Link href="/about" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <Link href="/about" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "Help center" ? (
-                        <Link href="/help-center" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <Link href="/help-center" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "Professionals" ? (
-                        <Link href="/professionals" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <Link href="/professionals" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : link === "List with us" ? (
-                        <Link href="/list-with-us" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <Link href="/list-with-us" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </Link>
                       ) : (
-                        <a href="#" className="inline-block text-xs md:text-sm text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+                        <a href="#" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
                           {link}
                         </a>
                       )}
@@ -77,13 +77,13 @@ export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
           </div>
         </div>
 
-        <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-text-secondary">
+        <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4 body-small text-text-secondary">
           <div>©2025 ArcoGlobal BV. All rights reserved.</div>
           <div className="flex gap-6">
-            <Link href="/terms" className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+            <Link href="/terms" className="body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
               Terms
             </Link>
-            <Link href="/privacy" className="text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
+            <Link href="/privacy" className="body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
               Privacy
             </Link>
           </div>

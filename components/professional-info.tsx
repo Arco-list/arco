@@ -155,17 +155,17 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-semibold text-foreground">{ratingDisplay.value.toFixed(2)}</span>
+              <span className="body-small font-semibold text-foreground">{ratingDisplay.value.toFixed(2)}</span>
             </div>
 
-            <span className="text-sm text-text-secondary">·</span>
+            <span className="body-small text-text-secondary">·</span>
 
             {ratingHref ? (
-              <a href={ratingHref} className="text-sm text-text-secondary underline hover:text-foreground">
+              <a href={ratingHref} className="body-small text-text-secondary underline hover:text-foreground">
                 {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
               </a>
             ) : (
-              <span className="text-sm text-text-secondary">
+              <span className="body-small text-text-secondary">
                 {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
               </span>
             )}
@@ -199,19 +199,19 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold text-black">Meet the professional</h2>
+        <h2 className="heading-4 font-bold text-black">Meet the professional</h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {detailItems.map((detail) => (
             <div key={detail.label} className="space-y-1">
-              <p className="text-sm text-text-secondary">{detail.label}</p>
-              <p className="text-sm font-medium text-foreground">{detail.value}</p>
+              <p className="body-small text-text-secondary">{detail.label}</p>
+              <p className="body-small font-medium text-foreground">{detail.value}</p>
             </div>
           ))}
         </div>
 
         <button
-          className="text-sm text-text-secondary hover:text-foreground underline mt-4"
+          className="body-small text-text-secondary hover:text-foreground underline mt-4"
           onClick={() => setIsReportModalOpen(true)}
         >
           Report this listing

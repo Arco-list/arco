@@ -81,12 +81,12 @@ export const CustomDropdown = ({
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search options"
               autoFocus
-              className="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              className="w-full px-3 py-2 body-small border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
             />
           </div>
           <div className="max-h-60 overflow-auto">
             {filteredOptions.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-text-secondary">
+              <div className="px-4 py-3 body-small text-text-secondary">
                 {options.length === 0 && !searchQuery
                   ? isLoading
                     ? "Loading options..."

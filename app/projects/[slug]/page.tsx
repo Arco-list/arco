@@ -1216,9 +1216,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
 function PreviewBanner() {
   return (
-    <div className="bg-amber-500/10 py-3 text-sm text-amber-900">
+    <div className="bg-amber-500/10 py-3 body-small text-amber-900">
       <div className="mx-auto flex max-w-6xl items-center justify-center px-4">
-        <p className="font-medium">
+        <p className="body-small font-medium">
           You&rsquo;re viewing a private preview. Only you and the Arco review team can see this page until the project is
           published.
         </p>

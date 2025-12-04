@@ -42,8 +42,8 @@ export default async function SignupConfirmPage({ searchParams }: SignupConfirmP
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <MailCheck className="h-8 w-8 text-primary" aria-hidden="true" />
               </div>
-              <h3>Confirm your email</h3>
-              <p className="text-muted-foreground text-sm">
+              <h3 className="heading-3">Confirm your email</h3>
+              <p className="body-small text-muted-foreground">
                 We just sent a confirmation link{email ? (
                   <>
                     {" "}
@@ -53,8 +53,8 @@ export default async function SignupConfirmPage({ searchParams }: SignupConfirmP
               </p>
             </div>
 
-            <div className="mt-8 space-y-3 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Next steps</p>
+            <div className="mt-8 space-y-3 body-small text-muted-foreground">
+              <p className="body-small font-medium text-foreground">Next steps</p>
               <ul className="list-disc space-y-2 pl-5">
                 <li>Open the confirmation email and follow the secure link.</li>
                 <li>You&apos;ll see a confirmation screen, then click &quot;Go to dashboard&quot; to continue.</li>
@@ -68,7 +68,7 @@ export default async function SignupConfirmPage({ searchParams }: SignupConfirmP
               </ul>
             </div>
 
-            <div className="mt-8 space-y-3 text-center text-sm text-muted-foreground">
+            <div className="mt-8 space-y-3 text-center body-small text-muted-foreground">
               <p>Already confirmed?</p>
               <div className="flex justify-center gap-3">
                 <Link href="/login" className="text-primary font-medium">
