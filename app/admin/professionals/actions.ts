@@ -148,6 +148,44 @@ export async function updateCompanyPlanTierAction(input: { companyId: string; pl
   return { success: true }
 }
 
+export async function updateCompanyPlanExpirationAction(input: { companyId: string; planExpiresAt: string | null }) {
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
+  if (!parsedCompanyId.success) {
+    return { success: false, error: "Invalid company id" }
+  }
+
+  const expirationResult = z
+    .string()
+    .datetime()
+    .nullable()
+    .safeParse(input.planExpiresAt)
+
+  if (!expirationResult.success) {
+    return { success: false, error: "Invalid expiration date" }
+  }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update({ plan_expires_at: expirationResult.data })
+    .eq("id", parsedCompanyId.data)
+
+  if (updateError) {
+    logger.error("admin-professionals", "Failed to update company plan expiration", {
+      companyId: parsedCompanyId.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
 export async function updateProfessionalFeaturedAction(input: {
   professionalId: string
   isFeatured: boolean
@@ -236,10 +274,12 @@ export async function updateCompanyFeaturedAction(input: {
 export async function updateCompanyDetailsAction(input: {
   companyId: string
   name: string
+  slug: string | null
   logoUrl: string | null
   website: string | null
   contactEmail: string | null
   services: string[]
+  primaryServiceId: string | null
 }) {
   const parsedCompanyId = uuidSchema.safeParse(input.companyId)
   if (!parsedCompanyId.success) {
@@ -249,6 +289,19 @@ export async function updateCompanyDetailsAction(input: {
   const nameResult = z.string().min(2).max(150).safeParse(input.name)
   if (!nameResult.success) {
     return { success: false, error: "Company name must be between 2 and 150 characters" }
+  }
+
+  const slugResult = z
+    .string()
+    .regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, numbers, and hyphens")
+    .min(2)
+    .max(100)
+    .nullable()
+    .transform((value) => (value ? value.trim().toLowerCase() : null))
+    .safeParse(input.slug && input.slug.length > 0 ? input.slug : null)
+
+  if (!slugResult.success) {
+    return { success: false, error: "Slug must contain only lowercase letters, numbers, and hyphens" }
   }
 
   const logoResult = z
@@ -297,6 +350,11 @@ export async function updateCompanyDetailsAction(input: {
     return { success: false, error: "Services selection is invalid" }
   }
 
+  const primaryServiceResult = uuidSchema.nullable().safeParse(input.primaryServiceId)
+  if (!primaryServiceResult.success) {
+    return { success: false, error: "Invalid primary service id" }
+  }
+
   const { supabase, error } = await assertAdmin()
   if (error) {
     return { success: false, error: error.message }
@@ -304,10 +362,12 @@ export async function updateCompanyDetailsAction(input: {
 
   const updatePayload = {
     name: nameResult.data,
+    slug: slugResult.data,
     logo_url: logoResult.data,
     website: websiteResult.data,
     email: emailResult.data,
     services_offered: servicesResult.data,
+    primary_service_id: primaryServiceResult.data,
   }
 
   const { error: updateError } = await supabase

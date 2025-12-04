@@ -229,8 +229,8 @@ export function GroupedPicturesModal({
                     >
                       {/* Category Header */}
                       <div className="space-y-1">
-                        <h2 className="text-xl font-semibold text-foreground">{group.category}</h2>
-                        {group.description && <p className="text-text-secondary text-sm">{group.description}</p>}
+                        <h2 className="heading-4 font-semibold text-foreground">{group.category}</h2>
+                        {group.description && <p className="text-text-secondary body-small">{group.description}</p>}
                       </div>
 
                       {/* Images - Grid Layout */}
@@ -353,8 +353,8 @@ export function GroupedPicturesModal({
             </Button>
 
             {/* Category Label */}
-            <div 
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm"
+            <div
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full body-small backdrop-blur-sm"
               role="status"
               aria-live="polite"
             >

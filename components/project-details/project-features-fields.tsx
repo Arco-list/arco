@@ -31,7 +31,7 @@ export const ProjectFeaturesFields = ({
 }: ProjectFeaturesFieldsProps) => (
   <div className="space-y-12">
     {projectTaxonomyError && (
-      <p className="text-sm text-amber-600">
+      <p className="body-small text-amber-600">
         Feature options are using fallback values because taxonomy data is temporarily unavailable.
       </p>
     )}

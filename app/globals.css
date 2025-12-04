@@ -288,59 +288,14 @@
     @apply bg-background text-foreground font-sans;
   }
   
-  /* Typography Scale - Using Tailwind Utilities */
-
-  /* H1 - Hero image - text-5xl (48px) → md:text-6xl (60px) → lg:text-8xl (96px) */
-  h1 {
-    @apply font-semibold;
-    font-family: var(--font-heading);
-    letter-spacing: -2px;
-    line-height: 1;
-    @apply text-5xl md:text-6xl lg:text-8xl;
-  }
-
-  /* H2 - Category cards - text-4xl (36px) → md:text-5xl (48px) */
-  h2 {
-    @apply font-semibold;
-    font-family: var(--font-heading);
-    letter-spacing: -1px;
-    line-height: 1.2;
-    @apply text-4xl md:text-5xl;
-  }
-
-  /* H3 - Page titles - text-2xl (24px) → md:text-3xl (30px) */
-  h3 {
-    @apply font-semibold;
-    font-family: var(--font-heading);
-    letter-spacing: -0.5px;
-    line-height: 1.2;
-    @apply text-2xl md:text-3xl;
-  }
-
-  /* H4 - Section titles - text-base (16px) → md:text-xl (20px) */
-  h4 {
-    @apply font-semibold;
-    font-family: var(--font-heading);
-    letter-spacing: -0.3px;
-    line-height: 1.2;
-    @apply text-base md:text-xl;
-  }
-
-  /* H5 - Card titles - text-xs (12px) → md:text-base (16px) */
-  h5 {
-    @apply font-semibold;
-    font-family: var(--font-heading);
-    letter-spacing: 0;
-    line-height: 1.2;
-    @apply text-xs md:text-base;
-  }
-
-  /* H6 - Regular headings - text-base (16px) */
-  h6 {
-    @apply font-medium text-base;
-    font-family: var(--font-sans);
-    letter-spacing: 0;
-    line-height: 1.2;
+  /* ⚠️ OLD TYPOGRAPHY SYSTEM REMOVED - ALL TAGS MUST USE UTILITY CLASSES NOW ⚠️ */
+  /* Reset semantic tags to inherit - Typography must be applied via utility classes */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    margin: 0;
   }
 
   /* Body Regular */
@@ -372,6 +327,84 @@
 .body-small {
   @apply font-normal text-sm tracking-normal leading-normal;
   font-family: var(--font-sans);
+}
+
+/* ============================================
+ * NEW TYPOGRAPHY UTILITY CLASSES
+ * ============================================
+ * These classes allow visual/semantic decoupling
+ * Use these classes when you want different
+ * visual styling than the semantic HTML tag
+ * ============================================ */
+
+/* Heading 1 - Hero Image */
+.heading-1 {
+  @apply font-semibold text-5xl md:text-6xl lg:text-7xl;
+  font-family: var(--font-heading);
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+/* Heading 2 - Category Cards */
+.heading-2 {
+  @apply font-semibold text-4xl md:text-[40px] lg:text-[42px];
+  font-family: var(--font-heading);
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+
+/* Heading 3 - Page Titles */
+.heading-3 {
+  @apply font-semibold text-[26px] md:text-3xl;
+  font-family: var(--font-heading);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+/* Heading 4 - Section Titles */
+.heading-4 {
+  @apply font-semibold text-[22px] md:text-2xl;
+  font-family: var(--font-heading);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+/* Heading 5 - Card Titles */
+.heading-5 {
+  @apply font-semibold text-[18px] md:text-[20px];
+  font-family: var(--font-heading);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Heading 6 - Regular Headings */
+.heading-6 {
+  @apply font-medium text-sm md:text-base;
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Heading 7 - Small Headings */
+.heading-7 {
+  @apply font-medium text-sm;
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Body Large */
+.body-large {
+  @apply font-normal text-base md:text-lg;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+/* Body Regular */
+.body-regular {
+  @apply font-normal text-sm md:text-base;
+  font-family: var(--font-sans);
+  line-height: 1.5;
 }
 
 @layer components {

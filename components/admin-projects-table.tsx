@@ -838,7 +838,7 @@ export function AdminProjectsTable({ projects }: AdminProjectsTableProps) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border max-w-full">
         <Table>
           <TableHeader>
             <TableRow>

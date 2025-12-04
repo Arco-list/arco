@@ -2163,7 +2163,7 @@ export default function ListingEditorPage() {
   const renderPhotoTourSection = () => {
     if (!hasProjectAccess) {
       return (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-6 body-small text-amber-800">
           You need access to this project to manage its photo tour.
         </div>
       )
@@ -2171,19 +2171,19 @@ export default function ListingEditorPage() {
 
     if (!projectId) {
       return (
-        <div className="py-16 text-center text-sm text-text-secondary">
+        <div className="py-16 text-center body-small text-text-secondary">
           Select a project to manage its photo tour.
         </div>
       )
     }
 
     if (isLoadingProject) {
-      return <div className="py-16 text-center text-sm text-text-secondary">Loading project photos…</div>
+      return <div className="py-16 text-center body-small text-text-secondary">Loading project photos…</div>
     }
 
     if (photoProjectLoadError) {
       return (
-        <div className="rounded-md border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        <div className="rounded-md border border-red-200 bg-red-50 p-6 body-small text-red-700">
           {photoProjectLoadError}
         </div>
       )
@@ -2202,8 +2202,8 @@ export default function ListingEditorPage() {
   const renderLocationSection = () => (
     <div className="space-y-6 pb-24 md:pb-0">
       <div className="hidden md:block">
-        <h3 className="font-medium text-foreground">Location</h3>
-        <p className="text-text-secondary mt-1">Where is the project located?</p>
+        <h3 className="heading-4 text-foreground">Location</h3>
+        <p className="body-regular text-text-secondary mt-1">Where is the project located?</p>
       </div>
 
       <div className="space-y-8">
@@ -2232,7 +2232,7 @@ export default function ListingEditorPage() {
             </>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 body-small text-amber-800">
                 Add your Google Maps API key to `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to enable address autocomplete and map
                 selection.
               </div>
@@ -2245,14 +2245,14 @@ export default function ListingEditorPage() {
               />
             </div>
           )}
-          <p className="text-sm text-text-secondary mt-2">
+          <p className="body-small text-text-secondary mt-2">
             Search for your project location or drag the pin on the map to fine-tune it
           </p>
-          {mapsError && <p className="text-sm text-red-600 mt-2">{mapsError}</p>}
-          {detailsErrors.address && <p className="text-sm text-red-600 mt-2">{detailsErrors.address}</p>}
+          {mapsError && <p className="body-small text-red-600 mt-2">{mapsError}</p>}
+          {detailsErrors.address && <p className="body-small text-red-600 mt-2">{detailsErrors.address}</p>}
           <div className="mt-4 rounded-lg border border-border bg-surface p-4">
-            <p className="text-sm font-medium text-foreground">Selected address</p>
-            <p className="mt-1 text-sm text-foreground">
+            <p className="body-small font-medium text-foreground">Selected address</p>
+            <p className="mt-1 body-small text-foreground">
               {detailsForm.address
                 ? detailsForm.address
                 : "Start typing in the search box or drag the map pin to capture the address."}
@@ -2263,8 +2263,8 @@ export default function ListingEditorPage() {
         {/* Share exact location toggle */}
         <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
           <div>
-            <h4 className="font-medium text-foreground mb-1">Share the exact location of the project</h4>
-            <p className="text-sm text-text-secondary">Allow others to see the precise location of your project</p>
+            <h4 className="heading-5 text-foreground mb-1">Share the exact location of the project</h4>
+            <p className="body-small text-text-secondary">Allow others to see the precise location of your project</p>
           </div>
           <button
             type="button"
@@ -2313,8 +2313,8 @@ export default function ListingEditorPage() {
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div className="hidden md:block">
-            <h3 className="font-medium text-foreground">Professionals</h3>
-            <p className="mt-1 text-text-secondary">Manage the professional services linked to this project.</p>
+            <h3 className="heading-4 text-foreground">Professionals</h3>
+            <p className="mt-1 body-regular text-text-secondary">Manage the professional services linked to this project.</p>
           </div>
           <button
             type="button"
@@ -2327,24 +2327,24 @@ export default function ListingEditorPage() {
         </div>
 
         {professionalsError && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-4 body-small text-amber-800">
             {professionalsError}
           </div>
         )}
 
         {inviteError && !inviteDialogOpen && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{inviteError}</div>
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 body-small text-red-700">{inviteError}</div>
         )}
 
         {professionalsLoading ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-white p-6 text-sm text-text-secondary">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-white p-6 body-small text-text-secondary">
             <Loader2 className="h-5 w-5 animate-spin" />
             Loading professionals…
           </div>
         ) : (
           <div className="space-y-6">
             {selectedServices.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-text-secondary">
+              <div className="rounded-lg border border-dashed border-border bg-surface p-6 body-small text-text-secondary">
                 Add a professional service to invite collaborators to this project.
               </div>
             ) : (
@@ -2420,7 +2420,7 @@ export default function ListingEditorPage() {
       <main className="flex-1 px-4 pt-20 pb-8 md:px-8">
         <div className="mx-auto max-w-7xl">
           {entitlementsError && (
-            <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 body-small text-amber-800">
               {entitlementsError}
             </div>
           )}
@@ -2475,7 +2475,7 @@ export default function ListingEditorPage() {
                       <button
                         key={item.id}
                         onClick={() => setActiveSection(item.id)}
-                        className={`w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all text-sm font-medium ${
+                        className={`body-small w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all font-medium ${
                           isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
                         }`}
                       >
@@ -2526,7 +2526,7 @@ export default function ListingEditorPage() {
                   >
                     <Menu className="h-5 w-5" />
                   </Button>
-                  <h4 className="font-semibold text-foreground">{getCurrentSectionTitle()}</h4>
+                  <h4 className="heading-5 text-foreground">{getCurrentSectionTitle()}</h4>
                 </div>
                 {!isEditMode && activeSection === "preview" && (
                   <Button 
@@ -2545,10 +2545,10 @@ export default function ListingEditorPage() {
               {activeSection === "preview" && (
                 <div className="flex items-center justify-center min-h-[60vh]">
                   <div className="text-center max-w-md">
-                    <h3 className="font-semibold text-foreground mb-3">
+                    <h3 className="heading-4 text-foreground mb-3">
                       Ready to edit your listing?
                     </h3>
-                    <p className="text-text-secondary mb-8">
+                    <p className="body-regular text-text-secondary mb-8">
                       Click "Edit listing" in the sidebar to make changes to your project.
                     </p>
                   </div>
@@ -2560,7 +2560,7 @@ export default function ListingEditorPage() {
                 <div className="space-y-8 pb-24 md:pb-0">
                   {detailsFeedback && (
                     <div
-                      className={`rounded-md border p-4 text-sm ${
+                      className={`body-small rounded-md border p-4 ${
                         detailsFeedback.type === "success"
                           ? "border-green-200 bg-green-50 text-green-700"
                           : "border-red-200 bg-red-50 text-red-700"
@@ -2571,7 +2571,7 @@ export default function ListingEditorPage() {
                   )}
 
                   {detailsLoadError && !detailsLoading ? (
-                    <div className="rounded-md border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+                    <div className="rounded-md border border-red-200 bg-red-50 p-6 body-small text-red-700">
                       {detailsLoadError}
                     </div>
                   ) : detailsLoading ? (
@@ -2580,8 +2580,8 @@ export default function ListingEditorPage() {
                     <div className="space-y-12">
                       <section className="space-y-6">
                         <div>
-                          <h3 className="font-semibold text-foreground">Project basics</h3>
-                          <p className="text-sm text-text-secondary">
+                          <h3 className="heading-4 text-foreground">Project basics</h3>
+                          <p className="body-small text-text-secondary">
                             Update the core classification of your project.
                           </p>
                         </div>
@@ -2603,8 +2603,8 @@ export default function ListingEditorPage() {
 
                       <section className="space-y-6">
                         <div>
-                          <h3 className="font-semibold text-foreground">Features</h3>
-                          <p className="text-sm text-text-secondary">
+                          <h3 className="heading-4 text-foreground">Features</h3>
+                          <p className="body-small text-text-secondary">
                             Highlight the location and material characteristics that define this project.
                           </p>
                         </div>
@@ -2621,8 +2621,8 @@ export default function ListingEditorPage() {
 
                       <section className="space-y-6">
                         <div>
-                          <h3 className="font-semibold text-foreground">Project metrics</h3>
-                          <p className="text-sm text-text-secondary">
+                          <h3 className="heading-4 text-foreground">Project metrics</h3>
+                          <p className="body-small text-text-secondary">
                             Capture scale, investment level, and timeline details.
                           </p>
                         </div>
@@ -2640,8 +2640,8 @@ export default function ListingEditorPage() {
 
                       <section className="space-y-6">
                         <div>
-                          <h3 className="font-semibold text-foreground">Storytelling</h3>
-                          <p className="text-sm text-text-secondary">
+                          <h3 className="heading-4 text-foreground">Storytelling</h3>
+                          <p className="body-small text-text-secondary">
                             Craft a narrative that helps prospects understand the scope and highlights.
                           </p>
                         </div>
@@ -2697,7 +2697,7 @@ export default function ListingEditorPage() {
           <DialogHeader>
             <DialogTitle>Edit this listing?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-text-secondary">
+          <p className="body-small text-text-secondary">
             Making edits will require admin approval again. The listing will be moved to draft status and needs to be reviewed before it can be published.
           </p>
           <div className="flex justify-end gap-3 pt-4">
@@ -2724,7 +2724,7 @@ export default function ListingEditorPage() {
             <DialogTitle>Select professional services</DialogTitle>
           </DialogHeader>
           {professionalServices.length === 0 ? (
-            <div className="rounded-md border border-border bg-surface p-4 text-sm text-text-secondary">
+            <div className="rounded-md border border-border bg-surface p-4 body-small text-text-secondary">
               Professional services are not available right now. Please try again later.
             </div>
           ) : (
@@ -2747,7 +2747,7 @@ export default function ListingEditorPage() {
                         aria-hidden
                         className={`mb-3 h-6 w-6 ${isSelected ? "text-foreground" : "text-foreground"}`}
                       />
-                      <span className="mt-2 text-sm font-medium text-foreground">{service.name}</span>
+                      <span className="mt-2 body-small font-medium text-foreground">{service.name}</span>
                     </button>
                   )
                 })}
@@ -2780,17 +2780,17 @@ export default function ListingEditorPage() {
           <DialogHeader>
             <DialogTitle>{editingInviteId ? "Update invite" : "Invite professional"}</DialogTitle>
             {inviteServiceId && (
-              <p className="mt-1 text-sm text-text-secondary">
+              <p className="mt-1 body-small text-text-secondary">
                 Service: {professionalServices.find(s => s.id === inviteServiceId)?.name}
               </p>
             )}
           </DialogHeader>
           {inviteError && (
-            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{inviteError}</div>
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 body-small text-red-700">{inviteError}</div>
           )}
           <div className="space-y-4">
             <div>
-              <label htmlFor="invite-email" className="mb-2 block text-sm font-medium text-foreground">
+              <label htmlFor="invite-email" className="mb-2 block body-small font-medium text-foreground">
                 Company email address
               </label>
               <input
@@ -2800,16 +2800,16 @@ export default function ListingEditorPage() {
                 onChange={(event) => setInviteEmail(event.target.value)}
                 disabled={isInviteMutating}
                 placeholder="name@company.com"
-                className={`w-full rounded-md border px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
+                className={`body-small w-full rounded-md border px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
                   inviteError ? 'border-red-300' : 'border-border'
                 } disabled:cursor-not-allowed disabled:opacity-50`}
               />
               {inviteError && (
-                <p className="mt-2 text-sm text-red-600">
+                <p className="mt-2 body-small text-red-600">
                   {inviteError}
                 </p>
               )}
-              <p className="mt-2 text-sm text-text-secondary">
+              <p className="mt-2 body-small text-text-secondary">
                 No invites are sent until the project is approved by Arco.
               </p>
             </div>
@@ -2853,7 +2853,7 @@ export default function ListingEditorPage() {
                       setActiveSection(item.id)
                       setIsMobileMenuOpen(false)
                     }}
-                    className={`w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all text-sm font-medium ${
+                    className={`body-small w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all font-medium ${
                       isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
                     }`}
                   >

@@ -321,7 +321,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               </div>
               <div className="flex flex-col">
                 <span className="font-medium leading-tight">{row.original.displayName}</span>
-                <span className="text-sm text-muted-foreground">{row.original.email}</span>
+                <span className="body-small text-muted-foreground">{row.original.email}</span>
               </div>
             </div>
           )
@@ -391,7 +391,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           const lastLogin = formatRelative(row.original.lastSignInAt)
           const fallback = formatRelative(row.original.createdAt)
           return (
-            <div className="text-sm text-muted-foreground">
+            <div className="body-small text-muted-foreground">
               {lastLogin ?? (row.original.status === "invited" ? "Pending activation" : fallback ?? "N/A")}
             </div>
           )
@@ -612,8 +612,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       <div className="flex flex-col gap-4 px-4 lg:px-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Users</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="heading-4">Users</h2>
+            <p className="body-small text-muted-foreground">
               {totalAdmins} total · {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"} · {pendingInvites} pending invite
               {pendingInvites === 1 ? "" : "s"}
             </p>
@@ -654,7 +654,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                   >
                     <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
                       <div className="flex flex-col gap-1">
-                        <Label htmlFor="invite-role-admin" className="text-sm font-medium">
+                        <Label htmlFor="invite-role-admin" className="heading-7">
                           Admin
                         </Label>
                         <span className="text-xs text-muted-foreground">
@@ -665,7 +665,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                     </div>
                     <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
                       <div className="flex flex-col gap-1">
-                        <Label htmlFor="invite-role-super-admin" className="text-sm font-medium">
+                        <Label htmlFor="invite-role-super-admin" className="heading-7">
                           Super Admin
                         </Label>
                         <span className="text-xs text-muted-foreground">
@@ -769,7 +769,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={columns.length} className="h-24 text-center body-small text-muted-foreground">
                     No admins found. Adjust your filters or invite a new teammate.
                   </TableCell>
                 </TableRow>
@@ -778,14 +778,14 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           </Table>
         </div>
 
-        <div className="flex flex-col gap-2 border-t py-3 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2 border-t py-3 body-small text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
           <div>
             {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} admin
             {table.getFilteredRowModel().rows.length === 1 ? "" : "s"} selected
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium text-muted-foreground">
+              <Label htmlFor="rows-per-page" className="heading-7 text-muted-foreground">
                 Rows per page
               </Label>
               <Select
@@ -842,7 +842,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           {roleDialogUser && (
             <div className="flex flex-col gap-4">
               <div className="rounded-md border border-border bg-muted/50 px-4 py-3">
-                <p className="text-sm font-medium">{roleDialogUser.displayName}</p>
+                <p className="body-small font-medium">{roleDialogUser.displayName}</p>
                 <p className="text-xs text-muted-foreground">{roleDialogUser.email}</p>
               </div>
               <RadioGroup
@@ -852,7 +852,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               >
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="role-admin" className="text-sm font-medium">
+                    <Label htmlFor="role-admin" className="heading-7">
                       Admin
                     </Label>
                     <span className="text-xs text-muted-foreground">
@@ -867,7 +867,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 </div>
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="role-super-admin" className="text-sm font-medium">
+                    <Label htmlFor="role-super-admin" className="heading-7">
                       Super Admin
                     </Label>
                     <span className="text-xs text-muted-foreground">
@@ -910,7 +910,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           {statusDialog && (
             <div className="space-y-3">
               <div className="rounded-md border border-border px-3 py-3">
-                <p className="text-sm font-medium">{statusDialog.user.displayName}</p>
+                <p className="body-small font-medium">{statusDialog.user.displayName}</p>
                 <p className="text-xs text-muted-foreground">{statusDialog.user.email}</p>
               </div>
               {!statusDialog.nextActive && statusDialog.user.isLastSuperAdmin && (
@@ -947,7 +947,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           {deleteDialog && (
             <div className="space-y-4">
               <div className="rounded-md border border-border px-3 py-3">
-                <p className="text-sm font-medium">{deleteDialog.user.displayName}</p>
+                <p className="body-small font-medium">{deleteDialog.user.displayName}</p>
                 <p className="text-xs text-muted-foreground">{deleteDialog.user.email}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Role: {ROLE_LABELS[deleteDialog.user.role]}
@@ -957,13 +957,13 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               {deleteDialog.isChecking ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-sm text-muted-foreground">Checking deletion requirements…</span>
+                  <span className="ml-2 body-small text-muted-foreground">Checking deletion requirements…</span>
                 </div>
               ) : deleteDialog.checkResult ? (
                 <>
                   {deleteDialog.checkResult.blockers.length > 0 && (
                     <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3">
-                      <p className="text-sm font-medium text-rose-900 mb-2">Cannot delete user</p>
+                      <p className="body-small font-medium text-rose-900 mb-2">Cannot delete user</p>
                       <ul className="space-y-1">
                         {deleteDialog.checkResult.blockers.map((blocker, idx) => (
                           <li key={idx} className="text-xs text-rose-800">
@@ -976,7 +976,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
 
                   {deleteDialog.checkResult.canDelete && deleteDialog.checkResult.warnings.length > 0 && (
                     <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
-                      <p className="text-sm font-medium text-amber-900 mb-2">The following data will be deleted:</p>
+                      <p className="body-small font-medium text-amber-900 mb-2">The following data will be deleted:</p>
                       <ul className="space-y-1">
                         {deleteDialog.checkResult.warnings.map((warning, idx) => (
                           <li key={idx} className="text-xs text-amber-800">
@@ -988,7 +988,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                   )}
 
                   {deleteDialog.checkResult.canDelete && deleteDialog.checkResult.warnings.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="body-small text-muted-foreground">
                       This user has no related data. The account will be permanently deleted.
                     </p>
                   )}

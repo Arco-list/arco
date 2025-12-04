@@ -1,10 +1,12 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Image from "next/image"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { X, Copy, Mail, MessageCircle, MessageSquare, Share2, Share } from "lucide-react"
 import { toast } from "sonner"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 interface ShareModalProps {
   isOpen: boolean
@@ -171,25 +173,27 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
     >
       <DialogContent className="sm:max-w-lg p-6">
         <DialogHeader className="mb-4">
-          <DialogTitle className="text-lg font-semibold flex items-center justify-between gap-4">
+          <DialogTitle className="heading-5 font-semibold flex items-center justify-between gap-4">
             <span>Share this project</span>
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close share dialog">
               <X className="h-4 w-4" />
             </Button>
           </DialogTitle>
-          <DialogDescription className="text-sm text-text-secondary">
+          <DialogDescription className="body-small text-text-secondary">
             Quickly share this project with clients or collaborators.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-border bg-surface/60 p-3 mb-6">
-          <img
-            src={imageUrl || "/placeholder.svg"}
+          <Image
+            src={sanitizeImageUrl(imageUrl, "/placeholder.svg")}
             alt={title}
+            width={IMAGE_SIZES.thumbnail.width}
+            height={IMAGE_SIZES.thumbnail.height}
             className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
           />
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-sm font-medium text-foreground line-clamp-2">{title}</span>
+            <span className="body-small font-medium text-foreground line-clamp-2">{title}</span>
             {displaySubtitle ? <span className="text-xs text-text-secondary line-clamp-2">{displaySubtitle}</span> : null}
           </div>
         </div>
@@ -209,7 +213,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
               onClick={onClick}
             >
               <Icon className="h-4 w-4" />
-              <span className="text-sm">{label}</span>
+              <span className="body-small">{label}</span>
               {status ? <span className="text-xs text-green-600">{status}</span> : null}
             </Button>
           ))}

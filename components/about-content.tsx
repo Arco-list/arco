@@ -61,10 +61,10 @@ export function AboutContent({ projects }: AboutContentProps) {
       {/* Hero Section */}
       <section className="pt-24 md:pt-32 pb-12 md:pb-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 md:px-6 text-center">
-          <h1 className="mb-4 md:mb-6 px-4">
+          <h1 className="heading-1 mb-4 md:mb-6 px-4">
             Build beautiful
           </h1>
-          <p className="text-base md:text-lg lg:text-xl text-text-secondary mb-6 md:mb-8 max-w-4xl mx-auto leading-relaxed px-2">
+          <p className="body-large text-text-secondary mb-6 md:mb-8 max-w-4xl mx-auto leading-relaxed px-2">
             Inspiring the world to build beautifully through the most inspiring portfolio of architectural achievements.
           </p>
           <Button asChild>
@@ -99,7 +99,7 @@ export function AboutContent({ projects }: AboutContentProps) {
                   />
                 </div>
                 <div className="mt-3">
-                  <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">
+                  <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">
                     {project.title}
                   </p>
                 </div>
@@ -113,7 +113,7 @@ export function AboutContent({ projects }: AboutContentProps) {
       <section className="py-12 md:py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <div className="text-center mb-8 md:mb-12">
-            <h2 className="mb-4 md:mb-6">
+            <h2 className="heading-2 mb-4 md:mb-6">
               <span className="inline-flex items-center justify-center flex-wrap">
                 <span>Building&nbsp;</span>
                 <span className="inline-flex items-baseline">
@@ -126,7 +126,7 @@ export function AboutContent({ projects }: AboutContentProps) {
                 </span>
               </span>
             </h2>
-            <p className="text-base md:text-lg text-text-secondary max-w-4xl mx-auto leading-relaxed">
+            <p className="body-large text-text-secondary max-w-4xl mx-auto leading-relaxed">
               We believe beauty is built through collaboration. Our platform connects homeowners, professionals, and brands to create a vibrant community where ideas, expertise, and products come together to shape exceptional architecture and design.
             </p>
           </div>
@@ -141,8 +141,8 @@ export function AboutContent({ projects }: AboutContentProps) {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <h4 className="mb-3">Homeowners</h4>
-              <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+              <h4 className="heading-4 mb-3">Homeowners</h4>
+              <p className="body-regular text-text-secondary leading-relaxed">
                 We help homeowners move from inspiration to realisation by connecting them with featured projects and trusted professionals to bring their vision to life.
               </p>
               <Button asChild variant="secondary" size="sm" className="mt-4">
@@ -159,8 +159,8 @@ export function AboutContent({ projects }: AboutContentProps) {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <h4 className="mb-3">Professionals</h4>
-              <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+              <h4 className="heading-4 mb-3">Professionals</h4>
+              <p className="body-regular text-text-secondary leading-relaxed">
                 Architects, designers, builders and many other professionals use our platform to showcase their work, grow their network, and reach clients who value quality and creativity.
               </p>
               <Button asChild variant="secondary" size="sm" className="mt-4">
@@ -177,8 +177,8 @@ export function AboutContent({ projects }: AboutContentProps) {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <h4 className="mb-3">Brands</h4>
-              <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+              <h4 className="heading-4 mb-3">Brands</h4>
+              <p className="body-regular text-text-secondary leading-relaxed">
                 We connect design-focused brands with the people shaping tomorrow's most inspiring spaces, offering visibility at the moment it matters most.
               </p>
               <Button asChild variant="secondary" size="sm" className="mt-4">
@@ -192,10 +192,10 @@ export function AboutContent({ projects }: AboutContentProps) {
       {/* Final CTA Section */}
       <section className="py-12 md:py-20 bg-[#F5F5F5]">
         <div className="max-w-4xl mx-auto px-4 md:px-6 text-center">
-          <h2 className="mb-4 md:mb-6">
+          <h2 className="heading-2 mb-4 md:mb-6">
             Shape this space together
           </h2>
-          <p className="text-base md:text-lg lg:text-xl mb-6 md:mb-8 text-text-secondary leading-relaxed px-2">
+          <p className="body-large mb-6 md:mb-8 text-text-secondary leading-relaxed px-2">
             At Arco, we're on a mission to transform how dreams become homes. Join us and help bring inspiring spaces to life. Together, we can build something extraordinary.
           </p>
           <Button asChild>

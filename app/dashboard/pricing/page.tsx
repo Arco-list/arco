@@ -55,18 +55,18 @@ export default function PricingPage() {
 
       <main className="flex-1 pt-20 pb-8">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <h3 className="mb-6 font-semibold text-foreground">Plans</h3>
+          <h3 className="heading-4 mb-6 text-foreground">Plans</h3>
 
 
           <div className="flex w-full flex-col items-stretch gap-6 md:flex-row">
             <div className="flex w-full flex-col rounded-2xl border border-border bg-white p-6 text-left shadow-sm">
-              <h3 className="mb-2 text-2xl font-semibold text-foreground">Basic</h3>
-              <p className="text-sm text-text-secondary mb-4">Free forever, no credit card required</p>
+              <h3 className="heading-3 mb-2 text-foreground">Basic</h3>
+              <p className="body-small text-text-secondary mb-4">Free forever, no credit card required</p>
               <span className="text-4xl font-medium">€0</span>
-              <p className="text-sm text-text-secondary">Per month</p>
+              <p className="body-small text-text-secondary">Per month</p>
               <Separator className="my-6" />
               <div className="flex flex-1 flex-col justify-between gap-6">
-                <ul className="space-y-3 text-sm text-text-secondary">
+                <ul className="body-small space-y-3 text-text-secondary">
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-muted-foreground" />
                     <span>Up to 3 projects</span>
@@ -86,16 +86,16 @@ export default function PricingPage() {
               </div>
             </div>
             <div className="flex w-full flex-col rounded-2xl border border-border bg-white p-6 text-left shadow-lg">
-              <h3 className="mb-2 text-2xl font-semibold text-foreground">Plus</h3>
-              <p className="text-sm text-red-600 font-medium mb-4">Free during beta</p>
+              <h3 className="heading-3 mb-2 text-foreground">Plus</h3>
+              <p className="body-small text-red-600 font-medium mb-4">Free during beta</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-semibold text-foreground line-through">€39</span>
                 <span className="text-4xl font-semibold text-foreground">€0</span>
               </div>
-              <p className="text-sm text-text-secondary">Per month</p>
+              <p className="body-small text-text-secondary">Per month</p>
               <Separator className="my-6" />
               <div className="flex flex-1 flex-col justify-between gap-6">
-                <ul className="space-y-3 text-sm text-foreground">
+                <ul className="body-small space-y-3 text-foreground">
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-red-400" />
                     <span>Unlimited projects</span>
@@ -130,11 +130,11 @@ export default function PricingPage() {
                   )}
                 </Button>
                 {!canAttemptUpgrade && !isPlus && (
-                  <p className="text-sm text-text-secondary">
+                  <p className="body-small text-text-secondary">
                     Upgrades are temporarily unavailable. Contact support if you need help activating Plus.
                   </p>
                 )}
-                {upgradeError && <p className="text-sm text-red-600">{upgradeError}</p>}
+                {upgradeError && <p className="body-small text-red-600">{upgradeError}</p>}
               </div>
             </div>
           </div>

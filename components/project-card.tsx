@@ -1,8 +1,10 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Heart, ThumbsUp } from "lucide-react"
 import { memo } from "react"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -57,14 +59,12 @@ export const ProjectCard = memo(function ProjectCard({
   return (
     <Link href={project.slug ? `/projects/${project.slug}` : "#"} className={`group cursor-pointer ${className}`}>
       <div className="relative overflow-hidden rounded-lg bg-surface">
-        <img
-          src={imageSrc}
+        <Image
+          src={sanitizeImageUrl(imageSrc, PLACEHOLDER_IMAGE)}
           alt={imageAlt}
+          width={IMAGE_SIZES.card.width}
+          height={IMAGE_SIZES.card.width}
           className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          onError={(event) => {
-            event.currentTarget.src = PLACEHOLDER_IMAGE
-            event.currentTarget.onerror = null
-          }}
         />
         <button
           onClick={handleSaveToggle}
@@ -81,7 +81,7 @@ export const ProjectCard = memo(function ProjectCard({
       </div>
       <div className="mt-3">
         <div className="flex items-start gap-2 mb-1">
-          <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2 flex-1">
+          <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2 flex-1">
             {project.title}
           </p>
           <button
@@ -90,7 +90,7 @@ export const ProjectCard = memo(function ProjectCard({
             disabled={isMutatingLike}
             aria-pressed={isLiked}
             aria-label={isLiked ? "Unlike project" : "Like project"}
-            className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground disabled:opacity-70 flex-shrink-0"
+            className="flex items-center gap-1 body-small text-text-secondary hover:text-foreground disabled:opacity-70 flex-shrink-0"
           >
             <ThumbsUp
               className={`h-3 w-3 ${isLiked ? "text-red-500 fill-red-500" : ""}`}

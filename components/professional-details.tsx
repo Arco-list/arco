@@ -69,13 +69,13 @@ export function ProfessionalDetails({ professional, projectsCount }: Professiona
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-black">About the professional</h2>
+      <h2 className="heading-4 font-bold text-black">About the professional</h2>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {details.map((detail) => (
           <div key={detail.label} className="space-y-1">
-            <p className="text-sm text-text-secondary">{detail.label}</p>
-            <p className="text-sm font-medium text-foreground">{detail.value}</p>
+            <p className="body-small text-text-secondary">{detail.label}</p>
+            <p className="body-small font-medium text-foreground">{detail.value}</p>
           </div>
         ))}
       </div>

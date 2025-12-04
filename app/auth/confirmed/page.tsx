@@ -38,8 +38,8 @@ export default async function EmailConfirmedPage({ searchParams }: EmailConfirme
               </div>
 
               <div className="space-y-2">
-                <h3>Email confirmed!</h3>
-                <p className="text-muted-foreground text-sm">
+                <h3 className="heading-3">Email confirmed!</h3>
+                <p className="body-small text-muted-foreground">
                   Your email has been successfully verified. You can now access all features of your account.
                 </p>
               </div>
@@ -54,7 +54,7 @@ export default async function EmailConfirmedPage({ searchParams }: EmailConfirme
                 <div className="text-center">
                   <Link
                     href="/"
-                    className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                    className="body-small text-muted-foreground hover:text-primary transition-colors"
                   >
                     Back to home
                   </Link>
@@ -63,8 +63,8 @@ export default async function EmailConfirmedPage({ searchParams }: EmailConfirme
             </div>
 
             <div className="mt-8 p-4 bg-surface rounded-lg">
-              <h2 className="text-sm font-medium text-foreground mb-2">What&apos;s next?</h2>
-              <ul className="text-sm text-muted-foreground space-y-1">
+              <h2 className="body-small font-medium text-foreground mb-2">What&apos;s next?</h2>
+              <ul className="body-small text-muted-foreground space-y-1">
                 <li>• Complete your profile to get started</li>
                 <li>• Browse available projects and professionals</li>
                 <li>• Save your favorite projects and professionals</li>

@@ -94,8 +94,8 @@ export function AdminOnboardingForm({ email, redirectTo }: AdminOnboardingFormPr
   return (
     <div className="flex flex-col gap-8">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Welcome to the Arco admin portal</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="heading-3">Welcome to the Arco admin portal</h1>
+        <p className="body-small text-muted-foreground">
           {maskedEmail ? `Account verified for ${maskedEmail}.` : "Your admin account has been verified."} Choose a strong
           password to finish setup and access the dashboard.
         </p>
@@ -130,21 +130,21 @@ export function AdminOnboardingForm({ email, redirectTo }: AdminOnboardingFormPr
           />
         </div>
 
-        <ul className="space-y-1 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+        <ul className="body-small space-y-1 rounded-lg bg-muted/60 p-3 text-muted-foreground">
           <li>• Use at least {MIN_PASSWORD_LENGTH} characters.</li>
           <li>• Combine uppercase, lowercase, numbers, and symbols.</li>
           <li>• Avoid reusing passwords from other services.</li>
         </ul>
 
-        {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-        {success ? <p className="text-sm font-medium text-green-600">Password saved — redirecting…</p> : null}
+        {error ? <p className="body-small font-medium text-destructive">{error}</p> : null}
+        {success ? <p className="body-small font-medium text-green-600">Password saved — redirecting…</p> : null}
 
         <Button type="submit" variant="secondary" size="sm" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Saving…" : "Save password and continue"}
         </Button>
       </form>
 
-      <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+      <div className="body-small rounded-xl border border-border bg-muted/30 p-4 text-muted-foreground">
         <p className="font-medium text-foreground">Need help?</p>
         <p>
           If the browser says the link expired, ask an existing super admin to resend the invitation and try again within one

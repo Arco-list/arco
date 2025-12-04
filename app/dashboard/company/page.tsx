@@ -5,7 +5,6 @@ import { Footer } from "@/components/footer"
 import { CompanySettingsShell } from "@/components/company-settings/company-settings-shell"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { Database } from "@/lib/supabase/types"
-import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
 
 export default async function CompanySettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -60,12 +59,6 @@ export default async function CompanySettingsPage() {
     redirect("/create-company")
   }
 
-  // Create filter sets based on PROFESSIONAL_CATEGORY_CONFIG
-  const allowedCategorySlugs = new Set(PROFESSIONAL_CATEGORY_CONFIG.map((config) => config.slug))
-  const allowedServiceSlugs = new Set(
-    PROFESSIONAL_CATEGORY_CONFIG.flatMap((config) => config.services.map((service) => service.slug))
-  )
-
   const [{ data: socialLinks }, { data: photos }, { data: allCategories }, { data: professional }] = await Promise.all([
     supabase
       .from("company_social_links")
@@ -91,12 +84,8 @@ export default async function CompanySettingsPage() {
       .maybeSingle(),
   ])
 
-  // Filter categories and services based on whitelist
-  const categories = (allCategories ?? []).filter((cat) => cat.slug && allowedCategorySlugs.has(cat.slug))
-  const services = (allCategories ?? []).filter((cat) => cat.slug && allowedServiceSlugs.has(cat.slug))
-
-  // Combine both categories and services for the dropdown and sort alphabetically
-  const serviceOptions = [...categories, ...services]
+  // Use all categories as service options (no whitelist filtering)
+  const serviceOptions = (allCategories ?? [])
     .map((item) => ({
       id: item.id,
       name: item.name,

@@ -19,7 +19,7 @@ export function ProfessionalsSidebar() {
     <>
       <div className="lg:sticky lg:top-24 lg:z-20">
         <Card className="p-6 space-y-4">
-          <h2 className="text-2xl font-bold text-black">Professionals who built it</h2>
+          <h2 className="heading-4 font-bold text-black">Professionals who built it</h2>
 
           <div className="divide-y divide-gray-200">
             {projectProfessionals.map((professional) => {
@@ -31,10 +31,10 @@ export function ProfessionalsSidebar() {
               return (
                 <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                   <div className="flex-1 min-w-0">
-                    <p className="text-base font-normal text-foreground truncate">
+                    <p className="body-regular font-normal text-foreground truncate">
                       {professional.companyName}
                     </p>
-                    <p className="text-base font-normal text-text-secondary">
+                    <p className="body-small font-normal text-text-secondary">
                       {professional.serviceCategory}
                       {' · '}
                       <Link
@@ -66,7 +66,7 @@ export function ProfessionalsSidebar() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md mx-auto">
           <DialogHeader className="pb-4 border-b">
-            <DialogTitle className="text-lg font-semibold">Professionals who built it</DialogTitle>
+            <DialogTitle className="heading-4 font-semibold">Professionals who built it</DialogTitle>
           </DialogHeader>
 
           <div className="divide-y divide-gray-200 py-4">
@@ -79,10 +79,10 @@ export function ProfessionalsSidebar() {
               return (
                 <div key={professional.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
                   <div className="flex-1 min-w-0">
-                    <p className="text-base font-normal text-foreground truncate">
+                    <p className="body-regular font-normal text-foreground truncate">
                       {professional.companyName}
                     </p>
-                    <p className="text-base font-normal text-text-secondary">
+                    <p className="body-small font-normal text-text-secondary">
                       {professional.serviceCategory}
                       {' · '}
                       <Link

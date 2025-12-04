@@ -149,8 +149,8 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h3>Invites</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="heading-4">Invites</h3>
+        <p className="body-small text-muted-foreground">
           Review pending invitations and keep company listings in sync with project statuses.
         </p>
       </div>
@@ -199,7 +199,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
           <TableBody>
             {pageItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={5} className="py-10 text-center body-small text-muted-foreground">
                   No invites match the current filters.
                 </TableCell>
               </TableRow>
@@ -222,7 +222,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
                 return (
                   <TableRow key={invite.id}>
                     <TableCell className="align-top">
-                      <div className="flex flex-col gap-1 text-sm">
+                      <div className="flex flex-col gap-1 body-small">
                         <span className="font-medium text-foreground break-words">{invite.invitedEmail}</span>
                         {respondedRelative ? (
                           <span className="text-xs text-muted-foreground">Responded {respondedRelative}</span>
@@ -230,7 +230,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1 text-sm">
+                      <div className="flex flex-col gap-1 body-small">
                         <span className="font-medium text-foreground">{projectLabel}</span>
                         {projectStatusLabel ? (
                           <span className="inline-flex items-center gap-1 text-xs capitalize text-muted-foreground">
@@ -241,7 +241,7 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col text-sm">
+                      <div className="flex flex-col body-small">
                         <span className="font-medium text-foreground">{invitedAt.absolute}</span>
                         {invitedAt.relative ? (
                           <span className="text-xs text-muted-foreground">{invitedAt.relative}</span>
@@ -276,13 +276,13 @@ export function AdminProfessionalInvitesTable({ invites }: Props) {
         </Table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 body-small text-muted-foreground">
         <div>
           Showing {pageItems.length} of {filteredInvites.length} invites
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Label htmlFor="invites-rows" className="text-sm font-medium text-foreground">
+            <Label htmlFor="invites-rows" className="heading-7 text-foreground">
               Rows per page
             </Label>
             <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>

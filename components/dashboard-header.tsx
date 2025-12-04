@@ -201,7 +201,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
               className="flex items-center gap-2 h-9 rounded-full border px-3 border-border hover:bg-surface"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              <span className="hidden text-sm md:inline">{menuLabel}</span>
+              <span className="hidden body-small md:inline">{menuLabel}</span>
               <Menu className="h-5 w-5" />
             </button>
 

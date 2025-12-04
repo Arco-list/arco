@@ -92,11 +92,11 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
     <div className="lg:sticky lg:top-24 lg:z-20">
       <Card className="space-y-6 p-6">
         <div className="space-y-4">
-          <h2 className="text-2xl font-bold text-black">Contact {displayName}</h2>
+          <h2 className="heading-4 font-bold text-black">Contact {displayName}</h2>
 
           <div className="space-y-3">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <div className="flex items-center gap-2 body-small text-text-secondary">
                 <Phone className="h-4 w-4 flex-shrink-0" />
                 {phone ? (
                   <RevealPhoneNumber phone={phone} />
@@ -106,7 +106,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
               </div>
 
               {primaryActions.map(({ icon: Icon, label, href, disabled, external }, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
+                <div key={index} className="flex items-center gap-2 body-small">
                   {href ? (
                     <a
                       href={href ?? ""}
@@ -130,7 +130,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
 
           {socialLinks.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-foreground">Follow</h4>
+              <h4 className="body-small font-medium text-foreground">Follow</h4>
               <div className="flex justify-start gap-2">
                 {socialLinks.map(({ href, Icon, platform }) => (
                   <a
@@ -176,7 +176,7 @@ const RevealPhoneNumber = ({ phone }: { phone: string }) => {
     <button
       type="button"
       onClick={() => setIsVisible(true)}
-      className="text-sm font-medium text-foreground underline hover:no-underline"
+      className="body-small font-medium text-foreground underline hover:no-underline"
     >
       Show phone number
     </button>

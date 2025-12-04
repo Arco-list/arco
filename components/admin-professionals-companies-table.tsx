@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import {
   IconBuildingSkyscraper,
   IconDotsVertical,
@@ -10,11 +11,13 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 import {
   updateCompanyDetailsAction,
   updateCompanyStatusAction,
   updateCompanyPlanTierAction,
+  updateCompanyPlanExpirationAction,
   updateCompanyFeaturedAction,
   updateProfessionalFeaturedAction,
 } from "@/app/admin/professionals/actions"
@@ -64,6 +67,7 @@ import type { Database } from "@/lib/supabase/types"
 export type AdminCompanyRow = {
   id: string
   name: string
+  slug: string | null
   location: string | null
   city: string | null
   country: string | null
@@ -80,6 +84,8 @@ export type AdminCompanyRow = {
   website: string | null
   contactEmail: string | null
   servicesOffered: string[]
+  primaryServiceId: string | null
+  planExpiresAt: string | null
 }
 
 type Props = {
@@ -98,13 +104,16 @@ type PendingStatusAction = {
 
 type EditFormState = {
   name: string
+  slug: string
   logoUrl: string
   website: string
   email: string
   services: string[]
+  primaryServiceId: string
   isFeatured: boolean
   status: CompanyStatus
   planTier: PlanTier
+  planExpiresAt: string
   professionals: CompanyProfessional[]
 }
 
@@ -194,13 +203,16 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
       if (!cancelled) {
         setEditForm({
           name: editingCompany.name,
+          slug: editingCompany.slug ?? "",
           logoUrl: editingCompany.logoUrl ?? "",
           website: editingCompany.website ?? "",
           email: editingCompany.contactEmail ?? "",
           services: editingCompany.servicesOffered ?? [],
+          primaryServiceId: editingCompany.primaryServiceId ?? "",
           isFeatured: editingCompany.isFeatured,
           status: editingCompany.status,
           planTier: editingCompany.planTier,
+          planExpiresAt: editingCompany.planExpiresAt ?? "",
           professionals: professionals ?? [],
         })
       }
@@ -309,10 +321,12 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
         const detailsResult = await updateCompanyDetailsAction({
           companyId: editingCompany.id,
           name: editForm.name.trim(),
+          slug: editForm.slug.trim() || null,
           logoUrl: editForm.logoUrl.trim() || null,
           website: editForm.website.trim() || null,
           contactEmail: editForm.email.trim() || null,
           services: editForm.services,
+          primaryServiceId: editForm.primaryServiceId || null,
         })
 
         if (!detailsResult.success) {
@@ -346,6 +360,19 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           }
         }
 
+        // Update plan expiration if changed
+        if (editForm.planExpiresAt !== editingCompany.planExpiresAt) {
+          const planExpirationResult = await updateCompanyPlanExpirationAction({
+            companyId: editingCompany.id,
+            planExpiresAt: editForm.planExpiresAt || null,
+          })
+
+          if (!planExpirationResult.success) {
+            toast.error(planExpirationResult.error ?? "Failed to update plan expiration")
+            return
+          }
+        }
+
         toast.success(`${editingCompany.name} updated`)
         router.refresh()
       } catch (error) {
@@ -361,8 +388,8 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
     <div className="flex h-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h3>Companies</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="heading-4">Companies</h3>
+          <p className="body-small text-muted-foreground">
             Manage professional company profiles surfaced across marketing pages.
           </p>
         </div>
@@ -389,7 +416,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           <TableBody>
             {pageItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center body-small text-muted-foreground">
                   No companies match the current filters.
                 </TableCell>
               </TableRow>
@@ -417,7 +444,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                             </Badge>
                           ) : null}
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2 body-small text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <IconBuildingSkyscraper className="size-3.5" />
                             {company.location ? company.location : "Location not set"}
@@ -440,18 +467,18 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1 text-sm font-medium">
+                      <div className="flex items-center gap-1 body-small font-medium">
                         {company.projectsLinked}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1 body-small text-muted-foreground">
                         <IconUsers className="size-3.5" />
                         {company.professionalCount}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1 text-sm">
+                      <div className="flex items-center gap-1 body-small">
                         <IconStar className="size-3.5 fill-yellow-400 text-yellow-400" />
                         {ratingLabel}
                       </div>
@@ -509,13 +536,13 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
         </Table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 body-small text-muted-foreground">
         <div>
           Showing {pageItems.length} of {filteredCompanies.length} companies
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Label htmlFor="companies-rows" className="text-sm font-medium text-foreground">
+            <Label htmlFor="companies-rows" className="heading-7 text-foreground">
               Rows per page
             </Label>
             <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
@@ -603,8 +630,8 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
           <div className="space-y-4 py-2">
             <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/30">
               <div className="space-y-0.5">
-                <Label className="text-base font-medium">Featured on homepage</Label>
-                <p className="text-sm text-muted-foreground">
+                <Label className="heading-6">Featured on homepage</Label>
+                <p className="body-small text-muted-foreground">
                   Display this company in the featured professionals section
                 </p>
               </div>
@@ -674,6 +701,25 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="plan-expires-at">Plan expiration</Label>
+              <Input
+                id="plan-expires-at"
+                type="datetime-local"
+                value={editForm?.planExpiresAt ? new Date(editForm.planExpiresAt).toISOString().slice(0, 16) : ""}
+                onChange={(event) =>
+                  setEditForm((prev) => (prev ? { ...prev, planExpiresAt: event.target.value ? new Date(event.target.value).toISOString() : "" } : prev))
+                }
+              />
+              {editForm?.planExpiresAt && (
+                <p className="text-xs text-muted-foreground">
+                  {new Date(editForm.planExpiresAt) > new Date()
+                    ? `Expires in ${Math.ceil((new Date(editForm.planExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days`
+                    : `Expired ${Math.ceil((Date.now() - new Date(editForm.planExpiresAt).getTime()) / (1000 * 60 * 60 * 24))} days ago`
+                  }
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="company-name">Company name</Label>
               <Input
                 id="company-name"
@@ -682,6 +728,20 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                   setEditForm((prev) => (prev ? { ...prev, name: event.target.value } : prev))
                 }
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-slug">URL slug</Label>
+              <Input
+                id="company-slug"
+                placeholder="company-slug"
+                value={editForm?.slug ?? ""}
+                onChange={(event) =>
+                  setEditForm((prev) => (prev ? { ...prev, slug: event.target.value } : prev))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Used in URL: /professionals/{editForm?.slug || "slug"}
+              </p>
             </div>
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
               <div className="space-y-2">
@@ -697,13 +757,12 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                 />
                 {editForm?.logoUrl ? (
                   <div className="mt-2 flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border bg-muted/40">
-                    <img
-                      src={editForm.logoUrl}
+                    <Image
+                      src={sanitizeImageUrl(editForm.logoUrl)}
                       alt="Company logo preview"
+                      width={IMAGE_SIZES.thumbnail.width}
+                      height={IMAGE_SIZES.thumbnail.height}
                       className="h-full w-full object-contain"
-                      onError={(event) => {
-                        event.currentTarget.style.display = "none"
-                      }}
                     />
                   </div>
                 ) : null}
@@ -732,26 +791,49 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                   }
                 />
               </div>
+              <div className="space-y-2 lg:col-span-1">
+                <Label htmlFor="primary-service">Primary service</Label>
+                <Select
+                  value={editForm?.primaryServiceId ?? ""}
+                  onValueChange={(value) =>
+                    setEditForm((prev) => (prev ? { ...prev, primaryServiceId: value } : prev))
+                  }
+                >
+                  <SelectTrigger id="primary-service">
+                    <SelectValue placeholder="Select primary service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {serviceOptions.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2 lg:col-span-2">
-                <Label>Services</Label>
-                <p className="text-xs text-muted-foreground">Select the services this company offers.</p>
+                <Label>Other services</Label>
+                <p className="text-xs text-muted-foreground">Select additional services this company offers.</p>
                 <div className="max-h-56 overflow-y-auto rounded-md border p-3">
                   {serviceOptions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No services available.</p>
+                    <p className="body-small text-muted-foreground">No services available.</p>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2">
                       {serviceOptions.map((service) => {
                         const checked = editForm?.services.includes(service.id) ?? false
+                        const disabled = service.id === editForm?.primaryServiceId
                         return (
                           <label
                             key={service.id}
                             className={cn(
-                              "flex items-center gap-2 rounded-md border px-3 py-2 text-sm",
+                              "flex items-center gap-2 rounded-md border px-3 py-2 body-small",
+                              disabled ? "opacity-50 cursor-not-allowed" : "",
                               checked ? "border-primary bg-primary/5" : "border-border hover:border-primary"
                             )}
                           >
                             <Checkbox
                               checked={checked}
+                              disabled={disabled}
                               onCheckedChange={(value) =>
                                 toggleService(service.id, value === true)
                               }
@@ -769,7 +851,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                 <p className="text-xs text-muted-foreground">Manage which professionals from this company are featured on the homepage.</p>
                 <div className="max-h-64 overflow-y-auto rounded-md border">
                   {editForm?.professionals?.length === 0 ? (
-                    <div className="p-4 text-center text-sm text-muted-foreground">
+                    <div className="p-4 text-center body-small text-muted-foreground">
                       No professionals found for this company.
                     </div>
                   ) : (
@@ -782,13 +864,12 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                           <div key={professional.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
                             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border bg-muted/40">
                               {professional.avatar_url ? (
-                                <img
-                                  src={professional.avatar_url}
+                                <Image
+                                  src={sanitizeImageUrl(professional.avatar_url)}
                                   alt={name}
+                                  width={IMAGE_SIZES.avatar.width}
+                                  height={IMAGE_SIZES.avatar.height}
                                   className="h-full w-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none'
-                                  }}
                                 />
                               ) : (
                                 <span className="text-xs font-medium text-muted-foreground">
@@ -797,7 +878,7 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{name}</p>
+                              <p className="body-small font-medium truncate">{name}</p>
                               <p className="text-xs text-muted-foreground truncate">{role}</p>
                             </div>
                             <div className="flex items-center gap-2">

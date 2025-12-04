@@ -66,7 +66,7 @@ export function ProjectFeatures() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold text-black">Features</h2>
+      <h2 className="heading-3 font-bold text-black">Features</h2>
 
       {featuredList.length > 0 && (
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
@@ -77,7 +77,7 @@ export function ProjectFeatures() {
                 key={feature.id}
                 type="button"
                 onClick={() => handleFeatureClick(feature)}
-                className="flex items-center gap-2 text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary transition-colors text-left"
+                className="flex items-center gap-2 body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary transition-colors text-left"
               >
                 <IconComponent className="h-4 w-4 flex-shrink-0" />
                 <span>{feature.label}</span>
@@ -96,13 +96,13 @@ export function ProjectFeatures() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md">
           <DialogHeader className="pb-4">
-            <DialogTitle className="text-lg font-semibold">Features</DialogTitle>
+            <DialogTitle className="heading-5 font-semibold">Features</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">
             {featureGroups.map((group) => (
               <div key={group.id}>
-                <h3 className="mb-3 text-sm font-medium text-foreground">{group.name}</h3>
+                <h3 className="mb-3 body-small font-medium text-foreground">{group.name}</h3>
                 <div className="flex flex-wrap gap-2">
                   {group.items.map((feature) => {
                     const modalFeature: FeatureWithGroup = { ...feature, groupId: group.id }
@@ -115,7 +115,7 @@ export function ProjectFeatures() {
                           handleFeatureClick(modalFeature)
                           setShowModal(false)
                         }}
-                        className="flex items-center gap-2 text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary transition-colors"
+                        className="flex items-center gap-2 body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary transition-colors"
                       >
                         <IconComponent className="h-4 w-4 flex-shrink-0" />
                         <span>{feature.label}</span>

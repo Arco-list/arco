@@ -49,10 +49,10 @@ export default function ListWithUsPage() {
         {/* Hero Section */}
         <section className="pt-24 md:pt-32 pb-12 md:pb-20 bg-white">
           <div className="max-w-7xl mx-auto px-4 md:px-6 text-center">
-            <h1 className="mb-4 md:mb-6 px-4">
+            <h1 className="heading-2 mb-4 md:mb-6 px-4">
               Attract high-end homeowners
             </h1>
-            <p className="text-base md:text-lg lg:text-xl text-text-secondary mb-6 md:mb-8 max-w-4xl mx-auto leading-relaxed px-2">
+            <p className="body-large text-text-secondary mb-6 md:mb-8 max-w-4xl mx-auto leading-relaxed px-2">
               Join Arco and connect with homeowners who value exceptional design and quality. By showcasing your completed projects, you put your company in front of clients seeking inspiration and the right professionals to bring their dream to life.
             </p>
             <Button asChild size="lg">
@@ -91,8 +91,8 @@ export default function ListWithUsPage() {
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
               <div className="text-center lg:text-left">
-                <h2 className="mb-4 md:mb-6">Reach a wider audience</h2>
-                <p className="text-base md:text-lg text-text-secondary mb-6 md:mb-8 leading-relaxed">
+                <h2 className="heading-3 mb-4 md:mb-6">Reach a wider audience</h2>
+                <p className="body-regular text-text-secondary mb-6 md:mb-8 leading-relaxed">
                   Optimize your listings for better visibility. With our advanced global SEO features, your listings are
                   optimized to rank higher in search results, making it easier for potential clients to find your
                   properties across different regions and markets.
@@ -121,8 +121,8 @@ export default function ListWithUsPage() {
                 />
               </div>
               <div className="text-center lg:text-left order-1 lg:order-2">
-                <h2 className="mb-4 md:mb-6">Showcase your work</h2>
-                <p className="text-base md:text-lg text-text-secondary leading-relaxed">
+                <h2 className="heading-3 mb-4 md:mb-6">Showcase your work</h2>
+                <p className="body-regular text-text-secondary leading-relaxed">
                   Our platform provides you with customizable tools to create a professional online presence.
                   Establishing a strong brand identity allows you to gain the trust of buyers and sellers, ultimately
                   leading to more business.
@@ -137,8 +137,8 @@ export default function ListWithUsPage() {
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
               <div className="text-center lg:text-left">
-                <h2 className="mb-4 md:mb-6">Create a stunning portfolio</h2>
-                <p className="text-base md:text-lg text-text-secondary leading-relaxed">
+                <h2 className="heading-3 mb-4 md:mb-6">Create a stunning portfolio</h2>
+                <p className="body-regular text-text-secondary leading-relaxed">
                   Shine whenever & build yours—whether it's during the day, in the evening, or on weekends.
                 </p>
               </div>
@@ -165,8 +165,8 @@ export default function ListWithUsPage() {
                 />
               </div>
               <div className="text-center lg:text-left order-1 lg:order-2">
-                <h2 className="mb-4 md:mb-6">Get direct access to customers</h2>
-                <p className="text-base md:text-lg text-text-secondary leading-relaxed">
+                <h2 className="heading-3 mb-4 md:mb-6">Get direct access to customers</h2>
+                <p className="body-regular text-text-secondary leading-relaxed">
                   Homeowners can reach out to you directly through your profile. You can also add all professionals involved in a project, so architects, builders, designers, and more get the recognition they deserve.
                 </p>
               </div>
@@ -223,7 +223,7 @@ export default function ListWithUsPage() {
         {/* How to List Section */}
         <section className="py-12 md:py-20 bg-white">
           <div className="max-w-4xl mx-auto px-4 md:px-6 text-center">
-            <h2 className="mb-6 md:mb-8">
+            <h2 className="heading-3 mb-6 md:mb-8">
               How to list your projects on Arco
             </h2>
             <div className="max-w-6xl mx-auto px-4 md:px-6 mt-8 md:mt-12">
@@ -232,8 +232,8 @@ export default function ListWithUsPage() {
                 <div className="flex justify-center">
                   <User className="h-6 w-6 text-foreground" />
                 </div>
-                <h4>Sign up in minutes</h4>
-                <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+                <h4 className="heading-6">Sign up in minutes</h4>
+                <p className="body-small text-text-secondary leading-relaxed">
                   Create your professional account and join a community of top-tier professionals showcasing the best in residential design and craftsmanship.
                 </p>
               </div>
@@ -241,8 +241,8 @@ export default function ListWithUsPage() {
                 <div className="flex justify-center">
                   <Upload className="h-6 w-6 text-foreground" />
                 </div>
-                <h4>List your projects</h4>
-                <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+                <h4 className="heading-6">List your projects</h4>
+                <p className="body-small text-text-secondary leading-relaxed">
                   Upload your completed projects, add photos, details, and credit your collaborators to show the full story behind your work.
                 </p>
               </div>
@@ -250,8 +250,8 @@ export default function ListWithUsPage() {
                 <div className="flex justify-center">
                   <Palette className="h-6 w-6 text-foreground" />
                 </div>
-                <h4>Create portfolio</h4>
-                <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+                <h4 className="heading-6">Create portfolio</h4>
+                <p className="body-small text-text-secondary leading-relaxed">
                   Build a stunning profile that reflects your brand and expertise. Your portfolio becomes a powerful tool to attract clients, highlight your best work, and stand out from the competition.
                 </p>
               </div>
@@ -263,8 +263,8 @@ export default function ListWithUsPage() {
         {/* Final CTA Section */}
         <section className="py-12 md:py-20 bg-[#F5F5F5]">
           <div className="max-w-4xl mx-auto px-4 md:px-6 text-center">
-            <h2 className="mb-4 md:mb-6">Ready to list your projects?</h2>
-            <p className="text-base md:text-lg lg:text-xl mb-6 md:mb-8 text-text-secondary leading-relaxed px-2">
+            <h2 className="heading-3 mb-4 md:mb-6">Ready to list your projects?</h2>
+            <p className="body-large text-text-secondary mb-6 md:mb-8 leading-relaxed px-2">
               Inspire professionals to build beautiful and showcase their portfolios to homeowners in search of
               realizing their dream.
             </p>

@@ -1,10 +1,12 @@
 "use client"
 
 import { useMemo, type KeyboardEvent } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Expand } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 type GalleryImage = {
   src: string
@@ -77,9 +79,11 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
         )}
         aria-label={galleryIsInteractive ? `View photo 1 of ${totalImages}` : undefined}
       >
-        <img
-          src={displayImages[0]?.src || PLACEHOLDER_IMAGE.src}
+        <Image
+          src={sanitizeImageUrl(displayImages[0]?.src, PLACEHOLDER_IMAGE.src)}
           alt={displayImages[0]?.alt || PLACEHOLDER_IMAGE.alt}
+          width={IMAGE_SIZES.gallery.width}
+          height={IMAGE_SIZES.gallery.height}
           className={cn(
             "h-full max-h-full min-h-0 w-full object-cover transition-transform duration-300 ease-out",
             galleryIsInteractive && "group-hover:scale-105",
@@ -129,9 +133,11 @@ export function GalleryGrid({ images, interactive = true, onOpen, showOverlay = 
                 galleryIsInteractive ? `View photo ${Math.min(index + 2, totalImages)} of ${totalImages}` : undefined
               }
             >
-              <img
-                src={resolvedImage.src}
+              <Image
+                src={sanitizeImageUrl(resolvedImage.src, PLACEHOLDER_IMAGE.src)}
                 alt={resolvedImage.alt}
+                width={IMAGE_SIZES.card.width}
+                height={IMAGE_SIZES.card.height}
                 className={cn(
                   "h-full max-h-full min-h-0 w-full object-cover transition-transform duration-300 ease-out",
                   galleryIsInteractive && "group-hover:scale-105",

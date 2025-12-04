@@ -47,12 +47,12 @@ export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) 
 
         <div className="space-y-4">
           <div>
-            <Label className="text-sm font-medium mb-3 block">Why are you reporting this {listingType}?</Label>
+            <Label className="body-small font-medium mb-3 block">Why are you reporting this {listingType}?</Label>
             <RadioGroup value={selectedReason} onValueChange={setSelectedReason}>
               {reasons.map((reason) => (
                 <div key={reason} className="flex items-center space-x-2">
                   <RadioGroupItem value={reason} id={reason} />
-                  <Label htmlFor={reason} className="text-sm">
+                  <Label htmlFor={reason} className="body-small">
                     {reason}
                   </Label>
                 </div>
@@ -61,7 +61,7 @@ export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) 
           </div>
 
           <div>
-            <Label htmlFor="description" className="text-sm font-medium mb-2 block">
+            <Label htmlFor="description" className="body-small font-medium mb-2 block">
               Additional details (optional)
             </Label>
             <Textarea

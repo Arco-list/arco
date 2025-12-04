@@ -39,13 +39,13 @@ export const ProjectBasicsFields = ({
 }: ProjectBasicsFieldsProps) => (
   <div className="space-y-8">
     {projectTaxonomyError && (
-      <p className="text-sm text-amber-600">
+      <p className="body-small text-amber-600">
         We could not load the latest taxonomy data, so fallback values are shown for now.
       </p>
     )}
 
     <div>
-      <label className="block text-base font-medium text-foreground mb-3">
+      <label className="block body-regular font-medium text-foreground mb-3">
         What is the category of your project? <span className="text-red-500">*</span>
       </label>
       <CustomDropdown
@@ -58,17 +58,17 @@ export const ProjectBasicsFields = ({
         openDropdown={openDropdown}
         setOpenDropdown={setOpenDropdown}
       />
-      <p className="text-sm text-text-secondary mt-2">Choose the main category that best describes your project</p>
+      <p className="body-small text-text-secondary mt-2">Choose the main category that best describes your project</p>
       {taxonomyError && (
-        <p className="text-sm text-amber-600 mt-2">
+        <p className="body-small text-amber-600 mt-2">
           We could not reach Supabase; showing fallback taxonomy options for now.
         </p>
       )}
-      {validationErrors.category && <p className="text-sm text-red-600 mt-2">{validationErrors.category}</p>}
+      {validationErrors.category && <p className="body-small text-red-600 mt-2">{validationErrors.category}</p>}
     </div>
 
     <div>
-      <label className="block text-base font-medium text-foreground mb-3">
+      <label className="block body-regular font-medium text-foreground mb-3">
         Project type <span className="text-red-500">*</span>
       </label>
       <CustomDropdown
@@ -82,14 +82,14 @@ export const ProjectBasicsFields = ({
         openDropdown={openDropdown}
         setOpenDropdown={setOpenDropdown}
       />
-      <p className="text-sm text-text-secondary mt-2">
+      <p className="body-small text-text-secondary mt-2">
         Select the specific subtype within your chosen category (e.g., Villa, Kitchen)
       </p>
-      {validationErrors.projectType && <p className="text-sm text-red-600 mt-2">{validationErrors.projectType}</p>}
+      {validationErrors.projectType && <p className="body-small text-red-600 mt-2">{validationErrors.projectType}</p>}
     </div>
 
     <div>
-      <label className="block text-base font-medium text-foreground mb-3">
+      <label className="block body-regular font-medium text-foreground mb-3">
         Building type <span className="text-red-500">*</span>
       </label>
       <CustomDropdown
@@ -101,14 +101,14 @@ export const ProjectBasicsFields = ({
         openDropdown={openDropdown}
         setOpenDropdown={setOpenDropdown}
       />
-      <p className="text-sm text-text-secondary mt-2">
+      <p className="body-small text-text-secondary mt-2">
         Indicate whether the project was a new build, renovation, or interior design scope
       </p>
-      {validationErrors.buildingType && <p className="text-sm text-red-600 mt-2">{validationErrors.buildingType}</p>}
+      {validationErrors.buildingType && <p className="body-small text-red-600 mt-2">{validationErrors.buildingType}</p>}
     </div>
 
     <div>
-      <label className="block text-base font-medium text-foreground mb-3">
+      <label className="block body-regular font-medium text-foreground mb-3">
         Project style <span className="text-red-500">*</span>
       </label>
       <CustomDropdown
@@ -120,10 +120,10 @@ export const ProjectBasicsFields = ({
         openDropdown={openDropdown}
         setOpenDropdown={setOpenDropdown}
       />
-      <p className="text-sm text-text-secondary mt-2">
+      <p className="body-small text-text-secondary mt-2">
         Choose the architectural or design style that best represents your project
       </p>
-      {validationErrors.projectStyle && <p className="text-sm text-red-600 mt-2">{validationErrors.projectStyle}</p>}
+      {validationErrors.projectStyle && <p className="body-small text-red-600 mt-2">{validationErrors.projectStyle}</p>}
     </div>
   </div>
 )

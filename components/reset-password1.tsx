@@ -83,8 +83,8 @@ const ResetPassword1 = ({
               />
             </Link>
             <div className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md text-center">
-              <h3>Check Your Email</h3>
-              <p className="text-muted-foreground text-sm">We've sent a password reset link to {email}</p>
+              <h3 className="heading-3">Check Your Email</h3>
+              <p className="body-small text-muted-foreground">We've sent a password reset link to {email}</p>
               <Button asChild variant="secondary" className="w-full">
                 <Link href={loginUrl}>Back to Login</Link>
               </Button>
@@ -106,8 +106,8 @@ const ResetPassword1 = ({
             onSubmit={handleSubmit}
             className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md"
           >
-            <h3>{heading}</h3>
-            <p className="text-muted-foreground text-sm text-center">{description}</p>
+            <h3 className="heading-3">{heading}</h3>
+            <p className="body-small text-muted-foreground text-center">{description}</p>
             <Input
               type="email"
               placeholder="Email"
@@ -121,7 +121,7 @@ const ResetPassword1 = ({
               {isLoading ? "Sending..." : buttonText}
             </Button>
           </form>
-          <div className="text-muted-foreground flex justify-center gap-1 text-sm">
+          <div className="body-small text-muted-foreground flex justify-center gap-1">
             <p>{loginText}</p>
             <Link href={loginUrl} className="text-primary font-medium hover:underline">
               Login

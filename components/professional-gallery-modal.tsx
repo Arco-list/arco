@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import Image from "next/image"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,6 +15,7 @@ import {
 import { ShareModal } from "./share-modal"
 import { useProfessionalGalleryData } from "@/contexts/professional-gallery-modal-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 interface ProfessionalGalleryModalProps {
   isOpen: boolean
@@ -242,8 +244,8 @@ export function ProfessionalGalleryModal({
                     >
                       {/* Category Header */}
                       <div className="space-y-1">
-                        <h2 className="text-xl font-semibold text-foreground">{group.category}</h2>
-                        {group.description && <p className="text-text-secondary text-sm">{group.description}</p>}
+                        <h2 className="heading-4 font-semibold text-foreground">{group.category}</h2>
+                        {group.description && <p className="text-text-secondary body-small">{group.description}</p>}
                       </div>
 
                       {/* Images - Grid Layout */}
@@ -254,9 +256,11 @@ export function ProfessionalGalleryModal({
                             className="cursor-pointer w-full"
                             onClick={() => handleImageClick(groupIndex, imageIndex)}
                           >
-                            <img
-                              src={image.src || "/placeholder.svg"}
+                            <Image
+                              src={sanitizeImageUrl(image.src, "/placeholder.svg")}
                               alt={image.alt}
+                              width={IMAGE_SIZES.gallery.width}
+                              height={IMAGE_SIZES.gallery.height}
                               className="w-full h-auto object-cover rounded-lg hover:opacity-95 transition-opacity aspect-square"
                             />
                           </div>
@@ -329,9 +333,11 @@ export function ProfessionalGalleryModal({
             {/* Image Display */}
             <div className="absolute inset-0 flex items-center justify-center px-4 md:px-12">
               <div className="relative w-full h-full flex items-center justify-center">
-                <img
-                  src={allImages[currentImageIndex]?.src || "/placeholder.svg"}
-                  alt={allImages[currentImageIndex]?.alt}
+                <Image
+                  src={sanitizeImageUrl(allImages[currentImageIndex]?.src, "/placeholder.svg")}
+                  alt={allImages[currentImageIndex]?.alt || "Professional photo"}
+                  width={1200}
+                  height={900}
                   className={`max-w-full max-h-[80vh] object-contain transition-transform duration-300 ease-out ${
                     isZoomed ? "cursor-zoom-out" : "cursor-zoom-in"
                   }`}
@@ -371,7 +377,7 @@ export function ProfessionalGalleryModal({
 
             {/* Category Label */}
             <div
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm"
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full body-small backdrop-blur-sm"
               role="status"
               aria-live="polite"
             >

@@ -101,7 +101,7 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
           {...form.register("email")}
         />
         {form.formState.errors.email && (
-          <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+          <p className="body-small text-destructive">{form.formState.errors.email.message}</p>
         )}
       </div>
       <div className="space-y-2">
@@ -115,7 +115,7 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
           {...form.register("password")}
         />
         {form.formState.errors.password && (
-          <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
+          <p className="body-small text-destructive">{form.formState.errors.password.message}</p>
         )}
       </div>
       <input type="hidden" defaultValue={safeRedirectTo ?? ""} {...form.register("redirectTo")} />

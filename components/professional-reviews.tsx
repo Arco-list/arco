@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useTransition } from "react"
+import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Award, ChevronDown, MessageCircle, Shield, Star, X } from "lucide-react"
 import { toast } from "sonner"
@@ -8,6 +9,7 @@ import { toast } from "sonner"
 import type { ProfessionalRatingsBreakdown, ProfessionalReviewSummary } from "@/lib/professionals/types"
 import { createReviewAction } from "@/app/professionals/[slug]/actions"
 import { useRequireAuth } from "@/hooks/use-require-auth"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -191,7 +193,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
     <div id={id} className="w-full bg-white py-8 px-4 md:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold text-black">
+          <h2 className="heading-4 font-bold text-black">
             <Star className="h-5 w-5 fill-black text-black inline-block mr-2 -mt-1" />
             {ratingHeadline}
           </h2>
@@ -201,7 +203,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-foreground"
+                  className="flex items-center gap-2 body-small text-text-secondary hover:text-foreground"
                   onClick={() => setIsSortDropdownOpen((open) => !open)}
                 >
                   Sort: {sortBy === "recent" ? "Most recent" : sortBy === "highest" ? "Highest rated" : "Lowest rated"}
@@ -212,7 +214,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-border bg-white shadow-lg">
                     <div className="py-1">
                       <button
-                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy("recent")
                           setIsSortDropdownOpen(false)
@@ -221,7 +223,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                         Most recent
                       </button>
                       <button
-                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy("highest")
                           setIsSortDropdownOpen(false)
@@ -230,7 +232,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                         Highest rated
                       </button>
                       <button
-                        className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
                         onClick={() => {
                           setSortBy("lowest")
                           setIsSortDropdownOpen(false)
@@ -256,39 +258,41 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
         <div className="mb-6 flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
           <div className="flex items-center gap-2">
             <Award className="h-4 w-4 text-text-secondary" />
-            <span className="text-sm text-text-secondary">Quality of work</span>
-            <span className="text-sm font-semibold text-foreground">{formatRating(ratings.quality)}</span>
+            <span className="body-small text-text-secondary">Quality of work</span>
+            <span className="body-small font-semibold text-foreground">{formatRating(ratings.quality)}</span>
           </div>
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-text-secondary" />
-            <span className="text-sm text-text-secondary">Reliability</span>
-            <span className="text-sm font-semibold text-foreground">{formatRating(ratings.reliability)}</span>
+            <span className="body-small text-text-secondary">Reliability</span>
+            <span className="body-small font-semibold text-foreground">{formatRating(ratings.reliability)}</span>
           </div>
           <div className="flex items-center gap-2">
             <MessageCircle className="h-4 w-4 text-text-secondary" />
-            <span className="text-sm text-text-secondary">Communication</span>
-            <span className="text-sm font-semibold text-foreground">{formatRating(ratings.communication)}</span>
+            <span className="body-small text-text-secondary">Communication</span>
+            <span className="body-small font-semibold text-foreground">{formatRating(ratings.communication)}</span>
           </div>
         </div>
 
         <div className="mb-6 grid grid-cols-1 gap-8 md:grid-cols-2">
           {sortedReviews.length === 0 ? (
-            <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center text-sm text-text-secondary">
+            <div className="col-span-full rounded-lg border border-dashed border-border p-8 text-center body-small text-text-secondary">
               Reviews will appear here once homeowners share feedback.
             </div>
           ) : (
             sortedReviews.map((review) => (
               <div key={review.id} className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={review.reviewerAvatarUrl || PLACEHOLDER_AVATAR}
+                  <Image
+                    src={sanitizeImageUrl(review.reviewerAvatarUrl, PLACEHOLDER_AVATAR)}
                     alt={review.reviewerName}
+                    width={IMAGE_SIZES.avatar.width}
+                    height={IMAGE_SIZES.avatar.height}
                     className="h-10 w-10 rounded-full object-cover"
                   />
                   <div>
-                    <h4 className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground">{review.reviewerName}</h4>
+                    <h4 className="body-small font-medium leading-[1.2] tracking-[0] text-foreground">{review.reviewerName}</h4>
                     {typeof review.yearsOnPlatform === "number" && review.yearsOnPlatform > 0 ? (
-                      <p className="text-sm text-text-secondary">
+                      <p className="body-small text-text-secondary">
                         {review.yearsOnPlatform} year{review.yearsOnPlatform === 1 ? "" : "s"} on Arco
                       </p>
                     ) : null}
@@ -298,7 +302,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                 <div className="flex items-center gap-2">
                   {renderStars(review.rating)}
                   {review.createdAt ? (
-                    <span className="text-sm text-text-secondary">
+                    <span className="body-small text-text-secondary">
                       {new Intl.DateTimeFormat("en-GB", {
                         day: "numeric",
                         month: "short",
@@ -308,7 +312,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   ) : null}
                 </div>
 
-                {review.title ? <h5 className="text-sm font-semibold text-foreground">{review.title}</h5> : null}
+                {review.title ? <h5 className="body-small font-semibold text-foreground">{review.title}</h5> : null}
 
                 <div>
                   <p className="text-foreground">
@@ -319,7 +323,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   {review.comment && review.comment.length > 160 ? (
                     <button
                       onClick={() => toggleExpanded(review.id)}
-                      className="mt-1 text-sm font-medium text-foreground underline hover:no-underline"
+                      className="mt-1 body-small font-medium text-foreground underline hover:no-underline"
                     >
                       {expandedReviews.has(review.id) ? "Show less" : "Show more"}
                     </button>
@@ -338,7 +342,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
           >
             Show all reviews
           </Button>
-          <button className="text-sm text-text-secondary underline hover:no-underline">Learn how reviews work</button>
+          <button className="body-small text-text-secondary underline hover:no-underline">Learn how reviews work</button>
         </div>
 
         <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
@@ -392,7 +396,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
 
               <div className="mb-6">
                 <h3 className="mb-2 font-medium text-foreground">Rate your experience in these areas</h3>
-                <p className="mb-4 text-sm text-text-secondary">
+                <p className="mb-4 body-small text-text-secondary">
                   You’ve provided an overall rating. Let them know what they did great and where they can improve.
                 </p>
 
@@ -432,7 +436,7 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
                   maxLength={500}
                 />
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">{reviewText.length}/500</span>
+                  <span className="body-small text-muted-foreground">{reviewText.length}/500</span>
                 </div>
               </div>
 

@@ -1,10 +1,12 @@
 "use client"
 
 import { useState, useRef } from "react"
+import Image from "next/image"
+import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import Link from "next/link"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 export function ProfessionalsSection() {
   const [showModal, setShowModal] = useState(false)
@@ -31,11 +33,11 @@ export function ProfessionalsSection() {
     <>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-black">Professionals who built it</h2>
+          <h2 className="heading-3 text-black">Professionals who built it</h2>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowModal(true)}
-              className="text-sm text-foreground hover:text-foreground font-medium"
+              className="body-small text-foreground hover:text-foreground font-medium"
             >
               View all
             </button>
@@ -78,9 +80,11 @@ export function ProfessionalsSection() {
                 <Link href={professionalHref} className="group">
                   <div className="relative overflow-hidden rounded-lg mb-4">
                     {professional.companyLogo ? (
-                      <img
-                        src={professional.companyLogo}
+                      <Image
+                        src={sanitizeImageUrl(professional.companyLogo)}
                         alt={professional.companyName || 'Company'}
+                        width={IMAGE_SIZES.card.width}
+                        height={IMAGE_SIZES.card.width}
                         className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                     ) : (
@@ -89,11 +93,11 @@ export function ProfessionalsSection() {
                   </div>
                 </Link>
                 <Link href={professionalHref}>
-                  <p className="text-sm font-medium text-foreground hover:text-foreground mb-1">
+                  <p className="body-small font-medium text-foreground hover:text-foreground mb-1">
                     {professional.companyName}
                   </p>
                 </Link>
-                <p className="text-xs text-text-secondary">
+                <p className="body-small text-text-secondary">
                   {professional.serviceCategory}
                   {' · '}
                   <Link
@@ -112,7 +116,7 @@ export function ProfessionalsSection() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md mx-auto">
           <DialogHeader className="pb-4 border-b">
-            <DialogTitle className="text-lg font-semibold">Professionals who built it</DialogTitle>
+            <DialogTitle className="heading-5">Professionals who built it</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
@@ -126,24 +130,26 @@ export function ProfessionalsSection() {
                 <div key={professional.id} className="flex items-start gap-3 py-2">
                   <Link href={professionalHref}>
                     {professional.companyLogo ? (
-                      <img
-                        src={professional.companyLogo}
+                      <Image
+                        src={sanitizeImageUrl(professional.companyLogo)}
                         alt={professional.companyName || 'Company logo'}
+                        width={48}
+                        height={48}
                         className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded bg-surface flex items-center justify-center text-xs text-muted-foreground">
+                      <div className="w-12 h-12 rounded bg-surface flex items-center justify-center body-small text-muted-foreground">
                         Logo
                       </div>
                     )}
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link href={professionalHref}>
-                      <p className="text-sm font-medium text-foreground truncate hover:text-foreground">
+                      <p className="body-small font-medium text-foreground truncate hover:text-foreground">
                         {professional.companyName}
                       </p>
                     </Link>
-                    <p className="text-xs text-text-secondary">
+                    <p className="body-small text-text-secondary">
                       {professional.serviceCategory}
                       {' · '}
                       <Link

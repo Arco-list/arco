@@ -912,14 +912,14 @@ export default function DashboardListingsPage() {
       <main className="flex-1 py-8 pt-20 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
         {entitlementsError && (
-          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 body-small text-amber-800">
             {entitlementsError}
           </div>
         )}
         <div className="flex flex-col gap-4 mb-8">
           <div className="flex flex-row items-center justify-between gap-3">
             <div className="flex-shrink-0">
-              <h4 className="font-semibold text-foreground">Your projects</h4>
+              <h4 className="heading-4 text-foreground">Your projects</h4>
             </div>
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <Button
@@ -947,7 +947,7 @@ export default function DashboardListingsPage() {
               {filters.keyword && (
                 <button
                   onClick={() => handleRemoveFilter("keyword")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
+                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
                 >
                   <span>&ldquo;{filters.keyword}&rdquo;</span>
                   <X className="h-3 w-3" />
@@ -957,7 +957,7 @@ export default function DashboardListingsPage() {
                 <button
                   key={status}
                   onClick={() => handleRemoveFilter("status", status)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
+                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
                 >
                   <span>{PROJECT_STATUS_LABELS[status]}</span>
                   <X className="h-3 w-3" />
@@ -967,7 +967,7 @@ export default function DashboardListingsPage() {
                 <button
                   key={role}
                   onClick={() => handleRemoveFilter("role", role)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
+                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
                 >
                   <span>{role === "owner" ? "Project owner" : "Contributor"}</span>
                   <X className="h-3 w-3" />
@@ -976,7 +976,7 @@ export default function DashboardListingsPage() {
               {(filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR) && (
                 <button
                   onClick={() => handleRemoveFilter("year")}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-sm text-foreground transition-colors"
+                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
                 >
                   <span>
                     {filters.yearFrom}-{filters.yearTo}
@@ -986,7 +986,7 @@ export default function DashboardListingsPage() {
               )}
               <button
                 onClick={handleClearAllFilters}
-                className="text-sm text-text-secondary hover:text-foreground underline ml-2"
+                className="body-small text-text-secondary hover:text-foreground underline ml-2"
               >
                 Clear all
               </button>
@@ -1000,10 +1000,10 @@ export default function DashboardListingsPage() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-red-900 mb-1">
+                <h3 className="body-small font-semibold text-red-900 mb-1">
                   Security Warning: RLS Policy Not Enforced
                 </h3>
-                <p className="text-sm text-red-700">
+                <p className="body-small text-red-700">
                   Row-Level Security validation failed for the projects table. This may allow
                   unauthorized access to project data. Contact your administrator immediately.
                 </p>
@@ -1019,10 +1019,10 @@ export default function DashboardListingsPage() {
               <div className="flex items-start gap-3 flex-1">
                 <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                  <h3 className="body-small font-semibold text-amber-900 mb-1">
                     Metadata Loading Error
                   </h3>
-                  <p className="text-sm text-amber-700">
+                  <p className="body-small text-amber-700">
                     {metadataError}
                     {projectsWithErrors.size > 0 && (
                       <span className="block mt-1">
@@ -1045,7 +1045,7 @@ export default function DashboardListingsPage() {
         )}
 
         {loadError && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 body-small text-red-700">
             {loadError}
           </div>
         )}
@@ -1210,10 +1210,10 @@ export default function DashboardListingsPage() {
                 </div>
               </div>
               <div className="mt-3">
-                <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{project.title}</p>
-                <p className="text-xs font-normal text-text-secondary mt-1">{project.subtitle}</p>
+                <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{project.title}</p>
+                <p className="body-small font-normal text-text-secondary mt-1">{project.subtitle}</p>
                 {project.invitedServiceCategory && project.role === "contributor" && (
-                  <p className="text-xs text-text-secondary mt-1 font-medium">
+                  <p className="body-small text-text-secondary mt-1 font-medium">
                     Service: {project.invitedServiceCategory}
                   </p>
                 )}
@@ -1224,8 +1224,8 @@ export default function DashboardListingsPage() {
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-border bg-white p-12 text-center">
-            <h2 className="text-lg font-medium text-foreground">Add your first project</h2>
-            <p className="text-sm text-text-secondary mt-2">
+            <h2 className="heading-5 text-foreground">Add your first project</h2>
+            <p className="body-small text-text-secondary mt-2">
               Kick off your first listing to showcase your work and connect with professionals.
             </p>
             <div className="mt-6">
@@ -1261,8 +1261,8 @@ export default function DashboardListingsPage() {
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Delete listing?</h2>
-                <p className="mt-1 text-sm text-text-secondary">
+                <h2 className="heading-5 text-foreground">Delete listing?</h2>
+                <p className="mt-1 body-small text-text-secondary">
                   This will remove <span className="font-medium">{pendingDeleteProject.title}</span> from your dashboard. You can
                   always create the listing again later.
                 </p>
@@ -1296,13 +1296,13 @@ export default function DashboardListingsPage() {
         <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Edit cover photo</h2>
+              <h2 className="heading-4 text-foreground">Edit cover photo</h2>
               <button onClick={closeCoverPhotoModal} className="text-muted-foreground hover:text-text-secondary">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-sm text-text-secondary mb-6">
+            <p className="body-small text-text-secondary mb-6">
               This photo will be displayed with the project on your company portfolio
             </p>
 
@@ -1337,7 +1337,7 @@ export default function DashboardListingsPage() {
                 })}
               </div>
             ) : (
-              <div className="mb-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center text-sm text-text-secondary">
+              <div className="mb-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center body-small text-text-secondary">
                 Upload project photos in the listing editor to choose a cover image.
               </div>
             )}

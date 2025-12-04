@@ -1,10 +1,12 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Heart, Star } from "lucide-react"
 import { memo } from "react"
 
 import type { ProfessionalCard as ProfessionalCardData } from "@/lib/professionals/types"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -34,14 +36,12 @@ export const ProfessionalCard = memo(function ProfessionalCard({
   return (
     <Link href={`/professionals/${professional.slug}`} className={`group cursor-pointer ${className}`}>
       <div className="relative overflow-hidden rounded-lg bg-surface">
-        <img
-          src={imageSrc}
+        <Image
+          src={sanitizeImageUrl(imageSrc, PLACEHOLDER_IMAGE)}
           alt={professional.name}
+          width={IMAGE_SIZES.card.width}
+          height={IMAGE_SIZES.card.width}
           className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          onError={(event) => {
-            event.currentTarget.src = PLACEHOLDER_IMAGE
-            event.currentTarget.onerror = null
-          }}
         />
 
         <button
@@ -56,14 +56,14 @@ export const ProfessionalCard = memo(function ProfessionalCard({
       </div>
 
       <div className="mt-3">
-        <p className="text-sm font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{professional.name}</p>
-        <p className="text-xs font-normal text-text-secondary mt-1">
+        <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{professional.name}</p>
+        <p className="body-small font-normal text-text-secondary mt-1">
           {professional.profession} in {professional.location}
         </p>
         <div className="flex items-center gap-1 mt-1">
           <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-          <span className="text-xs font-normal text-text-secondary">{professional.rating}</span>
-          <span className="text-xs font-normal text-text-secondary">({professional.reviewCount})</span>
+          <span className="body-small font-normal text-text-secondary">{professional.rating}</span>
+          <span className="body-small font-normal text-text-secondary">({professional.reviewCount})</span>
         </div>
       </div>
     </Link>

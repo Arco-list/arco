@@ -44,25 +44,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <section className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-muted/30 px-4 py-16">
           <div className="mx-auto w-full max-w-md rounded-2xl bg-background p-8 shadow-lg">
             <div className="mb-6 text-center space-y-2">
-              <h3>Welcome back</h3>
-              <p className="text-muted-foreground text-sm">
+              <h3 className="heading-3">Welcome back</h3>
+              <p className="body-small text-muted-foreground">
                 Sign in to access your saved projects, professionals, and dashboards.
               </p>
             </div>
             {activeError && (
-              <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
-                <p className="font-medium">{activeError.title}</p>
-                <p className="mt-1 text-destructive/80">{activeError.description}</p>
+              <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 body-small text-destructive" role="alert">
+                <p className="body-small font-medium">{activeError.title}</p>
+                <p className="body-small mt-1 text-destructive/80">{activeError.description}</p>
               </div>
             )}
             <LoginForm redirectTo={redirectTo} />
-            <div className="mt-6 text-sm text-center text-muted-foreground">
+            <div className="mt-6 body-small text-center text-muted-foreground">
               <span>Don&apos;t have an account?</span>{" "}
               <Link href={`/signup${redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ""}`} className="text-primary font-medium">
                 Create one
               </Link>
             </div>
-            <div className="mt-2 text-sm text-center">
+            <div className="mt-2 body-small text-center">
               <Link href="/reset-password" className="text-muted-foreground hover:text-primary">
                 Forgot your password?
               </Link>

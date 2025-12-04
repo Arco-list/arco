@@ -87,9 +87,9 @@ function HomeownerContent() {
             </TabsList>
 
             <TabsContent value="saved-projects">
-              <h2 className="text-lg font-semibold text-foreground mb-6">Saved Projects</h2>
+              <h2 className="heading-5 font-semibold text-foreground mb-6">Saved Projects</h2>
               {savedProjectsError && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 body-small text-red-700">
                   {savedProjectsError}
                 </div>
               )}
@@ -149,20 +149,20 @@ function HomeownerContent() {
               </div>
               {!isSavedProjectsLoading && savedProjects.length === 0 && !savedProjectsError && (
                 <div className="text-center py-12">
-                  <p className="text-text-secondary">No saved projects yet.</p>
+                  <p className="body-regular text-text-secondary">No saved projects yet.</p>
                 </div>
               )}
               {isSavedProjectsLoading && (
                 <div className="text-center py-12">
-                  <p className="text-text-secondary">Loading saved projects…</p>
+                  <p className="body-regular text-text-secondary">Loading saved projects…</p>
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="saved-professionals">
-              <h2 className="text-lg font-semibold text-foreground mb-6">Saved Professionals</h2>
+              <h2 className="heading-5 font-semibold text-foreground mb-6">Saved Professionals</h2>
               {savedProfessionalsError && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 text-sm text-red-700">
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 mb-6 body-small text-red-700">
                   {savedProfessionalsError}
                 </div>
               )}
@@ -189,18 +189,18 @@ function HomeownerContent() {
                 savedProfessionalEntries.length === 0 &&
                 !savedProfessionalsError && (
                 <div className="text-center py-12">
-                  <p className="text-text-secondary">No saved professionals yet.</p>
+                  <p className="body-regular text-text-secondary">No saved professionals yet.</p>
                 </div>
               )}
               {isSavedProfessionalsLoading && (
                 <div className="text-center py-12">
-                  <p className="text-text-secondary">Loading saved professionals…</p>
+                  <p className="body-regular text-text-secondary">Loading saved professionals…</p>
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="account">
-              <h2 className="text-lg font-semibold text-foreground mb-6">Account</h2>
+              <h2 className="heading-5 font-semibold text-foreground mb-6">Account</h2>
               <AccountSettingsForm />
             </TabsContent>
           </Tabs>
@@ -214,7 +214,7 @@ function HomeownerContent() {
 
 export default function Homeowner() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen body-regular">Loading...</div>}>
       <FilterProvider>
         <HomeownerContent />
       </FilterProvider>

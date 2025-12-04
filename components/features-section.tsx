@@ -25,7 +25,7 @@ export function FeaturesSection() {
   return (
     <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto rounded-lg p-8 mb-4" style={{ backgroundColor: '#F8F4F4' }}>
-        <h3>Realize your next dream project</h3>
+        <h3 className="heading-3">Realize your next dream project</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
           {features.map((feature, index) => (
@@ -33,8 +33,8 @@ export function FeaturesSection() {
               <div className="flex justify-start mb-6">
                 <feature.icon className="h-8 w-8 text-foreground" />
               </div>
-              <h5 className="mb-4">{feature.title}</h5>
-              <p className="text-text-secondary leading-relaxed">{feature.description}</p>
+              <h5 className="heading-5 mb-4">{feature.title}</h5>
+              <p className="body-regular text-text-secondary leading-relaxed">{feature.description}</p>
             </div>
           ))}
         </div>

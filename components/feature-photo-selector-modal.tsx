@@ -107,12 +107,12 @@ export function FeaturePhotoSelectorModal({
     <div className={overlayClassName}>
       <div className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-lg bg-white overflow-hidden">
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-white p-6 flex-shrink-0">
-          <h2 className="text-xl font-semibold text-foreground">Select photos for {featureName}</h2>
+          <h2 className="heading-4 font-semibold text-foreground">Select photos for {featureName}</h2>
           <div className="flex items-center gap-3">
             {canDeleteFeature && onDeleteFeature && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <button className="flex items-center gap-2 text-sm font-medium text-red-600 transition-colors hover:text-red-700">
+                  <button className="flex items-center gap-2 body-small font-medium text-red-600 transition-colors hover:text-red-700">
                     <Trash2 className="h-4 w-4" />
                     Delete feature
                   </button>
@@ -148,8 +148,8 @@ export function FeaturePhotoSelectorModal({
         <div className="space-y-6 p-6 pb-8 overflow-y-auto overflow-x-hidden flex-1">
           <div>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Select from existing photos</h3>
-              <div className="flex items-center gap-4 text-sm text-text-secondary">
+              <h3 className="heading-5 font-semibold text-foreground">Select from existing photos</h3>
+              <div className="flex items-center gap-4 body-small text-text-secondary">
                 {coverSelected && <span className="font-medium text-blue-600">Cover photo selected</span>}
                 <span>{selectedCount} selected</span>
               </div>
@@ -166,7 +166,7 @@ export function FeaturePhotoSelectorModal({
               >
                 <ImageIcon className="mb-3 h-8 w-8 text-muted-foreground" />
                 <p className="font-medium text-foreground">Upload new photos</p>
-                <p className="mb-4 text-sm text-text-secondary">Drag and drop or browse for photos</p>
+                <p className="mb-4 body-small text-text-secondary">Drag and drop or browse for photos</p>
                 <label className="inline-block">
                   <input
                     type="file"
@@ -191,7 +191,7 @@ export function FeaturePhotoSelectorModal({
                   </Button>
                 </label>
                 {modalUploadErrors.length > 0 && (
-                  <ul className="mt-4 space-y-1 text-left text-sm text-red-600">
+                  <ul className="mt-4 space-y-1 text-left body-small text-red-600">
                     {modalUploadErrors.map((error, index) => (
                       <li key={`${error}-${index}`}>{error}</li>
                     ))}
@@ -248,7 +248,7 @@ export function FeaturePhotoSelectorModal({
                                 }
                               }}
                               disabled={!isSelected || isCoverPhoto}
-                              className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
+                              className={`block w-full px-3 py-2 text-left body-small transition-colors ${
                                 !isSelected || isCoverPhoto
                                   ? "cursor-not-allowed text-muted-foreground"
                                   : "text-foreground hover:bg-surface"
@@ -265,7 +265,7 @@ export function FeaturePhotoSelectorModal({
                                   }
                                   onDeletePhoto(photo.id)
                                 }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left body-small text-red-600 transition-colors hover:bg-red-50"
                               >
                                 <Trash2 className="h-3 w-3" />
                                 Delete photo
@@ -281,7 +281,7 @@ export function FeaturePhotoSelectorModal({
             </div>
 
             {selectablePhotos.length === 0 && (
-              <div className="mt-4 rounded-lg border border-dashed border-border bg-surface p-4 text-sm text-text-secondary">
+              <div className="mt-4 rounded-lg border border-dashed border-border bg-surface p-4 body-small text-text-secondary">
                 {uploadedPhotosCount === 0
                   ? "Upload photos to get started"
                   : "All photos are assigned. Upload more to add to this feature."}
@@ -293,7 +293,7 @@ export function FeaturePhotoSelectorModal({
             <div className="space-y-4">
               {onTaglineChange && (
                 <div>
-                  <label htmlFor={taglineInputId} className="block text-sm font-medium text-foreground">
+                  <label htmlFor={taglineInputId} className="block body-small font-medium text-foreground">
                     Feature tagline
                   </label>
                   <Input
@@ -316,7 +316,7 @@ export function FeaturePhotoSelectorModal({
                   className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
                 >
                   <div className="mr-4">
-                    <p className="text-sm font-medium text-foreground">Highlight this feature</p>
+                    <p className="body-small font-medium text-foreground">Highlight this feature</p>
                     <p className="text-xs text-text-secondary">
                       Toggle to feature this category in the Highlights section on the project page.
                     </p>
@@ -332,7 +332,7 @@ export function FeaturePhotoSelectorModal({
           )}
 
           {modalUploadErrors.length > 0 && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="rounded-md border border-red-200 bg-red-50 p-4 body-small text-red-700">
               <div className="flex items-start gap-3">
                 <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
                 <div className="space-y-2">

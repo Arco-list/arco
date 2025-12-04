@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic"
 type CompanyRow = {
   id: string
   name: string
+  slug: string | null
   location: string | null
   city: string | null
   country: string | null
@@ -37,6 +38,7 @@ type CompanyRow = {
   website: string | null
   contactEmail: string | null
   servicesOffered: string[]
+  primaryServiceId: string | null
 }
 
 type ServiceOption = {
@@ -73,7 +75,7 @@ async function loadAdminProfessionalsData() {
     supabase
       .from("companies")
       .select(
-        "id, name, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered"
+        "id, name, slug, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, plan_expires_at"
       ),
     supabase
       .from("company_metrics")
@@ -152,6 +154,7 @@ async function loadAdminProfessionalsData() {
     return {
       id: company.id,
       name: company.name,
+      slug: company.slug ?? null,
       location,
       city: company.city ?? null,
       country: company.country ?? null,
@@ -170,6 +173,8 @@ async function loadAdminProfessionalsData() {
       servicesOffered: Array.isArray(company.services_offered)
         ? company.services_offered.filter((value): value is string => typeof value === "string")
         : [],
+      primaryServiceId: company.primary_service_id ?? null,
+      planExpiresAt: company.plan_expires_at ?? null,
     }
   })
 

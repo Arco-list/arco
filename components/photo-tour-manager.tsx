@@ -130,8 +130,8 @@ export function PhotoTourManager({
       {showHeader && (
         <div className="flex items-center justify-between mb-4">
           <div className="hidden md:block">
-            <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-            <p className="text-sm text-text-secondary">{subtitle}</p>
+            <h2 className="heading-3 font-semibold text-foreground">{title}</h2>
+            <p className="body-small text-text-secondary">{subtitle}</p>
           </div>
 
           <div className="relative md:ml-auto ml-auto">
@@ -160,7 +160,7 @@ export function PhotoTourManager({
                     }}
                   />
                   <span
-                    className={`w-full text-left px-4 py-2 text-sm transition-colors block ${
+                    className={`w-full text-left px-4 py-2 body-small transition-colors block ${
                       isUploading ? "text-muted-foreground cursor-not-allowed" : "text-foreground hover:bg-surface"
                     }`}
                   >
@@ -173,7 +173,7 @@ export function PhotoTourManager({
                     setShowAddMenu(false)
                   }}
                   disabled={isSavingFeatures}
-                  className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                  className={`w-full text-left px-4 py-2 body-small transition-colors ${
                     isSavingFeatures ? "text-muted-foreground cursor-not-allowed" : "text-foreground hover:bg-surface"
                   }`}
                 >
@@ -208,7 +208,7 @@ export function PhotoTourManager({
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center">
                       <ImageIcon className="w-12 h-12 text-muted-foreground mb-4" />
-                      <span className="bg-white border border-border text-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-surface transition-colors">
+                      <span className="bg-white border border-border text-foreground px-4 py-2 rounded-md body-small font-medium hover:bg-surface transition-colors">
                         Select photos
                       </span>
                     </div>
@@ -218,9 +218,9 @@ export function PhotoTourManager({
                 <div className="p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <FeatureIcon className="w-4 h-4" />
-                    <p className="text-sm">{featureDisplay.name}</p>
+                    <p className="body-small">{featureDisplay.name}</p>
                   </div>
-                  <p className="text-sm">{photoCount > 0 ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "Add photos"}</p>
+                  <p className="body-small">{photoCount > 0 ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "Add photos"}</p>
                 </div>
               </button>
             </div>
@@ -234,7 +234,7 @@ export function PhotoTourManager({
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="p-6 border-b border-border">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-foreground">Add feature</h2>
+                <h2 className="heading-4 font-semibold text-foreground">Add feature</h2>
                 <button
                   onClick={() => {
                     setShowAddFeatureModal(false)
