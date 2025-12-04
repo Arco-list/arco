@@ -3,9 +3,11 @@
 import { Heart, ChevronLeft, ChevronRight, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import Image from "next/image"
 import { useRef } from "react"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { featuredItemToProfessionalCard } from "@/lib/professionals/utils"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 export type FeaturedProfessional = {
   id: string
@@ -93,9 +95,11 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
                   style={{ scrollSnapAlign: "start" }}
                 >
                   <div className="relative aspect-square rounded-lg overflow-hidden mb-3">
-                    <img
-                      src={professional.image || "/placeholder.svg?height=300&width=300"}
+                    <Image
+                      src={sanitizeImageUrl(professional.image, "/placeholder.svg?height=300&width=300")}
                       alt={professional.name}
+                      width={IMAGE_SIZES.card.width}
+                      height={IMAGE_SIZES.card.width}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     <button

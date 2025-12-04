@@ -1,10 +1,12 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Image from "next/image"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { X, Copy, Mail, MessageCircle, MessageSquare, Share2, Share } from "lucide-react"
 import { toast } from "sonner"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 interface ShareModalProps {
   isOpen: boolean
@@ -183,9 +185,11 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
         </DialogHeader>
 
         <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-border bg-surface/60 p-3 mb-6">
-          <img
-            src={imageUrl || "/placeholder.svg"}
+          <Image
+            src={sanitizeImageUrl(imageUrl, "/placeholder.svg")}
             alt={title}
+            width={IMAGE_SIZES.thumbnail.width}
+            height={IMAGE_SIZES.thumbnail.height}
             className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
           />
           <div className="flex min-w-0 flex-1 flex-col">

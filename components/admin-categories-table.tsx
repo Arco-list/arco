@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
+import Image from "next/image"
 import { format } from "date-fns"
 import {
   ArrowUpDown,
@@ -25,6 +26,7 @@ import {
   updateCategoryNameAction,
 } from "@/app/admin/categories/actions"
 import { ImageUploadDialog } from "@/components/image-upload-dialog"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -405,9 +407,11 @@ export function AdminCategoriesTable({ categories }: AdminCategoriesTableProps) 
                   <TableCell>
                     <div className="flex items-center justify-center">
                       {category.imageUrl ? (
-                        <img
-                          src={category.imageUrl}
+                        <Image
+                          src={sanitizeImageUrl(category.imageUrl)}
                           alt={category.name}
+                          width={IMAGE_SIZES.thumbnail.width}
+                          height={IMAGE_SIZES.thumbnail.height}
                           className="h-16 w-16 rounded-md object-cover"
                         />
                       ) : (

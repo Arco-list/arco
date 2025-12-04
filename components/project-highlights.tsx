@@ -2,8 +2,10 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useCallback, useRef } from "react"
+import Image from "next/image"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 import { useProjectGalleryModal } from "@/contexts/project-gallery-modal-context"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 export function ProjectHighlights() {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -74,9 +76,11 @@ export function ProjectHighlights() {
             style={{ scrollSnapAlign: "start" }}
           >
             <div className="relative overflow-hidden rounded-lg">
-              <img
-                src={highlight.imageUrl || "/placeholder.svg"}
+              <Image
+                src={sanitizeImageUrl(highlight.imageUrl, "/placeholder.svg")}
                 alt={highlight.title}
+                width={IMAGE_SIZES.card.width}
+                height={IMAGE_SIZES.card.width}
                 className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             </div>

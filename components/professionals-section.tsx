@@ -1,10 +1,12 @@
 "use client"
 
 import { useState, useRef } from "react"
+import Image from "next/image"
+import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import Link from "next/link"
 import { useProjectPreview } from "@/contexts/project-preview-context"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 export function ProfessionalsSection() {
   const [showModal, setShowModal] = useState(false)
@@ -78,9 +80,11 @@ export function ProfessionalsSection() {
                 <Link href={professionalHref} className="group">
                   <div className="relative overflow-hidden rounded-lg mb-4">
                     {professional.companyLogo ? (
-                      <img
-                        src={professional.companyLogo}
+                      <Image
+                        src={sanitizeImageUrl(professional.companyLogo)}
                         alt={professional.companyName || 'Company'}
+                        width={IMAGE_SIZES.card.width}
+                        height={IMAGE_SIZES.card.width}
                         className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                     ) : (
@@ -126,9 +130,11 @@ export function ProfessionalsSection() {
                 <div key={professional.id} className="flex items-start gap-3 py-2">
                   <Link href={professionalHref}>
                     {professional.companyLogo ? (
-                      <img
-                        src={professional.companyLogo}
+                      <Image
+                        src={sanitizeImageUrl(professional.companyLogo)}
                         alt={professional.companyName || 'Company logo'}
+                        width={48}
+                        height={48}
                         className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
                       />
                     ) : (

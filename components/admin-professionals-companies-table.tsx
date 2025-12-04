@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import {
   IconBuildingSkyscraper,
   IconDotsVertical,
@@ -10,6 +11,7 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 import {
   updateCompanyDetailsAction,
@@ -755,13 +757,12 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                 />
                 {editForm?.logoUrl ? (
                   <div className="mt-2 flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border bg-muted/40">
-                    <img
-                      src={editForm.logoUrl}
+                    <Image
+                      src={sanitizeImageUrl(editForm.logoUrl)}
                       alt="Company logo preview"
+                      width={IMAGE_SIZES.thumbnail.width}
+                      height={IMAGE_SIZES.thumbnail.height}
                       className="h-full w-full object-contain"
-                      onError={(event) => {
-                        event.currentTarget.style.display = "none"
-                      }}
                     />
                   </div>
                 ) : null}
@@ -863,13 +864,12 @@ export function AdminProfessionalsCompaniesTable({ companies, serviceOptions }: 
                           <div key={professional.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
                             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border bg-muted/40">
                               {professional.avatar_url ? (
-                                <img
-                                  src={professional.avatar_url}
+                                <Image
+                                  src={sanitizeImageUrl(professional.avatar_url)}
                                   alt={name}
+                                  width={IMAGE_SIZES.avatar.width}
+                                  height={IMAGE_SIZES.avatar.height}
                                   className="h-full w-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none'
-                                  }}
                                 />
                               ) : (
                                 <span className="text-xs font-medium text-muted-foreground">

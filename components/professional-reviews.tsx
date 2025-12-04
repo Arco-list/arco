@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useTransition } from "react"
+import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Award, ChevronDown, MessageCircle, Shield, Star, X } from "lucide-react"
 import { toast } from "sonner"
@@ -8,6 +9,7 @@ import { toast } from "sonner"
 import type { ProfessionalRatingsBreakdown, ProfessionalReviewSummary } from "@/lib/professionals/types"
 import { createReviewAction } from "@/app/professionals/[slug]/actions"
 import { useRequireAuth } from "@/hooks/use-require-auth"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -280,9 +282,11 @@ export function ProfessionalReviews({ companyId, professionalName, ratings, revi
             sortedReviews.map((review) => (
               <div key={review.id} className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={review.reviewerAvatarUrl || PLACEHOLDER_AVATAR}
+                  <Image
+                    src={sanitizeImageUrl(review.reviewerAvatarUrl, PLACEHOLDER_AVATAR)}
                     alt={review.reviewerName}
+                    width={IMAGE_SIZES.avatar.width}
+                    height={IMAGE_SIZES.avatar.height}
                     className="h-10 w-10 rounded-full object-cover"
                   />
                   <div>

@@ -1,8 +1,10 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Heart, ThumbsUp } from "lucide-react"
 import { memo } from "react"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -57,14 +59,12 @@ export const ProjectCard = memo(function ProjectCard({
   return (
     <Link href={project.slug ? `/projects/${project.slug}` : "#"} className={`group cursor-pointer ${className}`}>
       <div className="relative overflow-hidden rounded-lg bg-surface">
-        <img
-          src={imageSrc}
+        <Image
+          src={sanitizeImageUrl(imageSrc, PLACEHOLDER_IMAGE)}
           alt={imageAlt}
+          width={IMAGE_SIZES.card.width}
+          height={IMAGE_SIZES.card.width}
           className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          onError={(event) => {
-            event.currentTarget.src = PLACEHOLDER_IMAGE
-            event.currentTarget.onerror = null
-          }}
         />
         <button
           onClick={handleSaveToggle}

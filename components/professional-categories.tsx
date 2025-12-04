@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRef } from "react"
 import Link from "next/link"
+import Image from "next/image"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 const FALLBACK_IMAGE = "/placeholder.svg?height=400&width=300"
 
@@ -71,9 +73,11 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
               style={{ scrollSnapAlign: "start" }}
             >
               <div className="relative aspect-[3/4] rounded-lg overflow-hidden mb-3">
-                <img
-                  src={category.imageUrl || FALLBACK_IMAGE}
+                <Image
+                  src={sanitizeImageUrl(category.imageUrl, FALLBACK_IMAGE)}
                   alt={category.title}
+                  width={300}
+                  height={400}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />

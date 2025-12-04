@@ -2,10 +2,12 @@
 
 import { useMemo } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { AlertTriangle, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 type PlanTier = "basic" | "plus"
 
@@ -91,9 +93,11 @@ export function ListingStatusModal<TStatus extends string>({
           </div>
 
           <div className="flex items-center gap-3 mb-6">
-            <img
-              src={project.coverImageUrl}
+            <Image
+              src={sanitizeImageUrl(project.coverImageUrl)}
               alt={project.title}
+              width={IMAGE_SIZES.thumbnail.width}
+              height={IMAGE_SIZES.thumbnail.height}
               className="w-16 h-16 rounded-lg object-cover bg-surface"
             />
             <div className="space-y-1">
