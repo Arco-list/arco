@@ -1,4 +1,5 @@
 "use client"
+// Test deployment - Vercel GitHub connection
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
