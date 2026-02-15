@@ -1,0 +1,574 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Figtree Font Family */
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/Figtree-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Primary Colors */
+  --primary: #FF333A;
+  --primary-hover: #EC2D34;
+  --primary-active: #FF333A;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary Colors */
+  --secondary: #222222;
+  --secondary-hover: #000000;
+  --secondary-foreground: #FFFFFF;
+
+  /* Tertiary Colors */
+  --tertiary: #F2F2F2;
+  --tertiary-hover: #EBEBEB;
+  --tertiary-foreground: #222222;
+
+  /* Neutral Colors */
+  --background: #FFFFFF;
+  --foreground: #222222;
+  --surface: #F5F5F5;
+  --border: #EBEBEB;
+  --text-primary: #222222;
+  --text-secondary: #6A6A6A;
+  --text-disabled: #8C8C8C;
+
+  /* Card colors */
+  --card: #FFFFFF;
+  --card-foreground: #222222;
+
+  /* Popover colors */
+  --popover: #FFFFFF;
+  --popover-foreground: #222222;
+
+  /* Muted colors */
+  --muted: #F5F5F5;
+  --muted-foreground: #6A6A6A;
+
+  /* Accent colors */
+  --accent: #F2F2F2;
+  --accent-foreground: #222222;
+
+  /* Destructive colors */
+  --destructive: #FF333A;
+  --destructive-foreground: #FFFFFF;
+
+  /* Success colors */
+  --success: #059669;
+  --success-foreground: #FFFFFF;
+
+  /* Warning colors */
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+
+  /* Info colors */
+  --info: #0284C7;
+  --info-foreground: #FFFFFF;
+
+  /* Input & Ring */
+  --input: #EBEBEB;
+  --ring: #FF333A;
+
+  /* Legacy quaternary (map to tertiary) */
+  --quaternary: #F2F2F2;
+  --quaternary-foreground: #222222;
+  --quaternary-hover: #EBEBEB;
+
+  /* Chart colors */
+  --chart-1: #FF333A;
+  --chart-2: #222222;
+  --chart-3: #6A6A6A;
+  --chart-4: #F2F2F2;
+  --chart-5: #EBEBEB;
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #222222;
+  --sidebar-primary: #FF333A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F5F5F5;
+  --sidebar-accent-foreground: #222222;
+  --sidebar-border: #EBEBEB;
+  --sidebar-ring: #FF333A;
+}
+
+.dark {
+  /* Primary Colors - Keep same for brand consistency */
+  --primary: #FF333A;
+  --primary-hover: #EC2D34;
+  --primary-active: #FF333A;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary Colors - Inverted */
+  --secondary: #FFFFFF;
+  --secondary-hover: #F5F5F5;
+  --secondary-foreground: #222222;
+
+  /* Tertiary Colors - Dark variants */
+  --tertiary: #333333;
+  --tertiary-hover: #404040;
+  --tertiary-foreground: #FFFFFF;
+
+  /* Neutral Colors - Inverted */
+  --background: #1A1A1A;
+  --foreground: #FFFFFF;
+  --surface: #2C2C2C;
+  --border: #404040;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0A0A0;
+  --text-disabled: #666666;
+
+  /* Card colors */
+  --card: #2C2C2C;
+  --card-foreground: #FFFFFF;
+
+  /* Popover colors */
+  --popover: #2C2C2C;
+  --popover-foreground: #FFFFFF;
+
+  /* Muted colors */
+  --muted: #333333;
+  --muted-foreground: #A0A0A0;
+
+  /* Accent colors */
+  --accent: #333333;
+  --accent-foreground: #FFFFFF;
+
+  /* Destructive colors */
+  --destructive: #FF333A;
+  --destructive-foreground: #FFFFFF;
+
+  /* Success colors */
+  --success: #10B981;
+  --success-foreground: #FFFFFF;
+
+  /* Warning colors */
+  --warning: #F59E0B;
+  --warning-foreground: #000000;
+
+  /* Info colors */
+  --info: #3B82F6;
+  --info-foreground: #FFFFFF;
+
+  /* Input & Ring */
+  --input: #404040;
+  --ring: #FF333A;
+
+  /* Legacy quaternary (map to tertiary) */
+  --quaternary: #333333;
+  --quaternary-foreground: #FFFFFF;
+  --quaternary-hover: #404040;
+
+  /* Chart colors */
+  --chart-1: #FF333A;
+  --chart-2: #FFFFFF;
+  --chart-3: #A0A0A0;
+  --chart-4: #333333;
+  --chart-5: #404040;
+
+  /* Sidebar */
+  --sidebar: #1A1A1A;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #FF333A;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #333333;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #404040;
+  --sidebar-ring: #FF333A;
+}
+
+@theme inline {
+  /* Primary Colors */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-foreground: var(--primary-foreground);
+
+  /* Secondary Colors */
+  --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  /* Tertiary Colors */
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-hover: var(--tertiary-hover);
+  --color-tertiary-foreground: var(--tertiary-foreground);
+
+  /* Neutral Colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-disabled: var(--text-disabled);
+
+  /* Card Colors */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  /* Popover Colors */
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Muted Colors */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  /* Accent Colors */
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* Destructive Colors */
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Success Colors */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
+  /* Warning Colors */
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  /* Info Colors */
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* Input & Ring */
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Legacy quaternary */
+  --color-quaternary: var(--quaternary);
+  --color-quaternary-foreground: var(--quaternary-foreground);
+  --color-quaternary-hover: var(--quaternary-hover);
+
+  /* Chart Colors */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Sidebar Colors */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Font Families */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  
+  /* ⚠️ OLD TYPOGRAPHY SYSTEM REMOVED - ALL TAGS MUST USE UTILITY CLASSES NOW ⚠️ */
+  /* Reset semantic tags to inherit - Typography must be applied via utility classes */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    margin: 0;
+  }
+
+  /* Body Regular */
+  body {
+    @apply text-base font-normal tracking-normal leading-normal;
+  }
+}
+
+/* Typography utility classes - Using Tailwind */
+
+/* H3 - Page titles utility class (use class="h3") */
+.h3 {
+  @apply font-semibold;
+  font-family: var(--font-heading);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  @apply text-2xl md:text-3xl;
+}
+
+/* H7 - Small headings (use class="h7") */
+.h7 {
+  @apply font-medium text-sm;
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Body Small (use class="body-small") */
+.body-small {
+  @apply font-normal text-sm tracking-normal leading-normal;
+  font-family: var(--font-sans);
+}
+
+/* ============================================
+ * NEW TYPOGRAPHY UTILITY CLASSES
+ * ============================================
+ * These classes allow visual/semantic decoupling
+ * Use these classes when you want different
+ * visual styling than the semantic HTML tag
+ * ============================================ */
+
+/* Heading 1 - Hero Image */
+.heading-1 {
+  @apply font-semibold text-5xl md:text-6xl lg:text-7xl;
+  font-family: var(--font-heading);
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+/* Heading 2 - Category Cards */
+.heading-2 {
+  @apply font-semibold text-4xl md:text-[40px] lg:text-[42px];
+  font-family: var(--font-heading);
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+
+/* Heading 3 - Page Titles */
+.heading-3 {
+  @apply font-semibold text-[26px] md:text-3xl;
+  font-family: var(--font-heading);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+/* Heading 4 - Section Titles */
+.heading-4 {
+  @apply font-semibold text-[22px] md:text-2xl;
+  font-family: var(--font-heading);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+/* Heading 5 - Card Titles */
+.heading-5 {
+  @apply font-semibold text-[18px] md:text-[20px];
+  font-family: var(--font-heading);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Heading 6 - Regular Headings */
+.heading-6 {
+  @apply font-medium text-sm md:text-base;
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Heading 7 - Small Headings */
+.heading-7 {
+  @apply font-medium text-sm;
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+/* Body Large */
+.body-large {
+  @apply font-normal text-base md:text-lg;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+/* Body Regular */
+.body-regular {
+  @apply font-normal text-sm md:text-base;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+@layer components {
+  /* ============================================
+   * DESIGN SYSTEM BUTTON SPECIFICATIONS
+   * ============================================
+   * These classes define the official design system
+   * button styles. The <Button> component from
+   * @/components/ui/button implements these exact
+   * specifications.
+   * ============================================ */
+
+  /* Button Base */
+  .btn {
+    @apply inline-flex items-center justify-center;
+    @apply transition-colors duration-200;
+    @apply font-sans font-medium;
+    @apply py-3 px-6 rounded-full;
+    cursor: pointer;
+    border: none;
+    outline: none;
+  }
+
+  .btn:focus-visible {
+    @apply ring-2 ring-offset-2 ring-ring;
+  }
+
+  /* Primary Button */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground text-base;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-primary-hover;
+  }
+
+  .btn-primary:disabled {
+    @apply bg-border text-primary-foreground;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Secondary Button */
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground text-sm;
+    @apply py-3 px-4;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    @apply bg-secondary-hover;
+  }
+
+  .btn-secondary:disabled {
+    @apply bg-border text-secondary-foreground;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Tertiary Button */
+  .btn-tertiary {
+    @apply bg-tertiary text-tertiary-foreground text-sm;
+    @apply py-3 px-4;
+  }
+
+  .btn-tertiary:hover:not(:disabled) {
+    @apply bg-tertiary-hover;
+  }
+
+  .btn-tertiary:disabled {
+    @apply bg-transparent border border-border text-border;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Quaternary Button */
+  .btn-quaternary {
+    @apply bg-transparent border border-border text-foreground text-sm font-normal;
+    @apply py-1.5 px-3;
+  }
+
+  .btn-quaternary:hover:not(:disabled) {
+    @apply bg-tertiary;
+  }
+
+  .btn-quaternary:active:not(:disabled) {
+    @apply bg-transparent border-foreground text-foreground;
+  }
+
+  .btn-quaternary:disabled {
+    @apply bg-transparent border-border text-border;
+    cursor: not-allowed;
+    opacity: 1;
+  }
+
+  /* Text Button */
+  .btn-text {
+    @apply bg-transparent text-foreground text-sm font-medium;
+    @apply py-1.5 px-3 rounded-full;
+  }
+
+  .btn-text:hover:not(:disabled) {
+    @apply bg-tertiary;
+  }
+
+  .btn-text:active:not(:disabled) {
+    @apply text-primary;
+  }
+
+  /* Text Button Listed - for footer/menu */
+  .btn-text-listed {
+    @apply bg-transparent text-foreground text-sm font-normal;
+    @apply py-1.5 px-3 rounded-full;
+  }
+
+  .btn-text-listed:hover:not(:disabled) {
+    @apply text-text-secondary bg-tertiary;
+  }
+
+  .btn-text-listed:active:not(:disabled) {
+    @apply text-primary;
+  }
+}
+
+/* Added scrollbar-hide utility for horizontal scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.modal-overlay {
+  background-color: rgba(128, 128, 128, 0.65);
+}
+
+/* Sonner Toast Customization */
+[data-sonner-toast] {
+  font-family: var(--font-sans);
+}
+
+[data-sonner-toast][data-type="success"] {
+  --normal-bg: var(--success);
+  --normal-border: var(--success);
+  --normal-text: var(--success-foreground);
+}
+
+[data-sonner-toast][data-type="error"] {
+  --normal-bg: var(--destructive);
+  --normal-border: var(--destructive);
+  --normal-text: var(--destructive-foreground);
+}
+
+[data-sonner-toast][data-type="warning"] {
+  --normal-bg: var(--warning);
+  --normal-border: var(--warning);
+  --normal-text: var(--warning-foreground);
+}
+
+[data-sonner-toast][data-type="info"] {
+  --normal-bg: var(--info);
+  --normal-border: var(--info);
+  --normal-text: var(--info-foreground);
+}
+
+
