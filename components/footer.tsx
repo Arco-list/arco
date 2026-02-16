@@ -1,94 +1,168 @@
-import { Instagram, Linkedin, Twitter } from "lucide-react"
+"use client"
+
 import Link from "next/link"
+import Image from "next/image"
 
-const footerLinks = {
-  Products: ["Projects", "Professionals"], // Removed "Products" from the Products array
-  "For Business": ["List with us" /*, "Pricing" */], // Removed "Partner" from "For Business", Pricing commented out (Issue 8)
-  Arco: ["About", "Help center"], // Removed "Blog" from "Arco"
-}
-
-interface FooterProps {
-  maxWidth?: string;
-}
-
-export function Footer({ maxWidth = "max-w-[1800px]" }: FooterProps = {}) {
+export function Footer() {
   return (
-    <footer className="bg-[#F5F5F5] border-t border-border py-12 px-4 md:px-8">
-      <div className={`${maxWidth} mx-auto`}>
-        <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
-          <div>
-            <Link href="/" className="mb-6 block">
-              <img
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
-                alt="Arco Logo"
-                className="h-4 w-auto"
-              />
-            </Link>
-            <div className="flex gap-4">
-              <Instagram className="h-5 w-5 text-text-secondary hover:text-foreground cursor-pointer" />
-              <Linkedin className="h-5 w-5 text-text-secondary hover:text-foreground cursor-pointer" />
-              <Twitter className="h-5 w-5 text-text-secondary hover:text-foreground cursor-pointer" />
+    <>
+      <style jsx global>{`
+        /* Footer custom styles */
+        .footer-container {
+          max-width: 1680px;
+          margin: 0 auto;
+          padding: 0 80px;
+        }
+
+        .footer-top-grid {
+          display: grid;
+          grid-template-columns: 1.2fr 1.8fr;
+          gap: 40px;
+          padding-bottom: 40px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          margin-bottom: 28px;
+        }
+
+        .footer-links-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 48px;
+        }
+
+        .footer-col {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .footer-bottom-flex {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+          .footer-container {
+            padding: 0 40px !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .footer-container {
+            padding: 0 24px !important;
+          }
+          
+          .footer-top-grid {
+            grid-template-columns: 1fr !important;
+            gap: 32px !important;
+          }
+          
+          .footer-links-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 32px !important;
+          }
+          
+          .footer-bottom-flex {
+            flex-direction: column !important;
+            gap: 16px;
+            text-align: center;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .footer-container {
+            padding: 0 16px !important;
+          }
+          
+          .footer-links-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+      
+      <footer className="bg-[#161614] text-white/50 py-12 pb-8">
+        <div className="footer-container">
+          
+          {/* Top section */}
+          <div className="footer-top-grid">
+            
+            {/* Brand */}
+            <div>
+              <div className="mb-3">
+                <Image 
+                  src="/images/arco-logo-white.svg" 
+                  alt="Arco" 
+                  width={60}
+                  height={21}
+                  className="h-auto w-[60px]"
+                />
+              </div>
+              <p className="arco-small-text text-white/50 max-w-[200px]">
+                The professional network architects trust.
+              </p>
+            </div>
+
+            {/* Links */}
+            <div className="footer-links-grid">
+              
+              {/* Discover */}
+              <div className="footer-col">
+                <h4 className="arco-eyebrow text-white/35 mb-1.5">
+                  Discover
+                </h4>
+                <Link href="/projects" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Projects
+                </Link>
+                <Link href="/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Professionals
+                </Link>
+              </div>
+
+              {/* For Businesses */}
+              <div className="footer-col">
+                <h4 className="arco-eyebrow text-white/35 mb-1.5">
+                  For Businesses
+                </h4>
+                <Link href="/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Architects
+                </Link>
+                <Link href="/list-with-us" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Professionals
+                </Link>
+                <Link href="/editorial-standards" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Editorial standards
+                </Link>
+              </div>
+
+              {/* Company */}
+              <div className="footer-col">
+                <h4 className="arco-eyebrow text-white/35 mb-1.5">
+                  Company
+                </h4>
+                <Link href="/about" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  About
+                </Link>
+                <Link href="/privacy" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Privacy
+                </Link>
+                <Link href="/terms" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Terms
+                </Link>
+              </div>
+              
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 md:gap-8">
-            {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category}>
-                <h6 className="heading-6 text-foreground mb-4 px-2 md:px-3">{category}</h6>
-                <ul className="space-y-2">
-                  {links.map((link) => (
-                    <li key={link}>
-                      {/* COMMENTED OUT: Pricing link (Issue 8)
-                      {link === "Pricing" ? (
-                        <Link href="/pricing" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </Link>
-                      ) : */}
-                      {link === "Projects" ? (
-                        <Link href="/projects" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </Link>
-                      ) : link === "About" ? (
-                        <Link href="/about" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </Link>
-                      ) : link === "Help center" ? (
-                        <Link href="/help-center" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </Link>
-                      ) : link === "Professionals" ? (
-                        <Link href="/professionals" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </Link>
-                      ) : link === "List with us" ? (
-                        <Link href="/list-with-us" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </Link>
-                      ) : (
-                        <a href="#" className="inline-block body-small text-foreground px-2 md:px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-                          {link}
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          {/* Bottom section */}
+          <div className="footer-bottom-flex">
+            <span className="arco-small-text text-white/25">
+              © 2025 Arco. All rights reserved.
+            </span>
           </div>
+          
         </div>
-
-        <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4 body-small text-text-secondary">
-          <div>©2025 ArcoGlobal BV. All rights reserved.</div>
-          <div className="flex gap-6">
-            <Link href="/terms" className="body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-              Terms
-            </Link>
-            <Link href="/privacy" className="body-small text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary">
-              Privacy
-            </Link>
-          </div>
-        </div>
-      </div>
-    </footer>
+      </footer>
+    </>
   )
 }

@@ -1,15 +1,18 @@
+// app/page.tsx
+// Updated to use .wrap class for consistent horizontal margins
+
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import type { Database, Tables } from "@/lib/supabase/types"
 import { Header } from "@/components/header"
 import { HeroSection, type HeroProject } from "@/components/hero-section"
-import { ProjectCategories, type ProjectCategoryCard } from "@/components/project-categories"
-import { PopularProjects, type PopularProjectCard } from "@/components/popular-projects"
+import { BrowseSection, type BrowseCard } from "@/components/browse-section"
+import { RecentProjects, type RecentProject } from "@/components/recent-projects"
 import { FeaturesSection } from "@/components/features-section"
+import { MembershipCTA } from "@/components/membership-cta"
 import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
-import { ProfessionalCategories, type ProfessionalCategoryCard } from "@/components/professional-categories"
-import { ProjectTypes, type ProjectTypeCard } from "@/components/project-types"
 import { Footer } from "@/components/footer"
+import Link from "next/link"
 
 type SearchProjectsRow = Database["public"]["Functions"]["search_projects"]["Returns"][number]
 
@@ -20,7 +23,6 @@ type CategoryRow = Tables<"categories"> & {
 type CategoryWithChildren = CategoryRow & {
   children: CategoryRow[]
 }
-
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 
@@ -34,31 +36,24 @@ const normalizeSlug = (value: string | null | undefined) =>
 const FALLBACK_HERO_PROJECTS: HeroProject[] = [
   {
     id: "fallback-1",
-    title: "World's finest architectural constructions",
+    title: "Exceptional Architecture. Trusted Professionals.",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
     caption: "Modern Villa in Amsterdam",
   },
   {
     id: "fallback-2",
-    title: "World's finest architectural constructions",
+    title: "Exceptional Architecture. Trusted Professionals.",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
     caption: "Contemporary Residence in Rotterdam",
   },
   {
     id: "fallback-3",
-    title: "World's finest architectural constructions",
+    title: "Exceptional Architecture. Trusted Professionals.",
     href: "/projects",
     imageUrl: "/placeholder.svg?height=1080&width=1920",
     caption: "Luxury Estate in Utrecht",
-  },
-  {
-    id: "fallback-4",
-    title: "World's finest architectural constructions",
-    href: "/projects",
-    imageUrl: "/placeholder.svg?height=1080&width=1920",
-    caption: "Minimalist Home in The Hague",
   },
 ]
 
@@ -110,24 +105,12 @@ async function loadLandingData() {
       .limit(6),
   ])
 
-  if (heroProjectsResult.error) {
-    logger.error("Failed to load featured hero projects", { scope: "landing" }, heroProjectsResult.error)
-  }
-  if (popularProjectsResult.error) {
-    logger.error("Failed to load popular projects", { scope: "landing" }, popularProjectsResult.error)
-  }
-  if (parentCategoriesResult.error) {
-    logger.error("Failed to load project categories", { scope: "landing" }, parentCategoriesResult.error)
-  }
-  if (professionalCategoriesResult.error) {
-    logger.error("Failed to load professional categories", { scope: "landing" }, professionalCategoriesResult.error)
-  }
-  if (professionalSpecialtiesResult.error) {
-    logger.error("Failed to load professional specialties", { scope: "landing" }, professionalSpecialtiesResult.error)
-  }
-  if (featuredCompaniesResult.error) {
-    logger.error("Failed to load featured companies", { scope: "landing" }, featuredCompaniesResult.error)
-  }
+  if (heroProjectsResult.error) logger.error("Failed to load featured hero projects", { scope: "landing" }, heroProjectsResult.error)
+  if (popularProjectsResult.error) logger.error("Failed to load popular projects", { scope: "landing" }, popularProjectsResult.error)
+  if (parentCategoriesResult.error) logger.error("Failed to load project categories", { scope: "landing" }, parentCategoriesResult.error)
+  if (professionalCategoriesResult.error) logger.error("Failed to load professional categories", { scope: "landing" }, professionalCategoriesResult.error)
+  if (professionalSpecialtiesResult.error) logger.error("Failed to load professional specialties", { scope: "landing" }, professionalSpecialtiesResult.error)
+  if (featuredCompaniesResult.error) logger.error("Failed to load featured companies", { scope: "landing" }, featuredCompaniesResult.error)
 
   const heroProjects = (heroProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
   const popularProjects = (popularProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
@@ -149,11 +132,7 @@ async function loadLandingData() {
       .order("name", { ascending: true })
 
     if (childCategoriesResult.error) {
-      logger.error(
-        "Failed to load project subcategories",
-        { scope: "landing" },
-        childCategoriesResult.error,
-      )
+      logger.error("Failed to load project subcategories", { scope: "landing" }, childCategoriesResult.error)
     } else {
       childCategories = (childCategoriesResult.data as CategoryRow[] | null) ?? []
     }
@@ -197,18 +176,15 @@ async function loadLandingData() {
     .flatMap((category) => category.children ?? [])
     .filter((child) => child?.project_category_attributes?.is_listable)
     .slice(0, 24)
-    .filter(Boolean) as Tables<"categories"> & {
+    .filter(Boolean) as (Tables<"categories"> & {
     project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable"> | null
-  }[]
+  })[]
 
   const uniqueCategoryIdsForImages = Array.from(new Set(listableChildCategories.map((child) => child.id)))
 
   const representativeProjectResults = await Promise.all(
     uniqueCategoryIdsForImages.map((categoryId) =>
-      supabase.rpc("search_projects", {
-        category_filter: categoryId,
-        limit_count: 1,
-      }),
+      supabase.rpc("search_projects", { category_filter: categoryId, limit_count: 1 }),
     ),
   )
 
@@ -220,12 +196,24 @@ async function loadLandingData() {
     }
     const project = result.data?.[0]
     const categoryId = uniqueCategoryIdsForImages[index]
-    if (categoryId) {
-      representativeProjectMap.set(categoryId, project)
-    }
+    if (categoryId) representativeProjectMap.set(categoryId, project)
   })
 
-  const projectCategories: ProjectCategoryCard[] = projectCategoriesRaw
+  // Get project counts per category
+  const categoryCountsResult = await supabase
+    .from("project_categories")
+    .select("category_id")
+  
+  const categoryCounts = new Map<string, number>()
+  if (!categoryCountsResult.error && categoryCountsResult.data) {
+    categoryCountsResult.data.forEach((pc) => {
+      const count = categoryCounts.get(pc.category_id) ?? 0
+      categoryCounts.set(pc.category_id, count + 1)
+    })
+  }
+
+  // NEW: BrowseSection data - Projects
+  const browseProjects: BrowseCard[] = projectCategoriesRaw
     .filter((category) => category.children?.some((child) => child.project_category_attributes?.is_listable))
     .slice(0, 5)
     .map((category) => {
@@ -238,42 +226,67 @@ async function loadLandingData() {
         return project && project.primary_photo_url
       })
 
-      const representativeProject = childWithProject 
+      const representativeProject = childWithProject
         ? representativeProjectMap.get(childWithProject.id)
         : undefined
 
       const typeSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
+      
+      // Calculate total count for this parent category
+      const totalCount = listableChildren.reduce((sum, child) => {
+        return sum + (categoryCounts.get(child.id) ?? 0)
+      }, 0)
 
       return {
         id: category.id,
         title: category.name,
         href: typeSlug ? `/projects?type=${encodeURIComponent(typeSlug)}` : "/projects",
         imageUrl: representativeProject?.primary_photo_url ?? null,
+        count: totalCount > 0 ? `${totalCount}+ projects` : undefined,
       }
     })
 
-  const projectTypes: ProjectTypeCard[] = listableChildCategories.slice(0, 5).map((type) => {
-    const representativeProject = representativeProjectMap.get(type.id)
-    return {
-      id: type.id,
-      title: type.name,
-      href: `/projects?type=${encodeURIComponent(type.slug ?? type.name)}`,
-      imageUrl: representativeProject?.primary_photo_url ?? null,
-    }
+  // NEW: BrowseSection data - Spaces (hardcoded for now - you can make dynamic later)
+  const browseSpaces: BrowseCard[] = [
+    { id: '1', title: 'Kitchen', href: '/projects?space=kitchen', imageUrl: null },
+    { id: '2', title: 'Living Room', href: '/projects?space=living-room', imageUrl: null },
+    { id: '3', title: 'Bedroom', href: '/projects?space=bedroom', imageUrl: null },
+    { id: '4', title: 'Bathroom', href: '/projects?space=bathroom', imageUrl: null },
+    { id: '5', title: 'Outdoor', href: '/projects?space=outdoor', imageUrl: null },
+  ]
+
+  // NEW: BrowseSection data - Professionals
+  const professionalCategoryCounts = new Map<string, number>()
+  professionalSpecialties.forEach((entry) => {
+    const specialtySlug = normalizeSlug(entry.primary_specialty_slug ?? "")
+    if (!specialtySlug) return
+    const parentSlug = parentSlugByChildSlug.get(specialtySlug)
+    const categoryToCount = parentSlug || specialtySlug
+    professionalCategoryCounts.set(categoryToCount, (professionalCategoryCounts.get(categoryToCount) ?? 0) + 1)
   })
 
-  // Build mapping for title formatting (categories + taxonomy options)
+  const browseProfessionals: BrowseCard[] = professionalCategoriesRaw
+    .map((category) => {
+      const normalizedSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
+      const image = (category as any).image_url
+      if (!image) return null
+      
+      return {
+        id: category.id,
+        title: category.name ?? "",
+        href: `/professionals?categories=${encodeURIComponent(category.id)}`,
+        imageUrl: image,
+      } as BrowseCard
+    })
+    .filter((category): category is BrowseCard => category !== null)
+    .slice(0, 5)
+
   const allCategories = [...parentCategories, ...childCategories]
   const labelMap = new Map<string, string>()
-
-  // Add categories to the map
-  allCategories.forEach(category => {
-    if (category.id && category.name) {
-      labelMap.set(category.id, category.name)
-    }
+  allCategories.forEach((category) => {
+    if (category.id && category.name) labelMap.set(category.id, category.name)
   })
 
-  // Add taxonomy options to the map
   const taxonomyOptionsResult = await supabase
     .from("project_taxonomy_options")
     .select("id, name")
@@ -281,31 +294,20 @@ async function loadLandingData() {
 
   if (!taxonomyOptionsResult.error) {
     const taxonomyOptions = taxonomyOptionsResult.data ?? []
-    taxonomyOptions.forEach(option => {
-      if (option.id && option.name) {
-        labelMap.set(option.id, option.name)
-      }
+    taxonomyOptions.forEach((option) => {
+      if (option.id && option.name) labelMap.set(option.id, option.name)
     })
   }
 
   const heroProjectCards: HeroProject[] = heroProjects.map((project) => {
-    const style = project.style_preferences?.[0] || ""
+    const projectAny = project as any
+    const style = projectAny.style_preferences?.[0] || ""
     const subType = project.project_type || ""
     const location = project.location || ""
-
     const parts = []
-    if (style) {
-      const styleLabel = labelMap.get(style) || style
-      parts.push(styleLabel)
-    }
-    if (subType) {
-      const subTypeLabel = labelMap.get(subType) || subType
-      parts.push(subTypeLabel)
-    }
-    if (location) {
-      parts.push(`in ${location}`)
-    }
-
+    if (style) parts.push(labelMap.get(style) || style)
+    if (subType) parts.push(labelMap.get(subType) || subType)
+    if (location) parts.push(`in ${location}`)
     const caption = parts.length > 0 ? parts.join(" ") : undefined
 
     return {
@@ -319,70 +321,26 @@ async function loadLandingData() {
 
   const resolvedHeroProjects = heroProjectCards.length > 0 ? heroProjectCards : FALLBACK_HERO_PROJECTS
 
-  const popularProjectCards: PopularProjectCard[] = popularProjects.slice(0, 10).map((project) => {
-    const style = project.style_preferences?.[0] || ""
+  const recentProjectCards: RecentProject[] = popularProjects.slice(0, 6).map((project) => {
+    const projectAny = project as any
+    const style = projectAny.style_preferences?.[0] || ""
     const subType = project.project_type || ""
     const location = project.location || "Location unavailable"
-    
     const parts = []
-    if (style) {
-      const styleLabel = labelMap.get(style) || style
-      parts.push(styleLabel)
-    }
-    if (subType) {
-      const subTypeLabel = labelMap.get(subType) || subType
-      parts.push(subTypeLabel)
-    }
+    if (style) parts.push(labelMap.get(style) || style)
+    if (subType) parts.push(labelMap.get(subType) || subType)
     parts.push(`in ${location}`)
-    
     const title = parts.join(" ")
-    
+
     return {
       id: project.id,
       title,
       href: project.slug ? `/projects/${project.slug}` : "/projects",
       imageUrl: project.primary_photo_url,
-      likes: project.likes_count ?? 0,
+      subtitle: undefined,  // Architect name not available in search results
     }
   })
 
-  const professionalCategoryCounts = new Map<string, number>()
-  professionalSpecialties.forEach((entry) => {
-    const specialtySlug = normalizeSlug(entry.primary_specialty_slug)
-    if (!specialtySlug) return
-
-    // Check if this is a child category with a parent
-    const parentSlug = parentSlugByChildSlug.get(specialtySlug)
-
-    // If it has a parent, count towards the parent category
-    // If no parent found, it's a root category - count it directly
-    const categoryToCount = parentSlug || specialtySlug
-
-    professionalCategoryCounts.set(categoryToCount, (professionalCategoryCounts.get(categoryToCount) ?? 0) + 1)
-  })
-
-  const professionalCategoryCards: ProfessionalCategoryCard[] = professionalCategoriesRaw
-    .map((category) => {
-      const normalizedSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
-      const image = (category as any).image_url
-      if (!image) return null
-
-      const count = professionalCategoryCounts.get(normalizedSlug)
-      if (!count || count <= 0) return null
-      const countLabel = `${count} professional${count === 1 ? "" : "s"}`
-
-      return {
-        id: category.id,
-        title: category.name,
-        href: `/professionals?categories=${encodeURIComponent(category.id)}`,
-        imageUrl: image,
-        countLabel,
-      }
-    })
-    .filter((category): category is ProfessionalCategoryCard => Boolean(category))
-    .slice(0, 5)
-
-  // Fetch rating data and cover photos for featured companies
   const featuredCompanyIds = featuredCompaniesRaw.map((company) => company.id)
   let companyMetrics: Map<string, { averageRating: number; totalReviews: number }> = new Map()
   let companyCoverPhotos: Map<string, string> = new Map()
@@ -398,11 +356,12 @@ async function loadLandingData() {
         .select("company_id, url, is_cover, order_index")
         .in("company_id", featuredCompanyIds)
         .order("is_cover", { ascending: false })
-        .order("order_index", { ascending: true })
+        .order("order_index", { ascending: true }),
     ])
 
     if (!metricsResult.error && metricsResult.data) {
       metricsResult.data.forEach((metric) => {
+        if (!metric.company_id) return
         companyMetrics.set(metric.company_id, {
           averageRating: metric.average_rating || 0,
           totalReviews: metric.total_reviews || 0,
@@ -411,7 +370,6 @@ async function loadLandingData() {
     }
 
     if (!photosResult.error && photosResult.data) {
-      // Get first photo (prioritized by is_cover DESC, order_index ASC)
       const photosByCompany = new Map<string, string>()
       photosResult.data.forEach((photo) => {
         if (!photosByCompany.has(photo.company_id)) {
@@ -424,11 +382,9 @@ async function loadLandingData() {
 
   const featuredCompanies: FeaturedCompany[] = featuredCompaniesRaw.map((company) => {
     const location = [company.city, company.country].filter(Boolean).join(", ") || "Location unavailable"
-    const slug = company.slug || company.id
+    const slug = company.slug ?? company.id ?? ""
     const metrics = companyMetrics.get(company.id) || { averageRating: 0, totalReviews: 0 }
     const coverPhoto = companyCoverPhotos.get(company.id)
-
-    // Use primary service name as title
     const title = (company.primary_service as { name: string } | null)?.name || "Professional services"
 
     return {
@@ -445,29 +401,63 @@ async function loadLandingData() {
 
   return {
     heroProjects: resolvedHeroProjects,
-    projectCategories,
-    popularProjects: popularProjectCards,
-    projectTypes,
-    professionalCategories: professionalCategoryCards,
+    browseProjects,
+    browseSpaces,
+    browseProfessionals,
+    recentProjects: recentProjectCards,
     featuredCompanies,
   }
 }
 
 export default async function HomePage() {
-  const { heroProjects, projectCategories, popularProjects, projectTypes, professionalCategories, featuredCompanies } =
-    await loadLandingData()
+  const {
+    heroProjects,
+    browseProjects,
+    browseSpaces,
+    browseProfessionals,
+    recentProjects,
+    featuredCompanies,
+  } = await loadLandingData()
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Header transparent />
       <main className="pt-0">
+
+        {/* 1. Hero — full bleed, editorial headline */}
         <HeroSection projects={heroProjects} />
-        <ProjectCategories categories={projectCategories} />
-        <PopularProjects projects={popularProjects} />
+
+        {/* 2. Positioning Statement - UPDATED: Uses .wrap class */}
+        <section className="py-16 bg-white">
+          <div className="wrap text-center">
+            <h2 className="arco-page-title mb-8">
+              The professional network architects trust
+            </h2>
+            <p className="arco-body-text max-w-[900px] mx-auto">
+              Arco is where leading architects publish their residential work and credential the professionals they collaborate with. We help discerning clients discover exceptional teams through real projects — builders, interior designers, landscape architects, and specialists who have earned their reputation through craft, not advertising.
+            </p>
+          </div>
+        </section>
+
+        {/* 3. Browse Section - Projects, Spaces, Professionals */}
+        <BrowseSection 
+          projects={browseProjects}
+          spaces={browseSpaces}
+          professionals={browseProfessionals}
+        />
+
+        {/* 4. Recent Projects */}
+        <RecentProjects projects={recentProjects} />
+
+        {/* 5. How Arco works */}
         <FeaturesSection />
-        <ProfessionalCategories categories={professionalCategories} />
+
+        {/* 6. Featured Studios */}
         <FeaturedCompanies companies={featuredCompanies} />
-        <ProjectTypes types={projectTypes} />
+
+        {/* 7. Membership CTA */}
+        <MembershipCTA />
+
       </main>
       <Footer />
     </div>

@@ -12,17 +12,11 @@ export default function StylesPage() {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '60px 40px' }}>
         
         {/* HEADER */}
-        <div style={{ paddingBottom: '40px', marginBottom: '60px' }}>
-          <h1 style={{ 
-            fontFamily: 'var(--serif)', 
-            fontSize: '56px', 
-            fontWeight: 400, 
-            letterSpacing: '-0.5px', 
-            marginBottom: '12px' 
-          }}>
+        <div style={{ paddingBottom: '40px', marginBottom: '60px', borderBottom: '1px solid var(--rule)' }}>
+          <h1 className="arco-page-title" style={{ marginBottom: '12px' }}>
             Arco Design System
           </h1>
-          <p style={{ fontSize: '16px', color: 'var(--mid)', maxWidth: '700px' }}>
+          <p className="arco-body-text" style={{ maxWidth: '700px' }}>
             Visual reference for the Arco design system. All colors, typography, components, and patterns.
           </p>
         </div>
@@ -30,60 +24,60 @@ export default function StylesPage() {
         {/* COLORS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Color Palette</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Core Arco Colors</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Core Arco Colors</p>
 
           {/* Primary Colors */}
           <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Primary Colors</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Primary Colors</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' }}>
               <div>
                 <div style={{ height: '100px', background: '#FAFAF9', borderRadius: '6px', marginBottom: '12px', border: '2px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>White</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#FAFAF9</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Main background color for pages, cards, and content areas.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>White</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#FAFAF9</div>
+                <div className="arco-small-text">Main background color for pages, cards, and content areas.</div>
               </div>
               <div>
                 <div style={{ height: '100px', background: '#1c1c1a', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Black</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#1c1c1a</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Primary text color. Also used for secondary buttons and active states.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>Black</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#1c1c1a</div>
+                <div className="arco-small-text">Primary text color. Also used for secondary buttons and active states.</div>
               </div>
               <div>
                 <div style={{ height: '100px', background: '#016D75', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Accent (Teal)</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#016D75</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Primary buttons, link hovers, focus rings. Use sparingly.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>Accent (Teal)</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#016D75</div>
+                <div className="arco-small-text">Primary buttons, link hovers, focus rings. Use sparingly.</div>
               </div>
             </div>
           </div>
 
           {/* Secondary Colors */}
           <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Secondary Colors</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Secondary Colors</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' }}>
               <div>
                 <div style={{ height: '100px', background: '#f5f5f4', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Surface</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#f5f5f4</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Elevated surfaces, card backgrounds.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>Surface</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#f5f5f4</div>
+                <div className="arco-small-text">Elevated surfaces, card backgrounds.</div>
               </div>
               <div>
                 <div style={{ height: '100px', background: '#6b6b68', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Mid Gray</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#6b6b68</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Body text, descriptions.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>Mid Gray</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#6b6b68</div>
+                <div className="arco-small-text">Body text, descriptions.</div>
               </div>
               <div>
                 <div style={{ height: '100px', background: '#a1a1a0', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Light Gray</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#a1a1a0</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Metadata, subtitles, disabled states.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>Light Gray</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#a1a1a0</div>
+                <div className="arco-small-text">Metadata, subtitles, disabled states.</div>
               </div>
               <div>
                 <div style={{ height: '100px', background: '#e5e5e4', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--rule)' }}></div>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Rule</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#e5e5e4</div>
-                <div style={{ fontSize: '12px', color: 'var(--mid)', lineHeight: 1.5 }}>Borders, dividers, separators.</div>
+                <div className="arco-card-title" style={{ marginBottom: '4px' }}>Rule</div>
+                <div className="arco-small-text" style={{ fontFamily: 'Monaco, monospace', marginBottom: '8px' }}>#e5e5e4</div>
+                <div className="arco-small-text">Borders, dividers, separators.</div>
               </div>
             </div>
           </div>
@@ -92,7 +86,7 @@ export default function StylesPage() {
         {/* TYPOGRAPHY */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Typography</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Arco Typography Classes</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Arco Typography Classes</p>
 
           <div>
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
@@ -111,17 +105,17 @@ export default function StylesPage() {
             </div>
 
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
-              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>H4 — .arco-card-title — 15px, Sans, 400</div>
+              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>H4 (Headings) — .arco-h4 — 15px, Sans, 500</div>
+              <h4 className="arco-h4">Primary Colors</h4>
+            </div>
+
+            <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
+              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>H4 (Cards) — .arco-card-title — 15px, Sans, 400</div>
               <h4 className="arco-card-title">Contemporary Villa on the Amstel</h4>
             </div>
 
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
-              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>H4 Bold — .arco-h4 — 15px, Sans, 500</div>
-              <h4 className="arco-h4">Studio Modijefsky</h4>
-            </div>
-
-            <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
-              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Body — .arco-body-text — 15px, Sans, 300</div>
+              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Body — .arco-body-text — 15px, Sans, 300, Mid Gray</div>
               <p className="arco-body-text">Arco is where leading architects publish their residential work and credential the professionals they collaborate with.</p>
             </div>
 
@@ -131,12 +125,12 @@ export default function StylesPage() {
             </div>
 
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
-              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Subtitle — .arco-card-subtitle — 14px, Sans, 400</div>
+              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Subtitle — .arco-card-subtitle — 14px, Sans, 400, Light Gray</div>
               <p className="arco-card-subtitle">by Studio Modijefsky · Amsterdam · 2024</p>
             </div>
 
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
-              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Small — .arco-small-text — 14px, Sans, 400</div>
+              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Small — .arco-small-text — 14px, Sans, 400, Mid Gray</div>
               <p className="arco-small-text">Footer links, captions, secondary information</p>
             </div>
 
@@ -147,56 +141,106 @@ export default function StylesPage() {
           </div>
         </div>
 
-        {/* BUTTONS */}
+        {/* BUTTONS & LINKS - UPDATED */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Buttons & Links</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Interactive elements and CTAs</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Interactive elements and CTAs</p>
 
           <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Buttons</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Buttons</h4>
             <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', marginBottom: '24px' }}>
-                <span style={{ minWidth: '100px', fontSize: '14px', color: 'var(--mid)' }}>Default</span>
-                <button className="btn-primary">Primary</button>
-                <button className="btn-secondary">Secondary</button>
-                <button className="btn-tertiary">Tertiary</button>
+                <span className="arco-small-text" style={{ minWidth: '100px' }}>Default</span>
+                <button className="btn-primary">Primary Button</button>
+                <button className="btn-secondary">Secondary Button</button>
+                <button className="btn-tertiary">Tertiary Button</button>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center' }}>
-                <span style={{ minWidth: '100px', fontSize: '14px', color: 'var(--mid)' }}>Disabled</span>
-                <button className="btn-primary" disabled>Primary</button>
-                <button className="btn-secondary" disabled>Secondary</button>
-                <button className="btn-tertiary" disabled>Tertiary</button>
+                <span className="arco-small-text" style={{ minWidth: '100px' }}>Disabled</span>
+                <button className="btn-primary" disabled>Primary Button</button>
+                <button className="btn-secondary" disabled>Secondary Button</button>
+                <button className="btn-tertiary" disabled>Tertiary Button</button>
               </div>
             </div>
             <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                <li className="arco-small-text" style={{ color: 'var(--mid)', lineHeight: 1.7, paddingLeft: '16px', position: 'relative', marginBottom: '8px' }}>
+                <li className="arco-small-text" style={{ lineHeight: 1.7, paddingLeft: '16px', position: 'relative', marginBottom: '8px' }}>
                   <span style={{ position: 'absolute', left: 0, color: 'var(--accent)', fontWeight: 'bold' }}>•</span>
-                  <strong>Primary (Teal):</strong> Single most important action per screen
+                  <strong>Primary (Teal):</strong> Single most important action — 15px, Sans, 400
                 </li>
-                <li className="arco-small-text" style={{ color: 'var(--mid)', lineHeight: 1.7, paddingLeft: '16px', position: 'relative', marginBottom: '8px' }}>
+                <li className="arco-small-text" style={{ lineHeight: 1.7, paddingLeft: '16px', position: 'relative', marginBottom: '8px' }}>
                   <span style={{ position: 'absolute', left: 0, color: 'var(--accent)', fontWeight: 'bold' }}>•</span>
-                  <strong>Secondary (Black):</strong> Alternative important actions
+                  <strong>Secondary (Black):</strong> Alternative important actions — 15px, Sans, 400
                 </li>
-                <li className="arco-small-text" style={{ color: 'var(--mid)', lineHeight: 1.7, paddingLeft: '16px', position: 'relative' }}>
+                <li className="arco-small-text" style={{ lineHeight: 1.7, paddingLeft: '16px', position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 0, color: 'var(--accent)', fontWeight: 'bold' }}>•</span>
-                  <strong>Tertiary (Outline):</strong> Subtle actions, cancel buttons
+                  <strong>Tertiary (Outline):</strong> Subtle actions, cancel buttons — 15px, Sans, 400
                 </li>
               </ul>
             </div>
           </div>
 
+          {/* NEW: Navigation Links */}
           <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Text Links</h4>
-            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
-              <div style={{ marginBottom: '24px' }}>
-                <a href="#" className="text-link-plain">View all projects →</a>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Navigation Links</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px', marginBottom: '16px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <a href="#" className="arco-nav-text">Projects</a>
+                <span style={{ margin: '0 12px', color: 'var(--mid)' }}>·</span>
+                <a href="#" className="arco-nav-text">Professionals</a>
+                <span style={{ margin: '0 12px', color: 'var(--mid)' }}>·</span>
+                <a href="#" className="arco-nav-text">About</a>
               </div>
-              <div>
-                <p className="arco-body-text" style={{ maxWidth: '600px' }}>
-                  Arco is where leading architects publish their residential work. We help <a href="#" style={{ textDecoration: 'underline', color: 'var(--mid)' }} className="hover:text-[var(--accent)] transition-colors">discerning clients</a> discover exceptional teams.
-                </p>
+            </div>
+            <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
+              <p className="arco-small-text">
+                Uses .arco-nav-text — 15px, Sans, 400 → Teal on hover
+              </p>
+            </div>
+          </div>
+
+          {/* NEW: Footer Links */}
+          <div style={{ marginBottom: '48px' }}>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Footer Links</h4>
+            <div style={{ background: '#1c1c1a', border: '1px solid #333', borderRadius: '6px', padding: '40px', marginBottom: '16px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <a href="#" className="footer-link">About</a>
+                <span style={{ margin: '0 12px', color: '#6b6b68' }}>·</span>
+                <a href="#" className="footer-link">Help Center</a>
+                <span style={{ margin: '0 12px', color: '#6b6b68' }}>·</span>
+                <a href="#" className="footer-link">Privacy Policy</a>
               </div>
+            </div>
+            <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
+              <p className="arco-small-text">
+                Uses .footer-link — 14px, Sans, 400, Mid Gray → White on hover
+              </p>
+            </div>
+          </div>
+
+          {/* View All Link */}
+          <div style={{ marginBottom: '48px' }}>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>View All Link</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px', marginBottom: '16px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <a href="#" className="view-all-link">View all projects →</a>
+              </div>
+            </div>
+            <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
+              <p className="arco-small-text">Uses .view-all-link — 14px, Sans, 400, Light Gray → Teal on hover</p>
+            </div>
+          </div>
+
+          {/* Inline Links */}
+          <div>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Inline Links</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px', marginBottom: '16px' }}>
+              <p className="arco-body-text" style={{ maxWidth: '600px' }}>
+                Arco is where leading architects publish their residential work. We help <a href="#">discerning clients</a> discover exceptional teams.
+              </p>
+            </div>
+            <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
+              <p className="arco-small-text">Inline links inherit color, underline with gray → Teal color + underline on hover</p>
             </div>
           </div>
         </div>
@@ -204,50 +248,87 @@ export default function StylesPage() {
         {/* FORM ELEMENTS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Form Elements</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Input styles and form components</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Input styles and form components</p>
 
           <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Text Input</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Text Input</h4>
             <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px', color: 'var(--mid)' }}>Default</label>
+                  <label className="arco-small-text" style={{ display: 'block', marginBottom: '8px' }}>Default Input (Gray Outline)</label>
                   <input 
                     type="text" 
                     placeholder="Enter text..." 
+                    className="input-base input-default"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="arco-small-text" style={{ display: 'block', marginBottom: '8px' }}>Focused Input (Black Outline)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Click to focus..." 
+                    className="input-base"
                     style={{ 
-                      fontFamily: 'var(--sans)', 
-                      fontSize: '14px', 
-                      padding: '12px 16px', 
-                      border: '1px solid var(--rule)', 
-                      borderRadius: '3px', 
-                      background: 'white', 
-                      color: 'var(--black)', 
                       width: '100%',
-                      maxWidth: '400px'
+                      border: '1px solid var(--arco-black)'
                     }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '14px', marginBottom: '8px', color: 'var(--mid)' }}>Disabled</label>
+                  <label className="arco-small-text" style={{ display: 'block', marginBottom: '8px', color: 'var(--destructive)' }}>Error Input (Red Outline)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Invalid input..." 
+                    className="input-base input-error"
+                    style={{ width: '100%' }}
+                  />
+                  <p className="arco-small-text" style={{ marginTop: '4px', color: 'var(--destructive)' }}>This field is required</p>
+                </div>
+                <div>
+                  <label className="arco-small-text" style={{ display: 'block', marginBottom: '8px' }}>Disabled Input</label>
                   <input 
                     type="text" 
                     placeholder="Disabled..." 
                     disabled
-                    style={{ 
-                      fontFamily: 'var(--sans)', 
-                      fontSize: '14px', 
-                      padding: '12px 16px', 
-                      border: '1px solid var(--rule)', 
-                      borderRadius: '3px', 
-                      background: 'var(--surface)', 
-                      color: 'var(--light)', 
-                      width: '100%',
-                      maxWidth: '400px',
-                      cursor: 'not-allowed'
-                    }}
+                    className="input-base input-disabled"
+                    style={{ width: '100%' }}
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '48px' }}>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Textarea</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
+              <div style={{ maxWidth: '500px' }}>
+                <label className="arco-small-text" style={{ display: 'block', marginBottom: '8px' }}>Message</label>
+                <textarea 
+                  placeholder="Enter your message..." 
+                  rows={4}
+                  className="input-base input-default"
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Select Dropdown</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
+              <div style={{ maxWidth: '500px' }}>
+                <label className="arco-small-text" style={{ display: 'block', marginBottom: '8px' }}>Project Type</label>
+                <select 
+                  className="input-base input-default"
+                  style={{ width: '100%', cursor: 'pointer' }}
+                >
+                  <option>Select a type...</option>
+                  <option>Villa</option>
+                  <option>Townhouse</option>
+                  <option>Apartment</option>
+                  <option>Extension</option>
+                </select>
               </div>
             </div>
           </div>
@@ -256,12 +337,12 @@ export default function StylesPage() {
         {/* CATEGORY TAGS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Category Tags</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Filter tags for galleries</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Filter pills for galleries and navigation</p>
 
           <div>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Tag Variants</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Filter Tags</h4>
             <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
                 <button className="category-tag active">All</button>
                 <button className="category-tag">Exterior</button>
                 <button className="category-tag">Living</button>
@@ -269,6 +350,11 @@ export default function StylesPage() {
                 <button className="category-tag">Bedroom</button>
                 <button className="category-tag">Bathroom</button>
               </div>
+              <p className="arco-small-text">
+                <strong>Active:</strong> Black fill, white text, 500 weight, black outline<br/>
+                <strong>Inactive:</strong> Transparent, black text, 400 weight, gray outline<br/>
+                <strong>Hover:</strong> Black outline
+              </p>
             </div>
           </div>
         </div>
@@ -276,10 +362,10 @@ export default function StylesPage() {
         {/* CARDS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Cards</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Project and content card components</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Project and content card components</p>
 
           <div>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Project Cards</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Project Cards</h4>
             <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '30px' }}>
                 {[1, 2, 3].map((i) => (
@@ -292,11 +378,9 @@ export default function StylesPage() {
                       marginBottom: '12px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--mid)',
-                      fontSize: '14px'
+                      justifyContent: 'center'
                     }}>
-                      Image {i}
+                      <span className="arco-small-text">Image {i}</span>
                     </div>
                     <h4 className="arco-card-title" style={{ marginBottom: '4px' }}>Villa Project {i}</h4>
                     <p className="arco-card-subtitle">Amsterdam · 2024</p>
@@ -310,166 +394,57 @@ export default function StylesPage() {
         {/* SECTION HEADERS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Section Headers</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Title and action patterns</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Title and action patterns</p>
 
           <div>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Header with View All</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Header with View All</h4>
             <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '28px' }}>
                 <h2 className="arco-section-title">Recently Published</h2>
-                <a href="#" className="text-link-plain">View all projects →</a>
+                <a href="#" className="view-all-link">View all projects →</a>
               </div>
+              <p className="arco-small-text">Uses .arco-section-title + .view-all-link</p>
             </div>
           </div>
         </div>
 
-        {/* MODAL */}
+        {/* LAYOUT COMPONENTS */}
         <div style={{ marginBottom: '80px' }}>
-          <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Modal Window</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Overlay dialog pattern</p>
+          <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Layout Components</h2>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Section and container patterns</p>
+
+          <div style={{ marginBottom: '48px' }}>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>How It Works Grid</h4>
+            <div style={{ background: 'var(--surface)', padding: '40px', borderRadius: '6px' }}>
+              <div className="how-grid">
+                <div className="how-card">
+                  <div className="how-number">01</div>
+                  <h3 className="how-title">First Step</h3>
+                  <p className="how-body">This demonstrates the how-grid layout with proper spacing and typography.</p>
+                </div>
+                <div className="how-card">
+                  <div className="how-number">02</div>
+                  <h3 className="how-title">Second Step</h3>
+                  <p className="how-body">Numbers use 36px serif, titles use 15px sans 500, body uses 15px sans mid gray.</p>
+                </div>
+                <div className="how-card">
+                  <div className="how-number">03</div>
+                  <h3 className="how-title">Third Step</h3>
+                  <p className="how-body">Grid uses repeat(3, 1fr) with 40px gap, stacks on mobile.</p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Standard Modal</h4>
-            <div style={{ background: 'rgba(128, 128, 128, 0.65)', padding: '80px 40px', borderRadius: '6px' }}>
-              <div style={{ 
-                background: 'white', 
-                borderRadius: '6px', 
-                maxWidth: '500px', 
-                width: '100%', 
-                margin: '0 auto',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)'
-              }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'flex-start', 
-                  padding: '32px 32px 24px',
-                  borderBottom: '1px solid var(--rule)'
-                }}>
-                  <h3 style={{ fontFamily: 'var(--serif)', fontSize: '28px', fontWeight: 400, letterSpacing: '-0.3px' }}>
-                    Request an Introduction
-                  </h3>
-                  <button style={{ 
-                    background: 'none', 
-                    border: 'none', 
-                    fontSize: '32px', 
-                    lineHeight: 1, 
-                    color: 'var(--light)', 
-                    cursor: 'pointer', 
-                    padding: 0 
-                  }}>
-                    ×
-                  </button>
-                </div>
-                <div style={{ padding: '32px' }}>
-                  <p style={{ fontSize: '15px', lineHeight: 1.7, color: 'var(--mid)', marginBottom: '24px' }}>
-                    We&apos;ll connect you with the right professionals from this team based on your specific needs and project scope.
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <input 
-                      type="text" 
-                      placeholder="Your name" 
-                      style={{ 
-                        fontFamily: 'var(--sans)', 
-                        fontSize: '14px', 
-                        padding: '12px 16px', 
-                        border: '1px solid var(--rule)', 
-                        borderRadius: '3px', 
-                        width: '100%' 
-                      }}
-                    />
-                    <input 
-                      type="email" 
-                      placeholder="Email address" 
-                      style={{ 
-                        fontFamily: 'var(--sans)', 
-                        fontSize: '14px', 
-                        padding: '12px 16px', 
-                        border: '1px solid var(--rule)', 
-                        borderRadius: '3px', 
-                        width: '100%' 
-                      }}
-                    />
-                    <textarea 
-                      placeholder="Tell us about your project" 
-                      rows={4}
-                      style={{ 
-                        fontFamily: 'var(--sans)', 
-                        fontSize: '14px', 
-                        padding: '12px 16px', 
-                        border: '1px solid var(--rule)', 
-                        borderRadius: '3px', 
-                        width: '100%',
-                        resize: 'vertical'
-                      }}
-                    />
-                  </div>
-                </div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'flex-end', 
-                  gap: '12px', 
-                  padding: '24px 32px 32px',
-                  borderTop: '1px solid var(--rule)'
-                }}>
-                  <button className="btn-tertiary">Cancel</button>
-                  <button className="btn-primary">Send Request</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* PROJECT DETAIL COMPONENTS */}
-        <div style={{ marginBottom: '80px' }}>
-          <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Project Detail Components</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Specialized components for project pages</p>
-
-          {/* Architect Attribution */}
-          <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Architect Attribution</h4>
-            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px', textAlign: 'center' }}>
-              <h1 className="arco-page-title" style={{ marginBottom: '12px' }}>Contemporary Villa on the Amstel</h1>
-              <p className="architect-attribution">
-                by <a href="#">Studio Modijefsky</a>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Editorial Grid (Recent Projects)</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
+              <p className="arco-small-text" style={{ marginBottom: '16px' }}>
+                <strong>Row 1:</strong> 2fr 1fr grid (large card + 2 stacked cards)<br/>
+                <strong>Row 2:</strong> repeat(3, 1fr) grid (3 equal cards)<br/>
+                <strong>Gap:</strong> 20px consistent<br/>
+                <strong>Typography:</strong> .ed-name (15px, sans, 400), .ed-by (14px, light gray)
               </p>
-            </div>
-          </div>
-
-          {/* Specifications Bar */}
-          <div style={{ marginBottom: '48px' }}>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Specifications Bar</h4>
-            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
-              <div className="specifications-bar">
-                <div className="spec-item">
-                  <span className="arco-eyebrow">Location</span>
-                  <div className="arco-card-title">Amsterdam</div>
-                </div>
-                <div className="spec-item">
-                  <span className="arco-eyebrow">Year</span>
-                  <div className="arco-card-title">2024</div>
-                </div>
-                <div className="spec-item">
-                  <span className="arco-eyebrow">Type</span>
-                  <div className="arco-card-title">Villa</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Professional Credit Card */}
-          <div>
-            <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Professional Credit Card</h4>
-            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
-              <div style={{ maxWidth: '200px', margin: '0 auto', textAlign: 'center' }}>
-                <span className="arco-eyebrow" style={{ display: 'block', marginBottom: '16px' }}>Architect</span>
-                <div className="credit-icon">
-                  <span className="credit-icon-initials">SM</span>
-                </div>
-                <h3 className="arco-h4" style={{ marginBottom: '6px' }}>Studio Modijefsky</h3>
-                <p className="arco-card-subtitle" style={{ marginBottom: '12px' }}>Amsterdam, NL</p>
-                <span className="text-link-plain">View Portfolio →</span>
-              </div>
             </div>
           </div>
         </div>
@@ -477,20 +452,20 @@ export default function StylesPage() {
         {/* RESPONSIVE */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Responsive Breakpoints</h2>
-          <p className="arco-small-text" style={{ color: 'var(--mid)', marginBottom: '32px' }}>Mobile, tablet, and desktop layouts</p>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Mobile, tablet, and desktop layouts</p>
 
           <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
             <div style={{ display: 'grid', gap: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span className="arco-card-title" style={{ minWidth: '120px', fontWeight: 600 }}>Desktop</span>
+                <span className="arco-h4" style={{ minWidth: '120px' }}>Desktop</span>
                 <span className="arco-small-text">1024px and up</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span className="arco-card-title" style={{ minWidth: '120px', fontWeight: 600 }}>Tablet</span>
+                <span className="arco-h4" style={{ minWidth: '120px' }}>Tablet</span>
                 <span className="arco-small-text">768px - 1023px</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span className="arco-card-title" style={{ minWidth: '120px', fontWeight: 600 }}>Mobile</span>
+                <span className="arco-h4" style={{ minWidth: '120px' }}>Mobile</span>
                 <span className="arco-small-text">0px - 767px</span>
               </div>
             </div>
