@@ -9,7 +9,7 @@ import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { logger } from "@/lib/logger"
 
 export const metadata: Metadata = {
-  title: "Browse Projects",
+  title: "Browse Projects · Arco",
   description: "Explore architecture and design projects from across the Netherlands. Find inspiration for your next renovation or building project.",
 }
 
@@ -25,16 +25,19 @@ export default async function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pt-[60px] md:pt-[68px]">
+    <div className="min-h-screen bg-white">
       <Header />
+      
       <FilterErrorBoundary>
         <FilterProvider>
           <FilterBar />
+          
           <main className="flex-1 bg-white">
             <ProjectsGrid initialProjects={projects} />
           </main>
         </FilterProvider>
       </FilterErrorBoundary>
+      
       <Footer />
     </div>
   )

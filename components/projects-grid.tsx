@@ -1,13 +1,12 @@
 "use client"
 import { useMemo, useState } from "react"
-import { ChevronDown, ChevronRight, X } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronLeft, X } from "lucide-react"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { ProjectCard } from "@/components/project-card"
 import { useFilters } from "@/contexts/filter-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
-import { useSavedProjects } from "@/contexts/saved-projects-context"
-import { useProjectLikes } from "@/contexts/project-likes-context"
 
 const sortOptions = ["Most recent", "Most liked", "Alphabetical"] as const
 
@@ -21,31 +20,23 @@ type ProjectSummaryRow = {
   likes_count: number | null
   primary_photo_url: string | null
   created_at: string | null
+  professional_name?: string | null
+  professional_slug?: string | null
+  photos?: Array<{ url: string; alt?: string | null }>
   [key: string]: unknown
 }
 
 export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: ProjectSummaryRow[] }) {
   const filterContext = useFilters()
-  const { removeFilter, taxonomy } = filterContext
+  const { removeFilter } = filterContext
   const { projects, isLoading, error, hasMore, loadMore, typePhotoOverrides } = useProjectsQuery({
     pageSize: 12,
     initialProjects
   })
-  const {
-    savedProjectIds,
-    mutatingProjectIds: savedMutatingProjectIds,
-    saveProject,
-    removeProject,
-  } = useSavedProjects()
-  const {
-    likedProjectIds,
-    mutatingProjectIds: likeMutatingProjectIds,
-    likeCounts,
-    toggleLike,
-  } = useProjectLikes()
 
   const [sortBy, setSortBy] = useState<SortOption>("Most recent")
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
+  const [currentPhotoIndexes, setCurrentPhotoIndexes] = useState<Record<string, number>>({})
 
   const sortedProjects = useMemo(() => {
     const next = [...projects]
@@ -98,7 +89,7 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
       tags.push({ type: "buildingYear", value: "buildingYear", label: `Building year ≤ ${max ?? "any"}` })
     }
     if (filterContext.keyword.trim()) {
-      tags.push({ type: "keyword", value: filterContext.keyword.trim(), label: `Keyword: “${filterContext.keyword.trim()}”` })
+      tags.push({ type: "keyword", value: filterContext.keyword.trim(), label: `Keyword: "${filterContext.keyword.trim()}"` })
     }
     return tags
   }, [
@@ -134,157 +125,189 @@ export function ProjectsGrid({ initialProjects = [] }: { initialProjects?: Proje
     return `${typePart} in ${locationPart}`
   }, [filterContext.selectedLocation, filterContext.selectedTypes, filterContext.taxonomyLabelMap])
 
+  const navigatePhoto = (projectId: string, direction: 'prev' | 'next', totalPhotos: number) => {
+    setCurrentPhotoIndexes(prev => {
+      const currentIndex = prev[projectId] ?? 0
+      const newIndex = direction === 'next' 
+        ? (currentIndex + 1) % totalPhotos
+        : (currentIndex - 1 + totalPhotos) % totalPhotos
+      return { ...prev, [projectId]: newIndex }
+    })
+  }
+
   return (
-    <div className="w-full bg-white">
-      <div className="px-4 md:px-8">
-        <div className="max-w-[1800px] mx-auto py-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="heading-5 text-foreground">
-                {headingText}
-              </h4>
-            </div>
+    <div className="projects-container">
+      <div className="projects-header">
+        <h3 className="arco-h3">{headingText}</h3>
 
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 body-small text-text-secondary hover:text-foreground"
-                onClick={() => setIsSortDropdownOpen((open) => !open)}
-              >
-                Sort: {sortBy}
-                <ChevronDown className="h-4 w-4" />
-              </Button>
+        <div className="relative">
+          <button
+            className="view-all-link"
+            onClick={() => setIsSortDropdownOpen((open) => !open)}
+          >
+            Sort: {sortBy}
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
 
-              {isSortDropdownOpen && (
-                <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-border bg-white shadow-lg">
-                  <div className="py-1">
-                    {sortOptions.map((option) => (
-                      <button
-                        key={option}
-                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
-                        onClick={() => {
-                          setSortBy(option)
-                          setIsSortDropdownOpen(false)
-                        }}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {activeFilterTags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              {activeFilterTags.map((tag, index) => (
-                <button
-                  key={`${tag.type}-${tag.value}-${index}`}
-                  onClick={() => removeFilter(tag.type, tag.value)}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground body-small rounded-full hover:bg-surface transition-colors"
-                >
-                  {tag.label}
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-md bg-red-50 border border-red-200 text-red-600 px-4 py-3 mb-6">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {sortedProjects.map((project) => {
-              const projectId = project.id ?? ""
-              const override = projectId ? typePhotoOverrides[projectId] : undefined
-              const imageSrc = override?.url ?? project.primary_photo_url ?? "/placeholder.svg"
-              const imageAlt =
-                override?.alt ??
-                project.primary_photo_alt ??
-                project.title ??
-                filterContext.taxonomyLabelMap.get(project.project_type ?? "") ??
-                "Project"
-              const isSaved = projectId ? savedProjectIds.has(projectId) : false
-              const isMutatingSave = projectId ? savedMutatingProjectIds.has(projectId) : false
-              const isLiked = projectId ? likedProjectIds.has(projectId) : false
-              const isMutatingLike = projectId ? likeMutatingProjectIds.has(projectId) : false
-              const likesCount = projectId ? likeCounts[projectId] ?? project.likes_count ?? 0 : project.likes_count ?? 0
-
-              // Build project title from style, type, and location
-              const style = project.style_preferences?.[0] || ""
-              const subType = project.project_type || ""
-              const location = project.location || "Location unavailable"
-              const parts = []
-              if (style) {
-                const styleLabel = filterContext.taxonomyLabelMap.get(style) || style
-                parts.push(styleLabel)
-              }
-              if (subType) {
-                const subTypeLabel = filterContext.taxonomyLabelMap.get(subType) || subType
-                parts.push(subTypeLabel)
-              }
-              parts.push(`in ${location}`)
-              const projectTitle = parts.join(" ")
-
-              const projectData = {
-                id: projectId,
-                title: projectTitle,
-                slug: project.slug,
-                imageUrl: imageSrc,
-                imageAlt,
-                location,
-                likes: project.likes_count,
-              }
-
-              return (
-                <ProjectCard
-                  key={project.id}
-                  project={projectData}
-                  isSaved={isSaved}
-                  isLiked={isLiked}
-                  isMutatingSave={isMutatingSave}
-                  isMutatingLike={isMutatingLike}
-                  likesCount={likesCount}
-                  onToggleSave={(proj) => {
-                    if (isSaved) {
-                      void removeProject(projectId)
-                    } else {
-                      void saveProject(projectId, project)
-                    }
-                  }}
-                  onToggleLike={(id, count) => void toggleLike(id, { currentCount: count })}
-                />
-              )
-            })}
-
-            {isLoading && (
-              <div className="col-span-full flex justify-center py-12">
-                <p className="body-small text-text-secondary">Loading projects…</p>
+          {isSortDropdownOpen && (
+            <div className="absolute right-0 top-8 z-50 w-48 rounded-md border border-border bg-white shadow-lg">
+              <div className="py-1">
+                {sortOptions.map((option) => (
+                  <button
+                    key={option}
+                    className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-surface"
+                    onClick={() => {
+                      setSortBy(option)
+                      setIsSortDropdownOpen(false)
+                    }}
+                  >
+                    {option}
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-
-          {!isLoading && sortedProjects.length === 0 && !error && (
-            <div className="text-center py-12">
-              <p className="body-regular text-text-secondary">No projects found matching your filters.</p>
-            </div>
-          )}
-
-          {hasMore && (
-            <div className="flex justify-center">
-              <Button onClick={loadMore} disabled={isLoading} variant="ghost" className="flex items-center gap-2">
-                Load more
-                <ChevronRight className="h-4 w-4" />
-              </Button>
             </div>
           )}
         </div>
       </div>
+
+      {activeFilterTags.length > 0 && (
+        <div className="filter-tags">
+          {activeFilterTags.map((tag, index) => (
+            <button
+              key={`${tag.type}-${tag.value}-${index}`}
+              onClick={() => removeFilter(tag.type, tag.value)}
+              className="filter-tag"
+            >
+              {tag.label}
+              <X className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-200 text-red-600 px-4 py-3 mb-6">
+          {error}
+        </div>
+      )}
+
+      <div className="projects-grid">
+        {sortedProjects.map((project) => {
+          const projectId = project.id ?? ""
+          const currentPhotoIndex = currentPhotoIndexes[projectId] ?? 0
+          const projectPhotos = project.photos ?? []
+          const hasMultiplePhotos = projectPhotos.length > 1
+          
+          // Get current photo or fallback to primary
+          const currentPhoto = projectPhotos[currentPhotoIndex]
+          const imageSrc = currentPhoto?.url ?? project.primary_photo_url ?? "/placeholder.svg"
+          const imageAlt = currentPhoto?.alt ?? project.title ?? "Project"
+
+          // Build project title
+          const style = project.style_preferences?.[0] || ""
+          const subType = project.project_type || ""
+          const location = project.location || "Location unavailable"
+          const parts = []
+          if (style) {
+            const styleLabel = filterContext.taxonomyLabelMap.get(style) || style
+            parts.push(styleLabel)
+          }
+          if (subType) {
+            const subTypeLabel = filterContext.taxonomyLabelMap.get(subType) || subType
+            parts.push(subTypeLabel)
+          }
+          parts.push(`in ${location}`)
+          const projectTitle = parts.join(" ")
+
+          const professionalName = project.professional_name || "Unknown Architect"
+          const professionalSlug = project.professional_slug
+
+          return (
+            <Link
+              key={project.id}
+              href={`/projects/${project.slug}`}
+              className="project-card-link"
+            >
+              <div className="project-image-wrapper">
+                <img
+                  src={imageSrc}
+                  alt={imageAlt}
+                  className="project-image"
+                />
+
+                {/* Navigation Arrows - Show on hover if multiple photos */}
+                {hasMultiplePhotos && (
+                  <div className="image-nav-arrows">
+                    <button
+                      className="nav-arrow"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        navigatePhoto(projectId, 'prev', projectPhotos.length)
+                      }}
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      className="nav-arrow"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        navigatePhoto(projectId, 'next', projectPhotos.length)
+                      }}
+                      aria-label="Next image"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <h3 className="project-title">{projectTitle}</h3>
+              <p className="project-subtitle">
+                by{" "}
+                {professionalSlug ? (
+                  <Link
+                    href={`/professionals/${professionalSlug}`}
+                    className="project-architect"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {professionalName}
+                  </Link>
+                ) : (
+                  <span className="project-architect">{professionalName}</span>
+                )}
+              </p>
+            </Link>
+          )
+        })}
+
+        {isLoading && (
+          <div className="col-span-full flex justify-center py-12">
+            <p className="text-sm text-text-secondary">Loading projects…</p>
+          </div>
+        )}
+      </div>
+
+      {!isLoading && sortedProjects.length === 0 && !error && (
+        <div className="text-center py-12">
+          <p className="text-sm text-text-secondary">No projects found matching your filters.</p>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="load-more-container">
+          <button 
+            onClick={loadMore} 
+            disabled={isLoading} 
+            className="btn-load-more"
+          >
+            Load more
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

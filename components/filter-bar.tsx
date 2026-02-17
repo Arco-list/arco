@@ -4,7 +4,6 @@ import { Filter, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight } fro
 import { Button } from "@/components/ui/button"
 import { FiltersModal } from "./filters-modal"
 import { useFilters } from "@/contexts/filter-context"
-import { CATEGORY_ICON_MAP, DEFAULT_CATEGORY_ICON, SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
 
 interface TypeOptionItem {
@@ -53,6 +52,7 @@ export function FilterBar() {
   const styleDropdownRef = useRef<HTMLDivElement>(null)
   const locationDropdownRef = useRef<HTMLDivElement>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
+  const carouselWrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: Event) => {
@@ -76,22 +76,41 @@ export function FilterBar() {
 
   useEffect(() => {
     const updateScrollButtons = () => {
-      if (carouselRef.current) {
+      if (carouselRef.current && carouselWrapperRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current
-        setCanScrollLeft(scrollLeft > 0)
-        setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1)
+        const canLeft = scrollLeft > 0
+        const canRight = scrollLeft < scrollWidth - clientWidth - 1
+        
+        setCanScrollLeft(canLeft)
+        setCanScrollRight(canRight)
+        
+        // Update wrapper classes for gradient
+        if (canLeft) {
+          carouselWrapperRef.current.classList.add('can-scroll-left')
+        } else {
+          carouselWrapperRef.current.classList.remove('can-scroll-left')
+        }
+        
+        if (canRight) {
+          carouselWrapperRef.current.classList.add('can-scroll-right')
+        } else {
+          carouselWrapperRef.current.classList.remove('can-scroll-right')
+        }
       }
     }
 
     const carousel = carouselRef.current
     if (carousel) {
       carousel.addEventListener("scroll", updateScrollButtons)
+      window.addEventListener("resize", updateScrollButtons)
       updateScrollButtons()
 
-      return () => carousel.removeEventListener("scroll", updateScrollButtons)
+      return () => {
+        carousel.removeEventListener("scroll", updateScrollButtons)
+        window.removeEventListener("resize", updateScrollButtons)
+      }
     }
   }, [])
-
 
   const scrollCarousel = (direction: "left" | "right") => {
     if (carouselRef.current) {
@@ -230,13 +249,27 @@ export function FilterBar() {
   // Update scroll state when items change
   useEffect(() => {
     const updateScrollButtons = () => {
-      if (carouselRef.current) {
+      if (carouselRef.current && carouselWrapperRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current
-        setCanScrollLeft(scrollLeft > 0)
-        setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1)
+        const canLeft = scrollLeft > 0
+        const canRight = scrollLeft < scrollWidth - clientWidth - 1
+        
+        setCanScrollLeft(canLeft)
+        setCanScrollRight(canRight)
+        
+        if (canLeft) {
+          carouselWrapperRef.current.classList.add('can-scroll-left')
+        } else {
+          carouselWrapperRef.current.classList.remove('can-scroll-left')
+        }
+        
+        if (canRight) {
+          carouselWrapperRef.current.classList.add('can-scroll-right')
+        } else {
+          carouselWrapperRef.current.classList.remove('can-scroll-right')
+        }
       }
     }
-    // Use requestAnimationFrame to ensure DOM has updated
     const rafId = requestAnimationFrame(updateScrollButtons)
     return () => cancelAnimationFrame(rafId)
   }, [quickFilterItems])
@@ -287,40 +320,30 @@ export function FilterBar() {
 
   const projectStyles = taxonomyOptions.project_style ?? []
 
-  const getButtonClassName = (hasSelection: boolean) => {
-    return hasSelection
-      ? "border-[#222222] text-[#222222] bg-transparent"
-      : ""
-  }
-
   return (
     <>
-      <div className="w-full border-b border-border bg-white/95 backdrop-blur-md sticky top-14 z-40 h-16">
-      <div className="mx-auto max-w-[1800px] px-4">
-        <div className="flex items-center gap-2 py-3 min-h-[64px]">
-          {/* Filters Button */}
-          <Button
-            variant="quaternary"
-            size="quaternary"
-            className={getButtonClassName(hasActiveFilters())}
+      {/* FilterBar - PhotoTour Style */}
+      <div className="filter-bar">
+        <div className="filter-bar-content">
+          {/* Filters Button - Black */}
+          <button
+            className="category-tag filters-button"
             onClick={() => setIsFiltersModalOpen(true)}
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="h-3.5 w-3.5" />
             Filters
-          </Button>
+          </button>
 
-          {/* Type Dropdown - Hidden on mobile */}
-          <div className="relative hidden md:block" ref={typeDropdownRef}>
-            <Button
-              variant="quaternary"
-              size="quaternary"
-              className={getButtonClassName(selectedTypes.length > 0)}
+          {/* Type Dropdown */}
+          <div className="relative" ref={typeDropdownRef}>
+            <button
+              className={`category-tag ${selectedTypes.length > 0 ? 'active' : ''}`}
               onClick={toggleTypeDropdown}
               disabled={taxonomyLoading && topLevelCategories.length === 0}
             >
               Type
-              <ChevronDown className="h-4 w-4" />
-            </Button>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
 
             {taxonomyLoading && topLevelCategories.length === 0 && activeDropdown === "type" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
@@ -427,17 +450,15 @@ export function FilterBar() {
             )}
           </div>
 
-          {/* Style Dropdown - Hidden on mobile */}
-          <div className="relative hidden md:block" ref={styleDropdownRef}>
-            <Button
-              variant="quaternary"
-              size="quaternary"
-              className={getButtonClassName(selectedStyles.length > 0)}
+          {/* Style Dropdown */}
+          <div className="relative" ref={styleDropdownRef}>
+            <button
+              className={`category-tag ${selectedStyles.length > 0 ? 'active' : ''}`}
               onClick={toggleStyleDropdown}
             >
               Style
-              <ChevronDown className="h-4 w-4" />
-            </Button>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
 
             {activeDropdown === "style" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
@@ -476,17 +497,15 @@ export function FilterBar() {
             )}
           </div>
 
-          {/* Location Dropdown - Hidden on mobile */}
-          <div className="relative hidden md:block" ref={locationDropdownRef}>
-            <Button
-              variant="quaternary"
-              size="quaternary"
-              className={getButtonClassName(selectedLocation !== "")}
+          {/* Location Dropdown */}
+          <div className="relative" ref={locationDropdownRef}>
+            <button
+              className={`category-tag ${selectedLocation !== "" ? 'active' : ''}`}
               onClick={toggleLocationDropdown}
             >
               {selectedLocation || "Location"}
-              <ChevronDown className="h-4 w-4" />
-            </Button>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
 
             {activeDropdown === "location" && (
               <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
@@ -535,69 +554,53 @@ export function FilterBar() {
             )}
           </div>
 
-          {/* Divider - Hidden on mobile */}
-          <div className="h-6 w-px bg-surface flex-shrink-0 self-center hidden md:block"></div>
+          {/* Vertical Divider */}
+          <div className="divider" />
 
-          {/* Divider for mobile */}
-          <div className="h-6 w-px bg-surface flex-shrink-0 self-center md:hidden"></div>
-
-          {/* Left scroll button - Only visible on desktop */}
-          <div className="hidden md:block">
-            <Button
-              variant="quaternary"
-              className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollLeft ? "opacity-50 cursor-not-allowed" : ""}`}
+          {/* Carousel with overlaid arrows */}
+          <div className="carousel-wrapper" ref={carouselWrapperRef}>
+            {/* Left scroll arrow - overlaid */}
+            <button
+              className={`scroll-arrow scroll-left ${canScrollLeft ? 'visible' : ''}`}
               onClick={() => scrollCarousel("left")}
-              disabled={!canScrollLeft}
+              aria-label="Scroll left"
             >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
 
-          <div className="flex-1 overflow-hidden">
-            <div
-              ref={carouselRef}
-              className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth"
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
-              {quickFilterItems.map((item) => {
-                const iconKey = item.slug ?? item.parentSlug ?? ""
-                const IconComponent =
-                  SUBTYPE_ICON_MAP[iconKey] ?? CATEGORY_ICON_MAP[item.parentSlug ?? ""] ?? DEFAULT_CATEGORY_ICON
-                const isSelected = selectedTypes.includes(item.id)
-                return (
-                  <Button
-                    key={item.id}
-                    onClick={() => toggleTypeSelection(item.id)}
-                    variant="quaternary"
-                    size="quaternary"
-                    className={isSelected
-                      ? "border-[#222222] text-[#222222] bg-transparent"
-                      : ""
-                    }
-                  >
-                    <IconComponent className="h-4 w-4" />
-                    <span>{item.name}</span>
-                  </Button>
-                )
-              })}
+            {/* Carousel */}
+            <div className="carousel-container">
+              <div
+                ref={carouselRef}
+                className="carousel"
+              >
+                {quickFilterItems.map((item) => {
+                  const isSelected = selectedTypes.includes(item.id)
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => toggleTypeSelection(item.id)}
+                      className={`category-tag ${isSelected ? 'active' : ''}`}
+                    >
+                      {item.name}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Right scroll button - Only visible on desktop */}
-          <div className="hidden md:block">
-            <Button
-              variant="quaternary"
-              className={`h-8 w-8 p-0 flex-shrink-0 ${!canScrollRight ? "opacity-50 cursor-not-allowed" : ""}`}
+            {/* Right scroll arrow - overlaid */}
+            <button
+              className={`scroll-arrow scroll-right ${canScrollRight ? 'visible' : ''}`}
               onClick={() => scrollCarousel("right")}
-              disabled={!canScrollRight}
+              aria-label="Scroll right"
             >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
-
         </div>
       </div>
-      </div>
+
       <FiltersModal isOpen={isFiltersModalOpen} onClose={() => setIsFiltersModalOpen(false)} />
     </>
   )
