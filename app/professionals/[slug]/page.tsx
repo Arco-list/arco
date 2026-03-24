@@ -9,6 +9,8 @@ import { ProfessionalSpecs } from "@/components/professional/professional-specs"
 import { ProfessionalProjects } from "@/components/professional/professional-projects"
 import { ProfessionalContact } from "@/components/professional/professional-contact"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
 
 type PageParams = {
@@ -51,7 +53,53 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 
 export default async function ProfessionalDetailPage({ params }: { params: Promise<PageParams> }) {
   const { slug } = await params
-  const professional = await fetchProfessionalDetail(slug)
+
+  // First try normal fetch (listed companies)
+  let professional = await fetchProfessionalDetail(slug)
+
+  // If not found, check if current user is an owner/member and allow preview
+  if (!professional) {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (user) {
+      // Check if user is an admin
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("admin_role, user_types")
+        .eq("id", user.id)
+        .maybeSingle()
+
+      if (profile && isAdminUser(profile.user_types, profile.admin_role)) {
+        professional = await fetchProfessionalDetail(slug, { allowUnlisted: true })
+      }
+
+      // Check if user owns or is a member of this company
+      if (!professional) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)
+        const companyQuery = isUuid
+          ? supabase.from("companies").select("id, owner_id").eq("id", slug).maybeSingle()
+          : supabase.from("companies").select("id, owner_id").eq("slug", slug).maybeSingle()
+        const { data: company } = await companyQuery
+
+        if (company) {
+          const isOwner = company.owner_id === user.id
+          let isMember = false
+          if (!isOwner) {
+            const [memberResult, professionalResult] = await Promise.all([
+              supabase.from("company_members").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
+              supabase.from("professionals").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
+            ])
+            isMember = !!memberResult.data || !!professionalResult.data
+          }
+
+          if (isOwner || isMember) {
+            professional = await fetchProfessionalDetail(slug, { allowUnlisted: true })
+          }
+        }
+      }
+    }
+  }
 
   if (!professional) {
     notFound()
@@ -68,11 +116,11 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
   // Specs
   const specs = {
-    location: professional.location,
+    location: professional.company.city ? `${professional.company.city}, NL` : professional.location,
     established: professional.company.foundedYear ?? null,
-    teamSize: null, // employeeCount doesn't exist in the type
-    projectsCount: professional.projects.length,
-    specialties: professional.specialties.length > 0 ? professional.specialties[0] : null,
+    teamSize: professional.company.teamSizeMin ?? null,
+    languages: professional.company.languages ?? [],
+    certificates: professional.company.certificates ?? [],
   }
 
   // Contact info
@@ -85,9 +133,17 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
     <div className="min-h-screen bg-white">
       <Header />
 
-      <ProfessionalSubNav />
+      <ProfessionalSubNav
+        companyId={professional.company.id}
+        name={professional.name}
+        imageUrl={professional.gallery[0]?.url ?? professional.company.logoUrl ?? null}
+        slug={slug}
+        profession={servicesBadge}
+        location={specs.location ?? undefined}
+        hasProjects={professional.projects.length > 0}
+      />
 
-      <div className="wrap" style={{ marginTop: '120px', marginBottom: '60px' }}>
+      <div id="details" className="wrap" style={{ marginTop: '120px', marginBottom: '60px' }}>
         <ProfessionalHeader
           name={professional.name}
           services={servicesBadge}
@@ -100,8 +156,8 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           location={specs.location}
           established={specs.established}
           teamSize={specs.teamSize}
-          projectsCount={specs.projectsCount}
-          specialties={specs.specialties}
+          languages={specs.languages}
+          certificates={specs.certificates}
         />
       </div>
 
@@ -113,6 +169,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
       <ProfessionalContact
         companyName={professional.name}
         officeAddress={contact.officeAddress}
+        city={professional.company.city ?? null}
         websiteUrl={contact.websiteUrl}
       />
 

@@ -18,7 +18,6 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 import { isAdminUser } from "@/lib/auth-utils"
-import { getSiteUrl } from "@/lib/utils"
 import { toast } from "sonner"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
@@ -33,7 +32,6 @@ import {
   type ProfessionalOption,
   type InviteData,
 } from "@/lib/new-project/invite-professionals"
-import { sendProjectReviewEmail } from "@/lib/email-service"
 import {
   findProfessionalByEmailAction,
   getUserEmailAction,
@@ -41,8 +39,10 @@ import {
 } from "@/app/new-project/actions"
 import { SegmentedProgressBar } from "@/components/new-project/segmented-progress-bar"
 import { Button } from "@/components/ui/button"
+import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
 
-const TOTAL_STEPS = 4
+const TOTAL_STEPS_PUBLISHER = 4
+const TOTAL_STEPS_NON_PUBLISHER = 2
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
 
 const FALLBACK_SERVICE_OPTIONS: ServiceOption[] = [
@@ -96,7 +96,7 @@ type ServiceOption = {
 
 type InviteSummary = {
   id: string
-  serviceCategoryId: string
+  serviceCategoryIds: string[]
   email: string
   status: ProjectProfessionalRow["status"]
   invitedAt: string
@@ -110,9 +110,9 @@ const INVITE_STATUS_META: Partial<
   Record<ProjectProfessionalRow["status"], { label: string; className: string }>
 > = {
   invited: { label: "Invited", className: "bg-blue-100 text-blue-800" },
-  listed: { label: "Published", className: "bg-green-100 text-green-800" },
+  listed: { label: "Listed", className: "bg-green-100 text-green-800" },
   live_on_page: { label: "Featured", className: "bg-teal-100 text-teal-800" },
-  unlisted: { label: "Unpublished", className: "bg-surface text-foreground" },
+  unlisted: { label: "Unlisted", className: "bg-surface text-foreground" },
   removed: { label: "Removed", className: "bg-red-100 text-red-800" },
   rejected: { label: "Declined", className: "bg-red-100 text-red-800" },
 } as const
@@ -130,6 +130,9 @@ export default function ProfessionalsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { canPublishProjects } = useCompanyEntitlements()
+
+  const TOTAL_STEPS = canPublishProjects ? TOTAL_STEPS_PUBLISHER : TOTAL_STEPS_NON_PUBLISHER
 
   const projectIdFromParams = searchParams.get("projectId")
 
@@ -442,7 +445,7 @@ export default function ProfessionalsPage() {
     const loadInvites = async (projectId: string) => {
       const { data, error } = await supabase
         .from("project_professionals")
-        .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at, professional_id, company_id, is_project_owner")
+        .select("id, invited_email, invited_service_category_ids, status, invited_at, responded_at, professional_id, company_id, is_project_owner")
         .eq("project_id", projectId)
         .order("invited_at", { ascending: true, nullsFirst: false })
 
@@ -451,27 +454,28 @@ export default function ProfessionalsPage() {
         return
       }
 
-      const grouped = (data ?? []).reduce<Record<string, InviteSummary[]>>((acc, row) => {
-        const serviceId = row.invited_service_category_id
-        if (!serviceId) {
-          return acc
-        }
-        if (!acc[serviceId]) {
-          acc[serviceId] = []
-        }
-        acc[serviceId].push({
+      // Fan out: one invite with multiple serviceIds appears in each service bucket
+      const grouped: Record<string, InviteSummary[]> = {}
+      for (const row of data ?? []) {
+        const serviceIds = (row.invited_service_category_ids as string[] | null) ?? []
+        const summary: InviteSummary = {
           id: row.id,
           email: row.invited_email,
-          serviceCategoryId: serviceId,
+          serviceCategoryIds: serviceIds,
           status: row.status,
           invitedAt: row.invited_at,
           respondedAt: row.responded_at,
           professional_id: row.professional_id,
           company_id: row.company_id,
           is_project_owner: row.is_project_owner,
-        })
-        return acc
-      }, {})
+        }
+        if (serviceIds.length > 0) {
+          for (const sid of serviceIds) {
+            if (!grouped[sid]) grouped[sid] = []
+            grouped[sid].push(summary)
+          }
+        }
+      }
 
       setInvitesByService(grouped)
     }
@@ -579,17 +583,6 @@ export default function ProfessionalsPage() {
         throw error
       }
 
-      // Send project review email
-      if (user?.email) {
-        await sendProjectReviewEmail(user.email, {
-          firstname: user.user_metadata?.first_name || '',
-          Project_name: project?.title || '',
-          Project_title: project?.title || '',
-          project_name: project?.title || '',
-          dashboard_link: `${getSiteUrl()}/dashboard/listings`
-        })
-      }
-
       toast.success("Listing submitted for review", {
         description: "The Arco team will review your project and notify you once it's approved.",
       })
@@ -657,15 +650,15 @@ export default function ProfessionalsPage() {
 
     try {
       if (currentlySelected) {
-        // Delete all professional invites for this service category
-        const { error: professionalsError } = await supabase
-          .from("project_professionals")
-          .delete()
-          .eq("project_id", projectId)
-          .eq("invited_service_category_id", serviceId)
-
-        if (professionalsError) {
-          throw professionalsError
+        // Remove this service from all affected invites
+        const affectedInvites = invitesByService[serviceId] ?? []
+        for (const inv of affectedInvites) {
+          const newServiceIds = inv.serviceCategoryIds.filter(sid => sid !== serviceId)
+          if (newServiceIds.length === 0) {
+            await supabase.from("project_professionals").delete().eq("id", inv.id)
+          } else {
+            await supabase.from("project_professionals").update({ invited_service_category_ids: newServiceIds } as any).eq("id", inv.id)
+          }
         }
 
         // Delete the service selection
@@ -731,13 +724,16 @@ export default function ProfessionalsPage() {
       }
 
       setInvitesByService((prev) => {
-        const serviceInvites = prev[invite.serviceCategoryId] ?? []
-        const filtered = serviceInvites.filter((row) => row.id !== invite.id)
         const next = { ...prev }
-        if (filtered.length === 0) {
-          delete next[invite.serviceCategoryId]
-        } else {
-          next[invite.serviceCategoryId] = filtered
+        // Remove invite from all service buckets it appears in
+        for (const sid of invite.serviceCategoryIds) {
+          const serviceInvites = next[sid] ?? []
+          const filtered = serviceInvites.filter((row) => row.id !== invite.id)
+          if (filtered.length === 0) {
+            delete next[sid]
+          } else {
+            next[sid] = filtered
+          }
         }
         return next
       })
@@ -768,7 +764,7 @@ export default function ProfessionalsPage() {
       // Professional.email is now always real - comes from getAvailableProfessionalsAction
       const inviteData: InviteData = {
         project_id: projectId,
-        invited_service_category_id: serviceId,
+        invited_service_category_ids: [serviceId],
         invited_email: professional.email,
         professional_id: professional.id,
         company_id: professional.company_id,
@@ -782,10 +778,10 @@ export default function ProfessionalsPage() {
       }
 
       setInvitesByService((prev) => {
-        const nextInvite = {
+        const nextInvite: InviteSummary = {
           id: data.id,
           email: data.invited_email,
-          serviceCategoryId: serviceId,
+          serviceCategoryIds: [serviceId],
           status: data.status,
           invitedAt: data.invited_at,
           respondedAt: data.responded_at,
@@ -849,7 +845,7 @@ export default function ProfessionalsPage() {
           .from("project_professionals")
           .update(updateData)
           .eq("id", editingInviteId)
-          .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at")
+          .select("id, invited_email, invited_service_category_ids, status, invited_at, responded_at")
           .maybeSingle()
 
         if (error || !data) {
@@ -857,32 +853,32 @@ export default function ProfessionalsPage() {
         }
 
         setInvitesByService((prev) => {
-          const serviceId = data.invited_service_category_id
-          if (!serviceId) {
-            return prev
+          const serviceIds = (data.invited_service_category_ids as string[] | null) ?? []
+          if (serviceIds.length === 0) return prev
+          const next = { ...prev }
+          for (const sid of serviceIds) {
+            const existing = next[sid] ?? []
+            next[sid] = existing.map((invite) =>
+              invite.id === data.id
+                ? {
+                    id: data.id,
+                    email: data.invited_email,
+                    serviceCategoryIds: serviceIds,
+                    status: data.status,
+                    invitedAt: data.invited_at,
+                    respondedAt: data.responded_at,
+                  }
+                : invite,
+            )
           }
-          const existing = prev[serviceId] ?? []
-          const updated = existing.map((invite) =>
-            invite.id === data.id
-              ? {
-                  id: data.id,
-                  email: data.invited_email,
-                  serviceCategoryId: serviceId,
-                  status: data.status,
-                  invitedAt: data.invited_at,
-                  respondedAt: data.responded_at,
-                }
-              : invite,
-          )
-
-          return { ...prev, [serviceId]: updated }
+          return next
         })
       } else {
         // Use new createInvite function for new invites
         let professionalId = selectedProfessional?.id || null
         let companyId = selectedProfessional?.company_id || null
         let isProjectOwner = selectedProfessional && projectClientId === selectedProfessional.user_id
-        
+
         // If no professional selected (email-only invite), check if email belongs to existing professional
         if (!selectedProfessional) {
           const { data: foundProfessional } = await findProfessionalByEmailAction(email)
@@ -892,10 +888,10 @@ export default function ProfessionalsPage() {
             isProjectOwner = projectClientId === foundProfessional.user_id
           }
         }
-        
+
         const inviteData: InviteData = {
           project_id: projectId,
-          invited_service_category_id: inviteServiceId,
+          invited_service_category_ids: [inviteServiceId],
           invited_email: email,
           professional_id: professionalId,
           company_id: companyId,
@@ -909,14 +905,10 @@ export default function ProfessionalsPage() {
         }
 
         setInvitesByService((prev) => {
-          const serviceId = data.invited_service_category_id
-          if (!serviceId) {
-            return prev
-          }
-          const nextInvite = {
+          const nextInvite: InviteSummary = {
             id: data.id,
             email: data.invited_email,
-            serviceCategoryId: serviceId,
+            serviceCategoryIds: [inviteServiceId],
             status: data.status,
             invitedAt: data.invited_at,
             respondedAt: data.responded_at,
@@ -925,7 +917,7 @@ export default function ProfessionalsPage() {
             is_project_owner: data.is_project_owner,
           }
 
-          return { ...prev, [serviceId]: [nextInvite] }
+          return { ...prev, [inviteServiceId]: [nextInvite] }
         })
       }
 
@@ -977,7 +969,7 @@ export default function ProfessionalsPage() {
 
 
         {currentStep === 1 && <IntroStep isLoading={isInitializing} />}
-        {currentStep === 2 && (
+        {canPublishProjects && currentStep === 2 && (
           <ServiceSelectionStep
             services={serviceOptions}
             selectedServiceIds={selectedServiceIds}
@@ -985,7 +977,7 @@ export default function ProfessionalsPage() {
             isBusy={isBusy}
           />
         )}
-        {currentStep === 3 && (
+        {canPublishProjects && currentStep === 3 && (
           <InviteStep
             services={serviceOptions}
             selectedServiceIds={selectedServiceIds}
@@ -1003,7 +995,7 @@ export default function ProfessionalsPage() {
             goToServiceSelection={() => setCurrentStep(2)}
           />
         )}
-        {currentStep === 4 && (
+        {currentStep === (canPublishProjects ? 4 : 2) && (
           <PreviewStep
             project={projectSummary}
             services={selectedServiceNames}

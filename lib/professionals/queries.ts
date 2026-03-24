@@ -9,7 +9,6 @@ import type {
   ProfessionalDetail,
   ProfessionalGalleryImage,
   ProfessionalProjectSummary,
-  ProfessionalReviewSummary,
   ProfessionalSocialLink,
   ProfessionalRatingsBreakdown,
 } from "./types"
@@ -116,6 +115,7 @@ type SocialLinkRow = {
 type ProjectLinkRow = {
   project_id: string | null
   status: string | null
+  cover_photo_id: string | null
 }
 
 type ProjectSummaryRow = {
@@ -129,24 +129,6 @@ type ProjectSummaryRow = {
   status: NullableString
   style_preferences: NullableString[] | null
   project_type: NullableString
-}
-
-type ReviewRow = {
-  id: string
-  created_at: NullableString
-  overall_rating: number | null
-  title: NullableString
-  comment: NullableString
-  work_completed: boolean | null
-  reviewer_id: string
-}
-
-type ReviewerProfileRow = {
-  id: string
-  first_name: NullableString
-  last_name: NullableString
-  avatar_url: NullableString
-  created_at: NullableString
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -331,6 +313,8 @@ type SearchProfessionalsRpcRow = {
   company_country: string | null
   company_state_region: string | null
   company_city: string | null
+  company_latitude: number | null
+  company_longitude: number | null
   primary_specialty: string | null
   primary_service_name: string | null
   services_offered: string[] | null
@@ -339,6 +323,8 @@ type SearchProfessionalsRpcRow = {
   is_verified: boolean | null
   cover_photo_url: string | null
   avatar_url: string | null
+  specialty_ids: string[] | null
+  specialty_parent_ids: string[] | null
 }
 
 const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): ProfessionalCard | null => {
@@ -379,9 +365,15 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): Profession
     rating,
     reviewCount,
     image: row.cover_photo_url ?? row.company_logo ?? row.avatar_url ?? PLACEHOLDER_IMAGE,
+    logoUrl: row.company_logo ?? null,
     specialties,
     isVerified: Boolean(row.is_verified),
     domain: row.company_domain ?? null,
+    latitude: row.company_latitude ?? null,
+    longitude: row.company_longitude ?? null,
+    specialtyIds: Array.isArray(row.specialty_ids) ? row.specialty_ids : [],
+    specialtyParentIds: Array.isArray(row.specialty_parent_ids) ? row.specialty_parent_ids : [],
+    city: row.company_city ? row.company_city.toLowerCase().trim() : null,
   }
 }
 
@@ -392,7 +384,7 @@ export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> 
     search_query: null,
     country_filter: null,
     state_filter: null,
-    city_filter: null,
+    city_filters: null,
     category_filters: null,
     service_filters: null,
     min_rating: null,
@@ -512,13 +504,8 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
     return null
   }
 
-  // Check plan status
-  const isPlusActive =
-    company.plan_tier === "plus" &&
-    company.status === "listed" &&
-    (!company.plan_expires_at || new Date(company.plan_expires_at).getTime() > Date.now())
-
-  if (!isPlusActive || activeProfessional.is_available !== true) {
+  // Only require listed status
+  if (company.status !== "listed") {
     return null
   }
 
@@ -579,7 +566,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   }
 }
 
-export const fetchProfessionalDetail = async (slugOrId: string): Promise<ProfessionalDetail | null> => {
+export const fetchProfessionalDetail = async (slugOrId: string, options?: { allowUnlisted?: boolean }): Promise<ProfessionalDetail | null> => {
   const supabase = await createServerSupabaseClient()
 
   // Query companies table first (company-centric approach)
@@ -601,18 +588,9 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     return null
   }
 
-  // Check plan status
-  const isPlusActive =
-    company.plan_tier === "plus" &&
-    company.status === "listed" &&
-    (!company.plan_expires_at || new Date(company.plan_expires_at).getTime() > Date.now())
-
-  if (!isPlusActive) {
-    logger.info("Company not eligible for public detail page", {
-      slugOrId,
-      planTier: company.plan_tier,
-      companyStatus: company.status,
-    })
+  // Only require listed status (unless preview mode for owners/members)
+  if (company.status !== "listed" && !options?.allowUnlisted) {
+    logger.info("Company not listed", { slugOrId, companyStatus: company.status })
     return null
   }
 
@@ -675,33 +653,16 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     return null
   }
 
-  if (detailRow.is_available !== true) {
-    logger.info("Professional not available for public detail page", {
-      slugOrId,
-      companyId,
-      professionalId: detailRow.id,
-      isAvailable: detailRow.is_available,
-    })
-    return null
-  }
-
   const professionalId = detailRow.id
 
-  const [photosResult, socialLinksResult, projectLinksResult, reviewsResult] = await Promise.all([
+  const [photosResult, socialLinksResult, projectLinksResult] = await Promise.all([
     supabase.rpc("get_public_company_photos", { p_company_id: companyId }),
     supabase.from("company_social_links").select("platform, url").eq("company_id", companyId),
     supabase
       .from("project_professionals")
-      .select("project_id, status")
-      .eq("professional_id", professionalId)
+      .select("project_id, status, cover_photo_id")
+      .or(`professional_id.eq.${professionalId},company_id.eq.${companyId}`)
       .limit(50),
-    supabase
-      .from("reviews")
-      .select("id, created_at, overall_rating, title, comment, work_completed, reviewer_id")
-      .eq("company_id", companyId)
-      .eq("is_published", true)
-      .order("created_at", { ascending: false })
-      .limit(20),
   ])
 
   if (photosResult.error) {
@@ -724,10 +685,6 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     logger.warn("Failed to load project links for professional detail", { slugOrId, professionalId, supabaseError: projectLinksResult.error })
   }
 
-  if (reviewsResult.error) {
-    logger.warn("Failed to load reviews for professional detail", { slugOrId, professionalId, supabaseError: reviewsResult.error })
-  }
-
   const galleryRows = Array.isArray(photosResult.data) ? (photosResult.data as CompanyPhotoRow[]) : []
   const gallery: ProfessionalGalleryImage[] = galleryRows
     .filter((row) => typeof row?.url === "string" && row.url.length > 0)
@@ -747,19 +704,44 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     }))
 
   const linkRows = Array.isArray(projectLinksResult.data) ? (projectLinksResult.data as ProjectLinkRow[]) : []
-  const allowedStatuses = new Set(["live_on_page", "listed"])
-  const projectIds = linkRows
+  const allowedStatuses = new Set(["live_on_page"])
+  const filteredLinks = linkRows
     .filter((row) => typeof row?.project_id === "string" && allowedStatuses.has(String(row.status)))
-    .map((row) => row.project_id as string)
 
+  const projectIds = filteredLinks.map((row) => row.project_id as string)
   const uniqueProjectIds = Array.from(new Set(projectIds)).slice(0, 12)
+
+  // Build map of project_id → cover_photo_id for contributor-specific covers
+  const coverPhotoIdMap = new Map<string, string>()
+  for (const row of filteredLinks) {
+    if (row.project_id && row.cover_photo_id) {
+      coverPhotoIdMap.set(row.project_id, row.cover_photo_id)
+    }
+  }
 
   let projects: ProfessionalProjectSummary[] = []
 
   if (uniqueProjectIds.length > 0) {
+    // Fetch cover photo URLs for contributor-specific covers
+    const coverPhotoIds = Array.from(coverPhotoIdMap.values())
+    let coverPhotoUrlMap = new Map<string, string>()
+    if (coverPhotoIds.length > 0) {
+      const coverPhotosResult = await supabase
+        .from("project_photos")
+        .select("id, url")
+        .in("id", coverPhotoIds)
+      if (coverPhotosResult.data) {
+        for (const photo of coverPhotosResult.data) {
+          if (photo.id && photo.url) {
+            coverPhotoUrlMap.set(photo.id, photo.url)
+          }
+        }
+      }
+    }
+
     const projectSummariesResult = await supabase
       .from("mv_project_summary")
-      .select("id, title, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type")
+      .select("id, title, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, primary_category")
       .in("id", uniqueProjectIds)
 
     if (projectSummariesResult.error) {
@@ -795,6 +777,9 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
         }
         if (isUuid(row.project_type)) {
           taxonomyIds.add(row.project_type)
+        }
+        if (isUuid((row as any).primary_category)) {
+          taxonomyIds.add((row as any).primary_category)
         }
       })
 
@@ -836,17 +821,24 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
           .map((id) => (isUuid(id) ? taxonomyNameMap.get(id) ?? id : id))
           .filter(Boolean)
 
-        const projectType = row.project_type
+        // Prefer primary_category (building type like "Villa") over project_type (scope like "New Build")
+        const primaryCategory = (row as any).primary_category as string | null
+        const projectType = primaryCategory ?? row.project_type
         const resolvedType = projectType && isUuid(projectType)
           ? taxonomyNameMap.get(projectType) ?? projectType
           : projectType
+
+        // Use contributor's custom cover photo if set, otherwise fall back to primary_photo_url
+        const customCoverPhotoId = coverPhotoIdMap.get(row.id)
+        const customCoverUrl = customCoverPhotoId ? coverPhotoUrlMap.get(customCoverPhotoId) : null
+        const image = customCoverUrl ?? row.primary_photo_url ?? null
 
         return {
           id: row.id,
           title: row.title ?? "Project",
           slug: row.slug ?? null,
           location: row.location ?? null,
-          image: row.primary_photo_url ?? null,
+          image,
           likesCount: row.likes_count ?? null,
           projectYear: row.project_year ?? null,
           stylePreferences: resolvedStyles.length > 0 ? resolvedStyles : null,
@@ -855,64 +847,6 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
       })
     }
   }
-
-  const reviewRows = Array.isArray(reviewsResult.data) ? (reviewsResult.data as ReviewRow[]) : []
-  const reviewerIds = Array.from(
-    new Set(
-      reviewRows
-        .map((row) => row.reviewer_id)
-        .filter((id): id is string => typeof id === "string" && isUuid(id)),
-    ),
-  )
-
-  let reviewerProfiles = new Map<string, ReviewerProfileRow>()
-
-  if (reviewerIds.length > 0) {
-    const { data: reviewerProfilesData, error: reviewerProfilesError } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name, avatar_url, created_at")
-      .in("id", reviewerIds)
-
-    if (reviewerProfilesError) {
-      logger.warn("Failed to load reviewer profiles for professional detail", {
-        professionalId,
-        supabaseError: reviewerProfilesError,
-      })
-    } else {
-      const profileRows = Array.isArray(reviewerProfilesData)
-        ? (reviewerProfilesData as ReviewerProfileRow[])
-        : []
-
-      reviewerProfiles = new Map(
-        profileRows
-          .filter((row): row is ReviewerProfileRow => Boolean(row && typeof row.id === "string" && isUuid(row.id)))
-          .map((row) => [row.id, row]),
-      )
-    }
-  }
-
-  const reviews: ProfessionalReviewSummary[] = reviewRows.map((row) => {
-    const reviewerProfile = reviewerProfiles.get(row.reviewer_id) ?? null
-    const reviewerName = [reviewerProfile?.first_name, reviewerProfile?.last_name]
-      .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
-      .join(" ")
-      .trim()
-
-    const yearsOnPlatform = calculateYearsOnPlatform(reviewerProfile?.created_at ?? null)
-
-    return {
-      id: row.id,
-      reviewerName: reviewerName || "Verified homeowner",
-      reviewerInitials: buildInitials(reviewerProfile?.first_name ?? null, reviewerProfile?.last_name ?? null),
-      reviewerAvatarUrl: reviewerProfile?.avatar_url ?? null,
-      yearsOnPlatform: typeof yearsOnPlatform === "number" && yearsOnPlatform >= 0 ? yearsOnPlatform : null,
-      createdAt: row.created_at ?? null,
-      rating: typeof row.overall_rating === "number" ? row.overall_rating : 0,
-      title: row.title ?? null,
-      comment: row.comment ?? null,
-      workCompleted: row.work_completed,
-    }
-  })
 
   const profile = detailRow.profiles ?? {
     first_name: null,
@@ -1059,6 +993,5 @@ export const fetchProfessionalDetail = async (slugOrId: string): Promise<Profess
     gallery,
     socialLinks,
     projects,
-    reviews,
   }
 }

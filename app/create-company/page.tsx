@@ -1,43 +1,15 @@
 "use client"
 
-import type React from "react"
-
-import { useEffect, useState, useTransition } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload } from "lucide-react"
-import Image from "next/image"
 
-import { createCompanyAction } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
-
-const serviceOptions = [
-  { value: "design-planning-architecture", label: "Architecture" },
-  { value: "design-planning-interior-design", label: "Interior design" },
-  { value: "design-planning-garden-design", label: "Garden design" },
-  { value: "construction-general-contractor", label: "General contractor" },
-  { value: "construction-kitchen", label: "Kitchen" },
-  { value: "construction-tiles-and-stone", label: "Tiles and stone" },
-  { value: "systems-lighting", label: "Lighting" },
-  { value: "systems-electrical-systems", label: "Electrical systems" },
-  { value: "finishing-interior-styling", label: "Interior styling" },
-  { value: "outdoor-garden", label: "Garden" },
-].sort((a, b) => a.label.localeCompare(b.label))
+import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
 
 export default function CreateCompanyPage() {
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [companyName, setCompanyName] = useState("")
-  const [domain, setDomain] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [primaryService, setPrimaryService] = useState("")
-  const [formError, setFormError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
   const router = useRouter()
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile } = useAuth()
+  const { openCreateCompanyModal } = useCreateCompanyModal()
 
   useEffect(() => {
     if (!user) {
@@ -47,180 +19,15 @@ export default function CreateCompanyPage() {
 
     const userTypes = profile?.user_types ?? []
     if (Array.isArray(userTypes) && userTypes.includes("professional")) {
-      router.replace("/dashboard/listings")
+      router.replace("/dashboard/company")
+      return
     }
-  }, [profile?.user_types, router, user])
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
+    // Open the modal and navigate back so the dialog overlays the previous page
+    openCreateCompanyModal()
+    router.back()
+  }, [user, profile?.user_types, router, openCreateCompanyModal])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError(null)
-
-    startTransition(() => {
-      void createCompanyAction({
-        companyName,
-        domain,
-        email,
-        phone,
-        primaryService: primaryService || undefined,
-      }).then((result) => {
-        if (result.success) {
-          void refreshProfile()
-          router.push("/dashboard/listings")
-          router.refresh()
-        } else {
-          setFormError(result.error ?? "We couldn't save your company details. Please try again.")
-        }
-      })
-    })
-  }
-
-  return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-lg">
-        <div className="mb-8">
-          <Image
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
-            alt="Arco Logo"
-            width={48}
-            height={48}
-            className="w-auto h-6"
-          />
-        </div>
-
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="heading-3 text-foreground mb-1">Create a company</h1>
-          <p className="body-small text-text-secondary">Description</p>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Company Logo Upload */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="relative mb-4">
-              <div className="w-24 h-24 rounded-full bg-surface flex items-center justify-center overflow-hidden">
-                {logoPreview ? (
-                  <img
-                    src={logoPreview || "/placeholder.svg"}
-                    alt="Company logo"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Upload className="w-8 h-8 text-muted-foreground" />
-                )}
-              </div>
-            </div>
-            <label htmlFor="logo-upload">
-              <Button type="button" variant="quaternary" size="quaternary" className="cursor-pointer bg-transparent" asChild>
-                <span>Change logo</span>
-              </Button>
-              <input id="logo-upload" type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-            </label>
-          </div>
-
-          {/* Company Name */}
-          <div className="space-y-2">
-            <Label htmlFor="company-name" className="text-sm font-medium text-foreground">
-              Company name
-            </Label>
-            <Input
-              id="company-name"
-              placeholder="Company name"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="w-full"
-            />
-            <p className="body-small text-text-secondary">Helper</p>
-          </div>
-
-          {/* Domain */}
-          <div className="space-y-2">
-            <Label htmlFor="domain" className="text-sm font-medium text-foreground">
-              Domain
-            </Label>
-            <Input
-              id="domain"
-              placeholder="Website"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              className="w-full"
-            />
-            <p className="body-small text-text-secondary">Your domain need to be the same as your account email address</p>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-foreground">
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full"
-            />
-            <p className="body-small text-text-secondary">This email will be listed on your company page</p>
-          </div>
-
-          {/* Phone */}
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-sm font-medium text-foreground">
-              Phone
-            </Label>
-            <Input
-              id="phone"
-              type="tel"
-              placeholder=""
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full"
-            />
-            <p className="body-small text-text-secondary">This phone number will be visible on your company page</p>
-          </div>
-
-          {/* Primary Service */}
-          <div className="space-y-2">
-            <Label htmlFor="primary-service" className="text-sm font-medium text-foreground">
-              Primary service
-            </Label>
-            <Select value={primaryService} onValueChange={setPrimaryService}>
-              <SelectTrigger id="primary-service" className="w-full">
-                <SelectValue placeholder="Select company services" />
-              </SelectTrigger>
-              <SelectContent>
-                {serviceOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="body-small text-text-secondary">Additional services can be added later</p>
-          </div>
-
-          {formError ? <p className="body-small text-red-600">{formError}</p> : null}
-
-          {/* Submit Button */}
-          <div className="flex justify-end pt-4">
-            <Button type="submit" className="bg-black text-white hover:bg-secondary-hover px-8" disabled={isPending}>
-              {isPending ? "Saving..." : "Next"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
+  // Render nothing — the modal handles the UI
+  return null
 }

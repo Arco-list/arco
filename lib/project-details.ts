@@ -122,8 +122,7 @@ export const FALLBACK_PROJECT_TYPES: Record<string, ProjectDetailsDropdownOption
   ],
   "kitchen-living": [
     { value: "kitchen", label: "Kitchen", sortOrder: 1 },
-    { value: "living-room", label: "Living room", sortOrder: 2 },
-    { value: "dining-room", label: "Dining room", sortOrder: 3 },
+    { value: "living", label: "Living", sortOrder: 2 },
     { value: "sunroom", label: "Sunroom", sortOrder: 4 },
   ],
   "bed-bath": [

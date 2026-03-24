@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { DashboardHeader } from "@/components/dashboard-header"
+import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -51,7 +51,7 @@ export default function PricingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      <DashboardHeader />
+      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
 
       <main className="flex-1 pt-20 pb-8">
         <div className="mx-auto max-w-7xl px-4 md:px-8">

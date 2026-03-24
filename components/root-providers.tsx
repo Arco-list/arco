@@ -10,6 +10,10 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { SavedProjectsProvider } from "@/contexts/saved-projects-context";
 import { SavedProfessionalsProvider } from "@/contexts/saved-professionals-context";
 import { ProjectLikesProvider } from "@/contexts/project-likes-context";
+import { LoginModalProvider } from "@/contexts/login-modal-context";
+import { LoginModal } from "@/components/auth/login-modal";
+import { CreateCompanyModalProvider } from "@/contexts/create-company-modal-context";
+import { CreateCompanyModal } from "@/components/create-company-modal";
 
 export interface RootProvidersProps {
   children: ReactNode;
@@ -20,15 +24,21 @@ export const RootProviders = ({ children, initialSession }: RootProvidersProps) 
   return (
     <ErrorBoundary>
       <AuthProvider initialSession={initialSession}>
-        <ProjectLikesProvider>
-          <SavedProjectsProvider>
-            <SavedProfessionalsProvider>
-              <ScrollToTop />
-              {children}
-              <Toaster richColors position="bottom-right" closeButton />
-            </SavedProfessionalsProvider>
-          </SavedProjectsProvider>
-        </ProjectLikesProvider>
+        <LoginModalProvider>
+          <CreateCompanyModalProvider>
+            <ProjectLikesProvider>
+              <SavedProjectsProvider>
+                <SavedProfessionalsProvider>
+                  <ScrollToTop />
+                  {children}
+                  <LoginModal />
+                  <CreateCompanyModal />
+                  <Toaster position="top-center" closeButton toastOptions={{ className: "arco-toast" }} />
+                </SavedProfessionalsProvider>
+              </SavedProjectsProvider>
+            </ProjectLikesProvider>
+          </CreateCompanyModalProvider>
+        </LoginModalProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

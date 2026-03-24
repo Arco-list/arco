@@ -204,6 +204,43 @@ export async function setProjectStatusAction(input: {
     )
   }
 
+  // When admin publishes a project, auto-enable auto_approve_projects for the owning company
+  if (statusResult.data === "published") {
+    const { data: ownerPP } = await supabase
+      .from("project_professionals")
+      .select("company_id")
+      .eq("project_id", idResult.data)
+      .eq("is_project_owner", true)
+      .maybeSingle()
+
+    if (ownerPP?.company_id) {
+      // Auto-enable auto_approve and mark setup completed
+      await supabase
+        .from("companies")
+        .update({ auto_approve_projects: true, setup_completed: true } as never)
+        .eq("id", ownerPP.company_id)
+
+      // Sync company listed status based on active projects
+      await syncCompanyListedStatus(ownerPP.company_id)
+
+      logger.info("admin-projects", "Auto-approve enabled for company after project approval", {
+        companyId: ownerPP.company_id,
+        projectId: idResult.data,
+      })
+    }
+  }
+
+  // Sync listed status for all companies on this project
+  const { data: projectCompanies } = await supabase
+    .from("project_professionals")
+    .select("company_id")
+    .eq("project_id", idResult.data)
+    .not("company_id", "is", null)
+  const companyIds = Array.from(new Set((projectCompanies ?? []).map(pc => pc.company_id).filter(Boolean)))
+  for (const cId of companyIds) {
+    await syncCompanyListedStatus(cId as string)
+  }
+
   // Retry materialized view refresh with exponential backoff
   const serviceClient = createServiceRoleSupabaseClient()
   const warnings: string[] = []
@@ -797,4 +834,97 @@ export async function generateProjectSlugAction(
       'admin-projects-slug-generate'
     )
   }
+}
+
+const ppStatusSchema = z.enum(["invited", "listed", "live_on_page", "unlisted", "rejected", "removed"])
+
+/**
+ * Recalculate a company's listed status based on its project_professionals.
+ * - If the company has any listed/live_on_page PP records on published projects → set to "listed"
+ * - If none → set to "unlisted"
+ */
+export async function syncCompanyListedStatus(companyId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+
+  // Check if company has any active (listed/featured) project links on published projects
+  const { data: activePPs } = await supabase
+    .from("project_professionals")
+    .select("id, projects!inner(status)")
+    .eq("company_id", companyId)
+    .in("status", ["listed", "live_on_page"])
+    .eq("projects.status", "published")
+    .limit(1)
+
+  const hasActiveProjects = (activePPs?.length ?? 0) > 0
+
+  const { data: company } = await supabase
+    .from("companies")
+    .select("status")
+    .eq("id", companyId)
+    .maybeSingle()
+
+  if (!company) return
+
+  if (hasActiveProjects && company.status === "unlisted") {
+    await supabase.from("companies").update({ status: "listed" }).eq("id", companyId)
+    logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId })
+  } else if (!hasActiveProjects && company.status === "listed") {
+    await supabase.from("companies").update({ status: "unlisted" }).eq("id", companyId)
+    logger.info("admin-projects", "Company auto-unlisted (no active projects)", { companyId })
+  }
+}
+
+export async function updateProjectProfessionalStatusAction(input: {
+  projectId: string
+  companyId: string
+  status: string
+}) {
+  const projectIdResult = projectIdSchema.safeParse(input.projectId)
+  if (!projectIdResult.success) {
+    return { success: false, error: "Invalid project ID" }
+  }
+
+  const companyIdResult = projectIdSchema.safeParse(input.companyId)
+  if (!companyIdResult.success) {
+    return { success: false, error: "Invalid company ID" }
+  }
+
+  const statusResult = ppStatusSchema.safeParse(input.status)
+  if (!statusResult.success) {
+    return { success: false, error: "Invalid status" }
+  }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const { error: updateError } = await supabase
+    .from("project_professionals")
+    .update({ status: statusResult.data })
+    .eq("project_id", projectIdResult.data)
+    .eq("company_id", companyIdResult.data)
+
+  if (updateError) {
+    logger.error("admin-projects", "Failed to update project professional status", {
+      projectId: projectIdResult.data,
+      companyId: companyIdResult.data,
+      status: statusResult.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  logger.info("admin-projects", "Project professional status updated", {
+    projectId: projectIdResult.data,
+    companyId: companyIdResult.data,
+    status: statusResult.data,
+  })
+
+  // Sync company listed status based on active projects
+  await syncCompanyListedStatus(companyIdResult.data)
+
+  revalidatePath("/admin/projects")
+  revalidatePath("/admin/professionals")
+  return { success: true }
 }

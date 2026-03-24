@@ -1,43 +1,44 @@
 import type { Metadata } from "next"
+
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { FilterBar } from "@/components/filter-bar"
-import { ProjectsGrid } from "@/components/projects-grid"
 import { FilterProvider } from "@/contexts/filter-context"
 import { FilterErrorBoundary } from "@/components/filter-error-boundary"
+import { DiscoverClient } from "@/components/discover-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { logger } from "@/lib/logger"
 
 export const metadata: Metadata = {
   title: "Browse Projects · Arco",
-  description: "Explore architecture and design projects from across the Netherlands. Find inspiration for your next renovation or building project.",
+  description:
+    "Explore architecture and design projects from across the Netherlands. Find inspiration for your next renovation or building project.",
 }
 
 export const revalidate = 300
 
 export default async function ProjectsPage() {
-  let projects = []
+  let projects: Awaited<ReturnType<typeof fetchDiscoverProjects>> = []
 
   try {
     projects = await fetchDiscoverProjects()
   } catch (error) {
-    logger.error("Failed to render projects discover page", { component: "ProjectsPage" }, error as Error)
+    logger.error(
+      "Failed to render projects discover page",
+      { component: "ProjectsPage" },
+      error as Error,
+    )
   }
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      
+
       <FilterErrorBoundary>
         <FilterProvider>
-          <FilterBar />
-          
-          <main className="flex-1 bg-white">
-            <ProjectsGrid initialProjects={projects} />
-          </main>
+          <DiscoverClient initialProjects={projects} />
         </FilterProvider>
       </FilterErrorBoundary>
-      
+
       <Footer />
     </div>
   )

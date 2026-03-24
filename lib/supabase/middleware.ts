@@ -79,7 +79,7 @@ export async function updateSession(request: NextRequest) {
 
   if (!authenticatedUser) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/login";
+    redirectUrl.pathname = "/";
     redirectUrl.searchParams.set("redirectTo", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(redirectUrl);
   }

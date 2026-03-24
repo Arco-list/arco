@@ -17,9 +17,10 @@ import { useAuth } from "@/contexts/auth-context";
 export interface LoginFormProps {
   redirectTo?: string;
   onSuccess?: () => void;
+  prefillEmail?: string;
 }
 
-export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
+export const LoginForm = ({ redirectTo, onSuccess, prefillEmail }: LoginFormProps) => {
   const router = useRouter();
   const [isSubmitting, startTransition] = useTransition();
   const safeRedirectTo = sanitizeRedirectPath(redirectTo);
@@ -28,7 +29,7 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
   const form = useForm<SignInWithPasswordInput>({
     resolver: zodResolver(signInWithPasswordSchema),
     defaultValues: {
-      email: "",
+      email: prefillEmail ?? "",
       password: "",
       redirectTo: safeRedirectTo ?? "",
     },
@@ -98,6 +99,8 @@ export const LoginForm = ({ redirectTo, onSuccess }: LoginFormProps) => {
           placeholder="you@example.com"
           autoComplete="email"
           disabled={isSubmitting}
+          readOnly={!!prefillEmail}
+          className={prefillEmail ? "bg-muted" : ""}
           {...form.register("email")}
         />
         {form.formState.errors.email && (

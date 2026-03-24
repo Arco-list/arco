@@ -8,8 +8,8 @@ export type ContributorStatus = Extract<
 
 export const CONTRIBUTOR_STATUS_LABELS: Record<ContributorStatus, string> = {
   invited: "Invited",
-  unlisted: "Unpublished",
-  listed: "Published",
+  unlisted: "Unlisted",
+  listed: "Listed",
   live_on_page: "Featured",
   rejected: "Declined",
 }
@@ -34,22 +34,38 @@ export const CONTRIBUTOR_STATUS_OPTIONS: ReadonlyArray<
   ListingStatusModalOption<ContributorStatus>
 > = [
   {
-    value: "unlisted",
-    label: "Unpublished",
-    description: "Your company is not shown on this project.",
-    colorClass: "bg-muted-foreground",
+    value: "live_on_page",
+    label: "Featured",
+    description: "Listed on the project page and project shown in your portfolio.",
+    colorClass: "bg-teal-500",
   },
   {
     value: "listed",
-    label: "Published",
-    description: "Your company is listed on the project page.",
+    label: "Listed",
+    description: "Listed on the project page but not shown in your portfolio.",
     colorClass: "bg-emerald-500",
   },
   {
+    value: "unlisted",
+    label: "Unlisted",
+    description: "Not listed on the project page and not shown in your portfolio.",
+    colorClass: "bg-muted-foreground",
+  },
+]
+
+export const OWNER_STATUS_OPTIONS: ReadonlyArray<
+  ListingStatusModalOption<ContributorStatus>
+> = [
+  {
     value: "live_on_page",
     label: "Featured",
-    description: "Project is showcased in your company portfolio.",
+    description: "Project is published and shown in your portfolio.",
     colorClass: "bg-teal-500",
-    requiresPlus: true,
+  },
+  {
+    value: "listed",
+    label: "Listed",
+    description: "Project is published but not shown in your portfolio.",
+    colorClass: "bg-emerald-500",
   },
 ]

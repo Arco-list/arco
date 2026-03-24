@@ -8,7 +8,8 @@ interface Project {
   title: string
   location: string | null
   projectYear: number | null
-  image: string | null  // ← This is the correct property name!
+  projectType: string | null
+  image: string | null
 }
 
 interface ProfessionalProjectsProps {
@@ -37,9 +38,9 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
           <div className="projects-grid">
             {displayProjects.map((project) => {
               const href = project.slug ? `/projects/${project.slug}` : '#'
-              const subtitle = [project.location, project.projectYear]
+              const subtitle = [project.projectType, project.location]
                 .filter(Boolean)
-                .join(', ')
+                .join(' · ')
 
               return (
                 <Link
@@ -70,9 +71,9 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
           <div className="projects-list">
             {displayProjects.map((project) => {
               const href = project.slug ? `/projects/${project.slug}` : '#'
-              const subtitle = [project.location, project.projectYear]
+              const subtitle = [project.projectType, project.location]
                 .filter(Boolean)
-                .join(', ')
+                .join(' · ')
 
               return (
                 <Link

@@ -9,6 +9,7 @@ import { Grid3x3, Home } from "lucide-react"
 import type { Tables } from "@/lib/supabase/types"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
 import { isPhotoSelectableForFeature } from "@/lib/photo-filtering"
+import { SPACES } from "@/lib/spaces"
 
 export type FeatureOption = {
   id: string
@@ -25,9 +26,7 @@ export type UploadedPhoto = {
   storagePath: string | null
 }
 
-type FeatureCategoryRecord = Tables<"categories"> & {
-  project_category_attributes: Tables<"project_category_attributes"> | null
-}
+type SpaceRecord = { id: string; name: string; slug: string; sort_order: number | null }
 
 type ProjectFeatureRow = Tables<"project_features">
 type ProjectPhotoRow = Tables<"project_photos">
@@ -46,20 +45,12 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   "image/png": "png",
 }
 
-const FALLBACK_FEATURES: FeatureOption[] = [
-  { id: "bedroom", name: "Bedroom", slug: "bedroom" },
-  { id: "bathroom", name: "Bathroom", slug: "bathroom" },
-  { id: "kitchen", name: "Kitchen", slug: "kitchen" },
-  { id: "living-room", name: "Living Room", slug: "living_room" },
-  { id: "garden", name: "Garden", slug: "garden" },
-  { id: "garage", name: "Garage", slug: "garage" },
-  { id: "pool", name: "Pool", slug: "pool" },
-  { id: "office", name: "Office", slug: "office" },
-  { id: "balcony", name: "Balcony", slug: "balcony" },
-  { id: "basement", name: "Basement", slug: "basement" },
-  { id: "attic", name: "Attic", slug: "attic" },
-  { id: "terrace", name: "Terrace", slug: "terrace" },
-]
+const FALLBACK_FEATURES: FeatureOption[] = SPACES.map((s) => ({
+  id: s.slug,
+  name: s.name,
+  slug: s.slug,
+  iconKey: s.iconKey,
+}))
 
 const isUuid = (value?: string | null): value is string =>
   !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -135,6 +126,7 @@ export type UseProjectPhotoTourResult = {
   deletePhoto: (photoId: string) => void
   setOpenMenuId: (menuId: string | null) => void
   setShowAddFeatureModal: (value: boolean) => void
+  movePhotoToSpace: (photoId: string, spaceId: string) => Promise<void>
   appendUploadError: (message: string) => void
   resetUploadErrors: () => void
   resetModalUploadErrors: () => void
@@ -177,7 +169,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       {
         featureId: string
         orderIndex: number
-        categoryId: string | null
+        spaceId: string | null
         tagline: string | null
         isHighlighted: boolean
         name: string
@@ -249,30 +241,28 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     setFeatureError(null)
 
     const { data, error } = await supabase
-      .from("categories")
-      .select("id,name,slug,sort_order,project_category_attributes(is_building_feature)")
+      .from("spaces")
+      .select("id,name,slug,sort_order")
       .eq("is_active", true)
-      .eq("project_category_attributes.is_building_feature", true)
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("name", { ascending: true })
 
     if (error) {
-      setFeatureError("We could not load features from Supabase. Using fallback list for now.")
+      setFeatureError("We could not load spaces from Supabase. Using fallback list for now.")
       setFeatureOptions(FALLBACK_FEATURES)
       setIsLoadingFeatures(false)
       return
     }
 
-    const records = (data ?? []) as FeatureCategoryRecord[]
-    const filtered = records.filter((record) => record.project_category_attributes?.is_building_feature)
+    const records = (data ?? []) as SpaceRecord[]
 
-    if (filtered.length === 0) {
+    if (records.length === 0) {
       setFeatureOptions(FALLBACK_FEATURES)
       setIsLoadingFeatures(false)
       return
     }
 
-    const mapped = filtered
+    const mapped = records
       .map<FeatureOption>((record) => ({
         id: record.id,
         name: record.name,
@@ -597,7 +587,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
         const [featureResponse, photoResponse] = await Promise.all([
           supabase
             .from("project_features")
-            .select("id, name, category_id, cover_photo_id, is_building_default, order_index, tagline, is_highlighted")
+            .select("id, name, category_id, space_id, cover_photo_id, is_building_default, order_index, tagline, is_highlighted")
             .eq("project_id", projectIdValue)
             .order("order_index", { ascending: true, nullsFirst: false }),
           supabase
@@ -628,7 +618,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           {
             featureId: string
             orderIndex: number
-            categoryId: string | null
+            spaceId: string | null
             tagline: string | null
             isHighlighted: boolean
           }
@@ -641,7 +631,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           metadata[BUILDING_FEATURE_ID] = {
             featureId: buildingFeature.id,
             orderIndex: buildingFeature.order_index ?? 0,
-            categoryId: buildingFeature.category_id,
+            spaceId: buildingFeature.space_id,
             tagline: buildingFeature.tagline ?? null,
             isHighlighted: buildingFeature.is_highlighted ?? false,
             name: buildingFeature.name,
@@ -654,7 +644,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           metadata[ADDITIONAL_FEATURE_ID] = {
             featureId: additionalFeature.id,
             orderIndex: additionalFeature.order_index ?? 0,
-            categoryId: additionalFeature.category_id,
+            spaceId: additionalFeature.space_id,
             tagline: additionalFeature.tagline ?? null,
             isHighlighted: additionalFeature.is_highlighted ?? false,
             name: additionalFeature.name,
@@ -672,37 +662,38 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             return
           }
 
-          if (feature.category_id) {
-            // Skip if this category is already mapped to the building feature
-            // (This handles the case where we merged a duplicate)
-            if (buildingFeature?.category_id === feature.category_id) {
+          // Use space_id for space features (preferred), fall back to category_id for legacy data
+          const spaceKey = feature.space_id ?? feature.category_id
+          if (spaceKey) {
+            // Skip if this space is already mapped to the building feature
+            if (buildingFeature?.space_id && buildingFeature.space_id === feature.space_id) {
               console.log(`Skipping duplicate feature "${feature.name}" - already mapped to building feature`)
               return
             }
 
-            console.log(`Loading feature "${feature.name}" with category_id:`, feature.category_id)
-            uiKeyByFeatureId.set(feature.id, feature.category_id)
-            idMap[feature.category_id] = feature.id
-            metadata[feature.category_id] = {
+            console.log(`Loading feature "${feature.name}" with space_id:`, feature.space_id)
+            uiKeyByFeatureId.set(feature.id, spaceKey)
+            idMap[spaceKey] = feature.id
+            metadata[spaceKey] = {
               featureId: feature.id,
               orderIndex: feature.order_index ?? 0,
-              categoryId: feature.category_id,
+              spaceId: feature.space_id,
               tagline: feature.tagline ?? null,
               isHighlighted: feature.is_highlighted ?? false,
               name: feature.name,
             }
-            taxonomySelection.add(feature.category_id)
+            taxonomySelection.add(spaceKey)
             return
           }
 
-          // This should rarely/never happen - features without category_id should be building or additional
-          console.warn(`Feature "${feature.name}" (${feature.id}) has no category_id - using database ID as key`)
+          // Features without space_id should be building or additional
+          console.warn(`Feature "${feature.name}" (${feature.id}) has no space_id - using database ID as key`)
           uiKeyByFeatureId.set(feature.id, feature.id)
           idMap[feature.id] = feature.id
           metadata[feature.id] = {
             featureId: feature.id,
             orderIndex: feature.order_index ?? 0,
-            categoryId: feature.category_id,
+            spaceId: feature.space_id,
             tagline: feature.tagline ?? null,
             isHighlighted: feature.is_highlighted ?? false,
             name: feature.name,
@@ -746,16 +737,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           nextFeaturePhotos[BUILDING_FEATURE_ID] = []
         }
 
-        // Build selectedFeatures array including the building feature's category if it has one
-        const buildingCategoryId = buildingFeature?.category_id
+        // Build selectedFeatures array including the building feature's space if it has one
+        const buildingSpaceId = buildingFeature?.space_id
         const allSelectedFeatures = [
           BUILDING_FEATURE_ID,
-          ...(buildingCategoryId ? [buildingCategoryId] : []),
+          ...(buildingSpaceId ? [buildingSpaceId] : []),
           ...Array.from(taxonomySelection)
         ]
 
         console.log("Final taxonomySelection:", Array.from(taxonomySelection))
-        console.log("Building feature category_id:", buildingCategoryId)
+        console.log("Building feature space_id:", buildingSpaceId)
         console.log("Setting selectedFeatures to:", allSelectedFeatures)
 
         // Recalculate Additional photos to only include truly unassigned photos
@@ -1138,12 +1129,10 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const getFeatureDisplay = useCallback(
     (featureId: string): FeatureDisplay => {
       if (featureId === BUILDING_FEATURE_ID) {
-        const buildingMetadata = featureMetadata[BUILDING_FEATURE_ID]
-        const name = buildingMetadata?.name ?? "Building"
-        return { id: featureId, name, icon: Home }
+        return { id: featureId, name: "Exterior", icon: Home }
       }
       if (featureId === ADDITIONAL_FEATURE_ID) {
-        return { id: featureId, name: "Additional photos", icon: Grid3x3 }
+        return { id: featureId, name: "Other", icon: Grid3x3 }
       }
 
       const option = featureOptions.find((item) => item.id === featureId)
@@ -1189,7 +1178,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
               next[id] = {
                 featureId: id,
                 orderIndex: next[ADDITIONAL_FEATURE_ID]?.orderIndex ?? 0,
-                categoryId: isUuid(id) ? id : null,
+                spaceId: isUuid(id) ? id : null,
                 tagline: null,
                 isHighlighted: false,
                 name,
@@ -1244,17 +1233,17 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             continue
           }
 
-          const categoryId = isUuid(featureKey) ? featureKey : null
+          const spaceId = isUuid(featureKey) ? featureKey : null
 
           const { data, error } = await supabase
             .from("project_features")
             .insert({
               project_id: resolvedProjectId,
               name: featureName,
-              category_id: categoryId,
+              space_id: spaceId,
               order_index: nextOrder,
             })
-            .select("id, category_id, order_index, tagline, is_highlighted, name")
+            .select("id, space_id, order_index, tagline, is_highlighted, name")
             .single()
 
           if (error) {
@@ -1262,26 +1251,28 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             if ("code" in error && error.code === "23505") {
               console.log(`Feature "${featureName}" already exists, fetching existing feature`)
 
-              // Try to fetch the existing feature by category_id first (most accurate)
+              // Try to fetch the existing feature by space_id first (most accurate)
               let existingFeature = null
-              if (categoryId) {
+              if (spaceId) {
                 const { data: existingData } = await supabase
                   .from("project_features")
-                  .select("id, category_id, order_index, tagline, is_highlighted, name")
+                  .select("id, space_id, order_index, tagline, is_highlighted, name")
                   .eq("project_id", resolvedProjectId)
-                  .eq("category_id", categoryId)
+                  .eq("space_id", spaceId)
+                  .limit(1)
                   .maybeSingle()
 
                 existingFeature = existingData
               }
 
-              // If not found by category_id, try by name
+              // If not found by space_id, try by name
               if (!existingFeature) {
                 const { data: existingData } = await supabase
                   .from("project_features")
-                  .select("id, category_id, order_index, tagline, is_highlighted, name")
+                  .select("id, space_id, order_index, tagline, is_highlighted, name")
                   .eq("project_id", resolvedProjectId)
                   .eq("name", featureName)
+                  .limit(1)
                   .maybeSingle()
 
                 existingFeature = existingData
@@ -1293,7 +1284,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
                 metadataCopy[featureKey] = {
                   featureId: existingFeature.id,
                   orderIndex: existingFeature.order_index ?? nextOrder,
-                  categoryId: existingFeature.category_id,
+                  spaceId: existingFeature.space_id,
                   tagline: existingFeature.tagline ?? null,
                   isHighlighted: existingFeature.is_highlighted ?? false,
                   name: existingFeature.name,
@@ -1314,7 +1305,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           metadataCopy[featureKey] = {
             featureId: data.id,
             orderIndex: data.order_index ?? nextOrder,
-            categoryId: data.category_id,
+            spaceId: data.space_id,
             tagline: data.tagline ?? null,
             isHighlighted: data.is_highlighted ?? false,
             name: featureName,
@@ -1337,7 +1328,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             metadataCopy[ADDITIONAL_FEATURE_ID] = {
               featureId: additionalMeta.featureId,
               orderIndex: desiredAdditionalOrder,
-              categoryId: additionalMeta.categoryId,
+              spaceId: additionalMeta.spaceId,
               tagline: additionalMeta.tagline ?? null,
               isHighlighted: additionalMeta.isHighlighted ?? false,
             }
@@ -1623,7 +1614,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             [showPhotoSelector]: {
               featureId: dbFeatureId,
               orderIndex: 0,
-              categoryId: null,
+              spaceId: null,
               tagline: nextTagline,
               isHighlighted: nextHighlighted,
             },
@@ -1767,25 +1758,117 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     [cancelPhotoSelection, removeFeatureById],
   )
 
+  /** Move a single photo to a space. Creates the project_features row if needed, then assigns the photo. */
+  const movePhotoToSpace = useCallback(
+    async (photoId: string, spaceId: string) => {
+      if (!resolvedProjectId) return
+
+      // 1. Ensure the space's project_features row exists
+      let dbFeatureId = featureIdMap[spaceId]
+      if (!dbFeatureId) {
+        const success = await addFeatures([spaceId])
+        if (!success) return
+        // After addFeatures, the featureIdMap is updated — but we need the latest value
+        // Since addFeatures updates state asynchronously, read from the insert result directly
+      }
+
+      // Re-read dbFeatureId (may have been set by addFeatures)
+      dbFeatureId = featureIdMap[spaceId]
+      if (!dbFeatureId) {
+        // addFeatures just ran but state hasn't updated yet — query the DB directly
+        const { data: featureRow } = await supabase
+          .from("project_features")
+          .select("id")
+          .eq("project_id", resolvedProjectId)
+          .eq("space_id", spaceId)
+          .limit(1)
+          .maybeSingle()
+        dbFeatureId = featureRow?.id ?? null
+      }
+
+      if (!dbFeatureId) {
+        console.error("Could not find or create project_features row for space", spaceId)
+        return
+      }
+
+      // 2. Remove photo from its current space (if any)
+      const currentSpaceKey = Object.entries(featurePhotos).find(
+        ([key, photoIds]) =>
+          key !== BUILDING_FEATURE_ID &&
+          key !== ADDITIONAL_FEATURE_ID &&
+          photoIds.includes(photoId),
+      )?.[0]
+
+      if (currentSpaceKey) {
+        const currentDbFeatureId = featureIdMap[currentSpaceKey]
+        if (currentDbFeatureId && currentSpaceKey !== spaceId) {
+          // Move photo to fallback first (unassign from current space)
+          const fallbackDbId = featureIdMap[BUILDING_FEATURE_ID] ?? featureIdMap[ADDITIONAL_FEATURE_ID]
+          if (fallbackDbId) {
+            await supabase.rpc("assign_photos_to_feature", {
+              p_project_id: resolvedProjectId,
+              p_feature_id: fallbackDbId,
+              p_photo_ids: [photoId],
+            })
+          }
+        }
+      }
+
+      // 3. Assign photo to the target space
+      const { error } = await supabase.rpc("assign_photos_to_feature", {
+        p_project_id: resolvedProjectId,
+        p_feature_id: dbFeatureId,
+        p_photo_ids: [photoId],
+      })
+
+      if (error) {
+        console.error("Failed to move photo to space:", error)
+        return
+      }
+
+      // 4. Update local state
+      setFeaturePhotos((prev) => {
+        const next = { ...prev }
+        // Remove from old space
+        if (currentSpaceKey && currentSpaceKey !== spaceId) {
+          next[currentSpaceKey] = (next[currentSpaceKey] ?? []).filter((id) => id !== photoId)
+        }
+        // Add to new space
+        next[spaceId] = [...(next[spaceId] ?? []), photoId]
+        return next
+      })
+
+      // Ensure the space is in selectedFeatures
+      if (!selectedFeatures.includes(spaceId)) {
+        setSelectedFeatures((prev) => [...new Set([...prev, spaceId])])
+      }
+
+      // Update featureIdMap if it wasn't set
+      if (!featureIdMap[spaceId]) {
+        setFeatureIdMap((prev) => ({ ...prev, [spaceId]: dbFeatureId! }))
+      }
+    },
+    [resolvedProjectId, featureIdMap, featurePhotos, selectedFeatures, addFeatures, supabase],
+  )
+
   const displayFeatureIds = useMemo(() => {
-    // Get the building feature's category ID to exclude it from user features
-    const buildingCategoryId = featureMetadata[BUILDING_FEATURE_ID]?.categoryId
-
-    const uniqueUserFeatures = Array.from(
-      new Set(
-        selectedFeatures.filter(
-          (id) => id !== BUILDING_FEATURE_ID && id !== buildingCategoryId
+    // Only show spaces that actually have photos assigned, ordered by spaces table sort_order
+    const spacesWithPhotos = new Set(
+      Object.entries(featurePhotos)
+        .filter(
+          ([key, photoIds]) =>
+            key !== BUILDING_FEATURE_ID &&
+            key !== ADDITIONAL_FEATURE_ID &&
+            photoIds.length > 0,
         )
-      )
+        .map(([key]) => key),
     )
-
-    // Only add ADDITIONAL_FEATURE_ID if it's not already in uniqueUserFeatures
-    if (!uniqueUserFeatures.includes(ADDITIONAL_FEATURE_ID)) {
-      return [BUILDING_FEATURE_ID, ...uniqueUserFeatures, ADDITIONAL_FEATURE_ID]
-    }
-
-    return [BUILDING_FEATURE_ID, ...uniqueUserFeatures]
-  }, [featureMetadata, selectedFeatures])
+    // Use featureOptions order (sorted by sort_order from spaces table)
+    return featureOptions
+      .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
+      .filter((opt) => spacesWithPhotos.has(opt.id))
+      .map((opt) => opt.id)
+  }, [featurePhotos, featureOptions])
 
   const orderedFeatureOptions = useMemo(() => {
     return [...featureOptions].sort((a, b) => {
@@ -2081,7 +2164,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   )
 
   const getProjectTypeCategoryId = useCallback(() => {
-    return featureMetadata[BUILDING_FEATURE_ID]?.categoryId ?? null
+    return featureMetadata[BUILDING_FEATURE_ID]?.spaceId ?? null
   }, [featureMetadata])
 
   const refreshProjectContext = useCallback(() => {
@@ -2148,6 +2231,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     toggleTempFeature,
     saveNewFeatures,
     deleteFeature,
+    movePhotoToSpace,
     toggleFeature,
     handlePhotoDragStart,
     handlePhotoDragOver,

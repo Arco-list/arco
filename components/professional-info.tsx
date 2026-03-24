@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Star } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { ReportModal } from "@/components/report-modal"
 import type { ProfessionalDetail } from "@/lib/professionals/types"
@@ -14,7 +12,6 @@ const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 type ProfessionalInfoProps = {
   professional: ProfessionalDetail
   shareUrl?: string
-  reviewsAnchorId?: string
 }
 
 const formatJoinedYear = (value: string | null) => {
@@ -38,7 +35,7 @@ const formatArray = (values: string[], options?: { limit?: number }) => {
   return remainder > 0 ? `${trimmed.join(", ")} (+${remainder})` : trimmed.join(", ")
 }
 
-export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId }: ProfessionalInfoProps) {
+export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalInfoProps) {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
 
@@ -47,14 +44,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     professional.company.logoUrl ??
     professional.profile.avatarUrl ??
     PLACEHOLDER_IMAGE
-
-  const ratingDisplay = useMemo(
-    () => ({
-      value: Number(professional.ratings.overall.toFixed(2)),
-      total: professional.ratings.total,
-    }),
-    [professional.ratings.overall, professional.ratings.total]
-  )
 
   const formatExperience = (years: number | null) => {
     if (typeof years !== "number" || Number.isNaN(years) || years <= 0) {
@@ -119,8 +108,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
     { label: "Verified", value: professional.isVerified ? "Yes" : undefined },
   ].filter((item) => Boolean(item.value))
 
-  const ratingHref = reviewsAnchorId ? `#${reviewsAnchorId}` : undefined
-
   const subtitle = useMemo(() => {
     // Use company's PRIMARY service (from primary_service_id), NOT the first item in services array
     const service = professional.company.primaryService || professional.company.services[0]
@@ -151,25 +138,6 @@ export function ProfessionalInfo({ professional, shareUrl = "", reviewsAnchorId 
         <div className="space-y-3 flex-1">
           <h1 className="text-2xl md:text-3xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', lineHeight: '1.2' }}>{professional.name}</h1>
           {subtitle ? <h2 className="text-base md:text-xl font-semibold text-foreground" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.3px', lineHeight: '1.2' }}>{subtitle}</h2> : null}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-              <span className="body-small font-semibold text-foreground">{ratingDisplay.value.toFixed(2)}</span>
-            </div>
-
-            <span className="body-small text-text-secondary">·</span>
-
-            {ratingHref ? (
-              <a href={ratingHref} className="body-small text-text-secondary underline hover:text-foreground">
-                {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
-              </a>
-            ) : (
-              <span className="body-small text-text-secondary">
-                {ratingDisplay.total} review{ratingDisplay.total === 1 ? "" : "s"}
-              </span>
-            )}
-          </div>
 
           {description ? (
             <div className="space-y-2">

@@ -1,31 +1,17 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Poppins, Cormorant_Garamond, Inter } from "next/font/google"
+import { Cormorant_Garamond } from "next/font/google"
 import Script from "next/script"
 import "./globals.css"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { RootProviders } from "@/components/root-providers"
 import { buildSession } from "@/lib/auth-utils"
 
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-poppins",
-  display: "swap",
-})
-
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["300", "400", "500"],
   style: ["normal", "italic"],
   variable: "--font-serif",
-  display: "swap",
-})
-
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
-  variable: "--font-sans",
   display: "swap",
 })
 
@@ -70,8 +56,8 @@ export default async function RootLayout({
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   return (
-    <html lang="en" className={`${poppins.variable} ${cormorant.variable} ${inter.variable}`}>
-      <body className={poppins.className}>
+    <html lang="en" className={cormorant.variable}>
+      <body>
         <RootProviders initialSession={session}>{children}</RootProviders>
         {mapsApiKey && (
           <Script

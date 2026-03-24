@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
+import { AdminHeader } from "@/components/admin-header"
 
 type AdminLayoutProps = {
   children: ReactNode
@@ -16,7 +17,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
   } = await supabase.auth.getSession()
 
   if (!session?.user) {
-    return redirect(`/login?redirectTo=/admin`)
+    return redirect(`/?redirectTo=/admin`)
   }
 
   const { data: profile, error } = await supabase
@@ -38,5 +39,12 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     return redirect(`/dashboard?unauthorized=admin`)
   }
 
-  return <>{children}</>
+  return (
+    <div className="min-h-screen">
+      <AdminHeader />
+      <main className="pt-[60px]">
+        {children}
+      </main>
+    </div>
+  )
 }

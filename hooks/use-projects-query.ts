@@ -32,28 +32,8 @@ const escapeIlikePattern = (value: string) =>
     .replace(/[%_]/g, "\\$&")
     .replace(/'/g, "''")
 
-const applyTypeFilters = (query: any, selectedTypes: string[], buildingFeatureCategories: Tables<"categories">[]) => {
-  // Add safety check for category IDs and identify selected building features
-  const buildingFeatureTypes = buildingFeatureCategories
-    .filter(cat => selectedTypes.includes(cat.id))
-    .map(cat => cat.id)
-  
-  if (buildingFeatureTypes.length === 0) {
-    // No building features selected - simple project_type filter
-    return query.in("project_type", selectedTypes)
-  }
-  
-  // Separate regular types from building feature types
-  const regularTypes = selectedTypes.filter(type => !buildingFeatureTypes.includes(type))
-  
-  if (regularTypes.length > 0) {
-    // Mixed selection: both regular types and building features
-    // Use ALL selected types for project_type, building features for features array
-    return query.or(`project_type.in.(${selectedTypes.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
-  } else {
-    // Only building features selected: check both project_type and features array
-    return query.or(`project_type.in.(${buildingFeatureTypes.join(',')}),features.cs.{${buildingFeatureTypes.join(',')}}`)
-  }
+const applyTypeFilters = (query: any, selectedTypes: string[]) => {
+  return query.in("project_type", selectedTypes)
 }
 
 interface UseProjectsQueryOptions {
@@ -72,7 +52,7 @@ const ALLOWED_BUDGET_LEVELS = new Set<ProjectBudgetLevel>([
 ])
 
 type CategoryRow = Tables<"categories"> & {
-  project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable" | "is_building_feature"> | null
+  project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable"> | null
 }
 
 type ProjectSummaryRow = Tables<"project_search_documents">
@@ -91,6 +71,7 @@ interface UseProjectsQueryResult {
   loadMore: () => Promise<void>
   refetch: () => Promise<void>
   typePhotoOverrides: Record<string, { url: string; alt?: string | null }>
+  spacePhotoOverrides: Record<string, { url: string; alt?: string | null }>
 }
 
 export function useProjectsQuery({
@@ -100,7 +81,8 @@ export function useProjectsQuery({
   const {
     selectedTypes,
     selectedStyles,
-    selectedLocation,
+    selectedLocations,
+    selectedSpace,
     selectedFeatures,
     selectedBuildingTypes,
     selectedLocationFeatures,
@@ -121,6 +103,7 @@ export function useProjectsQuery({
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(initialProjects.length === DEFAULT_PAGE_SIZE)
   const [typePhotoOverrides, setTypePhotoOverrides] = useState<Record<string, { url: string; alt?: string | null }>>({})
+  const [spacePhotoOverrides, setSpacePhotoOverrides] = useState<Record<string, { url: string; alt?: string | null }>>({})
 
   const hasInitialDataRef = useRef(initialProjects.length > 0)
 
@@ -155,11 +138,6 @@ export function useProjectsQuery({
     })
     return map
   }, [categories])
-
-  const buildingFeatureCategories = useMemo(() => 
-    categories.filter(cat => cat.id && cat.project_category_attributes?.is_building_feature),
-    [categories]
-  )
 
   const normalizedTypes = useMemo(() => {
     if (categories.length === 0 || validTypeTokens.size === 0) {
@@ -202,7 +180,7 @@ export function useProjectsQuery({
     () => ({
       types: typeFilterValues,
       styles: selectedStyles,
-      location: selectedLocation,
+      locations: selectedLocations,
       features: selectedFeatures,
       buildingTypes: selectedBuildingTypes,
       locationFeatures: selectedLocationFeatures,
@@ -219,7 +197,7 @@ export function useProjectsQuery({
     [
       typeFilterValues,
       selectedStyles,
-      selectedLocation,
+      selectedLocations,
       selectedFeatures,
       selectedBuildingTypes,
       selectedLocationFeatures,
@@ -308,16 +286,44 @@ export function useProjectsQuery({
         .order("created_at", { ascending: false, nullsFirst: false })
         .range(from, to)
 
+      // Space filter: find project IDs with features in the selected space
+      if (selectedSpace) {
+        const { data: spaceRows } = await supabase
+          .from("spaces")
+          .select("id")
+          .eq("slug", selectedSpace)
+          .limit(1)
+
+        const spaceId = spaceRows?.[0]?.id
+        if (spaceId) {
+          const { data: featureRows } = await supabase
+            .from("project_features")
+            .select("project_id")
+            .eq("space_id", spaceId)
+
+          const projectIds = [...new Set((featureRows ?? []).map((f) => f.project_id).filter(Boolean))]
+          if (projectIds.length > 0) {
+            query = query.in("id", projectIds)
+          } else {
+            // No projects have this space — return empty
+            return { data: [], total: 0 }
+          }
+        }
+      }
+
       if (filters.types.length > 0) {
-        query = applyTypeFilters(query, filters.types, buildingFeatureCategories)
+        query = applyTypeFilters(query, filters.types)
       }
 
       if (filters.styles.length > 0) {
         query = query.contains("style_preferences", filters.styles)
       }
 
-      if (filters.location) {
-        query = query.ilike("location", `%${escapeIlikePattern(filters.location)}%`)
+      if (filters.locations.length > 0) {
+        const locationOr = filters.locations
+          .map((loc) => `location.ilike.%${escapeIlikePattern(loc)}%`)
+          .join(",")
+        query = query.or(locationOr)
       }
 
       if (filters.features.length > 0) {
@@ -357,12 +363,44 @@ export function useProjectsQuery({
         throw supabaseError
       }
 
+      // Fetch preview photos for card carousel (max 5 per project)
+      const projectIds = (data ?? []).map((p) => p.id).filter(Boolean) as string[]
+      if (projectIds.length > 0) {
+        const { data: photos } = await supabase
+          .from("project_photos")
+          .select("id, project_id, url, alt_text, order_index, is_primary, feature_id")
+          .in("project_id", projectIds)
+          .order("order_index", { ascending: true, nullsFirst: false })
+
+        if (photos) {
+          const photosByProject = new Map<string, typeof photos>()
+          for (const photo of photos) {
+            if (!photo.project_id) continue
+            const existing = photosByProject.get(photo.project_id) ?? []
+            if (existing.length < 5) existing.push(photo)
+            photosByProject.set(photo.project_id, existing)
+          }
+
+          for (const project of (data ?? []) as any[]) {
+            const projectPhotos = photosByProject.get(project.id) ?? []
+            project.photos = projectPhotos.map((p: any) => ({
+              id: p.id,
+              url: p.url,
+              alt: p.alt_text ?? null,
+              space: null,
+              order_index: p.order_index ?? 0,
+              is_primary: p.is_primary ?? false,
+            }))
+          }
+        }
+      }
+
       return {
         data: data ?? [],
         total: count ?? 0,
       }
     },
-    [effectivePageSize, filters, buildingFeatureCategories],
+    [effectivePageSize, filters, selectedSpace],
   )
 
   const fetchTypePhotoOverrides = useCallback(
@@ -461,6 +499,88 @@ export function useProjectsQuery({
     [imageCategorySearchOrder],
   )
 
+  const fetchSpacePhotoOverrides = useCallback(
+    async (projectRows: ProjectSummaryRow[], spaceSlug: string): Promise<Record<string, { url: string; alt?: string | null }>> => {
+      if (!projectRows.length || !spaceSlug) return {}
+
+      const projectIds = projectRows
+        .map((p) => p.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+
+      if (!projectIds.length) return {}
+
+      const supabase = getBrowserSupabaseClient()
+
+      // Find the space ID for this space slug
+      const { data: spaceRows } = await supabase
+        .from("spaces")
+        .select("id")
+        .eq("slug", spaceSlug)
+        .limit(1)
+
+      const spaceId = spaceRows?.[0]?.id
+      if (!spaceId) return {}
+
+      // Find project features with this space that have a cover photo
+      const { data: featureRows } = await supabase
+        .from("project_features")
+        .select("project_id, cover_photo_id")
+        .in("project_id", projectIds)
+        .eq("space_id", spaceId)
+        .not("cover_photo_id", "is", null)
+
+      if (!featureRows?.length) return {}
+
+      const coverIds = featureRows
+        .map((f) => f.cover_photo_id)
+        .filter((id): id is string => typeof id === "string")
+
+      const { data: photos } = await supabase
+        .from("project_photos")
+        .select("id, url, alt_text")
+        .in("id", coverIds)
+
+      const photoMap = new Map(
+        (photos ?? [])
+          .filter((p) => p.id && p.url)
+          .map((p) => [p.id as string, { url: p.url as string, alt: p.alt_text ?? null }]),
+      )
+
+      const overrides: Record<string, { url: string; alt?: string | null }> = {}
+      featureRows.forEach((f) => {
+        if (f.project_id && f.cover_photo_id) {
+          const photo = photoMap.get(f.cover_photo_id)
+          if (photo) overrides[f.project_id] = photo
+        }
+      })
+
+      return overrides
+    },
+    [],
+  )
+
+  // Fetch space-specific cover photos whenever the space filter or project list changes
+  useEffect(() => {
+    if (!selectedSpace || projects.length === 0) {
+      setSpacePhotoOverrides({})
+      return
+    }
+
+    let cancelled = false
+
+    fetchSpacePhotoOverrides(projects, selectedSpace)
+      .then((overrides) => {
+        if (!cancelled) setSpacePhotoOverrides(overrides)
+      })
+      .catch((err) => {
+        console.error("Failed to load space photos", err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSpace, projects, fetchSpacePhotoOverrides])
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -468,7 +588,7 @@ export function useProjectsQuery({
       const hasFilters =
         typeFilterValues.length > 0 ||
         selectedStyles.length > 0 ||
-        selectedLocation !== null ||
+        selectedLocations.length > 0 ||
         selectedFeatures.length > 0 ||
         selectedBuildingTypes.length > 0 ||
         selectedLocationFeatures.length > 0 ||
@@ -480,7 +600,8 @@ export function useProjectsQuery({
         projectYearRange[1] !== null ||
         buildingYearRange[0] !== null ||
         buildingYearRange[1] !== null ||
-        keyword.trim().length > 0
+        keyword.trim().length > 0 ||
+        !!selectedSpace
 
       // If we have initial SSR data and no filters, don't fetch
       if (hasInitialDataRef.current && !hasFilters) {
@@ -538,7 +659,7 @@ export function useProjectsQuery({
     imageCategorySearchOrder,
     typeFilterValues.length,
     selectedStyles.length,
-    selectedLocation,
+    selectedLocations,
     selectedFeatures.length,
     selectedBuildingTypes.length,
     selectedLocationFeatures.length,
@@ -548,7 +669,8 @@ export function useProjectsQuery({
     selectedBudgets.length,
     projectYearRange,
     buildingYearRange,
-    keyword
+    keyword,
+    selectedSpace
   ])
 
   const loadMore = useCallback(async () => {
@@ -621,5 +743,6 @@ export function useProjectsQuery({
     loadMore,
     refetch,
     typePhotoOverrides,
+    spacePhotoOverrides,
   }
 }

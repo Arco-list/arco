@@ -10,7 +10,7 @@ import DOMPurify from "dompurify"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { createServerActionSupabaseClient } from "@/lib/supabase/server"
+import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger, sanitizeForLogging } from "@/lib/logger"
 import type { Database } from "@/lib/supabase/types"
 import { checkRateLimit } from "@/lib/rate-limit"
@@ -39,13 +39,12 @@ const contactSchema = z.object({
   domain: z
     .string()
     .trim()
-    .min(1, "Domain is required")
     .max(120, "Domain must be shorter than 120 characters")
-    .refine((value) => /^[a-z0-9.-]+$/i.test(value.replace(/^https?:\/\//i, "")), {
+    .refine((value) => !value || /^[a-z0-9.-]+$/i.test(value.replace(/^https?:\/\//i, "")), {
       message: "Enter a valid domain (example.com)",
     }),
-  email: z.string().trim().email("Enter a valid email address"),
-  phone: z.string().trim().min(5, "Enter a valid phone number"),
+  email: z.string().trim().email("Enter a valid email address").or(z.literal("")),
+  phone: z.string().trim().min(5, "Enter a valid phone number").or(z.literal("")),
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),
   country: z.string().trim().optional(),
@@ -134,10 +133,14 @@ async function getCompanyContext() {
     return { supabase, user: null as const, error: "You need to be signed in." }
   }
 
-  const { data: company, error: companyError } = await supabase
+  // 1. Always prefer owned company (oldest first)
+  const { getActiveCompanyId, setActiveCompanyId } = await import("@/lib/active-company")
+  const { data: ownedCompany, error: companyError } = await supabase
     .from("companies")
     .select("id, name, logo_url")
     .eq("owner_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle()
 
   if (companyError) {
@@ -145,11 +148,64 @@ async function getCompanyContext() {
     return { supabase, user, company: null as const, error: "Unable to load your company." }
   }
 
-  if (!company) {
-    return { supabase, user, company: null as const, error: "Create a company first." }
+  if (ownedCompany) {
+    // Always use owned company — update cookie if needed
+    const activeId = await getActiveCompanyId()
+    if (activeId !== ownedCompany.id) {
+      await setActiveCompanyId(ownedCompany.id)
+    }
+    return { supabase, user, company: ownedCompany, error: null as const }
   }
 
-  return { supabase, user, company, error: null as const }
+  // 2. No owned company — check cookie for active company (membership)
+  const activeId = await getActiveCompanyId()
+  if (activeId) {
+    const { data: activeCompany } = await supabase
+      .from("companies")
+      .select("id, name, logo_url")
+      .eq("id", activeId)
+      .maybeSingle()
+
+    if (activeCompany) {
+      const isMember = await supabase
+        .from("company_members")
+        .select("id")
+        .eq("company_id", activeId)
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle()
+        .then((r) => !!r.data)
+
+      if (isMember) {
+        return { supabase, user, company: activeCompany, error: null as const }
+      }
+    }
+  }
+
+  // 3. Fallback: find first company via team membership
+  const { data: membership } = await supabase
+    .from("company_members")
+    .select("company_id")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (membership) {
+    const { data: memberCompany } = await supabase
+      .from("companies")
+      .select("id, name, logo_url")
+      .eq("id", membership.company_id)
+      .single()
+
+    if (memberCompany) {
+      await setActiveCompanyId(memberCompany.id)
+      return { supabase, user, company: memberCompany, error: null as const }
+    }
+  }
+
+  return { supabase, user, company: null as const, error: "Create a company first." }
 }
 
 const buildPublicUrl = (path: string) => {
@@ -349,15 +405,15 @@ export async function updateCompanyContactAction(
   }
 
   const payload = parsedContact.data
-  const normalizedDomain = payload.domain.replace(/^https?:\/\//i, "").toLowerCase()
+  const normalizedDomain = payload.domain ? payload.domain.replace(/^https?:\/\//i, "").toLowerCase() : ""
 
   const { error: updateError } = await supabase
     .from("companies")
     .update({
-      domain: normalizedDomain,
-      website: `https://${normalizedDomain}`,
-      email: payload.email,
-      phone: payload.phone,
+      domain: normalizedDomain || null,
+      website: normalizedDomain ? `https://${normalizedDomain}` : null,
+      email: payload.email || null,
+      phone: payload.phone || null,
       address: payload.address ?? null,
       city: payload.city ?? null,
       country: payload.country ?? null,
@@ -440,6 +496,14 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
 
   const { primaryServiceId, servicesOffered, languages, certificates } = parsed.data
 
+  console.log("[updateCompanyServices]", {
+    companyId: company!.id,
+    primaryServiceId: primaryServiceId || null,
+    servicesOffered,
+    languages,
+    certificates,
+  })
+
   // Use atomic function to update services and refresh materialized views
   // This ensures data consistency - either both operations succeed or both fail
   const { error: updateError } = await supabase.rpc("update_company_services", {
@@ -451,6 +515,7 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
   })
 
   if (updateError) {
+    console.error("[updateCompanyServices] RPC error:", updateError)
     logger.db(
       "rpc",
       "update_company_services",
@@ -458,11 +523,60 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
       { companyId: company!.id },
       updateError
     )
-    return { success: false, error: "Could not update services." }
+    return { success: false, error: `Could not update services: ${updateError.message}` }
+  }
+
+  console.log("[updateCompanyServices] Success")
+
+  revalidatePath("/dashboard/company")
+  revalidatePath("/professionals", "layout")
+  return { success: true }
+}
+
+const specsSchema = z.object({
+  foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).nullable().optional(),
+  teamSizeMin: z.number().int().min(1).max(10000).nullable().optional(),
+  teamSizeMax: z.number().int().min(1).max(10000).nullable().optional(),
+  city: z.string().trim().max(120).nullable().optional(),
+  country: z.string().trim().max(120).nullable().optional(),
+  address: z.string().trim().max(500).nullable().optional(),
+})
+
+export async function updateCompanySpecsAction(input: z.infer<typeof specsSchema>): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext()
+
+  if (error) {
+    return { success: false, error }
+  }
+
+  const parsed = specsSchema.safeParse(input)
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid specs" }
+  }
+
+  const updateData: Record<string, unknown> = {}
+  if (parsed.data.foundedYear !== undefined) updateData.founded_year = parsed.data.foundedYear
+  if (parsed.data.teamSizeMin !== undefined) updateData.team_size_min = parsed.data.teamSizeMin
+  if (parsed.data.teamSizeMax !== undefined) updateData.team_size_max = parsed.data.teamSizeMax
+  if (parsed.data.city !== undefined) updateData.city = parsed.data.city
+  if (parsed.data.country !== undefined) updateData.country = parsed.data.country
+  if (parsed.data.address !== undefined) updateData.address = parsed.data.address
+
+  if (Object.keys(updateData).length === 0) {
+    return { success: true }
+  }
+
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update(updateData)
+    .eq("id", company!.id)
+
+  if (updateError) {
+    logger.db("update", "companies", "Failed to update company specs", { companyId: company!.id }, updateError)
+    return { success: false, error: "Could not update company specs." }
   }
 
   revalidatePath("/dashboard/company")
-  revalidatePath("/professionals")
   return { success: true }
 }
 
@@ -741,6 +855,44 @@ export async function setCompanyCoverPhotoAction(input: z.infer<typeof photoIdSc
   return { success: true }
 }
 
+export async function setCompanyHeroPhotoAction(input: { projectId: string; photoUrl: string }): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext()
+  if (error) return { success: false, error }
+
+  const { error: rpcError } = await supabase.rpc("set_company_hero_photo", {
+    p_company_id: company!.id,
+    p_project_id: input.projectId,
+    p_photo_url: input.photoUrl,
+  })
+
+  if (rpcError) {
+    logger.db("rpc", "set_company_hero_photo", "Failed to set hero photo", { companyId: company!.id }, rpcError)
+    return { success: false, error: "Could not set hero photo." }
+  }
+
+  revalidatePath("/dashboard/company")
+  revalidatePath("/professionals")
+  return { success: true }
+}
+
+export async function clearCompanyHeroPhotoAction(): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext()
+  if (error) return { success: false, error }
+
+  const { error: rpcError } = await supabase.rpc("clear_company_hero_photo", {
+    p_company_id: company!.id,
+  })
+
+  if (rpcError) {
+    logger.db("rpc", "clear_company_hero_photo", "Failed to clear hero photo", { companyId: company!.id }, rpcError)
+    return { success: false, error: "Could not clear hero photo." }
+  }
+
+  revalidatePath("/dashboard/company")
+  revalidatePath("/professionals")
+  return { success: true }
+}
+
 export async function deleteCompanyPhotoAction(input: z.infer<typeof photoIdSchema>): Promise<UploadActionResult> {
   const { supabase, company, error } = await getCompanyContext()
 
@@ -810,4 +962,463 @@ export async function deleteCompanyPhotoAction(input: z.infer<typeof photoIdSche
   await deleteFromStorage(supabase, company!.id, existingPhoto.storage_path)
   revalidatePath("/dashboard/company")
   return { success: true, nextCoverPhotoId }
+}
+
+// ── AI Description Generation ──
+
+export async function generateCompanyDescriptionAction(
+  companyId: string
+): Promise<ActionResult & { description?: string }> {
+  const { supabase, error } = await getCompanyContext()
+  if (error) return { success: false, error }
+
+  // Fetch company data for context
+  const { data: company } = await supabase
+    .from("companies")
+    .select("id, name, description, city, country, founded_year, languages, certificates, services_offered, domain, primary_service_id")
+    .eq("id", companyId)
+    .single()
+
+  if (!company) return { success: false, error: "Company not found." }
+
+  // Resolve service names from IDs
+  let serviceNames: string[] = []
+  if (company.services_offered?.length) {
+    const { data: cats } = await supabase
+      .from("categories")
+      .select("id, name")
+      .in("id", company.services_offered)
+    serviceNames = (cats ?? []).map(c => c.name).filter(Boolean) as string[]
+  }
+
+  // Fetch website content if domain is set
+  let websiteContent = ""
+  if (company.domain) {
+    try {
+      const url = company.domain.startsWith("http") ? company.domain : `https://${company.domain}`
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 8000)
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { "User-Agent": "ArcoBot/1.0" },
+      })
+      clearTimeout(timeout)
+      if (res.ok) {
+        const html = await res.text()
+        // Strip HTML tags, scripts, styles — extract text only
+        const text = html
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+          .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+          .replace(/<header[\s\S]*?<\/header>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&[a-z]+;/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+        // Take first ~2000 chars to keep context manageable
+        websiteContent = text.slice(0, 2000)
+      }
+    } catch {
+      // Website fetch failed — non-fatal, continue without it
+    }
+  }
+
+  const context = [
+    `Company name: ${company.name}`,
+    company.city ? `Location: ${company.city}${company.country ? `, ${company.country}` : ""}` : null,
+    company.founded_year ? `Founded: ${company.founded_year}` : null,
+    serviceNames.length > 0 ? `Services: ${serviceNames.join(", ")}` : null,
+    company.languages?.length ? `Languages: ${(company.languages as string[]).join(", ")}` : null,
+    company.certificates?.length ? `Certificates: ${(company.certificates as string[]).join(", ")}` : null,
+    company.domain ? `Website: ${company.domain}` : null,
+    websiteContent ? `Website content:\n${websiteContent}` : null,
+    company.description ? `Current description: ${company.description}` : null,
+  ].filter(Boolean).join("\n")
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { success: false, error: "AI generation is not configured." }
+  }
+
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default
+    const client = new Anthropic()
+
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 400,
+      messages: [{
+        role: "user",
+        content: `You write company descriptions for Arco, a curated marketplace for architecture, interior design and construction professionals in the Netherlands.
+
+Tone: professional, warm, confident. Third-person. Active voice. No superlatives or clichés. Focus on what the company does, their expertise, and what makes them distinctive. 2-4 sentences, 150-300 characters ideal, max 500 characters. Return only the description text — no quotes, labels, or preamble.
+
+${context}`,
+      }],
+    })
+
+    const text = message.content.find((b) => b.type === "text")?.text?.trim()
+    if (!text) return { success: false, error: "AI returned empty response." }
+
+    return { success: true, description: text.slice(0, 2000) }
+  } catch (e) {
+    const errMsg = isError(e) ? e.message : String(e)
+    console.error("[ai-description] Failed:", errMsg, e)
+    logger.error("Failed to generate description", { companyId, errMsg }, isError(e) ? e : undefined)
+    return { success: false, error: `Failed to generate description: ${errMsg}` }
+  }
+}
+
+// ── Company Switcher ──
+
+export async function getUserCompaniesAction(): Promise<{
+  companies: Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }>
+  activeId: string | null
+}> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { companies: [], activeId: null }
+
+  const { getActiveCompanyId, setActiveCompanyId } = await import("@/lib/active-company")
+
+  const companies: Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }> = []
+  const seen = new Set<string>()
+
+  // Owned companies first
+  const { data: owned } = await supabase
+    .from("companies")
+    .select("id, name, logo_url")
+    .eq("owner_id", user.id)
+    .order("created_at", { ascending: true })
+
+  for (const c of owned ?? []) {
+    if (!seen.has(c.id)) {
+      seen.add(c.id)
+      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, role: "owner" })
+    }
+  }
+
+  // Member companies
+  const { data: memberships } = await supabase
+    .from("company_members")
+    .select("company_id, companies(id, name, logo_url)")
+    .eq("user_id", user.id)
+    .eq("status", "active")
+
+  for (const m of memberships ?? []) {
+    const c = m.companies as unknown as { id: string; name: string; logo_url: string | null } | null
+    if (c && !seen.has(c.id)) {
+      seen.add(c.id)
+      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, role: "member" })
+    }
+  }
+
+  // Active ID: prefer owned company if user owns one
+  let activeId = await getActiveCompanyId()
+  const firstOwned = companies.find(c => c.role === "owner")
+  if (firstOwned && activeId !== firstOwned.id) {
+    await setActiveCompanyId(firstOwned.id)
+    activeId = firstOwned.id
+  }
+
+  return { companies, activeId }
+}
+
+export async function switchCompanyAction(companyId: string): Promise<ActionResult> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Not signed in." }
+
+  // Verify access
+  const { data: isOwner } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("id", companyId)
+    .eq("owner_id", user.id)
+    .maybeSingle()
+
+  if (!isOwner) {
+    const { data: isMember } = await supabase
+      .from("company_members")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .maybeSingle()
+
+    if (!isMember) return { success: false, error: "No access to this company." }
+  }
+
+  const { setActiveCompanyId } = await import("@/lib/active-company")
+  await setActiveCompanyId(companyId)
+
+  revalidatePath("/dashboard", "layout")
+  return { success: true }
+}
+
+// ─── Company Deletion ─────────────────────────────────────────────────────────
+
+export type CompanyDeletionCheck = {
+  canDelete: boolean
+  companyName: string
+  warnings: string[]
+  blockers: string[]
+}
+
+export async function checkCompanyDeletionAction(): Promise<{ success: true; data: CompanyDeletionCheck } | { success: false; error: string }> {
+  const { supabase, user, company, error } = await getCompanyContext()
+  if (error) return { success: false, error }
+
+  const companyId = company!.id
+
+  // Verify ownership
+  const { data: owned } = await supabase
+    .from("companies")
+    .select("id, name, owner_id")
+    .eq("id", companyId)
+    .eq("owner_id", user!.id)
+    .maybeSingle()
+
+  if (!owned) {
+    return { success: false, error: "Only the company owner can delete the company." }
+  }
+
+  const warnings: string[] = []
+  const blockers: string[] = []
+
+  // Count team members (excluding owner)
+  const { count: memberCount } = await supabase
+    .from("company_members")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .neq("user_id", user!.id)
+
+  if ((memberCount ?? 0) > 0) {
+    warnings.push(`${memberCount} team member${memberCount === 1 ? "" : "s"} will be removed`)
+  }
+
+  // Count project associations
+  const { count: projectCount } = await supabase
+    .from("project_professionals")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+
+  if ((projectCount ?? 0) > 0) {
+    warnings.push(`Company will be removed from ${projectCount} project${projectCount === 1 ? "" : "s"}`)
+  }
+
+  return {
+    success: true,
+    data: {
+      canDelete: blockers.length === 0,
+      companyName: owned.name,
+      warnings,
+      blockers,
+    },
+  }
+}
+
+export async function deleteCompanyAction(input: { confirmText: string }): Promise<ActionResult> {
+  if (input.confirmText !== "DELETE") {
+    return { success: false, error: "You must type DELETE to confirm." }
+  }
+
+  const { supabase, user, company, error } = await getCompanyContext()
+  if (error) return { success: false, error }
+
+  const companyId = company!.id
+
+  // Verify ownership
+  const { data: owned } = await supabase
+    .from("companies")
+    .select("id, owner_id")
+    .eq("id", companyId)
+    .eq("owner_id", user!.id)
+    .maybeSingle()
+
+  if (!owned) {
+    return { success: false, error: "Only the company owner can delete the company." }
+  }
+
+  // Use service role to delete child rows that RLS would block
+  // (project_professionals DELETE policy requires project owner, not company owner)
+  const serviceRole = createServiceRoleSupabaseClient()
+
+  const { error: ppErr } = await serviceRole
+    .from("project_professionals")
+    .delete()
+    .eq("company_id", companyId)
+
+  if (ppErr) {
+    logger.db("delete", "project_professionals", "Failed to delete project professional links", { companyId }, ppErr)
+    return { success: false, error: "Failed to remove company from projects." }
+  }
+
+  // Explicitly delete child rows (safety, even though CASCADE would handle most)
+  const { error: photosErr } = await supabase
+    .from("company_photos")
+    .delete()
+    .eq("company_id", companyId)
+
+  if (photosErr) {
+    logger.db("delete", "company_photos", "Failed to delete company photos", { companyId }, photosErr)
+    return { success: false, error: "Failed to delete company photos." }
+  }
+
+  const { error: linksErr } = await supabase
+    .from("company_social_links")
+    .delete()
+    .eq("company_id", companyId)
+
+  if (linksErr) {
+    logger.db("delete", "company_social_links", "Failed to delete company social links", { companyId }, linksErr)
+    return { success: false, error: "Failed to delete company social links." }
+  }
+
+  // Delete company — CASCADE handles: company_members, company_ratings,
+  // reviews, saved_companies. professionals.company_id is SET NULL.
+  const { error: deleteErr } = await supabase
+    .from("companies")
+    .delete()
+    .eq("id", companyId)
+
+  if (deleteErr) {
+    logger.db("delete", "companies", "Failed to delete company", { companyId }, deleteErr)
+    return { success: false, error: "Failed to delete company." }
+  }
+
+  // Remove "professional" from owner's user_types
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("user_types")
+    .eq("id", user!.id)
+    .single()
+
+  if (profile?.user_types) {
+    const updatedTypes = (profile.user_types as string[]).filter((t) => t !== "professional")
+    await supabase
+      .from("profiles")
+      .update({ user_types: updatedTypes })
+      .eq("id", user!.id)
+  }
+
+  // Clear active company cookie
+  const { cookies } = await import("next/headers")
+  const cookieStore = await cookies()
+  cookieStore.delete("active_company_id")
+
+  revalidatePath("/dashboard", "layout")
+  return { success: true }
+}
+
+// ══════════════════════════════════════════════════════════
+// Complete Company Setup (go-live on onboarding)
+// ══════════════════════════════════════════════════════════
+
+export async function completeCompanySetupAction(input: {
+  listCompany: boolean
+  listProjectIds: string[]
+}): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createServerActionSupabaseClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Not authenticated" }
+
+  // Find company owned by this user
+  const { data: ownedCompany } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("owner_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  const companyId = ownedCompany?.id
+  if (!companyId) return { success: false, error: "No company found" }
+
+  // List the company and mark setup as completed
+  if (input.listCompany) {
+    const { error: statusErr } = await supabase
+      .from("companies")
+      .update({ status: "listed", setup_completed: true })
+      .eq("id", companyId)
+
+    if (statusErr) {
+      logger.db("update", "companies", "Failed to list company", { companyId }, statusErr)
+      return { success: false, error: "Failed to list company" }
+    }
+  } else {
+    // Even if not listing, mark setup as completed
+    await supabase
+      .from("companies")
+      .update({ setup_completed: true })
+      .eq("id", companyId)
+  }
+
+  // List selected projects
+  if (input.listProjectIds.length > 0) {
+    const { error: ppErr } = await supabase
+      .from("project_professionals")
+      .update({ status: "listed" })
+      .eq("company_id", companyId)
+      .in("project_id", input.listProjectIds)
+
+    if (ppErr) {
+      logger.db("update", "project_professionals", "Failed to list projects", { companyId, projectIds: input.listProjectIds }, ppErr)
+      return { success: false, error: "Failed to list projects" }
+    }
+  }
+
+  // Refresh materialized views
+  const serviceRole = createServiceRoleSupabaseClient()
+  await serviceRole.rpc("refresh_all_materialized_views")
+
+  revalidatePath("/dashboard", "layout")
+  revalidatePath("/professionals", "layout")
+  revalidatePath("/projects", "layout")
+  return { success: true }
+}
+
+// ── Update Cover Photo ──
+
+export async function updateCoverPhotoAction(input: {
+  projectId: string
+  photoId: string
+  role: "owner" | "contributor"
+  projectProfessionalId?: string
+}): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Not authenticated" }
+
+  if (input.role === "contributor" && input.projectProfessionalId) {
+    const { error } = await supabase
+      .from("project_professionals")
+      .update({ cover_photo_id: input.photoId })
+      .eq("id", input.projectProfessionalId)
+    if (error) {
+      logger.db("update", "project_professionals", "Failed to update cover photo", { projectProfessionalId: input.projectProfessionalId }, error)
+      return { success: false, error: "Failed to update cover photo" }
+    }
+  } else {
+    const { error } = await supabase
+      .from("project_photos")
+      .update({ is_primary: true })
+      .eq("id", input.photoId)
+      .eq("project_id", input.projectId)
+    if (error) {
+      logger.db("update", "project_photos", "Failed to update cover photo", { projectId: input.projectId, photoId: input.photoId }, error)
+      return { success: false, error: "Failed to update cover photo" }
+    }
+  }
+
+  const serviceRole = createServiceRoleSupabaseClient()
+  await serviceRole.rpc("refresh_all_materialized_views")
+
+  revalidatePath("/dashboard", "layout")
+  revalidatePath("/professionals", "layout")
+  revalidatePath("/projects", "layout")
+  return { success: true }
 }

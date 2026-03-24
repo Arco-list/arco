@@ -24,10 +24,10 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
   const {
     selectedCategories,
     selectedServices,
-    selectedCity,
+    selectedCities,
     setSelectedCategories,
     setSelectedServices,
-    setSelectedCity,
+    setSelectedCities,
     clearAllFilters,
     taxonomy,
     cities,
@@ -132,19 +132,25 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
 
               <div>
                 <h6 className="mb-3">City</h6>
-                <select
-                  id="modal-city"
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                  value={selectedCity || ""}
-                  onChange={(e) => setSelectedCity(e.target.value || null)}
-                >
-                  <option value="">All cities</option>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
                   {cities.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
+                    <label key={city} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border text-black focus:ring-black"
+                        checked={selectedCities.includes(city)}
+                        onChange={() => {
+                          if (selectedCities.includes(city)) {
+                            setSelectedCities(selectedCities.filter((c) => c !== city))
+                          } else {
+                            setSelectedCities([...selectedCities, city])
+                          }
+                        }}
+                      />
+                      <span className="text-sm">{city}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
             </>
           )}

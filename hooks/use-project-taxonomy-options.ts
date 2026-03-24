@@ -17,7 +17,6 @@ import {
   sortByOrderThenLabel,
   sortFeatureOptions,
 } from "@/lib/project-details"
-import { PROJECT_TYPE_FILTERS } from "@/lib/project-type-filter-map"
 import type { Tables } from "@/lib/supabase/types"
 
 type CategoryWithAttributes = Tables<"categories">
@@ -123,84 +122,30 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         return
       }
 
-      const normalize = (value?: string | null) => value?.trim().toLowerCase() ?? ""
-      const slugify = (value?: string | null) =>
-        value
-          ? value
-              .trim()
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-+|-+$/g, "")
-          : ""
+      // Build project type list from active categories.
+      // Parent categories that have children are service categories (Design & Planning, Construction, etc.)
+      // Parent categories without children are project types (Villa, Apartment, Penthouse, etc.)
+      const allParents = records.filter((r) => !r.parent_id)
+      const allChildren = records.filter((r) => r.parent_id)
 
-      const recordsById = new Map<string, CategoryWithAttributes>()
-      const nameIndex = new Map<string, CategoryWithAttributes>()
-      const slugIndex = new Map<string, CategoryWithAttributes>()
+      // Identify which parents have children (service categories)
+      const parentsWithChildren = new Set(allChildren.map((c) => c.parent_id!))
 
-      records.forEach((record) => {
-        if (record.id) {
-          recordsById.set(record.id, record)
-        }
+      // Project types = parent categories without children
+      const projectTypeParents = allParents.filter((r) => !parentsWithChildren.has(r.id))
 
-        if (record.name) {
-          nameIndex.set(normalize(record.name), record)
-        }
-
-        if (record.slug) {
-          slugIndex.set(normalize(record.slug), record)
-          slugIndex.set(slugify(record.slug), record)
-        }
-
-        slugIndex.set(slugify(record.name), record)
-      })
-
-      const parentOptions: ProjectDetailsDropdownOption[] = []
+      const listingTypes: ProjectDetailsDropdownOption[] = []
       const groupedProjectTypes: Record<string, ProjectDetailsDropdownOption[]> = {}
-      const isListable = (record: CategoryWithAttributes | null | undefined) =>
-        record?.is_listing_type === true
 
-      Object.keys(PROJECT_TYPE_FILTERS).forEach((typeName, typeIndex) => {
-        const parentRecord = nameIndex.get(normalize(typeName)) ?? slugIndex.get(slugify(typeName))
-        if (!parentRecord || !parentRecord.id) {
-          return
-        }
-
-        const subTypeNames = PROJECT_TYPE_FILTERS[typeName as keyof typeof PROJECT_TYPE_FILTERS]
-        const options: ProjectDetailsDropdownOption[] = []
-
-        subTypeNames.forEach((subTypeName, subIndex) => {
-          if (normalize(subTypeName) === normalize(typeName)) {
-            return
-          }
-
-          const subRecord =
-            nameIndex.get(normalize(subTypeName)) ?? slugIndex.get(slugify(subTypeName)) ?? null
-
-          if (!subRecord || !subRecord.id || !isListable(subRecord)) {
-            return
-          }
-
-          options.push({
-            value: subRecord.id,
-            label: subRecord.name,
-            sortOrder: subRecord.sort_order ?? subIndex,
-          })
+      for (const parent of projectTypeParents) {
+        listingTypes.push({
+          value: parent.id,
+          label: parent.name,
+          sortOrder: parent.sort_order ?? 0,
         })
+      }
 
-        if (options.length === 0) {
-          return
-        }
-
-        parentOptions.push({
-          value: parentRecord.id,
-          label: parentRecord.name,
-          sortOrder: parentRecord.sort_order ?? typeIndex,
-        })
-
-        groupedProjectTypes[parentRecord.id] = options.sort(sortByOrderThenLabel)
-      })
-
-      if (parentOptions.length === 0) {
+      if (listingTypes.length === 0) {
         applyFallbackTaxonomy()
         setTaxonomyState((prev) => ({
           ...prev,
@@ -209,11 +154,11 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         return
       }
 
-      parentOptions.sort(sortByOrderThenLabel)
+      listingTypes.sort(sortByOrderThenLabel)
 
       setTaxonomyState((prev) => ({
         ...prev,
-        categoryOptions: parentOptions,
+        categoryOptions: listingTypes,
         projectTypeOptionsByCategory: groupedProjectTypes,
         isLoadingTaxonomy: false,
       }))

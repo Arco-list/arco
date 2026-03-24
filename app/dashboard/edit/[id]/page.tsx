@@ -1,12 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   ChevronLeft,
   ChevronRight,
+  Grid3x3,
   ImageIcon,
   Users,
   FileText,
@@ -16,6 +17,7 @@ import {
   MoreHorizontal,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   Menu,
   X,
 } from "lucide-react"
@@ -24,7 +26,6 @@ import { useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
@@ -42,15 +43,20 @@ import {
 import ListingStatusModal from "@/components/listing-status-modal"
 import {
   type ProjectStatus,
-  type ListingStatusValue,
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_DOT_CLASS,
-  LISTING_STATUS_VALUES,
-  ACTIVE_STATUS_VALUES,
-  isListingStatusValue,
-  LISTING_STATUS_OPTIONS,
 } from "@/lib/project-status-config"
-import { DashboardHeader } from "@/components/dashboard-header"
+import {
+  type ContributorStatus,
+  CONTRIBUTOR_STATUS_LABELS,
+  CONTRIBUTOR_STATUS_DOT_CLASS,
+  OWNER_STATUS_OPTIONS,
+} from "@/lib/contributor-status-config"
+import { setProjectStatusAction } from "@/app/admin/projects/actions"
+import { regenerateDescription } from "@/app/new-project/import/actions"
+import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
+import { Header } from "@/components/header"
+import { EditSubNav } from "@/components/project/edit-sub-nav"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
 import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
@@ -58,7 +64,6 @@ import { ProjectMetricsFields } from "@/components/project-details/project-metri
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
 import { ProfessionalServiceCard } from "@/components/project-professional-service-card"
 import { FeaturePhotoSelectorModal } from "@/components/feature-photo-selector-modal"
-import { PhotoTourManager } from "@/components/photo-tour-manager"
 import {
   DEFAULT_LOCATION_ICONS,
   DEFAULT_MATERIAL_ICONS,
@@ -72,6 +77,7 @@ import {
   type ProjectDetailsFormState,
   type ProjectDetailsSelectField,
   type ProjectDetailsTextField,
+  resolveProjectDetailsIcon,
   sortByOrderThenLabel,
 } from "@/lib/project-details"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -83,18 +89,24 @@ import {
   MIN_PHOTOS_REQUIRED,
   OVERLAY_CLASSES,
   useProjectPhotoTour,
+  type FeatureOption,
+  type UploadedPhoto,
 } from "@/hooks/use-project-photo-tour"
+import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
 import {
   createInvite,
   type ProfessionalOption,
   type InviteData,
 } from "@/lib/new-project/invite-professionals"
-import { 
-  findProfessionalByEmailAction, 
+import {
+  findProfessionalByEmailAction,
   getUserEmailAction,
-  getAvailableProfessionalsAction 
+  getAvailableProfessionalsAction
 } from "@/app/new-project/actions"
+import { createUnlistedCompanyAction, confirmLinkExistingCompanyAction } from "@/app/dashboard/edit/actions"
+import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions"
 import { isAdminUser } from "@/lib/auth-utils"
 import {
   DropdownMenu,
@@ -135,15 +147,19 @@ type ProfessionalServiceOption = {
 
 type ProfessionalInviteSummary = {
   id: string
-  serviceId: string | null
+  serviceIds: string[]
   email: string
   status: ProjectProfessionalRow["status"]
   isOwner: boolean
   invitedAt: string
   respondedAt: string | null
   professionalId: string | null
+  companyId: string | null
   companyName: string | null
+  companyLogo: string | null
   primaryService: string | null
+  projectsCount: number
+  isListedCompany: boolean
 }
 
 type ProfessionalSectionData = {
@@ -185,6 +201,26 @@ const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
   city: "",
   region: "",
   shareExactLocation: false,
+}
+
+const SCOPE_OPTIONS = ["New Build", "Renovation", "Interior Design"]
+
+const getSubtypeIconForSlug = (slug?: string | null) => {
+  if (!slug) return null
+  const key = slug.trim().toLowerCase()
+  const Icon = SUBTYPE_ICON_MAP[key]
+  return Icon ?? null
+}
+
+const resolveIconForFeatureOption = (feature?: FeatureOption | null) => {
+  if (!feature) return Grid3x3
+  const subtypeIcon = getSubtypeIconForSlug(feature.slug)
+  if (subtypeIcon) return subtypeIcon
+  if (feature.iconKey) {
+    const icon = resolveProjectDetailsIcon(feature.iconKey)
+    if (icon) return icon
+  }
+  return resolveFeatureIcon(feature.slug)
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -248,18 +284,125 @@ const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpd
   }
 }
 
+/* ────────────────────────────────────────────────────────────────
+   EditableTitle — isolated from parent re-renders so the browser's
+   native contentEditable behaviour (cursor, selection, double-click)
+   is never interrupted by React reconciliation.
+   ──────────────────────────────────────────────────────────────── */
+const EditableTitle = memo(function EditableTitle({
+  initialValue,
+  onSave,
+}: {
+  initialValue: string
+  onSave: (value: string) => void
+}) {
+  const ecRef = useRef<HTMLDivElement>(null)
+  const elRef = useRef<HTMLHeadingElement>(null)
+  const savedValueRef = useRef(initialValue)
+
+  // Set initial content once the DOM is ready
+  useEffect(() => {
+    if (elRef.current && initialValue && !elRef.current.textContent) {
+      elRef.current.textContent = initialValue
+      savedValueRef.current = initialValue
+    }
+  }, [initialValue])
+
+  return (
+    <div
+      ref={ecRef}
+      className="ec"
+      style={{ display: "inline-block", width: "100%", marginBottom: 24 }}
+    >
+      <span className="ec-badge">
+        <span className="ec-ico">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: "inline-block", flexShrink: 0 }}>
+            <path d="M11.5 1.5l3 3L5 14H2v-3z" />
+          </svg>
+        </span>
+        <span className="ec-txt">Edit</span>
+      </span>
+      <h1
+        ref={elRef}
+        className="arco-page-title"
+        contentEditable
+        suppressContentEditableWarning
+        onFocus={() => ecRef.current?.classList.add("on")}
+        onBlur={() => {
+          ecRef.current?.classList.remove("on")
+          const val = elRef.current?.textContent?.trim() ?? ""
+          if (val && val !== savedValueRef.current) {
+            savedValueRef.current = val
+            onSave(val)
+          }
+        }}
+        style={{ cursor: "text", outline: "none" }}
+        data-placeholder="Project title"
+      />
+    </div>
+  )
+})
+
+const REJECTION_REASONS = [
+  "Not a residential project",
+  "Insufficient photos",
+  "Low quality images",
+  "Missing project details",
+  "Duplicate project",
+  "Inappropriate content",
+  "Not architecture or interior design",
+]
+
 export default function ListingEditorPage() {
   const params = useParams()
   const router = useRouter()
-  const [activeSection, setActiveSection] = useState("preview")
+  const searchParams = useSearchParams()
+  const importToastFiredRef = useRef(false)
+  const [activeSection, setActiveSection] = useState("location")
   const [showStatusModal, setShowStatusModal] = useState(false)
-  const [currentStatusValue, setCurrentStatusValue] = useState<ListingStatusValue | "">("")
-  const [selectedStatus, setSelectedStatus] = useState<ListingStatusValue | "">("")
+  const [currentStatusValue, setCurrentStatusValue] = useState<ContributorStatus | "">("")
+  const [selectedStatus, setSelectedStatus] = useState<ContributorStatus | "">("")
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
   const [projectStatus, setProjectStatus] = useState<ProjectStatus | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false)
+
+  // ── Admin review mode ──────────────────────────────────────────────────────
+  const isAdminReview = searchParams.get("review") === "1"
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isApproving, setIsApproving] = useState(false)
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState("")
+  const [selectedRejectionReasons, setSelectedRejectionReasons] = useState<string[]>([])
+  const [isRejecting, setIsRejecting] = useState(false)
+  const [reviewQueue, setReviewQueue] = useState<string[]>([])
+
+  // ── Delete project ─────────────────────────────────────────────────────────
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeletingProject, setIsDeletingProject] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+
+  // ── New state for redesigned layout ───────────────────────────────────────
+  // activeEditField state removed — title/desc .ec "on" class is now managed
+  // imperatively via refs to avoid re-renders that disrupt cursor/selection.
+  const [editSaveStatus, setEditSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
+  const [activeEditFeature, setActiveEditFeature] = useState<string | null>(null)
+  const [photoMoveMenuId, setPhotoMoveMenuId] = useState<string | null>(null)
+  const [photoDeleteConfirmId, setPhotoDeleteConfirmId] = useState<string | null>(null)
+  const [showCoverPicker, setShowCoverPicker] = useState(false)
+  const [editingSpecBar, setEditingSpecBar] = useState<string | null>(null)
+  const [specScope, setSpecScope] = useState("")
+
+  // City lookup state (specs bar location)
+  const [cityQuery, setCityQuery] = useState("")
+  const [cityResults, setCityResults] = useState<Array<{ placeId: string; mainText: string; secondaryText: string }>>([])
+  const [isCitySearching, setIsCitySearching] = useState(false)
+  const citySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cityServiceRef = useRef<any>(null)
+  const descEditRef = useRef<HTMLParagraphElement>(null)
+  const descEcRef = useRef<HTMLDivElement>(null)
+  const editSaveTimerRef = useRef<ReturnType<typeof setTimeout>>()
 
 
   // Location state variables
@@ -313,9 +456,15 @@ export default function ListingEditorPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [hasProjectAccess, setHasProjectAccess] = useState(false)
   const [locationSaving, setLocationSaving] = useState(false)
+  const [isSubmittingForReview, setIsSubmittingForReview] = useState(false)
+  const [generatingDesc, setGeneratingDesc] = useState(false)
+  const autoGenerateDescTriggered = useRef(false)
+  const [showSubmitReviewPopup, setShowSubmitReviewPopup] = useState(false)
+  const [highlightMissingFields, setHighlightMissingFields] = useState(false)
 
   const {
     uploadedPhotos,
+    featurePhotos,
     orderedFeatureOptions,
     selectedFeatures,
     displayFeatureIds,
@@ -335,6 +484,7 @@ export default function ListingEditorPage() {
     toggleTempFeature,
     saveNewFeatures,
     deleteFeature,
+    movePhotoToSpace,
     tempSelectedPhotos,
     toggleTempPhoto,
     tempCoverPhoto,
@@ -374,8 +524,6 @@ export default function ListingEditorPage() {
     resetModalUploadErrors,
   } = useProjectPhotoTour({ supabase, projectId: hasProjectAccess ? projectId : null })
 
-  const photoTourHook = useProjectPhotoTour({ supabase, projectId: hasProjectAccess ? projectId : null })
-
   const statusModalProject = useMemo(() => {
     const coverPhotoUrl =
       getFeatureCoverPhoto(BUILDING_FEATURE_ID) ??
@@ -406,11 +554,10 @@ export default function ListingEditorPage() {
   const isPendingAdminReview = projectStatus === "in_progress"
   const limitReachedForNewActivation = false
   const selectedStatusOption = useMemo(
-    () => LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus),
+    () => OWNER_STATUS_OPTIONS.find((option) => option.value === selectedStatus),
     [selectedStatus],
   )
-  const requiresPlusForSelection = selectedStatusOption?.requiresPlus === true && !isPlus
-  const canSaveStatus = Boolean(selectedStatusOption) && !isPendingAdminReview && !requiresPlusForSelection
+  const canSaveStatus = Boolean(selectedStatusOption) && !isPendingAdminReview
 
   const currentFeatureDisplay = useMemo(
     () => (showPhotoSelector ? getFeatureDisplay(showPhotoSelector) : null),
@@ -426,19 +573,26 @@ export default function ListingEditorPage() {
   )
 
 
+  // Load the owner's project_professionals status for the status modal
   useEffect(() => {
-    if (!projectStatus) {
-      return
+    if (!projectId || !userId) return
+    let cancelled = false
+    const loadOwnerPPStatus = async () => {
+      const { data } = await supabase
+        .from("project_professionals")
+        .select("status")
+        .eq("project_id", projectId)
+        .eq("is_project_owner", true)
+        .maybeSingle()
+      if (!cancelled && data?.status) {
+        const ppStatus = data.status as ContributorStatus
+        setCurrentStatusValue(ppStatus)
+        setSelectedStatus(ppStatus)
+      }
     }
-
-    if (isListingStatusValue(projectStatus)) {
-      setCurrentStatusValue(projectStatus)
-      setSelectedStatus(projectStatus)
-    } else {
-      setCurrentStatusValue("")
-      setSelectedStatus("")
-    }
-  }, [projectStatus])
+    void loadOwnerPPStatus()
+    return () => { cancelled = true }
+  }, [projectId, userId, supabase])
 
   useEffect(() => {
     if (showStatusModal) {
@@ -516,6 +670,34 @@ export default function ListingEditorPage() {
     }
   }, [supabase])
 
+  // ── Admin review: check admin status and load review queue ─────────────────
+  useEffect(() => {
+    if (!isAdminReview || !userId) return
+    let cancelled = false
+    const loadAdminReviewData = async () => {
+      // Check admin
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("user_types")
+        .eq("id", userId)
+        .maybeSingle()
+      const types = (profile as any)?.user_types as string[] | null
+      if (!cancelled) setIsAdmin(Array.isArray(types) && types.includes("admin"))
+
+      // Load review queue (all in_progress projects)
+      const { data: reviewProjects } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("status", "in_progress")
+        .order("created_at", { ascending: true })
+      if (!cancelled && reviewProjects) {
+        setReviewQueue(reviewProjects.map((p) => p.id))
+      }
+    }
+    void loadAdminReviewData()
+    return () => { cancelled = true }
+  }, [isAdminReview, userId, supabase])
+
   useEffect(() => {
     setHasProjectAccess(false)
     setProjectSlug(null)
@@ -556,7 +738,34 @@ export default function ListingEditorPage() {
         return
       }
 
-      if (project.client_id !== userId) {
+      // Check access: admin, project owner (client_id),
+      // or their company is linked as project owner via project_professionals
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("user_types")
+        .eq("id", userId)
+        .maybeSingle()
+
+      let hasAccess = isAdminUser(userProfile?.user_types) || project.client_id === userId
+      if (!hasAccess) {
+        // Check if user's company owns this project
+        const { data: proData } = await supabase
+          .from("professionals")
+          .select("company_id")
+          .eq("user_id", userId)
+          .maybeSingle()
+        if (proData?.company_id) {
+          const { data: ppData } = await supabase
+            .from("project_professionals")
+            .select("id")
+            .eq("project_id", projectId)
+            .eq("company_id", proData.company_id)
+            .eq("is_project_owner", true)
+            .maybeSingle()
+          if (ppData) hasAccess = true
+        }
+      }
+      if (!hasAccess) {
         setDetailsLoadError("You do not have access to edit this project.")
         setDetailsLoading(false)
         return
@@ -622,6 +831,7 @@ export default function ListingEditorPage() {
         const status = (project.status as ProjectStatus | null) ?? null
         setProjectStatus(status)
         setDetailsForm(hydratedState)
+        setSpecScope(project.project_type ?? "")
         setLocationData({
           address: project.address_formatted ?? "",
           shareExactLocation: project.share_exact_location ?? false,
@@ -639,21 +849,21 @@ export default function ListingEditorPage() {
     }
   }, [projectId, supabase, userId])
 
-  // Set edit mode based on project status
-  // Only projects that have been submitted (in_progress or higher) should be editable here
-  // Projects in draft status should use /app/new-project/ instead
+  // Show a one-time welcome toast when arriving from the URL import flow
   useEffect(() => {
-    if (!projectStatus) return
+    if (importToastFiredRef.current) return
+    if (searchParams?.get("from") !== "import") return
+    importToastFiredRef.current = true
+    toast.success("Project imported!", {
+      description: "We pre-filled what we could from your website. Add photos and complete the remaining fields before publishing.",
+      duration: 8000,
+    })
+  }, [searchParams])
 
-    // For projects that were submitted and came back for editing
-    if (projectStatus === "in_progress") {
-      setIsEditMode(true)
-      setActiveSection("photo-tour")
-    } else if (["published", "completed", "archived"].includes(projectStatus)) {
-      setIsEditMode(false)
-      setActiveSection("preview")
-    }
-  }, [projectStatus])
+  // Keep activeSection as "location" for map initialization in the new layout
+  useEffect(() => {
+    setActiveSection("location")
+  }, [])
 
   useEffect(() => {
     if (activeSection !== "location") {
@@ -1004,6 +1214,36 @@ export default function ListingEditorPage() {
     chain.run()
   }
 
+  const handleGenerateProjectDescription = useCallback(async () => {
+    if (!projectId || generatingDesc) return
+    setGeneratingDesc(true)
+    try {
+      const result = await regenerateDescription(projectId)
+      if ("description" in result && result.description) {
+        setDetailsForm((prev) => ({ ...prev, projectDescription: result.description }))
+        if (descEditRef.current) {
+          descEditRef.current.textContent = result.description
+        }
+        toast.success("Description generated")
+      } else if ("error" in result) {
+        toast.error(result.error)
+      }
+    } catch {
+      toast.error("Failed to generate description")
+    } finally {
+      setGeneratingDesc(false)
+    }
+  }, [projectId, generatingDesc])
+
+  // Auto-generate description on load for projects without a description
+  useEffect(() => {
+    if (!projectId || autoGenerateDescTriggered.current || generatingDesc) return
+    if (detailsForm.projectDescription) return
+    if (detailsLoading) return
+    autoGenerateDescTriggered.current = true
+    handleGenerateProjectDescription()
+  }, [projectId, detailsForm.projectDescription, detailsLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const updateYearFieldErrors = (state: ProjectDetailsFormState, options?: { treatEmptyAsError?: boolean }) => {
     const { errors } = generateYearErrorMessages(state, options)
 
@@ -1144,7 +1384,6 @@ export default function ListingEditorPage() {
         .from("projects")
         .update(locationUpdate)
         .eq("id", projectId)
-        .eq("client_id", userId)
       if (updateError) {
         throw updateError
       }
@@ -1269,7 +1508,6 @@ export default function ListingEditorPage() {
         .from("projects")
         .update(projectUpdatePayload)
         .eq("id", projectId)
-        .eq("client_id", userId)
       if (updateError) {
         throw updateError
       }
@@ -1365,6 +1603,50 @@ export default function ListingEditorPage() {
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [isInviteMutating, setIsInviteMutating] = useState(false)
 
+  // Inline card editing state
+  const [editingInviteField, setEditingInviteField] = useState<{ inviteId: string; field: "service" | "company" | "email" } | null>(null)
+  const [companySearchQuery, setCompanySearchQuery] = useState("")
+  const [companySearchResults, setCompanySearchResults] = useState<{ id: string; name: string; city: string | null; logo_url: string | null; email: string | null }[]>([])
+  const [isSearchingCompanies, setIsSearchingCompanies] = useState(false)
+  const companySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [ownerCompanyServices, setOwnerCompanyServices] = useState<{ id: string; name: string; parentName?: string | null }[]>([])
+  // Map of companyId → services for invited Arco companies (non-owner)
+  const [inviteCompanyServices, setInviteCompanyServices] = useState<Record<string, { id: string; name: string; parentName?: string | null }[]>>({})
+  const [confirmDeleteInviteId, setConfirmDeleteInviteId] = useState<string | null>(null)
+  const [draftCard, setDraftCard] = useState<{ serviceIds: string[]; serviceName: string; companyName: string; companyLogo: string | null; email: string; companyId?: string | null } | null>(null)
+
+  // 3-tier company lookup state
+  type GooglePlaceResult = { placeId: string; name: string; city: string | null }
+  const [googleResults, setGoogleResults] = useState<GooglePlaceResult[]>([])
+  const [pendingTier23, setPendingTier23] = useState<{
+    inviteId: string // card id or "__draft__"
+    companyName: string
+    googlePlaceId: string | null
+    city: string | null
+    prefillEmail: string | null
+    // Enriched fields from Google Place Details
+    website: string | null
+    domain: string | null
+    phone: string | null
+    fullAddress: string | null
+    country: string | null
+    stateRegion: string | null
+    editorialSummary: string | null
+    googleTypes: string[] | null
+  } | null>(null)
+  const [dupWarning, setDupWarning] = useState<{
+    existingId: string
+    existingName: string
+    existingLogo: string | null
+    existingProjectCount: number
+    pendingInviteId: string
+    pendingInput: { name: string; email: string; city?: string | null; googlePlaceId?: string | null }
+    matchType: "domain" | "name"
+  } | null>(null)
+  const googleAutocompleteService = useRef<any>(null)
+  const companySearchActive = useRef(false) // true after user types, false on initial focus
+  const selectAllOnMount = useRef(false)
+
   const editableSidebarItems = [
     { id: "photo-tour", name: "Photo tour", icon: ImageIcon },
     { id: "professionals", name: "Professionals", icon: Users },
@@ -1400,7 +1682,6 @@ export default function ListingEditorPage() {
           .from("projects")
           .update({ status: "in_progress" })
           .eq("id", projectId)
-          .eq("client_id", userId)
 
         if (error) {
           toast.error("Failed to update project status")
@@ -1418,62 +1699,118 @@ export default function ListingEditorPage() {
     }
   }
 
+  const handleShowSubmitReview = () => {
+    if (!projectId || isSubmittingForReview) return
+    setHighlightMissingFields(false)
+    setShowSubmitReviewPopup(true)
+  }
+
   const handleSubmitForReview = async () => {
-    if (!projectId) return
-    
+    if (!projectId || isSubmittingForReview) return
+
     try {
       if (!userId) {
         toast.error("User not authenticated")
         return
       }
 
+      setIsSubmittingForReview(true)
+      setShowSubmitReviewPopup(false)
+
+      // Check if company has auto-approve enabled
+      let autoApprove = false
+      const { data: proData } = await supabase
+        .from("professionals")
+        .select("company_id")
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (proData?.company_id) {
+        const { data: companyData } = await supabase
+          .from("companies")
+          .select("auto_approve_projects")
+          .eq("id", proData.company_id)
+          .maybeSingle()
+        autoApprove = Boolean((companyData as any)?.auto_approve_projects)
+      }
+
+      const newStatus = autoApprove ? "published" : "in_progress"
+
       const { error } = await supabase
         .from("projects")
-        .update({ status: "in_progress" })
+        .update({ status: newStatus })
         .eq("id", projectId)
-        .eq("client_id", userId)
-      
+
       if (error) {
         toast.error("Failed to submit for review")
         console.error("Error submitting for review:", error)
       } else {
-        setProjectStatus("in_progress")
+        // Update project_professionals status
+        const ppStatus = autoApprove ? "live_on_page" : "listed"
+        await supabase
+          .from("project_professionals")
+          .update({ status: ppStatus })
+          .eq("project_id", projectId)
+          .eq("status", "unlisted")
+
+        setProjectStatus(newStatus)
+        if (autoApprove) {
+          setCurrentStatusValue("live_on_page")
+          setSelectedStatus("live_on_page")
+        }
         setIsEditMode(false)
-        setActiveSection("preview")
-        toast.success("Submitted for admin review")
+        setShowStatusModal(false)
+        toast.success(autoApprove ? "Project published!" : "Submitted for review!")
       }
     } catch (err) {
       toast.error("Failed to submit for review")
       console.error("Error submitting for review:", err)
+    } finally {
+      setIsSubmittingForReview(false)
     }
   }
 
-  const statusOptions = LISTING_STATUS_OPTIONS
+  const statusOptions = OWNER_STATUS_OPTIONS
 
   const statusOptionByValue = useMemo(
     () => new Map(statusOptions.map((option) => [option.value, option])),
     [statusOptions],
   )
 
+  // For draft/in_progress/rejected, show project-level status; otherwise show PP status
+  const useProjectLevelStatus = projectStatus && ["draft", "in_progress", "rejected"].includes(projectStatus)
+
   const currentStatusLabel = useMemo(() => {
+    if (useProjectLevelStatus && projectStatus) {
+      return PROJECT_STATUS_LABELS[projectStatus]
+    }
     if (currentStatusValue && statusOptionByValue.has(currentStatusValue)) {
       return statusOptionByValue.get(currentStatusValue)!.label
+    }
+    if (currentStatusValue) {
+      return CONTRIBUTOR_STATUS_LABELS[currentStatusValue] ?? currentStatusValue
     }
     if (projectStatus) {
       return PROJECT_STATUS_LABELS[projectStatus]
     }
     return "Set status"
-  }, [currentStatusValue, projectStatus, statusOptionByValue])
+  }, [currentStatusValue, projectStatus, statusOptionByValue, useProjectLevelStatus])
 
   const statusIndicatorClass = useMemo(() => {
+    if (useProjectLevelStatus && projectStatus) {
+      return PROJECT_STATUS_DOT_CLASS[projectStatus]
+    }
     if (currentStatusValue && statusOptionByValue.has(currentStatusValue)) {
       return statusOptionByValue.get(currentStatusValue)!.colorClass
+    }
+    if (currentStatusValue) {
+      return CONTRIBUTOR_STATUS_DOT_CLASS[currentStatusValue] ?? "bg-muted-foreground"
     }
     if (projectStatus) {
       return PROJECT_STATUS_DOT_CLASS[projectStatus]
     }
     return "bg-muted-foreground"
-  }, [currentStatusValue, projectStatus, statusOptionByValue])
+  }, [currentStatusValue, projectStatus, statusOptionByValue, useProjectLevelStatus])
 
   const loadProfessionalServiceOptions = useCallback(async () => {
     const { data: childRows, error: childError } = await supabase
@@ -1591,7 +1928,7 @@ export default function ListingEditorPage() {
     const { data: inviteRows, error: invitesError } = await supabase
       .from("project_professionals")
       .select(
-        "id, invited_email, invited_service_category_id, status, is_project_owner, invited_at, responded_at, professional_id",
+        "id, invited_email, invited_service_category_ids, status, is_project_owner, invited_at, responded_at, professional_id, company_id",
       )
       .eq("project_id", projectId)
       .order("is_project_owner", { ascending: false })
@@ -1613,7 +1950,7 @@ export default function ListingEditorPage() {
     if (professionalIds.length) {
       const { data: professionals, error: professionalError } = await supabase
         .from("mv_professional_summary")
-        .select("id, company_name, primary_specialty")
+        .select("id, company_id, company_name, company_logo, primary_specialty")
         .in("id", professionalIds)
 
       if (professionalError) {
@@ -1627,36 +1964,97 @@ export default function ListingEditorPage() {
       )
     }
 
+    // Collect all company IDs across all invites
+    const allCompanyIds = Array.from(
+      new Set(
+        (inviteRows ?? [])
+          .map(row => (row as any).company_id ?? (row.professional_id ? professionalMap.get(row.professional_id)?.company_id : null))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    )
+
+    // Fetch company info for invites that have company_id but no professional_id
+    const companyOnlyIds = allCompanyIds.filter(id =>
+      (inviteRows ?? []).some(row => (row as any).company_id === id && !row.professional_id)
+    )
+    let companyMap = new Map<string, { name: string; logo_url: string | null }>()
+    if (companyOnlyIds.length) {
+      const { data: companies } = await supabase
+        .from("companies")
+        .select("id, name, logo_url")
+        .in("id", companyOnlyIds)
+      if (companies) {
+        companyMap = new Map(companies.map(c => [c.id, { name: c.name, logo_url: c.logo_url }]))
+      }
+    }
+
+    // Fetch project counts and company status for all companies
+    let companyProjectCounts = new Map<string, number>()
+    let companyStatusMap = new Map<string, string>()
+    if (allCompanyIds.length) {
+      const [{ data: projectCounts }, { data: companyStatuses }] = await Promise.all([
+        supabase
+          .from("project_professionals")
+          .select("company_id, project_id, projects!inner(status)")
+          .in("company_id", allCompanyIds)
+          .eq("projects.status" as any, "published"),
+        supabase
+          .from("companies")
+          .select("id, status")
+          .in("id", allCompanyIds),
+      ])
+      // Count unique published projects per company
+      const countSets = new Map<string, Set<string>>()
+      projectCounts?.forEach((row: any) => {
+        if (row.company_id && row.project_id) {
+          if (!countSets.has(row.company_id)) countSets.set(row.company_id, new Set())
+          countSets.get(row.company_id)!.add(row.project_id)
+        }
+      })
+      countSets.forEach((projects, companyId) => companyProjectCounts.set(companyId, projects.size))
+      companyStatuses?.forEach(c => companyStatusMap.set(c.id, c.status))
+    }
+
     const invitesByService: Record<string, ProfessionalInviteSummary[]> = {}
     let ownerInvite: ProfessionalInviteSummary | null = null
 
     ;(inviteRows ?? []).forEach((row) => {
       const professionalData = row.professional_id ? professionalMap.get(row.professional_id) : null
+      const companyId = (row as any).company_id ?? professionalData?.company_id ?? null
+      const companyDirect = companyId && !professionalData ? companyMap.get(companyId) : null
+      const isListed = row.professional_id ? true : (companyId ? companyStatusMap.get(companyId) === "listed" : false)
+      const serviceIds = (row.invited_service_category_ids as string[] | null) ?? []
       const summary: ProfessionalInviteSummary = {
         id: row.id,
-        serviceId: row.invited_service_category_id,
+        serviceIds,
         email: row.invited_email,
         status: row.status,
         isOwner: row.is_project_owner,
         invitedAt: row.invited_at,
         respondedAt: row.responded_at,
         professionalId: row.professional_id,
-        companyName: professionalData?.company_name ?? null,
+        companyId,
+        companyName: professionalData?.company_name ?? companyDirect?.name ?? null,
+        companyLogo: professionalData?.company_logo ?? companyDirect?.logo_url ?? null,
         primaryService: professionalData?.primary_specialty ?? null,
+        projectsCount: companyId ? (companyProjectCounts.get(companyId) ?? 0) : 0,
+        isListedCompany: isListed,
       }
 
       if (summary.isOwner) {
         ownerInvite = summary
       }
 
-      if (!summary.serviceId) {
-        return
+      // Fan out: add invite to each service bucket it belongs to
+      if (serviceIds.length > 0) {
+        for (const sid of serviceIds) {
+          if (!invitesByService[sid]) invitesByService[sid] = []
+          invitesByService[sid].push(summary)
+        }
+      } else {
+        if (!invitesByService["__unassigned__"]) invitesByService["__unassigned__"] = []
+        invitesByService["__unassigned__"].push(summary)
       }
-
-      if (!invitesByService[summary.serviceId]) {
-        invitesByService[summary.serviceId] = []
-      }
-      invitesByService[summary.serviceId].push(summary)
     })
 
     Object.values(invitesByService).forEach((list) => {
@@ -1791,6 +2189,77 @@ export default function ListingEditorPage() {
     }
   }, [applyProfessionalSectionData, fetchProfessionalSectionData, hasProjectAccess, loadAvailableProfessionals, projectId, supabase])
 
+  // Fetch owner company's selected services for the owner card service dropdown
+  useEffect(() => {
+    if (!projectOwnerInvite?.companyId) { setOwnerCompanyServices([]); return }
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from("companies")
+        .select("services_offered")
+        .eq("id", projectOwnerInvite.companyId!)
+        .maybeSingle()
+      if (cancelled || !data?.services_offered?.length) return
+      const { data: cats } = await supabase
+        .from("categories")
+        .select("id, name, parent_id")
+        .in("id", data.services_offered)
+      if (cancelled || !cats) return
+      // Resolve parent names for grouping
+      const parentIds = [...new Set(cats.map(c => c.parent_id).filter(Boolean))] as string[]
+      const parentMap = new Map<string, string>()
+      if (parentIds.length > 0) {
+        const { data: parents } = await supabase.from("categories").select("id, name").in("id", parentIds)
+        if (parents) parents.forEach(p => parentMap.set(p.id, p.name))
+      }
+      if (!cancelled) {
+        setOwnerCompanyServices(cats.map(c => ({ id: c.id, name: c.name, parentName: c.parent_id ? parentMap.get(c.parent_id) ?? null : null })))
+      }
+    })()
+    return () => { cancelled = true }
+  }, [projectOwnerInvite?.companyId, supabase])
+
+  // Fetch services for an Arco company and cache in inviteCompanyServices
+  const loadCompanyServices = useCallback(async (companyId: string) => {
+    const { data } = await supabase
+      .from("companies")
+      .select("services_offered")
+      .eq("id", companyId)
+      .maybeSingle()
+    if (!data?.services_offered?.length) return
+    const { data: cats } = await supabase
+      .from("categories")
+      .select("id, name, parent_id")
+      .in("id", data.services_offered)
+    if (!cats) return
+    // Resolve parent names for grouping
+    const parentIds = [...new Set(cats.map(c => c.parent_id).filter(Boolean))] as string[]
+    const parentMap = new Map<string, string>()
+    if (parentIds.length > 0) {
+      const { data: parents } = await supabase.from("categories").select("id, name").in("id", parentIds)
+      if (parents) parents.forEach(p => parentMap.set(p.id, p.name))
+    }
+    setInviteCompanyServices(prev => ({
+      ...prev,
+      [companyId]: cats.map(c => ({ id: c.id, name: c.name, parentName: c.parent_id ? parentMap.get(c.parent_id) ?? null : null })),
+    }))
+  }, [supabase])
+
+  // Load services for all companies on non-owner invite cards
+  useEffect(() => {
+    const allInvites = Object.values(professionalInvites).flat()
+    if (allInvites.length === 0) return
+    const companyIds = allInvites
+      .filter(inv => !inv.isOwner && inv.companyId)
+      .map(inv => inv.companyId!)
+    const unique = [...new Set(companyIds)]
+    for (const cid of unique) {
+      if (!inviteCompanyServices[cid]) {
+        void loadCompanyServices(cid)
+      }
+    }
+  }, [professionalInvites, loadCompanyServices]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const openServiceModal = () => {
     setServiceSelectionDraft(selectedProfessionalServiceIds)
     setIsServiceModalOpen(true)
@@ -1899,6 +2368,7 @@ export default function ListingEditorPage() {
     setProfessionalsError(null)
 
     try {
+      // Remove the service selection
       const { error } = await supabase
         .from("project_professional_services")
         .delete()
@@ -1907,6 +2377,18 @@ export default function ListingEditorPage() {
 
       if (error) {
         throw error
+      }
+
+      // For each invite that has this service, remove it from their array
+      const affectedInvites = professionalInvites[serviceId] ?? []
+      for (const inv of affectedInvites) {
+        const newServiceIds = inv.serviceIds.filter(sid => sid !== serviceId)
+        if (newServiceIds.length === 0) {
+          // No services left — delete the row entirely
+          await supabase.from("project_professionals").delete().eq("id", inv.id)
+        } else {
+          await supabase.from("project_professionals").update({ invited_service_category_ids: newServiceIds } as any).eq("id", inv.id)
+        }
       }
 
       setSelectedProfessionalServiceIds((prev) => prev.filter((id) => id !== serviceId))
@@ -1970,6 +2452,33 @@ export default function ListingEditorPage() {
       return
     }
 
+    // Check if this company already has a row on this project
+    const existingInvite = Object.values(professionalInvites).flat().find(
+      inv => inv.companyId === professional.company_id || inv.email === professional.email
+    )
+    if (existingInvite) {
+      // Add service to existing row
+      if (existingInvite.serviceIds.includes(serviceId)) {
+        setInviteError("This company is already credited for this service.")
+        return
+      }
+      setIsInviteMutating(true)
+      try {
+        const newServiceIds = [...existingInvite.serviceIds, serviceId]
+        const { error } = await supabase
+          .from("project_professionals")
+          .update({ invited_service_category_ids: newServiceIds } as any)
+          .eq("id", existingInvite.id)
+        if (error) throw error
+        await refreshProfessionalSection()
+      } catch (error) {
+        setInviteError(error instanceof Error ? error.message : "We couldn't add this service. Please try again.")
+      } finally {
+        setIsInviteMutating(false)
+      }
+      return
+    }
+
     const existingInvites = professionalInvites[serviceId] ?? []
     if (existingInvites.length >= 1) {
       setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
@@ -1981,10 +2490,10 @@ export default function ListingEditorPage() {
 
     try {
       const isProjectOwner = projectClientId === professional.user_id
-      
+
       const inviteData: InviteData = {
         project_id: projectId,
-        invited_service_category_id: serviceId,
+        invited_service_category_ids: [serviceId],
         invited_email: professional.email,
         professional_id: professional.id,
         company_id: professional.company_id,
@@ -2048,7 +2557,7 @@ export default function ListingEditorPage() {
           .from("project_professionals")
           .update(updateData)
           .eq("id", editingInviteId)
-          .select("id, invited_email, invited_service_category_id, status, invited_at, responded_at")
+          .select("id, invited_email, invited_service_category_ids, status, invited_at, responded_at")
           .maybeSingle()
 
         if (error || !data) {
@@ -2070,7 +2579,7 @@ export default function ListingEditorPage() {
         
         const inviteData: InviteData = {
           project_id: projectId,
-          invited_service_category_id: inviteServiceId,
+          invited_service_category_ids: [inviteServiceId],
           invited_email: email,
           professional_id: professionalId,
           company_id: companyId,
@@ -2091,6 +2600,530 @@ export default function ListingEditorPage() {
     } finally {
       setIsInviteMutating(false)
     }
+  }
+
+  // ── Inline card field editing ─────────────────────────────────────────────
+  const saveInviteService = async (inviteId: string, newServiceId: string, oldServiceId?: string) => {
+    try {
+      // Find the current invite to get its serviceIds
+      const currentInvite = Object.values(professionalInvites).flat().find(inv => inv.id === inviteId)
+      let newServiceIds: string[]
+      if (oldServiceId && currentInvite) {
+        // Replace old service with new one in the array
+        newServiceIds = currentInvite.serviceIds.map(sid => sid === oldServiceId ? newServiceId : sid)
+      } else {
+        // Fallback: set to single new service
+        newServiceIds = [newServiceId]
+      }
+      const { error } = await supabase
+        .from("project_professionals")
+        .update({ invited_service_category_ids: newServiceIds } as any)
+        .eq("id", inviteId)
+      if (error) throw error
+      await refreshProfessionalSection()
+    } catch {
+      toast.error("Failed to update service")
+    }
+    setEditingInviteField(null)
+  }
+
+  const saveInviteEmail = async (inviteId: string, newEmail: string) => {
+    const trimmed = newEmail.trim()
+    if (!trimmed) { setEditingInviteField(null); return }
+    if (!EMAIL_REGEX.test(trimmed)) { toast.error("Please enter a valid email address"); return }
+    const domain = getDomain(trimmed)
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
+    try {
+      const updateData: Record<string, unknown> = { invited_email: trimmed }
+      const { data: foundPro } = await findProfessionalByEmailAction(trimmed)
+      if (foundPro) {
+        updateData.professional_id = foundPro.id
+        updateData.company_id = foundPro.company_id
+      }
+      const { error } = await supabase.from("project_professionals").update(updateData).eq("id", inviteId)
+      if (error) throw error
+      await refreshProfessionalSection()
+    } catch {
+      toast.error("Failed to update email")
+    }
+    setEditingInviteField(null)
+  }
+
+  const saveInviteCompany = async (inviteId: string, companyId: string | null, companyEmail?: string | null) => {
+    try {
+      const updateData: Record<string, unknown> = { company_id: companyId }
+      if (companyId && companyEmail) {
+        updateData.invited_email = companyEmail
+      }
+      // Pre-fill primary service from company profile
+      if (companyId) {
+        const { data: companyRow } = await supabase
+          .from("companies")
+          .select("primary_service_id, services_offered")
+          .eq("id", companyId)
+          .maybeSingle()
+        if (companyRow?.primary_service_id) {
+          updateData.invited_service_category_ids = [companyRow.primary_service_id]
+        }
+        // Cache company's services for the dropdown
+        if (companyRow?.services_offered?.length) {
+          const { data: cats } = await supabase
+            .from("categories")
+            .select("id, name")
+            .in("id", companyRow.services_offered)
+          if (cats) {
+            setInviteCompanyServices(prev => ({ ...prev, [companyId]: cats }))
+          }
+        }
+      }
+      const { error } = await supabase
+        .from("project_professionals")
+        .update(updateData)
+        .eq("id", inviteId)
+      if (error) throw error
+      await refreshProfessionalSection()
+    } catch {
+      toast.error("Failed to update company")
+    }
+    setEditingInviteField(null)
+    setCompanySearchQuery("")
+    setCompanySearchResults([])
+    setGoogleResults([])
+  }
+
+  // Handle selecting a Google or manual company (tier 2/3)
+  const handleSelectTier23Company = async (inviteId: string, name: string, googlePlaceId: string | null, city: string | null) => {
+    setPendingTier23({ inviteId, companyName: name, googlePlaceId, city, prefillEmail: null, website: null, domain: null, phone: null, fullAddress: null, country: null, stateRegion: null, editorialSummary: null, googleTypes: null })
+    setEditingInviteField({ inviteId, field: "email" })
+    setCompanySearchQuery("")
+    setCompanySearchResults([])
+    setGoogleResults([])
+
+    // For Google Places results, fetch full details for enrichment
+    if (googlePlaceId) {
+      try {
+        const g = (window as any).google
+        if (g?.maps) {
+          const placesLib = await g.maps.importLibrary("places")
+          if (placesLib?.PlacesService) {
+            const div = document.createElement("div")
+            const service = new placesLib.PlacesService(div)
+            service.getDetails(
+              { placeId: googlePlaceId, fields: ["website", "formatted_address", "address_components", "international_phone_number", "formatted_phone_number", "editorial_summary", "types"] },
+              (place: any, status: string) => {
+                if (status === "OK" && place) {
+                  const website = place.website ?? null
+                  let hostname: string | null = null
+                  if (website) {
+                    try {
+                      hostname = new URL(website).hostname.replace(/^www\./, "")
+                      if (["facebook.com", "instagram.com", "linkedin.com", "pinterest.com"].includes(hostname)) {
+                        hostname = null
+                      }
+                    } catch { /* invalid URL */ }
+                  }
+
+                  const components = place.address_components ?? []
+                  const placeCountry = components.find((c: any) => c.types?.includes("country"))?.long_name ?? null
+                  const placeState = components.find((c: any) => c.types?.includes("administrative_area_level_1"))?.long_name ?? null
+
+                  setPendingTier23(prev =>
+                    prev && prev.googlePlaceId === googlePlaceId
+                      ? {
+                          ...prev,
+                          prefillEmail: hostname ? `info@${hostname}` : prev.prefillEmail,
+                          website,
+                          domain: hostname,
+                          phone: place.international_phone_number ?? place.formatted_phone_number ?? null,
+                          fullAddress: place.formatted_address ?? null,
+                          country: placeCountry,
+                          stateRegion: placeState,
+                          editorialSummary: place.editorial_summary?.text ?? null,
+                          googleTypes: place.types ?? null,
+                        }
+                      : prev
+                  )
+                }
+              }
+            )
+          }
+        }
+      } catch { /* Google API not available */ }
+    }
+  }
+
+  // Save a tier 2/3 company after email is provided
+  const saveTier23Company = async (inviteId: string, email: string) => {
+    const trimmed = email.trim()
+    if (!trimmed) return
+    if (!EMAIL_REGEX.test(trimmed)) { toast.error("Please enter a valid email address"); return }
+    const domain = getDomain(trimmed)
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
+    if (!projectId || !pendingTier23) return
+
+    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
+    const projectTitle = detailsForm.projectTitle || "Untitled project"
+
+    if (!userId) { toast.error("Not authenticated"); return }
+
+    try {
+      const result = await createUnlistedCompanyAction({
+        name: pendingTier23.companyName,
+        email: trimmed,
+        city: pendingTier23.city,
+        googlePlaceId: pendingTier23.googlePlaceId,
+        projectId,
+        inviterName,
+        projectTitle,
+        creatorUserId: userId,
+        website: pendingTier23.website,
+        domain: pendingTier23.domain,
+        phone: pendingTier23.phone,
+        address: pendingTier23.fullAddress,
+        country: pendingTier23.country,
+        stateRegion: pendingTier23.stateRegion,
+      })
+
+      if ("duplicate" in result) {
+        if (result.matchType === "domain") {
+          // Domain match (invited company) — auto-link without popup
+          try {
+            if (inviteId === "__draft__") {
+              const insertData: Record<string, unknown> = {
+                project_id: projectId,
+                invited_email: trimmed,
+                invited_service_category_ids: draftCard?.serviceIds ?? [],
+                company_id: result.existingCompanyId,
+              }
+              const { data: foundPro } = await findProfessionalByEmailAction(trimmed)
+              if (foundPro) insertData.professional_id = foundPro.id
+              await supabase.from("project_professionals").insert(insertData)
+              setDraftCard(null)
+            } else {
+              await confirmLinkExistingCompanyAction({
+                companyId: result.existingCompanyId,
+                inviteId,
+                projectId,
+                email: trimmed,
+                inviterName,
+                projectTitle,
+              })
+            }
+            await refreshProfessionalSection()
+            toast.success("Professional added")
+          } catch {
+            toast.error("Failed to add professional")
+          }
+          setPendingTier23(null)
+          setEditingInviteField(null)
+          return
+        }
+        setDupWarning({
+          existingId: result.existingCompanyId,
+          existingName: result.existingCompanyName,
+          existingLogo: result.existingCompanyLogo ?? null,
+          existingProjectCount: result.existingCompanyProjectCount ?? 0,
+          pendingInviteId: inviteId,
+          pendingInput: { name: pendingTier23.companyName, email: trimmed, city: pendingTier23.city, googlePlaceId: pendingTier23.googlePlaceId },
+          matchType: result.matchType,
+        })
+        return
+      }
+
+      if ("error" in result) {
+        console.error("createUnlistedCompanyAction returned error:", result.error)
+        toast.error(result.error)
+        // Keep pendingTier23 so user can retry
+        setEditingInviteField({ inviteId, field: "email" })
+        return
+      }
+
+      // Fire-and-forget enrichment (logo + AI description)
+      if (pendingTier23.domain) {
+        enrichCompanyAction({
+          companyId: result.companyId,
+          companyName: pendingTier23.companyName,
+          website: pendingTier23.website,
+          domain: pendingTier23.domain,
+          editorialSummary: pendingTier23.editorialSummary,
+          googleTypes: pendingTier23.googleTypes,
+          city: pendingTier23.city,
+          country: pendingTier23.country,
+        }).catch(err => console.error("Company enrichment failed:", err))
+      }
+
+      // Link company to invite
+      if (inviteId === "__draft__") {
+        // For draft card: insert new project_professionals row
+        const insertData: Record<string, unknown> = {
+          project_id: projectId,
+          invited_email: trimmed,
+          invited_service_category_ids: draftCard?.serviceIds ?? [],
+          company_id: result.companyId,
+        }
+        const { data: foundPro } = await findProfessionalByEmailAction(trimmed)
+        if (foundPro) {
+          insertData.professional_id = foundPro.id
+        }
+        const { error } = await supabase.from("project_professionals").insert(insertData)
+        if (error) throw error
+        setDraftCard(null)
+        await refreshProfessionalSection()
+        toast.success(result.emailSent ? "Professional added & invite sent" : "Professional added")
+      } else {
+        // For existing card: update company_id and email
+        await saveInviteCompany(inviteId, result.companyId, trimmed)
+        toast.success(result.emailSent ? "Invite email sent" : "Company linked")
+      }
+      setPendingTier23(null)
+      setEditingInviteField(null)
+    } catch (err) {
+      console.error("saveTier23Company error:", err)
+      toast.error("Failed to add professional")
+      // Keep pendingTier23 and re-open email field so user can retry
+      setEditingInviteField({ inviteId, field: "email" })
+    }
+  }
+
+  // Handle dedup warning actions
+  const handleDupLinkExisting = async () => {
+    if (!dupWarning || !projectId) return
+    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
+    const projectTitle = detailsForm.projectTitle || "Untitled project"
+
+    if (dupWarning.pendingInviteId === "__draft__") {
+      // For draft card, insert row with existing company
+      try {
+        const updateData: Record<string, unknown> = {
+          project_id: projectId,
+          invited_email: dupWarning.pendingInput.email,
+          invited_service_category_ids: draftCard?.serviceIds ?? [],
+          company_id: dupWarning.existingId,
+        }
+        const { data: foundPro } = await findProfessionalByEmailAction(dupWarning.pendingInput.email)
+        if (foundPro) {
+          updateData.professional_id = foundPro.id
+        }
+        const { error } = await supabase.from("project_professionals").insert(updateData)
+        if (error) throw error
+        setDraftCard(null)
+        await refreshProfessionalSection()
+        toast.success("Professional added")
+      } catch {
+        toast.error("Failed to add professional")
+      }
+    } else {
+      const res = await confirmLinkExistingCompanyAction({
+        companyId: dupWarning.existingId,
+        inviteId: dupWarning.pendingInviteId,
+        projectId,
+        email: dupWarning.pendingInput.email,
+        inviterName,
+        projectTitle,
+      })
+      if (res.success) {
+        await refreshProfessionalSection()
+        toast.success("Company linked")
+      } else {
+        toast.error(res.error || "Failed to link company")
+      }
+    }
+    setDupWarning(null)
+    setPendingTier23(null)
+    setEditingInviteField(null)
+  }
+
+  const handleDupForceCreate = async () => {
+    if (!dupWarning || !projectId || !userId) return
+    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
+    const projectTitle = detailsForm.projectTitle || "Untitled project"
+
+    const result = await createUnlistedCompanyAction({
+      name: dupWarning.pendingInput.name,
+      email: dupWarning.pendingInput.email,
+      city: dupWarning.pendingInput.city,
+      googlePlaceId: dupWarning.pendingInput.googlePlaceId,
+      projectId,
+      inviterName,
+      projectTitle,
+      creatorUserId: userId,
+      skipDedup: true,
+    })
+
+    if ("error" in result) {
+      toast.error(result.error)
+    } else if ("success" in result) {
+      if (dupWarning.pendingInviteId === "__draft__") {
+        try {
+          const updateData: Record<string, unknown> = {
+            project_id: projectId,
+            invited_email: dupWarning.pendingInput.email,
+            invited_service_category_ids: draftCard?.serviceIds ?? [],
+            company_id: result.companyId,
+          }
+          const { error } = await supabase.from("project_professionals").insert(updateData)
+          if (error) throw error
+          setDraftCard(null)
+          await refreshProfessionalSection()
+          toast.success(result.emailSent ? "Professional added & invite sent" : "Professional added")
+        } catch {
+          toast.error("Failed to add professional")
+        }
+      } else {
+        await saveInviteCompany(dupWarning.pendingInviteId, result.companyId, dupWarning.pendingInput.email)
+        toast.success(result.emailSent ? "Invite email sent" : "Company linked")
+      }
+    }
+    setDupWarning(null)
+    setPendingTier23(null)
+    setEditingInviteField(null)
+  }
+
+  const searchCompanies = (query: string) => {
+    setCompanySearchQuery(query)
+    if (companySearchTimer.current) clearTimeout(companySearchTimer.current)
+    if (query.trim().length < 2) { setCompanySearchResults([]); setGoogleResults([]); return }
+    companySearchTimer.current = setTimeout(async () => {
+      setIsSearchingCompanies(true)
+      try {
+        // Parallel: DB + Google Places
+        const dbPromise = supabase
+          .from("companies")
+          .select("id, name, city, logo_url, email")
+          .ilike("name", `%${query.trim()}%`)
+          .eq("status", "listed")
+          .limit(6)
+
+        const googlePromise = (async (): Promise<GooglePlaceResult[]> => {
+          try {
+            const g = (window as any).google
+            if (!g?.maps) return []
+
+            // With loading=async, places lib must be loaded via importLibrary
+            if (!googleAutocompleteService.current) {
+              const placesLib = await g.maps.importLibrary("places")
+              if (!placesLib?.AutocompleteService) return []
+              googleAutocompleteService.current = new placesLib.AutocompleteService()
+            }
+
+            const response = await new Promise<any>((resolve) => {
+              googleAutocompleteService.current.getPlacePredictions(
+                { input: query.trim(), types: ["establishment"], componentRestrictions: { country: "nl" } },
+                (predictions: any, status: string) => {
+                  if (status === "OK" && predictions) {
+                    resolve(predictions)
+                  } else {
+                    resolve([])
+                  }
+                }
+              )
+            })
+            return response.slice(0, 5).map((p: any) => ({
+              placeId: p.place_id,
+              name: p.structured_formatting?.main_text ?? p.description ?? "",
+              city: (() => {
+                const parts = (p.structured_formatting?.secondary_text ?? "").split(",").map((s: string) => s.trim())
+                // secondary_text is typically "Street, City, Country" — pick the part before the last (country)
+                return parts.length >= 2 ? parts[parts.length - 2] : parts[0] || null
+              })(),
+            }))
+          } catch (e) {
+            console.warn("Google Places search failed:", e)
+            return []
+          }
+        })()
+
+        const [dbResult, googleData] = await Promise.all([dbPromise, googlePromise])
+        const dbData = dbResult.data ?? []
+        setCompanySearchResults(dbData)
+
+        // Deduplicate: remove Google results that match a DB result by name
+        const dbNames = new Set(dbData.map(c => c.name.toLowerCase()))
+        setGoogleResults(googleData.filter(g => !dbNames.has(g.name.toLowerCase())))
+      } catch {
+        setCompanySearchResults([])
+        setGoogleResults([])
+      }
+      setIsSearchingCompanies(false)
+    }, 300)
+  }
+
+  const saveDraftCard = async (email: string) => {
+    const trimmed = email.trim()
+    if (!trimmed) return
+    if (!EMAIL_REGEX.test(trimmed)) { toast.error("Please enter a valid email address"); return }
+    const domain = getDomain(trimmed)
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
+    if (!projectId) return
+    try {
+      const updateData: Record<string, unknown> = {
+        project_id: projectId,
+        invited_email: trimmed,
+        invited_service_category_ids: draftCard?.serviceIds ?? [],
+      }
+      const { data: foundPro } = await findProfessionalByEmailAction(trimmed)
+      if (foundPro) {
+        updateData.professional_id = foundPro.id
+        updateData.company_id = foundPro.company_id
+      }
+      const { error } = await supabase.from("project_professionals").insert(updateData)
+      if (error) throw error
+      setDraftCard(null)
+      await refreshProfessionalSection()
+      toast.success("Professional added")
+    } catch {
+      toast.error("Failed to add professional")
+    }
+  }
+
+  // Save draft card with a DB company (tier 1) — uses company email automatically
+  const saveDraftCardWithCompany = async (companyId: string, companyEmail: string | null) => {
+    if (!projectId) return
+    if (!companyEmail) {
+      // No email on file — fall back to asking for email via tier 2/3 flow
+      const companyName = companySearchResults.find(c => c.id === companyId)?.name ?? ""
+      handleSelectTier23Company("__draft__", companyName, null, null)
+      setDraftCard(d => d ? { ...d, companyName, companyId } : d)
+      void loadCompanyServices(companyId)
+      return
+    }
+
+    try {
+      // Fetch company's primary service and services from DB
+      const { data: companyRow } = await supabase
+        .from("companies")
+        .select("primary_service_id, services_offered")
+        .eq("id", companyId)
+        .maybeSingle()
+
+      const serviceIds = draftCard?.serviceIds?.length ? draftCard.serviceIds
+        : companyRow?.primary_service_id ? [companyRow.primary_service_id]
+        : []
+
+      const insertData: Record<string, unknown> = {
+        project_id: projectId,
+        company_id: companyId,
+        invited_email: companyEmail,
+        invited_service_category_ids: serviceIds,
+      }
+      const { error } = await supabase.from("project_professionals").insert(insertData)
+      if (error) throw error
+      setDraftCard(null)
+
+      // Cache company's services for the dropdown
+      if (companyRow?.services_offered?.length) {
+        void loadCompanyServices(companyId)
+      }
+
+      await refreshProfessionalSection()
+      toast.success("Professional added")
+    } catch {
+      toast.error("Failed to add professional")
+    }
+    setEditingInviteField(null)
+    setCompanySearchQuery("")
+    setCompanySearchResults([])
+    setGoogleResults([])
   }
 
   const handleDeleteInvite = async (invite: ProfessionalInviteSummary) => {
@@ -2121,20 +3154,180 @@ export default function ListingEditorPage() {
     setSelectedStatus(currentStatusValue || "")
   }, [currentStatusValue])
 
-  const handleStatusSave = () => {
-    if (!selectedStatus || isPendingAdminReview) {
+  const handleStatusSave = async () => {
+    if (!selectedStatus || isPendingAdminReview || !projectId) {
       handleCloseStatusModal()
       return
     }
 
-    if (requiresPlusForSelection) {
-      toast.error("Upgrade to Plus to make this listing discoverable.")
-      return
+    await supabase
+      .from("project_professionals")
+      .update({ status: selectedStatus })
+      .eq("project_id", projectId)
+      .eq("is_project_owner", true)
+
+    // Sync company listed status
+    if (projectOwnerInvite?.companyId) {
+      await syncCompanyListedStatus(projectOwnerInvite.companyId)
     }
 
     setCurrentStatusValue(selectedStatus)
     handleCloseStatusModal()
   }
+
+  // ── Admin review handlers ────────────────────────────────────────────────
+
+  const navigateToNextReview = useCallback(() => {
+    const currentIndex = reviewQueue.indexOf(projectId ?? "")
+    const remaining = reviewQueue.filter((id) => id !== projectId)
+    if (remaining.length > 0) {
+      const nextIndex = Math.min(currentIndex, remaining.length - 1)
+      router.push(`/dashboard/edit/${remaining[nextIndex]}?review=1`)
+    } else {
+      toast.success("All projects reviewed!")
+      router.push("/admin/projects")
+    }
+  }, [reviewQueue, projectId, router])
+
+  const handleAdminApprove = useCallback(async () => {
+    if (!projectId || isApproving) return
+    setIsApproving(true)
+    try {
+      const result = await setProjectStatusAction({ projectId, status: "published" })
+      if (result && "error" in result) {
+        toast.error(typeof result.error === "string" ? result.error : "Failed to approve project")
+        return
+      }
+      toast.success("Project approved")
+      navigateToNextReview()
+    } catch {
+      toast.error("Failed to approve project")
+    } finally {
+      setIsApproving(false)
+    }
+  }, [projectId, isApproving, navigateToNextReview])
+
+  const handleAdminReject = useCallback(async () => {
+    if (!projectId || isRejecting || (selectedRejectionReasons.length === 0 && !rejectionReason.trim())) return
+    setIsRejecting(true)
+    try {
+      const combinedReason = [
+        ...selectedRejectionReasons,
+        ...(rejectionReason.trim() ? [rejectionReason.trim()] : []),
+      ].join(". ")
+      const result = await setProjectStatusAction({ projectId, status: "rejected", rejectionReason: combinedReason })
+      if (result && "error" in result) {
+        toast.error(typeof result.error === "string" ? result.error : "Failed to reject project")
+        return
+      }
+      toast.success("Project rejected")
+      setShowRejectModal(false)
+      setRejectionReason("")
+      setSelectedRejectionReasons([])
+      navigateToNextReview()
+    } catch {
+      toast.error("Failed to reject project")
+    } finally {
+      setIsRejecting(false)
+    }
+  }, [projectId, isRejecting, rejectionReason, selectedRejectionReasons, navigateToNextReview])
+
+  const handleDeleteProject = useCallback(async () => {
+    if (!projectId || !userId || isDeletingProject) return
+    setIsDeletingProject(true)
+    try {
+      const { error } = await supabase.from("projects").delete().eq("id", projectId).eq("client_id", userId)
+      if (error) throw error
+      toast.success("Project deleted")
+      router.push("/dashboard/listings")
+    } catch {
+      toast.error("Failed to delete project")
+    } finally {
+      setIsDeletingProject(false)
+    }
+  }, [projectId, userId, isDeletingProject, supabase, router])
+
+  // ── New handlers for redesigned layout ───────────────────────────────────
+
+  const flashEditSaved = useCallback(() => {
+    setEditSaveStatus("saved")
+    if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current)
+    editSaveTimerRef.current = setTimeout(() => setEditSaveStatus("idle"), 2000)
+  }, [])
+
+  const saveFieldDirect = useCallback(async (patch: Record<string, unknown>) => {
+    if (!projectId || !userId) return
+    setEditSaveStatus("saving")
+    await supabase.from("projects").update(patch).eq("id", projectId)
+    flashEditSaved()
+  }, [projectId, userId, supabase, flashEditSaved])
+
+  const handleTitleSave = useCallback((val: string) => {
+    setDetailsForm(prev => ({ ...prev, projectTitle: val }))
+    void saveFieldDirect({ title: val })
+  }, [saveFieldDirect])
+
+  const handleDescEditFocus = () => {
+    descEcRef.current?.classList.add("on")
+  }
+
+  const handleDescEditBlur = () => {
+    descEcRef.current?.classList.remove("on")
+    const val = descEditRef.current?.textContent?.trim() ?? ""
+    if (val !== descriptionPlainText) {
+      setDetailsForm(prev => ({ ...prev, projectDescription: val }))
+      void saveFieldDirect({ description: val || null })
+    }
+  }
+
+  const saveSpecBarField = (field: string, value: string) => {
+    setEditingSpecBar(null)
+    void saveFieldDirect({ [field]: value || null })
+  }
+
+  // City search for specs bar location
+  const searchCity = useCallback((query: string) => {
+    setCityQuery(query)
+    if (citySearchTimer.current) clearTimeout(citySearchTimer.current)
+    if (query.trim().length < 2) { setCityResults([]); return }
+
+    citySearchTimer.current = setTimeout(async () => {
+      setIsCitySearching(true)
+      try {
+        const g = (window as any).google
+        if (!g?.maps) { setIsCitySearching(false); return }
+
+        if (!cityServiceRef.current) {
+          const placesLib = await g.maps.importLibrary("places")
+          if (!placesLib?.AutocompleteService) { setIsCitySearching(false); return }
+          cityServiceRef.current = new placesLib.AutocompleteService()
+        }
+
+        const predictions = await new Promise<any>((resolve) => {
+          cityServiceRef.current.getPlacePredictions(
+            { input: query.trim(), types: ["(cities)"], componentRestrictions: { country: "nl" } },
+            (preds: any, status: string) => { resolve(status === "OK" && preds ? preds : []) },
+          )
+        })
+
+        setCityResults(predictions.slice(0, 5).map((p: any) => ({
+          placeId: p.place_id,
+          mainText: p.structured_formatting?.main_text ?? "",
+          secondaryText: p.structured_formatting?.secondary_text ?? "",
+        })))
+      } catch { setCityResults([]) }
+      setIsCitySearching(false)
+    }, 300)
+  }, [])
+
+  const handleSelectCity = useCallback((mainText: string) => {
+    const city = mainText
+    setDetailsForm(prev => ({ ...prev, city }))
+    setCityQuery("")
+    setCityResults([])
+    setEditingSpecBar(null)
+    void saveFieldDirect({ location: city })
+  }, [saveFieldDirect])
 
   // Location input change handler
   const handleLocationInputChange = (field: string, value: string | boolean) => {
@@ -2189,13 +3382,176 @@ export default function ListingEditorPage() {
       )
     }
 
+    // Collect all photo IDs that belong to a real space
+    const taggedPhotoIds = new Set(
+      displayFeatureIds.flatMap(fid => featurePhotos[fid] ?? [])
+    )
+    const untaggedPhotos = uploadedPhotos.filter(p => !taggedPhotoIds.has(p.id))
+    const untaggedCount = untaggedPhotos.length
+
+    // When showing "All", sort photos by space order (exterior first) then untagged last
+    const allPhotosSorted = (() => {
+      const ordered: UploadedPhoto[] = []
+      const used = new Set<string>()
+      for (const fid of displayFeatureIds) {
+        for (const pid of featurePhotos[fid] ?? []) {
+          if (!used.has(pid)) {
+            const photo = uploadedPhotos.find(p => p.id === pid)
+            if (photo) { ordered.push(photo); used.add(pid) }
+          }
+        }
+      }
+      // Append untagged photos at the end
+      for (const p of uploadedPhotos) {
+        if (!used.has(p.id)) { ordered.push(p); used.add(p.id) }
+      }
+      return ordered
+    })()
+
+    const filteredPhotos = activeEditFeature === "__untagged__"
+      ? untaggedPhotos
+      : activeEditFeature
+        ? uploadedPhotos.filter(p => (featurePhotos[activeEditFeature] ?? []).includes(p.id))
+        : allPhotosSorted
+
     return (
-      <PhotoTourManager
-        photoTour={photoTourHook}
-        showHeader={true}
-        title="Photo tour"
-        subtitle="Add photos for every feature. Only features with photos appear on the published page."
-      />
+      <>
+        {/* Room / feature tabs */}
+        <div className="category-tags" style={{ marginBottom: 24, flexWrap: "wrap" }}>
+          <button
+            className={`category-tag${activeEditFeature === null ? " active" : ""}`}
+            onClick={() => setActiveEditFeature(null)}
+          >
+            All{uploadedPhotos.length > 0 ? ` · ${uploadedPhotos.length}` : ""}
+          </button>
+          {displayFeatureIds.map(featureId => {
+            const fd = getFeatureDisplay(featureId)
+            const count = getFeaturePhotoCount(featureId)
+            return (
+              <button
+                key={featureId}
+                className={`category-tag${activeEditFeature === featureId ? " active" : ""}`}
+                onClick={() => setActiveEditFeature(featureId)}
+              >
+                {fd.name}{count > 0 ? ` · ${count}` : ""}
+              </button>
+            )
+          })}
+          {untaggedCount > 0 && (
+            <button
+              className={`category-tag category-tag--untagged${activeEditFeature === "__untagged__" ? " active" : ""}`}
+              onClick={() => setActiveEditFeature("__untagged__")}
+            >
+              Untagged · {untaggedCount}
+            </button>
+          )}
+        </div>
+
+        {/* Photo grid */}
+        <div className="photo-edit-grid">
+          {/* Add photo tile — first */}
+          <label className="photo-add-tile">
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png"
+              className="hidden"
+              disabled={isUploading}
+              onChange={e => { void handleFileUpload(e.target.files); e.target.value = "" }}
+            />
+            <Plus size={18} style={{ color: "#c0c0be", marginBottom: 4 }} />
+            <span style={{ fontSize: 12, color: "#b8b8b6", letterSpacing: ".03em" }}>
+              {isUploading ? "Uploading…" : "Add photos"}
+            </span>
+          </label>
+          {filteredPhotos.map(photo => {
+            // Find which space this photo belongs to (excluding building/additional)
+            const photoSpace = orderedFeatureOptions.find(opt => (featurePhotos[opt.id] ?? []).includes(photo.id))
+            const roomLabel = photoSpace?.name ?? "No space"
+            return (
+              <div key={photo.id} className="photo-edit-thumb">
+                <img src={photo.url} alt="" />
+
+                {/* Delete icon — top right */}
+                <button
+                  className="photo-del-btn"
+                  onClick={() => setPhotoDeleteConfirmId(photo.id)}
+                  title="Delete photo"
+                >
+                  <Trash2 size={13} />
+                </button>
+
+                {/* Delete confirmation overlay */}
+                {photoDeleteConfirmId === photo.id && (
+                  <div className="photo-del-confirm">
+                    <p>Delete this photo?</p>
+                    <div className="photo-del-confirm-btns">
+                      <button
+                        className="photo-del-yes"
+                        onClick={() => { deletePhoto(photo.id); setPhotoDeleteConfirmId(null) }}
+                      >
+                        Delete
+                      </button>
+                      <button
+                        className="photo-del-no"
+                        onClick={() => setPhotoDeleteConfirmId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Space label — bottom */}
+                <div className="photo-room-bar">
+                  <button
+                    className="photo-room-trigger"
+                    onClick={() => setPhotoMoveMenuId(photo.id)}
+                  >
+                    {roomLabel}
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 6l4 4 4-4" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Space picker overlay */}
+                {photoMoveMenuId === photo.id && (
+                  <div className="photo-space-overlay" onClick={() => setPhotoMoveMenuId(null)}>
+                    <div className="photo-space-pills" onClick={(e) => e.stopPropagation()}>
+                      {orderedFeatureOptions.map(opt => {
+                        const isAssigned = (featurePhotos[opt.id] ?? []).includes(photo.id)
+                        return (
+                          <button
+                            key={opt.id}
+                            className={`photo-space-pill${isAssigned ? " active" : ""}`}
+                            onClick={() => {
+                              setPhotoMoveMenuId(null)
+                              if (!isAssigned) {
+                                void movePhotoToSpace(photo.id, opt.id)
+                              }
+                            }}
+                          >
+                            {opt.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Empty state */}
+        {filteredPhotos.length === 0 && !isUploading && (
+          <p style={{ fontSize: 13, color: "#b0b0ae", marginTop: 16 }}>
+            {activeEditFeature ? "No photos in this room yet." : "Upload your first photo to get started."}
+          </p>
+        )}
+
+      </>
     )
   }
 
@@ -2413,270 +3769,1166 @@ export default function ListingEditorPage() {
     />
   )
 
+  // ── Derived values for the new layout ──────────────────────────────────────
+  const coverPhotoUrl =
+    uploadedPhotos.find(p => p.isCover)?.url ??
+    getFeatureCoverPhoto(BUILDING_FEATURE_ID) ??
+    getFeatureCoverPhoto(ADDITIONAL_FEATURE_ID) ??
+    uploadedPhotos[0]?.url ??
+    null
+
+  const locationDisplayValue =
+    detailsForm.city ||
+    detailsForm.address ||
+    ""
+
+  const buildingTypeLabel =
+    sortedBuildingTypeOptions.find(o => o.value === detailsForm.buildingType)?.label ||
+    detailsForm.buildingType ||
+    ""
+
+  // Combined project type label: prefer category subtype, fall back to building type
+  const projectTypeLabel = (() => {
+    if (detailsForm.projectType) {
+      // Check child types across all categories
+      for (const catId of Object.keys(projectTypeOptionsByCategory)) {
+        const match = projectTypeOptionsByCategory[catId]?.find(o => o.value === detailsForm.projectType)
+        if (match) return match.label
+      }
+      // Check parent categories
+      const catMatch = categoryOptions.find(o => o.value === detailsForm.projectType)
+      if (catMatch) return catMatch.label
+    }
+    return buildingTypeLabel
+  })()
+
+  const styleLabel =
+    sortedProjectStyleOptions.find(o => o.value === detailsForm.projectStyle)?.label ||
+    ""
+
+  const flatInvites = useMemo(() => {
+    const serviceMap = new Map(professionalServices.map(s => [s.id, s]))
+    const serviceOrder = new Map(professionalServices.map((s, i) => [s.id, i]))
+    const formatServiceName = (ids: string[], fallback?: string | null) => {
+      const sorted = ids.slice().sort((a, b) => (serviceOrder.get(a) ?? 999) - (serviceOrder.get(b) ?? 999))
+      const names = sorted.map(sid => serviceMap.get(sid)?.name).filter(Boolean) as string[]
+      if (names.length === 0) return fallback ?? "Select service"
+      if (names.length === 1) return names[0]
+      return `${names[0]} +${names.length - 1}`
+    }
+    // Deduplicate by invite id (since same invite fans out to multiple service buckets)
+    const seen = new Set<string>()
+    const nonOwner: (ProfessionalInviteSummary & { serviceName: string })[] = []
+    for (const invites of Object.values(professionalInvites)) {
+      for (const inv of invites) {
+        if (inv.isOwner || seen.has(inv.id)) continue
+        seen.add(inv.id)
+        nonOwner.push({
+          ...inv,
+          serviceName: formatServiceName(inv.serviceIds),
+        })
+      }
+    }
+    // Owner card always first
+    if (projectOwnerInvite) {
+      return [{ ...projectOwnerInvite, serviceName: formatServiceName(projectOwnerInvite.serviceIds, projectOwnerInvite.primaryService) }, ...nonOwner]
+    }
+    return nonOwner
+  }, [professionalInvites, professionalServices, projectOwnerInvite])
+
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <DashboardHeader />
+    <div className="min-h-screen bg-white">
+      <style>{`
+        .ec { position: relative; cursor: pointer; }
+        .ec::before { content: ''; position: absolute; inset: -10px -14px; border: 1px solid transparent; border-radius: 5px; transition: border-color .18s; pointer-events: none; z-index: 0; }
+        .ec:hover::before { border-color: #1c1c1a; }
+        .ec.on::before  { border-color: #016D75; }
+        .ec.on          { cursor: default; }
+        .ec [contenteditable] { cursor: text; outline: none; }
+        .ec [contenteditable]:empty::before { content: attr(data-placeholder); color: #c8c8c6; pointer-events: none; }
+        .ec-badge { position: absolute; top: -19px; left: -8px; display: flex; align-items: center; gap: 4px; background: #fff; padding: 0 4px; pointer-events: none; z-index: 1; }
+        .ec-ico { display: flex; align-items: center; color: #c8c8c6; transition: color .18s; }
+        .ec-txt { font-size: 10px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase; color: #c8c8c6; white-space: nowrap; transition: color .15s; }
+        .ec:hover .ec-ico, .ec:hover .ec-txt { color: #1c1c1a; }
+        .ec.on    .ec-ico, .ec.on    .ec-txt { color: #016D75; }
+        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; }
+        .spec-item-edit::before { content: ''; position: absolute; inset: -32px -6px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; z-index: 1; }
+        .spec-item-edit:hover::before   { border-color: #1c1c1a; }
+        .spec-item-edit.editing::before { border-color: #016D75; }
+        .spec-item-edit .ec-badge { top: -40px; left: 50%; transform: translateX(-50%); padding: 0 6px; background: #fff; z-index: 2; }
+        .spec-item-edit:hover   .ec-ico, .spec-item-edit:hover   .ec-txt { color: #1c1c1a; }
+        .spec-item-edit.editing .ec-ico, .spec-item-edit.editing .ec-txt { color: #016D75; }
+        .spec-item-edit.editing .spec-eyebrow { color: #016D75; }
+        .dd-panel { position: absolute; left: 50%; transform: translateX(-50%); background: #fff; border: 1px solid #e8e8e6; border-radius: 7px; box-shadow: 0 12px 40px rgba(0,0,0,.12); overflow: hidden; overflow-y: auto; min-width: 180px; z-index: 20; top: calc(100% + 4px); }
+        .dd-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; cursor: pointer; transition: background .1s; font-size: 13px; font-weight: 300; color: #1c1c1a; }
+        .dd-row:hover { background: #f5f5f3; }
+        .dd-row.sel   { font-weight: 500; }
+        .dd-check     { color: #016D75; font-size: 11px; }
+        .dd-group-label { padding: 8px 14px 4px; font-size: 11px; font-weight: 500; color: #a1a1a0; text-transform: uppercase; letter-spacing: .04em; }
+        .spec-inp { width: 100%; text-align: center; font-size: 15px; font-weight: 500; color: #1c1c1a; background: transparent; border: none; border-bottom: 1px solid rgba(1,109,117,.3); outline: none; padding: 0 0 2px; font-family: inherit; }
+        .spec-inp-inline { width: 100%; text-align: center; font-size: 15px; font-weight: 400; color: #1c1c1a; background: transparent; border: none; border-bottom: 1px solid transparent; outline: none; padding: 0 0 2px; font-family: inherit; cursor: pointer; line-height: 1.3; -moz-appearance: textfield; }
+        .spec-inp-inline::-webkit-outer-spin-button, .spec-inp-inline::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .spec-inp-inline::placeholder { color: #b0b0ae; }
+        .spec-inp-inline:read-only { pointer-events: none; }
+        .spec-item-edit.editing .spec-inp-inline { border-bottom-color: rgba(1,109,117,.3); cursor: text; pointer-events: auto; }
+        [contenteditable]:focus { outline: none; }
+        [contenteditable]:empty:before { content: attr(data-placeholder); color: #b0b0ae; pointer-events: none; }
+        .hero-add-photo-cta:hover { opacity: 0.8 !important; }
+        .hero-cover-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: #fff; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.25); border-radius: 100px; padding: 8px 18px; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .15s, border-color .15s; }
+        .hero-cover-btn:hover { background: rgba(0,0,0,.6); border-color: rgba(255,255,255,.4); }
 
-      <main className="flex-1 px-4 pt-20 pb-8 md:px-8">
-        <div className="mx-auto max-w-7xl">
-          {entitlementsError && (
-            <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 body-small text-amber-800">
-              {entitlementsError}
-            </div>
-          )}
-          <div className="flex">
-            {/* Sidebar - Hidden on mobile */}
-            <div className="hidden md:block w-64 bg-white border-r border-border p-6 mr-8">
-              <div className="space-y-6">
-                {/* Status Selector */}
-                <div>
-                  <Button
-                    variant="tertiary"
-                    size="sm"
-                    onClick={() => setShowStatusModal(true)}
-                    className="w-full justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
-                      <span>{currentStatusLabel}</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
+        /* ── Professionals grid ── */
+        .credit-card-edit { position: relative; text-align: center; display: block; cursor: pointer; }
+        .credit-card-edit::before { content: ''; position: absolute; inset: -10px -14px; border: 1px solid transparent; border-radius: 5px; transition: border-color .18s; pointer-events: none; z-index: 0; }
+        .credit-card-edit:hover::before { border-color: #1c1c1a; }
+        .credit-card-edit .ec-badge { top: -19px; left: -8px; padding: 0 4px; background: #fff; z-index: 1; }
+        .credit-card-edit:hover .ec-ico, .credit-card-edit:hover .ec-txt { color: #1c1c1a; }
+        .card-del { position: absolute; top: -6px; right: -10px; width: 30px; height: 30px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,.45); color: #fff; border: 1px solid rgba(255,255,255,.2); opacity: 0; transition: opacity .15s, background .12s; z-index: 2; }
+        .credit-card-edit:hover .card-del { opacity: 1; }
+        .card-del:hover { background: rgba(210,40,40,.75) !important; border-color: transparent !important; }
+        .add-pro-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; align-self: stretch; min-height: 188px; }
+        .add-pro-tile::before { content: ''; position: absolute; inset: -10px -14px; border: 1px dashed #c8c8c6; border-radius: 5px; transition: border-color .18s, background .18s; pointer-events: none; }
+        .add-pro-tile:hover::before { border-color: #016D75; background: rgba(1,109,117,.03); }
+        .add-pro-tile:hover .add-pro-icon { color: #016D75; }
+        .add-pro-tile:hover .add-pro-label { color: #016D75; }
+        .card-del-confirm { position: absolute; inset: -10px -14px; background: rgba(0,0,0,.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; border-radius: 5px; }
+        .card-del-confirm p { color: #fff; font-size: 13px; font-weight: 500; margin: 0; }
+        .editable-hint { border-bottom: 1px dashed #d4d4d2; transition: border-color .15s; cursor: pointer; }
+        .editable-hint:hover { border-color: #1c1c1a; }
+        .card-field-inp { width: 100%; text-align: center; background: transparent; border: none; border-bottom: 1px dashed #d4d4d2; outline: none; padding: 0; margin: 0; font-family: var(--font-sans); }
+        .company-search-menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 6px); background: #fff; border: 1px solid #e8e8e6; border-radius: var(--radius-sm); box-shadow: 0 8px 28px rgba(0,0,0,.14); min-width: 280px; padding: 4px 0; z-index: 30; max-height: 240px; overflow-y: auto; }
+        .company-search-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 7px 13px; font-size: 12.5px; font-weight: 300; color: #1c1c1a; cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .company-search-row:hover { background: #f5f5f3; }
+        .company-search-row.sel { font-weight: 500; }
+        .service-menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 6px); background: #fff; border: 1px solid #e8e8e6; border-radius: var(--radius-sm); box-shadow: 0 8px 28px rgba(0,0,0,.14); min-width: 220px; padding: 4px 0; z-index: 30; max-height: 300px; overflow-y: auto; }
+        .service-group-label { padding: 8px 13px 4px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #a1a1a0; pointer-events: none; }
+        .service-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 6px 13px 6px 20px; font-size: 12.5px; font-weight: 300; color: #1c1c1a; cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; }
+        .service-row:hover { background: #f5f5f3; }
+        .service-row.sel { font-weight: 500; }
+        .service-row.disabled { opacity: 0.35; cursor: not-allowed; }
+        .service-row.disabled:hover { background: none; }
+        .company-search-add { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 13px; font-size: 12.5px; font-weight: 400; color: #016D75; cursor: pointer; background: none; border: none; text-align: left; transition: background .1s; }
+        .company-search-add:hover { background: #f0fafa; }
+        .tier-badge { font-size: 9px; font-weight: 600; letter-spacing: .04em; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; flex-shrink: 0; }
+        .tier-badge.arco { background: rgba(1,109,117,.1); color: #016D75; }
+        .tier-badge.google { background: rgba(66,133,244,.1); color: #4285F4; }
+        .company-search-divider { height: 1px; background: #e8e8e6; margin: 4px 0; }
 
-                {/* Edit/Submit buttons */}
-                {!isEditMode ? (
-                  <div>
-                    <Button 
-                      className="w-full bg-secondary text-white hover:bg-secondary-hover h-auto px-[18px] py-3" 
-                      onClick={() => setShowEditConfirmModal(true)}
-                    >
-                      Edit listing
-                    </Button>
-                  </div>
-                ) : (
-                  <div>
-                    <Button 
-                      className="w-full bg-secondary text-white hover:bg-secondary-hover h-auto px-[18px] py-3" 
-                      onClick={handleSubmitForReview}
-                    >
-                      Submit for review
-                    </Button>
-                  </div>
-                )}
+        /* ── Tier badges ── */
 
-                {/* Navigation Items */}
-                <div className="space-y-2">
-                  {sidebarItems.map((item) => {
-                    const IconComponent = item.icon
-                    const isActive = activeSection === item.id
+        /* ── Photo edit grid ── */
+        .photo-edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .photo-edit-thumb { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #f0f0ee; }
+        .photo-edit-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
+        /* Delete button — top right */
+        .photo-del-btn { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); color: #fff; border: 1px solid rgba(255,255,255,.2); cursor: pointer; opacity: 0; transition: opacity .15s, background .12s; z-index: 2; }
+        .photo-edit-thumb:hover .photo-del-btn { opacity: 1; }
+        .photo-del-btn:hover { background: rgba(210,40,40,.75) !important; border-color: transparent !important; }
+
+        /* Delete confirmation overlay */
+        .photo-del-confirm { position: absolute; inset: 0; background: rgba(0,0,0,.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
+        .photo-del-confirm p { color: #fff; font-size: 13px; font-weight: 500; margin: 0; }
+        .photo-del-confirm-btns { display: flex; gap: 8px; }
+        .photo-del-yes { padding: 6px 18px; background: #d42828; color: #fff; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; border: none; cursor: pointer; transition: background .12s; }
+        .photo-del-yes:hover { background: #b91c1c; }
+        .photo-del-no { padding: 6px 18px; background: rgba(255,255,255,.15); color: #fff; border-radius: var(--radius-sm); font-size: 12px; border: 1px solid rgba(255,255,255,.3); cursor: pointer; transition: background .12s; }
+        .photo-del-no:hover { background: rgba(255,255,255,.25); }
+
+        /* Room bar — bottom gradient */
+        .photo-room-bar { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 10px 10px; background: linear-gradient(to top, rgba(0,0,0,.58) 0%, transparent 100%); opacity: 0; transition: opacity .16s; pointer-events: none; z-index: 2; }
+        .photo-edit-thumb:hover .photo-room-bar { opacity: 1; pointer-events: auto; }
+        .photo-room-trigger { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: rgba(255,255,255,.92); background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 3px; white-space: nowrap; transition: background .12s; }
+        .photo-room-trigger:hover { background: rgba(255,255,255,.14); }
+        /* Space picker overlay */
+        .photo-space-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; z-index: 10; cursor: pointer; }
+        .photo-space-pills { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 16px; max-width: 90%; }
+        .photo-space-pill { padding: 5px 13px; font-size: 12px; font-weight: 400; color: rgba(255,255,255,.88); background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.22); border-radius: 100px; cursor: pointer; transition: all .12s; white-space: nowrap; }
+        .photo-space-pill:hover { background: rgba(255,255,255,.22); border-color: rgba(255,255,255,.4); color: #fff; }
+        .photo-space-pill.active { background: #fff; color: #1c1c1a; border-color: #fff; }
+
+        .photo-add-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; aspect-ratio: 4/3; border: 1px dashed #d4d4d2; cursor: pointer; transition: border-color .15s, background .15s; }
+        .photo-add-tile:hover { border-color: #016D75; background: rgba(1,109,117,.03); }
+
+        /* City lookup dropdown */
+        .ccm-dropdown { border: 1px solid #e8e8e6; border-radius: 3px; box-shadow: 0 8px 28px rgba(0,0,0,.14); max-height: 280px; overflow-y: auto; padding: 4px 0; background: #fff; }
+        .ccm-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 14px; font-size: 13px; font-weight: 300; color: #1c1c1a; cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; }
+        .ccm-row:hover { background: #f5f5f3; }
+      `}</style>
+
+      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
+
+      <div>
+
+        {/* ── Hero ──────────────────────────────────────────────── */}
+        <section style={{
+          position: "relative", width: "100%", height: "82vh", minHeight: 560,
+          overflow: "hidden", background: "#111",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {coverPhotoUrl ? (
+            <>
+              <img
+                src={coverPhotoUrl}
+                alt="Cover photo"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+              />
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.18)" }} />
+              {/* Change cover button */}
+              <button
+                onClick={() => setShowCoverPicker(true)}
+                className="hero-cover-btn"
+              >
+                <ImageIcon size={14} />
+                Change cover
+              </button>
+
+            </>
+          ) : null}
+        </section>
+
+        {/* ── Cover photo picker popup ──────────────────────────── */}
+        {showCoverPicker && (
+          <div className="popup-overlay" onClick={() => setShowCoverPicker(false)}>
+            <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">Select cover photo</h3>
+                <button type="button" className="popup-close" onClick={() => setShowCoverPicker(false)} aria-label="Close">✕</button>
+              </div>
+              <p className="arco-body-text" style={{ marginBottom: 20 }}>
+                Choose which image to display as the project cover.
+              </p>
+              <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {uploadedPhotos.map(photo => {
+                    const isCurrent = photo.url === coverPhotoUrl
                     return (
                       <button
-                        key={item.id}
-                        onClick={() => setActiveSection(item.id)}
-                        className={`body-small w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all font-medium ${
-                          isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
-                        }`}
+                        key={photo.id}
+                        onClick={() => { setCoverPhoto(photo.id); setShowCoverPicker(false) }}
+                        style={{ position: "relative", aspectRatio: "4/3", overflow: "hidden", borderRadius: 6, border: isCurrent ? "2px solid #016D75" : "2px solid transparent", cursor: "pointer", background: "#f0f0ee", padding: 0, transition: "border-color .15s" }}
                       >
-                        <IconComponent className="w-5 h-5" />
-                        <span>{item.name}</span>
+                        <img src={photo.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        {isCurrent && (
+                          <span style={{ position: "absolute", top: 6, right: 6, background: "#016D75", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                          </span>
+                        )}
                       </button>
                     )
                   })}
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Main Content */}
-            <div className="flex-1 md:pt-6">
-              {/* Back Button - Mobile Only */}
-              <div className="md:hidden mb-4">
-                <Button variant="tertiary" size="sm" asChild className="w-20 min-w-[5rem] max-w-[5rem]">
-                  <Link href="/dashboard/listings">
-                    <ChevronLeft className="w-4 h-4" />
-                    Back
-                  </Link>
-                </Button>
-              </div>
+        {/* ── Sub-nav ────────────────────────────────────────────── */}
+        <EditSubNav
+          statusIndicatorClass={statusIndicatorClass}
+          currentStatusLabel={currentStatusLabel}
+          editSaveStatus={editSaveStatus}
+          detailsSaving={detailsSaving}
+          locationSaving={locationSaving}
+          onStatusClick={() => setShowStatusModal(true)}
+          projectSlug={projectSlug}
+          projectStatus={projectStatus}
+          onSubmitForReview={handleShowSubmitReview}
+          isSubmitting={isSubmittingForReview}
+          isAdminReview={isAdminReview && isAdmin}
+          onApprove={handleAdminApprove}
+          onReject={() => setShowRejectModal(true)}
+          isApproving={isApproving}
+        />
 
-              {/* Mobile Status Button */}
-              <div className="md:hidden mb-8 max-w-64">
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onClick={() => setShowStatusModal(true)}
-                  className="w-full justify-between"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${statusIndicatorClass}`} />
-                    <span>{currentStatusLabel}</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
+        {/* ── Project header (editable title + description) ─────── */}
+        <section
+          id="details"
+          style={{ maxWidth: 800, margin: "0 auto", padding: "80px 0 72px", textAlign: "center" }}
+        >
+          {/* Title */}
+          <EditableTitle
+            initialValue={detailsForm.projectTitle}
+            onSave={handleTitleSave}
+          />
 
-              {/* Mobile Navigation Header */}
-              <div className="md:hidden mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="tertiary"
-                    size="icon"
-                    onClick={() => setIsMobileMenuOpen(true)}
-                  >
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                  <h4 className="heading-5 text-foreground">{getCurrentSectionTitle()}</h4>
-                </div>
-                {!isEditMode && activeSection === "preview" && (
-                  <Button 
-                    className="bg-secondary text-white hover:bg-secondary-hover" 
-                    onClick={() => setShowEditConfirmModal(true)}
-                  >
-                    Edit
-                  </Button>
-                )}
-                {isEditMode && (
-                  <Button className="bg-secondary text-white hover:bg-secondary-hover" onClick={handlePreviewListing}>
-                    Preview
-                  </Button>
-                )}
-              </div>
-              {activeSection === "preview" && (
-                <div className="flex items-center justify-center min-h-[60vh]">
-                  <div className="text-center max-w-md">
-                    <h3 className="heading-4 text-foreground mb-3">
-                      Ready to edit your listing?
-                    </h3>
-                    <p className="body-regular text-text-secondary mb-8">
-                      Click "Edit listing" in the sidebar to make changes to your project.
-                    </p>
-                  </div>
-                </div>
+          {/* Architect attribution */}
+          {projectOwnerInvite?.companyName && (
+            <p className="architect-attribution" style={{ textAlign: "center", marginBottom: 24 }}>
+              by{' '}<span style={{ color: "var(--arco-black)", textDecoration: "none", borderBottom: "1px solid var(--arco-rule)", cursor: "default" }}>{projectOwnerInvite.companyName}</span>
+            </p>
+          )}
+
+          {/* Description */}
+          <div
+            ref={descEcRef}
+            className="ec"
+            style={{ display: "block" }}
+            data-submit-highlight={highlightMissingFields && !descriptionPlainText?.trim() ? "true" : undefined}
+          >
+            <span className="ec-badge">
+              <span className="ec-ico">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: "inline-block", flexShrink: 0 }}>
+                  <path d="M11.5 1.5l3 3L5 14H2v-3z" />
+                </svg>
+              </span>
+              <span className="ec-txt">Edit</span>
+            </span>
+            <p
+              ref={descEditRef}
+              className="arco-body-text"
+              contentEditable
+              suppressContentEditableWarning
+              onFocus={handleDescEditFocus}
+              onBlur={handleDescEditBlur}
+              style={{ cursor: "text", minHeight: "1.7em", textAlign: "center", outline: "none" }}
+              data-placeholder="Add a project description…"
+            >
+              {descriptionPlainText || ""}
+            </p>
+            <button
+              type="button"
+              className="ec-generate-link"
+              onClick={(e) => { e.stopPropagation(); handleGenerateProjectDescription() }}
+              disabled={generatingDesc}
+              style={{ justifyContent: "center" }}
+            >
+              {generatingDesc ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
+                  </svg>
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9.937 15.5A2 2 0 008.5 14.063l-6.135-1.582a.5.5 0 010-.962L8.5 9.936A2 2 0 009.937 8.5l1.582-6.135a.5.5 0 01.963 0L14.063 8.5A2 2 0 0015.5 9.937l6.135 1.582a.5.5 0 010 .963L15.5 14.063a2 2 0 00-1.437 1.437l-1.582 6.135a.5.5 0 01-.963 0z" />
+                  </svg>
+                  {descriptionPlainText ? "Regenerate" : "Generate with AI"}
+                </>
               )}
-              {activeSection === "photo-tour" && renderPhotoTourSection()}
-              {activeSection === "professionals" && renderProfessionalsSection()}
-              {activeSection === "details" && (
-                <div className="space-y-8 pb-24 md:pb-0">
-                  {detailsFeedback && (
+            </button>
+          </div>
+        </section>
+
+        {/* ── Specs bar ──────────────────────────────────────────── */}
+        <div className="wrap">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
+
+          {/* Location */}
+          <div
+            className={`spec-item-edit${editingSpecBar === "location" ? " editing" : ""}`}
+            data-submit-highlight={highlightMissingFields && !detailsForm.city?.trim() ? "true" : undefined}
+            onClick={() => editingSpecBar !== "location" && setEditingSpecBar("location")}
+          >
+            <span className="ec-badge">
+              <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
+              <span className="ec-txt">Edit</span>
+            </span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Location</span>
+            {editingSpecBar === "location" ? (
+              <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
+                <input
+                  autoFocus
+                  className="spec-inp"
+                  value={cityQuery}
+                  onChange={e => searchCity(e.target.value)}
+                  placeholder="Search city…"
+                  onKeyDown={e => {
+                    if (e.key === "Escape") { setCityQuery(""); setCityResults([]); setEditingSpecBar(null) }
+                  }}
+                  onBlur={() => {
+                    // Delay to allow dropdown onMouseDown to fire first
+                    setTimeout(() => { setCityQuery(""); setCityResults([]); setEditingSpecBar(prev => prev === "location" ? null : prev) }, 150)
+                  }}
+                />
+                {cityQuery.trim().length >= 2 && (
+                  <div className="ccm-dropdown" style={{ position: "absolute", left: 0, right: 0, top: "100%", marginTop: 4, zIndex: 20 }}>
+                    {cityResults.map(r => (
+                      <button
+                        key={r.placeId}
+                        type="button"
+                        className="ccm-row"
+                        onMouseDown={e => { e.preventDefault(); handleSelectCity(r.mainText) }}
+                      >
+                        <span className="truncate">
+                          <span style={{ fontWeight: 400 }}>{r.mainText}</span>
+                          {r.secondaryText && <span style={{ color: "#a1a1a0", marginLeft: 4 }}>{r.secondaryText}</span>}
+                        </span>
+                      </button>
+                    ))}
+                    {isCitySearching && (
+                      <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching…</div>
+                    )}
+                    {!isCitySearching && cityResults.length === 0 && (
+                      <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>No results found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="arco-card-title" style={{ color: locationDisplayValue ? undefined : "#b0b0ae" }}>
+                {locationDisplayValue || "Add location"}
+              </div>
+            )}
+          </div>
+
+          {/* Year */}
+          <div
+            className={`spec-item-edit${editingSpecBar === "year" ? " editing" : ""}`}
+            onClick={() => editingSpecBar !== "year" && setEditingSpecBar("year")}
+          >
+            <span className="ec-badge">
+              <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
+              <span className="ec-txt">Edit</span>
+            </span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Year</span>
+            <input
+              type="number"
+              className="spec-inp-inline"
+              value={detailsForm.yearBuilt ?? ""}
+              readOnly={editingSpecBar !== "year"}
+              autoFocus={editingSpecBar === "year"}
+              placeholder="Add year"
+              min={1800}
+              max={new Date().getFullYear()}
+              onChange={e => setDetailsForm(prev => ({ ...prev, yearBuilt: e.target.value }))}
+              onBlur={e => {
+                const v = e.target.value.trim()
+                const parsed = parseInt(v, 10)
+                const valid = !isNaN(parsed) && parsed >= 1800 && parsed <= new Date().getFullYear()
+                setDetailsForm(prev => ({ ...prev, yearBuilt: v }))
+                saveSpecBarField("project_year", valid ? String(parsed) : "")
+              }}
+              onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur() }}
+              onClick={e => { if (editingSpecBar === "year") e.stopPropagation() }}
+            />
+          </div>
+
+          {/* Project Type */}
+          <div
+            className={`spec-item-edit${editingSpecBar === "type" ? " editing" : ""}`}
+            data-submit-highlight={highlightMissingFields && !(detailsForm.category || detailsForm.projectType) ? "true" : undefined}
+            style={{ position: "relative" }}
+            onClick={() => editingSpecBar !== "type" && setEditingSpecBar("type")}
+          >
+            <span className="ec-badge">
+              <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
+              <span className="ec-txt">Edit</span>
+            </span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Type</span>
+            <div className="arco-card-title" style={{ color: projectTypeLabel ? undefined : "#b0b0ae" }}>
+              {projectTypeLabel || "Select type"}
+            </div>
+            {editingSpecBar === "type" && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null) }} />
+                <div className="dd-panel" style={{ maxHeight: 320, overflowY: "auto" }}>
+                  {categoryOptions.map(cat => {
+                    const subtypes = projectTypeOptionsByCategory[cat.value] ?? []
+                    return (
+                      <div key={cat.value}>
+                        {subtypes.length > 0 ? (
+                          <>
+                            <div className="dd-group-label">{cat.label}</div>
+                            {subtypes.map(opt => (
+                              <div
+                                key={opt.value}
+                                className={`dd-row${opt.value === detailsForm.projectType ? " sel" : ""}`}
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  setDetailsForm(prev => ({ ...prev, projectType: opt.value, category: cat.value }))
+                                  setEditingSpecBar(null)
+                                  void saveFieldDirect({ project_type_category_id: opt.value })
+                                }}
+                              >
+                                <span>{opt.label}</span>
+                                {opt.value === detailsForm.projectType && <span className="dd-check">✓</span>}
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <div
+                            className={`dd-row${cat.value === detailsForm.projectType ? " sel" : ""}`}
+                            onClick={e => {
+                              e.stopPropagation()
+                              setDetailsForm(prev => ({ ...prev, projectType: cat.value, category: cat.value }))
+                              setEditingSpecBar(null)
+                              void saveFieldDirect({ project_type_category_id: cat.value })
+                            }}
+                          >
+                            <span>{cat.label}</span>
+                            {cat.value === detailsForm.projectType && <span className="dd-check">✓</span>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Scope */}
+          <div
+            className={`spec-item-edit${editingSpecBar === "scope" ? " editing" : ""}`}
+            data-submit-highlight={highlightMissingFields && !specScope ? "true" : undefined}
+            style={{ position: "relative" }}
+            onClick={() => editingSpecBar !== "scope" && setEditingSpecBar("scope")}
+          >
+            <span className="ec-badge">
+              <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
+              <span className="ec-txt">Edit</span>
+            </span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Scope</span>
+            <div className="arco-card-title" style={{ color: specScope ? undefined : "#b0b0ae" }}>
+              {specScope || "Select scope"}
+            </div>
+            {editingSpecBar === "scope" && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null) }} />
+                <div className="dd-panel">
+                  {SCOPE_OPTIONS.map(opt => (
                     <div
-                      className={`body-small rounded-md border p-4 ${
-                        detailsFeedback.type === "success"
-                          ? "border-green-200 bg-green-50 text-green-700"
-                          : "border-red-200 bg-red-50 text-red-700"
-                      }`}
+                      key={opt}
+                      className={`dd-row${opt === specScope ? " sel" : ""}`}
+                      onClick={e => { e.stopPropagation(); setSpecScope(opt); saveSpecBarField("project_type", opt) }}
                     >
-                      {detailsFeedback.message}
+                      <span>{opt}</span>
+                      {opt === specScope && <span className="dd-check">✓</span>}
                     </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Style */}
+          <div
+            className={`spec-item-edit${editingSpecBar === "style" ? " editing" : ""}`}
+            data-submit-highlight={highlightMissingFields && !detailsForm.projectStyle ? "true" : undefined}
+            style={{ position: "relative" }}
+            onClick={() => editingSpecBar !== "style" && setEditingSpecBar("style")}
+          >
+            <span className="ec-badge">
+              <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
+              <span className="ec-txt">Edit</span>
+            </span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Style</span>
+            <div className="arco-card-title" style={{ color: styleLabel ? undefined : "#b0b0ae" }}>
+              {styleLabel || "Select style"}
+            </div>
+            {editingSpecBar === "style" && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null) }} />
+                <div className="dd-panel">
+                  {sortedProjectStyleOptions.map(opt => (
+                    <div
+                      key={opt.value}
+                      className={`dd-row${opt.value === detailsForm.projectStyle ? " sel" : ""}`}
+                      onClick={e => { e.stopPropagation(); setDetailsForm(prev => ({ ...prev, projectStyle: opt.value })); setEditingSpecBar(null); void saveFieldDirect({ style_preferences: opt.value ? [opt.value] : null }) }}
+                    >
+                      <span>{opt.label}</span>
+                      {opt.value === detailsForm.projectStyle && <span className="dd-check">✓</span>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          </div>
+        </div>
+
+        {/* ── Photos ────────────────────────────────────────────────── */}
+        <section id="photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 72, borderBottom: "1px solid #e8e8e6" }}>
+          <div style={{ marginBottom: 28 }}>
+            <h2 className="arco-section-title">Photo Tour</h2>
+            <p className="arco-body-text" style={{ marginTop: 6 }}>Add photos to showcase your project and organise them by space.</p>
+          </div>
+          {renderPhotoTourSection()}
+        </section>
+
+        {/* ── Professionals ─────────────────────────────────────────── */}
+        <section id="professionals" className="wrap" style={{ paddingTop: 72, paddingBottom: 120 }}>
+          <div style={{ marginBottom: 40 }}>
+            <h2 className="arco-section-title">Credited Professionals</h2>
+            <p className="arco-body-text" style={{ marginTop: 6, maxWidth: 600 }}>
+              The trusted team behind this project. Click any field to edit.
+            </p>
+          </div>
+
+          {professionalsError && (
+            <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", color: "#92400e", borderRadius: 4, padding: "10px 14px", marginBottom: 20, fontSize: 13 }}>
+              {professionalsError}
+            </div>
+          )}
+
+          <div className="credits-grid">
+            {flatInvites.map(inv => {
+              const initials = inv.companyName
+                ? (inv.companyName.split(" ").filter(Boolean).length >= 2
+                    ? inv.companyName.split(" ").filter(Boolean).slice(0, 2).map((w: string) => w[0]).join("")
+                    : inv.companyName.substring(0, 2))
+                : inv.serviceName.substring(0, 2)
+              const isEditingService = editingInviteField?.inviteId === inv.id && editingInviteField.field === "service"
+              const isEditingCompany = editingInviteField?.inviteId === inv.id && editingInviteField.field === "company"
+              const isEditingEmail   = editingInviteField?.inviteId === inv.id && editingInviteField.field === "email"
+              const isConfirmingDelete = confirmDeleteInviteId === inv.id
+              // Owner card: service dropdown uses company's services; non-owner uses all project services
+              // Owner → owner company services; Arco company with services → that company's services; otherwise → all
+              const serviceDropdownOptions = inv.isOwner
+                ? ownerCompanyServices
+                : (inv.companyId && inviteCompanyServices[inv.companyId]?.length)
+                  ? inviteCompanyServices[inv.companyId]
+                  : professionalServices
+              return (
+                <div key={inv.id} className="credit-card-edit" style={{ overflow: isConfirmingDelete ? "visible" : undefined }}>
+                  <span className="ec-badge">
+                    <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+                    <span className="ec-txt">Edit</span>
+                  </span>
+                  {/* Delete button — only for non-owner cards */}
+                  {!inv.isOwner && (
+                    <button
+                      className="card-del"
+                      onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(inv.id) }}
+                      aria-label="Remove"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   )}
 
-                  {detailsLoadError && !detailsLoading ? (
-                    <div className="rounded-md border border-red-200 bg-red-50 p-6 body-small text-red-700">
-                      {detailsLoadError}
-                    </div>
-                  ) : detailsLoading ? (
-                    <div className="py-12 text-center text-text-secondary">Loading project details…</div>
-                  ) : (
-                    <div className="space-y-12">
-                      <section className="space-y-6">
-                        <div>
-                          <h3 className="heading-4 text-foreground">Project basics</h3>
-                          <p className="body-small text-text-secondary">
-                            Update the core classification of your project.
-                          </p>
-                        </div>
-                        <ProjectBasicsFields
-                          formData={detailsForm}
-                          validationErrors={detailsErrors}
-                          categoryOptions={categoryOptions}
-                          projectTypeOptions={projectTypeOptions}
-                          buildingTypeOptions={sortedBuildingTypeOptions}
-                          projectStyleOptions={sortedProjectStyleOptions}
-                          openDropdown={detailsOpenDropdown}
-                          setOpenDropdown={setDetailsOpenDropdown}
-                          onDropdownSelect={handleDropdownSelect}
-                          isLoadingTaxonomy={isLoadingTaxonomy}
-                          taxonomyError={taxonomyError}
-                          projectTaxonomyError={projectTaxonomyError}
-                        />
-                      </section>
-
-                      <section className="space-y-6">
-                        <div>
-                          <h3 className="heading-4 text-foreground">Features</h3>
-                          <p className="body-small text-text-secondary">
-                            Highlight the location and material characteristics that define this project.
-                          </p>
-                        </div>
-                        <ProjectFeaturesFields
-                          locationItems={locationFeaturesData}
-                          materialItems={materialFeaturesData}
-                          selectedLocationFeatures={detailsForm.locationFeatures}
-                          selectedMaterialFeatures={detailsForm.materialFeatures}
-                          onToggle={handleCheckboxChange}
-                          validationErrors={detailsErrors}
-                          projectTaxonomyError={projectTaxonomyError}
-                        />
-                      </section>
-
-                      <section className="space-y-6">
-                        <div>
-                          <h3 className="heading-4 text-foreground">Project metrics</h3>
-                          <p className="body-small text-text-secondary">
-                            Capture scale, investment level, and timeline details.
-                          </p>
-                        </div>
-                        <ProjectMetricsFields
-                          formData={detailsForm}
-                          validationErrors={detailsErrors}
-                          sizeOptions={sortedSizeOptions}
-                          budgetOptions={sortedBudgetOptions}
-                          openDropdown={detailsOpenDropdown}
-                          setOpenDropdown={setDetailsOpenDropdown}
-                          onDropdownSelect={handleDropdownSelect}
-                          onInputChange={handleInputChange}
-                        />
-                      </section>
-
-                      <section className="space-y-6">
-                        <div>
-                          <h3 className="heading-4 text-foreground">Storytelling</h3>
-                          <p className="body-small text-text-secondary">
-                            Craft a narrative that helps prospects understand the scope and highlights.
-                          </p>
-                        </div>
-                        <ProjectNarrativeFields
-                          formData={detailsForm}
-                          validationErrors={detailsErrors}
-                          onInputChange={handleInputChange}
-                          editor={descriptionEditor}
-                          onCommand={applyDescriptionFormatting}
-                          plainTextLength={descriptionPlainTextLength}
-                          wordCount={descriptionWordCount}
-                          minDescriptionLength={MIN_DESCRIPTION_LENGTH}
-                          maxTitleLength={MAX_TITLE_LENGTH}
-                        />
-                      </section>
-
-                      {/* Save Button - Sticky on Mobile */}
-                      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-border md:static md:border-t md:pt-6 md:mt-6 md:flex md:justify-end z-10">
-                        <Button variant="secondary" size="sm" onClick={() => void handleSaveDetails()} disabled={detailsSaving} className="w-full md:w-auto">
-                          {detailsSaving ? "Saving…" : "Save details"}
-                        </Button>
+                  {/* Delete confirmation overlay */}
+                  {isConfirmingDelete && (
+                    <div className="card-del-confirm">
+                      <p>Delete?</p>
+                      <div className="photo-del-confirm-btns">
+                        <button className="photo-del-yes" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null); void handleDeleteInvite(inv) }}>Yes</button>
+                        <button className="photo-del-no" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null) }}>No</button>
                       </div>
                     </div>
                   )}
+
+                  {/* Service type — clickable dropdown */}
+                  <div style={{ position: "relative", marginBottom: 16 }}>
+                    <span
+                      className="arco-eyebrow editable-hint"
+                      style={{ display: "inline", cursor: "pointer", paddingBottom: 1, color: inv.serviceIds.length > 0 ? undefined : "#016D75" }}
+                      onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: inv.id, field: "service" }) }}
+                    >
+                      {inv.serviceName}
+                    </span>
+                    {isEditingService && (() => {
+                      const groups: { label: string; items: typeof serviceDropdownOptions }[] = []
+                      const seen = new Set<string>()
+                      for (const s of serviceDropdownOptions) {
+                        const label = (s as any).parentName ?? "Other"
+                        if (!seen.has(label)) { seen.add(label); groups.push({ label, items: [] }) }
+                        groups.find(g => g.label === label)!.items.push(s)
+                      }
+                      return (
+                        <>
+                          <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={() => setEditingInviteField(null)} />
+                          <div className="service-menu">
+                            {groups.map((g, gi) => (
+                              <div key={g.label}>
+                                {gi > 0 && <div className="company-search-divider" />}
+                                <div className="service-group-label">{g.label}</div>
+                                {g.items.map(s => {
+                                  const isSelected = inv.serviceIds.includes(s.id)
+                                  const atMax = !isSelected && inv.serviceIds.length >= 3
+                                  return (
+                                  <button
+                                    key={s.id}
+                                    className={`service-row${isSelected ? " sel" : ""}${atMax ? " disabled" : ""}`}
+                                    disabled={atMax}
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      if (isSelected) {
+                                        // Remove service from array
+                                        const newIds = inv.serviceIds.filter(sid => sid !== s.id)
+                                        if (newIds.length === 0) {
+                                          toast.error("At least one service is required")
+                                          return
+                                        }
+                                        void supabase.from("project_professionals").update({ invited_service_category_ids: newIds } as any).eq("id", inv.id).then(() => refreshProfessionalSection())
+                                      } else {
+                                        if (inv.serviceIds.length >= 3) {
+                                          toast.error("Maximum 3 services per professional")
+                                          return
+                                        }
+                                        void supabase.from("project_professionals").update({ invited_service_category_ids: [...inv.serviceIds, s.id] } as any).eq("id", inv.id).then(() => refreshProfessionalSection())
+                                      }
+                                      setEditingInviteField(null)
+                                    }}
+                                  >
+                                    <span>{s.name}</span>
+                                    {isSelected && (
+                                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                                    )}
+                                  </button>
+                                  )
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Icon */}
+                  <div className="credit-icon">
+                    {inv.companyLogo ? (
+                      <img src={inv.companyLogo} alt={inv.companyName ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                    ) : (
+                      <span className="credit-icon-initials">{initials}</span>
+                    )}
+                  </div>
+
+                  {/* Company name — non-editable for owner, search input for others */}
+                  <div style={{ position: "relative", width: "100%", marginBottom: 6 }}>
+                    <h3
+                      className="arco-h4"
+                      style={{ cursor: inv.isOwner ? undefined : "text", color: !inv.isOwner && !inv.companyName && !isEditingCompany ? "#b0b0ae" : undefined }}
+                      onClick={inv.isOwner ? undefined : (e => {
+                        e.stopPropagation()
+                        if (!isEditingCompany) {
+                          companySearchActive.current = false
+                          selectAllOnMount.current = false
+                          setCompanySearchQuery(inv.companyName ?? "")
+                          setCompanySearchResults([])
+                          setGoogleResults([])
+                          setEditingInviteField({ inviteId: inv.id, field: "company" })
+                        }
+                      })}
+                      onDoubleClick={inv.isOwner ? undefined : (e => {
+                        e.stopPropagation()
+                        if (!isEditingCompany) {
+                          companySearchActive.current = false
+                          selectAllOnMount.current = true
+                          setCompanySearchQuery(inv.companyName ?? "")
+                          setCompanySearchResults([])
+                          setGoogleResults([])
+                          setEditingInviteField({ inviteId: inv.id, field: "company" })
+                        }
+                      })}
+                    >
+                      {inv.isOwner ? (
+                        inv.companyName || "Your company"
+                      ) : isEditingCompany ? (
+                        <>
+                          <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); companySearchActive.current = false }} />
+                          <input
+                            ref={el => {
+                              if (el && selectAllOnMount.current) {
+                                selectAllOnMount.current = false
+                                requestAnimationFrame(() => el.select())
+                              }
+                            }}
+                            autoFocus
+                            className="card-field-inp"
+                            style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit" }}
+                            value={companySearchQuery}
+                            onChange={e => { companySearchActive.current = true; searchCompanies(e.target.value) }}
+                            placeholder="Search company…"
+                            onClick={e => e.stopPropagation()}
+                          />
+                          {companySearchActive.current && (companySearchResults.length > 0 || googleResults.length > 0 || companySearchQuery.trim().length >= 2) && (
+                            <div className="company-search-menu">
+                              {companySearchResults.map(c => (
+                                <button
+                                  key={c.id}
+                                  className={`company-search-row${c.id === inv.companyId ? " sel" : ""}`}
+                                  onClick={e => { e.stopPropagation(); void saveInviteCompany(inv.id, c.id, c.email) }}
+                                >
+                                  <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
+                                  <span className="tier-badge arco">On Arco</span>
+                                </button>
+                              ))}
+                              {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
+                              {googleResults.map(g => (
+                                <button
+                                  key={g.placeId}
+                                  className="company-search-row"
+                                  onClick={e => { e.stopPropagation(); handleSelectTier23Company(inv.id, g.name, g.placeId, g.city) }}
+                                >
+                                  <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
+                                  <span className="tier-badge google">Google</span>
+                                </button>
+                              ))}
+                              {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
+                                <>
+                                  {(companySearchResults.length > 0 || googleResults.length > 0) && <div className="company-search-divider" />}
+                                  <button
+                                    className="company-search-add"
+                                    onClick={e => { e.stopPropagation(); handleSelectTier23Company(inv.id, companySearchQuery.trim(), null, null) }}
+                                  >
+                                    <Plus size={12} />
+                                    <span>Add &ldquo;{companySearchQuery.trim()}&rdquo;</span>
+                                  </button>
+                                </>
+                              )}
+                              {isSearchingCompanies && (
+                                <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching…</div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="editable-hint">{inv.companyName || "Company name"}</span>
+                      )}
+                    </h3>
+                  </div>
+
+                  {/* Subtitle: project count for listed companies, email for unlisted/invited */}
+                  {pendingTier23?.inviteId === inv.id ? (
+                    <p
+                      className="arco-card-subtitle"
+                      style={{ marginBottom: 0, cursor: "pointer", color: "#016D75" }}
+                      onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: inv.id, field: "email" }) }}
+                    >
+                      {isEditingEmail ? (
+                        <input
+                          autoFocus
+                          key={pendingTier23.prefillEmail ?? ""}
+                          className="card-field-inp"
+                          style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
+                          defaultValue={pendingTier23.prefillEmail ?? ""}
+                          onBlur={e => void saveTier23Company(inv.id, e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") void saveTier23Company(inv.id, (e.target as HTMLInputElement).value)
+                            if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
+                          }}
+                          placeholder="Enter email to send invite…"
+                          onClick={e => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className="editable-hint">{pendingTier23.prefillEmail ?? "Enter email to send invite…"}</span>
+                      )}
+                    </p>
+                  ) : inv.companyId && inv.isListedCompany ? (
+                    <p className="arco-card-subtitle" style={{ marginBottom: 0 }}>
+                      {inv.projectsCount} {inv.projectsCount === 1 ? "project" : "projects"}
+                    </p>
+                  ) : inv.email ? (
+                    <p className="arco-card-subtitle" style={{ marginBottom: 0 }}>
+                      {inv.email}
+                    </p>
+                  ) : null}
                 </div>
-              )}
-              {activeSection === "location" && renderLocationSection()}
+              )
+            })}
+
+            {/* Draft card — new professional being added */}
+            {draftCard && (
+              <div className="credit-card-edit">
+                <span className="ec-badge">
+                  <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+                  <span className="ec-txt">Edit</span>
+                </span>
+                <button
+                  className="card-del"
+                  onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null) }}
+                  aria-label="Remove"
+                >
+                  <Trash2 size={13} />
+                </button>
+
+                {/* Service — dropdown */}
+                <div style={{ position: "relative", marginBottom: 16 }}>
+                  <span
+                    className="arco-eyebrow editable-hint"
+                    style={{ display: "inline", cursor: "pointer", paddingBottom: 1, color: draftCard.serviceIds.length > 0 ? undefined : "#016D75" }}
+                    onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: "__draft__", field: "service" }) }}
+                  >
+                    {draftCard.serviceName || "Select service"}
+                  </span>
+                  {editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "service" && (() => {
+                    // Use company-specific services if the draft has an Arco company
+                    const draftCompanyServices = draftCard.companyId && inviteCompanyServices[draftCard.companyId]?.length
+                      ? inviteCompanyServices[draftCard.companyId]
+                      : null
+                    const serviceOptions = draftCompanyServices ?? professionalServices
+                    const groups: { label: string; items: typeof serviceOptions }[] = []
+                    const seen = new Set<string>()
+                    for (const s of serviceOptions) {
+                      const label = (s as any).parentName ?? "Other"
+                      if (!seen.has(label)) { seen.add(label); groups.push({ label, items: [] }) }
+                      groups.find(g => g.label === label)!.items.push(s)
+                    }
+                    return (
+                      <>
+                        <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={() => setEditingInviteField(null)} />
+                        <div className="service-menu">
+                          {groups.map((g, gi) => (
+                            <div key={g.label}>
+                              {gi > 0 && <div className="company-search-divider" />}
+                              <div className="service-group-label">{g.label}</div>
+                              {g.items.map(s => {
+                                const isSelected = draftCard.serviceIds.includes(s.id)
+                                const atMax = !isSelected && draftCard.serviceIds.length >= 3
+                                return (
+                                <button
+                                  key={s.id}
+                                  className={`service-row${isSelected ? " sel" : ""}${atMax ? " disabled" : ""}`}
+                                  disabled={atMax}
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    setDraftCard(d => {
+                                      if (!d) return d
+                                      if (!isSelected && d.serviceIds.length >= 3) {
+                                        toast.error("Maximum 3 services per professional")
+                                        return d
+                                      }
+                                      const newIds = isSelected ? d.serviceIds.filter(sid => sid !== s.id) : [...d.serviceIds, s.id]
+                                      const serviceOrderMap = new Map(serviceOptions.map((ps, i) => [ps.id, i]))
+                                      const sorted = newIds.slice().sort((a, b) => (serviceOrderMap.get(a) ?? 999) - (serviceOrderMap.get(b) ?? 999))
+                                      const names = sorted.map(sid => serviceOptions.find(ps => ps.id === sid)?.name).filter(Boolean) as string[]
+                                      const displayName = names.length <= 1 ? (names[0] ?? "Select service") : `${names[0]} +${names.length - 1}`
+                                      return { ...d, serviceIds: newIds, serviceName: displayName }
+                                    })
+                                    setEditingInviteField(null)
+                                  }}
+                                >
+                                  <span>{s.name}</span>
+                                  {isSelected && (
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                                  )}
+                                </button>
+                                )
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+
+                {/* Icon */}
+                <div className="credit-icon">
+                  {draftCard.companyLogo ? (
+                    <img src={draftCard.companyLogo} alt={draftCard.companyName} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                  ) : (
+                    <span className="credit-icon-initials" style={{ color: draftCard.companyName ? undefined : "#d4d4d2" }}>
+                      {draftCard.companyName
+                        ? draftCard.companyName.split(" ").filter(Boolean).slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()
+                        : "?"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Company name — search */}
+                <div style={{ position: "relative", width: "100%", marginBottom: 6 }}>
+                  <h3
+                    className="arco-h4"
+                    style={{ cursor: "text", color: draftCard.companyName && !(editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "company") ? undefined : "#b0b0ae" }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (!(editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "company")) {
+                        companySearchActive.current = false
+                        selectAllOnMount.current = false
+                        setCompanySearchQuery(draftCard.companyName)
+                        setCompanySearchResults([])
+                        setGoogleResults([])
+                        setEditingInviteField({ inviteId: "__draft__", field: "company" })
+                      }
+                    }}
+                    onDoubleClick={e => {
+                      e.stopPropagation()
+                      companySearchActive.current = false
+                      selectAllOnMount.current = true
+                      setCompanySearchQuery(draftCard.companyName)
+                      setCompanySearchResults([])
+                      setGoogleResults([])
+                      setEditingInviteField({ inviteId: "__draft__", field: "company" })
+                    }}
+                  >
+                    {editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "company" ? (
+                      <>
+                        <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); companySearchActive.current = false }} />
+                        <input
+                          ref={el => {
+                            if (el && selectAllOnMount.current) {
+                              selectAllOnMount.current = false
+                              requestAnimationFrame(() => el.select())
+                            }
+                          }}
+                          autoFocus
+                          className="card-field-inp"
+                          style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit" }}
+                          value={companySearchQuery}
+                          onChange={e => { companySearchActive.current = true; searchCompanies(e.target.value) }}
+                          placeholder="Search company…"
+                          onClick={e => e.stopPropagation()}
+                        />
+                        {companySearchActive.current && (companySearchResults.length > 0 || googleResults.length > 0 || companySearchQuery.trim().length >= 2) && (
+                          <div className="company-search-menu">
+                            {companySearchResults.map(c => (
+                              <button
+                                key={c.id}
+                                className="company-search-row"
+                                onClick={e => { e.stopPropagation(); void saveDraftCardWithCompany(c.id, c.email) }}
+                              >
+                                <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
+                                <span className="tier-badge arco">On Arco</span>
+                              </button>
+                            ))}
+                            {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
+                            {googleResults.map(g => (
+                              <button
+                                key={g.placeId}
+                                className="company-search-row"
+                                onClick={e => { e.stopPropagation(); setDraftCard(d => d ? { ...d, companyName: g.name } : d); handleSelectTier23Company("__draft__", g.name, g.placeId, g.city) }}
+                              >
+                                <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
+                                <span className="tier-badge google">Google</span>
+                              </button>
+                            ))}
+                            {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
+                              <>
+                                {(companySearchResults.length > 0 || googleResults.length > 0) && <div className="company-search-divider" />}
+                                <button
+                                  className="company-search-add"
+                                  onClick={e => { e.stopPropagation(); setDraftCard(d => d ? { ...d, companyName: companySearchQuery.trim() } : d); handleSelectTier23Company("__draft__", companySearchQuery.trim(), null, null) }}
+                                >
+                                  <Plus size={12} />
+                                  <span>Add &ldquo;{companySearchQuery.trim()}&rdquo;</span>
+                                </button>
+                              </>
+                            )}
+                            {isSearchingCompanies && (
+                              <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching…</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="editable-hint">{draftCard.companyName || "Company name"}</span>
+                    )}
+                  </h3>
+                </div>
+
+                {/* Email — only shown for tier 2/3 (Places / manual) companies */}
+                {pendingTier23?.inviteId === "__draft__" && (
+                  <p
+                    className="arco-card-subtitle"
+                    style={{ marginBottom: 0, cursor: "pointer", color: "#016D75" }}
+                    onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: "__draft__", field: "email" }) }}
+                  >
+                    {editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "email" ? (
+                      <input
+                        autoFocus
+                        key={pendingTier23.prefillEmail ?? ""}
+                        className="card-field-inp"
+                        style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
+                        defaultValue={pendingTier23.prefillEmail ?? draftCard.email}
+                        onBlur={e => {
+                          const val = e.target.value.trim()
+                          void saveTier23Company("__draft__", val)
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            const val = (e.target as HTMLInputElement).value.trim()
+                            void saveTier23Company("__draft__", val)
+                          }
+                          if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
+                        }}
+                        placeholder="Enter email to send invite…"
+                        onClick={e => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="editable-hint">{pendingTier23.prefillEmail ?? "Enter email to send invite…"}</span>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Add Professional card */}
+            <div
+              className="add-pro-tile"
+              onClick={() => { if (!draftCard) setDraftCard({ serviceIds: [], serviceName: "", companyName: "", companyLogo: null, email: "" }) }}
+              style={draftCard ? { opacity: 0.4, cursor: "default" } : undefined}
+            >
+              <Plus size={18} className="add-pro-icon" style={{ color: "#a1a1a0", marginBottom: 4, transition: "color .18s" }} />
+              <span className="add-pro-label" style={{ fontSize: 12, color: "#a1a1a0", letterSpacing: ".03em", fontWeight: 400, transition: "color .18s" }}>Add professional</span>
             </div>
           </div>
-        </div>
-      </main>
+
+          {/* Dedup warning dialog */}
+          {dupWarning && (
+            <div className="popup-overlay" onClick={() => setDupWarning(null)}>
+              <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+                <div className="popup-header">
+                  <h3 className="arco-section-title">Company already exists</h3>
+                  <button type="button" className="popup-close" onClick={() => setDupWarning(null)} aria-label="Close">✕</button>
+                </div>
+                <p className="arco-body-text" style={{ marginBottom: 16 }}>
+                  A company with this name already exists. Would you like to link the existing company instead?
+                </p>
+
+                {/* Company preview */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "var(--arco-off-white)", borderRadius: 6, marginBottom: 20 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+                    {dupWarning.existingLogo ? (
+                      <img src={dupWarning.existingLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <span style={{ fontSize: 14, fontWeight: 300, color: "var(--arco-mid)" }}>
+                        {dupWarning.existingName.split(" ").filter(Boolean).length >= 2
+                          ? dupWarning.existingName.split(" ")[0][0] + dupWarning.existingName.split(" ")[1][0]
+                          : dupWarning.existingName.substring(0, 2)}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "var(--arco-black)" }}>{dupWarning.existingName}</div>
+                    <div style={{ fontSize: 12, color: "var(--arco-mid-grey)" }}>
+                      {dupWarning.existingProjectCount} {dupWarning.existingProjectCount === 1 ? "project" : "projects"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="popup-actions">
+                  <button className="btn-tertiary" onClick={() => void handleDupForceCreate()} style={{ flex: 1 }}>
+                    Create new
+                  </button>
+                  <button className="btn-primary" onClick={() => void handleDupLinkExisting()} style={{ flex: 1 }}>
+                    Link existing
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+      </div>
+
+      {/* ── Delete project ─────────────────────────────────────── */}
+      {!isAdminReview && (
+        <section className="wrap" style={{ padding: "0 60px 60px" }}>
+          <hr style={{ border: "none", borderTop: "1px solid var(--arco-rule)", margin: "0 0 24px" }} />
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 13, fontWeight: 300, padding: 0,
+              color: "#dc2626", background: "none",
+              border: "none", cursor: "pointer",
+            }}
+          >
+            <Trash2 size={14} />
+            Delete project
+          </button>
+        </section>
+      )}
 
       <Footer maxWidth="max-w-7xl" />
 
-      {/* Status Modal */}
+      {/* ── Modals ──────────────────────────────────────────────────── */}
       <ListingStatusModal
         open={showStatusModal}
         onClose={handleCloseStatusModal}
@@ -2688,184 +4940,445 @@ export default function ListingEditorPage() {
         statusOptions={statusOptions}
         saveDisabled={!canSaveStatus}
         isPendingAdminReview={isPendingAdminReview}
+        isDraft={projectStatus === "draft"}
+        onSubmitForReview={handleSubmitForReview}
+        isSubmittingForReview={isSubmittingForReview}
         limitReachedForNewActivation={limitReachedForNewActivation}
-        activeStatusValues={ACTIVE_STATUS_VALUES}
       />
 
-      <Dialog open={showEditConfirmModal} onOpenChange={setShowEditConfirmModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit this listing?</DialogTitle>
-          </DialogHeader>
-          <p className="body-small text-text-secondary">
-            Making edits will require admin approval again. The listing will be moved to draft status and needs to be reviewed before it can be published.
-          </p>
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              variant="tertiary"
-              onClick={() => setShowEditConfirmModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleEditListing}
-            >
-              Continue editing
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {featurePhotoSelectorModal}
 
-      <Dialog open={isServiceModalOpen} onOpenChange={handleServiceModalOpenChange}>
-        <DialogContent className="max-w-2xl sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Select professional services</DialogTitle>
-          </DialogHeader>
-          {professionalServices.length === 0 ? (
-            <div className="rounded-md border border-border bg-surface p-4 body-small text-text-secondary">
-              Professional services are not available right now. Please try again later.
-            </div>
-          ) : (
-            <div className="max-h-[60vh] overflow-y-auto pr-1">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {professionalServices.map((service) => {
-                  const isSelected = serviceSelectionDraft.includes(service.id)
-                  const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
-                  return (
-                    <button
-                      key={service.id}
-                      type="button"
-                      onClick={() => toggleServiceInDraft(service.id)}
-                      aria-pressed={isSelected}
-                      className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
-                        isSelected ? "border-foreground bg-surface" : "border-border bg-white hover:border-border"
-                      }`}
-                    >
-                      <IconComponent
-                        aria-hidden
-                        className={`mb-3 h-6 w-6 ${isSelected ? "text-foreground" : "text-foreground"}`}
-                      />
-                      <span className="mt-2 body-small font-medium text-foreground">{service.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-          <div className="flex gap-3 pt-4 justify-end">
-            <Button
-              variant="tertiary"
-              size="sm"
-              onClick={() => handleServiceModalOpenChange(false)}
-              disabled={isUpdatingServices}
+      {/* Select services popup */}
+      {isServiceModalOpen && (
+        <div className="popup-overlay" onClick={() => handleServiceModalOpenChange(false)}>
+          <div
+            className="popup-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 640, maxHeight: "80vh", display: "flex", flexDirection: "column", padding: 0 }}
+          >
+            {/* Header — grey background */}
+            <div
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "20px 28px",
+                background: "var(--arco-off-white)", borderRadius: "12px 12px 0 0", flexShrink: 0,
+              }}
             >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void handleSaveServiceSelection()}
-              disabled={isUpdatingServices}
-            >
-              {isUpdatingServices ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              <h3 className="arco-section-title" style={{ margin: 0 }}>Select professional services</h3>
+              <button type="button" className="popup-close" onClick={() => handleServiceModalOpenChange(false)} aria-label="Close">
+                ✕
+              </button>
+            </div>
 
-      <Dialog open={inviteDialogOpen} onOpenChange={handleInviteDialogChange}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingInviteId ? "Update invite" : "Invite professional"}</DialogTitle>
-            {inviteServiceId && (
-              <p className="mt-1 body-small text-text-secondary">
-                Service: {professionalServices.find(s => s.id === inviteServiceId)?.name}
-              </p>
-            )}
-          </DialogHeader>
-          {inviteError && (
-            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 body-small text-red-700">{inviteError}</div>
-          )}
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="invite-email" className="mb-2 block body-small font-medium text-foreground">
-                Company email address
-              </label>
-              <input
-                id="invite-email"
-                type="email"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                disabled={isInviteMutating}
-                placeholder="name@company.com"
-                className={`body-small w-full rounded-md border px-3 py-2 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
-                  inviteError ? 'border-red-300' : 'border-border'
-                } disabled:cursor-not-allowed disabled:opacity-50`}
-              />
-              {inviteError && (
-                <p className="mt-2 body-small text-red-600">
-                  {inviteError}
+            {/* Scrollable body */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 28px 28px" }}>
+              {professionalServices.length === 0 ? (
+                <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>
+                  Professional services are not available right now. Please try again later.
+                </p>
+              ) : (
+                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+                  {professionalServices.map((service) => {
+                    const isSelected = serviceSelectionDraft.includes(service.id)
+                    const IconComponent = resolveProfessionalServiceIcon(service.slug, service.parentName)
+                    return (
+                      <button
+                        key={service.id}
+                        type="button"
+                        onClick={() => toggleServiceInDraft(service.id)}
+                        aria-pressed={isSelected}
+                        style={{
+                          display: "flex", flexDirection: "column", padding: 14, borderRadius: 8,
+                          border: isSelected ? "2px solid var(--arco-black)" : "2px solid var(--arco-light-grey)",
+                          background: isSelected ? "var(--arco-off-white)" : "#fff",
+                          textAlign: "left", cursor: "pointer", transition: "border-color 0.15s",
+                        }}
+                      >
+                        <IconComponent aria-hidden style={{ width: 22, height: 22, marginBottom: 10 }} />
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{service.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Sticky footer */}
+            <div
+              style={{
+                display: "flex", gap: 10, justifyContent: "flex-end",
+                padding: "16px 28px", borderTop: "1px solid var(--arco-rule)",
+                background: "var(--arco-off-white)", borderRadius: "0 0 12px 12px", flexShrink: 0,
+              }}
+            >
+              <button type="button" className="btn-tertiary" onClick={() => handleServiceModalOpenChange(false)} disabled={isUpdatingServices} style={{ fontSize: 14, padding: "10px 20px" }}>
+                Cancel
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => void handleSaveServiceSelection()} disabled={isUpdatingServices} style={{ fontSize: 14, padding: "10px 20px" }}>
+                {isUpdatingServices ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite professional popup */}
+      {inviteDialogOpen && (
+        <div className="popup-overlay" onClick={() => handleInviteDialogChange(false)}>
+          <div
+            className="popup-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 440, display: "flex", flexDirection: "column", padding: 0 }}
+          >
+            {/* Header — grey background */}
+            <div
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "20px 28px",
+                background: "var(--arco-off-white)", borderRadius: "12px 12px 0 0", flexShrink: 0,
+              }}
+            >
+              <h3 className="arco-section-title" style={{ margin: 0 }}>{editingInviteId ? "Update invite" : "Invite professional"}</h3>
+              <button type="button" className="popup-close" onClick={() => handleInviteDialogChange(false)} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: "12px 28px 28px" }}>
+              {inviteServiceId && (
+                <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 16 }}>
+                  Service: {professionalServices.find(s => s.id === inviteServiceId)?.name}
                 </p>
               )}
-              <p className="mt-2 body-small text-text-secondary">
-                No invites are sent until the project is approved by Arco.
-              </p>
+
+              {inviteError && (
+                <div style={{ marginBottom: 16, padding: 12, borderRadius: 6, background: "#fef2f2", border: "1px solid #fecaca", fontSize: 13, color: "#b91c1c" }}>
+                  {inviteError}
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="invite-email" style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  Company email address
+                </label>
+                <input
+                  id="invite-email"
+                  type="email"
+                  className="form-input"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  disabled={isInviteMutating}
+                  placeholder="name@company.com"
+                  style={{ marginBottom: 0 }}
+                />
+                <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginTop: 8, fontSize: 13 }}>
+                  No invites are sent until the project is approved by Arco.
+                </p>
+              </div>
+            </div>
+
+            {/* Sticky footer */}
+            <div
+              style={{
+                display: "flex", gap: 10, justifyContent: "flex-end",
+                padding: "16px 28px", borderTop: "1px solid var(--arco-rule)",
+                background: "var(--arco-off-white)", borderRadius: "0 0 12px 12px", flexShrink: 0,
+              }}
+            >
+              <button type="button" className="btn-tertiary" onClick={() => handleInviteDialogChange(false)} disabled={isInviteMutating} style={{ fontSize: 14, padding: "10px 20px" }}>
+                Cancel
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => void handleInviteSubmit()} disabled={isInviteMutating} style={{ fontSize: 14, padding: "10px 20px" }}>
+                {isInviteMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add to project
+              </button>
             </div>
           </div>
-          <div className="flex gap-3 pt-4 justify-end">
-            <Button
-              variant="tertiary"
-              size="sm"
-              onClick={() => handleInviteDialogChange(false)}
-              disabled={isInviteMutating}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void handleInviteSubmit()}
-              disabled={isInviteMutating}
-            >
-              {isInviteMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add to project
-            </Button>
+        </div>
+      )}
+
+      {/* ── Submit for review popup ──────────────────────────── */}
+      {showSubmitReviewPopup && (() => {
+        const title = detailsForm.projectTitle?.trim()
+        const desc = descriptionPlainText?.trim()
+        const location = detailsForm.city?.trim()
+        const type = detailsForm.category || detailsForm.projectType
+        const scope = specScope
+        const style = detailsForm.projectStyle
+        const photoCount = uploadedPhotos.length
+        const taggedPhotoIds = new Set<string>()
+        for (const photos of Object.values(featurePhotos)) {
+          for (const p of photos) taggedPhotoIds.add(p.id)
+        }
+        const taggedCount = taggedPhotoIds.size
+        const profCount = flatInvites.length
+
+        const required = [
+          { label: "Project name", ok: Boolean(title) },
+          { label: "Description", ok: Boolean(desc) },
+          { label: "Location", ok: Boolean(location) },
+          { label: "Type", ok: Boolean(type) },
+          { label: "Scope", ok: Boolean(scope) },
+          { label: "Style", ok: Boolean(style) },
+          { label: "Minimum 5 photos", ok: photoCount >= 5 },
+        ]
+        const allRequiredMet = required.every(r => r.ok)
+
+        const recommendations = [
+          { label: "Add 20+ photos for a complete project showcase", ok: photoCount >= 20 },
+          { label: "Tag photos to spaces for a guided photo tour", ok: photoCount > 0 && taggedCount === photoCount },
+          { label: "Credit 5+ professionals to increase project visibility", ok: profCount >= 5 },
+        ]
+
+        return (
+          <div className="popup-overlay" onClick={() => setShowSubmitReviewPopup(false)}>
+            <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">Submit for review</h3>
+                <button type="button" className="popup-close" onClick={() => setShowSubmitReviewPopup(false)} aria-label="Close">✕</button>
+              </div>
+
+              {/* Required fields */}
+              <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--arco-mid-grey)", marginBottom: 12 }}>Required</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                {required.map(r => (
+                  <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 300, color: r.ok ? "var(--arco-mid-grey)" : "#dc2626" }}>
+                    {r.ok ? (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6" /></svg>
+                    )}
+                    {r.label}
+                  </div>
+                ))}
+              </div>
+
+              {/* Recommendations */}
+              <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--arco-mid-grey)", marginBottom: 12 }}>Recommended</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                {recommendations.map(r => (
+                  <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 300, color: r.ok ? "var(--arco-mid-grey)" : "var(--arco-mid-grey)" }}>
+                    {r.ok ? (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#d4d4d2" strokeWidth="2" strokeLinecap="round"><circle cx="8" cy="8" r="6" /></svg>
+                    )}
+                    {r.label}
+                  </div>
+                ))}
+              </div>
+
+              {/* Actions */}
+              <div className="popup-actions">
+                <button className="btn-tertiary" onClick={() => { setShowSubmitReviewPopup(false); if (!allRequiredMet) setHighlightMissingFields(true) }} style={{ flex: 1 }}>
+                  Back to editing
+                </button>
+                <button
+                  className="btn-primary"
+                  disabled={!allRequiredMet || isSubmittingForReview}
+                  onClick={handleSubmitForReview}
+                  style={{ flex: 1 }}
+                >
+                  {isSubmittingForReview ? "Submitting…" : "Submit"}
+                </button>
+              </div>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        )
+      })()}
 
-      {/* Mobile Navigation Drawer */}
-      <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <DialogContent className="max-w-sm">
-          <div className="space-y-4">
-            {/* Navigation Items */}
-            <div className="space-y-2">
-              {sidebarItems.map((item) => {
-                const IconComponent = item.icon
-                const isActive = activeSection === item.id
-
+      {/* ── Admin rejection modal ─────────────────────────────── */}
+      {showRejectModal && (
+        <div className="popup-overlay" onClick={() => { if (!isRejecting) { setShowRejectModal(false); setRejectionReason(""); setSelectedRejectionReasons([]) } }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Reject project</h3>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={() => { setShowRejectModal(false); setRejectionReason(""); setSelectedRejectionReasons([]) }}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
+              Select one or more reasons for rejecting this project.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              {REJECTION_REASONS.map((reason) => {
+                const isSelected = selectedRejectionReasons.includes(reason)
                 return (
                   <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveSection(item.id)
-                      setIsMobileMenuOpen(false)
+                    key={reason}
+                    type="button"
+                    onClick={() => setSelectedRejectionReasons((prev) =>
+                      isSelected ? prev.filter((r) => r !== reason) : [...prev, reason]
+                    )}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 14px", borderRadius: 3, cursor: "pointer",
+                      fontSize: 13, fontWeight: 400, textAlign: "left",
+                      background: isSelected ? "var(--arco-surface)" : "#fff",
+                      border: isSelected ? "1px solid #1c1c1a" : "1px solid #e5e5e4",
+                      color: "#1c1c1a", transition: "border-color .15s, background .15s",
                     }}
-                    className={`body-small w-full flex items-center gap-3 px-[18px] py-3 rounded-full text-left transition-all font-medium ${
-                      isActive ? "bg-quaternary text-quaternary-foreground" : "bg-transparent text-quaternary-foreground hover:bg-quaternary-hover"
-                    }`}
                   >
-                    <IconComponent className="w-5 h-5" />
-                    <span>{item.name}</span>
+                    <span style={{
+                      width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                      border: isSelected ? "none" : "1.5px solid #d4d4d2",
+                      background: isSelected ? "#1c1c1a" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {isSelected && (
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                          <path d="M3 8l4 4 6-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    {reason}
                   </button>
                 )
               })}
+
+              {/* Other — with free text */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (rejectionReason) {
+                      setRejectionReason("")
+                    } else {
+                      setRejectionReason(" ")
+                    }
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, width: "100%",
+                    padding: "10px 14px", borderRadius: rejectionReason ? "3px 3px 0 0" : 3, cursor: "pointer",
+                    fontSize: 13, fontWeight: 400, textAlign: "left",
+                    background: rejectionReason ? "var(--arco-surface)" : "#fff",
+                    border: rejectionReason ? "1px solid #1c1c1a" : "1px solid #e5e5e4",
+                    borderBottom: rejectionReason ? "none" : undefined,
+                    color: "#1c1c1a", transition: "border-color .15s, background .15s",
+                  }}
+                >
+                  <span style={{
+                    width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                    border: rejectionReason ? "none" : "1.5px solid #d4d4d2",
+                    background: rejectionReason ? "#1c1c1a" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {rejectionReason && (
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l4 4 6-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  Other
+                </button>
+                {rejectionReason !== "" && (
+                  <textarea
+                    className="w-full px-3 py-2 text-sm outline-none transition-colors resize-none"
+                    style={{
+                      border: "1px solid #1c1c1a", borderTop: "none",
+                      borderRadius: "0 0 3px 3px", background: "var(--arco-surface)",
+                    }}
+                    rows={2}
+                    placeholder="Describe the reason…"
+                    value={rejectionReason.trim() === "" ? "" : rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    autoFocus
+                  />
+                )}
+              </div>
+            </div>
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                onClick={() => { setShowRejectModal(false); setRejectionReason(""); setSelectedRejectionReasons([]) }}
+                disabled={isRejecting}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => void handleAdminReject()}
+                disabled={isRejecting || (selectedRejectionReasons.length === 0 && !rejectionReason.trim())}
+                style={{ flex: 1 }}
+              >
+                {isRejecting ? "Rejecting…" : "Reject"}
+              </button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
+
+      {/* ── Delete project confirmation ───────────────────────── */}
+      {showDeleteConfirm && (
+        <div className="popup-overlay" onClick={() => { if (!isDeletingProject) { setShowDeleteConfirm(false); setDeleteConfirmText("") } }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Delete project</h3>
+              <button type="button" className="popup-close" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText("") }} aria-label="Close">
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
+              Permanently delete this project and all associated data. This action cannot be undone.
+            </p>
+
+            <div className="popup-banner popup-banner--danger">
+              <AlertTriangle className="popup-banner-icon" />
+              <span>This project will be permanently deleted. This cannot be undone.</span>
+            </div>
+
+            <div className="popup-banner popup-banner--warn">
+              <AlertTriangle className="popup-banner-icon" />
+              <span>This project will disappear from the portfolio of all credited professionals.</span>
+            </div>
+
+            <p className="body-small text-text-secondary mb-3">
+              Type <strong>DELETE</strong> to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
+            />
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText("") }}
+                disabled={isDeletingProject}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteConfirmText !== "DELETE" || isDeletingProject}
+                onClick={() => void handleDeleteProject()}
+                className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
+                  deleteConfirmText === "DELETE"
+                    ? "bg-red-600 text-white"
+                    : "bg-surface text-text-secondary"
+                } ${isDeletingProject ? "opacity-60" : ""}`}
+                style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
+              >
+                {isDeletingProject ? "Deleting…" : "Delete project"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

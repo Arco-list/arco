@@ -1,23 +1,19 @@
 "use client"
 
-import { DashboardHeader } from "@/components/dashboard-header"
+import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { AccountSettingsForm } from "@/components/account-settings-form"
 
 export default function DashboardSettings() {
   return (
-    <div className="flex min-h-screen flex-col bg-surface">
-      <DashboardHeader />
+    <div className="min-h-screen bg-white">
+      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
 
-      <main className="flex-1 pt-20 pb-8">
-        <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <h3 className="heading-4 mb-8 text-foreground">Settings</h3>
+      <div className="wrap" style={{ paddingTop: 120, marginBottom: 60 }}>
+        <AccountSettingsForm />
+      </div>
 
-          <AccountSettingsForm />
-        </div>
-      </main>
-
-      <Footer maxWidth="max-w-7xl" />
+      <Footer />
     </div>
   )
 }

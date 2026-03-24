@@ -3,19 +3,20 @@ import Link from "next/link"
 interface ProfessionalContactProps {
   companyName: string
   officeAddress: string | null
+  city: string | null
   websiteUrl: string | null
 }
 
 export function ProfessionalContact({
   companyName,
   officeAddress,
+  city: cityProp,
   websiteUrl,
 }: ProfessionalContactProps) {
-  // Parse address if available
-  const addressLines = officeAddress ? officeAddress.split('\n').filter(Boolean) : []
-  const city = addressLines[0] ?? null
-  const street = addressLines[1] ?? null
-  const postal = addressLines[2] ?? null
+  // Build display: "street + housenumber, city" — matching company edit page format
+  const city = cityProp ?? null
+  const street = officeAddress?.split(",")[0]?.trim() ?? null
+  const locationDisplay = [street, city].filter(Boolean).join(', ') || null
 
   return (
     <section id="contact" className="contact-section">
@@ -33,14 +34,12 @@ export function ProfessionalContact({
           </div>
 
           {/* Office Location */}
-          {city && (
+          {locationDisplay && (
             <div className="contact-card">
               <span className="arco-eyebrow">Office Location</span>
               <p className="arco-card-title" style={{ margin: '12px 0 4px' }}>
-                {city}
+                {locationDisplay}
               </p>
-              {street && <p className="arco-card-subtitle">{street}</p>}
-              {postal && <p className="arco-card-subtitle">{postal}</p>}
             </div>
           )}
 

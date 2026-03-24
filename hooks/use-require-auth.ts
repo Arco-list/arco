@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/contexts/auth-context";
+import { useLoginModal } from "@/contexts/login-modal-context";
 
 export interface RequireAuthResult {
   isAuthenticated: boolean;
@@ -13,7 +14,7 @@ export interface RequireAuthResult {
 
 export const useRequireAuth = (): RequireAuthResult => {
   const { user } = useAuth();
-  const router = useRouter();
+  const { openLoginModal } = useLoginModal();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -23,9 +24,8 @@ export const useRequireAuth = (): RequireAuthResult => {
   }, [pathname, searchParams]);
 
   const redirectToLogin = useCallback(() => {
-    const loginUrl = `/login?redirectTo=${encodeURIComponent(redirectTarget)}`;
-    router.push(loginUrl);
-  }, [redirectTarget, router]);
+    openLoginModal(redirectTarget);
+  }, [openLoginModal, redirectTarget]);
 
   const ensureAuth = useCallback(() => {
     if (user) {

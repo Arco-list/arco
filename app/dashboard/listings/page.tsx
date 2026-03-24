@@ -1,11 +1,12 @@
 "use client"
 
-import { DashboardHeader } from "@/components/dashboard-header"
+import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, Check, AlertTriangle, X, Info } from "lucide-react"
+import { MoreHorizontal, Check, AlertTriangle, Info, X } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { ImportProjectModal } from "@/components/import-project-modal"
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -23,6 +24,7 @@ import {
   type ListingStatusValue,
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_CHIP_CLASS,
+  PROJECT_STATUS_DOT_CLASS,
   LISTING_STATUS_VALUES,
   ACTIVE_STATUS_VALUES,
   BASIC_ACTIVE_LIMIT,
@@ -33,8 +35,12 @@ import {
   type ContributorStatus,
   CONTRIBUTOR_STATUS_LABELS,
   CONTRIBUTOR_STATUS_CHIP_CLASS,
+  CONTRIBUTOR_STATUS_DOT_CLASS,
   CONTRIBUTOR_STATUS_OPTIONS,
+  OWNER_STATUS_OPTIONS,
 } from "@/lib/contributor-status-config"
+import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
+import { updateCoverPhotoAction } from "@/app/dashboard/company/actions"
 
 type ProjectPhotoRow = Pick<
   Database["public"]["Tables"]["project_photos"]["Row"],
@@ -48,7 +54,7 @@ type ProjectRow = Database["public"]["Tables"]["projects"]["Row"] & {
   }[] | null
   project_professional_id?: string
   project_professional_status?: string
-  invited_service_category_id?: string | null
+  invited_service_category_ids?: string[] | null
 }
 
 type ListingProjectPhoto = {
@@ -64,6 +70,7 @@ type ListingProject = {
   status: ProjectStatus | ContributorStatus
   statusLabel: string
   statusChipClass: string
+  statusDotClass: string
   slug: string | null
   subtitle: string
   styleLabel: string | null
@@ -79,6 +86,8 @@ type ListingProject = {
   projectProfessionalId?: string
   projectProfessionalStatus?: string
   invitedServiceCategory?: string | null
+  rejectionReason?: string | null
+  rawProjectStatus?: string
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -92,7 +101,7 @@ export default function DashboardListingsPage() {
 
   // SECURITY: Validate RLS policies are enforced
   const { isSecure: isRLSSecure, loading: rlsLoading } = useTableRLSValidation("projects", {
-    enabled: process.env.NODE_ENV === "development", // Enable in dev, optional in prod
+    enabled: false, // Disabled: professionals see company-associated projects (not their own client_id), which triggers false positives
   })
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
@@ -120,6 +129,7 @@ export default function DashboardListingsPage() {
   })
   const [contributorStatusModalOpen, setContributorStatusModalOpen] = useState(false)
   const [selectedContributorStatus, setSelectedContributorStatus] = useState<ContributorStatus | "">("")
+  const [importModalOpen, setImportModalOpen] = useState(false)
   // LRU-style cache with size limit to prevent unbounded memory growth
   const taxonomyCacheRef = useRef<{
     styles: Map<string, string>
@@ -130,14 +140,27 @@ export default function DashboardListingsPage() {
   })
   const MAX_CACHE_SIZE = 100 // Reasonable limit for taxonomy options
   const router = useRouter()
-  const { planTier, isPlus, error: entitlementsError } = useCompanyEntitlements()
+  const { planTier, isPlus, canPublishProjects, error: entitlementsError } = useCompanyEntitlements()
   const companyPlan: "basic" | "plus" = planTier ?? "basic"
   const [userId, setUserId] = useState<string | null>(null)
-
+  const [companyId, setCompanyId] = useState<string | null>(null)
+  const [professionalId, setProfessionalId] = useState<string | null>(null)
   // Track in-flight requests to prevent race conditions
   const abortControllerRef = useRef<AbortController | null>(null)
   const requestIdRef = useRef(0)
   const [retryTrigger, setRetryTrigger] = useState(0)
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!openDropdown) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!(e.target as Element).closest(".dropdown-menu")) {
+        setOpenDropdown(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [openDropdown])
 
   useEffect(() => {
     // RACE CONDITION FIX: Cancel any in-flight requests
@@ -189,13 +212,31 @@ export default function DashboardListingsPage() {
         .eq("user_id", authData.user.id)
         .maybeSingle()
 
+      let resolvedCompanyId = professionalData?.company_id ?? null
+      setCompanyId(resolvedCompanyId)
+      setProfessionalId(professionalData?.id ?? null)
+
+      // Fallback: if no professional record, check team membership
       if (!professionalData?.id || professionalError) {
-        if (isActive && !abortController.signal.aborted) {
-          setLoadError("No professional profile found. Please complete your profile setup.")
-          setProjects([])
-          setIsLoading(false)
+        const { data: membership } = await supabase
+          .from("company_members")
+          .select("company_id")
+          .eq("user_id", authData.user.id)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle()
+
+        if (membership?.company_id) {
+          resolvedCompanyId = membership.company_id
+          setCompanyId(resolvedCompanyId)
+        } else {
+          if (isActive && !abortController.signal.aborted) {
+            setLoadError("No professional profile found. Please complete your profile setup.")
+            setProjects([])
+            setIsLoading(false)
+          }
+          return
         }
-        return
       }
 
       // Fetch ALL projects for this COMPANY (not just this professional)
@@ -206,9 +247,9 @@ export default function DashboardListingsPage() {
           project_id,
           status,
           is_project_owner,
-          invited_service_category_id,
-          invited_service_category:categories!project_professionals_invited_service_category_id_fkey(name, slug),
+          invited_service_category_ids,
           professional_id,
+          cover_photo_id,
           projects!inner(
             id,
             title,
@@ -222,12 +263,13 @@ export default function DashboardListingsPage() {
             created_at,
             updated_at,
             project_year,
+            rejection_reason,
             client_id,
             project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
             project_photos(id, url, is_primary, order_index)
           )
         `)
-        .eq("company_id", professionalData.company_id)
+        .eq("company_id", resolvedCompanyId!)
         .neq("status", "rejected")
         .order("created_at", { ascending: false })
 
@@ -245,17 +287,26 @@ export default function DashboardListingsPage() {
         return
       }
 
-      // Transform project_professionals data into project rows
-      const projectRows = (data ?? []).map(pp => ({
+      // Transform project_professionals data into project rows, deduplicating by project_id
+      // (a company can have multiple project_professionals rows for the same project)
+      const projectMap = new Map<string, (typeof data)[number]>()
+      for (const pp of data ?? []) {
+        const existing = projectMap.get(pp.project_id)
+        if (!existing || (pp.is_project_owner && !existing.is_project_owner)) {
+          projectMap.set(pp.project_id, pp)
+        }
+      }
+      const projectRows = Array.from(projectMap.values()).map(pp => ({
         ...pp.projects,
         project_professionals: [{ is_project_owner: pp.is_project_owner }],
         project_professional_id: pp.id,
         project_professional_status: pp.status,
-        invited_service_category_id: pp.invited_service_category_id,
-        invited_service_category: pp.invited_service_category
+        invited_service_category_ids: (pp.invited_service_category_ids as string[] | null) ?? [],
+        contributor_cover_photo_id: pp.cover_photo_id as string | null,
       })) as (ProjectRow & {
         project_type_category: { name: string | null } | null
-        invited_service_category?: { name: string | null } | null
+        invited_service_category_ids?: string[] | null
+        contributor_cover_photo_id: string | null
       })[]
 
       // Collect style IDs that need resolution (styles can't be JOINed due to array column)
@@ -334,19 +385,31 @@ export default function DashboardListingsPage() {
         const isProjectOwner = project.project_professionals?.some((pp) => pp.is_project_owner) ?? false
         const role: "owner" | "contributor" = isProjectOwner ? "owner" : "contributor"
 
-        // For contributors, show their contributor status; for owners, show project status
+        // Show project_professionals status for both owners and contributors
+        // For draft/in_progress/rejected projects, show the project-level status instead
         let statusKey: ProjectStatus | ContributorStatus
         let statusLabel: string
         let statusChipClass: string
+        let statusDotClass: string
 
-        if (role === "contributor" && project.project_professional_status) {
-          statusKey = project.project_professional_status as ContributorStatus
-          statusLabel = CONTRIBUTOR_STATUS_LABELS[statusKey as ContributorStatus] ?? statusKey
-          statusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[statusKey as ContributorStatus] ?? "bg-surface text-text-secondary"
+        const projectStatus = project.status as ProjectStatus
+        const ppStatus = project.project_professional_status as ContributorStatus | undefined
+
+        if (["draft", "in_progress", "rejected"].includes(projectStatus)) {
+          statusKey = projectStatus
+          statusLabel = PROJECT_STATUS_LABELS[projectStatus] ?? projectStatus
+          statusChipClass = PROJECT_STATUS_CHIP_CLASS[projectStatus] ?? "bg-surface text-text-secondary"
+          statusDotClass = PROJECT_STATUS_DOT_CLASS[projectStatus] ?? "bg-muted-foreground"
+        } else if (ppStatus) {
+          statusKey = ppStatus
+          statusLabel = CONTRIBUTOR_STATUS_LABELS[ppStatus] ?? ppStatus
+          statusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[ppStatus] ?? "bg-surface text-text-secondary"
+          statusDotClass = CONTRIBUTOR_STATUS_DOT_CLASS[ppStatus] ?? "bg-muted-foreground"
         } else {
-          statusKey = project.status as ProjectStatus
-          statusLabel = PROJECT_STATUS_LABELS[statusKey as ProjectStatus] ?? statusKey
-          statusChipClass = PROJECT_STATUS_CHIP_CLASS[statusKey as ProjectStatus] ?? "bg-surface text-text-secondary"
+          statusKey = projectStatus
+          statusLabel = PROJECT_STATUS_LABELS[projectStatus] ?? projectStatus
+          statusChipClass = PROJECT_STATUS_CHIP_CLASS[projectStatus] ?? "bg-surface text-text-secondary"
+          statusDotClass = PROJECT_STATUS_DOT_CLASS[projectStatus] ?? "bg-muted-foreground"
         }
 
         const rawPhotos = project.project_photos ?? []
@@ -366,7 +429,12 @@ export default function DashboardListingsPage() {
             return aIndex - bIndex
           })
 
-        const primaryPhoto = normalizedPhotos.find((photo) => photo.isPrimary) ?? normalizedPhotos[0] ?? null
+        // For contributors, prefer their custom cover_photo_id; for owners, use is_primary
+        const contributorCoverPhotoId = project.contributor_cover_photo_id
+        const contributorCoverPhoto = contributorCoverPhotoId
+          ? normalizedPhotos.find((photo) => photo.id === contributorCoverPhotoId)
+          : null
+        const primaryPhoto = contributorCoverPhoto ?? normalizedPhotos.find((photo) => photo.isPrimary) ?? normalizedPhotos[0] ?? null
         const coverImageUrl = primaryPhoto?.url ?? "/placeholder.svg"
         const coverPhotoId = primaryPhoto?.id ?? null
 
@@ -383,12 +451,8 @@ export default function DashboardListingsPage() {
         const projectTypeLabel = project.project_type_category?.name ??
           (project.project_type && !isUuid(project.project_type) ? project.project_type : "")
 
-        const locationParts = [project.address_city, project.address_region].filter(Boolean).join(", ")
-        const subtitlePieces = [styleLabel, projectTypeLabel].filter(Boolean)
-        const styleType = subtitlePieces.join(" ")
-        const subtitle = [styleType, locationParts ? `in ${locationParts}` : null]
-          .filter(Boolean)
-          .join(" ") || "Add more project details"
+        const locationLabel = project.address_city || null
+        const subtitle = [projectTypeLabel, locationLabel].filter(Boolean).join(" · ")
 
         return {
           id: project.id,
@@ -396,10 +460,11 @@ export default function DashboardListingsPage() {
           status: statusKey,
           statusLabel,
           statusChipClass,
+          statusDotClass,
           slug: project.slug ?? null,
           subtitle,
           styleLabel: styleLabel || null,
-          locationLabel: locationParts ? locationParts : null,
+          locationLabel: locationLabel,
           coverImageUrl,
           coverPhotoId,
           photos: normalizedPhotos,
@@ -410,7 +475,9 @@ export default function DashboardListingsPage() {
           hasMetadataError: hasStyleError,
           projectProfessionalId: project.project_professional_id,
           projectProfessionalStatus: project.project_professional_status,
-          invitedServiceCategory: project.invited_service_category?.name || null,
+          invitedServiceCategory: null, // TODO: resolve category names from invited_service_category_ids if needed
+          rejectionReason: project.rejection_reason ?? null,
+          rawProjectStatus: projectStatus,
         }
       })
 
@@ -456,15 +523,10 @@ export default function DashboardListingsPage() {
   }, [])
 
   const handleUpdateStatus = (project: ListingProject) => {
-    if (project.status === "draft") {
-      router.push(`/new-project/details?projectId=${project.id}`)
-      return
-    }
-
+    // All statuses open the modal — draft shows "submit for review" option
     setSelectedProject(project)
-    const initialStatus = isListingStatusValue(project.status) ? project.status : ""
-    setSelectedStatus(initialStatus)
-    setStatusModalOpen(true)
+    setSelectedContributorStatus((project.projectProfessionalStatus as ContributorStatus) || "listed")
+    setContributorStatusModalOpen(true)
     setOpenDropdown(null)
   }
 
@@ -499,14 +561,9 @@ export default function DashboardListingsPage() {
       return
     }
 
-    const statusOption = statusOptions.find((option) => option.value === selectedStatus)
+    const statusOption = LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus)
     if (!statusOption) {
       toast.error("Select a valid status before saving.")
-      return
-    }
-
-    if (statusOption.requiresPlus && !isPlus) {
-      toast.error("Upgrade to Plus to make this project discoverable.")
       return
     }
 
@@ -530,6 +587,7 @@ export default function DashboardListingsPage() {
 
       const newStatusLabel = PROJECT_STATUS_LABELS[selectedStatus as ProjectStatus]
       const newStatusChipClass = PROJECT_STATUS_CHIP_CLASS[selectedStatus as ProjectStatus]
+      const newStatusDotClass = PROJECT_STATUS_DOT_CLASS[selectedStatus as ProjectStatus]
 
       setProjects((prev) =>
         prev.map((project) => {
@@ -542,6 +600,7 @@ export default function DashboardListingsPage() {
             status: selectedStatus,
             statusLabel: newStatusLabel,
             statusChipClass: newStatusChipClass,
+            statusDotClass: newStatusDotClass,
           }
         }),
       )
@@ -571,15 +630,13 @@ export default function DashboardListingsPage() {
     setIsSavingCoverPhoto(true)
 
     try {
-      const { error } = await supabase
-        .from("project_photos")
-        .update({ is_primary: true })
-        .eq("id", selectedCoverPhoto)
-        .eq("project_id", selectedProject.id)
-
-      if (error) {
-        throw error
-      }
+      const result = await updateCoverPhotoAction({
+        projectId: selectedProject.id,
+        photoId: selectedCoverPhoto,
+        role: selectedProject.role,
+        projectProfessionalId: selectedProject.projectProfessionalId,
+      })
+      if (!result.success) throw new Error(result.error)
 
       setProjects((prev) =>
         prev.map((project) => {
@@ -604,6 +661,7 @@ export default function DashboardListingsPage() {
 
       toast.success("Cover photo updated")
       closeCoverPhotoModal()
+      router.refresh()
     } catch (error) {
       console.error("Failed to update cover photo", error)
       toast.error("We couldn't update the cover photo. Please try again.", {
@@ -659,52 +717,40 @@ export default function DashboardListingsPage() {
     }
   }
 
+  const getProjectUrl = (project: ListingProject) => {
+    if (!project.slug) return null
+    const needsPreview = project.status === "draft" || project.status === "in_progress"
+    return `/projects/${project.slug}${needsPreview ? "?preview=1" : ""}`
+  }
+
   const handleCardClick = (project: ListingProject) => {
     if (project.role === "owner") {
-      // If project is draft (never submitted), continue in new-project flow
-      if (project.status === "draft") {
-        router.push(`/new-project/details?projectId=${project.id}`)
-      } else {
-        router.push(`/dashboard/edit/${project.id}`)
-      }
+      router.push(`/dashboard/edit/${project.id}`)
     } else {
-      if (project.slug) {
-        window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer")
+      const url = getProjectUrl(project)
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer")
       }
     }
   }
 
   const handleEditListing = (project: ListingProject) => {
     setOpenDropdown(null)
-    // If project is draft (never submitted), continue in new-project flow
-    if (project.status === "draft") {
-      router.push(`/new-project/details?projectId=${project.id}`)
-    } else {
-      router.push(`/dashboard/edit/${project.id}`)
-    }
+    router.push(`/dashboard/edit/${project.id}`)
   }
 
   const handlePreviewListing = (project: ListingProject) => {
     setOpenDropdown(null)
 
-    if (!project.slug) {
+    const url = getProjectUrl(project)
+    if (!url) {
       toast.error("Preview unavailable", {
         description: "This listing does not have a public link yet.",
       })
       return
     }
 
-    const basePath = `/projects/${project.slug}`
-    const isInReview = project.status === "in_progress"
-    const isLive = project.status === "published" || project.status === "completed"
-    const targetUrl = isInReview ? `${basePath}?preview=1` : basePath
-
-    if (isLive || isInReview) {
-      window.open(targetUrl, "_blank", "noopener,noreferrer")
-      return
-    }
-
-    router.push(targetUrl)
+    window.open(url, "_blank", "noopener,noreferrer")
   }
 
   const handleUpdateContributorStatus = (project: ListingProject) => {
@@ -737,6 +783,7 @@ export default function DashboardListingsPage() {
       // Update local state with new contributor status and derived display fields
       const newStatusLabel = CONTRIBUTOR_STATUS_LABELS[selectedContributorStatus as ContributorStatus]
       const newStatusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[selectedContributorStatus as ContributorStatus]
+      const newStatusDotClass = CONTRIBUTOR_STATUS_DOT_CLASS[selectedContributorStatus as ContributorStatus]
 
       setProjects((prev) =>
         prev.map((p) =>
@@ -746,12 +793,15 @@ export default function DashboardListingsPage() {
                 projectProfessionalStatus: selectedContributorStatus,
                 status: selectedContributorStatus as ContributorStatus,
                 statusLabel: newStatusLabel,
-                statusChipClass: newStatusChipClass
+                statusChipClass: newStatusChipClass,
+                statusDotClass: newStatusDotClass,
               }
             : p
         )
       )
 
+      // Sync company listed status
+      if (companyId) await syncCompanyListedStatus(companyId)
       toast.success("Listing status updated")
       setContributorStatusModalOpen(false)
       setSelectedProject(null)
@@ -792,6 +842,19 @@ export default function DashboardListingsPage() {
         return p.projectYear >= filters.yearFrom && p.projectYear <= filters.yearTo
       })
     }
+
+    // Sort by status priority: action-required first, then active, then inactive
+    const statusOrder: Record<string, number> = {
+      draft: 0,
+      in_progress: 1,
+      invited: 2,
+      rejected: 3,
+      live_on_page: 4,
+      listed: 5,
+      unlisted: 6,
+      archived: 7,
+    }
+    result = [...result].sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99))
 
     return result
   }, [projects, filters])
@@ -846,8 +909,7 @@ export default function DashboardListingsPage() {
     ? isListingStatusValue(selectedProject.status) && ACTIVE_STATUS_VALUES.includes(selectedProject.status)
     : false
 
-  const limitReachedForNewActivation =
-    !isPlus && activeListingsExcludingSelected >= BASIC_ACTIVE_LIMIT && !isSelectedProjectActive
+  const limitReachedForNewActivation = false
 
   const isPendingAdminReview = selectedProject?.status === "in_progress"
 
@@ -856,7 +918,6 @@ export default function DashboardListingsPage() {
         title: selectedProject.title,
         descriptor: selectedProjectDescriptor,
         coverImageUrl: selectedProject.coverImageUrl,
-        planBadgeLabel: isPlus ? "Plus plan" : "Basic plan",
       }
     : null
 
@@ -893,462 +954,447 @@ export default function DashboardListingsPage() {
   }, [])
 
   const selectedStatusOption = LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus)
-  const statusSelectionRequiresUpgrade = selectedStatusOption?.requiresPlus === true && !isPlus
-  const statusSelectionHitsLimit =
-    !isPlus && limitReachedForNewActivation && selectedStatusOption
-      ? ACTIVE_STATUS_VALUES.includes(selectedStatusOption.value)
-      : false
 
   const isValidStatusSelection =
-    !isPendingAdminReview && Boolean(selectedStatusOption) && !statusSelectionRequiresUpgrade && !statusSelectionHitsLimit
+    !isPendingAdminReview && Boolean(selectedStatusOption)
 
   const displayedProjects = filteredProjects
   const hasProjects = projects.length > 0
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
-      <DashboardHeader />
+    <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
+      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
 
-      <main className="flex-1 py-8 pt-20 px-4 md:px-8">
-        <div className="max-w-7xl mx-auto">
-        {entitlementsError && (
-          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 body-small text-amber-800">
-            {entitlementsError}
-          </div>
-        )}
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="flex flex-row items-center justify-between gap-3">
-            <div className="flex-shrink-0">
-              <h4 className="heading-4 text-foreground">Your projects</h4>
-            </div>
-            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-              <Button
-                variant="tertiary"
-                size="sm"
-                onClick={() => setIsFilterOpen(true)}
-                className={hasActiveFilters ? "border-red-500 text-red-600 bg-red-50" : ""}
-              >
-                Filter
-                {hasActiveFilters && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs font-medium bg-red-600 text-white rounded-full">
-                    {filters.statuses.length + filters.roles.length + (filters.keyword ? 1 : 0) + (filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR ? 1 : 0)}
-                  </span>
-                )}
-              </Button>
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/new-project">Add project</Link>
-              </Button>
-            </div>
-          </div>
-
-          {/* Filter Chips */}
-          {hasActiveFilters && (
-            <div className="flex flex-wrap items-center gap-2">
-              {filters.keyword && (
-                <button
-                  onClick={() => handleRemoveFilter("keyword")}
-                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
-                >
-                  <span>&ldquo;{filters.keyword}&rdquo;</span>
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-              {filters.statuses.map((status) => (
-                <button
-                  key={status}
-                  onClick={() => handleRemoveFilter("status", status)}
-                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
-                >
-                  <span>{PROJECT_STATUS_LABELS[status]}</span>
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-              {filters.roles.map((role) => (
-                <button
-                  key={role}
-                  onClick={() => handleRemoveFilter("role", role)}
-                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
-                >
-                  <span>{role === "owner" ? "Project owner" : "Contributor"}</span>
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-              {(filters.yearFrom !== MIN_YEAR || filters.yearTo !== CURRENT_YEAR) && (
-                <button
-                  onClick={() => handleRemoveFilter("year")}
-                  className="body-small inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface rounded-full text-foreground transition-colors"
-                >
-                  <span>
-                    {filters.yearFrom}-{filters.yearTo}
-                  </span>
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-              <button
-                onClick={handleClearAllFilters}
-                className="body-small text-text-secondary hover:text-foreground underline ml-2"
-              >
-                Clear all
-              </button>
-            </div>
+      {/* Page title — matches /projects layout */}
+      <div className="discover-page-title">
+        <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 className="arco-section-title">My projects</h2>
+          {canPublishProjects && hasProjects && (
+            <button onClick={() => setImportModalOpen(true)} className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
+              Publish your project
+            </button>
           )}
         </div>
+      </div>
 
-        {/* SECURITY: RLS Validation Warning */}
-        {!rlsLoading && !isRLSSecure && (
-          <div className="mb-6 rounded-lg border border-red-600 bg-red-50 p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="body-small font-semibold text-red-900 mb-1">
-                  Security Warning: RLS Policy Not Enforced
-                </h3>
-                <p className="body-small text-red-700">
-                  Row-Level Security validation failed for the projects table. This may allow
-                  unauthorized access to project data. Contact your administrator immediately.
+      <main style={{ flex: 1 }}>
+        <div className="discover-results">
+          <div className="wrap">
+
+            {/* Banners */}
+            {entitlementsError && (
+              <div style={{ marginBottom: 20, padding: "10px 14px", borderRadius: 6, border: "1px solid #fde68a", background: "#fffbeb", fontSize: 13, color: "#92400e" }}>
+                {entitlementsError}
+              </div>
+            )}
+            {!rlsLoading && !isRLSSecure && (
+              <div style={{ marginBottom: 20, padding: "12px 14px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fef2f2", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <AlertTriangle style={{ width: 16, height: 16, color: "#dc2626", flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: "#7f1d1d", marginBottom: 2 }}>Security Warning</p>
+                  <p style={{ fontSize: 13, color: "#b91c1c" }}>Row-Level Security validation failed. Contact your administrator immediately.</p>
+                </div>
+              </div>
+            )}
+            {metadataError && (
+              <div style={{ marginBottom: 20, padding: "12px 14px", borderRadius: 6, border: "1px solid #fde68a", background: "#fffbeb", display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flex: 1 }}>
+                  <AlertTriangle style={{ width: 16, height: 16, color: "#d97706", flexShrink: 0, marginTop: 2 }} />
+                  <p style={{ fontSize: 13, color: "#92400e" }}>{metadataError}</p>
+                </div>
+                <button
+                  onClick={handleRetryMetadata}
+                  disabled={isRetrying}
+                  style={{ fontSize: 13, color: "#78350f", background: "none", border: "1px solid #fcd34d", borderRadius: 4, padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}
+                >
+                  {isRetrying ? "Retrying…" : "Retry"}
+                </button>
+              </div>
+            )}
+            {loadError && (
+              <div style={{ marginBottom: 20, padding: "12px 14px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fef2f2", fontSize: 13, color: "#dc2626" }}>
+                {loadError}
+              </div>
+            )}
+
+            {/* Result count */}
+            {!isLoading && hasProjects && (
+              <div className="discover-results-meta">
+                <p className="discover-results-count">
+                  <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
+                    {displayedProjects.length.toLocaleString()}
+                  </strong>{" "}
+                  {displayedProjects.length === 1 ? "project" : "projects"}
                 </p>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* ERROR HANDLING: Metadata Loading Error Banner with Retry */}
-        {metadataError && (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3 flex-1">
-                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="body-small font-semibold text-amber-900 mb-1">
-                    Metadata Loading Error
-                  </h3>
-                  <p className="body-small text-amber-700">
-                    {metadataError}
-                    {projectsWithErrors.size > 0 && (
-                      <span className="block mt-1">
-                        Affected projects: {projectsWithErrors.size}
-                      </span>
-                    )}
-                  </p>
-                </div>
+            {/* Loading skeleton */}
+            {isLoading ? (
+              <div className="discover-grid">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="animate-pulse">
+                    <div style={{ aspectRatio: "4/3", background: "var(--surface)", borderRadius: 4, marginBottom: 12 }} />
+                    <div style={{ height: 15, background: "var(--surface)", borderRadius: 3, width: "70%", marginBottom: 6 }} />
+                    <div style={{ height: 13, background: "var(--surface)", borderRadius: 3, width: "50%" }} />
+                  </div>
+                ))}
               </div>
-              <Button
-                variant="quaternary" size="quaternary"
-                onClick={handleRetryMetadata}
-                disabled={isRetrying}
-                className="ml-4 border-amber-300 text-amber-900 hover:bg-amber-100"
-              >
-                {isRetrying ? "Retrying..." : "Retry"}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {loadError && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 body-small text-red-700">
-            {loadError}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="animate-pulse">
-                <div className="aspect-square w-full bg-surface rounded-lg" />
-                <div className="mt-3 space-y-2">
-                  <div className="h-4 bg-surface rounded w-3/4" />
-                  <div className="h-3 bg-surface rounded w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : hasProjects ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {displayedProjects.map((project, index) => {
-              const cardKey = `${project.id}-${index}`
-              return (
-            <div 
-              key={cardKey} 
-              className="group cursor-pointer"
-              onClick={(e) => {
-                // Only trigger if not clicking dropdown area
-                if (!(e.target as Element).closest('.dropdown-menu')) {
-                  handleCardClick(project)
-                }
-              }}
-            >
-              <div className="relative overflow-hidden rounded-lg bg-surface">
-                <img
-                  src={project.coverImageUrl}
-                  alt={project.title}
-                  className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                />
-                <div className="absolute top-3 left-3 flex items-center gap-2">
-                  {project.status === "in_progress" ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass} flex items-center gap-1 cursor-help`}>
-                          {project.statusLabel}
-                          <Info className="w-3 h-3" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Awaiting Arco review. We&apos;ll email you as soon as the team approves this listing.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : project.status === "draft" ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass} flex items-center gap-1 cursor-help`}>
-                          {project.statusLabel}
-                          <Info className="w-3 h-3" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Continue the listing wizard to submit this project for review.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${project.statusChipClass}`}>
-                      {project.statusLabel}
-                    </span>
-                  )}
-                  {/* ERROR HANDLING: Visual indicator for projects with missing metadata */}
-                  {project.hasMetadataError && (
-                    <span
-                      className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 flex items-center gap-1"
-                      title="Some project details couldn't be loaded"
-                    >
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>Incomplete</span>
-                    </span>
-                  )}
-                </div>
-                <div className="absolute top-3 right-3 flex items-center gap-2">
-                  {project.role === "owner" && (
-                    <span className="text-xs font-medium text-foreground bg-white px-2 py-1 rounded-full">Project owner</span>
-                  )}
-                  <div className="relative dropdown-menu">
-                    <button
+            ) : hasProjects ? (
+              <div className="discover-grid">
+                {displayedProjects.map((project, index) => {
+                  const cardKey = `${project.id}-${index}`
+                  return (
+                    <div
+                      key={cardKey}
+                      className="discover-card"
+                      style={{ position: "relative", cursor: "pointer" }}
                       onClick={(e) => {
-                        e.stopPropagation()
-                        setOpenDropdown(openDropdown === cardKey ? null : cardKey)
+                        if (!(e.target as Element).closest(".dropdown-menu")) {
+                          handleCardClick(project)
+                        }
                       }}
-                      className="p-1 bg-white rounded-full shadow-sm hover:bg-surface"
                     >
-                      <MoreHorizontal className="w-4 h-4 text-text-secondary" />
-                    </button>
-                    {openDropdown === cardKey && (
-                      <div className="absolute right-0 top-8 bg-white rounded-md shadow-lg border border-border w-48 z-10">
-                        <div className="py-1">
+                      {/* Image — 4:3 matching /projects */}
+                      <div
+                        className="discover-card-image-wrap"
+                        style={{ position: "relative" }}
+                        onMouseEnter={(e) => {
+                          const overlay = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-overlay")
+                          const pill = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-pill")
+                          if (overlay) overlay.style.background = "rgba(0,0,0,.35)"
+                          if (pill) pill.style.opacity = "1"
+                        }}
+                        onMouseLeave={(e) => {
+                          const overlay = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-overlay")
+                          const pill = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-pill")
+                          if (overlay) overlay.style.background = "transparent"
+                          if (pill) pill.style.opacity = "0"
+                        }}
+                      >
+                        <div className="discover-card-image-layer">
+                          <img src={project.coverImageUrl} alt={project.title} />
+                        </div>
+
+                        {/* Accept button for invited contributors — on image only */}
+                        {project.role === "contributor" && project.status === "invited" && (
+                          <button
+                            style={{
+                              position: "absolute", inset: 0, zIndex: 2,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              background: "transparent", border: "none", cursor: "pointer",
+                              transition: "background .2s",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "rgba(0,0,0,.35)"
+                              const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
+                              if (pill) { pill.style.opacity = "1"; pill.style.background = "rgba(0,0,0,.6)"; pill.style.borderColor = "rgba(255,255,255,.4)" }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent"
+                              const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
+                              if (pill) { pill.style.opacity = "0.7"; pill.style.background = "rgba(0,0,0,.45)"; pill.style.borderColor = "rgba(255,255,255,.25)" }
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleUpdateContributorStatus(project)
+                            }}
+                          >
+                            <span
+                              data-accept-pill=""
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 7,
+                                fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
+                                color: "#fff", background: "rgba(0,0,0,.45)",
+                                border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
+                                padding: "8px 18px",
+                                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                                opacity: 0.7, transition: "opacity .2s, background .2s, border-color .2s",
+                              }}
+                            >
+                              <Check size={14} />
+                              Accept
+                            </span>
+                          </button>
+                        )}
+
+                        {/* Hover action pill — Edit project (owner) / View project (contributor) */}
+                        {!(project.role === "contributor" && project.status === "invited") && (
+                          <div
+                            style={{
+                              position: "absolute", inset: 0, zIndex: 1,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              background: "transparent", transition: "background .2s",
+                              pointerEvents: "none",
+                            }}
+                            className="listing-card-hover-overlay"
+                          >
+                            <span
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 7,
+                                fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
+                                color: "#fff", background: "rgba(0,0,0,.6)",
+                                border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
+                                padding: "8px 18px",
+                                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                                opacity: 0, transition: "opacity .2s",
+                              }}
+                              className="listing-card-hover-pill"
+                            >
+                              {project.role === "owner" ? "Edit project" : "View project"}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Owner pill — bottom-left of image */}
+                        {project.role === "owner" && (
+                          <span
+                            style={{
+                              position: "absolute", bottom: 10, left: 10, zIndex: 2,
+                              display: "inline-flex", alignItems: "center",
+                              fontSize: 11, fontWeight: 500, color: "#fff",
+                              background: "rgba(0,0,0,.45)", borderRadius: 100,
+                              padding: "4px 10px", letterSpacing: ".02em",
+                              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                            }}
+                          >
+                            Owner
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Status pill — overlaid on image, always clickable */}
+                      <div style={{ position: "absolute", top: 12, left: 12, zIndex: 2, display: "flex", gap: 6 }}>
+                        <button
+                          className="filter-pill flex items-center gap-1.5"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (project.role === "owner") {
+                              handleUpdateStatus(project)
+                            } else {
+                              handleUpdateContributorStatus(project)
+                            }
+                          }}
+                        >
+                          <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${project.statusDotClass}`} />
+                          <span className="text-xs font-medium">{project.statusLabel}</span>
+                        </button>
+                      </div>
+
+                      {/* Dropdown — top-right, aligned with filter-pill / filter-dropdown CSS */}
+                      <div
+                        className="dropdown-menu"
+                        style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          className="filter-pill"
+                          onClick={() => setOpenDropdown(openDropdown === cardKey ? null : cardKey)}
+                          data-open={openDropdown === cardKey ? "true" : undefined}
+                          aria-label="Project options"
+                          style={{ padding: "6px 8px", gap: 0 }}
+                        >
+                          <MoreHorizontal style={{ width: 16, height: 16 }} />
+                        </button>
+                        <div
+                          className="filter-dropdown"
+                          data-open={openDropdown === cardKey ? "true" : undefined}
+                          data-align="right"
+                          style={{ minWidth: 180, top: "calc(100% + 6px)" }}
+                        >
                           {project.role === "owner" ? (
-                            <div className="px-4 py-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleUpdateStatus(project)
-                                }}
-                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
-                              >
-                                Update status
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleEditCoverImage(project)
-                                }}
-                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
-                              >
-                                Edit cover image
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleEditListing(project)
-                                }}
-                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
-                              >
-                                Edit listing
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handlePreviewListing(project)
-                                }}
-                                className="block w-full text-left text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
-                              >
-                                Preview listing
-                              </button>
-                              <div className="border-t border-border my-1" />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleDeleteListing(project)
-                                }}
-                                className="block w-full text-left text-sm text-red-600 px-3 py-1.5 rounded-full hover:bg-red-50"
-                              >
-                                Delete listing
-                              </button>
-                            </div>
+                            <>
+                              {([
+                                { label: "Edit listing", action: () => handleEditListing(project) },
+                                { label: "Update status", action: () => handleUpdateStatus(project) },
+                                { label: "Change cover", action: () => handleEditCoverImage(project) },
+                                ...(getProjectUrl(project) ? [{ label: "View project", action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
+                              ] as const).map(({ label, action }) => (
+                                <div
+                                  key={label}
+                                  className="filter-dropdown-option"
+                                  onClick={action}
+                                  role="menuitem"
+                                >
+                                  <span className="filter-dropdown-label">{label}</span>
+                                </div>
+                              ))}
+                            </>
                           ) : (
-                            <div className="px-4 py-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleUpdateContributorStatus(project)
-                                }}
-                                className="block w-full text-left text-sm px-3 py-1.5 rounded-full hover:bg-surface"
-                              >
-                                Update listing status
-                              </button>
-                            </div>
+                            <>
+                              {([
+                                { label: "Update status", action: () => handleUpdateContributorStatus(project) },
+                                { label: "Change cover", action: () => handleEditCoverImage(project) },
+                                ...(getProjectUrl(project) ? [{ label: "View project", action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
+                              ] as const).map(({ label, action }) => (
+                                <div
+                                  key={label}
+                                  className="filter-dropdown-option"
+                                  onClick={action}
+                                  role="menuitem"
+                                >
+                                  <span className="filter-dropdown-label">{label}</span>
+                                </div>
+                              ))}
+                            </>
                           )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
+
+                      {/* Card text — same as /projects */}
+                      <h3 className="discover-card-title">{project.title}</h3>
+                      {project.status === "rejected" && project.rejectionReason ? (
+                        <p className="discover-card-sub" style={{ color: "#dc2626" }}>
+                          {project.rejectionReason}
+                        </p>
+                      ) : (
+                        <>
+                          <p className="discover-card-sub">{project.subtitle}</p>
+                          {project.invitedServiceCategory && project.role === "contributor" && (
+                            <p className="discover-card-sub" style={{ color: "var(--primary)" }}>
+                              {project.invitedServiceCategory}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-              <div className="mt-3">
-                <p className="body-small font-medium leading-[1.2] tracking-[0] text-foreground line-clamp-2">{project.title}</p>
-                <p className="body-small font-normal text-text-secondary mt-1">{project.subtitle}</p>
-                {project.invitedServiceCategory && project.role === "contributor" && (
-                  <p className="body-small text-text-secondary mt-1 font-medium">
-                    Service: {project.invitedServiceCategory}
-                  </p>
+            ) : (
+              <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
+                {canPublishProjects ? (
+                  <>
+                    <p className="arco-eyebrow" style={{ marginBottom: 16 }}>Get started</p>
+                    <h2 className="arco-section-title" style={{ marginBottom: 12 }}>Publish your first project</h2>
+                    <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
+                      Import a project from your website — we'll read the title, photos, and details automatically.
+                    </p>
+                    <button onClick={() => setImportModalOpen(true)} className="btn-primary">
+                      Publish your project
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="arco-eyebrow" style={{ marginBottom: 16 }}>No projects yet</p>
+                    <h2 className="arco-section-title" style={{ marginBottom: 12 }}>Get invited to a project</h2>
+                    <p className="arco-body-text" style={{ maxWidth: 400, margin: "0 auto" }}>
+                      When a homeowner or project owner adds your company to their project, it will appear here.
+                    </p>
+                  </>
                 )}
               </div>
-            </div>
-              )
-            })}
+            )}
           </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border bg-white p-12 text-center">
-            <h2 className="heading-5 text-foreground">Add your first project</h2>
-            <p className="body-small text-text-secondary mt-2">
-              Kick off your first listing to showcase your work and connect with professionals.
-            </p>
-            <div className="mt-6">
-              <Button asChild>
-                <Link href="/new-project">Create a project</Link>
-              </Button>
-            </div>
-          </div>
-        )}
         </div>
       </main>
 
-      <ListingStatusModal
-        open={statusModalOpen && Boolean(selectedProject)}
-        onClose={handleCloseStatusModal}
-        onSave={handleSaveStatus}
-        project={statusModalProject}
-        companyPlan={companyPlan}
-        selectedStatus={selectedStatus}
-        onStatusChange={setSelectedStatus}
-        statusOptions={LISTING_STATUS_OPTIONS}
-        saveDisabled={isSavingStatus || !isValidStatusSelection}
-        isPendingAdminReview={isPendingAdminReview}
-        limitReachedForNewActivation={limitReachedForNewActivation}
-        activeStatusValues={ACTIVE_STATUS_VALUES}
-      />
-
       {pendingDeleteProject && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 border border-red-100 shadow-lg">
-            <div className="flex items-start gap-3 mb-6">
-              <div className="rounded-full bg-red-50 p-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <h2 className="heading-5 text-foreground">Delete listing?</h2>
-                <p className="mt-1 body-small text-text-secondary">
-                  This will remove <span className="font-medium">{pendingDeleteProject.title}</span> from your dashboard. You can
-                  always create the listing again later.
-                </p>
-              </div>
+        <div className="popup-overlay" onClick={handleCancelDelete}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Delete listing</h3>
+              <button type="button" className="popup-close" onClick={handleCancelDelete} aria-label="Close">
+                ✕
+              </button>
             </div>
 
-            <div className="flex gap-3">
-              <Button
-                variant="quaternary"
-                size="quaternary"
+            <p className="arco-body-text" style={{ marginBottom: 24 }}>
+              This will permanently remove <strong>{pendingDeleteProject.title}</strong> from your dashboard. You can always create the listing again later.
+            </p>
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
                 onClick={handleCancelDelete}
-                className="flex-1"
                 disabled={isSavingStatus}
+                style={{ flex: 1 }}
               >
                 Cancel
-              </Button>
-              <Button
-                variant="destructive"
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
                 onClick={handleConfirmDelete}
-                className="flex-1"
                 disabled={isSavingStatus}
+                style={{ flex: 1 }}
               >
                 {isSavingStatus ? "Deleting..." : "Delete listing"}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {coverPhotoModalOpen && selectedProject && (
-        <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="heading-4 text-foreground">Edit cover photo</h2>
-              <button onClick={closeCoverPhotoModal} className="text-muted-foreground hover:text-text-secondary">
-                <X className="w-5 h-5" />
-              </button>
+        <div className="popup-overlay" onClick={closeCoverPhotoModal}>
+          <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Change cover</h3>
+              <button type="button" className="popup-close" onClick={closeCoverPhotoModal} aria-label="Close">✕</button>
             </div>
-
-            <p className="body-small text-text-secondary mb-6">
-              This photo will be displayed with the project on your company portfolio
+            <p className="arco-body-text" style={{ marginBottom: 20 }}>
+              {selectedProject.role === "contributor"
+                ? "Choose an image that best represents your service on this project."
+                : "This photo will be displayed with the project on your company portfolio."}
             </p>
 
-            {selectedProject.photos.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-                {selectedProject.photos.map((photo) => {
-                  const isSelected = selectedCoverPhoto === photo.id
-                  const isCurrentCover = photo.isPrimary
+            {/* Scrollable photo grid */}
+            <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
+              {selectedProject.photos.length > 0 ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {selectedProject.photos.map((photo) => {
+                    const isSelected = selectedCoverPhoto === photo.id
+                    const isCurrentCover = photo.isPrimary
 
-                  return (
-                    <button
-                      key={photo.id}
-                      type="button"
-                      onClick={() => setSelectedCoverPhoto(photo.id)}
-                      className={`relative h-32 w-full overflow-hidden rounded-lg border transition focus:outline-none focus:ring-2 focus:ring-primary ${
-                        isSelected ? "border-primary ring-2 ring-primary/20" : "border-transparent hover:border-border"
-                      }`}
-                    >
-                      <img src={photo.url} alt={selectedProject.title} className="h-full w-full object-cover" />
-                      {isCurrentCover && (
-                        <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-xs font-medium text-foreground">
-                          Current cover
-                        </span>
-                      )}
-                      {isSelected && (
-                        <div className="absolute top-2 right-2 rounded-full bg-white p-1 shadow-sm">
-                          <Check className="w-4 h-4 text-foreground" />
-                        </div>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="mb-6 rounded-lg border border-dashed border-border bg-surface p-6 text-center body-small text-text-secondary">
-                Upload project photos in the listing editor to choose a cover image.
-              </div>
-            )}
+                    return (
+                      <button
+                        key={photo.id}
+                        type="button"
+                        onClick={() => setSelectedCoverPhoto(photo.id)}
+                        style={{
+                          position: "relative",
+                          aspectRatio: "4/3",
+                          overflow: "hidden",
+                          borderRadius: 6,
+                          border: isSelected ? "2px solid #016D75" : "2px solid transparent",
+                          cursor: "pointer",
+                          background: "#f0f0ee",
+                          padding: 0,
+                          transition: "border-color .15s",
+                        }}
+                      >
+                        <img src={photo.url} alt={selectedProject.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        {isCurrentCover && (
+                          <span style={{ position: "absolute", bottom: 6, left: 6, borderRadius: 24, background: "rgba(255,255,255,0.9)", padding: "3px 8px", fontSize: 11, fontWeight: 500, color: "var(--arco-black)" }}>
+                            Current
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span style={{ position: "absolute", top: 6, right: 6, background: "#016D75", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ border: "1px dashed var(--arco-rule)", borderRadius: 4, padding: "40px 24px", textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--text-disabled)" }}>
+                  Upload project photos in the listing editor to choose a cover image.
+                </div>
+              )}
+            </div>
 
-            <div className="flex gap-3 justify-end">
-              <Button variant="quaternary" size="quaternary" onClick={closeCoverPhotoModal}>
+            {/* Footer buttons */}
+            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+              <button className="btn-tertiary" onClick={closeCoverPhotoModal} style={{ flex: 1 }}>
                 Cancel
-              </Button>
-              <Button onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto}>
+              </button>
+              <button className="btn-primary" onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto} style={{ flex: 1 }}>
                 {isSavingCoverPhoto ? "Saving..." : "Save"}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -1373,9 +1419,25 @@ export default function DashboardListingsPage() {
         companyPlan={companyPlan}
         selectedStatus={selectedContributorStatus}
         onStatusChange={setSelectedContributorStatus}
-        statusOptions={CONTRIBUTOR_STATUS_OPTIONS}
+        statusOptions={selectedProject?.role === "owner" ? OWNER_STATUS_OPTIONS : CONTRIBUTOR_STATUS_OPTIONS}
         saveDisabled={!selectedContributorStatus || selectedContributorStatus === "invited"}
-        role="contributor"
+        isPendingAdminReview={selectedProject?.rawProjectStatus === "in_progress"}
+        isRejected={selectedProject?.rawProjectStatus === "rejected"}
+        rejectionReason={selectedProject?.rejectionReason}
+        isDraft={selectedProject?.rawProjectStatus === "draft"}
+        onSubmitForReview={selectedProject?.role === "owner" && selectedProject?.rawProjectStatus === "draft" ? () => {
+          setContributorStatusModalOpen(false)
+          router.push(`/dashboard/edit/${selectedProject.id}`)
+        } : undefined}
+        role={selectedProject?.role ?? "contributor"}
+      />
+
+      <ImportProjectModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        userId={userId}
+        companyId={companyId}
+        professionalId={professionalId}
       />
 
       <Footer maxWidth="max-w-7xl" />

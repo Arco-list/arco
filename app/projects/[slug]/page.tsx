@@ -15,6 +15,7 @@ import { ProjectStructuredData } from "@/components/project-structured-data"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
+import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 
 const PREVIEW_PARAM = "preview"
 
@@ -26,24 +27,24 @@ async function resolveRedirect(slug: string, supabase: any, visited = new Set<st
     console.error(`Circular redirect detected: ${Array.from(visited).join(' -> ')} -> ${slug}`)
     return Array.from(visited)[0] || slug
   }
-  
+
   visited.add(slug)
-  
+
   if (visited.size > 10) {
     console.error(`Redirect chain too long: ${Array.from(visited).join(' -> ')}`)
     return Array.from(visited)[0] || slug
   }
-  
+
   const { data, error } = await supabase
     .from('project_redirects')
     .select('new_slug')
     .eq('old_slug', slug)
     .maybeSingle()
-  
+
   if (error || !data?.new_slug) {
     return slug
   }
-  
+
   return resolveRedirect(data.new_slug, supabase, visited)
 }
 
@@ -57,7 +58,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const supabase = await createServerSupabaseClient()
 
   const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
-  
+
   const { data: project } = await supabase
     .from("projects")
     .select("id, title, description, seo_title, seo_description, slug")
@@ -80,9 +81,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const primaryPhoto = photos?.[0]
   const title = project.seo_title?.trim() || `${project.title} · Arco`
-  const description = project.seo_description?.trim() || 
-    (project.description ? 
-      project.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...' : 
+  const description = project.seo_description?.trim() ||
+    (project.description ?
+      project.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
       `Discover ${project.title} on Arco.`)
 
   const baseUrl = getSiteUrl()
@@ -111,14 +112,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const resolvedParams = await params
   const resolvedSearchParams = await searchParams
   const supabase = await createServerSupabaseClient()
-  
+
   // Resolve redirects
   const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
   if (finalSlug !== resolvedParams.slug) {
     redirect(`/projects/${finalSlug}`)
   }
 
-  // Fetch project
+  // Fetch project (try slug first, then ID for admin preview)
   const [{ data: authData }, projectResult] = await Promise.all([
     supabase.auth.getUser(),
     supabase
@@ -128,9 +129,19 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .maybeSingle(),
   ])
 
-  const project = projectResult.data
+  let project = projectResult.data
 
-  if (projectResult.error || !isProjectRow(project)) {
+  // If not found by slug, try by ID (for admin preview of projects without a slug)
+  if (!project && isUuid(finalSlug)) {
+    const { data: projectById } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("id", finalSlug)
+      .maybeSingle()
+    project = projectById
+  }
+
+  if (!project || !isProjectRow(project)) {
     notFound()
   }
 
@@ -156,44 +167,104 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   // Fetch related data
-  const [photosResult, professionalsResult] = await Promise.all([
+  const [photosResult, professionalsResult, featuresResult] = await Promise.all([
     supabase
       .from("project_photos")
       .select("id, url, caption, feature_id, is_primary, order_index")
       .eq("project_id", project.id)
       .order("is_primary", { ascending: false })
       .order("order_index", { ascending: true }),
+    (() => {
+      let q = supabase
+        .from("project_professionals")
+        .select(`
+          id,
+          invited_service_category_ids,
+          status,
+          professional_id,
+          company_id,
+          is_project_owner,
+          companies!inner(id, name, slug, status, logo_url, primary_service_id, services_offered)
+        `)
+        .eq("project_id", project.id)
+        .not("company_id", "is", null)
+      if (canPreview) {
+        // In preview mode, show listed/featured professionals + the project owner
+        q = q.or("status.in.(live_on_page,listed),is_project_owner.eq.true")
+      } else {
+        q = q.in("status", ["live_on_page", "listed"]).neq("companies.status", "unlisted")
+      }
+      return q
+    })(),
     supabase
-      .from("project_professionals")
-      .select(`
-        id,
-        invited_service_category_id,
-        status,
-        professional_id,
-        company_id,
-        companies!inner(id, name, slug, status)
-      `)
+      .from("project_features")
+      .select("id, space:spaces!space_id(slug)")
       .eq("project_id", project.id)
-      .in("status", ["live_on_page", "listed"])
-      .not("professional_id", "is", null)
+      .not("space_id", "is", null)
   ])
 
   const photos = photosResult.data ?? []
   const professionals = professionalsResult.data ?? []
 
+  // Build feature_id → space slug map
+  const featureSpaceMap = new Map<string, string>()
+  for (const f of featuresResult.data ?? []) {
+    const slug = (f.space as any)?.slug
+    if (slug) featureSpaceMap.set(f.id, slug)
+  }
+
+  // Enrich photos with space slug and collect unique spaces
+  const spaceOrderMap = new Map(SPACE_SLUGS.map((slug, idx) => [slug, idx]))
+  const enrichedPhotos = photos
+    .map(p => ({
+      ...p,
+      space: p.feature_id ? featureSpaceMap.get(p.feature_id) ?? null : null,
+    }))
+    .sort((a, b) => {
+      const orderA = a.space ? (spaceOrderMap.get(a.space) ?? 999) : 999
+      const orderB = b.space ? (spaceOrderMap.get(b.space) ?? 999) : 999
+      if (orderA !== orderB) return orderA - orderB
+      return (a.order_index ?? 0) - (b.order_index ?? 0)
+    })
+  const spaceSet = new Set(
+    enrichedPhotos.map(p => p.space).filter((s): s is string => Boolean(s))
+  )
+  // Order by SPACES constant (matches spaces table sort_order)
+  const uniqueSpaces = SPACES.filter(s => spaceSet.has(s.slug)).map(s => s.slug)
+  // When there are tagged spaces, assign untagged photos to "other" so they group under the Other pill
+  const hasUntagged = enrichedPhotos.some(p => !p.space)
+  if (uniqueSpaces.length > 0 && hasUntagged) {
+    uniqueSpaces.push("other")
+    for (const p of enrichedPhotos) {
+      if (!p.space) p.space = "other"
+    }
+  }
+
   // Get categories for professionals
-  const categoryIds = professionals
-    .map(p => p.invited_service_category_id)
-    .filter((id): id is string => Boolean(id))
+  const categoryIds = Array.from(new Set(
+    professionals.flatMap(p => {
+      const invited = (p.invited_service_category_ids as string[] | null) ?? []
+      if (invited.length > 0) return invited
+      // Include company's primary service or first services_offered as fallback
+      const company = p.companies as any
+      if (company?.primary_service_id) return [company.primary_service_id]
+      if (company?.services_offered?.length) return [company.services_offered[0]]
+      return []
+    })
+  ))
 
   const { data: categories } = categoryIds.length > 0
     ? await supabase
         .from("categories")
-        .select("id, name")
+        .select("id, name, sort_order")
         .in("id", categoryIds)
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("name", { ascending: true })
     : { data: [] }
 
   const categoryMap = new Map(categories?.map(c => [c.id, c.name]) ?? [])
+  // sort_order map for ordering services like the admin table
+  const categorySortOrder = new Map(categories?.map((c, i) => [c.id, i]) ?? [])
 
   // Get company project counts and photos
   const companyIds = professionals
@@ -237,16 +308,40 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
   })
 
-  // Format professionals data for components
-  const formattedProfessionals = professionals.map(p => ({
-    id: p.id,
-    companyId: p.company_id,
-    companyName: p.companies?.name ?? "Unknown",
-    companySlug: p.companies?.slug,
-    serviceCategory: categoryMap.get(p.invited_service_category_id ?? '') ?? "Service",
-    logo: p.company_id ? companyLogoMap.get(p.company_id) ?? null : null,
-    projectsCount: p.company_id ? (companyProjectCounts.get(p.company_id)?.size ?? 0) : 0,
-  }))
+  // Format professionals data for components — project owner first
+  const formattedProfessionals = professionals
+    .sort((a, b) => {
+      const aOwner = a.is_project_owner ? 1 : 0
+      const bOwner = b.is_project_owner ? 1 : 0
+      return bOwner - aOwner
+    })
+    .map(p => {
+      let serviceIds = (p.invited_service_category_ids as string[] | null) ?? []
+      // Fall back to company's primary service or services_offered if no invited services set
+      if (serviceIds.length === 0) {
+        const company = p.companies as any
+        if (company?.primary_service_id) {
+          serviceIds = [company.primary_service_id]
+        } else if (company?.services_offered?.length) {
+          serviceIds = [company.services_offered[0]]
+        }
+      }
+      const serviceCategories = serviceIds
+        .slice()
+        .sort((a, b) => (categorySortOrder.get(a) ?? 999) - (categorySortOrder.get(b) ?? 999))
+        .map(sid => categoryMap.get(sid))
+        .filter((name): name is string => Boolean(name))
+      return {
+        id: p.id,
+        companyId: p.company_id,
+        companyName: p.companies?.name ?? "Unknown",
+        companySlug: (p.companies as any)?.slug,
+        serviceCategory: serviceCategories.length > 0 ? serviceCategories.join(" · ") : "Service",
+        serviceCategories,
+        logo: p.companies?.logo_url ?? (p.company_id ? companyLogoMap.get(p.company_id) ?? null : null),
+        projectsCount: p.company_id ? (companyProjectCounts.get(p.company_id)?.size ?? 0) : 0,
+      }
+    })
 
   // Format for ProjectStructuredData (different format)
   const structuredDataProfessionals = formattedProfessionals.map(p => ({
@@ -255,7 +350,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }))
 
   // Get architect for related projects
-  const architect = formattedProfessionals.find(p => 
+  const architect = formattedProfessionals.find(p =>
     p.serviceCategory.toLowerCase().includes('architect')
   )
 
@@ -270,7 +365,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             slug,
             title,
             address_city,
-            project_year
+            project_year,
+            project_type_category_id
           )
         `)
         .eq("company_id", architect.companyId)
@@ -294,16 +390,60 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     relatedPhotos?.map(p => [p.project_id, p.url]) ?? []
   )
 
+  const coverPhoto = photos.find(p => p.is_primary) ?? photos[0]
+
+  // Resolve UUIDs → human-readable names
+  // Type: edit page saves to project_type_category_id (UUID → categories table)
+  // Scope: edit page saves to project_type (plain string like "New Build")
+  // Style: stored as UUID in style_preferences → project_taxonomy_options table
+  const typeId = project.project_type_category_id
+  const styleIds = (Array.isArray(project.style_preferences) ? project.style_preferences : []).filter(isUuid)
+
+  const relatedCategoryIds = (relatedProjects ?? [])
+    .map(r => r.projects.project_type_category_id)
+    .filter(isUuid)
+
+  const uuidsToResolve = {
+    categories: [...[typeId].filter(isUuid), ...relatedCategoryIds],
+    taxonomy: styleIds,
+  }
+
+  const [{ data: resolvedCategories }, { data: resolvedTaxonomy }] = await Promise.all([
+    uuidsToResolve.categories.length > 0
+      ? supabase.from("categories").select("id, name").in("id", uuidsToResolve.categories)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    uuidsToResolve.taxonomy.length > 0
+      ? supabase.from("project_taxonomy_options").select("id, name").in("id", uuidsToResolve.taxonomy)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ])
+
+  const nameMap = new Map<string, string>()
+  for (const row of resolvedCategories ?? []) nameMap.set(row.id, row.name)
+  for (const row of resolvedTaxonomy ?? []) nameMap.set(row.id, row.name)
+
+  const resolveName = (value: string | null | undefined): string | null => {
+    if (!value) return null
+    if (isUuid(value)) return nameMap.get(value) ?? null
+    return value
+  }
+
   const formattedRelatedProjects = relatedProjects?.map(r => ({
     id: r.projects.id,
     slug: r.projects.slug,
     title: r.projects.title,
     location: r.projects.address_city,
-    year: r.projects.project_year,
+    projectType: resolveName(r.projects.project_type_category_id) ?? null,
     imageUrl: relatedPhotoMap.get(r.project_id) ?? null,
   })) ?? []
 
-  const coverPhoto = photos.find(p => p.is_primary) ?? photos[0]
+  // Type from project_type_category_id, falling back to project_type if it's a UUID
+  const resolvedType = resolveName(typeId) ?? resolveName(project.project_type)
+  // Scope from project_type (plain string like "New Build", "Renovation", "Interior Design")
+  const SCOPE_VALUES = ["New Build", "Renovation", "Interior Design"]
+  const resolvedScope = SCOPE_VALUES.includes(project.project_type ?? "") ? project.project_type : null
+  const resolvedStyle = resolveName(
+    Array.isArray(project.style_preferences) ? project.style_preferences[0] : null
+  )
 
   return (
     <>
@@ -326,13 +466,19 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
       <div className="min-h-screen bg-white">
         <Header />
-        
-        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={project.title} />
-        
-        <SubNav />
 
-        {/* UPDATED: Use .wrap instead of .project-container for consistent padding */}
-        <div className="wrap" style={{ marginTop: '60px', marginBottom: '60px' }}>
+        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={project.title} />
+
+        <SubNav projectId={project.id} title={project.title} subtitle={[resolvedType, project.address_city].filter(Boolean).join(" · ")} imageUrl={coverPhoto?.url ?? null} slug={project.slug} />
+
+        {/*
+          ── Details section ───────────────────────────────────────────────────
+          id="details" is the scroll target for the SubNav "Details" link.
+          It wraps ProjectHeader + SpecificationsBar only.
+          PhotoTour lives in its own section below so #photo-tour scrolls
+          independently.
+        */}
+        <div id="details" className="wrap" style={{ marginTop: '60px' }}>
           <ProjectHeader
             title={project.title}
             architectName={architect?.companyName ?? null}
@@ -343,12 +489,19 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <SpecificationsBar
             location={project.address_city}
             year={project.project_year}
-            type={project.project_type}
-            scope={project.building_type}
-            style={project.style_preferences?.[0] ?? null}
+            type={resolvedType}
+            scope={resolvedScope}
+            style={resolvedStyle}
           />
+        </div>
 
-          <PhotoTour photos={photos} projectId={project.id} />
+        {/*
+          ── Photos section ────────────────────────────────────────────────────
+          PhotoTour already renders its own id="photo-tour" wrapper internally.
+          The outer .wrap provides consistent horizontal padding.
+        */}
+        <div className="wrap" style={{ marginBottom: '60px' }}>
+          <PhotoTour photos={enrichedPhotos} projectId={project.id} spaces={uniqueSpaces} />
         </div>
 
         <CreditedProfessionals professionals={formattedProfessionals} />

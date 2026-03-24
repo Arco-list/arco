@@ -2,7 +2,6 @@
 
 import { useEffect } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { logger } from "@/lib/logger"
 
 interface GeneralErrorProps {
@@ -13,7 +12,6 @@ interface GeneralErrorProps {
 export default function GeneralError({ error, reset }: GeneralErrorProps) {
   useEffect(() => {
     if (error) {
-      // Log the error using proper error monitoring service
       logger.error("Global error boundary triggered", {
         component: "GeneralError",
         digest: error.digest,
@@ -24,28 +22,18 @@ export default function GeneralError({ error, reset }: GeneralErrorProps) {
   }, [error])
 
   return (
-    <div className="flex items-center justify-center bg-background py-20">
-      <div className="text-center space-y-6 max-w-md mx-auto px-4">
-        <div className="space-y-2">
-          <h1 className="text-6xl font-bold text-destructive">Error</h1>
-          <h2 className="text-2xl font-semibold">Something went wrong</h2>
-          <p className="text-muted-foreground">
-            An unexpected error occurred. Please try again or contact support if the problem persists.
-          </p>
-        </div>
-        
-        <div className="space-y-4">
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", padding: "80px 24px" }}>
+      <div style={{ textAlign: "center", maxWidth: 480 }}>
+        <p className="arco-eyebrow" style={{ marginBottom: 16 }}>Error</p>
+        <h1 className="arco-page-title" style={{ marginBottom: 12 }}>Something went wrong</h1>
+        <p className="arco-body" style={{ marginBottom: 40 }}>
+          An unexpected error occurred. Please try again or contact support if the problem persists.
+        </p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
           {reset && (
-            <Button onClick={reset} className="w-full">
-              Try Again
-            </Button>
+            <button onClick={reset} className="btn btn-primary">Try again</button>
           )}
-          
-          <Button variant="quaternary" size="quaternary" asChild className="w-full">
-            <Link href="/">
-              Go Home
-            </Link>
-          </Button>
+          <Link href="/" className="btn btn-secondary">Go home</Link>
         </div>
       </div>
     </div>

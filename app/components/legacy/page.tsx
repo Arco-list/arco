@@ -156,7 +156,6 @@ export default function LegacyComponentsPage() {
               <ComponentItem name="professional-gallery.tsx" path="components/professional-gallery.tsx" status="needs-redesign" />
               <ComponentItem name="professional-gallery-modal.tsx" path="components/professional-gallery-modal.tsx" status="needs-redesign" />
               <ComponentItem name="professional-projects.tsx" path="components/professional-projects.tsx" status="needs-redesign" />
-              <ComponentItem name="professional-reviews.tsx" path="components/professional-reviews.tsx" status="needs-redesign" />
               <ComponentItem name="professional-categories.tsx" path="components/professional-categories.tsx" status="needs-redesign" />
               <ComponentItem name="professional-action-buttons.tsx" path="components/professional-action-buttons.tsx" status="needs-redesign" />
               <ComponentItem name="professional-contact-sidebar.tsx" path="components/professional-contact-sidebar.tsx" status="needs-redesign" />
@@ -227,11 +226,8 @@ export default function LegacyComponentsPage() {
           
           <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '32px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-              <ComponentItem name="admin-projects-table.tsx" path="components/admin-projects-table.tsx" status="needs-redesign" />
               <ComponentItem name="admin-professionals-companies-table.tsx" path="components/admin-professionals-companies-table.tsx" status="needs-redesign" />
               <ComponentItem name="admin-professional-invites-table.tsx" path="components/admin-professional-invites-table.tsx" status="needs-redesign" />
-              <ComponentItem name="admin-reviews-table.tsx" path="components/admin-reviews-table.tsx" status="needs-redesign" />
-              <ComponentItem name="admin-categories-table.tsx" path="components/admin-categories-table.tsx" status="needs-redesign" />
               <ComponentItem name="admin-onboarding-form.tsx" path="components/admin-onboarding-form.tsx" status="needs-redesign" />
               <ComponentItem name="projects-data-table.tsx" path="components/projects-data-table.tsx" status="needs-redesign" />
               <ComponentItem name="users-data-table.tsx" path="components/users-data-table.tsx" status="needs-redesign" />

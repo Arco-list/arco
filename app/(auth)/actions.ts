@@ -468,6 +468,7 @@ export const signInWithOtpAction = async (
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
+      shouldCreateUser: false,
       emailRedirectTo,
     },
   });
@@ -481,6 +482,129 @@ export const signInWithOtpAction = async (
   return {
     data: { redirectTo },
   };
+};
+
+export const checkUserExistsAction = async (
+  email: string
+): Promise<AuthActionResult<{ exists: boolean }>> => {
+  if (!email || !email.trim()) {
+    return { error: { message: 'Email is required', code: 'VALIDATION_ERROR' } };
+  }
+
+  try {
+    const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
+    const adminClient = createServiceRoleSupabaseClient();
+
+    const { data: { users }, error } = await adminClient.auth.admin.listUsers({
+      perPage: 1000,
+    });
+
+    if (error) {
+      logger.auth('check-user', 'Error checking if user exists', {
+        error: { message: error.message },
+      });
+      return { data: { exists: true } };
+    }
+
+    const exactMatch = users?.some(
+      (u) => u.email?.toLowerCase() === email.toLowerCase().trim()
+    );
+
+    return { data: { exists: !!exactMatch } };
+  } catch (error) {
+    logger.auth('check-user', 'Exception checking user existence', {}, error as Error);
+    return { data: { exists: true } };
+  }
+};
+
+export const signUpWithOtpAction = async (
+  rawInput: { email: string; firstName: string; lastName?: string; redirectTo?: string }
+): Promise<AuthActionResult<{ redirectTo?: string }>> => {
+  const { email, firstName, lastName, redirectTo: rawRedirectTo } = rawInput;
+
+  if (!email?.trim() || !firstName?.trim()) {
+    return { error: { message: 'Email and first name are required.' } };
+  }
+
+  const redirectTo = sanitizeRedirectPath(rawRedirectTo);
+
+  try {
+    // Step 1: Create user via admin API (auto-confirmed, with metadata)
+    const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
+    const adminClient = createServiceRoleSupabaseClient();
+
+    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+      email: email.toLowerCase().trim(),
+      email_confirm: true,
+      user_metadata: {
+        first_name: firstName.trim(),
+        last_name: lastName?.trim() || null,
+      },
+    });
+
+    if (createError) {
+      logger.auth('signup-otp', 'Failed to create user via admin API', {
+        error: { message: createError.message },
+      });
+
+      // If user already exists (race condition), fall through to OTP send
+      if (
+        createError.message?.toLowerCase().includes('already') ||
+        createError.message?.toLowerCase().includes('exists') ||
+        createError.status === 422
+      ) {
+        logger.auth('signup-otp', 'User already exists, proceeding with OTP send');
+      } else {
+        return {
+          error: {
+            message: 'Could not create your account. Please try again.',
+            code: 'CREATE_USER_ERROR',
+          },
+        };
+      }
+    } else {
+      logger.auth('signup-otp', 'User created via admin API', {
+        userId: newUser.user.id,
+      });
+    }
+
+    // Step 2: Send OTP via the standard flow (goes through Loops.so)
+    const supabase = await createServerActionSupabaseClient();
+    const baseUrl = await getBaseUrl();
+    const callbackUrl = `${baseUrl}/auth/callback`;
+    const finalRedirectTo = resolveRedirectPath(rawRedirectTo);
+    const emailRedirectTo = `${callbackUrl}?redirect_to=${encodeURIComponent(finalRedirectTo)}`;
+
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo,
+      },
+    });
+
+    if (otpError) {
+      logger.auth('signup-otp', 'Failed to send OTP after user creation', {
+        error: { message: otpError.message },
+      });
+      return {
+        error: {
+          message: 'Account created but failed to send verification code. Please try signing in.',
+          code: 'OTP_SEND_ERROR',
+        },
+      };
+    }
+
+    return { data: { redirectTo } };
+  } catch (error) {
+    logger.auth('signup-otp', 'Exception during signup with OTP', {}, error as Error);
+    return {
+      error: {
+        message: 'An unexpected error occurred. Please try again.',
+        code: 'UNEXPECTED_ERROR',
+      },
+    };
+  }
 };
 
 export const signOutAction = async (): Promise<AuthActionResult<{ success: true }>> => {
@@ -520,6 +644,41 @@ export const resetPasswordAction = async (
 
   if (normalizedError) {
     return { error: normalizedError };
+  }
+
+  return { data: { success: true } };
+};
+
+export const updateProfileNameAction = async (input: {
+  firstName: string;
+  lastName: string;
+}): Promise<AuthActionResult<{ success: true }>> => {
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+
+  if (!firstName) {
+    return { error: { message: 'First name is required', code: 'VALIDATION_ERROR' } };
+  }
+
+  const supabase = await createServerActionSupabaseClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { error: { message: 'Not authenticated', code: 'AUTH_ERROR' } };
+  }
+
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({
+      first_name: firstName,
+      last_name: lastName || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', user.id);
+
+  if (updateError) {
+    logger.db('update', 'profiles', 'Failed to update profile name', { userId: user.id }, updateError);
+    return { error: { message: 'Could not save your name', code: 'DB_ERROR' } };
   }
 
   return { data: { success: true } };

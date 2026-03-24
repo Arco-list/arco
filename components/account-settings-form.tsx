@@ -9,8 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 
 const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 const AVATAR_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
@@ -471,173 +469,166 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
     }
   }
 
+  const displayName = [profileForm.firstName, profileForm.lastName].filter(Boolean).join(" ").trim()
+
   return (
-    <div className={cn("max-w-2xl", className)}>
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="text-xl font-medium">Profile Information</CardTitle>
-          <CardDescription>Update your personal information and contact details.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleProfileSubmit} className="space-y-6">
-            <div className="space-y-3">
-              <Label>Profile Photo</Label>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={avatarPreview ?? undefined} alt="Profile avatar" />
-                  <AvatarFallback>{avatarFallback}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="tertiary"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploadingAvatar || isSavingProfile || isLoading}
-                    >
-                      {isUploadingAvatar ? "Uploading..." : "Upload Photo"}
-                    </Button>
-                    {avatarPreview ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={handleAvatarRemove}
-                        disabled={isUploadingAvatar || isSavingProfile || isLoading}
-                      >
-                        Remove
-                      </Button>
-                    ) : null}
-                  </div>
-                  <p className="text-xs text-muted-foreground">JPG, PNG, or WEBP up to 5 MB.</p>
-                </div>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={handleAvatarFileChange}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  type="text"
-                  value={profileForm.firstName}
-                  onChange={(event) =>
-                    setProfileForm((state) => ({ ...state, firstName: event.target.value }))
-                  }
-                  placeholder="Enter your first name"
-                  disabled={isLoading || isSavingProfile}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  type="text"
-                  value={profileForm.lastName}
-                  onChange={(event) =>
-                    setProfileForm((state) => ({ ...state, lastName: event.target.value }))
-                  }
-                  placeholder="Enter your last name"
-                  disabled={isLoading || isSavingProfile}
-                />
-              </div>
-            </div>
+    <div className={cn("", className)}>
+      {/* ── Header: Avatar + Name (matches company edit page) ── */}
+      <section className="professional-header">
+        <div className="company-icon" onClick={() => fileInputRef.current?.click()} style={{ display: "inline-block", cursor: "pointer" }}>
+          <Avatar style={{ width: 100, height: 100 }}>
+            <AvatarImage src={avatarPreview ?? undefined} alt="Profile avatar" style={{ width: 100, height: 100 }} />
+            <AvatarFallback style={{ width: 100, height: 100, fontSize: 32, fontWeight: 300 }}>{avatarFallback}</AvatarFallback>
+          </Avatar>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleAvatarFileChange}
+          />
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                value={profileForm.email}
-                onChange={(event) =>
-                  setProfileForm((state) => ({ ...state, email: event.target.value }))
-                }
-                placeholder="Enter your email address"
-                disabled={isLoading || isSavingProfile}
-                required
-                pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
-              />
-            </div>
+        <h1 className="arco-page-title">{displayName || "Your Name"}</h1>
+        <p className="professional-badge">{profileForm.email || "your@email.com"}</p>
+      </section>
 
+      {/* ── Detail bar (matches spec bar) ── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+        gap: 32,
+        padding: "32px 0",
+        borderTop: "1px solid #e8e8e6",
+        borderBottom: "1px solid #e8e8e6",
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>First Name</span>
+          <Input
+            id="firstName"
+            type="text"
+            value={profileForm.firstName}
+            onChange={(event) =>
+              setProfileForm((state) => ({ ...state, firstName: event.target.value }))
+            }
+            placeholder="First name"
+            disabled={isLoading || isSavingProfile}
+            className="text-center border-0 shadow-none h-auto p-0 text-[15px]"
+          />
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Last Name</span>
+          <Input
+            id="lastName"
+            type="text"
+            value={profileForm.lastName}
+            onChange={(event) =>
+              setProfileForm((state) => ({ ...state, lastName: event.target.value }))
+            }
+            placeholder="Last name"
+            disabled={isLoading || isSavingProfile}
+            className="text-center border-0 shadow-none h-auto p-0 text-[15px]"
+          />
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Email</span>
+          <Input
+            id="email"
+            type="email"
+            value={profileForm.email}
+            onChange={(event) =>
+              setProfileForm((state) => ({ ...state, email: event.target.value }))
+            }
+            placeholder="Email address"
+            disabled={isLoading || isSavingProfile}
+            required
+            pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+            className="text-center border-0 shadow-none h-auto p-0 text-[15px]"
+          />
+        </div>
+      </div>
+
+      {/* ── Actions row ── */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", padding: "24px 0" }}>
+        <Button
+          type="button"
+          variant="tertiary"
+          onClick={() => void handleProfileSubmit({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)}
+          disabled={isSavingProfile || isUploadingAvatar}
+        >
+          {isSavingProfile ? "Saving..." : "Update Profile"}
+        </Button>
+        {avatarPreview ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleAvatarRemove}
+            disabled={isUploadingAvatar || isSavingProfile || isLoading}
+          >
+            Remove Photo
+          </Button>
+        ) : null}
+      </div>
+
+      {/* ── Password section ── */}
+      <section style={{ maxWidth: 500, margin: "0 auto" }}>
+        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 16 }}>Change Password</h2>
+        <p className="professional-badge" style={{ textAlign: "center", marginBottom: 32 }}>Update your password to keep your account secure.</p>
+
+        <form onSubmit={handlePasswordSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">Current Password</Label>
+            <Input
+              id="currentPassword"
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(event) =>
+                setPasswordForm((state) => ({ ...state, currentPassword: event.target.value }))
+              }
+              placeholder="Enter your current password"
+              disabled={isSavingPassword || isLoading || !isEmailAuthUser}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="newPassword">New Password</Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(event) =>
+                setPasswordForm((state) => ({ ...state, newPassword: event.target.value }))
+              }
+              placeholder="Enter your new password"
+              disabled={isSavingPassword || isLoading || !isEmailAuthUser}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm New Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(event) =>
+                setPasswordForm((state) => ({ ...state, confirmPassword: event.target.value }))
+              }
+              placeholder="Confirm your new password"
+              disabled={isSavingPassword || isLoading || !isEmailAuthUser}
+            />
+          </div>
+
+          <div style={{ textAlign: "center" }}>
             <Button
               type="submit"
               variant="secondary"
-              className="w-full md:w-auto"
-              disabled={isSavingProfile || isUploadingAvatar}
-            >
-              {isSavingProfile ? "Saving..." : "Update Profile"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Separator className="my-8" />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl font-medium">Change Password</CardTitle>
-          <CardDescription>Update your password to keep your account secure.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handlePasswordSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(event) =>
-                  setPasswordForm((state) => ({ ...state, currentPassword: event.target.value }))
-                }
-                placeholder="Enter your current password"
-                disabled={isSavingPassword || isLoading || !isEmailAuthUser}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(event) =>
-                  setPasswordForm((state) => ({ ...state, newPassword: event.target.value }))
-                }
-                placeholder="Enter your new password"
-                disabled={isSavingPassword || isLoading || !isEmailAuthUser}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(event) =>
-                  setPasswordForm((state) => ({ ...state, confirmPassword: event.target.value }))
-                }
-                placeholder="Confirm your new password"
-                disabled={isSavingPassword || isLoading || !isEmailAuthUser}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              variant="secondary"
-              className="w-full md:w-auto"
               disabled={isSavingPassword || !isEmailAuthUser}
             >
               {isSavingPassword ? "Updating..." : "Change Password"}
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+        </form>
+      </section>
     </div>
   )
 }

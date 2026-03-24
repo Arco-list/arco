@@ -5,6 +5,7 @@ import {
   Bath,
   Bed,
   Car,
+  DoorOpen,
   Droplet,
   Flame,
   Flower2,
@@ -12,6 +13,7 @@ import {
   Home,
   Layers,
   MapPin,
+  MoreHorizontal,
   Paintbrush,
   Shield,
   Sofa,
@@ -35,6 +37,7 @@ export const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
   fireplace: Flame,
   garage: Car,
   garden: TreePine,
+  hallway: DoorOpen,
   indoor_pool: Waves,
   kitchen: UtensilsCrossed,
   lighting: Shield,
@@ -55,6 +58,7 @@ export const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
   paint: Paintbrush,
   landscaping: Flower2,
   location: MapPin,
+  other: MoreHorizontal,
 }
 
 const normaliseSlug = (slug?: string | null) => {

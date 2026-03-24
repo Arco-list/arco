@@ -25,8 +25,8 @@ export interface FilterState {
 const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: "draft", label: "In progress" },
   { value: "in_progress", label: "In review" },
-  { value: "published", label: "Published" },
-  { value: "archived", label: "Unpublished" },
+  { value: "published", label: "Listed" },
+  { value: "archived", label: "Unlisted" },
   { value: "rejected", label: "Rejected" },
 ]
 

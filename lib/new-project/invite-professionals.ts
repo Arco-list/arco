@@ -27,7 +27,7 @@ export interface ProfessionalOption {
 
 export interface InviteData {
   project_id: string
-  invited_service_category_id: string
+  invited_service_category_ids: string[]
   invited_email: string
   professional_id?: string | null
   company_id?: string | null
@@ -99,7 +99,7 @@ export async function createInvite(
       .insert({
         project_id: inviteData.project_id,
         invited_email: inviteData.invited_email,
-        invited_service_category_id: inviteData.invited_service_category_id,
+        invited_service_category_ids: inviteData.invited_service_category_ids,
         professional_id: inviteData.professional_id || null,
         company_id: inviteData.company_id || null,
         is_project_owner: inviteData.is_project_owner ?? false,

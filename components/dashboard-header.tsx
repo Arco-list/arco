@@ -8,7 +8,9 @@ import { toast } from "sonner"
 
 import { signOutAction } from "@/app/(auth)/actions"
 import { HeaderSearch } from "@/components/header-search"
+import { CompanySwitcher } from "@/components/company-switcher"
 import { useAuth } from "@/contexts/auth-context"
+import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
 
 export interface DashboardHeaderProps {
   maxWidth?: string;
@@ -20,6 +22,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
   const searchParams = useSearchParams()
   const searchParamQuery = searchParams.get("search") ?? ""
   const { profile, user } = useAuth()
+  const { openCreateCompanyModal } = useCreateCompanyModal()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isSigningOut, startSignOutTransition] = useTransition()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -134,7 +137,8 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
           </div>
 
           {!isHomeownerPage && canAccessProfessionalDashboard && (
-            <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
+            <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2 gap-1">
+              <CompanySwitcher />
               {isAdmin && (
                 <Link
                   href="/admin"
@@ -183,7 +187,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
           <div className="relative flex items-center gap-3" ref={menuRef}>
             {isHomeownerPage && (
               <Link
-                href={hasProfessionalRole ? "/new-project" : "/list-with-us"}
+                href={hasProfessionalRole ? "/new-project" : "/businesses/architects"}
                 className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-surface"
               >
                 {hasProfessionalRole ? "Add new project" : "List with us"}
@@ -263,7 +267,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       {/* Section 3: List with us / Dashboard / Help */}
                       <div className="px-4 py-3">
                         <Link
-                          href="/list-with-us"
+                          href="/businesses/architects"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
@@ -378,13 +382,13 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                   ) : (
                     <>
                       <div className="px-4 py-3">
-                        <Link
-                          href="/create-company"
-                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
-                          onClick={() => setIsMenuOpen(false)}
+                        <button
+                          type="button"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary text-left w-full"
+                          onClick={() => { setIsMenuOpen(false); openCreateCompanyModal() }}
                         >
                           Create company profile
-                        </Link>
+                        </button>
                         <Link
                           href="/homeowner"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"

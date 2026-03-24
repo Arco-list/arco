@@ -62,6 +62,62 @@ function generateSlug(name: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+export async function updateCategoryAction(
+  input: { categoryId: string; name: string; slug?: string; parentId?: string | null }
+): Promise<ActionResult> {
+  const parseResult = categoryIdSchema.safeParse(input.categoryId)
+  if (!parseResult.success) {
+    return createErrorResponse('VALIDATION', 'Invalid category id', {}, 'admin-categories-update')
+  }
+
+  if (!input.name || input.name.trim().length < 2 || input.name.trim().length > 100) {
+    return createErrorResponse('VALIDATION', 'Category name must be between 2 and 100 characters', {}, 'admin-categories-update')
+  }
+
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse('AUTH', error.message, {}, 'admin-categories-update')
+
+  const name = input.name.trim()
+  const slug = input.slug?.trim() || generateSlug(name)
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+
+  // Check slug uniqueness
+  const { data: existingCategory } = await serviceSupabase
+    .from("categories")
+    .select("id")
+    .eq("slug", slug)
+    .neq("id", parseResult.data)
+    .maybeSingle()
+
+  if (existingCategory) {
+    return createErrorResponse('VALIDATION', 'A category with this slug already exists', {}, 'admin-categories-update')
+  }
+
+  const updateData: Record<string, unknown> = {
+    name,
+    slug,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (input.parentId !== undefined) {
+    updateData.parent_id = input.parentId
+  }
+
+  const { error: updateError } = await serviceSupabase
+    .from("categories")
+    .update(updateData)
+    .eq("id", parseResult.data)
+
+  if (updateError) {
+    return createErrorResponse('DATABASE', updateError.message, {}, 'admin-categories-update')
+  }
+
+  revalidatePath("/admin/categories")
+  revalidatePath("/professionals")
+  return createSuccessResponse({ categoryId: parseResult.data, name, slug })
+}
+
 export async function updateCategoryNameAction(
   input: { categoryId: string; name: string }
 ): Promise<ActionResult> {
@@ -324,8 +380,79 @@ export async function deleteCategoryAction(
   })
 }
 
+export async function toggleHomeCarrouselAction(
+  input: { categoryId: string; enabled: boolean; categoryType: string }
+): Promise<ActionResult> {
+  const parseResult = categoryIdSchema.safeParse(input.categoryId)
+  if (!parseResult.success) {
+    return createErrorResponse(
+      'VALIDATION',
+      'Invalid category id',
+      { errors: parseResult.error.flatten() },
+      'admin-categories-home-carrousel'
+    )
+  }
+
+  const { error } = await assertAdmin()
+  if (error) {
+    return createErrorResponse(
+      'AUTH',
+      error.message,
+      { userId: null },
+      'admin-categories-home-carrousel'
+    )
+  }
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+
+  // Enforce max 5 per category type when enabling
+  if (input.enabled) {
+    const { data: currentCount } = await serviceSupabase
+      .from("categories")
+      .select("id")
+      .eq("in_home_carrousel", true)
+      .eq("is_active", true)
+      .eq("category_type", input.categoryType)
+      .eq("category_hierarchy", 2)
+
+    if (currentCount && currentCount.length >= 5) {
+      return createErrorResponse(
+        'VALIDATION',
+        'Maximum 5 categories can be shown on the homepage carousel. Please remove one first.',
+        { categoryType: input.categoryType, currentCount: currentCount.length },
+        'admin-categories-home-carrousel'
+      )
+    }
+  }
+
+  const { error: updateError } = await serviceSupabase
+    .from("categories")
+    .update({
+      in_home_carrousel: input.enabled,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", parseResult.data)
+
+  if (updateError) {
+    return createErrorResponse(
+      'DATABASE',
+      updateError.message,
+      { categoryId: parseResult.data, enabled: input.enabled },
+      'admin-categories-home-carrousel'
+    )
+  }
+
+  revalidatePath("/admin/categories")
+  revalidatePath("/")
+
+  return createSuccessResponse({
+    categoryId: parseResult.data,
+    inHomeCarrousel: input.enabled
+  })
+}
+
 export async function createCategoryAction(
-  input: { name: string; parentId?: string | null; description?: string | null }
+  input: { name: string; parentId?: string | null; description?: string | null; categoryType?: string | null }
 ): Promise<ActionResult> {
   if (!input.name || input.name.trim().length < 2 || input.name.trim().length > 100) {
     return createErrorResponse(
@@ -368,15 +495,27 @@ export async function createCategoryAction(
     )
   }
 
+  // Determine hierarchy: parent (group) = 1, child = 2
+  // For project types without a parent, still treat as child-level (flat)
+  const hierarchy = input.parentId
+    ? 2
+    : input.categoryType === "Professional"
+      ? 1
+      : 2
+
+  const insertData = {
+    name,
+    slug,
+    parent_id: input.parentId || null,
+    description: input.description?.trim() || null,
+    is_active: true,
+    category_type: input.categoryType || null,
+    category_hierarchy: hierarchy,
+  }
+
   const { data: newCategory, error: insertError } = await serviceSupabase
     .from("categories")
-    .insert({
-      name,
-      slug,
-      parent_id: input.parentId || null,
-      description: input.description?.trim() || null,
-      is_active: true
-    })
+    .insert(insertData as any)
     .select("id, name, slug")
     .single()
 
@@ -394,5 +533,55 @@ export async function createCategoryAction(
 
   return createSuccessResponse({
     category: newCategory
+  })
+}
+
+export async function toggleCanPublishProjectsAction(
+  input: { categoryId: string; enabled: boolean }
+): Promise<ActionResult> {
+  const parseResult = categoryIdSchema.safeParse(input.categoryId)
+  if (!parseResult.success) {
+    return createErrorResponse(
+      'VALIDATION',
+      'Invalid category ID',
+      { categoryId: input.categoryId },
+      'admin-categories-can-publish'
+    )
+  }
+
+  const { error } = await assertAdmin()
+  if (error) {
+    return createErrorResponse(
+      'AUTH',
+      error.message,
+      { userId: null },
+      'admin-categories-can-publish'
+    )
+  }
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+
+  const { error: updateError } = await serviceSupabase
+    .from("categories")
+    .update({
+      can_publish_projects: input.enabled,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", parseResult.data)
+
+  if (updateError) {
+    return createErrorResponse(
+      'DATABASE',
+      updateError.message,
+      { categoryId: parseResult.data, enabled: input.enabled },
+      'admin-categories-can-publish'
+    )
+  }
+
+  revalidatePath("/admin/categories")
+
+  return createSuccessResponse({
+    categoryId: parseResult.data,
+    canPublishProjects: input.enabled
   })
 }

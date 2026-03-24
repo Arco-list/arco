@@ -68,6 +68,10 @@ const toProfessionalCard = (row: any): ProfessionalCard => {
       ? row.logo_url
       : PLACEHOLDER_IMAGE;
 
+  const logoUrl = typeof row.logo_url === "string" && row.logo_url.length > 0
+    ? row.logo_url
+    : null;
+
   return {
     id: row.company_id,
     slug: row.company_slug || row.company_id,
@@ -79,6 +83,7 @@ const toProfessionalCard = (row: any): ProfessionalCard => {
     rating: Number(ratingValue.toFixed(2)),
     reviewCount,
     image,
+    logoUrl,
     specialties,
     isVerified: Boolean(row.is_verified),
     domain: row.company_domain ?? null,

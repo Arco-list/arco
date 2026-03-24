@@ -51,7 +51,7 @@ export function FeatureSelectionGrid({
     <>
       {errorMessage && <p className="body-small text-amber-600 mb-4">{errorMessage}</p>}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {features.map((feature) => {
           const IconComponent = resolveIcon(feature)
           const isAlreadyAdded = selectedFeatures.includes(feature.id)
@@ -62,7 +62,7 @@ export function FeatureSelectionGrid({
               key={feature.id}
               onClick={() => !isAlreadyAdded && onToggle(feature.id)}
               disabled={isAlreadyAdded || isSaving}
-              className={`p-4 rounded-lg border-2 transition-all text-left ${
+              className={`flex h-full flex-col rounded-lg border-2 p-4 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900/40 ${
                 isAlreadyAdded
                   ? "border-border bg-surface opacity-50 cursor-not-allowed"
                   : isInTempSelection
@@ -70,8 +70,11 @@ export function FeatureSelectionGrid({
                     : "border-border bg-white hover:border-border"
               } ${isSaving ? "opacity-60" : ""}`}
             >
-              <IconComponent className="w-6 h-6 text-foreground mb-2" />
-              <p className="font-medium text-foreground body-small">{feature.name}</p>
+              <IconComponent aria-hidden className="mb-3 h-6 w-6 text-foreground" />
+              <span className="body-small font-medium text-foreground">{feature.name}</span>
+              {isAlreadyAdded && (
+                <span className="mt-1 text-xs text-text-secondary">Added</span>
+              )}
             </button>
           )
         })}

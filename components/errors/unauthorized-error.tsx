@@ -1,30 +1,17 @@
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 
 export default function UnauthorizedError() {
   return (
-    <div className="flex items-center justify-center bg-background py-20">
-      <div className="text-center space-y-6 max-w-md mx-auto px-4">
-        <div className="space-y-2">
-          <h1 className="text-6xl font-bold text-primary">401</h1>
-          <h2 className="text-2xl font-semibold">Unauthorized</h2>
-          <p className="text-muted-foreground">
-            You need to be logged in to access this page.
-          </p>
-        </div>
-        
-        <div className="space-y-4">
-          <Button asChild className="w-full">
-            <Link href="/login">
-              Sign In
-            </Link>
-          </Button>
-          
-          <Button variant="quaternary" size="quaternary" asChild className="w-full">
-            <Link href="/">
-              Go Home
-            </Link>
-          </Button>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", padding: "80px 24px" }}>
+      <div style={{ textAlign: "center", maxWidth: 480 }}>
+        <p className="arco-eyebrow" style={{ marginBottom: 16 }}>401</p>
+        <h1 className="arco-page-title" style={{ marginBottom: 12 }}>Unauthorized</h1>
+        <p className="arco-body" style={{ marginBottom: 40 }}>
+          You need to be logged in to access this page.
+        </p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          <Link href="/login" className="btn btn-primary">Sign in</Link>
+          <Link href="/" className="btn btn-secondary">Go home</Link>
         </div>
       </div>
     </div>

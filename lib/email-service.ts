@@ -1,10 +1,11 @@
 'use server'
 
-export type EmailTemplate = 
-  | 'project-review'
+export type EmailTemplate =
   | 'project-live'
-  | 'project-rejected' 
+  | 'project-rejected'
   | 'professional-invite'
+  | 'team-invite'
+  | 'domain-verification'
 
 export interface EmailVariables {
   // User variables
@@ -36,10 +37,11 @@ export interface EmailVariables {
 
 // Template ID mapping - Update these IDs from your Loops dashboard
 const EMAIL_TEMPLATES: Record<EmailTemplate, string> = {
-  'project-review': 'cm70btm1l003rpi2hhcxqklpe',
   'project-live': 'cmgrix7ib81tdy80igwg27jzi', // Updated with actual template ID
   'project-rejected': 'cmgrir5g76hvnyc0ifadfp7b3', // Add your template ID
-  'professional-invite': 'cmh2bhml30enxyw0jgvk31c3s' // Updated with actual template ID
+  'professional-invite': 'cmh2bhml30enxyw0jgvk31c3s', // Updated with actual template ID
+  'team-invite': 'TODO_CREATE_IN_LOOPS', // Create template in Loops.so dashboard
+  'domain-verification': 'cmmj0rol708e80i3ropaa8h4d'
 }
 
 interface LoopsResponse {
@@ -112,22 +114,6 @@ export async function sendTransactionalEmail(
 // Convenience functions for specific email scenarios
 
 /**
- * Send project review email when user submits project
- */
-export const sendProjectReviewEmail = async (
-  email: string,
-  projectData: {
-    firstname?: string
-    Project_name: string
-    Project_title: string
-    project_name: string
-    dashboard_link?: string
-  }
-): Promise<LoopsResponse> => {
-  return sendTransactionalEmail(email, 'project-review', projectData)
-}
-
-/**
  * Send project status update emails (live/rejected)
  */
 export const sendProjectStatusEmail = async (
@@ -159,6 +145,19 @@ export const sendProfessionalInviteEmail = async (
   }
 ): Promise<LoopsResponse> => {
   return sendTransactionalEmail(email, 'professional-invite', inviteData)
+}
+
+/**
+ * Send domain verification email with 6-digit code
+ */
+export const sendDomainVerificationEmail = async (
+  email: string,
+  data: {
+    code: string
+    businessname: string
+  }
+): Promise<LoopsResponse> => {
+  return sendTransactionalEmail(email, 'domain-verification', data)
 }
 
 /**

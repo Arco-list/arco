@@ -16,15 +16,13 @@ import {
 } from "@tanstack/react-table"
 import { useRouter } from "next/navigation"
 import {
-  Clock,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Loader2,
-  Mail,
   MoreHorizontal,
   Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
-  UserPlus,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -33,35 +31,16 @@ import {
   checkUserDeletionAction,
   deleteUserAction,
   generateAdminResetPasswordAction,
-  inviteAdminUserAction,
+  generateLoginAsLinkAction,
   toggleAdminStatusAction,
 } from "@/app/admin/users/actions"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTrigger,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group"
 import {
   Select,
   SelectContent,
@@ -69,13 +48,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
+
+export type AdminUserCompany = {
+  id: string
+  name: string
+  slug: string
+  companyStatus: string
+  projectCount: number
+}
+
+const COMPANY_STATUS_DOT: Record<string, string> = {
+  listed: "bg-emerald-500",
+  unlisted: "bg-muted-foreground",
+  deactivated: "bg-red-500",
+}
 
 export type AdminUserRow = {
   id: string
   displayName: string
   email: string
+  avatarUrl: string | null
+  companies: AdminUserCompany[]
   role: "super_admin" | "admin" | "client"
   status: "active" | "inactive" | "invited"
   createdAt: string | null
@@ -93,34 +88,41 @@ type AdminUsersTableProps = {
   singleActiveSuperAdmin: boolean
 }
 
+function getUserRoleLabel(user: AdminUserRow): string {
+  if (user.role === "super_admin") return "Super Admin"
+  if (user.role === "admin") return "Admin"
+  if (user.companies.length > 0) return "Professional"
+  return "Homeowner"
+}
+
 const ROLE_LABELS: Record<AdminUserRow["role"], string> = {
   admin: "Admin",
   super_admin: "Super Admin",
   client: "Homeowner",
 }
 
-const STATUS_META: Record<
-  AdminUserRow["status"],
-  { label: string; tone: string; icon: React.ReactNode }
-> = {
-  active: {
-    label: "Active",
-    tone: "border-green-200 text-green-700 bg-green-50",
-    icon: <ShieldCheck className="mr-1 h-3.5 w-3.5" />,
-  },
-  invited: {
-    label: "Invited",
-    tone: "border-amber-200 text-amber-700 bg-amber-50",
-    icon: <Clock className="mr-1 h-3.5 w-3.5" />,
-  },
-  inactive: {
-    label: "Inactive",
-    tone: "border-rose-200 text-rose-700 bg-rose-50",
-    icon: <ShieldAlert className="mr-1 h-3.5 w-3.5" />,
-  },
+const STATUS_DOT: Record<AdminUserRow["status"], string> = {
+  active: "bg-emerald-500",
+  invited: "bg-amber-500",
+  inactive: "bg-rose-500",
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const STATUS_LABEL: Record<AdminUserRow["status"], string> = {
+  active: "Active",
+  invited: "Invited",
+  inactive: "Inactive",
+}
+
+const ROLE_OPTIONS: { value: AdminUserRow["role"]; label: string; description: string; dotColor: string }[] = [
+  { value: "client", label: "Homeowner", description: "Standard user account, no admin access", dotColor: "bg-[#a1a1a0]" },
+  { value: "admin", label: "Admin", description: "Manage listings, professionals, and reviews", dotColor: "bg-blue-500" },
+  { value: "super_admin", label: "Super Admin", description: "Full access including billing and settings", dotColor: "bg-[#016D75]" },
+]
+
+const USER_STATUS_OPTIONS: { value: "active" | "inactive"; label: string; description: string; dotColor: string }[] = [
+  { value: "active", label: "Active", description: "User can log in and access the platform", dotColor: "bg-emerald-500" },
+  { value: "inactive", label: "Deactivated", description: "User is blocked from logging in", dotColor: "bg-rose-500" },
+]
 
 const parseDate = (value: string | null) => {
   if (!value) return null
@@ -142,23 +144,19 @@ const formatAbsolute = (value: string | null) => {
 
 export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTableProps) {
   const router = useRouter()
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = useState({})
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 20,
   })
 
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteRole, setInviteRole] = useState<"admin" | "super_admin">("admin")
-
   const [roleDialogUser, setRoleDialogUser] = useState<AdminUserRow | null>(null)
-  const [roleSelection, setRoleSelection] = useState<"admin" | "super_admin">("admin")
+  const [roleSelection, setRoleSelection] = useState<AdminUserRow["role"]>("client")
 
-  const [statusDialog, setStatusDialog] = useState<{ user: AdminUserRow; nextActive: boolean } | null>(null)
+  const [statusDialogUser, setStatusDialogUser] = useState<AdminUserRow | null>(null)
+  const [statusSelection, setStatusSelection] = useState<"active" | "inactive">("active")
 
   const [resettingUserId, setResettingUserId] = useState<string | null>(null)
 
@@ -166,23 +164,22 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const [roleFilter, setRoleFilter] = useState<"all" | AdminUserRow["role"]>("all")
   const [statusFilter, setStatusFilter] = useState<"all" | AdminUserRow["status"]>("all")
 
-  const [isInviting, startInviteTransition] = useTransition()
   const [isUpdatingRole, startRoleTransition] = useTransition()
   const [isUpdatingStatus, startStatusTransition] = useTransition()
   const [isGeneratingReset, startResetTransition] = useTransition()
   const [isDeletingUser, startDeleteTransition] = useTransition()
+  const [loggingInAsUserId, setLoggingInAsUserId] = useState<string | null>(null)
 
-  const [deleteDialog, setDeleteDialog] = useState<{
-    user: AdminUserRow
-    checkResult?: {
-      canDelete: boolean
-      warnings: string[]
-      blockers: string[]
-      ownsCompany: boolean
-      companyName?: string
-    }
-    isChecking: boolean
+  const [deleteUser, setDeleteUser] = useState<AdminUserRow | null>(null)
+  const [deleteCheckResult, setDeleteCheckResult] = useState<{
+    canDelete: boolean
+    warnings: string[]
+    blockers: string[]
+    ownsCompany: boolean
+    companyName?: string
   } | null>(null)
+  const [isCheckingDelete, setIsCheckingDelete] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   const handleResetPassword = useCallback(
     (user: AdminUserRow) => {
@@ -221,7 +218,10 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   )
 
   const handleOpenDeleteDialog = useCallback(async (user: AdminUserRow) => {
-    setDeleteDialog({ user, isChecking: true })
+    setDeleteUser(user)
+    setDeleteCheckResult(null)
+    setDeleteConfirmText("")
+    setIsCheckingDelete(true)
 
     try {
       const result = await checkUserDeletionAction({ userId: user.id })
@@ -230,34 +230,33 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         toast.error("Failed to check deletion requirements", {
           description: result.error,
         })
-        setDeleteDialog(null)
+        setDeleteUser(null)
+        setIsCheckingDelete(false)
         return
       }
 
-      setDeleteDialog({
-        user,
-        checkResult: {
-          canDelete: result.data.canDelete,
-          warnings: result.data.warnings,
-          blockers: result.data.blockers,
-          ownsCompany: result.data.ownsCompany,
-          companyName: result.data.companyName,
-        },
-        isChecking: false,
+      setDeleteCheckResult({
+        canDelete: result.data.canDelete,
+        warnings: result.data.warnings,
+        blockers: result.data.blockers,
+        ownsCompany: result.data.ownsCompany,
+        companyName: result.data.companyName,
       })
+      setIsCheckingDelete(false)
     } catch (err) {
       console.error(err)
       toast.error("Unexpected error while checking deletion requirements.")
-      setDeleteDialog(null)
+      setDeleteUser(null)
+      setIsCheckingDelete(false)
     }
   }, [])
 
   const handleConfirmDelete = useCallback(() => {
-    if (!deleteDialog) return
+    if (!deleteUser) return
 
     startDeleteTransition(async () => {
       try {
-        const result = await deleteUserAction({ userId: deleteDialog.user.id })
+        const result = await deleteUserAction({ userId: deleteUser.id })
 
         if (!result.success) {
           toast.error("Failed to delete user", {
@@ -267,42 +266,106 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         }
 
         toast.success("User deleted", {
-          description: `${deleteDialog.user.displayName} has been permanently deleted.`,
+          description: `${deleteUser.displayName} has been permanently deleted.`,
         })
-        setDeleteDialog(null)
+        setDeleteUser(null)
+        setDeleteCheckResult(null)
         router.refresh()
       } catch (err) {
         console.error(err)
         toast.error("Unexpected error while deleting user.")
       }
     })
-  }, [deleteDialog, router, startDeleteTransition])
+  }, [deleteUser, router, startDeleteTransition])
+
+  const handleLoginAs = useCallback(
+    async (user: AdminUserRow) => {
+      setLoggingInAsUserId(user.id)
+      try {
+        const result = await generateLoginAsLinkAction({ userId: user.id })
+        if (!result.success || !result.data?.loginUrl) {
+          toast.error("Could not generate login link", {
+            description: result.error ?? "Try again in a few moments.",
+          })
+          return
+        }
+        window.open(result.data.loginUrl, "_blank")
+        toast.success("Login link opened", {
+          description: `A new tab was opened as ${user.email}. Use an incognito window to keep your admin session.`,
+        })
+      } catch (err) {
+        console.error(err)
+        toast.error("Unexpected error while generating login link.")
+      } finally {
+        setLoggingInAsUserId(null)
+      }
+    },
+    [],
+  )
+
+  const handleConfirmRole = () => {
+    if (!roleDialogUser) return
+    if (roleSelection === roleDialogUser.role) {
+      setRoleDialogUser(null)
+      return
+    }
+
+    startRoleTransition(async () => {
+      try {
+        const result = await changeAdminRoleAction({
+          userId: roleDialogUser.id,
+          role: roleSelection === "client" ? "admin" : roleSelection,
+        })
+
+        if (!result.success) {
+          toast.error("Role update failed", { description: result.error })
+          return
+        }
+
+        toast.success("Role updated", {
+          description: `${roleDialogUser.displayName} is now ${ROLE_LABELS[roleSelection] ?? roleSelection}.`,
+        })
+        setRoleDialogUser(null)
+        router.refresh()
+      } catch (err) {
+        console.error(err)
+        toast.error("Unexpected error while updating the role.")
+      }
+    })
+  }
+
+  const handleConfirmStatus = () => {
+    if (!statusDialogUser) return
+    const nextActive = statusSelection === "active"
+
+    startStatusTransition(async () => {
+      try {
+        const result = await toggleAdminStatusAction({
+          userId: statusDialogUser.id,
+          active: nextActive,
+        })
+
+        if (!result.success) {
+          toast.error("Status update failed", { description: result.error })
+          return
+        }
+
+        toast.success(nextActive ? "User reactivated" : "User deactivated", {
+          description: nextActive
+            ? `${statusDialogUser.displayName} can log in again.`
+            : `${statusDialogUser.displayName} can no longer access the platform.`,
+        })
+        setStatusDialogUser(null)
+        router.refresh()
+      } catch (err) {
+        console.error(err)
+        toast.error("Unexpected error while updating status.")
+      }
+    })
+  }
 
   const columns = useMemo<ColumnDef<AdminUserRow>[]>(() => {
     return [
-      {
-        id: "select",
-        header: ({ table }) => (
-          <div className="flex items-center justify-center">
-            <Checkbox
-              checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
-              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-              aria-label="Select all"
-            />
-          </div>
-        ),
-        cell: ({ row }) => (
-          <div className="flex items-center justify-center">
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(value) => row.toggleSelected(!!value)}
-              aria-label="Select row"
-            />
-          </div>
-        ),
-        enableSorting: false,
-        enableHiding: false,
-      },
       {
         accessorKey: "displayName",
         header: "Name",
@@ -316,40 +379,123 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
 
           return (
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground">
-                {initials}
-              </div>
-              <div className="flex flex-col">
-                <span className="font-medium leading-tight">{row.original.displayName}</span>
-                <span className="body-small text-muted-foreground">{row.original.email}</span>
+              {row.original.avatarUrl ? (
+                <img
+                  src={row.original.avatarUrl}
+                  alt={row.original.displayName}
+                  className="h-8 w-8 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                  {initials}
+                </div>
+              )}
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-medium text-[#1c1c1a] truncate">{row.original.displayName}</span>
+                <span className="text-xs text-[#a1a1a0] truncate">{row.original.email}</span>
               </div>
             </div>
           )
         },
         filterFn: (row, columnId, filterValue) => {
           if (!filterValue) return true
-          const value = `${row.getValue(columnId)} ${row.original.email}`.toLowerCase()
-          return value.includes((filterValue as string).toLowerCase())
+          const search = (filterValue as string).toLowerCase()
+          const companyNames = row.original.companies.map((c) => c.name).join(" ")
+          const value = `${row.getValue(columnId)} ${row.original.email} ${companyNames}`.toLowerCase()
+          return value.includes(search)
         },
       },
       {
         accessorKey: "role",
         header: "Role",
-        cell: ({ row }) => (
-          <Badge className={cn("capitalize px-2 py-1 text-xs", row.original.role === "super_admin" && "bg-primary/10 text-primary")}>
-            {ROLE_LABELS[row.original.role]}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const roleLabel = getUserRoleLabel(row.original)
+          return (
+            <span className={cn(
+              "text-xs font-medium",
+              row.original.role === "super_admin" ? "text-[#016D75]" : "text-[#6b6b68]"
+            )}>
+              {roleLabel}
+            </span>
+          )
+        },
         filterFn: (row, columnId, filterValue) => {
           if (!filterValue || filterValue === "all") return true
           return row.getValue(columnId) === filterValue
         },
       },
       {
+        id: "companies",
+        header: "Company",
+        cell: ({ row }) => {
+          const companies = row.original.companies
+          if (!companies.length) {
+            return <span className="text-xs text-[#a1a1a0]">—</span>
+          }
+          const first = companies[0]
+          const overflow = companies.length - 1
+          return (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[first.companyStatus] ?? "bg-muted-foreground"}`} />
+                <Link
+                  href={`/professionals/${first.slug}`}
+                  className="text-xs text-[#1c1c1a] hover:text-[#016D75] transition-colors truncate max-w-[150px]"
+                >
+                  {first.name}
+                </Link>
+                {first.projectCount > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
+                    {first.projectCount} {first.projectCount === 1 ? "project" : "projects"}
+                  </span>
+                )}
+              </div>
+              {overflow > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-[11px] text-[#a1a1a0] hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit"
+                    >
+                      +{overflow} more
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[200px]">
+                    {companies.slice(1).map((company) => (
+                      <DropdownMenuItem key={company.id} className="flex items-center gap-1.5">
+                        <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                        <Link
+                          href={`/professionals/${company.slug}`}
+                          className="text-xs cursor-pointer truncate"
+                        >
+                          {company.name}
+                        </Link>
+                        {company.projectCount > 0 && (
+                          <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] ml-auto">
+                            {company.projectCount} {company.projectCount === 1 ? "project" : "projects"}
+                          </span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          )
+        },
+      },
+      {
         accessorKey: "status",
         header: "Status",
+        sortingFn: (rowA, rowB) => {
+          const order = { active: 0, invited: 1, inactive: 2 }
+          const statusDiff = order[rowA.original.status] - order[rowB.original.status]
+          if (statusDiff !== 0) return statusDiff
+          const a = rowA.original.lastSignInAt ? new Date(rowA.original.lastSignInAt).getTime() : 0
+          const b = rowB.original.lastSignInAt ? new Date(rowB.original.lastSignInAt).getTime() : 0
+          return b - a
+        },
         cell: ({ row }) => {
-          const meta = STATUS_META[row.original.status]
           const statusDetail = (() => {
             if (row.original.status === "invited") {
               const invitedRelative = formatRelative(row.original.invitedAt)
@@ -365,17 +511,12 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           })()
 
           return (
-            <div className="flex flex-col">
-              <span
-                className={cn(
-                  "inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-xs font-medium",
-                  meta.tone,
-                )}
-              >
-                {meta.icon}
-                {meta.label}
-              </span>
-              <span className="text-xs text-muted-foreground mt-1">{statusDetail}</span>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[row.original.status])} />
+                <span className="text-xs font-medium text-[#1c1c1a]">{STATUS_LABEL[row.original.status]}</span>
+              </div>
+              <span className="text-[11px] text-[#a1a1a0] pl-3">{statusDetail}</span>
             </div>
           )
         },
@@ -385,16 +526,12 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         },
       },
       {
-        accessorKey: "lastSignInAt",
-        header: "Last Activity",
+        accessorKey: "createdAt",
+        header: "Created",
         cell: ({ row }) => {
-          const lastLogin = formatRelative(row.original.lastSignInAt)
-          const fallback = formatRelative(row.original.createdAt)
-          return (
-            <div className="body-small text-muted-foreground">
-              {lastLogin ?? (row.original.status === "invited" ? "Pending activation" : fallback ?? "N/A")}
-            </div>
-          )
+          const date = parseDate(row.original.createdAt)
+          if (!date) return <span className="text-xs text-[#a1a1a0]">—</span>
+          return <span className="text-xs text-[#6b6b68]">{format(date, "PP")}</span>
         },
       },
       {
@@ -402,73 +539,56 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         header: "",
         cell: ({ row }) => {
           const user = row.original
-          const disableDemote = user.isLastSuperAdmin && user.role === "super_admin"
           const isInactive = user.status === "inactive"
-          const nextActive = isInactive
-          const disableDeactivate = (!isInactive && user.isLastSuperAdmin) || user.isSelf
+          const disableStatusChange = (!isInactive && user.isLastSuperAdmin) || user.isSelf
+          const isLoggingIn = loggingInAsUserId === user.id
 
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex h-8 w-8 p-0 text-muted-foreground" size="icon">
+                <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Open menu</span>
-                </Button>
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem
+                  disabled={user.isSelf || user.status === "invited" || isLoggingIn}
+                  onClick={() => handleLoginAs(user)}
+                >
+                  {isLoggingIn ? "Generating link…" : "Log in as user"}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
                     setRoleDialogUser(user)
                     setRoleSelection(user.role)
                   }}
                 >
-                  Update role…
+                  Update role
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={disableDeactivate}
+                  disabled={disableStatusChange}
                   onClick={() => {
-                    setStatusDialog({ user, nextActive })
+                    setStatusDialogUser(user)
+                    setStatusSelection(isInactive ? "active" : user.status === "active" ? "active" : "active")
                   }}
                 >
-                  {isInactive ? "Reactivate access" : "Deactivate access"}
+                  Update status
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={user.status === "invited" || (isGeneratingReset && resettingUserId === user.id)}
                   onClick={() => handleResetPassword(user)}
                 >
-                  {isGeneratingReset && resettingUserId === user.id ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating…
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      Reset password link
-                    </span>
-                  )}
+                  {isGeneratingReset && resettingUserId === user.id ? "Generating…" : "Reset password link"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={user.isSelf}
                   onClick={() => handleOpenDeleteDialog(user)}
-                  className="text-destructive focus:text-destructive"
+                  className="text-red-600 focus:text-red-600"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    Delete user…
-                  </span>
+                  Delete user
                 </DropdownMenuItem>
-                {disableDemote && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem disabled className="text-xs leading-tight text-muted-foreground whitespace-normal">
-                      Promote another super admin to unlock demotion.
-                    </DropdownMenuItem>
-                  </>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )
@@ -477,7 +597,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         enableHiding: false,
       },
     ]
-  }, [handleResetPassword, handleOpenDeleteDialog, isGeneratingReset, resettingUserId])
+  }, [handleResetPassword, handleOpenDeleteDialog, handleLoginAs, isGeneratingReset, resettingUserId, loggingInAsUserId])
 
   const table = useReactTable({
     data,
@@ -486,7 +606,6 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       sorting,
       columnFilters,
       columnVisibility,
-      rowSelection,
       pagination,
     },
     getCoreRowModel: getCoreRowModel(),
@@ -496,525 +615,425 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
   })
 
   const totalAdmins = data.length
   const totalSuperAdmins = data.filter((row) => row.role === "super_admin").length
-  const pendingInvites = data.filter((row) => row.status === "invited").length
-
-  const inviteDisabled = !EMAIL_REGEX.test(inviteEmail.trim())
-
-  const handleSendInvite = () => {
-    const email = inviteEmail.trim().toLowerCase()
-    if (!EMAIL_REGEX.test(email)) {
-      toast.error("Enter a valid email address before sending the invite.")
-      return
-    }
-
-    startInviteTransition(async () => {
-      try {
-        const result = await inviteAdminUserAction({ email, role: inviteRole })
-        if (!result.success) {
-          toast.error("Unable to send invitation", {
-            description: result.error,
-          })
-          return
-        }
-
-        toast.success("Invitation sent", {
-          description: `We emailed ${email} with setup instructions.`,
-        })
-        setInviteEmail("")
-        setInviteRole("admin")
-        setInviteDialogOpen(false)
-        router.refresh()
-      } catch (err) {
-        console.error(err)
-        toast.error("Unexpected error while sending the invitation.")
-      }
-    })
-  }
-
-  const handleConfirmRole = () => {
-    if (!roleDialogUser) return
-    if (roleSelection === roleDialogUser.role) {
-      toast.info("This admin already has that role.")
-      return
-    }
-
-    startRoleTransition(async () => {
-      try {
-        const result = await changeAdminRoleAction({
-          userId: roleDialogUser.id,
-          role: roleSelection,
-        })
-
-        if (!result.success) {
-          toast.error("Role update failed", { description: result.error })
-          return
-        }
-
-        toast.success("Role updated", {
-          description: `${roleDialogUser.displayName} is now ${ROLE_LABELS[roleSelection]}.`,
-        })
-        setRoleDialogUser(null)
-        router.refresh()
-      } catch (err) {
-        console.error(err)
-        toast.error("Unexpected error while updating the role.")
-      }
-    })
-  }
-
-  const handleConfirmStatus = () => {
-    if (!statusDialog) return
-
-    startStatusTransition(async () => {
-      try {
-        const result = await toggleAdminStatusAction({
-          userId: statusDialog.user.id,
-          active: statusDialog.nextActive,
-        })
-
-        if (!result.success) {
-          toast.error("Status update failed", { description: result.error })
-          return
-        }
-
-        toast.success(statusDialog.nextActive ? "Admin reactivated" : "Admin access revoked", {
-          description: statusDialog.nextActive
-            ? `${statusDialog.user.displayName} can log in again.`
-            : `${statusDialog.user.displayName} can no longer access the admin.`,
-        })
-        setStatusDialog(null)
-        router.refresh()
-      } catch (err) {
-        console.error(err)
-        toast.error("Unexpected error while updating status.")
-      }
-    })
-  }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
+      {/* Warning banner */}
       {singleActiveSuperAdmin && (
-        <div className="mx-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 lg:mx-6">
-          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+        <div className="flex items-start gap-2.5 border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <p>
-            There is only one active super admin. Invite or promote another super admin before demoting or deactivating the
-            current one.
+            There is only one active super admin. Invite or promote another before demoting or deactivating the current one.
           </p>
         </div>
       )}
 
-      <div className="flex flex-col gap-4 px-4 lg:px-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="heading-4">Users</h2>
-            <p className="body-small text-muted-foreground">
-              {totalAdmins} total · {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"} · {pendingInvites} pending invite
-              {pendingInvites === 1 ? "" : "s"}
-            </p>
+      {/* Header */}
+      <div className="flex flex-col gap-1">
+        <h3 className="arco-section-title">Users</h3>
+        <p className="text-xs text-[#a1a1a0] mt-0.5">
+          {totalAdmins} total &middot; {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"}
+        </p>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-1 items-center">
+          <input
+            type="text"
+            placeholder="Search by name or email…"
+            className="w-full max-w-sm px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+            value={searchTerm}
+            onChange={(event) => {
+              const value = event.target.value
+              setSearchTerm(value)
+              table.getColumn("displayName")?.setFilterValue(value)
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={roleFilter}
+            onValueChange={(value) => {
+              const next = value as typeof roleFilter
+              setRoleFilter(next)
+              table.getColumn("role")?.setFilterValue(next === "all" ? undefined : next)
+            }}
+          >
+            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+              <SelectValue placeholder="All roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              <SelectItem value="super_admin">Super admins</SelectItem>
+              <SelectItem value="admin">Admins</SelectItem>
+              <SelectItem value="client">Homeowners</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              const next = value as typeof statusFilter
+              setStatusFilter(next)
+              table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
+            }}
+          >
+            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="invited">Invited</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="border border-[#e5e5e4] overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#e5e5e4]">
+              {table.getHeaderGroups().map((headerGroup) =>
+                headerGroup.headers.map((header) => {
+                  const canSort = header.column.getCanSort()
+                  const sorted = header.column.getIsSorted()
+                  return (
+                    <th
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
+                    >
+                      {header.isPlaceholder ? null : canSort ? (
+                        <button
+                          className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors select-none"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {sorted === "asc" ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : sorted === "desc" ? (
+                            <ArrowDown className="h-3 w-3" />
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          )}
+                        </button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </th>
+                  )
+                })
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-4 py-3 align-middle">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={columns.length} className="h-24 text-center text-sm text-[#a1a1a0]">
+                  No users found. Adjust your filters or invite a new teammate.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between text-xs text-[#a1a1a0]">
+        <span>
+          {table.getFilteredRowModel().rows.length} user{table.getFilteredRowModel().rows.length === 1 ? "" : "s"}
+        </span>
+        <div className="flex items-center gap-3">
+          <span>
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              ‹
+            </button>
+            <button
+              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              ›
+            </button>
           </div>
-          <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Invite admin
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px]">
-              <DialogHeader>
-                <DialogTitle>Invite a new admin</DialogTitle>
-                <DialogDescription>
-                  We&apos;ll send setup instructions and track the invite once they verify their email.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-4 py-2">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="invite-email">Work email</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    placeholder="alex@arco.com"
-                    value={inviteEmail}
-                    autoFocus
-                    onChange={(event) => setInviteEmail(event.target.value)}
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="flex flex-col gap-3">
-                  <Label>Role</Label>
-                  <RadioGroup
-                    className="grid gap-3"
-                    value={inviteRole}
-                    onValueChange={(value) => setInviteRole(value as "admin" | "super_admin")}
+        </div>
+      </div>
+
+      {/* Role Dialog — popup-card design */}
+      {roleDialogUser && (
+        <div className="popup-overlay" onClick={() => setRoleDialogUser(null)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update role</h3>
+              <button type="button" className="popup-close" onClick={() => setRoleDialogUser(null)} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <div className="status-modal-options">
+              {ROLE_OPTIONS.map((option) => {
+                const isSelected = roleSelection === option.value
+                const isLastSuperAdmin = roleDialogUser.isLastSuperAdmin && roleDialogUser.role === "super_admin" && option.value !== "super_admin"
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`status-modal-option${isSelected ? " selected" : ""}`}
+                    disabled={isLastSuperAdmin}
+                    onClick={() => setRoleSelection(option.value)}
                   >
-                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="invite-role-admin" className="heading-7">
-                          Admin
-                        </Label>
-                        <span className="text-xs text-muted-foreground">
-                          Manage projects, professionals, and reviews.
-                        </span>
-                      </div>
-                      <RadioGroupItem id="invite-role-admin" value="admin" />
+                    <span className={`status-modal-dot ${option.dotColor}`} />
+                    <div className="status-modal-option-text">
+                      <span className="status-modal-option-label">{option.label}</span>
+                      <span className="status-modal-option-desc">{option.description}</span>
                     </div>
-                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="invite-role-super-admin" className="heading-7">
-                          Super Admin
-                        </Label>
-                        <span className="text-xs text-muted-foreground">
-                          Full access, including managing other admins.
-                        </span>
-                      </div>
-                      <RadioGroupItem id="invite-role-super-admin" value="super_admin" />
+                  </button>
+                )
+              })}
+            </div>
+
+            {roleDialogUser.isLastSuperAdmin && roleDialogUser.role === "super_admin" && (
+              <div className="px-4 pb-2">
+                <p className="border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-900 rounded-[3px]">
+                  Promote another super admin before demoting this user.
+                </p>
+              </div>
+            )}
+
+            <div className="popup-actions">
+              <button type="button" className="btn-tertiary" onClick={() => setRoleDialogUser(null)} disabled={isUpdatingRole} style={{ flex: 1 }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleConfirmRole}
+                disabled={isUpdatingRole || roleSelection === roleDialogUser.role}
+                style={{ flex: 1 }}
+              >
+                {isUpdatingRole ? "Updating…" : "Update role"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Dialog — popup-card design */}
+      {statusDialogUser && (
+        <div className="popup-overlay" onClick={() => setStatusDialogUser(null)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update status</h3>
+              <button type="button" className="popup-close" onClick={() => setStatusDialogUser(null)} aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <div className="status-modal-options">
+              {USER_STATUS_OPTIONS.map((option) => {
+                const isSelected = statusSelection === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`status-modal-option${isSelected ? " selected" : ""}`}
+                    onClick={() => setStatusSelection(option.value)}
+                  >
+                    <span className={`status-modal-dot ${option.dotColor}`} />
+                    <div className="status-modal-option-text">
+                      <span className="status-modal-option-label">{option.label}</span>
+                      <span className="status-modal-option-desc">{option.description}</span>
                     </div>
-                  </RadioGroup>
-                </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {statusDialogUser.isLastSuperAdmin && statusSelection === "inactive" && (
+              <div className="px-4 pb-2">
+                <p className="border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-900 rounded-[3px]">
+                  This is the last active super admin. Promote another before deactivating.
+                </p>
               </div>
-              <DialogFooter className="gap-2 sm:justify-end">
-                <Button variant="quaternary" size="quaternary" onClick={() => setInviteDialogOpen(false)} disabled={isInviting}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSendInvite} disabled={inviteDisabled || isInviting}>
-                  {isInviting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Send invitation
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+            )}
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 items-center gap-2">
-            <Input
-              placeholder="Search by name or email…"
-              className="max-w-sm"
-              value={searchTerm}
-              onChange={(event) => {
-                const value = event.target.value
-                setSearchTerm(value)
-                table.getColumn("displayName")?.setFilterValue(value)
-              }}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={roleFilter}
-              onValueChange={(value) => {
-                const next = value as typeof roleFilter
-                setRoleFilter(next)
-                table.getColumn("role")?.setFilterValue(next === "all" ? undefined : next)
-              }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="All roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
-                <SelectItem value="super_admin">Super admins</SelectItem>
-                <SelectItem value="admin">Admins</SelectItem>
-                <SelectItem value="client">Homeowners</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                const next = value as typeof statusFilter
-                setStatusFilter(next)
-                table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
-              }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="invited">Invited</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative flex flex-col gap-4 px-4 lg:px-6">
-        <div className="overflow-hidden rounded-lg border">
-          <Table>
-            <TableHeader className="bg-muted">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} colSpan={header.colSpan}>
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center body-small text-muted-foreground">
-                    No admins found. Adjust your filters or invite a new teammate.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t py-3 body-small text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} admin
-            {table.getFilteredRowModel().rows.length === 1 ? "" : "s"} selected
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="heading-7 text-muted-foreground">
-                Rows per page
-              </Label>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => table.setPageSize(Number(value))}
+            <div className="popup-actions">
+              <button type="button" className="btn-tertiary" onClick={() => setStatusDialogUser(null)} disabled={isUpdatingStatus} style={{ flex: 1 }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleConfirmStatus}
+                disabled={
+                  isUpdatingStatus ||
+                  (statusSelection === "active" && statusDialogUser.status === "active") ||
+                  (statusSelection === "inactive" && statusDialogUser.status === "inactive") ||
+                  (statusSelection === "inactive" && statusDialogUser.isLastSuperAdmin)
+                }
+                style={{ flex: 1 }}
               >
-                <SelectTrigger id="rows-per-page" className="w-24">
-                  <SelectValue placeholder={table.getState().pagination.pageSize} />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  {[10, 20, 30, 40, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="quaternary" size="quaternary"
-                className="h-8 w-8"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                ‹
-              </Button>
-              <Button
-                variant="quaternary" size="quaternary"
-                className="h-8 w-8"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                ›
-              </Button>
+                {isUpdatingStatus ? "Updating…" : "Update status"}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <Dialog open={!!roleDialogUser} onOpenChange={(open) => (!open ? setRoleDialogUser(null) : undefined)}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Update admin role</DialogTitle>
-            <DialogDescription>
-              {roleDialogUser
-                ? `Choose the access level for ${roleDialogUser.displayName}.`
-                : "Select the appropriate admin access."}
-            </DialogDescription>
-          </DialogHeader>
-          {roleDialogUser && (
-            <div className="flex flex-col gap-4">
-              <div className="rounded-md border border-border bg-muted/50 px-4 py-3">
-                <p className="body-small font-medium">{roleDialogUser.displayName}</p>
-                <p className="text-xs text-muted-foreground">{roleDialogUser.email}</p>
-              </div>
-              <RadioGroup
-                value={roleSelection}
-                onValueChange={(value) => setRoleSelection(value as "admin" | "super_admin")}
-                className="grid gap-3"
+      {/* Delete Confirmation — popup-card design */}
+      {deleteUser && (
+        <div className="popup-overlay" onClick={() => { if (!isDeletingUser) { setDeleteUser(null); setDeleteCheckResult(null) } }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Delete user</h3>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={() => { if (!isDeletingUser) { setDeleteUser(null); setDeleteCheckResult(null) } }}
+                aria-label="Close"
               >
-                <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="role-admin" className="heading-7">
-                      Admin
-                    </Label>
-                    <span className="text-xs text-muted-foreground">
-                      Manage listings, professionals, and reviews — no access to admin settings.
-                    </span>
-                  </div>
-                  <RadioGroupItem
-                    id="role-admin"
-                    value="admin"
-                    disabled={roleDialogUser.isLastSuperAdmin && roleDialogUser.role === "super_admin"}
+                ✕
+              </button>
+            </div>
+
+            <div className="px-4 pb-3">
+              <div className="flex items-center gap-3 mb-3">
+                {deleteUser.avatarUrl ? (
+                  <img
+                    src={deleteUser.avatarUrl}
+                    alt={deleteUser.displayName}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
                   />
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="role-super-admin" className="heading-7">
-                      Super Admin
-                    </Label>
-                    <span className="text-xs text-muted-foreground">
-                      Full access, including billing, settings, and managing other admins.
-                    </span>
+                ) : (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                    {deleteUser.displayName
+                      .split(" ")
+                      .filter(Boolean)
+                      .map((token) => token[0]?.toUpperCase())
+                      .slice(0, 2)
+                      .join("") || deleteUser.email.charAt(0).toUpperCase()}
                   </div>
-                  <RadioGroupItem id="role-super-admin" value="super_admin" />
+                )}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium text-[#1c1c1a] truncate">{deleteUser.displayName}</span>
+                  <span className="text-xs text-[#a1a1a0] truncate">{deleteUser.email}</span>
                 </div>
-              </RadioGroup>
-              {roleDialogUser.isLastSuperAdmin && roleDialogUser.role === "super_admin" && (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Promote another super admin before demoting this user. This prevents locking the team out of high-scope
-                  actions.
-                </p>
-              )}
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:justify-end">
-            <Button variant="quaternary" size="quaternary" onClick={() => setRoleDialogUser(null)} disabled={isUpdatingRole}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmRole} disabled={isUpdatingRole}>
-              {isUpdatingRole && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!statusDialog} onOpenChange={(open) => (!open ? setStatusDialog(null) : undefined)}>
-        <DialogContent className="sm:max-w-[430px]">
-          <DialogHeader>
-            <DialogTitle>{statusDialog?.nextActive ? "Reactivate admin" : "Deactivate admin access"}</DialogTitle>
-            <DialogDescription>
-              {statusDialog?.nextActive
-                ? "This admin will regain access immediately."
-                : "They will be signed out and blocked from logging in."}
-            </DialogDescription>
-          </DialogHeader>
-          {statusDialog && (
-            <div className="space-y-3">
-              <div className="rounded-md border border-border px-3 py-3">
-                <p className="body-small font-medium">{statusDialog.user.displayName}</p>
-                <p className="text-xs text-muted-foreground">{statusDialog.user.email}</p>
-              </div>
-              {!statusDialog.nextActive && statusDialog.user.isLastSuperAdmin && (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  This is the last active super admin. Promote or invite another super admin before deactivating.
-                </p>
-              )}
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:justify-end">
-            <Button variant="quaternary" size="quaternary" onClick={() => setStatusDialog(null)} disabled={isUpdatingStatus}>
-              Cancel
-            </Button>
-            <Button
-              variant={statusDialog?.nextActive ? "default" : "destructive"}
-              onClick={handleConfirmStatus}
-              disabled={isUpdatingStatus}
-            >
-              {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {statusDialog?.nextActive ? "Reactivate" : "Deactivate"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!deleteDialog} onOpenChange={(open) => (!open ? setDeleteDialog(null) : undefined)}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Delete user</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. All data associated with this user will be permanently deleted.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteDialog && (
-            <div className="space-y-4">
-              <div className="rounded-md border border-border px-3 py-3">
-                <p className="body-small font-medium">{deleteDialog.user.displayName}</p>
-                <p className="text-xs text-muted-foreground">{deleteDialog.user.email}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Role: {ROLE_LABELS[deleteDialog.user.role]}
-                </p>
               </div>
 
-              {deleteDialog.isChecking ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 body-small text-muted-foreground">Checking deletion requirements…</span>
+              <div className="popup-banner popup-banner--warn">
+                <AlertTriangle className="popup-banner-icon" />
+                <div>
+                  <p>This action cannot be undone. All data associated with this user will be permanently deleted.</p>
                 </div>
-              ) : deleteDialog.checkResult ? (
-                <>
-                  {deleteDialog.checkResult.blockers.length > 0 && (
-                    <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-3">
-                      <p className="body-small font-medium text-rose-900 mb-2">Cannot delete user</p>
-                      <ul className="space-y-1">
-                        {deleteDialog.checkResult.blockers.map((blocker, idx) => (
-                          <li key={idx} className="text-xs text-rose-800">
-                            • {blocker}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {deleteDialog.checkResult.canDelete && deleteDialog.checkResult.warnings.length > 0 && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
-                      <p className="body-small font-medium text-amber-900 mb-2">The following data will be deleted:</p>
-                      <ul className="space-y-1">
-                        {deleteDialog.checkResult.warnings.map((warning, idx) => (
-                          <li key={idx} className="text-xs text-amber-800">
-                            • {warning}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {deleteDialog.checkResult.canDelete && deleteDialog.checkResult.warnings.length === 0 && (
-                    <p className="body-small text-muted-foreground">
-                      This user has no related data. The account will be permanently deleted.
-                    </p>
-                  )}
-                </>
-              ) : null}
+              </div>
             </div>
-          )}
-          <DialogFooter className="gap-2 sm:justify-end">
-            <Button
-              variant="quaternary" size="quaternary"
-              onClick={() => setDeleteDialog(null)}
-              disabled={isDeletingUser || deleteDialog?.isChecking}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmDelete}
-              disabled={isDeletingUser || deleteDialog?.isChecking || !deleteDialog?.checkResult?.canDelete}
-            >
-              {isDeletingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete permanently
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+            {isCheckingDelete ? (
+              <div className="flex items-center justify-center px-4 py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-[#a1a1a0]" />
+                <span className="ml-2 text-xs text-[#a1a1a0]">Checking deletion requirements…</span>
+              </div>
+            ) : deleteCheckResult ? (
+              <div className="px-4 pb-2 space-y-2">
+                {deleteCheckResult.blockers.length > 0 && (
+                  <div className="popup-banner popup-banner--danger">
+                    <AlertTriangle className="popup-banner-icon" />
+                    <div>
+                      <p style={{ fontWeight: 500 }}>Cannot delete user</p>
+                      {deleteCheckResult.blockers.map((blocker, idx) => (
+                        <p key={idx}>{blocker}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {deleteCheckResult.canDelete && deleteCheckResult.warnings.length > 0 && (
+                  <div className="popup-banner popup-banner--warn">
+                    <AlertTriangle className="popup-banner-icon" />
+                    <div>
+                      <p style={{ fontWeight: 500 }}>The following data will be deleted:</p>
+                      {deleteCheckResult.warnings.map((warning, idx) => (
+                        <p key={idx}>{warning}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {deleteCheckResult.canDelete && deleteCheckResult.warnings.length === 0 && (
+                  <div className="popup-banner popup-banner--info">
+                    <AlertTriangle className="popup-banner-icon" />
+                    <div>
+                      <p>This user has no related data. The account will be permanently deleted.</p>
+                    </div>
+                  </div>
+                )}
+
+                {deleteCheckResult.canDelete && (
+                  <div className="pt-1">
+                    <label className="text-xs text-[#6b6b68] mb-1 block">
+                      Type <span className="font-medium text-[#1c1c1a]">DELETE</span> to confirm
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="DELETE"
+                      className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                onClick={() => { setDeleteUser(null); setDeleteCheckResult(null) }}
+                disabled={isDeletingUser || isCheckingDelete}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingUser || isCheckingDelete || !deleteCheckResult?.canDelete || deleteConfirmText !== "DELETE"}
+                style={{ flex: 1, backgroundColor: deleteCheckResult?.canDelete && deleteConfirmText === "DELETE" ? "#dc2626" : undefined, borderColor: deleteCheckResult?.canDelete && deleteConfirmText === "DELETE" ? "#dc2626" : undefined, color: deleteCheckResult?.canDelete && deleteConfirmText === "DELETE" ? "#fff" : undefined }}
+              >
+                {isDeletingUser ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -16,13 +16,17 @@ export type Database = {
     Tables: {
       categories: {
         Row: {
+          category_hierarchy: number | null
+          category_type: string | null
           color: string | null
           created_at: string | null
           description: string | null
           icon: string | null
           id: string
           image_url: string | null
+          in_home_carrousel: boolean | null
           is_active: boolean | null
+          is_listing_type: boolean
           name: string
           parent_id: string | null
           slug: string
@@ -30,13 +34,17 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          category_hierarchy?: number | null
+          category_type?: string | null
           color?: string | null
           created_at?: string | null
           description?: string | null
           icon?: string | null
           id?: string
           image_url?: string | null
+          in_home_carrousel?: boolean | null
           is_active?: boolean | null
+          is_listing_type?: boolean
           name: string
           parent_id?: string | null
           slug: string
@@ -44,13 +52,17 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          category_hierarchy?: number | null
+          category_type?: string | null
           color?: string | null
           created_at?: string | null
           description?: string | null
           icon?: string | null
           id?: string
           image_url?: string | null
+          in_home_carrousel?: boolean | null
           is_active?: boolean | null
+          is_listing_type?: boolean
           name?: string
           parent_id?: string | null
           slug?: string
@@ -78,6 +90,9 @@ export type Database = {
           domain: string | null
           email: string | null
           founded_year: number | null
+          google_place_id: string | null
+          hero_photo_project_id: string | null
+          hero_photo_url: string | null
           id: string
           is_featured: boolean
           is_verified: boolean | null
@@ -109,6 +124,9 @@ export type Database = {
           domain?: string | null
           email?: string | null
           founded_year?: number | null
+          google_place_id?: string | null
+          hero_photo_project_id?: string | null
+          hero_photo_url?: string | null
           id?: string
           is_featured?: boolean
           is_verified?: boolean | null
@@ -140,6 +158,9 @@ export type Database = {
           domain?: string | null
           email?: string | null
           founded_year?: number | null
+          google_place_id?: string | null
+          hero_photo_project_id?: string | null
+          hero_photo_url?: string | null
           id?: string
           is_featured?: boolean
           is_verified?: boolean | null
@@ -163,6 +184,27 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "companies_hero_photo_project_id_fkey"
+            columns: ["hero_photo_project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "companies_hero_photo_project_id_fkey"
+            columns: ["hero_photo_project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "companies_hero_photo_project_id_fkey"
+            columns: ["hero_photo_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "companies_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
@@ -174,6 +216,98 @@ export type Database = {
             columns: ["primary_service_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_members: {
+        Row: {
+          company_id: string
+          created_at: string
+          email: string
+          id: string
+          invited_at: string
+          invited_by: string | null
+          joined_at: string | null
+          role: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          email: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_company_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "company_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -396,6 +530,33 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
         ]
+      }
+      domain_verification_codes: {
+        Row: {
+          code: string
+          created_at: string
+          domain: string
+          expires_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          domain: string
+          expires_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          domain?: string
+          expires_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -1046,11 +1207,12 @@ export type Database = {
       project_professionals: {
         Row: {
           company_id: string | null
+          cover_photo_id: string | null
           created_at: string
           id: string
           invited_at: string
           invited_email: string
-          invited_service_category_id: string | null
+          invited_service_category_ids: string[] | null
           is_project_owner: boolean
           professional_id: string | null
           project_id: string
@@ -1060,11 +1222,12 @@ export type Database = {
         }
         Insert: {
           company_id?: string | null
+          cover_photo_id?: string | null
           created_at?: string
           id?: string
           invited_at?: string
           invited_email: string
-          invited_service_category_id?: string | null
+          invited_service_category_ids?: string[] | null
           is_project_owner?: boolean
           professional_id?: string | null
           project_id: string
@@ -1074,11 +1237,12 @@ export type Database = {
         }
         Update: {
           company_id?: string | null
+          cover_photo_id?: string | null
           created_at?: string
           id?: string
           invited_at?: string
           invited_email?: string
-          invited_service_category_id?: string | null
+          invited_service_category_ids?: string[] | null
           is_project_owner?: boolean
           professional_id?: string | null
           project_id?: string
@@ -1123,10 +1287,10 @@ export type Database = {
             referencedColumns: ["company_id_full"]
           },
           {
-            foreignKeyName: "project_professionals_invited_service_category_id_fkey"
-            columns: ["invited_service_category_id"]
+            foreignKeyName: "project_professionals_cover_photo_id_fkey"
+            columns: ["cover_photo_id"]
             isOneToOne: false
-            referencedRelation: "categories"
+            referencedRelation: "project_photos"
             referencedColumns: ["id"]
           },
           {
@@ -2115,6 +2279,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      clear_company_hero_photo: {
+        Args: { p_company_id: string }
+        Returns: undefined
+      }
       get_platform_stats: {
         Args: never
         Returns: {
@@ -2261,6 +2429,7 @@ export type Database = {
         Returns: boolean
       }
       refresh_all_materialized_views: { Args: never; Returns: undefined }
+      refresh_mv_professional_summary: { Args: never; Returns: undefined }
       refresh_professional_summary: { Args: never; Returns: undefined }
       refresh_project_summary: { Args: never; Returns: undefined }
       reorder_company_photos: {
@@ -2373,6 +2542,14 @@ export type Database = {
           slug: string
           title: string
         }[]
+      }
+      set_company_hero_photo: {
+        Args: {
+          p_company_id: string
+          p_photo_url: string
+          p_project_id: string
+        }
+        Returns: undefined
       }
       toggle_project_like: {
         Args: { p_project_id: string }
@@ -2598,3 +2775,4 @@ export const Constants = {
     },
   },
 } as const
+

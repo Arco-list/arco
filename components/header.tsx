@@ -6,27 +6,43 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { signOutAction } from "@/app/(auth)/actions";
-import { HeaderSearch } from "@/components/header-search";
 import { useAuth } from "@/contexts/auth-context";
+import { useLoginModal } from "@/contexts/login-modal-context";
+import { useCreateCompanyModal } from "@/contexts/create-company-modal-context";
+
+export interface NavLink {
+  href: string;
+  label: string;
+}
 
 export interface HeaderProps {
   transparent?: boolean;
   maxWidth?: string;
+  navLinks?: NavLink[];
 }
 
-export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: HeaderProps) {
+const DEFAULT_NAV_LINKS: NavLink[] = [
+  { href: "/projects", label: "Projects" },
+  { href: "/professionals", label: "Professionals" },
+];
+
+export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLinks = DEFAULT_NAV_LINKS }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamQuery = searchParams.get("search") ?? "";
   const { profile, user } = useAuth();
+  const { openLoginModal } = useLoginModal();
+  const { openCreateCompanyModal } = useCreateCompanyModal();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParamQuery);
   const [isSigningOut, startSignOutTransition] = useTransition();
   const [isScrolled, setIsScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isLoggedIn = Boolean(user);
@@ -41,10 +57,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
   const fallbackName = user?.email ? user.email.split("@")[0] : undefined;
   const rawMenuLabel = derivedFirstName || fallbackName;
   const menuLabel = rawMenuLabel && rawMenuLabel.trim().length > 0 ? rawMenuLabel.trim() : "Menu";
-  const isLoginPage = pathname === "/login";
-  const isSignupPage = pathname === "/signup";
-  const shouldShowLoginLink = !isLoggedIn && !isLoginPage;
-  const shouldShowSignupLink = !isLoggedIn && !isSignupPage;
 
   // Check if user has professional role
   const metadataUserTypes = Array.isArray(sessionMetadata.user_types)
@@ -97,6 +109,9 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -128,18 +143,16 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isSearchOpen]);
 
-  // Solid white background when scrolled, proper z-index
+  // Header sits above the filter bar (z-[300] > filter bar z-[150])
+  // so navigation dropdowns always render on top of the filter bar.
   const headerClasses = transparent
-    ? `fixed top-0 left-0 right-0 z-[200] transition-all duration-200 ${
-        isScrolled 
-          ? "bg-white border-b border-[#e5e5e4] py-3 md:py-4" 
+    ? `fixed top-0 left-0 right-0 z-[300] transition-all duration-200 ${
+        isScrolled
+          ? "bg-white border-b border-[#e5e5e4] py-3 md:py-4"
           : "py-4"
       }`
-    : "fixed top-0 left-0 right-0 z-[200] border-b border-[#e5e5e4] bg-white py-3 md:py-4";
+    : "fixed top-0 left-0 right-0 z-[300] border-b border-[#e5e5e4] bg-white py-3 md:py-4";
 
-  const textColor = transparent && !isScrolled ? "text-white" : "text-black";
-
-  const redirectQuery = pathname ? `?redirectTo=${encodeURIComponent(pathname)}` : "";
 
   return (
     <>
@@ -167,136 +180,36 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 }`}></span>
               </button>
 
-              {/* Hamburger Menu - positioned relative to button */}
+              {/* Hamburger Menu */}
               {isMenuOpen && (
-                <div 
-                  className="absolute z-50 w-56 border border-border bg-white shadow-lg" 
+                <div
+                  className="absolute z-50 w-52 border border-border bg-white shadow-lg"
                   ref={menuRef}
-                  style={{ 
-                    left: '0',
-                    top: 'calc(100% + 16px)'
-                  }}
+                  style={{ left: '0', top: 'calc(100% + 16px)' }}
                 >
                   <div className="py-1">
-                    {/* Section 1: Projects / Professionals */}
+                    {/* EXPLORE */}
                     <div className="px-4 py-3">
-                      <Link
-                        href="/projects"
-                        className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Projects
-                      </Link>
-                      <Link
-                        href="/professionals"
-                        className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Professionals
-                      </Link>
+                      <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Explore</p>
+                      <Link href="/projects" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Projects</Link>
+                      <Link href="/professionals" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Professionals</Link>
                     </div>
-                    
-                    {/* Divider */}
-                    <div className="border-t border-border" />
-                    
-                    {/* Section 2: Login/Signup OR Saved projects/Saved professionals/Account */}
+
+                    <div className="border-t border-border mx-4" />
+
+                    {/* PUBLISH */}
                     <div className="px-4 py-3">
-                      {isLoggedIn ? (
-                        <>
-                          <Link
-                            href="/homeowner?tab=saved-projects"
-                            className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            Saved projects
-                          </Link>
-                          <Link
-                            href="/homeowner?tab=saved-professionals"
-                            className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            Saved professionals
-                          </Link>
-                          <Link
-                            href="/homeowner?tab=account"
-                            className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            Account
-                          </Link>
-                          {hasAdminRole && (
-                            <Link
-                              href="/admin"
-                              className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                              onClick={() => setIsMenuOpen(false)}
-                            >
-                              Admin
-                            </Link>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {shouldShowLoginLink && (
-                            <Link
-                              href={`/login${redirectQuery}`}
-                              className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                              onClick={() => setIsMenuOpen(false)}
-                            >
-                              Login
-                            </Link>
-                          )}
-                          {shouldShowSignupLink && (
-                            <Link
-                              href={`/signup${redirectQuery}`}
-                              className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                              onClick={() => setIsMenuOpen(false)}
-                            >
-                              Sign up
-                            </Link>
-                          )}
-                        </>
-                      )}
+                      <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Publish</p>
+                      <Link href="/businesses/architects" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Architects</Link>
+                      <Link href="/businesses/professionals" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Professionals</Link>
                     </div>
-                    
-                    {/* Divider */}
-                    <div className="border-t border-border" />
-                    
-                    {/* Section 3: List with us/Help center/Sign out */}
+
+                    <div className="border-t border-border mx-4" />
+
+                    {/* About / Help */}
                     <div className="px-4 py-3">
-                      {hasProfessionalRole ? (
-                        <Link
-                          href="/dashboard/listings"
-                          className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                          onClick={() => setIsMenuOpen(false)}
-                        >
-                          Switch to company
-                        </Link>
-                      ) : (
-                        <Link
-                          href="/list-with-us"
-                          className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                          onClick={() => setIsMenuOpen(false)}
-                        >
-                          List with us
-                        </Link>
-                      )}
-                      <Link
-                        href="/help-center"
-                        className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        Help center
-                      </Link>
-                      {isLoggedIn && (
-                        <button
-                          type="button"
-                          className="block w-full text-left arco-nav-text text-red-600 px-3 py-1.5 hover:bg-red-50 transition-colors"
-                          onClick={handleSignOut}
-                          disabled={isSigningOut}
-                        >
-                          {isSigningOut ? "Signing out..." : "Sign out"}
-                        </button>
-                      )}
+                      <Link href="/about" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>About</Link>
+                      <Link href="/help-center" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Help & FAQ</Link>
                     </div>
                   </div>
                 </div>
@@ -304,22 +217,17 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
 
               {/* Nav links white when transparent */}
               <div className="hidden items-center gap-6 md:flex">
-                <Link
-                  href="/projects"
-                  className={`arco-nav-text whitespace-nowrap ${
-                    transparent && !isScrolled ? "nav-transparent" : "hover:text-primary"
-                  }`}
-                >
-                  Projects
-                </Link>
-                <Link
-                  href="/professionals"
-                  className={`arco-nav-text whitespace-nowrap ${
-                    transparent && !isScrolled ? "nav-transparent" : "hover:text-primary"
-                  }`}
-                >
-                  Professionals
-                </Link>
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`arco-nav-text whitespace-nowrap ${
+                      transparent && !isScrolled ? "nav-transparent" : "hover:text-primary"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
               </div>
             </div>
 
@@ -357,15 +265,88 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
                 </svg>
               </button>
 
-              {/* Login button - CSS classes handle colors */}
-              <Link
-                href={isLoggedIn ? (hasProfessionalRole ? "/dashboard/company" : "/homeowner") : `/login${redirectQuery}`}
-                className={`arco-nav-text px-[18px] py-[7px] rounded-[3px] whitespace-nowrap ${
-                  transparent && !isScrolled ? "btn-transparent" : "btn-scrolled"
-                }`}
-              >
-                {isLoggedIn ? menuLabel : "Log in"}
-              </Link>
+              {/* Account button / Log in */}
+              {isLoggedIn ? (
+                <div className="relative" ref={accountMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsAccountMenuOpen((o) => !o)}
+                    className={`arco-nav-text px-[18px] py-[7px] rounded-[3px] whitespace-nowrap ${
+                      transparent && !isScrolled ? "btn-transparent" : "btn-scrolled"
+                    }`}
+                  >
+                    {menuLabel}
+                  </button>
+
+                  {isAccountMenuOpen && (
+                    <div
+                      className="absolute right-0 z-50 w-52 border border-border bg-white shadow-lg"
+                      style={{ top: 'calc(100% + 16px)' }}
+                    >
+                      <div className="py-1">
+                        {/* EXPLORE */}
+                        <div className="px-4 py-3">
+                          <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Explore</p>
+                          <Link href="/homeowner?tab=saved-projects" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Saved projects</Link>
+                          <Link href="/homeowner?tab=saved-professionals" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Saved professionals</Link>
+                        </div>
+
+                        {hasProfessionalRole && (
+                          <>
+                            <div className="border-t border-border mx-4" />
+                            {/* PUBLISH */}
+                            <div className="px-4 py-3">
+                              <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Publish</p>
+                              <Link href="/dashboard/listings" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Listings</Link>
+                              <Link href="/dashboard/company" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Company</Link>
+                              <Link href="/dashboard/team" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Team</Link>
+                              <Link href="/pricing" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Pricing</Link>
+                            </div>
+                          </>
+                        )}
+
+                        {!hasProfessionalRole && (
+                          <>
+                            <div className="border-t border-border mx-4" />
+                            <div className="px-4 py-3">
+                              <button type="button" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors text-left w-full" onClick={() => { setIsAccountMenuOpen(false); openCreateCompanyModal() }}>Create company</button>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="border-t border-border mx-4" />
+
+                        {/* SETTINGS */}
+                        <div className="px-4 py-3">
+                          <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Settings</p>
+                          {hasAdminRole && (
+                            <Link href="/admin" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Admin</Link>
+                          )}
+                          <Link href="/homeowner?tab=account" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Account</Link>
+                          <button
+                            type="button"
+                            className="block w-full text-left arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
+                            onClick={handleSignOut}
+                            disabled={isSigningOut}
+                          >
+                            {isSigningOut ? "Signing out..." : "Sign out"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openLoginModal(pathname ?? undefined)}
+                  className={`arco-nav-text px-[18px] py-[7px] rounded-[3px] whitespace-nowrap ${
+                    transparent && !isScrolled ? "btn-transparent" : "btn-scrolled"
+                  }`}
+                >
+                  Log in
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -374,7 +355,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]" }: Hea
       {/* Search Overlay - full screen modal */}
       {isSearchOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-[250] flex items-start justify-center pt-20"
+          className="fixed inset-0 bg-black/50 z-[400] flex items-start justify-center pt-20"
           onClick={() => setIsSearchOpen(false)}
         >
           <div 

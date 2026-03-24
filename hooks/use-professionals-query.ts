@@ -25,6 +25,8 @@ type SearchProfessionalsRow = {
   company_city: string | null
   company_state_region: string | null
   company_country: string | null
+  company_latitude: number | null
+  company_longitude: number | null
   primary_specialty: string | null
   primary_service_name: string | null
   services_offered: string[] | null
@@ -33,10 +35,15 @@ type SearchProfessionalsRow = {
   hourly_rate_display: string | null
   is_verified: boolean | null
   cover_photo_url: string | null
+  specialty_ids: string[] | null
+  specialty_parent_ids: string[] | null
 }
 
 interface UseProfessionalsQueryResult {
   professionals: ProfessionalCard[]
+  /** All professionals ever fetched (unfiltered) — used for instant client-side map filtering */
+  allProfessionals: ProfessionalCard[]
+  total: number
   isLoading: boolean
   isLoadingMore: boolean
   error: string | null
@@ -91,9 +98,15 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
     rating,
     reviewCount,
     image: row.cover_photo_url || row.company_logo || row.avatar_url || PLACEHOLDER_IMAGE,
+    logoUrl: row.company_logo ?? null,
     specialties,
     isVerified: Boolean(row.is_verified),
     domain: row.company_domain ?? null,
+    latitude: row.company_latitude ?? null,
+    longitude: row.company_longitude ?? null,
+    specialtyIds: Array.isArray(row.specialty_ids) ? row.specialty_ids : [],
+    specialtyParentIds: Array.isArray(row.specialty_parent_ids) ? row.specialty_parent_ids : [],
+    city: row.company_city ? row.company_city.toLowerCase().trim() : null,
   }
 }
 
@@ -101,14 +114,16 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
   const {
     selectedCategories,
     selectedServices,
-    selectedCity,
+    selectedCities,
     keyword,
     taxonomy,
   } = useProfessionalFilters()
 
   const [professionals, setProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
+  const [allProfessionals, setAllProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
   const [hasMore, setHasMore] = useState(initialProfessionals.length === PAGE_SIZE)
   const [currentOffset, setCurrentOffset] = useState(initialProfessionals.length)
+  const [total, setTotal] = useState(initialProfessionals.length)
   const [isLoading, setIsLoading] = useState(false) // Start with SSR data
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -150,26 +165,40 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
           console.warn('Non-UUID services filtered out:', selectedServices.filter(s => !isUuid(s)))
         }
 
-        const { data, error: rpcError } = await supabase.rpc(
+        const filterParams = {
+          search_query: keyword.trim().length > 0 ? keyword.trim() : null,
+          country_filter: null,
+          state_filter: null,
+          city_filters: selectedCities.length > 0 ? selectedCities : null,
+          category_filters: validCategories.length > 0 ? validCategories : null,
+          service_filters: validServices.length > 0 ? validServices : null,
+          min_rating: null,
+          max_hourly_rate: null,
+          verified_only: false,
+        }
+
+        const dataPromise = supabase.rpc(
           "search_professionals",
-          {
-            search_query: keyword.trim().length > 0 ? keyword.trim() : null,
-            country_filter: null,
-            state_filter: null,
-            city_filter: selectedCity ?? null,
-            category_filters: validCategories.length > 0 ? validCategories : null,
-            service_filters: validServices.length > 0 ? validServices : null,
-            min_rating: null,
-            max_hourly_rate: null,
-            verified_only: false,
-            limit_count: PAGE_SIZE,
-            offset_count: offset,
-          },
+          { ...filterParams, limit_count: PAGE_SIZE, offset_count: offset },
           { signal: controller.signal },
         )
 
+        // Fetch total count in parallel on first page
+        const countPromise = replace
+          ? supabase.rpc("count_professionals", filterParams, { signal: controller.signal })
+          : null
+
+        const [{ data, error: rpcError }, countResult] = await Promise.all([
+          dataPromise,
+          countPromise ?? Promise.resolve(null),
+        ])
+
         if (rpcError) {
           throw rpcError
+        }
+
+        if (replace && countResult && !countResult.error && countResult.data != null) {
+          setTotal(Number(countResult.data))
         }
 
         const rows = Array.isArray(data) ? (data as SearchProfessionalsRow[]) : []
@@ -178,6 +207,12 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
           .filter((card): card is ProfessionalCard => card !== null)
 
         setProfessionals((prev) => (replace ? mapped : [...prev, ...mapped]))
+        // Accumulate all unique professionals for client-side map filtering
+        setAllProfessionals((prev) => {
+          const existing = new Map(prev.map((p) => [p.companyId, p]))
+          mapped.forEach((p) => existing.set(p.companyId, p))
+          return Array.from(existing.values())
+        })
         setHasMore(mapped.length === PAGE_SIZE)
         setCurrentOffset(offset + mapped.length)
       } catch (err) {
@@ -202,7 +237,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
         }
       }
     },
-    [keyword, selectedCategories, selectedCity, selectedServices],
+    [keyword, selectedCategories, selectedCities, selectedServices],
   )
 
   useEffect(() => {
@@ -215,7 +250,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     const hasFilters =
       selectedCategories.length > 0 ||
       selectedServices.length > 0 ||
-      selectedCity !== null ||
+      selectedCities.length > 0 ||
       keyword.trim().length > 0
 
     // If we have initial SSR data and no filters, don't fetch
@@ -227,11 +262,11 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     // Clear the flag for subsequent filter changes
     hasInitialDataRef.current = false
 
-    setProfessionals([])
+    // Don't clear professionals — keep old data visible until new results arrive
     setHasMore(true)
     setCurrentOffset(0)
     void fetchPage(0, true)
-  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCity, keyword])
+  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCities, keyword])
 
   const loadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) {
@@ -247,6 +282,8 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
 
   return {
     professionals,
+    allProfessionals,
+    total,
     isLoading,
     isLoadingMore,
     error,

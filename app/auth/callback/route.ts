@@ -23,6 +23,42 @@ export async function GET(request: NextRequest) {
     url: requestUrl.href,
   });
 
+  // Handle token_hash verification (used by admin "Login as" flow)
+  const tokenHash = requestUrl.searchParams.get('token_hash');
+  const tokenType = requestUrl.searchParams.get('type');
+
+  if (tokenHash && tokenType) {
+    const supabase = await createRouteHandlerSupabaseClient();
+
+    try {
+      logger.auth('callback', 'Verifying token_hash', { callbackId, tokenType });
+
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: tokenType as any,
+      });
+
+      if (error) {
+        logger.auth('callback', 'Error verifying token_hash', {
+          callbackId,
+          error: { message: error.message, status: error.status },
+        }, new Error(error.message));
+        return NextResponse.redirect(`${requestUrl.origin}/?error=auth_error`);
+      }
+
+      logger.auth('callback', 'Token verification successful', {
+        callbackId,
+        userId: data.user?.id,
+        hasSession: !!data.session,
+      });
+
+      return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
+    } catch (error) {
+      logger.auth('callback', 'Unexpected error during token verification', { callbackId }, error as Error);
+      return NextResponse.redirect(`${requestUrl.origin}/?error=unexpected_error`);
+    }
+  }
+
   if (code) {
     const supabase = await createRouteHandlerSupabaseClient();
 
@@ -40,7 +76,7 @@ export async function GET(request: NextRequest) {
           },
         }, new Error(error.message));
 
-        return NextResponse.redirect(`${requestUrl.origin}/login?error=auth_error`);
+        return NextResponse.redirect(`${requestUrl.origin}/?error=auth_error`);
       }
 
       logger.auth('callback', 'Code exchange successful', {
@@ -144,31 +180,37 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(onboardingUrl);
       }
 
-      // Redirect to email confirmation success page with the original redirectTo as a parameter
-      const confirmationUrl = new URL('/auth/confirmed', requestUrl.origin);
-      confirmationUrl.searchParams.set('redirectTo', redirectTo);
+      // For invite flows, go through the confirmation page
       if (inviteType) {
+        const confirmationUrl = new URL('/auth/confirmed', requestUrl.origin);
+        confirmationUrl.searchParams.set('redirectTo', redirectTo);
         confirmationUrl.searchParams.set('invite', inviteType);
-      }
-      if (redirectParam && redirectParam.includes('email=')) {
-        confirmationUrl.searchParams.set('inviteEmail', requestUrl.searchParams.get('email') ?? '');
+        if (redirectParam && redirectParam.includes('email=')) {
+          confirmationUrl.searchParams.set('inviteEmail', requestUrl.searchParams.get('email') ?? '');
+        }
+
+        logger.auth('callback', 'Invite flow, redirecting to confirmation page', {
+          callbackId,
+          confirmationUrl: confirmationUrl.href,
+        });
+
+        return NextResponse.redirect(confirmationUrl);
       }
 
-      logger.auth('callback', 'Callback completed successfully, redirecting to confirmation page', {
+      // Regular sign-in — redirect directly to the destination
+      logger.auth('callback', 'Sign-in successful, redirecting to destination', {
         callbackId,
-        originalRedirectTo: redirectTo,
-        confirmationUrl: confirmationUrl.href,
+        redirectTo,
       });
 
-      // Successful authentication - redirect to confirmation page first
-      return NextResponse.redirect(confirmationUrl);
+      return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
     } catch (error) {
       logger.auth('callback', 'Unexpected error during auth callback', { callbackId }, error as Error);
-      return NextResponse.redirect(`${requestUrl.origin}/login?error=unexpected_error`);
+      return NextResponse.redirect(`${requestUrl.origin}/?error=unexpected_error`);
     }
   }
 
   logger.auth('callback', 'No code provided in callback', { callbackId });
   // No code provided - redirect to login
-  return NextResponse.redirect(`${requestUrl.origin}/login?error=no_code`);
+  return NextResponse.redirect(`${requestUrl.origin}/?error=no_code`);
 }

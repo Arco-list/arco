@@ -16,6 +16,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 import { useProfessionalTaxonomy, type LocationOptions } from "@/hooks/use-professional-taxonomy"
 
+export const PROFESSIONAL_SORT_OPTIONS = ["Best match", "Most recent", "Highest rated", "Alphabetical"] as const
+export type ProfessionalSortOption = (typeof PROFESSIONAL_SORT_OPTIONS)[number]
+
 const normalizeToken = (value: string) => value.trim().toLowerCase()
 
 interface TokenMaps {
@@ -126,22 +129,25 @@ const resolveTokensToIds = (tokens: string[], maps?: TokenMaps): string[] => {
 interface ProfessionalFilterState {
   selectedCategories: string[]
   selectedServices: string[]
-  selectedCity: string | null
+  selectedCities: string[]
   keyword: string
+  sortBy: ProfessionalSortOption
 }
 
 const INITIAL_STATE: ProfessionalFilterState = {
   selectedCategories: [],
   selectedServices: [],
-  selectedCity: null,
+  selectedCities: [],
   keyword: "",
+  sortBy: "Best match",
 }
 
 type ProfessionalFilterAction =
   | { type: "SET_CATEGORIES"; payload: string[] }
   | { type: "SET_SERVICES"; payload: string[] }
-  | { type: "SET_CITY"; payload: string | null }
+  | { type: "SET_CITIES"; payload: string[] }
   | { type: "SET_KEYWORD"; payload: string }
+  | { type: "SET_SORT"; payload: ProfessionalSortOption }
   | { type: "RESET" }
 
 const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilterAction): ProfessionalFilterState => {
@@ -150,10 +156,12 @@ const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilte
       return { ...state, selectedCategories: action.payload }
     case "SET_SERVICES":
       return { ...state, selectedServices: action.payload }
-    case "SET_CITY":
-      return { ...state, selectedCity: action.payload }
+    case "SET_CITIES":
+      return { ...state, selectedCities: action.payload }
     case "SET_KEYWORD":
       return { ...state, keyword: action.payload }
+    case "SET_SORT":
+      return { ...state, sortBy: action.payload }
     case "RESET":
       return INITIAL_STATE
     default:
@@ -164,8 +172,9 @@ const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilte
 interface ProfessionalFilterContextValue extends ProfessionalFilterState {
   setSelectedCategories: (values: string[]) => void
   setSelectedServices: (values: string[]) => void
-  setSelectedCity: (value: string | null) => void
+  setSelectedCities: (values: string[]) => void
   setKeyword: (value: string) => void
+  setSortBy: (value: ProfessionalSortOption) => void
   clearAllFilters: () => void
   removeFilter: (type: string, value: string) => void
   hasActiveFilters: () => boolean
@@ -179,7 +188,7 @@ const ProfessionalFilterContext = createContext<ProfessionalFilterContextValue |
 function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) {
   const taxonomy = useProfessionalTaxonomy()
   const [state, dispatch] = useReducer(filterReducer, INITIAL_STATE)
-  const { selectedCategories, selectedServices, selectedCity, keyword } = state
+  const { selectedCategories, selectedServices, selectedCities, keyword, sortBy } = state
 
   // Extract unique cities from location facets
   const cities = useMemo(() => {
@@ -249,17 +258,26 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     [dispatch],
   )
 
-  const setSelectedCity = useCallback((value: string | null) => dispatch({ type: "SET_CITY", payload: value ?? null }), [])
+  const setSelectedCities = useCallback(
+    (values: string[]) => {
+      const sanitized = values
+        .filter((value): value is string => Boolean(value))
+        .filter((value, index, array) => array.indexOf(value) === index)
+      dispatch({ type: "SET_CITIES", payload: sanitized })
+    },
+    [dispatch],
+  )
   const setKeyword = useCallback((value: string) => dispatch({ type: "SET_KEYWORD", payload: value }), [])
+  const setSortBy = useCallback((value: ProfessionalSortOption) => dispatch({ type: "SET_SORT", payload: value }), [])
   const clearAllFilters = useCallback(() => dispatch({ type: "RESET" }), [])
 
   const hasActiveFilters = useCallback(
     () =>
       selectedCategories.length > 0 ||
       selectedServices.length > 0 ||
-      Boolean(selectedCity) ||
+      selectedCities.length > 0 ||
       keyword.trim().length > 0,
-    [keyword, selectedCategories.length, selectedCity, selectedServices.length],
+    [keyword, selectedCategories.length, selectedCities.length, selectedServices.length],
   )
 
   const removeFilter = useCallback(
@@ -272,7 +290,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
           setSelectedServices(selectedServices.filter((item) => item !== value))
           break
         case "city":
-          setSelectedCity(null)
+          setSelectedCities(selectedCities.filter((item) => item !== value))
           break
         case "keyword":
           setKeyword("")
@@ -281,7 +299,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
           break
       }
     },
-    [selectedCategories, selectedServices, setKeyword, setSelectedCategories, setSelectedCity, setSelectedServices],
+    [selectedCategories, selectedCities, selectedServices, setKeyword, setSelectedCategories, setSelectedCities, setSelectedServices],
   )
 
   const router = useRouter()
@@ -323,8 +341,8 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       params.set("services", serviceTokens.join(","))
     }
 
-    if (selectedCity) {
-      params.set("city", selectedCity)
+    if (selectedCities.length > 0) {
+      params.set("city", selectedCities.join(","))
     }
 
     if (keyword.trim().length > 0) {
@@ -343,7 +361,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     categoryTokenMaps,
     keyword,
     selectedCategories,
-    selectedCity,
+    selectedCities,
     selectedServices,
     serviceTokenMaps,
   ])
@@ -353,7 +371,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     if (!initializedRef.current || currentQuery !== lastParsedQueryRef.current) {
       const categoriesParam = parseCommaSeparatedParam(searchParams.get("categories"))
       const servicesParam = parseCommaSeparatedParam(searchParams.get("services"))
-      const cityParam = searchParams.get("city")
+      const cityParams = parseCommaSeparatedParam(searchParams.get("city"))
       const keywordParam = searchParams.get("search") ?? searchParams.get("keyword") ?? ""
 
       const resolvedCategories = resolveTokensToIds(categoriesParam, categoryTokenMaps)
@@ -365,8 +383,8 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       if (!areStringArraysEqual(resolvedServices, selectedServices)) {
         dispatch({ type: "SET_SERVICES", payload: resolvedServices })
       }
-      if ((cityParam ?? null) !== selectedCity) {
-        dispatch({ type: "SET_CITY", payload: cityParam ?? null })
+      if (!areStringArraysEqual(cityParams, selectedCities)) {
+        dispatch({ type: "SET_CITIES", payload: cityParams })
       }
       if (keywordParam !== keyword) {
         dispatch({ type: "SET_KEYWORD", payload: keywordParam })
@@ -382,7 +400,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     keyword,
     searchParams,
     selectedCategories,
-    selectedCity,
+    selectedCities,
     selectedServices,
     serviceTokenMaps,
   ])
@@ -391,12 +409,14 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     () => ({
       selectedCategories,
       selectedServices,
-      selectedCity,
+      selectedCities,
       keyword,
+      sortBy,
       setSelectedCategories,
       setSelectedServices,
-      setSelectedCity,
+      setSelectedCities,
       setKeyword,
+      setSortBy,
       clearAllFilters,
       removeFilter,
       hasActiveFilters,
@@ -408,14 +428,16 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       clearAllFilters,
       hasActiveFilters,
       keyword,
+      sortBy,
       cities,
       removeFilter,
       selectedCategories,
-      selectedCity,
+      selectedCities,
       selectedServices,
       setKeyword,
+      setSortBy,
       setSelectedCategories,
-      setSelectedCity,
+      setSelectedCities,
       setSelectedServices,
       taxonomy,
       taxonomyLabelMap,

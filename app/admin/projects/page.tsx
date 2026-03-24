@@ -1,31 +1,14 @@
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-
-import { AdminSidebar } from "@/components/admin-sidebar"
-import { AdminProjectsTable, type AdminProjectRow } from "@/components/admin-projects-table"
+import { AdminProjectsDataTable, type AdminProjectRow } from "@/components/admin-projects-data-table"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
+import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 
-type ProjectQueryRow = Tables<"projects"> & {
-  project_photos: Array<{ count: number | null }> | null
-  project_categories: Array<{ category_id: string | null; is_primary: boolean | null }> | null
-  client?: {
-    is_active: boolean | null
-  } | null
-}
+type ProjectStatusValue = "draft" | "in_progress" | "published" | "completed" | "archived" | "rejected"
 
-export default async function ProjectsPage() {
+async function loadAdminProjectsData() {
+  const serviceSupabase = createServiceRoleSupabaseClient()
 
   const slugToLabel = (value: string | null) =>
     (value ?? "")
@@ -37,184 +20,186 @@ export default async function ProjectsPage() {
       .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
       .join(" ")
 
-  const serviceSupabase = createServiceRoleSupabaseClient()
-
-  const [projectsResult, categoriesResult, taxonomyResult] = await Promise.all([
+  const [projectsResult, categoriesResult, taxonomyResult, projectProfessionalsResult] = await Promise.all([
     serviceSupabase
       .from("projects")
       .select(
-        `id, title, slug, status, project_type, project_type_category_id, style_preferences, features, project_year, created_at, is_featured, likes_count, location, address_formatted, address_city, address_region, share_exact_location, project_size, building_type, seo_title, seo_description, status_updated_at, status_updated_by, rejection_reason, project_photos(count), project_categories(category_id,is_primary), client:profiles!projects_client_id_fkey(is_active)`
+        "id, title, slug, status, rejection_reason, project_type, client_id, project_year, created_at, location, address_city, address_region, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
       )
       .eq("client.is_active", true)
       .order("created_at", { ascending: false, nullsFirst: false }),
     serviceSupabase.from("categories").select("id, name, slug"),
     serviceSupabase.from("project_taxonomy_options").select("id, name, slug"),
+    serviceSupabase
+      .from("project_professionals")
+      .select("project_id, status, is_project_owner, company:companies(id, name, slug, status)")
+      .not("company_id", "is", null),
   ])
 
-  const { data: projectsDataRaw, error: projectsError } = projectsResult
-  if (projectsError) {
-    console.error("Failed to load admin projects", projectsError)
+  if (projectsResult.error) {
+    logger.error("Failed to load admin projects", { table: "projects" }, projectsResult.error)
+    throw new Error("Failed to load projects data")
+  }
+  if (categoriesResult.error) {
+    logger.error("Failed to load categories", { table: "categories" }, categoriesResult.error)
+  }
+  if (taxonomyResult.error) {
+    logger.error("Failed to load taxonomy options", { table: "project_taxonomy_options" }, taxonomyResult.error)
+  }
+  if (projectProfessionalsResult.error) {
+    logger.error("Failed to load project professionals", { table: "project_professionals" }, projectProfessionalsResult.error)
   }
 
-  const projectsData = (projectsDataRaw as ProjectQueryRow[] | null) ?? []
-
-  const { data: categoriesData, error: categoriesError } = categoriesResult
-  if (categoriesError) {
-    console.error("Failed to load project categories", categoriesError)
-  }
-
-  const { data: taxonomyOptionsData, error: taxonomyError } = taxonomyResult
-  if (taxonomyError) {
-    console.error("Failed to load project taxonomy options", taxonomyError)
-  }
-
-  const normalizeKey = (value: string | null | undefined) => {
-    const trimmed = value?.trim()
-    if (!trimmed) return null
-    return trimmed.toLowerCase()
-  }
+  // Build category/taxonomy lookup
+  const normalizeKey = (value: string | null | undefined) => value?.trim()?.toLowerCase() ?? null
 
   const categoryIdToName = new Map<string, string>()
   const categorySlugToName = new Map<string, string>()
-  ;(categoriesData ?? []).forEach(({ id, name, slug }) => {
+  for (const { id, name, slug } of categoriesResult.data ?? []) {
     const idKey = normalizeKey(id)
     const slugKey = normalizeKey(slug)
     if (idKey && name) categoryIdToName.set(idKey, name)
     if (slugKey && name) categorySlugToName.set(slugKey, name)
-  })
+  }
 
   const taxonomyIdToName = new Map<string, string>()
   const taxonomySlugToName = new Map<string, string>()
-  ;(taxonomyOptionsData ?? []).forEach(({ id, name, slug }) => {
+  for (const { id, name, slug } of taxonomyResult.data ?? []) {
     const idKey = normalizeKey(id)
     const slugKey = normalizeKey(slug)
     if (idKey && name) taxonomyIdToName.set(idKey, name)
     if (slugKey && name) taxonomySlugToName.set(slugKey, name)
-  })
+  }
 
   const resolveLabel = (raw: string | null | undefined) => {
     const normalized = normalizeKey(raw)
     if (!normalized) return null
-
-    const directLabel =
+    return (
       taxonomyIdToName.get(normalized) ??
       taxonomySlugToName.get(normalized) ??
       categoryIdToName.get(normalized) ??
-      categorySlugToName.get(normalized)
-
-    if (directLabel) {
-      return directLabel
-    }
-
-    const original = raw?.trim()
-    if (!original) return null
-
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (uuidPattern.test(original)) {
-      return original
-    }
-
-    return slugToLabel(original)
+      categorySlugToName.get(normalized) ??
+      (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw?.trim() ?? "") ? null : slugToLabel(raw ?? null))
+    )
   }
 
-  const projects: AdminProjectRow[] = projectsData.map((project) => {
-    const id = project.id ?? ""
-
-    const seoTitle = project.seo_title ?? null
-    const seoDescription = project.seo_description ?? null
-    const statusUpdatedAt = project.status_updated_at ?? null
-    const statusUpdatedBy = project.status_updated_by ?? null
-    const rejectionReason = project.rejection_reason ?? null
-    const addressCity = project.address_city ?? null
-    const addressRegion = project.address_region ?? null
-    const cityRegionLabel = [addressCity, addressRegion].filter(Boolean).join(", ") || null
-    const addressFormatted = project.address_formatted ? project.address_formatted.trim() : null
-    const locationSummaryRaw = cityRegionLabel ?? project.location ?? addressFormatted ?? null
-    const locationSummary = locationSummaryRaw ? locationSummaryRaw.trim() : null
-    const shareExactLocation = project.share_exact_location ?? false
-
-    let seoStatus: string | null = null
-    if (seoTitle && seoDescription) {
-      seoStatus = "Ready"
-    } else if (seoTitle || seoDescription) {
-      seoStatus = "Partial"
-    } else {
-      seoStatus = "Missing"
+  // Build per-project companies map
+  type LinkedCompany = { id: string; name: string; slug: string | null; status: string; isOwner: boolean; companyStatus: string }
+  const statusSortOrder: Record<string, number> = {
+    listed: 0, live_on_page: 1, invited: 2, unlisted: 3, rejected: 4, removed: 5,
+  }
+  const projectCompaniesMap = new Map<string, LinkedCompany[]>()
+  for (const row of projectProfessionalsResult.data ?? []) {
+    if (!row.project_id) continue
+    const company = row.company as unknown as { id: string; name: string; slug: string | null; status: string | null } | null
+    if (!company?.id || !company?.name) continue
+    const existing = projectCompaniesMap.get(row.project_id) ?? []
+    if (!existing.some((c) => c.id === company.id)) {
+      existing.push({
+        id: company.id,
+        name: company.name,
+        slug: company.slug ?? null,
+        status: (row as any).status ?? "invited",
+        isOwner: !!(row as any).is_project_owner,
+        companyStatus: company.status ?? "unlisted",
+      })
+      projectCompaniesMap.set(row.project_id, existing)
     }
+  }
+  // Sort: owner first, then by contributor status priority
+  for (const [key, companies] of projectCompaniesMap) {
+    companies.sort((a, b) => {
+      if (a.isOwner && !b.isOwner) return -1
+      if (!a.isOwner && b.isOwner) return 1
+      return (statusSortOrder[a.status] ?? 99) - (statusSortOrder[b.status] ?? 99)
+    })
+  }
 
-    const featureLabels = ((project.features as string[] | null) ?? [])
-      .map((value) => resolveLabel(value))
-      .filter((label): label is string => Boolean(label))
+  // Fetch owner profiles
+  const clientIds = Array.from(
+    new Set(
+      (projectsResult.data ?? [])
+        .map((p: any) => p.client_id)
+        .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+    )
+  )
 
-    const styleLabels = ((project.style_preferences as string[] | null) ?? [])
-      .map((value) => resolveLabel(value))
-      .filter((label): label is string => Boolean(label))
+  const ownerProfileMap = new Map<string, { firstName: string | null; lastName: string | null; avatarUrl: string | null }>()
+  if (clientIds.length > 0) {
+    const { data: profiles, error: profilesError } = await serviceSupabase
+      .from("profiles")
+      .select("id, first_name, last_name, avatar_url")
+      .in("id", clientIds)
 
-    const primaryCategoryId = project.project_categories?.find((category) => category.is_primary)?.category_id ?? null
-    const primaryCategoryName = resolveLabel(primaryCategoryId) ?? slugToLabel(primaryCategoryId)
+    if (profilesError) {
+      logger.error("Failed to load owner profiles", { table: "profiles" }, profilesError)
+    } else {
+      for (const profile of profiles ?? []) {
+        ownerProfileMap.set(profile.id, {
+          firstName: profile.first_name,
+          lastName: profile.last_name,
+          avatarUrl: profile.avatar_url,
+        })
+      }
+    }
+  }
 
-    const projectTypeName = resolveLabel(project.project_type) ?? slugToLabel(project.project_type)
+  // Build project rows
+  const projects: AdminProjectRow[] = (projectsResult.data ?? []).map((project: any) => {
+    const id = project.id ?? ""
+    const locationParts = [project.address_city, project.address_region].filter(Boolean)
+    const location = locationParts.length > 0 ? locationParts.join(", ") : (project.location ?? null)
 
     const rawPhotoCount = project.project_photos?.[0]?.count ?? 0
-    const photoCount = typeof rawPhotoCount === "number" ? rawPhotoCount : Number(rawPhotoCount ?? 0)
+    const imageCount = typeof rawPhotoCount === "number" ? rawPhotoCount : Number(rawPhotoCount ?? 0)
+
+    const projectType = resolveLabel(project.project_type) ?? slugToLabel(project.project_type)
+
+    // Owner
+    const ownerProfile = project.client_id ? ownerProfileMap.get(project.client_id) : null
+    const ownerName = ownerProfile
+      ? [ownerProfile.firstName, ownerProfile.lastName].filter(Boolean).join(" ").trim() || null
+      : null
+    const owner = ownerName ? { name: ownerName, avatarUrl: ownerProfile?.avatarUrl ?? null } : null
+
+    // Companies
+    const companies = projectCompaniesMap.get(id) ?? []
 
     return {
       id,
       title: project.title ?? "Untitled project",
-      slug: project.slug,
-      status: (project.status ?? "draft") as AdminProjectRow["status"],
-      projectType: projectTypeName,
-      primaryCategory: primaryCategoryName,
-      styles: styleLabels,
-      features: featureLabels,
-      projectYear: project.project_year,
-      createdAt: project.created_at,
-      isFeatured: project.is_featured,
-      likesCount: project.likes_count,
-      location: locationSummary,
-      addressFormatted,
-      shareExactLocation,
-      imageCount: photoCount,
-      seoTitle,
-      seoDescription,
-      seoStatus,
-      statusUpdatedAt,
-      statusUpdatedBy,
-      rejectionReason,
+      slug: project.slug ?? null,
+      status: (project.status ?? "draft") as ProjectStatusValue,
+      projectType,
+      imageCount,
+      location,
+      createdAt: project.created_at ?? null,
+      owner,
+      companies,
+      rejectionReason: project.rejection_reason ?? null,
     }
   })
 
+  return projects
+}
+
+export default async function ProjectsPage() {
+  const projects = await loadAdminProjectsData()
+
+  const reviewProjects = projects.filter((p) => p.status === "in_progress")
+  const firstReviewProjectId = reviewProjects[0]?.id ?? null
+
   return (
-    <SidebarProvider>
-      <AdminSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/admin">Admin Dashboard</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Projects</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-          <div className="ml-auto px-4">
-            <Button asChild variant="quaternary" size="quaternary">
-              <a href="/admin/projects">Refresh</a>
-            </Button>
-          </div>
-        </header>
-        <Separator className="w-full" />
-        <div className="flex flex-1 flex-col gap-6 p-6 overflow-hidden">
-          <AdminProjectsTable projects={projects} />
+    <div className="min-h-screen bg-white">
+      <div className="discover-page-title">
+        <div className="wrap">
+          <AdminProjectsDataTable
+            projects={projects}
+            reviewCount={reviewProjects.length}
+            firstReviewProjectId={firstReviewProjectId}
+          />
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
+    </div>
   )
 }

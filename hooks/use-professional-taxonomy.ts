@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Tables } from "@/lib/supabase/types"
-import { PROFESSIONAL_CATEGORY_CONFIG } from "@/lib/professional-filter-map"
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 
@@ -60,11 +59,6 @@ const sanitizeString = (value: string | null | undefined) => {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
 }
-
-const allowedCategorySlugs = new Set(PROFESSIONAL_CATEGORY_CONFIG.map((category) => category.slug))
-const allowedServiceSlugs = new Set(
-  PROFESSIONAL_CATEGORY_CONFIG.flatMap((category) => category.services.map((service) => service.slug)),
-)
 
 const EMPTY_LOCATION_OPTIONS: LocationOptions = {
   countries: [],
@@ -206,12 +200,10 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
 
           const categoryRecords = (categoriesResult.data as CategoryRow[] | null) ?? []
 
-          const allowedCategories = categoryRecords.filter(
-            (record) => record.slug && allowedCategorySlugs.has(record.slug),
-          )
-          const allowedServices = categoryRecords.filter(
-            (record) => record.slug && allowedServiceSlugs.has(record.slug),
-          )
+          // Parent categories (no parent_id) = top-level filter categories
+          const allowedCategories = categoryRecords.filter((r) => !r.parent_id)
+          // Child categories (have parent_id) = services within a category
+          const allowedServices = categoryRecords.filter((r) => !!r.parent_id)
 
           const locationRecords = (locationsResult.data as LocationRpcRow[] | null) ?? []
 

@@ -164,7 +164,7 @@ export function AboutContent({ projects }: AboutContentProps) {
                 Architects, designers, builders and many other professionals use our platform to showcase their work, grow their network, and reach clients who value quality and creativity.
               </p>
               <Button asChild variant="secondary" size="sm" className="mt-4">
-                <Link href="/list-with-us">List your project</Link>
+                <Link href="/businesses/architects">List your project</Link>
               </Button>
             </div>
 

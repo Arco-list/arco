@@ -64,8 +64,8 @@ async function loadLandingData() {
     heroProjectsResult,
     popularProjectsResult,
     parentCategoriesResult,
-    professionalCategoriesResult,
-    professionalSpecialtiesResult,
+    homeProjectTypesResult,
+    homeProfessionalServicesResult,
     featuredCompaniesResult,
   ] = await Promise.all([
     supabase.rpc("search_projects", { featured_only: true, limit_count: 5 }),
@@ -77,17 +77,28 @@ async function loadLandingData() {
       .is("parent_id", null)
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("name", { ascending: true }),
+    // Homepage carousel: child project types flagged for homepage (exclude groups)
     supabase
       .from("categories")
       .select("id,name,slug,parent_id,sort_order,image_url")
       .eq("is_active", true)
-      .is("parent_id", null)
+      .eq("in_home_carrousel", true)
+      .eq("category_type", "Project")
+      .eq("category_hierarchy", 2)
       .order("sort_order", { ascending: true, nullsFirst: false })
-      .order("name", { ascending: true }),
+      .order("name", { ascending: true })
+      .limit(5),
+    // Homepage carousel: child professional services flagged for homepage (exclude groups)
     supabase
-      .from("mv_professional_summary")
-      .select("id, primary_specialty_slug")
-      .not("primary_specialty_slug", "is", null),
+      .from("categories")
+      .select("id,name,slug,parent_id,sort_order,image_url")
+      .eq("is_active", true)
+      .eq("in_home_carrousel", true)
+      .eq("category_type", "Professional")
+      .eq("category_hierarchy", 2)
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .order("name", { ascending: true })
+      .limit(5),
     supabase
       .from("companies")
       .select(`
@@ -108,15 +119,15 @@ async function loadLandingData() {
   if (heroProjectsResult.error) logger.error("Failed to load featured hero projects", { scope: "landing" }, heroProjectsResult.error)
   if (popularProjectsResult.error) logger.error("Failed to load popular projects", { scope: "landing" }, popularProjectsResult.error)
   if (parentCategoriesResult.error) logger.error("Failed to load project categories", { scope: "landing" }, parentCategoriesResult.error)
-  if (professionalCategoriesResult.error) logger.error("Failed to load professional categories", { scope: "landing" }, professionalCategoriesResult.error)
-  if (professionalSpecialtiesResult.error) logger.error("Failed to load professional specialties", { scope: "landing" }, professionalSpecialtiesResult.error)
+  if (homeProjectTypesResult.error) logger.error("Failed to load home project types", { scope: "landing" }, homeProjectTypesResult.error)
+  if (homeProfessionalServicesResult.error) logger.error("Failed to load home professional services", { scope: "landing" }, homeProfessionalServicesResult.error)
   if (featuredCompaniesResult.error) logger.error("Failed to load featured companies", { scope: "landing" }, featuredCompaniesResult.error)
 
   const heroProjects = (heroProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
   const popularProjects = (popularProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
   const parentCategories = (parentCategoriesResult.data as CategoryRow[] | null) ?? []
-  const professionalCategoriesRaw = (professionalCategoriesResult.data as Tables<"categories">[] | null) ?? []
-  const professionalSpecialties = professionalSpecialtiesResult.data ?? []
+  const homeProjectTypes = (homeProjectTypesResult.data as Tables<"categories">[] | null) ?? []
+  const homeProfessionalServices = (homeProfessionalServicesResult.data as Tables<"categories">[] | null) ?? []
   const featuredCompaniesRaw = featuredCompaniesResult.data ?? []
 
   let childCategories: CategoryRow[] = []
@@ -180,7 +191,12 @@ async function loadLandingData() {
     project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable"> | null
   })[]
 
-  const uniqueCategoryIdsForImages = Array.from(new Set(listableChildCategories.map((child) => child.id)))
+  // Include homepage project types in representative image lookup
+  const homeProjectTypeIds = homeProjectTypes.map((c) => c.id)
+  const uniqueCategoryIdsForImages = Array.from(new Set([
+    ...listableChildCategories.map((child) => child.id),
+    ...homeProjectTypeIds,
+  ]))
 
   const representativeProjectResults = await Promise.all(
     uniqueCategoryIdsForImages.map((categoryId) =>
@@ -212,74 +228,45 @@ async function loadLandingData() {
     })
   }
 
-  // NEW: BrowseSection data - Projects
-  const browseProjects: BrowseCard[] = projectCategoriesRaw
-    .filter((category) => category.children?.some((child) => child.project_category_attributes?.is_listable))
-    .slice(0, 5)
-    .map((category) => {
-      const listableChildren = (category.children ?? [])
-        .filter((child) => child.project_category_attributes?.is_listable)
-        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  // BrowseSection data - Projects: use homepage-flagged child project types
+  const browseProjects: BrowseCard[] = homeProjectTypes.map((category) => {
+    const typeSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
+    const projectCount = categoryCounts.get(category.id) ?? 0
 
-      const childWithProject = listableChildren.find((child) => {
-        const project = representativeProjectMap.get(child.id)
-        return project && project.primary_photo_url
-      })
+    // Prefer category image_url, fall back to representative project photo
+    const image = (category as any).image_url as string | null
+    const projectImage = image ?? representativeProjectMap.get(category.id)?.primary_photo_url ?? null
 
-      const representativeProject = childWithProject
-        ? representativeProjectMap.get(childWithProject.id)
-        : undefined
+    return {
+      id: category.id,
+      title: category.name ?? "",
+      href: typeSlug ? `/projects?type=${encodeURIComponent(typeSlug)}` : "/projects",
+      imageUrl: projectImage,
+      count: projectCount > 0 ? `${projectCount}+ projects` : undefined,
+    }
+  })
 
-      const typeSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
-      
-      // Calculate total count for this parent category
-      const totalCount = listableChildren.reduce((sum, child) => {
-        return sum + (categoryCounts.get(child.id) ?? 0)
-      }, 0)
-
-      return {
-        id: category.id,
-        title: category.name,
-        href: typeSlug ? `/projects?type=${encodeURIComponent(typeSlug)}` : "/projects",
-        imageUrl: representativeProject?.primary_photo_url ?? null,
-        count: totalCount > 0 ? `${totalCount}+ projects` : undefined,
-      }
-    })
-
-  // NEW: BrowseSection data - Spaces (hardcoded for now - you can make dynamic later)
+  // BrowseSection data - Spaces (hardcoded for now)
   const browseSpaces: BrowseCard[] = [
     { id: '1', title: 'Kitchen', href: '/projects?space=kitchen', imageUrl: null },
-    { id: '2', title: 'Living Room', href: '/projects?space=living-room', imageUrl: null },
+    { id: '2', title: 'Living', href: '/projects?space=living', imageUrl: null },
     { id: '3', title: 'Bedroom', href: '/projects?space=bedroom', imageUrl: null },
     { id: '4', title: 'Bathroom', href: '/projects?space=bathroom', imageUrl: null },
     { id: '5', title: 'Outdoor', href: '/projects?space=outdoor', imageUrl: null },
   ]
 
-  // NEW: BrowseSection data - Professionals
-  const professionalCategoryCounts = new Map<string, number>()
-  professionalSpecialties.forEach((entry) => {
-    const specialtySlug = normalizeSlug(entry.primary_specialty_slug ?? "")
-    if (!specialtySlug) return
-    const parentSlug = parentSlugByChildSlug.get(specialtySlug)
-    const categoryToCount = parentSlug || specialtySlug
-    professionalCategoryCounts.set(categoryToCount, (professionalCategoryCounts.get(categoryToCount) ?? 0) + 1)
-  })
-
-  const browseProfessionals: BrowseCard[] = professionalCategoriesRaw
+  // BrowseSection data - Professionals: use homepage-flagged child services
+  const browseProfessionals: BrowseCard[] = homeProfessionalServices
     .map((category) => {
-      const normalizedSlug = normalizeSlug(category.slug) || normalizeSlug(category.name)
       const image = (category as any).image_url
-      if (!image) return null
-      
+      // For child services, link with the service filter
       return {
         id: category.id,
         title: category.name ?? "",
-        href: `/professionals?categories=${encodeURIComponent(category.id)}`,
-        imageUrl: image,
+        href: `/professionals?services=${encodeURIComponent(category.id)}`,
+        imageUrl: image ?? null,
       } as BrowseCard
     })
-    .filter((category): category is BrowseCard => category !== null)
-    .slice(0, 5)
 
   const allCategories = [...parentCategories, ...childCategories]
   const labelMap = new Map<string, string>()

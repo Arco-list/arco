@@ -39,6 +39,7 @@ export function ProfessionalHeader({
         )}
       </div>
       
+      <div id="details-anchor" />
       <h1 className="arco-page-title">{name}</h1>
       
       <p className="professional-badge">{services}</p>

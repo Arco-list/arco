@@ -625,6 +625,69 @@ export async function checkUserDeletionAction(input: { userId: string }): Promis
   }
 }
 
+export async function generateLoginAsLinkAction(
+  input: { userId: string },
+): Promise<ActionResult<{ loginUrl: string }>> {
+  const parsed = deleteUserSchema.safeParse(input)
+  if (!parsed.success) {
+    return { success: false, error: "Invalid user ID." }
+  }
+
+  const { user: currentUser, error } = await assertSuperAdmin()
+  if (error || !currentUser) {
+    return { success: false, error: "You are not authorized to log in as other users." }
+  }
+
+  if (parsed.data.userId === currentUser.id) {
+    return { success: false, error: "You are already logged in as this user." }
+  }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+  const userResponse = await serviceClient.auth.admin.getUserById(parsed.data.userId)
+
+  if (userResponse.error || !userResponse.data?.user?.email) {
+    logger.auth(
+      "admin-login-as",
+      "Failed to load auth user for login-as",
+      { targetUserId: parsed.data.userId },
+      userResponse.error ?? new Error("Auth user not found"),
+    )
+    return { success: false, error: "Unable to load user account." }
+  }
+
+  const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+    type: "magiclink",
+    email: userResponse.data.user.email,
+  })
+
+  if (linkError || !linkData?.properties?.action_link) {
+    logger.auth(
+      "admin-login-as",
+      "Failed to generate login-as link",
+      { targetUserId: parsed.data.userId },
+      linkError ?? new Error("No action_link returned"),
+    )
+    return { success: false, error: "Could not generate login link." }
+  }
+
+  // Build a direct URL to our callback with the token_hash so we can verify it
+  // server-side. Going through Supabase's /auth/v1/verify endpoint redirects with
+  // fragment tokens which server-side route handlers cannot read.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  const actionLink = new URL(linkData.properties.action_link)
+  const tokenHash = actionLink.searchParams.get("token") ?? linkData.properties.hashed_token
+
+  if (!tokenHash) {
+    return { success: false, error: "Could not extract token from login link." }
+  }
+
+  const loginUrl = new URL(`${siteUrl}/auth/callback`)
+  loginUrl.searchParams.set("token_hash", tokenHash)
+  loginUrl.searchParams.set("type", "magiclink")
+
+  return { success: true, data: { loginUrl: loginUrl.toString() } }
+}
+
 export async function deleteUserAction(input: { userId: string }): Promise<ActionResult> {
   const parsed = deleteUserSchema.safeParse(input)
   if (!parsed.success) {

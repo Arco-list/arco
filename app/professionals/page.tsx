@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
 import { ProfessionalsFilterBar } from "@/components/professionals-filter-bar"
 import { ProfessionalsGrid } from "@/components/professionals-grid"
 import { ProfessionalFilterProvider } from "@/contexts/professional-filter-context"
@@ -25,17 +24,17 @@ export default async function ProfessionalsPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pt-[60px] md:pt-[68px]">
+    <div className="min-h-screen bg-white">
       <Header />
       <FilterErrorBoundary>
         <ProfessionalFilterProvider>
           <ProfessionalsFilterBar />
-          <main className="flex-1 bg-white">
+
+          <main>
             <ProfessionalsGrid professionals={professionals} />
           </main>
         </ProfessionalFilterProvider>
       </FilterErrorBoundary>
-      <Footer />
     </div>
   )
 }

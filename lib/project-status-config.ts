@@ -15,8 +15,8 @@ export const isListingStatusValue = (status: ProjectStatus | string): status is 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   draft: "In progress",
   in_progress: "In review",
-  published: "Published",
-  archived: "Unpublished",
+  published: "Listed",
+  archived: "Unlisted",
   rejected: "Rejected",
 }
 
@@ -39,13 +39,13 @@ export const PROJECT_STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
 export const LISTING_STATUS_OPTIONS: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
   {
     value: "archived",
-    label: "Unpublished",
+    label: "Unlisted",
     description: "Project is not visible to users.",
     colorClass: "bg-muted-foreground",
   },
   {
     value: "published",
-    label: "Published",
+    label: "Listed",
     description: "Project is visible to users and you are displayed on the project page.",
     colorClass: "bg-emerald-500",
   },

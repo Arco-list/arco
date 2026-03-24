@@ -1,29 +1,18 @@
 "use client"
 
-import { useMemo } from "react"
-import Link from "next/link"
-import Image from "next/image"
-import { AlertTriangle, X } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
-
-type PlanTier = "basic" | "plus"
+import { AlertTriangle } from "lucide-react"
 
 export type ListingStatusModalOption<T extends string> = {
   value: T
   label: string
   description: string
   colorClass: string
-  requiresPlus?: boolean
 }
 
 export type ListingStatusModalProject = {
   title: string
   descriptor: string
   coverImageUrl: string
-  planBadgeLabel?: string
 }
 
 type ListingStatusModalProps<TStatus extends string> = {
@@ -31,12 +20,17 @@ type ListingStatusModalProps<TStatus extends string> = {
   onClose: () => void
   onSave: () => void
   project: ListingStatusModalProject | null
-  companyPlan: PlanTier
+  companyPlan?: string
   selectedStatus: TStatus | ""
   onStatusChange: (status: TStatus) => void
   statusOptions: ReadonlyArray<ListingStatusModalOption<TStatus>>
   saveDisabled?: boolean
   isPendingAdminReview?: boolean
+  isRejected?: boolean
+  rejectionReason?: string | null
+  isDraft?: boolean
+  onSubmitForReview?: () => void
+  isSubmittingForReview?: boolean
   limitReachedForNewActivation?: boolean
   activeStatusValues?: ReadonlyArray<TStatus>
   role?: "owner" | "contributor"
@@ -47,180 +41,119 @@ export function ListingStatusModal<TStatus extends string>({
   onClose,
   onSave,
   project,
-  companyPlan,
   selectedStatus,
   onStatusChange,
   statusOptions,
   saveDisabled = false,
   isPendingAdminReview = false,
-  limitReachedForNewActivation = false,
-  activeStatusValues = [],
-  role = "owner",
+  isRejected = false,
+  rejectionReason,
+  isDraft = false,
+  onSubmitForReview,
+  isSubmittingForReview = false,
 }: ListingStatusModalProps<TStatus>) {
-  const activeStatusSet = useMemo(() => new Set(activeStatusValues), [activeStatusValues])
-
-  if (!project) {
+  if (!open || !project) {
     return null
   }
 
-  const planBadgeLabel = project.planBadgeLabel ?? (companyPlan === "plus" ? "Plus plan" : "Basic plan")
-  const planBadgeClass =
-    companyPlan === "plus" ? "bg-emerald-100 text-emerald-700" : "bg-surface text-text-secondary"
-
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          onClose()
-        }
-      }}
-    >
-      <DialogContent className="max-w-md border-none bg-transparent p-0 shadow-none">
-        <div className="bg-white rounded-lg max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h4 className="heading-5 text-foreground">
-              {role === "contributor" ? "Update listing status" : "Listing status"}
-            </h4>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-muted-foreground transition-colors hover:text-text-secondary"
-              aria-label="Close listing status"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 mb-6">
-            <Image
-              src={sanitizeImageUrl(project.coverImageUrl)}
-              alt={project.title}
-              width={IMAGE_SIZES.thumbnail.width}
-              height={IMAGE_SIZES.thumbnail.height}
-              className="w-16 h-16 rounded-lg object-cover bg-surface"
-            />
-            <div className="space-y-1">
-              <h6 className="heading-6 text-foreground">{project.title}</h6>
-              <p className="body-small text-text-secondary">{project.descriptor}</p>
-            </div>
-          </div>
-
-          {isPendingAdminReview && (
-            <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 mb-5 body-small text-blue-800">
-              <AlertTriangle className="h-5 w-5 mt-0.5 text-blue-600" />
-              <div>
-                <p className="font-medium">Under review by the Arco team</p>
-                <p className="text-blue-700">
-                  We&apos;ll email you once the review is complete. Status changes are disabled until approval.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {limitReachedForNewActivation && !isPendingAdminReview && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-5 body-small text-amber-800">
-              <AlertTriangle className="h-5 w-5 mt-0.5" />
-              <div>
-                <p className="font-medium">You&apos;ve reached the Basic plan limit.</p>
-                <p className="text-amber-700">Unlist another project or upgrade to Plus to set this listing live.</p>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3 mb-6">
-            {statusOptions.map((option) => {
-              const isSelected = selectedStatus === option.value
-              const requiresPlus = option.requiresPlus === true
-              const isPlusLocked = requiresPlus && companyPlan !== "plus"
-              const wouldBeActive = activeStatusSet.has(option.value)
-              const hitsActiveLimit = limitReachedForNewActivation && wouldBeActive
-              const isDisabled = isPlusLocked || hitsActiveLimit || isPendingAdminReview
-              const showUpgradeLink = isPlusLocked && !isPendingAdminReview
-              const description = isPendingAdminReview
-                ? option.description
-                : requiresPlus && companyPlan !== "plus"
-                    ? "Upgrade to Plus to make this project searchable on Discover."
-                    : option.description
-
-              return (
-                <label
-                  key={option.value}
-                  className={`block p-4 border rounded-lg transition-colors ${
-                    isSelected ? "border-foreground bg-surface" : "border-border hover:border-border"
-                  } ${isDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                  aria-disabled={isDisabled}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="radio"
-                      name="listing-status"
-                      value={option.value}
-                      checked={isSelected}
-                      onChange={() => {
-                        if (!isDisabled) {
-                          onStatusChange(option.value)
-                        }
-                      }}
-                      disabled={isDisabled}
-                      className="sr-only"
-                    />
-                    <div className="flex flex-1 flex-col gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${option.colorClass}`} />
-                        <span className="font-medium text-foreground">{option.label}</span>
-                        {requiresPlus && (
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              companyPlan === "plus"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {companyPlan === "plus" ? "Included in Plus" : "Plus"}
-                          </span>
-                        )}
-                      </div>
-                      <p className="body-small text-text-secondary">{description}</p>
-                      {showUpgradeLink && (
-                        <div className="flex items-center gap-2 body-small text-amber-700">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span>Upgrade to Plus to unlock this status.</span>
-                        </div>
-                      )}
-                      {hitsActiveLimit && (
-                        <div className="flex items-center gap-2 body-small text-red-600">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span>Basic plan allows up to three live listings.</span>
-                        </div>
-                      )}
-                    </div>
-                    {showUpgradeLink && (
-                      <Link
-                        href="/dashboard/pricing"
-                        className="body-small font-semibold text-emerald-600 hover:text-emerald-700"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        Upgrade
-                      </Link>
-                    )}
-                  </div>
-                </label>
-              )
-            })}
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="tertiary" size="tertiary" onClick={onClose} className="flex-1">
-              Cancel
-            </Button>
-            <Button variant="secondary" size="sm" onClick={onSave} className="flex-1" disabled={saveDisabled}>
-              Save
-            </Button>
-          </div>
+    <div className="popup-overlay" onClick={onClose}>
+      <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+        <div className="popup-header">
+          <h3 className="arco-section-title">Update status</h3>
+          <button type="button" className="popup-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {isDraft && !isPendingAdminReview && (
+          <div className="popup-banner popup-banner--info">
+            <AlertTriangle className="popup-banner-icon" />
+            <div>
+              <p style={{ fontWeight: 500 }}>This project is a draft</p>
+              <p>
+                Submit your project for review to make it eligible for publishing. Status changes are disabled until approved.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isPendingAdminReview && (
+          <div className="popup-banner popup-banner--info">
+            <AlertTriangle className="popup-banner-icon" />
+            <div>
+              <p style={{ fontWeight: 500 }}>Under review by the Arco team</p>
+              <p>
+                We&apos;ll email you once the review is complete. Status changes are disabled until approval.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isRejected && (
+          <div className="popup-banner popup-banner--danger">
+            <AlertTriangle className="popup-banner-icon" />
+            <div>
+              <p style={{ fontWeight: 500 }}>Project rejected</p>
+              {rejectionReason && (
+                <p>{rejectionReason}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="status-modal-options">
+          {statusOptions.map((option) => {
+            const isSelected = selectedStatus === option.value
+            const isDisabled = isPendingAdminReview || isDraft || isRejected
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`status-modal-option${isSelected ? " selected" : ""}`}
+                disabled={isDisabled}
+                onClick={() => onStatusChange(option.value)}
+              >
+                <span className={`status-modal-dot ${option.colorClass}`} />
+                <div className="status-modal-option-text">
+                  <span className="status-modal-option-label">{option.label}</span>
+                  <span className="status-modal-option-desc">{option.description}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="popup-actions">
+          {isDraft && onSubmitForReview ? (
+            <>
+              <button type="button" className="btn-tertiary" onClick={onClose} style={{ flex: 1 }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={onSubmitForReview}
+                disabled={isSubmittingForReview}
+                style={{ flex: 1, ...(isSubmittingForReview ? { opacity: 0.5 } : undefined) }}
+              >
+                {isSubmittingForReview ? "Submitting…" : "Submit"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn-tertiary" onClick={onClose} style={{ flex: 1 }}>
+                Cancel
+              </button>
+              <button type="button" className="btn-secondary" onClick={onSave} disabled={saveDisabled} style={{ flex: 1 }}>
+                Save
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

@@ -12,7 +12,7 @@ export default function HelpCenterPage() {
   return (
     <>
       <Header />
-      <main className="flex items-center justify-center">
+      <main>
         <Faq12 />
       </main>
       <Footer />

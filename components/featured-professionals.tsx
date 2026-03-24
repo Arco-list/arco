@@ -1,6 +1,6 @@
 "use client"
 
-import { Heart, ChevronLeft, ChevronRight, Star } from "lucide-react"
+import { Heart, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import Image from "next/image"
@@ -117,19 +117,6 @@ export function FeaturedProfessionals({ professionals }: FeaturedProfessionalsPr
                       {professional.name}
                     </h3>
                     <p className="body-small text-text-secondary">{professional.location}</p>
-                    <div className="flex items-center gap-2">
-                      {professional.rating > 0 ? (
-                        <>
-                          <div className="flex items-center gap-1">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="body-small font-medium text-foreground">{professional.rating.toFixed(1)}</span>
-                          </div>
-                          <span className="body-small text-text-secondary">({professional.reviews} reviews)</span>
-                        </>
-                      ) : (
-                        <span className="body-small text-text-secondary">No reviews yet</span>
-                      )}
-                    </div>
                   </div>
                 </Link>
               )

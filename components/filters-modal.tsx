@@ -5,6 +5,7 @@ import { X, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useFilters } from "@/contexts/filter-context"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
+import { SPACES } from "@/lib/spaces"
 
 interface FiltersModalProps {
   isOpen: boolean
@@ -18,7 +19,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   const {
     selectedTypes,
     selectedStyles,
-    selectedLocation,
+    selectedLocations,
     selectedLocationFeatures,
     selectedBuildingFeatures,
     selectedMaterialFeatures,
@@ -29,7 +30,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
     buildingYearRange,
     setSelectedTypes,
     setSelectedStyles,
-    setSelectedLocation,
+    setSelectedLocations,
     setSelectedLocationFeatures,
     setSelectedBuildingFeatures,
     setSelectedMaterialFeatures,
@@ -93,8 +94,8 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
   }, [categories])
 
   const buildingFeatureCategories = useMemo(
-    () => categories.filter((category) => category.project_category_attributes?.is_building_feature),
-    [categories],
+    () => SPACES.map((s) => ({ id: s.slug, name: s.name, slug: s.slug })),
+    [],
   )
 
   const typeSections = useMemo(() => {
@@ -302,19 +303,28 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
               <div>
                 <h6 className="mb-3">City</h6>
-                <select
-                  id="modal-location"
-                  className="w-full px-3 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                  value={selectedLocation || ""}
-                  onChange={(e) => setSelectedLocation(e.target.value || "")}
-                >
-                  <option value="">All cities</option>
-                  {(taxonomy.cities ?? []).map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-2 gap-2 max-h-[240px] overflow-y-auto">
+                  {(taxonomy.cities ?? []).map((city) => {
+                    const isChecked = selectedLocations.includes(city)
+                    return (
+                      <label key={city} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() =>
+                            setSelectedLocations(
+                              isChecked
+                                ? selectedLocations.filter((c) => c !== city)
+                                : [...selectedLocations, city]
+                            )
+                          }
+                          className="rounded border-border"
+                        />
+                        {city}
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
 
               <div>

@@ -2,11 +2,9 @@
 
 import { useMemo, useState } from "react"
 import Image from "next/image"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { X, Copy, Mail, MessageCircle, MessageSquare, Share2, Share } from "lucide-react"
+import { Copy, ExternalLink, Mail, MessageCircle, MessageSquare, Share2 } from "lucide-react"
 import { toast } from "sonner"
-import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
+import { sanitizeImageUrl } from "@/lib/image-security"
 
 interface ShareModalProps {
   isOpen: boolean
@@ -37,17 +35,17 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
     }
   }, [shareUrl])
 
-  const handleCopy = async (text: string, key: string, successMessage: string) => {
+  const handleCopy = async () => {
     try {
       if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text)
+        await navigator.clipboard.writeText(resolvedShareUrl)
       } else {
         if (typeof document === "undefined") {
           throw new Error("Clipboard API unavailable")
         }
 
         const textarea = document.createElement("textarea")
-        textarea.value = text
+        textarea.value = resolvedShareUrl
         textarea.style.position = "fixed"
         textarea.style.opacity = "0"
         document.body.appendChild(textarea)
@@ -57,23 +55,39 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
         document.body.removeChild(textarea)
       }
 
-      setCopiedKey(key)
-      toast.success(successMessage)
+      setCopiedKey("link")
+      toast.success("Link copied to clipboard")
       setTimeout(() => {
-        setCopiedKey((previous) => (previous === key ? null : previous))
+        setCopiedKey((previous) => (previous === "link" ? null : previous))
       }, 2000)
     } catch (error) {
       toast.error("Unable to copy to clipboard")
     }
   }
 
-  const handleCopyLink = async () => {
-    await handleCopy(resolvedShareUrl, "link", "Link copied to clipboard")
+  const handleSystemShare = async () => {
+    if (!navigator?.share) {
+      await handleCopy()
+      return
+    }
+
+    try {
+      await navigator.share({
+        title,
+        text: subtitle || title,
+        url: resolvedShareUrl,
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return
+      }
+      toast.error("Unable to share from this device")
+    }
   }
 
   const handleEmailShare = () => {
     const subject = encodeURIComponent(`Check out: ${title}`)
-    const body = encodeURIComponent(`I thought you might be interested in this project:\n${resolvedShareUrl}`)
+    const body = encodeURIComponent(`I thought you might be interested in this:\n${resolvedShareUrl}`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
@@ -100,125 +114,65 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
 
   const displaySubtitle = subtitle?.trim() ? subtitle.trim() : ""
 
-  const handleSystemShare = async () => {
-    if (!navigator?.share) {
-      await handleCopyLink()
-      return
-    }
-
-    try {
-      const shareText = displaySubtitle || title
-      await navigator.share({
-        title,
-        text: shareText,
-        url: resolvedShareUrl,
-      })
-      toast.success("Share sheet opened")
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return
-      }
-      toast.error("Unable to share from this device")
-    }
-  }
-
-  const shareOptions = [
-    {
-      key: "copy",
-      label: "Copy link",
-      icon: Copy,
-      onClick: handleCopyLink,
-      status: copiedKey === "link" ? "Copied" : null,
-    },
-    {
-      key: "email",
-      label: "E-mail",
-      icon: Mail,
-      onClick: handleEmailShare,
-    },
-    {
-      key: "whatsapp",
-      label: "WhatsApp",
-      icon: MessageSquare,
-      onClick: handleWhatsAppShare,
-    },
-    {
-      key: "messenger",
-      label: "Messenger",
-      icon: MessageCircle,
-      onClick: handleMessengerShare,
-    },
-    {
-      key: "facebook",
-      label: "Facebook",
-      icon: Share2,
-      onClick: handleFacebookShare,
-    },
-    {
-      key: "twitter",
-      label: "X (Twitter)",
-      icon: Share2,
-      onClick: handleTwitterShare,
-    },
+  const shareActions = [
+    { key: "copy", label: copiedKey === "link" ? "Copied!" : "Copy link", icon: Copy, onClick: handleCopy },
+    { key: "email", label: "E-mail", icon: Mail, onClick: handleEmailShare },
+    { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, onClick: handleWhatsAppShare },
+    { key: "messenger", label: "Messenger", icon: MessageCircle, onClick: handleMessengerShare },
+    { key: "facebook", label: "Facebook", icon: Share2, onClick: handleFacebookShare },
+    { key: "twitter", label: "X", icon: ExternalLink, onClick: handleTwitterShare },
   ] as const
 
-  return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          onClose()
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-lg p-6">
-        <DialogHeader className="mb-4">
-          <DialogTitle className="heading-5 font-semibold flex items-center justify-between gap-4">
-            <span>Share this project</span>
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close share dialog">
-              <X className="h-4 w-4" />
-            </Button>
-          </DialogTitle>
-          <DialogDescription className="body-small text-text-secondary">
-            Quickly share this project with clients or collaborators.
-          </DialogDescription>
-        </DialogHeader>
+  if (!isOpen) return null
 
-        <div className="flex flex-col sm:flex-row gap-3 rounded-lg border border-border bg-surface/60 p-3 mb-6">
-          <Image
-            src={sanitizeImageUrl(imageUrl, "/placeholder.svg")}
-            alt={title}
-            width={IMAGE_SIZES.thumbnail.width}
-            height={IMAGE_SIZES.thumbnail.height}
-            className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
-          />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="body-small font-medium text-foreground line-clamp-2">{title}</span>
-            {displaySubtitle ? <span className="text-xs text-text-secondary line-clamp-2">{displaySubtitle}</span> : null}
-          </div>
+  return (
+    <div className="popup-overlay" onClick={onClose}>
+      <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="popup-header">
+          <h3 className="arco-section-title">Share</h3>
+          <button type="button" className="popup-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
 
-        <Button variant="secondary" className="mb-4 flex w-full items-center justify-center gap-2" onClick={handleSystemShare}>
-          <Share className="h-4 w-4" />
-          Share with...
-        </Button>
+        {/* Project preview card — discover card style */}
+        <div style={{ marginBottom: 24 }}>
+          <div className="discover-card-image-wrap" style={{ borderRadius: 5, marginBottom: 10 }}>
+            <div className="discover-card-image-layer">
+              <Image
+                src={sanitizeImageUrl(imageUrl, "/placeholder.svg")}
+                alt={title}
+                width={600}
+                height={450}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            </div>
+          </div>
+          <h4 className="discover-card-title">{title}</h4>
+          {displaySubtitle ? <p className="discover-card-sub">{displaySubtitle}</p> : null}
+        </div>
 
-        {/* Share options grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {shareOptions.map(({ key, label, icon: Icon, onClick, status }) => (
-            <Button
+        {/* Native share — primary action */}
+        <button type="button" className="btn-secondary" onClick={handleSystemShare} style={{ width: "100%", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <ExternalLink style={{ width: 16, height: 16 }} />
+          Share
+        </button>
+
+        {/* Share options — pill buttons */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {shareActions.map(({ key, label, icon: Icon, onClick }) => (
+            <button
               key={key}
-              variant="quaternary" size="quaternary"
-              className="flex items-center justify-start gap-3 h-12 px-4 bg-transparent"
+              type="button"
+              className="filter-pill"
               onClick={onClick}
             >
-              <Icon className="h-4 w-4" />
-              <span className="body-small">{label}</span>
-              {status ? <span className="text-xs text-green-600">{status}</span> : null}
-            </Button>
+              <Icon style={{ width: 13, height: 13 }} />
+              {label}
+            </button>
           ))}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

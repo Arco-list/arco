@@ -2,36 +2,49 @@
 
 import { useState } from "react"
 import Image from "next/image"
+import { ChevronRight } from "lucide-react"
 
 interface Photo {
   id: string
   url: string
   caption: string | null
   feature_id: string | null
+  /** Space slug derived from the feature's linked space */
+  space?: string | null
 }
 
 interface PhotoTourProps {
   photos: Photo[]
   projectId: string
+  /** Unique space slugs present on this project's photos */
+  spaces?: string[]
 }
 
-export function PhotoTour({ photos }: PhotoTourProps) {
+export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
   const [activeCategory, setActiveCategory] = useState('All')
   const [showMore, setShowMore] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
 
-  // Categories - this would ideally come from features/categories
-  // TODO: Extract actual categories from photo feature_ids
-  const categories = ['All', 'Exterior', 'Living', 'Kitchen', 'Bedroom', 'Bathroom', 'Garden']
+  // Build categories from actual spaces on photos, with "All" first
+  const categories = ['All', ...spaces.map((slug) => {
+    // Convert slug to display name (e.g. "living-room" → "Living Room")
+    return slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  })]
 
-  // Filter photos by category
-  const filteredPhotos = activeCategory === 'All' 
-    ? photos 
+  // Slug lookup for filtering
+  const categorySlugMap = new Map<string, string>()
+  spaces.forEach((slug) => {
+    const label = slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    categorySlugMap.set(label, slug)
+  })
+
+  // Filter photos by space
+  const filteredPhotos = activeCategory === 'All'
+    ? photos
     : photos.filter(photo => {
-        // TODO: Map feature_id to category name
-        // For now, filter by caption containing category name
-        return photo.caption?.toLowerCase().includes(activeCategory.toLowerCase())
+        const targetSlug = categorySlugMap.get(activeCategory)
+        return targetSlug && photo.space === targetSlug
       })
 
   // Initial 6 photos for display
@@ -39,8 +52,8 @@ export function PhotoTour({ photos }: PhotoTourProps) {
   const remainingPhotos = filteredPhotos.slice(6)
   const displayPhotos = showMore ? filteredPhotos : initialPhotos
 
-  // UPDATED: Always use ALL filtered photos in lightbox
-  const lightboxPhotos = filteredPhotos
+  // Lightbox always shows ALL photos (pills navigate, not filter)
+  const lightboxPhotos = photos
 
   const openLightbox = (index: number) => {
     setLightboxIndex(index)
@@ -68,13 +81,21 @@ export function PhotoTour({ photos }: PhotoTourProps) {
     }
   }
 
-  const handleLightboxCategoryChange = (category: string) => {
-    // Update category
-    setActiveCategory(category)
-    setShowMore(false)
-    // Reset to first image
-    setLightboxIndex(0)
+  // In lightbox: navigate to the first photo of a given space
+  const handleLightboxSpaceNav = (spaceLabel: string) => {
+    const targetSlug = categorySlugMap.get(spaceLabel)
+    if (!targetSlug) return
+    const targetIndex = photos.findIndex((p) => p.space === targetSlug)
+    if (targetIndex !== -1) setLightboxIndex(targetIndex)
   }
+
+  // Determine which space pill should be active based on current lightbox photo
+  const currentLightboxSpace = lightboxOpen && photos[lightboxIndex]?.space
+    ? photos[lightboxIndex].space
+    : null
+  const activeLightboxPill = currentLightboxSpace
+    ? currentLightboxSpace.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    : null
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') closeLightbox()
@@ -90,18 +111,20 @@ export function PhotoTour({ photos }: PhotoTourProps) {
           <h2 className="arco-section-title">Photo Tour</h2>
         </div>
 
-        {/* Category Tags */}
-        <div className="category-tags">
-          {categories.map((category) => (
-            <button
-              key={category}
-              className={`category-tag ${activeCategory === category ? 'active' : ''}`}
-              onClick={() => handleCategoryChange(category)}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
+        {/* Category Tags — only show when photos have spaces */}
+        {spaces.length > 0 && (
+          <div className="category-tags">
+            {categories.map((category) => (
+              <button
+                key={category}
+                className={`category-tag ${activeCategory === category ? 'active' : ''}`}
+                onClick={() => handleCategoryChange(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+        )}
 
           {/* Photo Gallery */}
           <div className="photo-gallery">
@@ -128,16 +151,15 @@ export function PhotoTour({ photos }: PhotoTourProps) {
               )
             }
 
-            // Check if we need a grid row
-            const nextPhoto = displayPhotos[index + 1]
-            if (!nextPhoto || (index + 1) % 3 === 0) {
-              // Single image or end of pair
+            // First of the pair renders both images; second returns null
+            if (index % 3 === 1) {
+              const nextPhoto = displayPhotos[index + 1]
               return (
-                <div 
-                  key={`row-${photo.id}`} 
+                <div
+                  key={`row-${photo.id}`}
                   className={`gallery-row ${isHidden ? 'hidden-photo' : ''} ${showMore ? 'revealed' : ''}`}
                 >
-                  <div 
+                  <div
                     className="gallery-image-container"
                     onClick={() => openLightbox(index)}
                   >
@@ -150,7 +172,7 @@ export function PhotoTour({ photos }: PhotoTourProps) {
                     />
                   </div>
                   {nextPhoto && (
-                    <div 
+                    <div
                       className="gallery-image-container"
                       onClick={() => openLightbox(index + 1)}
                     >
@@ -167,7 +189,7 @@ export function PhotoTour({ photos }: PhotoTourProps) {
               )
             }
 
-            // Skip this one as it's part of the grid row above
+            // Second of the pair — already rendered above
             return null
           })}
         </div>
@@ -180,14 +202,16 @@ export function PhotoTour({ photos }: PhotoTourProps) {
                 className="btn-tertiary"
                 onClick={() => setShowMore(true)}
               >
-                Show More Photos <span>({remainingPhotos.length} remaining)</span>
+                More photos
+                <ChevronRight size={16} />
               </button>
             ) : (
               <button
                 className="btn-tertiary"
                 onClick={() => setShowMore(false)}
               >
-                Show Less Photos
+                Less photos
+                <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
               </button>
             )}
           </div>
@@ -247,23 +271,25 @@ export function PhotoTour({ photos }: PhotoTourProps) {
               />
             </div>
 
-            {/* UPDATED: Category tags with dark theme - stay in lightbox */}
-            <div className="lightbox-categories">
-              <div className="category-tags category-tags-dark">
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    className={`category-tag category-tag-dark ${activeCategory === category ? 'active' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleLightboxCategoryChange(category)
-                    }}
-                  >
-                    {category}
-                  </button>
-                ))}
+            {/* Space navigation pills — highlight based on current photo's space */}
+            {spaces.length > 0 && (
+              <div className="lightbox-categories">
+                <div className="category-tags category-tags-dark">
+                  {categories.filter((c) => c !== "All").map((category) => (
+                    <button
+                      key={category}
+                      className={`category-tag category-tag-dark ${activeLightboxPill === category ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleLightboxSpaceNav(category)
+                      }}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Caption */}
             {lightboxPhotos[lightboxIndex].caption && (

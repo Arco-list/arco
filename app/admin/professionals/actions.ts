@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
-import { createServerActionSupabaseClient } from "@/lib/supabase/server"
+import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 
@@ -271,6 +271,79 @@ export async function updateCompanyFeaturedAction(input: {
   return { success: true }
 }
 
+export async function updateCompanyAutoApproveAction(input: {
+  companyId: string
+  autoApproveProjects: boolean
+}) {
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
+  if (!parsedCompanyId.success) {
+    return { success: false, error: "Invalid company id" }
+  }
+
+  const autoApproveResult = z.boolean().safeParse(input.autoApproveProjects)
+  if (!autoApproveResult.success) {
+    return { success: false, error: "Invalid auto-approve value" }
+  }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update({ auto_approve_projects: autoApproveResult.data } as never)
+    .eq("id", parsedCompanyId.data)
+
+  if (updateError) {
+    logger.error("admin-professionals", "Failed to update company auto-approve", {
+      companyId: parsedCompanyId.data,
+      autoApproveProjects: autoApproveResult.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  logger.info("admin-professionals", "Company auto-approve updated", {
+    companyId: parsedCompanyId.data,
+    autoApproveProjects: autoApproveResult.data,
+  })
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
+export async function updateCompanyDomainVerifiedAction(input: {
+  companyId: string
+  isVerified: boolean
+}) {
+  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
+  if (!parsedCompanyId.success) return { success: false, error: "Invalid company id" }
+
+  const verifiedResult = z.boolean().safeParse(input.isVerified)
+  if (!verifiedResult.success) return { success: false, error: "Invalid value" }
+
+  const { supabase, error } = await assertAdmin()
+  if (error) return { success: false, error: error.message }
+
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update({ is_verified: verifiedResult.data })
+    .eq("id", parsedCompanyId.data)
+
+  if (updateError) {
+    logger.error("admin-professionals", "Failed to update domain verification", {
+      companyId: parsedCompanyId.data,
+      isVerified: verifiedResult.data,
+      error: updateError.message,
+    })
+    return { success: false, error: updateError.message }
+  }
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
 export async function updateCompanyDetailsAction(input: {
   companyId: string
   name: string
@@ -385,4 +458,135 @@ export async function updateCompanyDetailsAction(input: {
 
   revalidatePath("/admin/professionals")
   return { success: true }
+}
+
+export async function adminDeleteCompanyAction(input: { companyId: string }): Promise<{ success: true } | { success: false; error: string }> {
+  const parsedId = uuidSchema.safeParse(input.companyId)
+  if (!parsedId.success) {
+    return { success: false, error: "Invalid company ID" }
+  }
+
+  const { error } = await assertAdmin()
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  const companyId = parsedId.data
+  const serviceRole = createServiceRoleSupabaseClient()
+
+  // Delete child rows that may not CASCADE or are RLS-restricted
+  const { error: ppErr } = await serviceRole
+    .from("project_professionals")
+    .delete()
+    .eq("company_id", companyId)
+
+  if (ppErr) {
+    logger.error("admin-delete-company", "Failed to delete project professional links", { companyId, error: ppErr.message })
+    return { success: false, error: "Failed to remove company from projects." }
+  }
+
+  const { error: photosErr } = await serviceRole
+    .from("company_photos")
+    .delete()
+    .eq("company_id", companyId)
+
+  if (photosErr) {
+    logger.error("admin-delete-company", "Failed to delete company photos", { companyId, error: photosErr.message })
+    return { success: false, error: "Failed to delete company photos." }
+  }
+
+  const { error: linksErr } = await serviceRole
+    .from("company_social_links")
+    .delete()
+    .eq("company_id", companyId)
+
+  if (linksErr) {
+    logger.error("admin-delete-company", "Failed to delete company social links", { companyId, error: linksErr.message })
+    return { success: false, error: "Failed to delete company social links." }
+  }
+
+  // Get owner_id before deleting
+  const { data: company } = await serviceRole
+    .from("companies")
+    .select("owner_id")
+    .eq("id", companyId)
+    .maybeSingle()
+
+  // Delete company — CASCADE handles: company_members, company_ratings, reviews, saved_companies
+  const { error: deleteErr } = await serviceRole
+    .from("companies")
+    .delete()
+    .eq("id", companyId)
+
+  if (deleteErr) {
+    logger.error("admin-delete-company", "Failed to delete company", { companyId, error: deleteErr.message })
+    return { success: false, error: "Failed to delete company." }
+  }
+
+  // Remove "professional" from owner's user_types
+  if (company?.owner_id) {
+    const { data: profile } = await serviceRole
+      .from("profiles")
+      .select("user_types")
+      .eq("id", company.owner_id)
+      .single()
+
+    if (profile?.user_types) {
+      const updatedTypes = (profile.user_types as string[]).filter((t) => t !== "professional")
+      await serviceRole
+        .from("profiles")
+        .update({ user_types: updatedTypes })
+        .eq("id", company.owner_id)
+    }
+  }
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
+export async function generateCompanyLoginLinkAction(input: { companyId: string }): Promise<{ success: boolean; loginUrl?: string; error?: string }> {
+  const idResult = uuidSchema.safeParse(input.companyId)
+  if (!idResult.success) return { success: false, error: "Invalid company ID." }
+
+  const { error } = await assertAdmin()
+  if (error) return { success: false, error: "Not authorized." }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+
+  // Find the company owner
+  const { data: companyData } = await serviceClient
+    .from("companies")
+    .select("owner_id")
+    .eq("id", idResult.data)
+    .maybeSingle()
+
+  if (!companyData?.owner_id) return { success: false, error: "Company has no owner." }
+
+  // Get owner's email
+  const userResponse = await serviceClient.auth.admin.getUserById(companyData.owner_id)
+  if (userResponse.error || !userResponse.data?.user?.email) {
+    return { success: false, error: "Unable to load user account." }
+  }
+
+  // Generate magic link
+  const { data: linkData, error: linkError } = await serviceClient.auth.admin.generateLink({
+    type: "magiclink",
+    email: userResponse.data.user.email,
+  })
+
+  if (linkError || !linkData?.properties?.action_link) {
+    return { success: false, error: "Could not generate login link." }
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  const actionLink = new URL(linkData.properties.action_link)
+  const tokenHash = actionLink.searchParams.get("token") ?? linkData.properties.hashed_token
+
+  if (!tokenHash) return { success: false, error: "Could not extract token." }
+
+  const loginUrl = new URL(`${siteUrl}/auth/callback`)
+  loginUrl.searchParams.set("token_hash", tokenHash)
+  loginUrl.searchParams.set("type", "magiclink")
+
+  return { success: true, loginUrl: loginUrl.toString() }
 }

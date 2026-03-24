@@ -1,607 +1,959 @@
 "use client"
-import { useState, useRef, useEffect, useMemo, type MouseEvent } from "react"
-import { Filter, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { FiltersModal } from "./filters-modal"
+
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  type KeyboardEvent,
+} from "react"
+import { X } from "lucide-react"
+
 import { useFilters } from "@/contexts/filter-context"
-import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
+import type { ProjectSpaceKey } from "@/types/project-filters"
 
-interface TypeOptionItem {
-  id: string
-  name: string
-  slug?: string
-  parentId: string | null
-  parentSlug?: string
-  isParent: boolean
-  isListable: boolean
+// ─── Space options ─────────────────────────────────────────────────────────────
+
+interface SpaceOption {
+  key: ProjectSpaceKey
+  label: string
+  icon: React.ReactNode
 }
 
-interface TypeOptionSection {
-  id: string
-  name: string
-  slug?: string
-  items: TypeOptionItem[]
+const SPACE_OPTIONS: SpaceOption[] = [
+  {
+    key: "exterior",
+    label: "Exterior",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <path d="M2 8l6-5 6 5" />
+        <rect x="3" y="8" width="10" height="6" />
+        <rect x="6" y="10" width="4" height="4" />
+      </svg>
+    ),
+  },
+  {
+    key: "living",
+    label: "Living",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <path d="M2 11V8a2 2 0 012-2h8a2 2 0 012 2v3" />
+        <rect x="1" y="11" width="14" height="2" rx="1" />
+        <line x1="4" y1="13" x2="4" y2="15" />
+        <line x1="12" y1="13" x2="12" y2="15" />
+      </svg>
+    ),
+  },
+  {
+    key: "kitchen",
+    label: "Kitchen",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <rect x="2" y="6" width="12" height="7" rx="1" />
+        <path d="M5 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+        <line x1="8" y1="9" x2="8" y2="11" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    key: "bedroom",
+    label: "Bedroom",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <rect x="1" y="9" width="14" height="4" rx="1" />
+        <path d="M2 9V7a1 1 0 011-1h3a1 1 0 011 1v2" />
+        <path d="M9 9V7a1 1 0 011-1h3a1 1 0 011 1v2" />
+        <line x1="3" y1="13" x2="3" y2="15" />
+        <line x1="13" y1="13" x2="13" y2="15" />
+      </svg>
+    ),
+  },
+  {
+    key: "bathroom",
+    label: "Bathroom",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <rect x="1" y="8" width="14" height="5" rx="1" />
+        <path d="M4 8V5a2 2 0 114 0" />
+        <line x1="3" y1="13" x2="3" y2="15" />
+        <line x1="13" y1="13" x2="13" y2="15" />
+      </svg>
+    ),
+  },
+  {
+    key: "home-office",
+    label: "Home office",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <rect x="2" y="3" width="12" height="8" rx="1" />
+        <line x1="5" y1="14" x2="11" y2="14" />
+        <line x1="8" y1="11" x2="8" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    key: "hallway",
+    label: "Hallway",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <rect x="3" y="2" width="10" height="12" rx="1" />
+        <path d="M6 14V10a2 2 0 014 0v4" />
+        <line x1="8" y1="6" x2="8" y2="7" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    key: "garden",
+    label: "Garden",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <path d="M8 14V8" />
+        <path d="M8 8C8 5 5 3 2 4c1 3 3 4 6 4z" />
+        <path d="M8 8c0-3 3-5 6-4-1 3-3 4-6 4z" />
+      </svg>
+    ),
+  },
+  {
+    key: "pool",
+    label: "Pool",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <path d="M1 10c1.5-1.8 3-1.8 4.5 0s3 1.8 4.5 0 3-1.8 4.5 0" />
+        <path d="M1 7c1.5-1.8 3-1.8 4.5 0s3 1.8 4.5 0 3-1.8 4.5 0" opacity=".35" />
+      </svg>
+    ),
+  },
+  {
+    key: "terrace",
+    label: "Terrace",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+        <path d="M1 10h14" />
+        <line x1="3" y1="10" x2="3" y2="14" />
+        <line x1="8" y1="10" x2="8" y2="14" />
+        <line x1="13" y1="10" x2="13" y2="14" />
+        <path d="M8 2L2 10h12z" opacity=".35" />
+      </svg>
+    ),
+  },
+]
+
+export const SORT_OPTIONS = ["Most recent", "Most liked", "Alphabetical"] as const
+export type SortOption = (typeof SORT_OPTIONS)[number]
+
+// ─── Icons ─────────────────────────────────────────────────────────────────────
+
+function CheckIcon() {
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+      <path
+        d="M1.5 4.5l2 2L7.5 2"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
-export function FilterBar() {
-  const {
-    selectedTypes,
-    selectedStyles,
-    selectedLocation,
-    setSelectedTypes,
-    setSelectedStyles,
-    setSelectedLocation,
-    hasActiveFilters,
-    taxonomy,
-  } = useFilters()
-
-  const {
-    categories: taxonomyCategories,
-    taxonomyOptions,
-    isLoading: taxonomyLoading,
-  } = taxonomy
-
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
-  const [expandedSections, setExpandedSections] = useState<string[]>([])
-  const [locationSearch, setLocationSearch] = useState<string>("")
-  const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
-
-  const typeDropdownRef = useRef<HTMLDivElement>(null)
-  const styleDropdownRef = useRef<HTMLDivElement>(null)
-  const locationDropdownRef = useRef<HTMLDivElement>(null)
-  const carouselRef = useRef<HTMLDivElement>(null)
-  const carouselWrapperRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClickOutside = (event: Event) => {
-      if (
-        typeDropdownRef.current &&
-        !typeDropdownRef.current.contains(event.target as Node) &&
-        styleDropdownRef.current &&
-        !styleDropdownRef.current.contains(event.target as Node) &&
-        locationDropdownRef.current &&
-        !locationDropdownRef.current.contains(event.target as Node)
-      ) {
-        setActiveDropdown(null)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
-
-  useEffect(() => {
-    const updateScrollButtons = () => {
-      if (carouselRef.current && carouselWrapperRef.current) {
-        const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current
-        const canLeft = scrollLeft > 0
-        const canRight = scrollLeft < scrollWidth - clientWidth - 1
-        
-        setCanScrollLeft(canLeft)
-        setCanScrollRight(canRight)
-        
-        // Update wrapper classes for gradient
-        if (canLeft) {
-          carouselWrapperRef.current.classList.add('can-scroll-left')
-        } else {
-          carouselWrapperRef.current.classList.remove('can-scroll-left')
-        }
-        
-        if (canRight) {
-          carouselWrapperRef.current.classList.add('can-scroll-right')
-        } else {
-          carouselWrapperRef.current.classList.remove('can-scroll-right')
-        }
-      }
-    }
-
-    const carousel = carouselRef.current
-    if (carousel) {
-      carousel.addEventListener("scroll", updateScrollButtons)
-      window.addEventListener("resize", updateScrollButtons)
-      updateScrollButtons()
-
-      return () => {
-        carousel.removeEventListener("scroll", updateScrollButtons)
-        window.removeEventListener("resize", updateScrollButtons)
-      }
-    }
-  }, [])
-
-  const scrollCarousel = (direction: "left" | "right") => {
-    if (carouselRef.current) {
-      const scrollAmount = 200
-      const newScrollLeft =
-        direction === "left"
-          ? carouselRef.current.scrollLeft - scrollAmount
-          : carouselRef.current.scrollLeft + scrollAmount
-
-      carouselRef.current.scrollTo({
-        left: newScrollLeft,
-        behavior: "smooth",
-      })
-    }
-  }
-
-  const toggleTypeDropdown = () => {
-    if (taxonomyLoading && topLevelCategories.length === 0) {
-      return
-    }
-    setActiveDropdown(activeDropdown === "type" ? null : "type")
-  }
-
-  const toggleTypeSelection = (typeId: string) => {
-    if (selectedTypes.includes(typeId)) {
-      setSelectedTypes([])
-    } else {
-      setSelectedTypes([typeId])
-    }
-  }
-
-  const handleTypeRadioClick = (event: MouseEvent<HTMLInputElement>, typeId: string) => {
-    if (selectedTypes.includes(typeId)) {
-      event.preventDefault()
-      setSelectedTypes([])
-    }
-  }
-
-  const topLevelCategories = useMemo(
-    () => taxonomyCategories.filter((category) => category.parent_id === null),
-    [taxonomyCategories],
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="9"
+      height="9"
+      viewBox="0 0 9 9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <path d="M2 3.5l2.5 2.5 2.5-2.5" />
+    </svg>
   )
+}
 
-  const childCategoriesByParent = useMemo(() => {
-    const map = new Map<string, typeof taxonomyCategories>
-    taxonomyCategories.forEach((category) => {
-      if (!category.parent_id) return
-      const siblings = map.get(category.parent_id) ?? []
-      siblings.push(category)
-      map.set(category.parent_id, siblings)
-    })
-    return map
-  }, [taxonomyCategories])
+// ─── DropdownOption ────────────────────────────────────────────────────────────
 
-  const typeOptions = useMemo<TypeOptionSection[]>(() => {
-    const sections: TypeOptionSection[] = []
-    const topLevelByName = new Map(topLevelCategories.map((category) => [category.name, category]))
-    const orderedTypes = Object.keys(PROJECT_TYPE_FILTERS)
+interface DropdownOptionProps {
+  label: string
+  checked: boolean
+  icon?: React.ReactNode
+  onToggle: () => void
+}
 
-    orderedTypes.forEach((typeName) => {
-      if (!isAllowedProjectType(typeName)) {
-        return
-      }
-
-      const category = topLevelByName.get(typeName)
-      if (!category) {
-        return
-      }
-
-      const allowedSubTypes = PROJECT_TYPE_FILTERS[typeName]
-      const children = childCategoriesByParent.get(category.id) ?? []
-
-      const sortedChildren = [...children]
-        .filter((item) => isAllowedProjectSubType(typeName, item.name))
-        .sort((a, b) => {
-          const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER
-          const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER
-          if (orderA !== orderB) return orderA - orderB
-          return a.name.localeCompare(b.name)
-        })
-
-      const shouldIncludeParent = (allowedSubTypes as readonly string[]).includes(typeName)
-
-      const itemsSource = [
-        ...(shouldIncludeParent ? [category] : []),
-        ...sortedChildren,
-      ]
-
-      if (itemsSource.length === 0) {
-        return
-      }
-
-      const sectionId = category.id ?? category.slug ?? category.name
-      const sectionSlug = category.slug ?? undefined
-
-      sections.push({
-        id: sectionId,
-        name: category.name,
-        slug: sectionSlug,
-        items: itemsSource.map((item, index) => {
-          const isParentItem = item.id === category.id
-          const itemName = item.name
-          return {
-            id: item.id ?? item.slug ?? `${item.name}-${index}`,
-            name: itemName,
-            slug: item.slug ?? undefined,
-            parentId: isParentItem ? null : item.parent_id ?? category.id ?? null,
-            parentSlug: sectionSlug,
-            isParent: isParentItem,
-            isListable: isAllowedProjectSubType(typeName, itemName) || (isParentItem && shouldIncludeParent),
-          }
-        }),
-      })
-    })
-
-    return sections
-  }, [childCategoriesByParent, topLevelCategories])
-
-  const quickFilterItems = useMemo(() => {
-    const seen = new Set<string>()
-    const items: TypeOptionItem[] = []
-
-    typeOptions.forEach((section) => {
-      section.items.forEach((item) => {
-        if (!item.isListable) return
-        if (item.isParent) return // Exclude parent items from carousel
-        if (seen.has(item.id)) return
-        items.push(item)
-        seen.add(item.id)
-      })
-    })
-
-    return items
-  }, [typeOptions])
-
-  // Update scroll state when items change
-  useEffect(() => {
-    const updateScrollButtons = () => {
-      if (carouselRef.current && carouselWrapperRef.current) {
-        const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current
-        const canLeft = scrollLeft > 0
-        const canRight = scrollLeft < scrollWidth - clientWidth - 1
-        
-        setCanScrollLeft(canLeft)
-        setCanScrollRight(canRight)
-        
-        if (canLeft) {
-          carouselWrapperRef.current.classList.add('can-scroll-left')
-        } else {
-          carouselWrapperRef.current.classList.remove('can-scroll-left')
-        }
-        
-        if (canRight) {
-          carouselWrapperRef.current.classList.add('can-scroll-right')
-        } else {
-          carouselWrapperRef.current.classList.remove('can-scroll-right')
-        }
-      }
-    }
-    const rafId = requestAnimationFrame(updateScrollButtons)
-    return () => cancelAnimationFrame(rafId)
-  }, [quickFilterItems])
-
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) => (prev.includes(section) ? prev.filter((item) => item !== section) : [...prev, section]))
-  }
-
-  const clearFilters = () => {
-    setSelectedTypes([])
-  }
-
-  const toggleStyleDropdown = () => {
-    setActiveDropdown(activeDropdown === "style" ? null : "style")
-  }
-
-  const toggleStyleSelection = (styleValue: string) => {
-    const next = selectedStyles.includes(styleValue)
-      ? selectedStyles.filter((s) => s !== styleValue)
-      : [...selectedStyles, styleValue]
-    setSelectedStyles(next)
-  }
-
-  const clearStyleFilters = () => {
-    setSelectedStyles([])
-  }
-
-  const toggleLocationDropdown = () => {
-    setActiveDropdown(activeDropdown === "location" ? null : "location")
-  }
-
-  const selectLocation = (location: string) => {
-    setSelectedLocation(location)
-    setLocationSearch(location)
-    setActiveDropdown(null)
-  }
-
-  const clearLocationFilter = () => {
-    setSelectedLocation("")
-    setLocationSearch("")
-  }
-
-  const availableCities = taxonomy.cities ?? []
-
-  const filteredLocations = availableCities.filter((location) =>
-    location.toLowerCase().includes(locationSearch.toLowerCase()),
+function DropdownOption({ label, checked, icon, onToggle }: DropdownOptionProps) {
+  return (
+    <div
+      role="option"
+      aria-selected={checked}
+      tabIndex={0}
+      className="filter-dropdown-option"
+      data-checked={checked}
+      onClick={onToggle}
+      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggle() }
+      }}
+    >
+      <div className="filter-dropdown-option-left">
+        <div className="filter-checkbox">{checked && <CheckIcon />}</div>
+        {icon && <span className="filter-dropdown-icon">{icon}</span>}
+        <span className="filter-dropdown-label">{label}</span>
+      </div>
+    </div>
   )
+}
 
-  const projectStyles = taxonomyOptions.project_style ?? []
+// ─── DrawerSection ─────────────────────────────────────────────────────────────
+
+interface DrawerSectionProps {
+  title: string
+  activeCount: number
+  children: React.ReactNode
+}
+
+function DrawerSection({ title, activeCount, children }: DrawerSectionProps) {
+  const [collapsed, setCollapsed] = useState(false)
+  return (
+    <div className="drawer-section" data-collapsed={collapsed}>
+      <div
+        className="drawer-section-header"
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+          if (e.key === " " || e.key === "Enter") { e.preventDefault(); setCollapsed((c) => !c) }
+        }}
+      >
+        <div className="drawer-section-header-left">
+          <span className="drawer-section-title">{title}</span>
+          {activeCount > 0 && (
+            <span className="drawer-section-badge">{activeCount} selected</span>
+          )}
+        </div>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
+          className="drawer-section-chevron">
+          <path d="M2 4l3 3 3-3" />
+        </svg>
+      </div>
+      {!collapsed && <div className="drawer-section-body">{children}</div>}
+    </div>
+  )
+}
+
+// ─── DrawerOptionListWithMore ──────────────────────────────────────────────────
+
+const DRAWER_SHOW_MORE_LIMIT = 6
+
+interface DrawerOptionListWithMoreProps<T> {
+  items: T[]
+  selectedValues: string[]
+  getItemValue: (item: T) => string
+  getItemLabel: (item: T) => string
+  onToggle: (value: string, isCurrentlyChecked: boolean) => void
+}
+
+function DrawerOptionListWithMore<T>({
+  items,
+  selectedValues,
+  getItemValue,
+  getItemLabel,
+  onToggle,
+}: DrawerOptionListWithMoreProps<T>) {
+  const [showAll, setShowAll] = useState(false)
+  const needsShowMore = items.length > DRAWER_SHOW_MORE_LIMIT
+  const visibleItems = needsShowMore && !showAll ? items.slice(0, DRAWER_SHOW_MORE_LIMIT) : items
 
   return (
     <>
-      {/* FilterBar - PhotoTour Style */}
-      <div className="filter-bar">
-        <div className="filter-bar-content">
-          {/* Filters Button - Black */}
-          <button
-            className="category-tag filters-button"
-            onClick={() => setIsFiltersModalOpen(true)}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filters
-          </button>
-
-          {/* Type Dropdown */}
-          <div className="relative" ref={typeDropdownRef}>
-            <button
-              className={`category-tag ${selectedTypes.length > 0 ? 'active' : ''}`}
-              onClick={toggleTypeDropdown}
-              disabled={taxonomyLoading && topLevelCategories.length === 0}
+      <div className="drawer-option-list">
+        {visibleItems.map((item) => {
+          const value = getItemValue(item)
+          const isChecked = selectedValues.includes(value)
+          return (
+            <div
+              key={value}
+              role="option"
+              aria-selected={isChecked}
+              tabIndex={0}
+              className="drawer-option"
+              data-checked={isChecked}
+              onClick={() => onToggle(value, isChecked)}
+              onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault()
+                  onToggle(value, isChecked)
+                }
+              }}
             >
-              Type
-              <ChevronDown className="h-3.5 w-3.5" />
+              <div className="drawer-option-left">
+                <div className="drawer-option-checkbox">
+                  {isChecked && <CheckIcon />}
+                </div>
+                <span className="drawer-option-label">{getItemLabel(item)}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {needsShowMore && (
+        <button
+          className="drawer-show-more"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? "Show less" : `Show all (${items.length})`}
+        </button>
+      )}
+    </>
+  )
+}
+
+// ─── DualRangeSlider ──────────────────────────────────────────────────────────
+
+interface DualRangeSliderProps {
+  min: number
+  max: number
+  valueLow: number
+  valueHigh: number
+  onChange: (low: number, high: number) => void
+}
+
+function DualRangeSlider({ min, max, valueLow, valueHigh, onChange }: DualRangeSliderProps) {
+  const range = max - min
+  const lowPct = ((valueLow - min) / range) * 100
+  const highPct = ((valueHigh - min) / range) * 100
+
+  return (
+    <div style={{ padding: "4px 8px" }}>
+      <div style={{ position: "relative", height: 20 }}>
+        {/* Track background */}
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 0,
+            right: 0,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: "var(--surface, #f5f5f4)",
+          }}
+        />
+        {/* Active track */}
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            left: `${lowPct}%`,
+            width: `${highPct - lowPct}%`,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: "var(--primary)",
+          }}
+        />
+        {/* Min slider */}
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={valueLow}
+          onChange={(e) => {
+            const v = Number.parseInt(e.target.value, 10)
+            onChange(Math.min(v, valueHigh - 1), valueHigh)
+          }}
+          className="dual-range-thumb"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", zIndex: valueLow > max - 10 ? 3 : 2 }}
+        />
+        {/* Max slider */}
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={valueHigh}
+          onChange={(e) => {
+            const v = Number.parseInt(e.target.value, 10)
+            onChange(valueLow, Math.max(v, valueLow + 1))
+          }}
+          className="dual-range-thumb"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", zIndex: 2 }}
+        />
+      </div>
+      <div className="flex justify-between mt-2" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        <span>{valueLow}</span>
+        <span>{valueHigh}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── FilterBar ─────────────────────────────────────────────────────────────────
+
+interface FilterBarProps {
+  sortBy: SortOption
+  onSortChange: (sort: SortOption) => void
+}
+
+export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
+  const {
+    selectedTypes,
+    selectedStyles,
+    selectedLocations,
+    selectedSpace,
+    selectedBuildingTypes,
+    projectYearRange,
+    setSelectedTypes,
+    setSelectedStyles,
+    setSelectedLocations,
+    setSelectedSpace,
+    setSelectedBuildingTypes,
+    setProjectYearRange,
+    clearAllFilters,
+    removeFilter,
+    taxonomy,
+  } = useFilters()
+
+  const { categories, taxonomyOptions, cities = [], isLoading: taxonomyLoading } = taxonomy
+
+  const styleOptions = taxonomyOptions.project_style ?? []
+  const buildingTypeOptions = taxonomyOptions.building_type ?? []
+
+  const YEAR_MIN = 1800
+  const YEAR_MAX = new Date().getFullYear()
+
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [locationSearch, setLocationSearch] = useState("")
+  const barRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) {
+        setActiveDropdown(null)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  // Lock scroll when drawer open
+  useEffect(() => {
+    document.body.classList.toggle("overflow-hidden", drawerOpen)
+    return () => document.body.classList.remove("overflow-hidden")
+  }, [drawerOpen])
+
+  // ── Taxonomy: top-level project type categories ──────────────────────────────
+  // Use parent categories (parent_id = null) that are marked listable via attributes
+  const topLevelCategories = useMemo(
+    () => categories.filter((c) => c.parent_id === null && c.is_active !== false && c.category_type === "Project"),
+    [categories],
+  )
+
+  // ── Filtered cities ──────────────────────────────────────────────────────────
+  const filteredCities = useMemo(
+    () =>
+      cities.filter((c) =>
+        c.toLowerCase().includes(locationSearch.toLowerCase()),
+      ),
+    [cities, locationSearch],
+  )
+
+  // ── Active chips ─────────────────────────────────────────────────────────────
+
+  interface Chip { type: string; value: string; label: string }
+
+  const chips = useMemo<Chip[]>(() => {
+    const tags: Chip[] = []
+    if (selectedSpace) {
+      const opt = SPACE_OPTIONS.find((o) => o.key === selectedSpace)
+      tags.push({ type: "space", value: selectedSpace, label: opt?.label ?? selectedSpace })
+    }
+    selectedTypes.forEach((id) => {
+      const cat = topLevelCategories.find((c) => c.id === id)
+      tags.push({ type: "type", value: id, label: cat?.name ?? id })
+    })
+    selectedLocations.forEach((loc) => {
+      tags.push({ type: "location", value: loc, label: loc })
+    })
+    selectedStyles.forEach((id) => {
+      const opt = styleOptions.find((s) => (s.id ?? s.slug ?? s.name) === id)
+      tags.push({ type: "style", value: id, label: opt?.name ?? id })
+    })
+    selectedBuildingTypes.forEach((id) => {
+      const opt = buildingTypeOptions.find((s) => (s.id ?? s.slug ?? s.name) === id)
+      tags.push({ type: "buildingType", value: id, label: opt?.name ?? id })
+    })
+    if (projectYearRange[0] !== null || projectYearRange[1] !== null) {
+      const min = projectYearRange[0] ?? YEAR_MIN
+      const max = projectYearRange[1] ?? YEAR_MAX
+      tags.push({ type: "projectYear", value: `${min}-${max}`, label: `${min} – ${max}` })
+    }
+    return tags
+  }, [selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX])
+
+  const totalCount = chips.length
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
+  const toggleDropdown = (name: string) =>
+    setActiveDropdown((prev) => (prev === name ? null : name))
+
+  const toggleType = useCallback(
+    (id: string) =>
+      setSelectedTypes(
+        selectedTypes.includes(id)
+          ? selectedTypes.filter((t) => t !== id)
+          : [...selectedTypes, id]
+      ),
+    [selectedTypes, setSelectedTypes],
+  )
+
+  const toggleSpace = useCallback(
+    (key: ProjectSpaceKey) =>
+      setSelectedSpace(selectedSpace === key ? "" : key),
+    [selectedSpace, setSelectedSpace],
+  )
+
+  const spaceOption = SPACE_OPTIONS.find((o) => o.key === selectedSpace)
+  const spaceLabel = spaceOption?.label ?? "Space"
+
+  const defaultSpaceIcon = (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"
+      style={{ flexShrink: 0, opacity: 0.65 }}>
+      <path d="M1 11c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0" />
+      <path d="M1 7.5c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0" opacity=".35" />
+    </svg>
+  )
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+
+  return (
+    <>
+      {/* Filter bar */}
+      <div className="discover-filter-bar" ref={barRef}>
+        <div className="wrap">
+          <div className="discover-filter-inner">
+
+            {/* All filters */}
+            <button
+              className="filter-pill"
+              data-active={totalCount > 0}
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open all filters"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <line x1="1.5" y1="3.5" x2="11.5" y2="3.5" />
+                <line x1="3.5" y1="6.5" x2="9.5" y2="6.5" />
+                <line x1="5.5" y1="9.5" x2="7.5" y2="9.5" />
+              </svg>
+              All filters
+              {totalCount > 0 && (
+                <span className="filter-pill-badge">{totalCount}</span>
+              )}
             </button>
 
-            {taxonomyLoading && topLevelCategories.length === 0 && activeDropdown === "type" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
-                <div className="p-4 space-y-3">
-                  <div className="h-4 w-32 animate-pulse rounded bg-surface" />
-                  <div className="h-4 w-40 animate-pulse rounded bg-surface" />
-                  <div className="h-4 w-28 animate-pulse rounded bg-surface" />
-                </div>
-              </div>
-            )}
+            <div className="filter-pill-divider" />
 
-            {!taxonomyLoading && activeDropdown === "type" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
-                <div className="p-4">
-                  <div className="space-y-3">
-                    {typeOptions.map((section) => (
-                      <div key={section.id}>
-                        {(() => {
-                          const parentItem = section.items.find((item) => item.isParent)
-                          const childItems = section.items.filter((item) => !item.isParent)
-
-                          const renderOption = (item: TypeOptionItem) => {
-                            const itemValue = item.id ?? item.name
-                            return (
-                              <label key={itemValue} className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="type-filter"
-                                  className="h-4 w-4 rounded-full border-border text-black focus:ring-black"
-                                  checked={selectedTypes.includes(itemValue)}
-                                  onChange={() => toggleTypeSelection(itemValue)}
-                                  onClick={(event) => handleTypeRadioClick(event, itemValue)}
-                                  aria-checked={selectedTypes.includes(itemValue)}
-                                />
-                                <span className="text-sm">{item.name}</span>
-                              </label>
-                            )
-                          }
-
-                          const isExpanded = expandedSections.includes(section.id)
-                          const showToggle = childItems.length > 0
-                          const itemsToRender = isExpanded ? childItems : []
-
-                          return (
-                            <>
-                              <div className="flex items-center justify-between mb-2">
-                                {parentItem ? (
-                                  <label className="flex items-center gap-3 cursor-pointer">
-                                    <input
-                                      type="radio"
-                                      name="type-filter"
-                                      className="h-4 w-4 rounded-full border-border text-black focus:ring-black"
-                                      checked={selectedTypes.includes(parentItem.id)}
-                                      onChange={() => toggleTypeSelection(parentItem.id)}
-                                      onClick={(event) => handleTypeRadioClick(event, parentItem.id)}
-                                      aria-checked={selectedTypes.includes(parentItem.id)}
-                                    />
-                                    <span className="text-sm">{section.name}</span>
-                                  </label>
-                                ) : (
-                                  <span className="text-sm">{section.name}</span>
-                                )}
-                                {showToggle && (
-                                  <button
-                                    className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
-                                    onClick={() => toggleSection(section.id)}
-                                  >
-                                    {isExpanded ? "Show less" : "View all"}
-                                    {isExpanded ? (
-                                      <ChevronUp className="h-3 w-3" />
-                                    ) : (
-                                      <ChevronDown className="h-3 w-3" />
-                                    )}
-                                  </button>
-                                )}
-                              </div>
-
-                              {childItems.length > 0 && (
-                                <div className="ml-6 space-y-2">
-                                  {itemsToRender.map((item) => renderOption(item))}
-                                </div>
-                              )}
-                            </>
-                          )
-                        })()}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 flex gap-3">
-                    <Button variant="quaternary" onClick={clearFilters} className="flex-1">
-                      Clear filter
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={toggleTypeDropdown}
-                      className="flex-1"
-                    >
-                      Filter
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Style Dropdown */}
-          <div className="relative" ref={styleDropdownRef}>
-            <button
-              className={`category-tag ${selectedStyles.length > 0 ? 'active' : ''}`}
-              onClick={toggleStyleDropdown}
-            >
-              Style
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-
-            {activeDropdown === "style" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
-                <div className="p-4">
-                  <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {projectStyles.map((style) => {
-                      const value = style.id ?? style.slug ?? style.name
-                      return (
-                        <label key={value} className="flex items-center gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-border text-black focus:ring-black"
-                            checked={selectedStyles.includes(value)}
-                            onChange={() => toggleStyleSelection(value)}
-                          />
-                          <span className="text-sm">{style.name}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-
-                  <div className="mt-6 flex gap-3">
-                    <Button variant="quaternary" onClick={clearStyleFilters} className="flex-1">
-                      Clear filter
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={toggleStyleDropdown}
-                      className="flex-1"
-                    >
-                      Filter
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Location Dropdown */}
-          <div className="relative" ref={locationDropdownRef}>
-            <button
-              className={`category-tag ${selectedLocation !== "" ? 'active' : ''}`}
-              onClick={toggleLocationDropdown}
-            >
-              {selectedLocation || "Location"}
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-
-            {activeDropdown === "location" && (
-              <div className="absolute left-0 top-12 z-50 w-64 rounded-md border border-border bg-white shadow-lg">
-                <div className="p-4">
-                  <div className="relative mb-4">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Search locations..."
-                      className="w-full pl-10 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-                      value={locationSearch}
-                      onChange={(e) => setLocationSearch(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {filteredLocations.length > 0 ? (
-                      filteredLocations.map((location) => (
-                        <button
-                          key={location}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-surface rounded-md transition-colors"
-                          onClick={() => selectLocation(location)}
-                        >
-                          {location}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-sm text-text-secondary">No locations found</div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex gap-3">
-                    <Button variant="quaternary" onClick={clearLocationFilter} className="flex-1">
-                      Clear filter
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={toggleLocationDropdown}
-                      className="flex-1"
-                    >
-                      Apply
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Vertical Divider */}
-          <div className="divider" />
-
-          {/* Carousel with overlaid arrows */}
-          <div className="carousel-wrapper" ref={carouselWrapperRef}>
-            {/* Left scroll arrow - overlaid */}
-            <button
-              className={`scroll-arrow scroll-left ${canScrollLeft ? 'visible' : ''}`}
-              onClick={() => scrollCarousel("left")}
-              aria-label="Scroll left"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Carousel */}
-            <div className="carousel-container">
-              <div
-                ref={carouselRef}
-                className="carousel"
+            {/* Space */}
+            <div style={{ position: "relative" }}>
+              <button
+                className="filter-pill"
+                data-active={!!selectedSpace}
+                data-open={activeDropdown === "space"}
+                onClick={() => toggleDropdown("space")}
+                aria-expanded={activeDropdown === "space"}
               >
-                {quickFilterItems.map((item) => {
-                  const isSelected = selectedTypes.includes(item.id)
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => toggleTypeSelection(item.id)}
-                      className={`category-tag ${isSelected ? 'active' : ''}`}
-                    >
-                      {item.name}
-                    </button>
-                  )
-                })}
+                {spaceOption?.icon ?? defaultSpaceIcon}
+                {spaceLabel}
+                <ChevronDownIcon className="filter-pill-chevron" />
+              </button>
+              <div
+                className="filter-dropdown"
+                data-open={activeDropdown === "space"}
+                style={{ minWidth: 224 }}
+              >
+                {SPACE_OPTIONS.map((opt) => (
+                  <DropdownOption
+                    key={opt.key}
+                    label={opt.label}
+                    checked={selectedSpace === opt.key}
+                    icon={opt.icon}
+                    onToggle={() => { toggleSpace(opt.key); setActiveDropdown(null) }}
+                  />
+                ))}
               </div>
             </div>
 
-            {/* Right scroll arrow - overlaid */}
-            <button
-              className={`scroll-arrow scroll-right ${canScrollRight ? 'visible' : ''}`}
-              onClick={() => scrollCarousel("right")}
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            {/* Type */}
+            <div className="filter-pill-group" data-hide-mobile="true" style={{ position: "relative" }}>
+              <button
+                className="filter-pill"
+                data-active={selectedTypes.length > 0}
+                data-open={activeDropdown === "type"}
+                onClick={() => toggleDropdown("type")}
+                disabled={taxonomyLoading && topLevelCategories.length === 0}
+                aria-expanded={activeDropdown === "type"}
+              >
+                Type
+                {selectedTypes.length > 0 && (
+                  <span className="filter-pill-badge">{selectedTypes.length}</span>
+                )}
+                <ChevronDownIcon className="filter-pill-chevron" />
+              </button>
+              <div
+                className="filter-dropdown"
+                data-open={activeDropdown === "type"}
+                style={{ minWidth: 224 }}
+              >
+                {taxonomyLoading && topLevelCategories.length === 0 ? (
+                  <div style={{ padding: "16px", fontSize: 13, color: "var(--text-secondary)" }}>
+                    Loading…
+                  </div>
+                ) : (
+                  topLevelCategories.map((cat) => (
+                    <DropdownOption
+                      key={cat.id}
+                      label={cat.name}
+                      checked={selectedTypes.includes(cat.id)}
+                      onToggle={() => toggleType(cat.id)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="filter-pill-group" data-hide-mobile="true" style={{ position: "relative" }}>
+              <button
+                className="filter-pill"
+                data-active={selectedLocations.length > 0}
+                data-open={activeDropdown === "location"}
+                onClick={() => toggleDropdown("location")}
+                aria-expanded={activeDropdown === "location"}
+              >
+                Location
+                {selectedLocations.length > 0 && (
+                  <span className="filter-pill-badge">{selectedLocations.length}</span>
+                )}
+                <ChevronDownIcon className="filter-pill-chevron" />
+              </button>
+              <div
+                className="filter-dropdown"
+                data-open={activeDropdown === "location"}
+                style={{ minWidth: 224 }}
+              >
+                <div className="filter-dropdown-search">
+                  <input
+                    type="text"
+                    placeholder="City or region…"
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                  {filteredCities.length > 0 ? (
+                    filteredCities.map((city) => (
+                      <DropdownOption
+                        key={city}
+                        label={city}
+                        checked={selectedLocations.includes(city)}
+                        onToggle={() => {
+                          setSelectedLocations(
+                            selectedLocations.includes(city)
+                              ? selectedLocations.filter((c) => c !== city)
+                              : [...selectedLocations, city]
+                          )
+                          setLocationSearch("")
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <div style={{ padding: "10px 16px", fontSize: 13, color: "var(--text-secondary)" }}>
+                      No locations found
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sort — right side */}
+            <div className="discover-filter-sort" style={{ position: "relative" }}>
+              <button
+                className="filter-pill"
+                data-open={activeDropdown === "sort"}
+                onClick={() => toggleDropdown("sort")}
+                aria-expanded={activeDropdown === "sort"}
+              >
+                {sortBy}
+                <ChevronDownIcon className="filter-pill-chevron" />
+              </button>
+              <div
+                className="filter-dropdown"
+                data-open={activeDropdown === "sort"}
+                data-align="right"
+                style={{ minWidth: 192 }}
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <DropdownOption
+                    key={opt}
+                    label={opt}
+                    checked={sortBy === opt}
+                    onToggle={() => { onSortChange(opt); setActiveDropdown(null) }}
+                  />
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
 
-      <FiltersModal isOpen={isFiltersModalOpen} onClose={() => setIsFiltersModalOpen(false)} />
+      {/* Active chip strip */}
+      {chips.length > 0 && (
+        <div className="discover-chip-strip">
+          <div className="wrap">
+            <div className="discover-chip-strip-inner">
+              {chips.map((chip) => (
+                <button
+                  key={`${chip.type}-${chip.value}`}
+                  className="filter-chip"
+                  onClick={() => removeFilter(chip.type, chip.value)}
+                  aria-label={`Remove ${chip.label}`}
+                >
+                  {chip.label}
+                  <span className="filter-chip-close" aria-hidden="true">✕</span>
+                </button>
+              ))}
+              <button className="filter-chip-clear-all" onClick={clearAllFilters}>
+                Clear all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer backdrop */}
+      <div
+        className="discover-drawer-backdrop"
+        data-open={drawerOpen}
+        onClick={() => setDrawerOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Filter drawer */}
+      <aside
+        className="discover-drawer"
+        data-open={drawerOpen}
+        role="dialog"
+        aria-modal="true"
+        aria-label="All filters"
+      >
+        <div className="discover-drawer-header">
+          <span className="discover-drawer-title">All filters</span>
+          <button
+            className="discover-drawer-close"
+            onClick={() => setDrawerOpen(false)}
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="discover-drawer-body">
+
+          {/* Space */}
+          <DrawerSection title="Space" activeCount={selectedSpace ? 1 : 0}>
+            <div className="drawer-option-list">
+              {SPACE_OPTIONS.map((opt) => (
+                <div
+                  key={opt.key}
+                  role="option"
+                  aria-selected={selectedSpace === opt.key}
+                  tabIndex={0}
+                  className="drawer-option"
+                  data-checked={selectedSpace === opt.key}
+                  onClick={() => toggleSpace(opt.key)}
+                  onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleSpace(opt.key) }
+                  }}
+                >
+                  <div className="drawer-option-left">
+                    <div className="drawer-option-checkbox">
+                      {selectedSpace === opt.key && <CheckIcon />}
+                    </div>
+                    <span className="drawer-option-icon">{opt.icon}</span>
+                    <span className="drawer-option-label">{opt.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DrawerSection>
+
+          {/* Type */}
+          <DrawerSection title="Type" activeCount={selectedTypes.length}>
+            <DrawerOptionListWithMore
+              items={topLevelCategories}
+              selectedValues={selectedTypes}
+              getItemValue={(cat) => cat.id}
+              getItemLabel={(cat) => cat.name}
+              onToggle={(value, isChecked) =>
+                setSelectedTypes(
+                  isChecked
+                    ? selectedTypes.filter((t) => t !== value)
+                    : [...selectedTypes, value]
+                )
+              }
+            />
+          </DrawerSection>
+
+          {/* Location */}
+          <DrawerSection title="Location" activeCount={selectedLocations.length}>
+            <input
+              className="drawer-search"
+              type="text"
+              placeholder="City or region…"
+              value={locationSearch}
+              onChange={(e) => setLocationSearch(e.target.value)}
+            />
+            <div className="drawer-option-list" style={{ maxHeight: 240, overflowY: "auto" }}>
+              {filteredCities.map((city) => {
+                const isChecked = selectedLocations.includes(city)
+                return (
+                  <div
+                    key={city}
+                    role="option"
+                    aria-selected={isChecked}
+                    tabIndex={0}
+                    className="drawer-option"
+                    data-checked={isChecked}
+                    onClick={() => {
+                      setSelectedLocations(
+                        isChecked
+                          ? selectedLocations.filter((c) => c !== city)
+                          : [...selectedLocations, city]
+                      )
+                      setLocationSearch("")
+                    }}
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault()
+                        setSelectedLocations(
+                          isChecked
+                            ? selectedLocations.filter((c) => c !== city)
+                            : [...selectedLocations, city]
+                        )
+                        setLocationSearch("")
+                      }
+                    }}
+                  >
+                    <div className="drawer-option-left">
+                      <div className="drawer-option-checkbox">
+                        {isChecked && <CheckIcon />}
+                      </div>
+                      <span className="drawer-option-label">{city}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </DrawerSection>
+
+          {/* Scope (Building Type) */}
+          <DrawerSection title="Scope" activeCount={selectedBuildingTypes.length}>
+            <div className="drawer-option-list">
+              {buildingTypeOptions.map((bt) => {
+                const value = bt.id ?? bt.slug ?? bt.name
+                const isChecked = selectedBuildingTypes.includes(value)
+                return (
+                  <div
+                    key={value}
+                    role="option"
+                    aria-selected={isChecked}
+                    tabIndex={0}
+                    className="drawer-option"
+                    data-checked={isChecked}
+                    onClick={() =>
+                      setSelectedBuildingTypes(
+                        isChecked
+                          ? selectedBuildingTypes.filter((s) => s !== value)
+                          : [...selectedBuildingTypes, value]
+                      )
+                    }
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault()
+                        setSelectedBuildingTypes(
+                          isChecked
+                            ? selectedBuildingTypes.filter((s) => s !== value)
+                            : [...selectedBuildingTypes, value]
+                        )
+                      }
+                    }}
+                  >
+                    <div className="drawer-option-left">
+                      <div className="drawer-option-checkbox">
+                        {isChecked && <CheckIcon />}
+                      </div>
+                      <span className="drawer-option-label">{bt.name}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </DrawerSection>
+
+          {/* Style */}
+          <DrawerSection title="Style" activeCount={selectedStyles.length}>
+            <DrawerOptionListWithMore
+              items={styleOptions}
+              selectedValues={selectedStyles}
+              getItemValue={(s) => s.id ?? s.slug ?? s.name}
+              getItemLabel={(s) => s.name}
+              onToggle={(value, isChecked) =>
+                setSelectedStyles(
+                  isChecked
+                    ? selectedStyles.filter((s) => s !== value)
+                    : [...selectedStyles, value]
+                )
+              }
+            />
+          </DrawerSection>
+
+          {/* Year */}
+          <DrawerSection title="Year" activeCount={(projectYearRange[0] !== null || projectYearRange[1] !== null) ? 1 : 0}>
+            <DualRangeSlider
+              min={YEAR_MIN}
+              max={YEAR_MAX}
+              valueLow={projectYearRange[0] ?? YEAR_MIN}
+              valueHigh={projectYearRange[1] ?? YEAR_MAX}
+              onChange={(low, high) =>
+                setProjectYearRange([
+                  low === YEAR_MIN ? null : low,
+                  high === YEAR_MAX ? null : high,
+                ])
+              }
+            />
+          </DrawerSection>
+
+        </div>
+
+        <div className="discover-drawer-footer">
+          <button
+            className="discover-drawer-clear"
+            onClick={() => { clearAllFilters(); setDrawerOpen(false) }}
+          >
+            Clear all
+          </button>
+          <button
+            className="discover-drawer-apply"
+            onClick={() => setDrawerOpen(false)}
+          >
+            Show results
+          </button>
+        </div>
+      </aside>
     </>
   )
 }

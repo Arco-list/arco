@@ -8,12 +8,6 @@ export function Footer() {
     <>
       <style jsx global>{`
         /* Footer custom styles */
-        .footer-container {
-          max-width: 1680px;
-          margin: 0 auto;
-          padding: 0 80px;
-        }
-
         .footer-top-grid {
           display: grid;
           grid-template-columns: 1.2fr 1.8fr;
@@ -42,17 +36,7 @@ export function Footer() {
         }
 
         /* Responsive */
-        @media (max-width: 1024px) {
-          .footer-container {
-            padding: 0 40px !important;
-          }
-        }
-
         @media (max-width: 768px) {
-          .footer-container {
-            padding: 0 24px !important;
-          }
-          
           .footer-top-grid {
             grid-template-columns: 1fr !important;
             gap: 32px !important;
@@ -71,10 +55,6 @@ export function Footer() {
         }
 
         @media (max-width: 480px) {
-          .footer-container {
-            padding: 0 16px !important;
-          }
-          
           .footer-links-grid {
             grid-template-columns: 1fr !important;
           }
@@ -82,14 +62,14 @@ export function Footer() {
       `}</style>
       
       <footer className="bg-[#161614] text-white/50 py-12 pb-8">
-        <div className="footer-container">
+        <div className="wrap">
           
           {/* Top section */}
           <div className="footer-top-grid">
             
             {/* Brand */}
             <div>
-              <div className="mb-3">
+              <div className="mb-5">
                 <Image 
                   src="/images/arco-logo-white.svg" 
                   alt="Arco" 
@@ -98,8 +78,8 @@ export function Footer() {
                   className="h-auto w-[60px]"
                 />
               </div>
-              <p className="arco-small-text text-white/50 max-w-[200px]">
-                The professional network architects trust.
+              <p className="arco-small-text text-white/35 max-w-[220px] leading-relaxed">
+                The professional network<br />architects trust.
               </p>
             </div>
 
@@ -124,14 +104,11 @@ export function Footer() {
                 <h4 className="arco-eyebrow text-white/35 mb-1.5">
                   For Businesses
                 </h4>
-                <Link href="/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                <Link href="/businesses/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">
                   Architects
                 </Link>
-                <Link href="/list-with-us" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                <Link href="/businesses/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">
                   Professionals
-                </Link>
-                <Link href="/editorial-standards" className="arco-small-text text-white/50 hover:text-white transition-colors">
-                  Editorial standards
                 </Link>
               </div>
 
@@ -142,6 +119,9 @@ export function Footer() {
                 </h4>
                 <Link href="/about" className="arco-small-text text-white/50 hover:text-white transition-colors">
                   About
+                </Link>
+                <Link href="/help-center" className="arco-small-text text-white/50 hover:text-white transition-colors">
+                  Help & FAQ
                 </Link>
                 <Link href="/privacy" className="arco-small-text text-white/50 hover:text-white transition-colors">
                   Privacy
@@ -157,7 +137,7 @@ export function Footer() {
           {/* Bottom section */}
           <div className="footer-bottom-flex">
             <span className="arco-small-text text-white/25">
-              © 2025 Arco. All rights reserved.
+              © 2025 Arco Global BV. All rights reserved.
             </span>
           </div>
           

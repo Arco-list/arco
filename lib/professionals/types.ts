@@ -18,9 +18,18 @@ export type ProfessionalCard = {
   rating: number
   reviewCount: number
   image: string
+  logoUrl: string | null
   specialties: string[]
   isVerified: boolean
   domain?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  /** Service/category UUIDs for client-side filtering */
+  specialtyIds?: string[]
+  /** Parent category UUIDs for client-side filtering */
+  specialtyParentIds?: string[]
+  /** Lowercase city for client-side location filtering */
+  city?: string | null
 }
 
 export type ProfessionalGalleryImage = {
@@ -54,19 +63,6 @@ export type ProfessionalProjectSummary = {
   projectYear: number | null
   stylePreferences: string[] | null
   projectType: string | null
-}
-
-export type ProfessionalReviewSummary = {
-  id: string
-  reviewerName: string
-  reviewerInitials: string
-  reviewerAvatarUrl: string | null
-  yearsOnPlatform: number | null
-  createdAt: string | null
-  rating: number
-  title: string | null
-  comment: string | null
-  workCompleted: boolean | null
 }
 
 export type ProfessionalDetail = {
@@ -118,5 +114,4 @@ export type ProfessionalDetail = {
   gallery: ProfessionalGalleryImage[]
   socialLinks: ProfessionalSocialLink[]
   projects: ProfessionalProjectSummary[]
-  reviews: ProfessionalReviewSummary[]
 }

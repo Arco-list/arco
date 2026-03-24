@@ -18,7 +18,7 @@ export function MembershipCTA() {
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <Link
-            href="/list-with-us"
+            href="/businesses/architects"
             className="btn-primary"
           >
             Apply as a Professional

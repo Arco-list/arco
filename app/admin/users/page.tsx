@@ -1,17 +1,6 @@
 import { redirect } from "next/navigation"
 
-import { AdminSidebar } from "@/components/admin-sidebar"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { UsersDataTable, type AdminUserRow } from "@/components/users-data-table"
+import { UsersDataTable, type AdminUserRow, type AdminUserCompany } from "@/components/users-data-table"
 import type { User } from "@supabase/supabase-js"
 import { isSuperAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
@@ -25,6 +14,7 @@ type AdminProfileRow = Pick<
   | "id"
   | "first_name"
   | "last_name"
+  | "avatar_url"
   | "admin_role"
   | "user_types"
   | "is_active"
@@ -46,7 +36,7 @@ export default async function UsersPage() {
     if (authError) {
       logger.auth("admin-users", "Failed to load current auth user", { error: authError.message })
     }
-    redirect(`/login?redirectTo=/admin/users`)
+    redirect(`/?redirectTo=/admin/users`)
   }
 
   const { data: currentProfile, error: currentProfileError } = await supabase
@@ -75,7 +65,7 @@ export default async function UsersPage() {
   const { data: adminProfilesData, error: adminProfilesError } = await serviceClient
     .from("profiles")
     .select(
-      "id, first_name, last_name, admin_role, user_types, is_active, invited_by, invited_at, created_at, updated_at",
+      "id, first_name, last_name, avatar_url, admin_role, user_types, is_active, invited_by, invited_at, created_at, updated_at",
     )
     .or("user_types.cs.{admin},user_types.cs.{client}")
     .order("created_at", { ascending: true })
@@ -147,6 +137,76 @@ export default async function UsersPage() {
     }
   }
 
+  // Build a map of user_id → companies from all sources:
+  // 1. professionals table (team members)
+  // 2. companies.owner_id (company owners)
+  // 3. company_members table (team memberships)
+  const userCompanyMap = new Map<string, AdminUserCompany[]>()
+  const allUserIds = adminProfiles.map((p) => p.id)
+
+  const addCompany = (userId: string, company: { id: string; name: string; slug: string | null; status?: string | null }) => {
+    if (!company.id || !company.name) return
+    const existing = userCompanyMap.get(userId) ?? []
+    if (!existing.some((c) => c.id === company.id)) {
+      existing.push({ id: company.id, name: company.name, slug: company.slug ?? company.id, companyStatus: company.status ?? "unlisted", projectCount: 0 })
+      userCompanyMap.set(userId, existing)
+    }
+  }
+
+  if (allUserIds.length > 0) {
+    const [{ data: teamMemberRows }, { data: ownedCompanies }, { data: memberRows }] = await Promise.all([
+      serviceClient
+        .from("professionals")
+        .select("user_id, company_id, companies(id, name, slug, status)")
+        .in("user_id", allUserIds),
+      serviceClient
+        .from("companies")
+        .select("id, name, slug, owner_id, status")
+        .in("owner_id", allUserIds),
+      serviceClient
+        .from("company_members")
+        .select("user_id, company_id, companies(id, name, slug, status)")
+        .in("user_id", allUserIds)
+        .eq("status", "active"),
+    ])
+
+    for (const row of teamMemberRows ?? []) {
+      if (!row.user_id || !row.companies) continue
+      addCompany(row.user_id, row.companies as unknown as { id: string; name: string; slug: string; status: string })
+    }
+
+    for (const row of ownedCompanies ?? []) {
+      if (!row.owner_id) continue
+      addCompany(row.owner_id, row)
+    }
+
+    for (const row of memberRows ?? []) {
+      if (!row.user_id || !row.companies) continue
+      addCompany(row.user_id, row.companies as unknown as { id: string; name: string; slug: string; status: string })
+    }
+  }
+
+  // Fetch project counts per company
+  const allCompanyIds = Array.from(new Set(Array.from(userCompanyMap.values()).flat().map((c) => c.id)))
+  if (allCompanyIds.length > 0) {
+    const { data: projectCounts } = await serviceClient
+      .from("project_professionals")
+      .select("company_id")
+      .in("company_id", allCompanyIds)
+
+    const countMap = new Map<string, number>()
+    for (const row of projectCounts ?? []) {
+      if (!row.company_id) continue
+      countMap.set(row.company_id, (countMap.get(row.company_id) ?? 0) + 1)
+    }
+
+    for (const companies of userCompanyMap.values()) {
+      for (const company of companies) {
+        company.projectCount = countMap.get(company.id) ?? 0
+      }
+    }
+  }
+
   const adminRows: AdminUserRow[] = adminProfiles.map((profile) => {
     const authRecord = authUserMap.get(profile.id) ?? null
     const inviterAuth = profile.invited_by ? authUserMap.get(profile.invited_by) ?? null : null
@@ -185,6 +245,8 @@ export default async function UsersPage() {
       id: profile.id,
       displayName,
       email,
+      avatarUrl: profile.avatar_url ?? null,
+      companies: userCompanyMap.get(profile.id) ?? [],
       role: adminRole,
       status,
       createdAt: profile.created_at,
@@ -210,31 +272,12 @@ export default async function UsersPage() {
   const singleActiveSuperAdmin = activeSuperAdminsCount <= 1
 
   return (
-    <SidebarProvider>
-      <AdminSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/admin">Admin Dashboard</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Users</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
-        <Separator className="w-full" />
-        <div className="flex flex-1 flex-col gap-4 p-4">
+    <div className="min-h-screen bg-white">
+      <div className="discover-page-title">
+        <div className="wrap">
           <UsersDataTable data={hydratedRows} singleActiveSuperAdmin={singleActiveSuperAdmin} />
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
+    </div>
   )
 }

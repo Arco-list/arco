@@ -2,9 +2,26 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
+import { ShareModal } from "@/components/share-modal"
+import type { ProfessionalCard } from "@/lib/professionals/types"
 
-export function ProfessionalSubNav() {
-  const [activeSection, setActiveSection] = useState<string>('projects')
+type ProfessionalSubNavProps = {
+  companyId: string
+  name: string
+  imageUrl: string | null
+  slug: string
+  profession?: string
+  location?: string
+  hasProjects?: boolean
+}
+
+export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession, location, hasProjects = true }: ProfessionalSubNavProps) {
+  const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } = useSavedProfessionals()
+  const isSaved = savedProfessionalIds.has(companyId)
+  const isMutating = mutatingProfessionalIds.has(companyId)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [activeSection, setActiveSection] = useState<string>('details')
   const [scrollDirection, setScrollDirection] = useState<'down' | 'up'>('down')
 
   useEffect(() => {
@@ -22,8 +39,8 @@ export function ProfessionalSubNav() {
       lastScrollY = currentScrollY
 
       // Find active section (top third of viewport)
-      const sections = ['projects', 'contact']
-      let active = 'projects'
+      const sections = hasProjects ? ['details', 'projects', 'contact'] : ['details', 'contact']
+      let active = 'details'
 
       for (const sectionId of sections) {
         const element = document.getElementById(sectionId)
@@ -31,7 +48,6 @@ export function ProfessionalSubNav() {
           const rect = element.getBoundingClientRect()
           if (rect.top <= window.innerHeight / 3 && rect.bottom >= 0) {
             active = sectionId
-            break
           }
         }
       }
@@ -56,9 +72,10 @@ export function ProfessionalSubNav() {
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
     e.preventDefault()
-    const element = document.getElementById(sectionId)
+    const scrollTarget = sectionId === 'details' ? 'details-anchor' : sectionId
+    const element = document.getElementById(scrollTarget)
     if (element) {
-      const offsetTop = element.offsetTop - 120 // Account for sticky nav
+      const offsetTop = element.offsetTop - 140 // Margin above section header
       window.scrollTo({
         top: offsetTop,
         behavior: 'smooth',
@@ -67,7 +84,8 @@ export function ProfessionalSubNav() {
   }
 
   return (
-    <div className="sub-nav">
+    <>
+    <div className="sub-nav" data-direction={scrollDirection}>
       <div className="wrap">
         <div className="sub-nav-content">
           <div className="sub-nav-left">
@@ -80,20 +98,33 @@ export function ProfessionalSubNav() {
             
             <div className="sub-nav-links">
               <a
-                href="#projects"
-                onClick={(e) => handleClick(e, 'projects')}
-                className={`sub-nav-link arco-nav-text ${
-                  activeSection === 'projects' 
+                href="#details"
+                onClick={(e) => handleClick(e, 'details')}
+                className={`sub-nav-link arco-eyebrow ${
+                  activeSection === 'details'
                     ? scrollDirection === 'down' ? 'active' : 'active-reverse'
                     : ''
                 }`}
               >
-                Projects
+                Details
               </a>
+              {hasProjects && (
+                <a
+                  href="#projects"
+                  onClick={(e) => handleClick(e, 'projects')}
+                  className={`sub-nav-link arco-eyebrow ${
+                    activeSection === 'projects'
+                      ? scrollDirection === 'down' ? 'active' : 'active-reverse'
+                      : ''
+                  }`}
+                >
+                  Projects
+                </a>
+              )}
               <a
                 href="#contact"
                 onClick={(e) => handleClick(e, 'contact')}
-                className={`sub-nav-link arco-nav-text ${
+                className={`sub-nav-link arco-eyebrow ${
                   activeSection === 'contact'
                     ? scrollDirection === 'down' ? 'active' : 'active-reverse'
                     : ''
@@ -105,15 +136,43 @@ export function ProfessionalSubNav() {
           </div>
 
           <div className="sub-nav-actions">
-            <button className="tag-button" aria-label="Save professional">
-              <svg viewBox="0 0 16 16" fill="none">
-                <path d="M12 14L8 11L4 14V3C4 2.44772 4.44772 2 5 2H11C11.5523 2 12 2.44772 12 3V14Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+            <button
+              className="filter-pill"
+              data-saved={isSaved}
+              aria-label={isSaved ? "Unsave professional" : "Save professional"}
+              aria-pressed={isSaved}
+              disabled={isMutating}
+              onClick={() => {
+                if (isSaved) {
+                  removeProfessional(companyId)
+                } else {
+                  const card: ProfessionalCard = {
+                    id: companyId,
+                    slug,
+                    companyId,
+                    professionalId: "",
+                    name,
+                    profession: profession ?? "Professional",
+                    location: location ?? "",
+                    rating: 0,
+                    reviewCount: 0,
+                    image: imageUrl ?? "/placeholder.svg",
+                    logoUrl: null,
+                    specialties: [],
+                    isVerified: false,
+                  }
+                  saveProfessional(card)
+                }
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 13.7C8 13.7 1.5 9.5 1.5 5.5C1.5 3.5 3.2 2 5.2 2C6.5 2 7.6 2.7 8 3.5C8.4 2.7 9.5 2 10.8 2C12.8 2 14.5 3.5 14.5 5.5C14.5 9.5 8 13.7 8 13.7Z" />
               </svg>
-              Save
+              {isSaved ? "Saved" : "Save"}
             </button>
-            <button className="tag-button" aria-label="Share professional">
-              <svg viewBox="0 0 16 16" fill="none">
-                <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+            <button className="filter-pill" aria-label="Share professional" onClick={() => setShareOpen(true)}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
               </svg>
               Share
             </button>
@@ -121,5 +180,15 @@ export function ProfessionalSubNav() {
         </div>
       </div>
     </div>
+
+    <ShareModal
+      isOpen={shareOpen}
+      onClose={() => setShareOpen(false)}
+      title={name}
+      subtitle={profession ?? ""}
+      imageUrl={imageUrl ?? "/placeholder.svg"}
+      shareUrl={`/professionals/${slug}`}
+    />
+    </>
   )
 }

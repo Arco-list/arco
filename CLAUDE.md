@@ -4,261 +4,158 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Next.js 15 project built with v0.app, featuring a responsive landing page for what appears to be a platform connecting professionals and project creators. The project uses React 19, TypeScript, and Tailwind CSS with shadcn/ui components.
+Arco is a Next.js 15 marketplace platform connecting clients with interior design/architecture companies. Uses React 19, TypeScript, Tailwind CSS v4, shadcn/ui, and Supabase for auth and database.
 
-**Key characteristics:**
-- Generated from v0.app with automatic sync to this repository
-- Configured for rapid prototyping with build errors/lint ignored during builds
-- Uses modern React patterns with Server Components (RSC)
-- Extensive use of Radix UI primitives through shadcn/ui
+**Build configuration:** TypeScript and ESLint errors are ignored during builds (`ignoreBuildErrors: true`, `ignoreDuringBuilds: true`) for rapid prototyping. Image optimization is disabled (`unoptimized: true`).
 
 ## Development Commands
 
-\`\`\`bash
-# Start development server
-pnpm dev
-# or
-npm run dev
+```bash
+pnpm dev       # Start development server
+pnpm build     # Build for production
+pnpm lint      # Run ESLint
+pnpm start     # Start production server
+```
 
-# Build for production
-pnpm build
+Always use **pnpm** (not npm or yarn).
 
-# Run linting (currently ignores errors during builds)
-pnpm lint
+## Architecture & Data Flow
 
-# Start production server
-pnpm start
-\`\`\`
+### Server/Client Component Split
 
-**Note:** TypeScript and ESLint errors are currently ignored during builds (`ignoreBuildErrors: true`, `ignoreDuringBuilds: true`) to facilitate rapid prototyping.
+Pages follow this pattern: the page (Server Component) fetches initial data, passes it to a client component with filter/state logic:
 
-## Architecture & Structure
+```typescript
+// app/projects/page.tsx (Server Component)
+const projects = await fetchDiscoverProjects()
+return (
+  <FilterProvider>
+    <DiscoverClient initialProjects={projects} />
+  </FilterProvider>
+)
+```
 
-### App Router Structure (Next.js 15)
-- **`app/`** - App Router with nested layouts and pages
-  - Route segments: `about`, `admin`, `dashboard`, `login`, `pricing`, `projects`, etc.
-  - Global layout in `app/layout.tsx` with Poppins font and scroll-to-top functionality
-  - Main landing page in `app/page.tsx`
+Server queries live in `lib/projects/queries.ts` and `lib/professionals/queries.ts`. Client-side pagination/filtering hooks live in `hooks/use-projects-query.ts` and `hooks/use-professionals-query.ts`.
 
-### Component Architecture
-- **`components/ui/`** - shadcn/ui base components (buttons, cards, dialogs, etc.)
-- **`components/`** - Custom application components (feature sections, dashboards, admin panels)
-- **`lib/`** - Utilities and shared logic
-  - `utils.ts` - Tailwind class merging and common utilities
-  - `csv-data.ts` - Data handling utilities
-- **`hooks/`** - Custom React hooks
-- **`contexts/`** - React context providers
+### Supabase Client Initialization
 
-### Design System
-- **Styling:** Tailwind CSS v4 with custom configuration
-- **Components:** shadcn/ui (New York style) with Radix UI primitives
-- **Icons:** Lucide React with Tabler icons as secondary
-- **Typography:** Poppins font family (300-700 weights)
-- **Theme:** CSS variables-based theming system
+Use the appropriate client for context:
 
-### Package Manager
-Uses **pnpm** as evident from `pnpm-lock.yaml`. Always use `pnpm` commands for consistency.
+```typescript
+// Server Components, Route Handlers, Server Actions
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+const supabase = await createServerSupabaseClient()
 
-## Key Dependencies
+// Client Components
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+```
 
-### UI & Styling
-- **Next.js 15** with App Router and React 19
-- **Tailwind CSS v4** with PostCSS
-- **shadcn/ui** components (extensive Radix UI collection)
-- **Lucide React** & **Tabler Icons** for iconography
+### Auth & Middleware
 
-### Forms & Data
-- **React Hook Form** with **Zod** validation
-- **@hookform/resolvers** for validation integration
-- **@tanstack/react-table** for data tables
+`middleware.ts` refreshes the Supabase session on every request (excluding static assets). It has special handling for `/homeowner` routes.
 
-### Additional Features
-- **next-themes** for theme switching
-- **date-fns** & **react-day-picker** for date handling
-- **recharts** for data visualization
-- **sonner** for toast notifications
-- **cmdk** for command palette functionality
+`app/layout.tsx` (root layout) initializes the session server-side and wraps children in `<RootProviders>`, which sets up auth context (`auth-context.tsx`) and all other global contexts.
 
-## Development Patterns
+### Context Architecture
 
-### Component Creation
-- Follow shadcn/ui conventions for base components
-- Use the existing alias system: `@/components`, `@/lib`, `@/hooks`
-- Leverage Radix UI primitives for accessibility and behavior
-- Apply consistent styling with `cn()` utility from `lib/utils.ts`
+Global state is managed through multiple React contexts in `contexts/`:
+- `auth-context.tsx` — session, user, profile data
+- `filter-context.tsx` — project discovery filters (location, types, spaces)
+- `professional-filter-context.tsx` — professional/company discovery filters
+- `saved-projects-context.tsx`, `saved-professionals-context.tsx` — bookmark state
+- `project-gallery-modal-context.tsx`, `professional-gallery-modal-context.tsx` — gallery modal state
 
-### Styling Approach
-- Utility-first with Tailwind CSS
-- CSS variables for theming (`--background`, `--foreground`, etc.)
-- Component variants using `class-variance-authority`
-- Responsive design patterns throughout
+### App Router Structure
 
-### TypeScript Configuration
-- Strict mode enabled with ES6 target
-- Path aliases configured (`@/*` maps to root)
-- Next.js plugin integration for enhanced TypeScript support
+```
+app/
+├── (auth)/              # Grouped auth layout
+├── (errors)/            # Custom 404, 500 pages
+├── admin/               # Admin dashboard (users, projects, taxonomy)
+├── auth/                # OAuth callback, invite-callback route handlers
+├── dashboard/           # User dashboard, saved items, company settings
+│   └── edit/[id]/       # Project editing
+├── projects/[slug]/     # Project detail pages
+├── professionals/[slug]/# Company detail pages
+├── new-project/         # Multi-step project creation wizard
+├── login/, signup/      # Auth flows
+├── create-company/      # Company onboarding
+├── businesses/          # Business-focused pages
+└── page.tsx             # Landing page
+```
 
-## v0.app Integration
+### Key `lib/` Files
 
-This project is automatically synced with v0.app:
-- Changes made in v0.app are pushed to this repository
-- Continue development at: https://v0.app/chat/projects/VFadKYHUN1D
-- Deployed on Vercel: https://vercel.com/tinkso/v0-arco
+- `lib/supabase/types.ts` — Auto-generated Supabase TypeScript types (85KB). **Do not edit manually.**
+- `lib/utils.ts` — `cn()` (Tailwind class merging), `getSiteUrl()`, `getSupportEmail()`
+- `lib/project-details.ts` — Project form configuration and icon mappings
+- `lib/rate-limit.ts` — Rate limiting via Upstash
+- `lib/email-service.ts` — Email sending
+- `lib/image-security.ts` — Image validation
 
-**Important:** Be mindful that changes may be overwritten by v0.app deployments. Coordinate significant modifications with the v0.app workflow.
+### Notable Hooks
 
-## Database Architecture
+- `hooks/use-company-entitlements.ts` — Checks company plan tier and feature access
+- `hooks/use-project-photo-tour.ts` — Large hook (75KB) managing photo gallery/tour state
+- `hooks/use-require-auth.ts` — Auth protection for client components
+- `hooks/use-professional-taxonomy.ts`, `hooks/use-project-taxonomy-options.ts` — Filter option data
 
-### ⚠️ CRITICAL: Terminology for AI Agents
+---
 
-**IMPORTANT:** This platform is **COMPANY-CENTRIC**, not professional-centric. Understanding this is essential:
+## ⚠️ CRITICAL: Company-Centric Terminology
+
+This platform is **COMPANY-CENTRIC**. The naming in the database can be confusing:
 
 | Term | What It Means | What It Does NOT Mean |
 |------|---------------|----------------------|
-| **`/professionals` page** | Browse COMPANIES (not individuals) | Individual professional profiles |
-| **Professional listing** | Company listing in marketplace | Individual user listing |
-| **`professionals` table** | Team members (users) within companies | Standalone professionals |
-| **`companies` table** | PRIMARY marketplace entity | Secondary metadata |
-| **`professional_id`** | User reference (team member) | Company reference |
+| `/professionals` page | Browse **COMPANIES** | Individual professional profiles |
+| `professionals` table | **Team members** (users) within companies | Standalone professionals |
+| `companies` table | **PRIMARY** marketplace entity | Secondary metadata |
+| `professional_id` | User reference (team member) | Company reference |
 
-**Key Architecture Rules:**
-1. **Companies** are the marketplace entity (what clients browse and hire)
-2. **Team members** (professionals table) are individual users who belong to companies
-3. The `/professionals` route displays **companies**, not individual people
-4. All public-facing features show **company** data (name, logo, services, projects)
-5. Individual user emails are used for invites, but companies are what get hired
+**Flow:** User browses `/professionals` → sees companies → invites a company to project → invite sent to team member email → company is added to project.
 
-**Example Flow:**
-- User browses `/professionals` → sees **companies**
-- User clicks company → sees **company** profile with team members
-- User invites company to project → invite sent to **user email** (team member)
-- Team member accepts → **company** is added to project (not individual)
+---
 
-### Supabase Database Structure
-This project uses Supabase as the backend database with a comprehensive schema for the Arco professional services marketplace platform.
+## Database Architecture (Supabase)
 
-#### Core Tables
+**Project ID:** `ogvobdcrectqsegqrquz`
+**Project URL:** `https://ogvobdcrectqsegqrquz.supabase.co`
 
-**Primary Entities:**
-- **`companies`** - PRIMARY marketplace entity (name, services, ratings, photos)
-- **`professionals`** - Team members (individual users) within companies ⚠️ *Will be renamed to `team_members`*
-- **`profiles`** - Extended user data with types array (client/professional/admin)
-- **`projects`** - Client project listings with photos and location
+**MCP Server:** Use `mcp__supabase__*` tools with `project_id: "ogvobdcrectqsegqrquz"` for all database operations.
 
-**Categories & Taxonomy:**
-- **`categories`** - Service categories hierarchy
-- **`project_taxonomy_options`** - Project filters (styles, sizes, features)
-- **`project_taxonomy_selections`** - Selected options per project
-- **`project_categories`** - Many-to-many project-category relationships
-- **`professional_specialties`** - Team member specialties (minimal use)
+### Core Tables
 
-**Project Management:**
-- **`project_photos`** - Multiple photos per project with features
-- **`project_features`** - Rooms/spaces for photo organization
-- **`project_professionals`** - Invite system (email-based, links users & companies)
-- **`project_professional_services`** - Services needed per project
+| Table | Purpose |
+|-------|---------|
+| `companies` | PRIMARY marketplace entity (name, services, ratings, photos) |
+| `professionals` | Team members (users) within companies — *will be renamed `team_members`* |
+| `profiles` | Extended user data; `types` array: `client \| professional \| admin` |
+| `projects` | Client project listings with photos and location |
+| `categories` | Service category hierarchy |
+| `project_taxonomy_options` | Filter options (styles, sizes, features) |
+| `project_taxonomy_selections` | Selected filter options per project |
+| `project_photos` | Multiple photos per project |
+| `project_features` | Rooms/spaces for photo organization |
+| `project_professionals` | Email-based invite system linking users & companies to projects |
+| `reviews` | Multi-dimensional company ratings |
+| `company_ratings` | Aggregated company ratings |
+| `saved_projects`, `saved_companies` | User bookmarks |
+| `company_photos`, `company_social_links` | Company profile data |
 
-**Reviews & Engagement:**
-- **`reviews`** - Multi-dimensional rating system for companies
-- **`company_ratings`** - Aggregated company ratings
-- **`saved_projects`** - User bookmarks for projects
-- **`saved_companies`** - User bookmarks for companies
+**Unused/removed:** `project_applications`, `notifications`, `saved_professionals`, `messages` — do not reference these.
 
-**Company Data:**
-- **`company_photos`** - Company gallery photos
-- **`company_social_links`** - Social media profiles
+### Materialized Views & Search Functions
 
-**Removed/Unused:**
-- ~~`project_applications`~~ - Never implemented ❌
-- ~~`notifications`~~ - Never implemented ❌
-- ~~`saved_professionals`~~ - Replaced by `saved_companies` ❌
-- ~~`messages`~~ - Placeholder (0 rows)
+```sql
+-- Company/professional listings (optimized)
+SELECT * FROM mv_professional_summary;
 
-#### Performance Optimizations
-- **Materialized Views**:
-  - `mv_professional_summary` - Optimized professional data for listings
-  - `mv_project_summary` - Optimized project data for galleries
-- **Search Functions**:
-  - `search_professionals()` - Filter by location, specialty, rating, etc.
-  - `search_projects()` - Filter by category, budget, features, etc.
-- **Indexes**: Composite indexes, GIN indexes for arrays, full-text search
-- **Auto-refresh**: Triggers update materialized views when data changes
+-- Project gallery (optimized)
+SELECT * FROM mv_project_summary;
 
-#### Security Features
-- **Row Level Security (RLS)**: Comprehensive policies on all tables
-- **Profile Protection**: Users can only modify their own profiles
-- **Project Privacy**: Draft projects private, published projects public
-- **Message Security**: Only participants can read messages
-- **Review Integrity**: Only clients who worked with professionals can review
-
-#### Key Data Types & Enums
-\`\`\`sql
-user_type: 'client' | 'professional' | 'admin'
-project_status: 'draft' | 'published' | 'in_progress' | 'completed' | 'archived'
-application_status: 'pending' | 'accepted' | 'rejected'
-project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
-\`\`\`
-
-#### Database Connection
-
-**MCP Server:** This project uses the `supabase-arco` MCP server to interact with the Arco database.
-
-**IMPORTANT:** Use `mcp__supabase__*` tools (the MCP server name doesn't affect tool names).
-
-**Arco Project Details:**
-- **Project ID**: `ogvobdcrectqsegqrquz`
-- **Project URL**: `https://ogvobdcrectqsegqrquz.supabase.co`
-
-**Examples:**
-```javascript
-// Get project details
-mcp__supabase__get_project(project_id: "ogvobdcrectqsegqrquz")
-
-// Get API URL
-mcp__supabase__get_project_url(project_id: "ogvobdcrectqsegqrquz")
-
-// Get publishable keys for client-side connections
-mcp__supabase__get_publishable_keys(project_id: "ogvobdcrectqsegqrquz")
-
-// Generate TypeScript types
-mcp__supabase__generate_typescript_types(project_id: "ogvobdcrectqsegqrquz")
-
-// Execute SQL queries
-mcp__supabase__execute_sql(
-  project_id: "ogvobdcrectqsegqrquz",
-  query: "SELECT * FROM companies LIMIT 10"
-)
-
-// Apply database migrations
-mcp__supabase__apply_migration(
-  project_id: "ogvobdcrectqsegqrquz",
-  name: "add_new_feature",
-  query: "ALTER TABLE companies ADD COLUMN new_field TEXT"
-)
-
-// List all accessible projects
-mcp__supabase__list_projects()
-```
-
-**Key Points:**
-- ✅ Always use `project_id: "ogvobdcrectqsegqrquz"` for Arco project operations
-- ✅ The `supabase-arco` MCP server is configured with Arco's credentials in `claude_desktop_config.json`
-- ✅ Tool names are always `mcp__supabase__*` regardless of which MCP server is being used
-
-#### Migration Status & Refactoring Plan
-
-**Current:** 89 migrations applied (up to 089_fix_critical_security_issues.sql)
-
-**Upcoming Refactoring:** (See REFACTORING_PLAN.md for details)
-- **Phase 1:** Drop unused tables (project_applications, notifications, saved_professionals)
-- **Phase 2A:** Rename `professionals` → `team_members` + add VIEW for compatibility
-- **Phase 2B:** Remove VIEW after testing
-
-**Rationale:** Clarify company-centric architecture and reduce AI agent confusion
-
-#### Usage Patterns
-\`\`\`sql
--- Get professional listings
+-- Search with filters
 SELECT * FROM public.search_professionals(
   search_query := 'architect',
   location_filter := 'Amsterdam',
@@ -266,13 +163,32 @@ SELECT * FROM public.search_professionals(
   limit_count := 20
 );
 
--- Get project listings
 SELECT * FROM public.search_projects(
   location_filter := 'Utrecht',
-  category_filter := 'uuid-of-architecture-category',
+  category_filter := 'uuid-here',
   limit_count := 12
 );
 
--- Refresh materialized views
+-- Refresh after bulk changes
 SELECT public.refresh_all_materialized_views();
-\`\`\`
+```
+
+### Key Enums
+
+```sql
+user_type:            'client' | 'professional' | 'admin'
+project_status:       'draft' | 'published' | 'in_progress' | 'completed' | 'archived'
+project_budget_level: 'budget' | 'mid_range' | 'premium' | 'luxury'
+```
+
+### Migration Status
+
+89 migrations applied (up to `089_fix_critical_security_issues.sql`).
+
+**Upcoming:** Rename `professionals` → `team_members` with a compatibility VIEW during transition. See `REFACTORING_PLAN.md`.
+
+---
+
+## v0.app Integration
+
+This project syncs with v0.app. Changes from v0.app are pushed to this repo and may overwrite local changes. Coordinate significant modifications with the v0.app workflow.

@@ -2,7 +2,6 @@
 
 import React from "react"
 import { AlertTriangle } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { logger } from "@/lib/logger"
 
 interface ErrorBoundaryProps {
@@ -26,7 +25,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log the error using proper error monitoring service
     logger.error("ErrorBoundary caught an error", {
       component: "ErrorBoundary",
       componentStack: errorInfo.componentStack,
@@ -47,46 +45,42 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }
 
       return (
-        <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-foreground mb-2">
-                  Something went wrong
-                </h2>
-                <p className="text-sm text-text-secondary mb-4">
-                  We encountered an unexpected error while loading this page.
-                  Please try refreshing the page or go back to try again.
-                </p>
-                {process.env.NODE_ENV === "development" && this.state.error && (
-                  <details className="mb-4">
-                    <summary className="text-xs text-text-secondary cursor-pointer hover:text-foreground">
-                      Error details (development only)
-                    </summary>
-                    <pre className="mt-2 text-xs bg-surface p-3 rounded overflow-auto max-h-40">
-                      {this.state.error.message}
-                      {"\n\n"}
-                      {this.state.error.stack}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button
-                variant="quaternary" size="quaternary"
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", padding: "80px 24px" }}>
+          <div style={{ textAlign: "center", maxWidth: 480 }}>
+            <p className="arco-eyebrow" style={{ marginBottom: 16 }}>Error</p>
+            <h1 className="arco-page-title" style={{ marginBottom: 12 }}>Something went wrong</h1>
+            <p className="arco-body" style={{ marginBottom: 24 }}>
+              An unexpected error occurred. Please try refreshing the page or go back to try again.
+            </p>
+
+            {process.env.NODE_ENV === "development" && this.state.error && (
+              <details style={{ marginBottom: 24, textAlign: "left" }}>
+                <summary style={{ fontSize: 13, color: "var(--text-secondary)", cursor: "pointer" }}>
+                  Error details (development only)
+                </summary>
+                <pre style={{ marginTop: 8, fontSize: 12, background: "var(--arco-surface, #f5f5f4)", padding: 12, borderRadius: 3, overflow: "auto", maxHeight: 160 }}>
+                  {this.state.error.message}
+                  {"\n\n"}
+                  {this.state.error.stack}
+                </pre>
+              </details>
+            )}
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button
                 onClick={() => window.history.back()}
-                className="flex-1"
+                className="btn-tertiary"
+                style={{ flex: 1, maxWidth: 200 }}
               >
-                Go Back
-              </Button>
-              <Button
+                Go back
+              </button>
+              <button
                 onClick={this.handleReset}
-                className="flex-1"
+                className="btn-secondary"
+                style={{ flex: 1, maxWidth: 200 }}
               >
-                Reload Page
-              </Button>
+                Reload page
+              </button>
             </div>
           </div>
         </div>

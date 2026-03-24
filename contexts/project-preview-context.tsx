@@ -55,7 +55,7 @@ export type PreviewProjectProfessional = {
   companyId?: string | null
   professionalId?: string | null
   serviceCategory: string
-  serviceCategoryId: string
+  serviceCategoryIds: string[]
   companyName?: string | null
   companySlug?: string | null
   companyLogo?: string | null

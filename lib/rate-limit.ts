@@ -23,7 +23,7 @@ export type RateLimitOptions = {
   prefix?: string
 }
 
-function getRedis() {
+export function getRedis() {
   if (!redis) {
     const url = process.env.UPSTASH_REDIS_REST_URL
     const token = process.env.UPSTASH_REDIS_REST_TOKEN

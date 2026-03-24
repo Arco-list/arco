@@ -458,7 +458,7 @@ export default function NewProjectPage() {
                       professional_id: professionalData.id,
                       company_id: professionalData.company_id,
                       invited_email: userEmail,
-                      invited_service_category_id: primaryServiceId,
+                      invited_service_category_ids: primaryServiceId ? [primaryServiceId] : [],
                       status: "listed",
                       is_project_owner: true,
                       responded_at: new Date().toISOString(),

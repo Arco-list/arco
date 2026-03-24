@@ -25,7 +25,7 @@ const TAXONOMY_TYPES: Tables<"project_taxonomy_options">["taxonomy_type"][] = [
 ]
 
 type CategoryRow = Tables<"categories"> & {
-  project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable" | "is_building_feature"> | null
+  project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable"> | null
 }
 
 type TaxonomyOptionRow = Tables<"project_taxonomy_options">
@@ -80,7 +80,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           supabase
             .from("categories")
             .select(
-              "id,name,slug,parent_id,sort_order,project_category_attributes(is_listable,is_building_feature)",
+              "id,name,slug,parent_id,sort_order,category_type,project_category_attributes(is_listable)",
             )
             .eq("is_active", true)
             .order("sort_order", { ascending: true, nullsFirst: false })

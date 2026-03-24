@@ -54,7 +54,13 @@ export default function GetStartedPage() {
         </div>
       </main>
 
-      <footer className="border-t border-border px-6 py-6 flex justify-end">
+      <footer className="border-t border-border px-6 py-6 flex items-center justify-between">
+        <Link
+          href="/new-project/import"
+          className="text-sm text-text-secondary hover:text-foreground transition-colors"
+        >
+          Have a website? Import from URL instead →
+        </Link>
         <Button variant="secondary" size="lg" asChild>
           <Link href="/new-project/details">
             Get started

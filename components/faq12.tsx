@@ -1,282 +1,310 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useState } from "react"
 
-import { cn } from "@/lib/utils"
-
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Button } from "@/components/ui/button"
-
-type Category = "Support" | "Account" | "Features" | "Security" | "Other"
-
-interface FAQItem {
-  question: string
-  answer: string
-  category: Category
+const C = {
+  white:   "#FAFAF9",
+  black:   "#1c1c1a",
+  surface: "#f5f5f4",
+  mid:     "#6b6b68",
+  light:   "#a1a1a0",
+  rule:    "#e5e5e4",
+  accent:  "#016D75",
 }
 
-const faqItems: FAQItem[] = [
-  // Support Questions
+const FAQ_SECTIONS = [
   {
-    category: "Support",
-    question: "How can I get help with my architectural project?",
-    answer:
-      "Our support team is available to help you connect with the right professionals for your project. You can reach out through our contact form or browse our extensive network of verified architects and contractors.",
+    eyebrow: "Browsing Arco",
+    title: "Discovering projects & professionals",
+    items: [
+      {
+        question: "What can I find on Arco?",
+        answer: "Arco is a curated archive of completed residential architecture projects. Every project is verified, documented, and properly credited to the architects and professionals who made it. You will not find concepts, renders, or self-published portfolios here.",
+      },
+      {
+        question: "How do I search for specific types of projects?",
+        answer: "Use the filter bar on the Projects page to narrow by project type, architectural style, location, and size. You can also browse by featured collections such as villas, kitchens, outdoor spaces, and new builds.",
+      },
+      {
+        question: "Can I save projects and professionals I like?",
+        answer: "Yes. Create a free account and save any project or professional to your collection. Access your saved items at any time from your account dashboard.",
+      },
+      {
+        question: "Is Arco free to browse?",
+        answer: "Browsing is always free. There is no paywall to explore projects or discover professionals. An account is only required to save items or get in touch with a professional.",
+      },
+    ],
   },
   {
-    category: "Support",
-    question: "What if I need immediate assistance with my project?",
-    answer:
-      "For urgent project needs, you can contact our priority support line. We'll connect you with available professionals in your area within 24 hours.",
+    eyebrow: "For architects",
+    title: "Publishing your work",
+    items: [
+      {
+        question: "How do I publish a project on Arco?",
+        answer: "Projects are published through an architect account. Sign up, create your company profile, and submit your project from the dashboard. Our editorial team reviews all submissions before they go live.",
+      },
+      {
+        question: "What makes a project eligible for Arco?",
+        answer: "Projects must be completed residential architecture — built and standing. We look for work with clear architectural intent, quality documentation, and verified credits. Speculative designs, renders, and unbuilt concepts are not accepted.",
+      },
+      {
+        question: "How do I credit the professionals who worked on my project?",
+        answer: "During the project upload, you can invite contractors, interior designers, and other collaborators by email. Once they accept, they are credited on the project and it appears in their professional profile automatically.",
+      },
+      {
+        question: "Can I control who sees my projects?",
+        answer: "Projects remain private as drafts until you choose to publish them. Published projects are visible to everyone. You can unpublish a project at any time from your dashboard.",
+      },
+    ],
   },
   {
-    category: "Support",
-    question: "Do you provide project consultation services?",
-    answer:
-      "Yes, we offer initial project consultations to help you understand scope, budget, and timeline. Our experts can guide you through the planning process.",
-  },
-  // Account Questions
-  {
-    category: "Account",
-    question: "How do I create a professional profile?",
-    answer:
-      "Simply sign up and complete your professional profile with your credentials, portfolio, and areas of expertise. Our verification team will review and approve qualified professionals.",
-  },
-  {
-    category: "Account",
-    question: "How do I update my project portfolio?",
-    answer:
-      "You can easily add new projects, photos, and descriptions through your dashboard. High-quality images and detailed descriptions help attract more clients.",
-  },
-  {
-    category: "Account",
-    question: "What if I forget my password?",
-    answer:
-      "Use the 'Forgot Password' link on the login page. We'll send you a secure reset link to your registered email address.",
-  },
-  // Features Questions
-  {
-    category: "Features",
-    question: "What types of architectural projects can I find?",
-    answer:
-      "Our platform features residential, commercial, and specialty projects including houses, kitchens, bathrooms, outdoor spaces, and unique architectural designs.",
+    eyebrow: "For professionals",
+    title: "Being credited through your work",
+    items: [
+      {
+        question: "How do I appear on Arco as a professional?",
+        answer: "Professionals appear on Arco by being credited on a published project by the architect who hired them. There are no self-published listings — your presence is earned through verified collaboration.",
+      },
+      {
+        question: "Can I create my own profile without being credited?",
+        answer: "You can create a company account and complete your profile, but your work will only appear publicly once an architect credits you on a project. This is by design — quality is earned, not claimed.",
+      },
+      {
+        question: "What does it mean to be credited on a project?",
+        answer: "It means the architect who hired you has acknowledged your contribution to a real, completed project. That endorsement is public, permanent, and directly associated with the finished work.",
+      },
+      {
+        question: "How do I join my company's account on Arco?",
+        answer: "Ask your company administrator to invite you by email from the company dashboard. You will receive an invitation link to join the team.",
+      },
+    ],
   },
   {
-    category: "Features",
-    question: "How do I search for specific project types?",
-    answer:
-      "Use our advanced filters to search by project type, style, location, budget range, and specific features. You can also browse by categories like Villa, Kitchen, Bathroom, or Outdoor spaces.",
-  },
-  {
-    category: "Features",
-    question: "Can I save projects I'm interested in?",
-    answer:
-      "Yes, you can save projects to your favorites list and create custom collections. You can also share projects with others.",
-  },
-  // Security Questions
-  {
-    category: "Security",
-    question: "How do you verify professional credentials?",
-    answer:
-      "We verify all professional licenses, certifications, and credentials through official channels. Only verified professionals can offer services on our platform.",
-  },
-  {
-    category: "Security",
-    question: "Is my project information secure?",
-    answer:
-      "We use industry-standard encryption to protect all project data and personal information. Your privacy and security are our top priorities.",
-  },
-  {
-    category: "Security",
-    question: "How do you handle payment security?",
-    answer:
-      "All payments are processed through secure, encrypted channels. We never store payment information and use trusted payment processors for all transactions.",
-  },
-  // Other Questions
-  {
-    category: "Other",
-    question: "What are your pricing plans?",
-    answer:
-      "We offer flexible pricing plans for both clients and professionals. Check our pricing page for detailed information about features and costs.",
-  },
-  {
-    category: "Other",
-    question: "Do you offer refunds?",
-    answer:
-      "Yes, we have a fair refund policy. If you're not satisfied with our service, contact our support team within 30 days for a full refund.",
-  },
-  {
-    category: "Other",
-    question: "How can I become a featured professional?",
-    answer:
-      "Maintain high ratings, complete projects on time, and showcase exceptional work. Our algorithm promotes top-performing professionals to featured status.",
+    eyebrow: "Account & billing",
+    title: "Managing your account",
+    items: [
+      {
+        question: "How do I create an account?",
+        answer: "Click Log in at the top of any page and sign up with your email address. During registration you will be asked to select your account type — client, architect, or professional.",
+      },
+      {
+        question: "What subscription plans are available?",
+        answer: "Arco offers plans for architects and professionals who want to publish and manage their work. Visit the Pricing page for current options and features. Browsing is always free.",
+      },
+      {
+        question: "How do I update my company profile?",
+        answer: "From your dashboard, navigate to Company settings. You can update your company name, description, services, and profile photo at any time.",
+      },
+      {
+        question: "How do I get in touch if something isn't working?",
+        answer: "Send an email to hello@arcolist.com and we will get back to you as quickly as possible. For billing questions, include your account email so we can locate your account.",
+      },
+    ],
   },
 ]
 
-const categories: Category[] = ["Support", "Account", "Features", "Security", "Other"]
-
-const TOP_PADDING = 300
-
-const Faq12 = () => {
-  const [activeCategory, setActiveCategory] = useState<Category>("Support")
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const isScrollingRef = useRef(false)
-  const categoryRefs = useRef<Record<Category, HTMLDivElement | null>>({
-    Support: null,
-    Account: null,
-    Features: null,
-    Security: null,
-    Other: null,
-  })
-
-  const setupObserver = useCallback(() => {
-    observerRef.current?.disconnect()
-
-    let debounceTimeout: NodeJS.Timeout
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        // Skip if we're programmatically scrolling
-        if (isScrollingRef.current) return
-
-        // Clear any pending timeout
-        if (debounceTimeout) {
-          clearTimeout(debounceTimeout)
-        }
-
-        // Debounce the category update
-        debounceTimeout = setTimeout(() => {
-          const intersectingEntries = entries.filter((entry) => entry.isIntersecting)
-
-          // Find the entry that's closest to being 100px from the top
-          const entry = intersectingEntries.reduce(
-            (closest, current) => {
-              const rect = current.boundingClientRect
-              const distanceFromThreshold = Math.abs(rect.top - TOP_PADDING)
-              const closestDistance = closest
-                ? Math.abs(closest.boundingClientRect.top - TOP_PADDING)
-                : Number.POSITIVE_INFINITY
-
-              return distanceFromThreshold < closestDistance ? current : closest
-            },
-            null as IntersectionObserverEntry | null,
-          )
-
-          if (entry) {
-            const category = entry.target.getAttribute("data-category") as Category
-            if (category) {
-              setActiveCategory(category)
-            }
-          }
-        }, 150)
-      },
-      {
-        root: null,
-        rootMargin: `-${TOP_PADDING}px 0px -100% 0px`,
-        threshold: [0, 0.25, 0.5, 0.75, 1],
-      },
-    )
-
-    Object.entries(categoryRefs.current).forEach(([category, element]) => {
-      if (element) {
-        element.setAttribute("data-category", category)
-        observerRef.current?.observe(element)
-      }
-    })
-
-    return () => {
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const cleanup = setupObserver()
-    return () => {
-      cleanup()
-      observerRef.current?.disconnect()
-    }
-  }, [setupObserver])
-
-  const handleCategoryClick = (category: Category) => {
-    setActiveCategory(category)
-    isScrollingRef.current = true
-
-    const element = document.getElementById(`faq-${category.toLowerCase()}`)
-    if (element) {
-      element.style.scrollMargin = `${TOP_PADDING}px`
-      element.scrollIntoView({ behavior: "smooth", block: "start" })
-
-      setTimeout(() => {
-        isScrollingRef.current = false
-      }, 1000)
-    }
-  }
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <section className="min-h-screen bg-white py-32 dark:bg-white">
-      <div className="container max-w-4xl">
-        <div className="text-center">
-          <h1 className="text-center text-4xl font-semibold tracking-tight sm:text-5xl">Help Center</h1>
-          <p className="mx-auto mt-4 max-w-xl text-center text-balance text-muted-foreground">
-            Find answers to common questions about using Arco to discover and connect with architectural professionals.
+    <div style={{ borderBottom: `1px solid ${C.rule}` }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen((o) => !o)}
+        aria-expanded={isOpen}
+        style={{
+          width: "100%",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 24,
+          padding: "22px 0",
+          textAlign: "left",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 15,
+            fontWeight: 400,
+            color: C.black,
+            lineHeight: 1.4,
+          }}
+        >
+          {question}
+        </span>
+        <span
+          style={{
+            flexShrink: 0,
+            width: 16,
+            height: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: C.mid,
+            transform: isOpen ? "rotate(45deg)" : "none",
+            transition: "transform 0.2s ease",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1V11M1 6H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </span>
+      </button>
+      {isOpen && (
+        <div style={{ paddingBottom: 24 }}>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 14,
+              fontWeight: 300,
+              lineHeight: 1.78,
+              color: C.mid,
+              maxWidth: "72ch",
+            }}
+          >
+            {answer}
           </p>
         </div>
+      )}
+    </div>
+  )
+}
 
-        <div className="mt-8 grid max-w-5xl gap-8 md:mt-12 md:grid-cols-[200px_1fr] md:gap-12 lg:mt-16">
-          {/* Sidebar */}
-          <div className="sticky top-24 flex h-fit flex-col gap-4 max-md:hidden">
-            {categories.map((category) => (
-              <Button
-                variant="ghost"
-                key={category}
-                onClick={() => handleCategoryClick(category)}
-                className={`justify-start text-left text-xl transition-colors ${
-                  activeCategory === category ? "font-semibold" : "font-normal hover:opacity-75"
-                }`}
-              >
-                {category}
-              </Button>
-            ))}
-          </div>
+const Faq12 = () => {
+  return (
+    <>
+      {/* Page header */}
+      <section style={{ paddingTop: 120, paddingBottom: 64 }}>
+        <div className="wrap">
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 16 }}>
+            Help & FAQ
+          </span>
+          <h1
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "clamp(32px, 4vw, 56px)",
+              fontWeight: 300,
+              lineHeight: 1.1,
+              letterSpacing: "-0.5px",
+              color: C.black,
+              maxWidth: 560,
+            }}
+          >
+            Questions answered.
+          </h1>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 15,
+              fontWeight: 300,
+              lineHeight: 1.7,
+              color: C.mid,
+              marginTop: 20,
+              maxWidth: "48ch",
+            }}
+          >
+            Everything you need to know about browsing, publishing, and managing your account on Arco.
+          </p>
+        </div>
+      </section>
 
-          {/* FAQ Items by Category */}
-          <div className="space-y-6">
-            {categories.map((category) => {
-              const categoryItems = faqItems.filter((item) => item.category === category)
-
-              return (
-                <div
-                  key={category}
-                  id={`faq-${category.toLowerCase()}`}
-                  ref={(el) => {
-                    categoryRefs.current[category] = el
-                  }}
-                  className={cn(`rounded-xl`, activeCategory === category ? "bg-surface" : "bg-surface", "px-6")}
+      {/* FAQ sections */}
+      {FAQ_SECTIONS.map((section, i) => (
+        <section
+          key={section.eyebrow}
+          style={{ padding: "64px 0" }}
+        >
+          <div className="wrap">
+            <div style={{ maxWidth: 760 }}>
+              <div style={{ marginBottom: 36 }}>
+                <span className="arco-eyebrow" style={{ display: "block", marginBottom: 12 }}>
+                  {section.eyebrow}
+                </span>
+                <h2
                   style={{
-                    scrollMargin: `${TOP_PADDING}px`,
+                    fontFamily: "var(--font-serif)",
+                    fontSize: "clamp(20px, 2.4vw, 32px)",
+                    fontWeight: 300,
+                    lineHeight: 1.2,
+                    letterSpacing: "-0.3px",
+                    color: C.black,
                   }}
                 >
-                  <Accordion type="single" collapsible defaultValue={`${categories[0]}-0`} className="w-full">
-                    {categoryItems.map((item, i) => (
-                      <AccordionItem key={i} value={`${category}-${i}`} className="border-b border-muted last:border-0">
-                        <AccordionTrigger className="text-base font-medium hover:no-underline">
-                          {item.question}
-                        </AccordionTrigger>
-                        <AccordionContent className="text-base font-medium text-muted-foreground">
-                          {item.answer}
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                </div>
-              )
-            })}
+                  {section.title}
+                </h2>
+              </div>
+              <div style={{ borderTop: `1px solid ${C.rule}` }}>
+                {section.items.map((item) => (
+                  <FAQItem key={item.question} question={item.question} answer={item.answer} />
+                ))}
+              </div>
+            </div>
           </div>
+        </section>
+      ))}
+
+      {/* Contact CTA */}
+      <section style={{ padding: "96px 0", background: C.surface, textAlign: "center" }}>
+        <div className="wrap">
+          <span
+            className="arco-eyebrow"
+            style={{ display: "block", marginBottom: 16 }}
+          >
+            Still have questions?
+          </span>
+          <h2
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "clamp(24px, 3vw, 44px)",
+              fontWeight: 300,
+              lineHeight: 1.1,
+              letterSpacing: "-0.4px",
+              color: C.black,
+              marginBottom: 20,
+            }}
+          >
+            We&apos;re here to help.
+          </h2>
+          <p
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 15,
+              fontWeight: 300,
+              lineHeight: 1.7,
+              color: C.mid,
+              maxWidth: "44ch",
+              margin: "0 auto 40px",
+            }}
+          >
+            If you didn&apos;t find what you were looking for, send us a message and we&apos;ll get back to you.
+          </p>
+          <a
+            href="mailto:hello@arcolist.com"
+            style={{
+              display: "inline-block",
+              fontFamily: "var(--font-sans)",
+              fontSize: 13,
+              fontWeight: 500,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: C.white,
+              background: C.black,
+              padding: "14px 32px",
+              textDecoration: "none",
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+          >
+            hello@arcolist.com
+          </a>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   )
 }
 

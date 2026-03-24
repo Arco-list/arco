@@ -1,26 +1,30 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { ChevronDown, Loader2, X } from "lucide-react"
+import { Fragment, useMemo, useState } from "react"
+import Link from "next/link"
+import { ChevronRight } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
+import { MapPreviewCard, ProfessionalsMap } from "@/components/professionals-map"
+import { Footer } from "@/components/footer"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
 
-const sortOptions = ["Best match", "Most recent", "Highest rated", "Alphabetical"] as const
+// Map preview card appears as the 3rd card (top-right in 3-col grid)
+const MAP_CARD_POSITION = 2
 
 export function ProfessionalsGrid({ professionals = [] }: { professionals?: ProfessionalCard[] }) {
+  const [showMap, setShowMap] = useState(false)
+
   const {
     selectedCategories,
     selectedServices,
-    selectedCity,
+    selectedCities,
     keyword,
-    removeFilter,
-    hasActiveFilters,
     taxonomyLabelMap,
+    sortBy,
   } = useProfessionalFilters()
 
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
@@ -28,6 +32,8 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
 
   const {
     professionals: queryProfessionals,
+    allProfessionals,
+    total,
     isLoading,
     isLoadingMore,
     error,
@@ -35,9 +41,6 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
     hasMore,
     loadMore,
   } = useProfessionalsQuery(professionals)
-
-  const [sortBy, setSortBy] = useState<(typeof sortOptions)[number]>("Best match")
-  const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false)
 
   const sortedProfessionals = useMemo(() => {
     const next = [...queryProfessionals]
@@ -54,172 +57,222 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
     }
   }, [queryProfessionals, sortBy])
 
-  const getPageTitle = () => {
+  const headingText = useMemo(() => {
+    const locationLabel =
+      selectedCities.length === 1
+        ? selectedCities[0]
+        : selectedCities.length === 2
+          ? `${selectedCities[0]} & ${selectedCities[1]}`
+          : selectedCities.length > 2
+            ? `${selectedCities.slice(0, -1).join(", ")} & ${selectedCities.at(-1)}`
+            : "the Netherlands"
+
     if (selectedCategories.length > 0) {
       const labels = selectedCategories
-        .map((categoryId) => taxonomyLabelMap.get(categoryId) ?? categoryId)
+        .map((id) => taxonomyLabelMap.get(id) ?? id)
         .filter(Boolean)
-
-      const categoryPart = (() => {
-        if (labels.length === 0) return "Professionals"
-        if (labels.length === 1) return labels[0]
-        if (labels.length === 2) return `${labels[0]} & ${labels[1]}`
-        return `${labels.slice(0, -1).join(", ")} & ${labels[labels.length - 1]}`
-      })()
-
-      const locationPart = selectedCity ?? "all locations"
-      return `${categoryPart} in ${locationPart}`
+      const part =
+        labels.length === 1
+          ? labels[0]
+          : labels.length === 2
+            ? `${labels[0]} & ${labels[1]}`
+            : `${labels.slice(0, -1).join(", ")} & ${labels.at(-1)}`
+      return `${part} in ${locationLabel}`
     }
+    if (selectedCities.length > 0) return `Professionals in ${locationLabel}`
+    return "Professionals in the Netherlands"
+  }, [selectedCategories, selectedCities, taxonomyLabelMap])
 
-    if (selectedCity) {
-      return `Professionals in ${selectedCity}`
-    }
-
-    return "Professionals in all locations"
-  }
-
-  const activeFilterTags = useMemo(() => {
-    const tags: Array<{ type: string; value: string; label: string }> = []
-
-    selectedCategories.forEach((categoryId) => {
-      tags.push({ type: "category", value: categoryId, label: taxonomyLabelMap.get(categoryId) ?? categoryId })
+  // Client-side filtered professionals for instant map updates
+  const mapProfessionals = useMemo(() => {
+    const searchLower = keyword.trim().toLowerCase()
+    return allProfessionals.filter((p) => {
+      // Category filter: check if any selected category matches specialty_parent_ids
+      if (selectedCategories.length > 0) {
+        const parentIds = p.specialtyParentIds ?? []
+        if (!selectedCategories.some((catId) => parentIds.includes(catId))) return false
+      }
+      // Service filter: check if any selected service matches specialty_ids
+      if (selectedServices.length > 0) {
+        const specIds = p.specialtyIds ?? []
+        if (!selectedServices.some((svcId) => specIds.includes(svcId))) return false
+      }
+      // City filter
+      if (selectedCities.length > 0) {
+        const lowerCities = selectedCities.map((c) => c.toLowerCase().trim())
+        if (!p.city || !lowerCities.includes(p.city)) return false
+      }
+      // Keyword filter
+      if (searchLower.length > 0) {
+        const haystack = `${p.name} ${p.profession} ${p.location} ${(p.specialties ?? []).join(" ")}`.toLowerCase()
+        if (!haystack.includes(searchLower)) return false
+      }
+      return true
     })
+  }, [allProfessionals, selectedCategories, selectedServices, selectedCities, keyword])
 
-    selectedServices.forEach((serviceId) => {
-      tags.push({ type: "service", value: serviceId, label: taxonomyLabelMap.get(serviceId) ?? serviceId })
-    })
+  // Check if any professionals have map coordinates
+  const hasMappable = sortedProfessionals.some(
+    (p) => typeof p.latitude === "number" && typeof p.longitude === "number"
+  )
 
-    if (selectedCity) {
-      tags.push({ type: "city", value: selectedCity, label: selectedCity })
-    }
-
-    if (keyword.trim()) {
-      tags.push({ type: "keyword", value: keyword.trim(), label: `Keyword: "${keyword.trim()}"` })
-    }
-
-    return tags
-  }, [keyword, selectedCategories, selectedCity, selectedServices, taxonomyLabelMap])
-
-  const handleSortSelect = (option: (typeof sortOptions)[number]) => {
-    setSortBy(option)
-    setIsSortDropdownOpen(false)
+  // When map is shown, replace everything below filter bar with full-width map
+  if (showMap) {
+    return (
+      <ProfessionalsMap
+        professionals={mapProfessionals}
+        onClose={() => setShowMap(false)}
+      />
+    )
   }
 
   return (
-    <div className="w-full bg-white">
-      <div className="px-4 md:px-8">
-        <div className="max-w-[1800px] mx-auto py-8">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="heading-5 text-foreground">{getPageTitle()}</h4>
+    <>
+      {/* Page title section — hidden when map is shown */}
+      <div className="discover-page-title">
+        <div className="wrap">
+          <nav aria-label="Breadcrumb" className="discover-breadcrumb">
+            <Link href="/professionals" className="discover-breadcrumb-item">
+              Professionals
+            </Link>
+            <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
+            <span className="discover-breadcrumb-item discover-breadcrumb-current">
+              Netherlands
+            </span>
+          </nav>
+          <h2 className="arco-section-title">Browse Professionals</h2>
+        </div>
+      </div>
 
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 body-small text-text-secondary hover:text-foreground"
-                onClick={() => setIsSortDropdownOpen((open) => !open)}
-              >
-                Sort: {sortBy}
-                <ChevronDown className="h-4 w-4" />
-              </Button>
+      <div className="discover-results">
+        <div className="wrap">
 
-              {isSortDropdownOpen && (
-                <div className="absolute right-0 top-10 z-50 w-48 rounded-md border border-border bg-white shadow-lg">
-                  <div className="py-1">
-                    {sortOptions.map((option) => (
-                      <button
-                        key={option}
-                        className="block w-full px-4 py-2 text-left body-small text-foreground hover:bg-surface"
-                        onClick={() => handleSortSelect(option)}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* Result meta */}
+          <div className="discover-results-meta">
+            <p className="discover-results-count">
+              <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
+                {(total > sortedProfessionals.length ? total : sortedProfessionals.length).toLocaleString()}
+              </strong>{" "}
+              {headingText}
+            </p>
           </div>
 
-          {isLoading && (
-            <div className="flex items-center gap-2 body-small text-text-secondary mb-4">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Updating results…
-            </div>
-          )}
-
+          {/* Error */}
           {error && (
-            <div className="mb-4 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 body-small text-red-700">
+            <div
+              style={{
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#dc2626",
+                borderRadius: 4,
+                padding: "12px 16px",
+                marginBottom: 24,
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
               <span>{error}</span>
-              <Button variant="quaternary" size="quaternary" onClick={refetch} className="text-red-700 border-red-200">
+              <button
+                onClick={refetch}
+                style={{
+                  fontSize: 13,
+                  background: "none",
+                  border: "1px solid #fecaca",
+                  borderRadius: 4,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  color: "#dc2626",
+                  flexShrink: 0,
+                }}
+              >
                 Retry
-              </Button>
+              </button>
             </div>
           )}
 
-          {hasActiveFilters() && activeFilterTags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              {activeFilterTags.map((tag, index) => (
-                <button
-                  key={`${tag.type}-${tag.value}-${index}`}
-                  onClick={() => removeFilter(tag.type, tag.value)}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-surface text-foreground body-small rounded-full hover:bg-surface transition-colors"
-                >
-                  {tag.label}
-                  <X className="h-3 w-3" />
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {sortedProfessionals.map((professional) => {
+          {/* Grid */}
+          <div className="discover-grid">
+            {sortedProfessionals.map((professional, index) => {
               const professionalId = professional.id ?? ""
               const isSaved = professionalId ? savedProfessionalIds.has(professionalId) : false
               const isMutating = professionalId ? mutatingProfessionalIds.has(professionalId) : false
 
               return (
-                <ProfessionalCardComponent
-                  key={`${professional.companyId}-${professional.professionalId}`}
-                  professional={professional}
-                  isSaved={isSaved}
-                  isMutating={isMutating}
-                  onToggleSave={(prof) => {
-                    if (isSaved) {
-                      removeProfessional(professionalId)
-                    } else {
-                      saveProfessional(prof)
-                    }
-                  }}
-                />
+                <Fragment key={`${professional.companyId}-${professional.professionalId}`}>
+                  {/* Insert map preview card at position */}
+                  {index === MAP_CARD_POSITION && hasMappable && (
+                    <MapPreviewCard
+                      professionals={sortedProfessionals}
+                      onClick={() => setShowMap(true)}
+                    />
+                  )}
+                  <ProfessionalCardComponent
+                    professional={professional}
+                    isSaved={isSaved}
+                    isMutating={isMutating}
+                    onToggleSave={(prof) => {
+                      if (isSaved) {
+                        removeProfessional(professionalId)
+                      } else {
+                        saveProfessional(prof)
+                      }
+                    }}
+                  />
+                </Fragment>
               )
             })}
+
+            {/* Show map card at end if fewer items than position */}
+            {sortedProfessionals.length > 0 && sortedProfessionals.length <= MAP_CARD_POSITION && hasMappable && (
+              <MapPreviewCard
+                professionals={sortedProfessionals}
+                onClick={() => setShowMap(true)}
+              />
+            )}
+
+            {isLoading && (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  display: "flex",
+                  justifyContent: "center",
+                  padding: "48px 0",
+                }}
+              >
+                <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>Loading professionals…</p>
+              </div>
+            )}
           </div>
 
-          {!isLoading && sortedProfessionals.length === 0 && (
-            <div className="text-center body-regular text-text-secondary">No professionals match your filters yet. Try adjusting them.</div>
-          )}
-
-          {hasMore && (
-            <div className="flex justify-center pt-4">
-              <Button
-                variant="quaternary" size="quaternary"
-                onClick={loadMore}
-                disabled={isLoadingMore}
-                className="min-w-[140px]"
-              >
-                {isLoadingMore ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                  </span>
-                ) : (
-                  "Load more"
-                )}
-              </Button>
+          {!isLoading && sortedProfessionals.length === 0 && !error && (
+            <div style={{ textAlign: "center", padding: "64px 0" }}>
+              <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>
+                No professionals found matching your filters.
+              </p>
             </div>
           )}
+
+          {/* Load more */}
+          {hasMore && (
+            <div className="discover-load-more">
+              <button
+                className="discover-load-more-btn"
+                onClick={loadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? "Loading…" : "Load more"}
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
-    </div>
+
+      <Footer />
+    </>
   )
 }
