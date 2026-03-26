@@ -5,10 +5,7 @@ import { toast } from "sonner"
 
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
 const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 const AVATAR_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
@@ -19,7 +16,6 @@ const AVATAR_MIME_TO_EXTENSION: Record<string, string> = {
 }
 const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024
 
-// RFC 5322 compliant email regex (simplified)
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function isValidEmail(email: string): boolean {
@@ -59,14 +55,19 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
   const [isSavingPassword, setIsSavingPassword] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [newEmail, setNewEmail] = useState("")
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [activeEditField, setActiveEditField] = useState<string | null>(null)
 
   const isEmailAuthUser = useMemo(() => {
     if (!user) return false
-
     const provider = user.app_metadata?.provider
     const providers = Array.isArray(user.app_metadata?.providers) ? user.app_metadata?.providers : []
-
     return provider === "email" || providers?.includes("email") || Boolean(user.email)
   }, [user])
 
@@ -74,11 +75,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
     const firstInitial = profileForm.firstName?.trim().charAt(0) ?? ""
     const lastInitial = profileForm.lastName?.trim().charAt(0) ?? ""
     const initials = `${firstInitial}${lastInitial}`.toUpperCase()
-
-    if (initials) {
-      return initials
-    }
-
+    if (initials) return initials
     const emailInitial = profileForm.email?.trim().charAt(0)?.toUpperCase()
     return emailInitial ?? "U"
   }, [profileForm.email, profileForm.firstName, profileForm.lastName])
@@ -86,100 +83,37 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
   const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null
     event.target.value = ""
-
     if (!file) return
-
-    if (!user) {
-      toast.error("You need to be signed in to update your profile photo")
-      return
-    }
-
-    if (!AVATAR_ALLOWED_MIME_TYPES.has(file.type)) {
-      toast.error("Unsupported file type", {
-        description: "Profile photos must be JPG, PNG, or WEBP images.",
-      })
-      return
-    }
-
-    if (file.size > AVATAR_MAX_SIZE_BYTES) {
-      toast.error("File too large", {
-        description: "Profile photos must be 5 MB or smaller.",
-      })
-      return
-    }
+    if (!user) { toast.error("You need to be signed in to update your profile photo"); return }
+    if (!AVATAR_ALLOWED_MIME_TYPES.has(file.type)) { toast.error("Unsupported file type", { description: "Profile photos must be JPG, PNG, or WEBP images." }); return }
+    if (file.size > AVATAR_MAX_SIZE_BYTES) { toast.error("File too large", { description: "Profile photos must be 5 MB or smaller." }); return }
 
     const extensionFromMime = AVATAR_MIME_TO_EXTENSION[file.type]
     const extensionFromName = file.name.split(".").pop()?.toLowerCase() ?? ""
     const extension = extensionFromMime ?? extensionFromName
+    if (!extension || !AVATAR_ALLOWED_EXTENSIONS.has(extension)) { toast.error("Unsupported file type"); return }
 
-    if (!extension || !AVATAR_ALLOWED_EXTENSIONS.has(extension)) {
-      toast.error("Unsupported file type", {
-        description: "Profile photos must be JPG, PNG, or WEBP images.",
-      })
-      return
-    }
-
-    const uniqueId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2)
+    const uniqueId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Math.random().toString(36).slice(2)
     const objectKey = `${user.id}/${uniqueId}.${extension}`
 
     setIsUploadingAvatar(true)
-
     const previousStoragePath = profile?.avatar_storage_path ?? null
 
     try {
-      const { error: uploadError } = await supabase.storage
-        .from("profile-photos")
-        .upload(objectKey, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type,
-        })
+      const { error: uploadError } = await supabase.storage.from("profile-photos").upload(objectKey, file, { cacheControl: "3600", upsert: false, contentType: file.type })
+      if (uploadError) { toast.error("Could not upload profile photo", { description: uploadError.message }); return }
 
-      if (uploadError) {
-        toast.error("Could not upload profile photo", {
-          description: uploadError.message,
-        })
-        return
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from("profile-photos")
-        .getPublicUrl(objectKey)
-
+      const { data: publicUrlData } = supabase.storage.from("profile-photos").getPublicUrl(objectKey)
       const publicUrl = publicUrlData?.publicUrl ? `${publicUrlData.publicUrl}?v=${Date.now()}` : null
-
-      if (!publicUrl) {
-        toast.error("Could not fetch profile photo URL")
-        void supabase.storage.from("profile-photos").remove([objectKey])
-        return
-      }
+      if (!publicUrl) { toast.error("Could not fetch profile photo URL"); void supabase.storage.from("profile-photos").remove([objectKey]); return }
 
       setAvatarPreview(publicUrl)
-
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          avatar_url: publicUrl,
-          avatar_storage_path: objectKey,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id)
-
-      if (profileError) {
-        toast.error("Could not update profile photo", {
-          description: profileError.message,
-        })
-        void supabase.storage.from("profile-photos").remove([objectKey])
-        return
-      }
+      const { error: profileError } = await supabase.from("profiles").update({ avatar_url: publicUrl, avatar_storage_path: objectKey, updated_at: new Date().toISOString() }).eq("id", user.id)
+      if (profileError) { toast.error("Could not update profile photo", { description: profileError.message }); void supabase.storage.from("profile-photos").remove([objectKey]); return }
 
       if (previousStoragePath && previousStoragePath !== objectKey) {
         void supabase.storage.from("profile-photos").remove([previousStoragePath])
       }
-
       await refreshProfile()
       toast.success("Profile photo updated")
     } catch (error) {
@@ -191,47 +125,16 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
   }
 
   const handleAvatarRemove = async () => {
-    if (!user) {
-      toast.error("You need to be signed in to update your profile photo")
-      return
-    }
-
-    if (!profile?.avatar_url && !profile?.avatar_storage_path) {
-      toast("No profile photo to remove", {
-        description: "Upload a photo before removing it.",
-      })
-      return
-    }
+    if (!user) { toast.error("You need to be signed in"); return }
+    if (!profile?.avatar_url && !profile?.avatar_storage_path) { toast("No profile photo to remove"); return }
 
     setIsUploadingAvatar(true)
-
     try {
       if (profile?.avatar_storage_path) {
-        const { error: storageError } = await supabase.storage
-          .from("profile-photos")
-          .remove([profile.avatar_storage_path])
-
-        if (storageError) {
-          console.error(storageError)
-        }
+        await supabase.storage.from("profile-photos").remove([profile.avatar_storage_path])
       }
-
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          avatar_url: null,
-          avatar_storage_path: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id)
-
-      if (profileError) {
-        toast.error("Could not remove profile photo", {
-          description: profileError.message,
-        })
-        return
-      }
-
+      const { error: profileError } = await supabase.from("profiles").update({ avatar_url: null, avatar_storage_path: null, updated_at: new Date().toISOString() }).eq("id", user.id)
+      if (profileError) { toast.error("Could not remove profile photo", { description: profileError.message }); return }
       setAvatarPreview(null)
       await refreshProfile()
       toast.success("Profile photo removed")
@@ -245,136 +148,48 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
 
   useEffect(() => {
     if (isLoading) return
-
-    setProfileForm({
-      firstName: profile?.first_name ?? "",
-      lastName: profile?.last_name ?? "",
-      email: user?.email ?? "",
-    })
+    setProfileForm({ firstName: profile?.first_name ?? "", lastName: profile?.last_name ?? "", email: user?.email ?? "" })
   }, [isLoading, profile?.first_name, profile?.last_name, user?.email])
 
   useEffect(() => {
-    if (profile?.avatar_url) {
-      setAvatarPreview(profile.avatar_url)
-    } else {
-      setAvatarPreview(null)
-    }
+    if (profile?.avatar_url) setAvatarPreview(profile.avatar_url)
+    else setAvatarPreview(null)
   }, [profile?.avatar_url])
 
-  const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleNameBlur = (field: "firstName" | "lastName", value: string) => {
+    setActiveEditField(null)
+    const trimmed = value.trim()
+    const current = field === "firstName" ? profile?.first_name ?? "" : profile?.last_name ?? ""
+    if (trimmed === current) return
 
-    if (!user) {
-      toast.error("You need to be signed in to update your profile")
-      return
-    }
+    setProfileForm(s => ({ ...s, [field]: trimmed }))
+    // Auto-save name
+    if (!user) return
+    const updates: Record<string, string | null> = { updated_at: new Date().toISOString() }
+    if (field === "firstName") updates.first_name = trimmed || null
+    else updates.last_name = trimmed || null
 
-    const trimmedFirstName = profileForm.firstName.trim()
-    const trimmedLastName = profileForm.lastName.trim()
-    const trimmedEmail = profileForm.email.trim()
+    supabase.from("profiles").update(updates).eq("id", user.id).then(({ error }) => {
+      if (error) toast.error("Could not update name")
+      else { toast.success("Name updated"); refreshProfile() }
+    })
+  }
 
-    const currentFirstName = profile?.first_name ?? ""
-    const currentLastName = profile?.last_name ?? ""
-    const currentEmail = user.email ?? ""
-
-    const hasProfileChanges =
-      trimmedFirstName !== currentFirstName || trimmedLastName !== currentLastName
-    const hasEmailChange = trimmedEmail !== currentEmail
-
-    if (!hasProfileChanges && !hasEmailChange) {
-      toast("No changes to save", {
-        description: "Update your profile details before submitting.",
-      })
-      return
-    }
-
-    if (!trimmedEmail) {
-      toast.error("Email is required")
-      return
-    }
-
-    if (!isValidEmail(trimmedEmail)) {
-      toast.error("Invalid email format", {
-        description: "Please enter a valid email address.",
-      })
-      return
-    }
+  const handleEmailUpdate = async () => {
+    const trimmed = newEmail.trim()
+    if (!trimmed || !isValidEmail(trimmed)) { toast.error("Please enter a valid email address"); return }
+    if (trimmed === user?.email) { toast("No change"); setEmailModalOpen(false); return }
 
     setIsSavingProfile(true)
-
     try {
-      if (hasProfileChanges) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert(
-            {
-              id: user.id,
-              first_name: trimmedFirstName || null,
-              last_name: trimmedLastName || null,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "id" }
-          )
-
-        if (profileError) {
-          toast.error("Could not update profile", {
-            description: profileError.message,
-          })
-          return
-        }
-      }
-
-      const shouldUpdateAuth = hasEmailChange || hasProfileChanges
-
-      if (shouldUpdateAuth) {
-        const authPayload: {
-          email?: string
-          data?: Record<string, string | null>
-        } = {}
-
-        if (hasEmailChange) {
-          authPayload.email = trimmedEmail
-        }
-
-        if (hasProfileChanges) {
-          authPayload.data = {
-            first_name: trimmedFirstName || null,
-            last_name: trimmedLastName || null,
-          }
-        }
-
-        const { error: authError } = await supabase.auth.updateUser(authPayload, {
-          emailRedirectTo: window.location.origin,
-        })
-
-        if (authError) {
-          toast.error("Could not update account", {
-            description: authError.message,
-          })
-          return
-        }
-
-        if (hasEmailChange) {
-          toast.warning("Check your inbox", {
-            description: "Confirm the email change to complete the update.",
-          })
-        }
-      }
-
+      const { error } = await supabase.auth.updateUser({ email: trimmed }, { emailRedirectTo: window.location.origin })
+      if (error) { toast.error("Could not update email", { description: error.message }); return }
+      toast.warning("Check your inbox", { description: "Confirm the email change to complete the update." })
+      setEmailModalOpen(false)
       await refreshSession()
-
-      setProfileForm({
-        firstName: trimmedFirstName,
-        lastName: trimmedLastName,
-        email: trimmedEmail,
-      })
-
-      if (!hasEmailChange) {
-        toast.success("Profile updated")
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected error"
-      toast.error("Could not update profile", { description: message })
+      toast.error("Could not update email", { description: message })
     } finally {
       setIsSavingProfile(false)
     }
@@ -382,83 +197,30 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
 
   const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-
-    if (!user?.email) {
-      toast.error("Password updates require an email-based account")
-      return
-    }
-
-    if (!isEmailAuthUser) {
-      toast("Password managed by provider", {
-        description: "Update your password with your single sign-on provider.",
-      })
-      return
-    }
-
-    if (!passwordForm.currentPassword.trim()) {
-      toast.error("Enter your current password")
-      return
-    }
-
-    if (passwordForm.newPassword.trim().length < 8) {
-      toast.error("New password must be at least 8 characters")
-      return
-    }
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error("New passwords do not match")
-      return
-    }
+    if (!user?.email) { toast.error("Password updates require an email-based account"); return }
+    if (!isEmailAuthUser) { toast("Password managed by provider"); return }
+    if (!passwordForm.currentPassword.trim()) { toast.error("Enter your current password"); return }
+    if (passwordForm.newPassword.trim().length < 8) { toast.error("New password must be at least 8 characters"); return }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) { toast.error("New passwords do not match"); return }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      toast.error("Misconfigured Supabase credentials", {
-        description: "Contact support to update your password.",
-      })
-      return
-    }
+    if (!supabaseUrl || !supabaseAnonKey) { toast.error("Misconfigured Supabase credentials"); return }
 
     setIsSavingPassword(true)
-
     try {
       const verifyResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({
-          email: user.email,
-          password: passwordForm.currentPassword,
-        }),
+        headers: { "Content-Type": "application/json", apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+        body: JSON.stringify({ email: user.email, password: passwordForm.currentPassword }),
       })
+      if (!verifyResponse.ok) { toast.error("Current password is incorrect"); return }
 
-      if (!verifyResponse.ok) {
-        const payload = (await verifyResponse.json().catch(() => null)) as
-          | { error?: string; error_description?: string }
-          | null
-        const reason = payload?.error_description ?? payload?.error ?? "Current password is incorrect"
-        toast.error("Current password is incorrect", {
-          description: reason,
-        })
-        return
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: passwordForm.newPassword,
-      })
-
-      if (updateError) {
-        toast.error("Unable to change password", {
-          description: updateError.message,
-        })
-        return
-      }
+      const { error: updateError } = await supabase.auth.updateUser({ password: passwordForm.newPassword })
+      if (updateError) { toast.error("Unable to change password", { description: updateError.message }); return }
 
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
+      setPasswordModalOpen(false)
       await refreshSession()
       toast.success("Password updated")
     } catch (error) {
@@ -471,29 +233,57 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
 
   const displayName = [profileForm.firstName, profileForm.lastName].filter(Boolean).join(" ").trim()
 
+  const authProvider = user?.app_metadata?.provider ?? "email"
+  const connectedProviders = Array.isArray(user?.app_metadata?.providers) ? user.app_metadata.providers as string[] : []
+
   return (
     <div className={cn("", className)}>
-      {/* ── Header: Avatar + Name (matches company edit page) ── */}
+      {/* ── Header: Avatar + Name (matches company edit) ── */}
       <section className="professional-header">
         <div className="company-icon" onClick={() => fileInputRef.current?.click()} style={{ display: "inline-block", cursor: "pointer" }}>
           <Avatar style={{ width: 100, height: 100 }}>
             <AvatarImage src={avatarPreview ?? undefined} alt="Profile avatar" style={{ width: 100, height: 100 }} />
             <AvatarFallback style={{ width: 100, height: 100, fontSize: 32, fontWeight: 300 }}>{avatarFallback}</AvatarFallback>
           </Avatar>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={handleAvatarFileChange}
-          />
+          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarFileChange} />
         </div>
 
-        <h1 className="arco-page-title">{displayName || "Your Name"}</h1>
-        <p className="professional-badge">{profileForm.email || "your@email.com"}</p>
+        {/* Editable first name + last name (inline, like company name) */}
+        <div className={`ec${activeEditField === "name" ? " on" : ""}`}>
+          <h1
+            className="arco-page-title"
+            contentEditable
+            suppressContentEditableWarning
+            onFocus={() => setActiveEditField("name")}
+            onBlur={(e) => {
+              const parts = (e.currentTarget.textContent ?? "").trim().split(/\s+/)
+              const first = parts[0] ?? ""
+              const last = parts.slice(1).join(" ")
+              handleNameBlur("firstName", first)
+              if (last || profileForm.lastName) {
+                setProfileForm(s => ({ ...s, lastName: last }))
+                if (user) {
+                  supabase.from("profiles").update({ last_name: last || null, updated_at: new Date().toISOString() }).eq("id", user.id)
+                }
+              }
+            }}
+            data-placeholder="Your Name"
+          >
+            {displayName || ""}
+          </h1>
+        </div>
+
+        {/* Email badge — click to open email change popup (like service selector) */}
+        <p
+          className="professional-badge service-popup-badge"
+          onClick={() => { setNewEmail(profileForm.email); setEmailModalOpen(true) }}
+          style={{ cursor: "pointer" }}
+        >
+          {profileForm.email || "Add email address"}
+        </p>
       </section>
 
-      {/* ── Detail bar (matches spec bar) ── */}
+      {/* ── Detail bar ── */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
@@ -503,132 +293,266 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         borderBottom: "1px solid #e8e8e6",
       }}>
         <div style={{ textAlign: "center" }}>
-          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>First Name</span>
-          <Input
-            id="firstName"
-            type="text"
-            value={profileForm.firstName}
-            onChange={(event) =>
-              setProfileForm((state) => ({ ...state, firstName: event.target.value }))
-            }
-            placeholder="First name"
-            disabled={isLoading || isSavingProfile}
-            className="text-center border-0 shadow-none h-auto p-0 text-[15px]"
-          />
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Member since</span>
+          <p style={{ fontSize: 15, fontWeight: 300, margin: 0, color: "var(--arco-black)" }}>
+            {user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—"}
+          </p>
         </div>
         <div style={{ textAlign: "center" }}>
-          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Last Name</span>
-          <Input
-            id="lastName"
-            type="text"
-            value={profileForm.lastName}
-            onChange={(event) =>
-              setProfileForm((state) => ({ ...state, lastName: event.target.value }))
-            }
-            placeholder="Last name"
-            disabled={isLoading || isSavingProfile}
-            className="text-center border-0 shadow-none h-auto p-0 text-[15px]"
-          />
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Sign-in method</span>
+          <p style={{ fontSize: 15, fontWeight: 300, margin: 0, color: "var(--arco-black)", textTransform: "capitalize" }}>
+            {authProvider === "google" ? "Google" : authProvider === "email" ? "Email & password" : authProvider}
+          </p>
         </div>
-        <div style={{ textAlign: "center" }}>
-          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Email</span>
-          <Input
-            id="email"
-            type="email"
-            value={profileForm.email}
-            onChange={(event) =>
-              setProfileForm((state) => ({ ...state, email: event.target.value }))
-            }
-            placeholder="Email address"
-            disabled={isLoading || isSavingProfile}
-            required
-            pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
-            className="text-center border-0 shadow-none h-auto p-0 text-[15px]"
-          />
+        <div
+          style={{ textAlign: "center", cursor: isEmailAuthUser ? "pointer" : "default" }}
+          onClick={() => { if (isEmailAuthUser) setPasswordModalOpen(true) }}
+        >
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Password</span>
+          {isEmailAuthUser ? (
+            <p style={{ fontSize: 13, fontWeight: 300, margin: 0, color: "var(--primary)", cursor: "pointer" }}>
+              Update password
+            </p>
+          ) : (
+            <p style={{ fontSize: 15, fontWeight: 300, margin: 0, color: "var(--arco-mid-grey)" }}>
+              Managed by {authProvider}
+            </p>
+          )}
         </div>
       </div>
 
       {/* ── Actions row ── */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", padding: "24px 0" }}>
-        <Button
-          type="button"
-          variant="tertiary"
-          onClick={() => void handleProfileSubmit({ preventDefault: () => {} } as FormEvent<HTMLFormElement>)}
-          disabled={isSavingProfile || isUploadingAvatar}
-        >
-          {isSavingProfile ? "Saving..." : "Update Profile"}
-        </Button>
         {avatarPreview ? (
-          <Button
+          <button
             type="button"
-            variant="ghost"
             onClick={handleAvatarRemove}
             disabled={isUploadingAvatar || isSavingProfile || isLoading}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 13, fontWeight: 300, padding: 0,
+              color: "var(--arco-mid-grey)", background: "none",
+              border: "none", cursor: "pointer",
+            }}
           >
-            Remove Photo
-          </Button>
+            Remove photo
+          </button>
         ) : null}
       </div>
 
-      {/* ── Password section ── */}
-      <section style={{ maxWidth: 500, margin: "0 auto" }}>
-        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 16 }}>Change Password</h2>
-        <p className="professional-badge" style={{ textAlign: "center", marginBottom: 32 }}>Update your password to keep your account secure.</p>
-
-        <form onSubmit={handlePasswordSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={passwordForm.currentPassword}
-              onChange={(event) =>
-                setPasswordForm((state) => ({ ...state, currentPassword: event.target.value }))
-              }
-              placeholder="Enter your current password"
-              disabled={isSavingPassword || isLoading || !isEmailAuthUser}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              value={passwordForm.newPassword}
-              onChange={(event) =>
-                setPasswordForm((state) => ({ ...state, newPassword: event.target.value }))
-              }
-              placeholder="Enter your new password"
-              disabled={isSavingPassword || isLoading || !isEmailAuthUser}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={passwordForm.confirmPassword}
-              onChange={(event) =>
-                setPasswordForm((state) => ({ ...state, confirmPassword: event.target.value }))
-              }
-              placeholder="Confirm your new password"
-              disabled={isSavingPassword || isLoading || !isEmailAuthUser}
-            />
-          </div>
-
-          <div style={{ textAlign: "center" }}>
-            <Button
-              type="submit"
-              variant="secondary"
-              disabled={isSavingPassword || !isEmailAuthUser}
-            >
-              {isSavingPassword ? "Updating..." : "Change Password"}
-            </Button>
-          </div>
-        </form>
+      {/* ── Notification Preferences ── */}
+      <section style={{ maxWidth: 600, margin: "48px auto 0" }}>
+        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 12 }}>Notification Preferences</h2>
+        <p className="arco-body-text" style={{ textAlign: "center", marginBottom: 32 }}>
+          Choose which notifications you'd like to receive. We'll only send you what matters.
+        </p>
+        <div style={{ textAlign: "center" }}>
+          <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>Notification settings coming soon.</p>
+        </div>
       </section>
+
+      {/* ── Connected Accounts ── */}
+      <section style={{ maxWidth: 600, margin: "48px auto 0" }}>
+        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 12 }}>Connected Accounts</h2>
+        <p className="arco-body-text" style={{ textAlign: "center", marginBottom: 32 }}>
+          Manage the accounts linked to your Arco profile.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {connectedProviders.length > 0 ? connectedProviders.map(p => (
+            <div key={p} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--arco-rule)" }}>
+              <span style={{ fontSize: 14, fontWeight: 400, textTransform: "capitalize" }}>{p === "google" ? "Google" : p}</span>
+              <span style={{ fontSize: 12, color: "var(--arco-mid-grey)" }}>Connected</span>
+            </div>
+          )) : (
+            <p className="arco-body-text" style={{ textAlign: "center", color: "var(--arco-mid-grey)" }}>No connected accounts.</p>
+          )}
+        </div>
+      </section>
+
+      {/* ── Delete Account (matches Delete Company design) ── */}
+      <section style={{ maxWidth: 600, margin: "48px auto 0", paddingBottom: 60 }}>
+        <hr style={{ border: "none", borderTop: "1px solid var(--arco-rule)", margin: "0 0 24px" }} />
+        <button
+          onClick={() => { setDeleteModalOpen(true); setDeleteConfirmText("") }}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            fontSize: 13, fontWeight: 300, padding: 0,
+            color: "#dc2626", background: "none",
+            border: "none", cursor: "pointer",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14M10 11v6M14 11v6" />
+          </svg>
+          Delete account
+        </button>
+      </section>
+
+      {/* ══════ Email Change Modal ══════ */}
+      {emailModalOpen && (
+        <div className="popup-overlay" onClick={() => setEmailModalOpen(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update email</h3>
+              <button className="popup-close" onClick={() => setEmailModalOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
+              We'll send a confirmation link to your new email address.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  New email address
+                </label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleEmailUpdate() }}
+                  placeholder="new@email.com"
+                  autoFocus
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <button
+                onClick={handleEmailUpdate}
+                disabled={isSavingProfile || !newEmail.trim()}
+                className="btn-primary"
+                style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
+              >
+                {isSavingProfile ? "Updating…" : "Update email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ Password Change Modal ══════ */}
+      {passwordModalOpen && (
+        <div className="popup-overlay" onClick={() => setPasswordModalOpen(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update password</h3>
+              <button className="popup-close" onClick={() => setPasswordModalOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
+              Enter your current password and choose a new one.
+            </p>
+            <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  Current password
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={passwordForm.currentPassword}
+                  onChange={e => setPasswordForm(s => ({ ...s, currentPassword: e.target.value }))}
+                  placeholder="Enter current password"
+                  autoFocus
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  New password
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={passwordForm.newPassword}
+                  onChange={e => setPasswordForm(s => ({ ...s, newPassword: e.target.value }))}
+                  placeholder="At least 8 characters"
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  Confirm new password
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={passwordForm.confirmPassword}
+                  onChange={e => setPasswordForm(s => ({ ...s, confirmPassword: e.target.value }))}
+                  placeholder="Confirm new password"
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSavingPassword}
+                className="btn-primary"
+                style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
+              >
+                {isSavingPassword ? "Updating…" : "Update password"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ Delete Account Modal ══════ */}
+      {deleteModalOpen && (
+        <div className="popup-overlay" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Delete account</h3>
+              <button className="popup-close" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
+              Permanently delete your account and all associated data. This action cannot be undone.
+            </p>
+
+            <div className="popup-banner popup-banner--danger" style={{ marginBottom: 16 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>Your account will be permanently deleted. This cannot be undone.</span>
+            </div>
+
+            <p className="arco-body-text" style={{ marginBottom: 12 }}>
+              Type <strong>DELETE</strong> to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="form-input"
+              style={{ marginBottom: 16 }}
+            />
+
+            <div className="popup-actions">
+              <button
+                className="btn-tertiary"
+                onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleteConfirmText !== "DELETE" || isDeletingAccount}
+                onClick={async () => {
+                  setIsDeletingAccount(true)
+                  // Account deletion would need a server action
+                  toast.error("Account deletion is not yet available. Please contact support.")
+                  setIsDeletingAccount(false)
+                }}
+                className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
+                  deleteConfirmText === "DELETE"
+                    ? "bg-red-600 text-white"
+                    : "bg-surface text-text-secondary"
+                }`}
+                style={{ fontSize: 14 }}
+              >
+                {isDeletingAccount ? "Deleting…" : "Delete account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

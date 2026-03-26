@@ -370,6 +370,7 @@ export function useProjectsQuery({
           .from("project_photos")
           .select("id, project_id, url, alt_text, order_index, is_primary, feature_id")
           .in("project_id", projectIds)
+          .order("is_primary", { ascending: false, nullsFirst: false })
           .order("order_index", { ascending: true, nullsFirst: false })
 
         if (photos) {

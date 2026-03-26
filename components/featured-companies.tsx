@@ -1,6 +1,3 @@
-// components/featured-companies.tsx
-// Featured Studios section - UPDATED to match design system
-
 import Image from "next/image"
 import Link from "next/link"
 
@@ -12,6 +9,7 @@ export interface FeaturedCompany {
   rating: number
   reviews: number
   image: string
+  logoUrl?: string | null
   href: string
 }
 
@@ -26,45 +24,54 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
 
   return (
     <section className="py-16 bg-white">
-      {/* UPDATED: Use .wrap class */}
       <div className="wrap">
-        {/* UPDATED: Use section-header pattern */}
         <div className="section-header">
-          <h2 className="arco-section-title">Featured Studios</h2>
-          <Link href="/professionals" className="view-all-link">
-            View all studios →
+          <h2 className="arco-section-title">Featured architects</h2>
+          <Link href="/professionals?services=architect" className="view-all-link">
+            View all architects →
           </Link>
         </div>
 
-        {/* Studio grid - 4 columns desktop */}
-        <div className="studio-grid">
-          {companies.map((company) => (
-            <Link
-              key={company.id}
-              href={company.href}
-              className="studio-card"
-            >
-              {/* Image - 4:3 aspect ratio */}
-              <div className="studio-img">
-                {company.image ? (
-                  <Image
-                    src={company.image}
-                    alt={company.name}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200" />
-                )}
-              </div>
+        <div className="discover-grid">
+          {companies.map((company) => {
+            const city = company.location?.split(",")[0]?.trim() || null
+            const subtitle = [company.title, city].filter(Boolean).join(" · ")
 
-              {/* UPDATED: Use arco-card-title class, removed Latest subtitle */}
-              <div className="studio-info">
-                <h3 className="arco-card-title" style={{ marginBottom: '2px' }}>{company.name}</h3>
-                <p className="arco-card-subtitle">{company.location}</p>
-              </div>
-            </Link>
-          ))}
+            return (
+              <Link
+                key={company.id}
+                href={company.href}
+                className="discover-card"
+              >
+                {/* Image */}
+                <div className="discover-card-image-wrap">
+                  <div className="discover-card-image-layer">
+                    {company.image ? (
+                      <img src={company.image} alt={company.name} />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
+                    )}
+                  </div>
+                </div>
+
+                {/* Text — logo + name + subtitle */}
+                <div className="pro-card-info">
+                  {company.logoUrl ? (
+                    <img src={company.logoUrl} alt="" className="pro-card-logo" />
+                  ) : (
+                    <div className="pro-card-logo pro-card-logo-placeholder">
+                      {company.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="discover-card-title">{company.name}</h3>
+                    {subtitle && <p className="discover-card-sub">{subtitle}</p>}
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
     </section>

@@ -1,5 +1,17 @@
 'use server'
 
+// Lazy-initialize Resend to avoid crashing at module load if RESEND_API_KEY is missing
+let _resend: import('resend').Resend | null = null
+function getResend() {
+  if (!_resend) {
+    const { Resend } = require('resend')
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend!
+}
+
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Arco <noreply@arcolist.com>'
+
 export type EmailTemplate =
   | 'project-live'
   | 'project-rejected'
@@ -8,114 +20,222 @@ export type EmailTemplate =
   | 'domain-verification'
 
 export interface EmailVariables {
-  // User variables
   firstname?: string
-  
-  // Project variables
   Project_name?: string
   Project_title?: string
   project_name?: string
   project_title?: string
   project_link?: string
   project_image?: string
-  
-  // Professional variables
   company_name?: string
   project_owner?: string
   project_location?: string
   service_category?: string
   professional_name?: string
-  
-  // Action variables
   dashboard_link?: string
   rejection_reason?: string
   confirmUrl?: string
-  
-  // Future extensibility
+  code?: string
+  businessname?: string
   [key: string]: any
 }
 
-// Template ID mapping - Update these IDs from your Loops dashboard
-const EMAIL_TEMPLATES: Record<EmailTemplate, string> = {
-  'project-live': 'cmgrix7ib81tdy80igwg27jzi', // Updated with actual template ID
-  'project-rejected': 'cmgrir5g76hvnyc0ifadfp7b3', // Add your template ID
-  'professional-invite': 'cmh2bhml30enxyw0jgvk31c3s', // Updated with actual template ID
-  'team-invite': 'TODO_CREATE_IN_LOOPS', // Create template in Loops.so dashboard
-  'domain-verification': 'cmmj0rol708e80i3ropaa8h4d'
-}
-
-interface LoopsResponse {
+interface EmailResponse {
   success: boolean
   message?: string
 }
 
+// ─── Email HTML templates ────────────────────────────────────────────────────
+
+function baseLayout(content: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:40px 20px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:8px;overflow:hidden;">
+<!-- Logo -->
+<tr><td style="padding:32px 40px 24px;">
+<img src="https://arcolist.com/arco-logo-email.png" alt="Arco" width="80" height="22" style="display:block;" />
+</td></tr>
+<!-- Content -->
+<tr><td style="padding:0 40px 32px;">
+${content}
+</td></tr>
+</table>
+<!-- Footer -->
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+<tr><td style="padding:24px 40px;text-align:center;">
+<p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">
+Arco Global BV · The professional network architects trust.
+</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`
+}
+
+function heading(text: string): string {
+  return `<h1 style="margin:0 0 16px;font-size:22px;font-weight:400;color:#1c1c1a;font-family:Georgia,'Times New Roman',serif;">${text}</h1>`
+}
+
+function body(text: string): string {
+  return `<p style="margin:0 0 16px;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">${text}</p>`
+}
+
+function button(text: string, url: string): string {
+  return `<table cellpadding="0" cellspacing="0" style="margin:24px 0;">
+<tr><td style="background:#016D75;border-radius:3px;">
+<a href="${url}" target="_blank" style="display:inline-block;padding:12px 28px;font-size:14px;font-weight:400;color:#ffffff;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${text}</a>
+</td></tr>
+</table>`
+}
+
+function divider(): string {
+  return `<hr style="border:none;border-top:1px solid #e8e8e6;margin:24px 0;" />`
+}
+
+// ─── Template renderers ──────────────────────────────────────────────────────
+
+function renderProjectLive(vars: EmailVariables): { subject: string; html: string } {
+  const projectName = vars.project_title || vars.Project_title || vars.project_name || 'Your project'
+  return {
+    subject: `${projectName} is now live on Arco`,
+    html: baseLayout(`
+      ${heading(`${projectName} is live`)}
+      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Great news — your project is now published and visible on Arco.`)}
+      ${vars.project_link ? button('View project', vars.project_link) : ''}
+      ${body('Your credited professionals will now be visible on the project page.')}
+    `),
+  }
+}
+
+function renderProjectRejected(vars: EmailVariables): { subject: string; html: string } {
+  const projectName = vars.project_title || vars.Project_title || vars.project_name || 'Your project'
+  return {
+    subject: `Update on ${projectName}`,
+    html: baseLayout(`
+      ${heading('Project update')}
+      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>We've reviewed <strong>${projectName}</strong> and it wasn't approved at this time.`)}
+      ${vars.rejection_reason ? body(`<strong>Reason:</strong> ${vars.rejection_reason}`) : ''}
+      ${divider()}
+      ${body('You can update your project and resubmit it for review.')}
+      ${vars.dashboard_link ? button('Go to dashboard', vars.dashboard_link) : ''}
+    `),
+  }
+}
+
+function renderProfessionalInvite(vars: EmailVariables): { subject: string; html: string } {
+  const projectName = vars.project_title || vars.project_name || 'a project'
+  return {
+    subject: `${vars.project_owner || 'An architect'} credited you on ${projectName}`,
+    html: baseLayout(`
+      ${heading('You\'ve been credited')}
+      ${body(`${vars.project_owner || 'An architect'} added your company to <strong>${projectName}</strong>${vars.project_location ? ` in ${vars.project_location}` : ''} on Arco.`)}
+      ${body('Accept the invitation to showcase this project on your company page.')}
+      ${vars.confirmUrl ? button('View invitation', vars.confirmUrl) : ''}
+      ${divider()}
+      ${body('<span style="color:#a1a1a0;font-size:13px;">Arco is a curated architecture platform where professionals are credited on real projects.</span>')}
+    `),
+  }
+}
+
+function renderTeamInvite(vars: EmailVariables): { subject: string; html: string } {
+  return {
+    subject: `You're invited to join ${vars.company_name || 'a company'} on Arco`,
+    html: baseLayout(`
+      ${heading('Team invitation')}
+      ${body(`You've been invited to join <strong>${vars.company_name || 'a company'}</strong> on Arco.`)}
+      ${body('Accept the invitation to collaborate on your company\'s profile and projects.')}
+      ${vars.confirmUrl ? button('Accept invitation', vars.confirmUrl) : ''}
+    `),
+  }
+}
+
+function renderDomainVerification(vars: EmailVariables): { subject: string; html: string } {
+  return {
+    subject: `${vars.code} is your Arco verification code`,
+    html: baseLayout(`
+      ${heading('Verify your domain')}
+      ${body(`Use this code to verify ownership of <strong>${vars.businessname || 'your company'}</strong>:`)}
+      <div style="margin:24px 0;padding:16px;background:#f5f5f4;border-radius:4px;text-align:center;">
+        <span style="font-size:32px;font-weight:500;letter-spacing:0.3em;color:#1c1c1a;font-family:monospace;">${vars.code || '------'}</span>
+      </div>
+      ${body('This code expires in 10 minutes.')}
+      ${body('<span style="color:#a1a1a0;font-size:13px;">If you didn\'t request this, you can safely ignore this email.</span>')}
+    `),
+  }
+}
+
+const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subject: string; html: string }> = {
+  'project-live': renderProjectLive,
+  'project-rejected': renderProjectRejected,
+  'professional-invite': renderProfessionalInvite,
+  'team-invite': renderTeamInvite,
+  'domain-verification': renderDomainVerification,
+}
+
 /**
- * Send a transactional email via Loops.so
- * @param email - Recipient email address
- * @param template - Email template type
- * @param dataVariables - Variables to populate in the email template
- * @returns Promise with success status and optional message
+ * Render an email template to HTML (for previews)
+ */
+export async function renderEmailTemplate(
+  template: EmailTemplate,
+  dataVariables?: EmailVariables
+): Promise<{ subject: string; html: string } | null> {
+  const renderer = TEMPLATE_RENDERERS[template]
+  if (!renderer) return null
+  return renderer(dataVariables || {})
+}
+
+// ─── Send function ───────────────────────────────────────────────────────────
+
+/**
+ * Send a transactional email via Resend
  */
 export async function sendTransactionalEmail(
   email: string,
   template: EmailTemplate,
   dataVariables?: EmailVariables
-): Promise<LoopsResponse> {
-  const apiKey = process.env.LOOPS_API_KEY
-
-  if (!apiKey) {
-    console.error('LOOPS_API_KEY environment variable is required')
+): Promise<EmailResponse> {
+  if (!process.env.RESEND_API_KEY) {
+    console.error('RESEND_API_KEY environment variable is required')
     return { success: false, message: 'Email service not configured' }
   }
 
-  const transactionalId = EMAIL_TEMPLATES[template]
-
-  if (!transactionalId) {
-    console.error(`Template ${template} not found in EMAIL_TEMPLATES`)
+  const renderer = TEMPLATE_RENDERERS[template]
+  if (!renderer) {
+    console.error(`Template ${template} not found`)
     return { success: false, message: `Template ${template} not configured` }
   }
 
+  const { subject, html } = renderer(dataVariables || {})
+
   try {
-    const response = await fetch('https://app.loops.so/api/v1/transactional', {
-      method: 'POST',
-      signal: AbortSignal.timeout(10000),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        email,
-        transactionalId,
-        dataVariables: dataVariables || {}
-      })
+    const { data, error } = await getResend().emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject,
+      html,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Loops API error:', response.status, errorText)
-      return { success: false, message: `HTTP ${response.status}: ${errorText}` }
+    if (error) {
+      console.error('Resend error:', error)
+      return { success: false, message: error.message }
     }
 
-    const result = await response.json() as LoopsResponse
-
-    if (!result.success) {
-      console.error('Loops email sending failed:', result.message)
-      return { success: false, message: result.message || 'Email sending failed' }
-    }
-
-    console.log(`Email sent successfully: ${template} to ${email}`)
-    return result
+    console.log(`Email sent: ${template} to ${email} (id: ${data?.id})`)
+    return { success: true }
   } catch (error) {
-    console.error('Email service network error:', error)
-    return { success: false, message: 'Network error sending email' }
+    console.error('Email service error:', error)
+    return { success: false, message: error instanceof Error ? error.message : 'Network error sending email' }
   }
 }
 
-// Convenience functions for specific email scenarios
+// ─── Convenience functions ───────────────────────────────────────────────────
 
-/**
- * Send project status update emails (live/rejected)
- */
 export const sendProjectStatusEmail = async (
   email: string,
   status: 'live' | 'rejected',
@@ -127,14 +247,11 @@ export const sendProjectStatusEmail = async (
     dashboard_link?: string
     rejection_reason?: string
   }
-): Promise<LoopsResponse> => {
+): Promise<EmailResponse> => {
   const template = status === 'live' ? 'project-live' : 'project-rejected'
   return sendTransactionalEmail(email, template, projectData)
 }
 
-/**
- * Send professional invitation email
- */
 export const sendProfessionalInviteEmail = async (
   email: string,
   inviteData: {
@@ -143,20 +260,17 @@ export const sendProfessionalInviteEmail = async (
     project_title: string
     confirmUrl: string
   }
-): Promise<LoopsResponse> => {
+): Promise<EmailResponse> => {
   return sendTransactionalEmail(email, 'professional-invite', inviteData)
 }
 
-/**
- * Send domain verification email with 6-digit code
- */
 export const sendDomainVerificationEmail = async (
   email: string,
   data: {
     code: string
     businessname: string
   }
-): Promise<LoopsResponse> => {
+): Promise<EmailResponse> => {
   return sendTransactionalEmail(email, 'domain-verification', data)
 }
 
@@ -172,68 +286,46 @@ export async function checkUserAndGenerateInviteUrl(
   const supabase = createServiceRoleSupabaseClient()
   const baseUrl = getSiteUrl()
 
-  // Look up user by email using admin API
   const { data: { users: allUsers }, error: authError } = await supabase.auth.admin.listUsers()
 
   if (authError) {
     console.error('Failed to list users:', authError)
-    // Fallback to new user signup on error
     const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
-    return {
-      confirmUrl: signupUrl,
-      isExistingProfessional: false
-    }
+    return { confirmUrl: signupUrl, isExistingProfessional: false }
   }
 
   const user = allUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
   if (!user) {
-    // New user - send to signup with redirect to create company
     const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
-    return {
-      confirmUrl: signupUrl,
-      isExistingProfessional: false
-    }
+    return { confirmUrl: signupUrl, isExistingProfessional: false }
   }
 
-  // Now look up profile by user ID
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select(`
-      id,
-      user_types,
-      professionals(id, company_id)
-    `)
+    .select(`id, user_types, professionals(id, company_id)`)
     .eq('id', user.id)
     .maybeSingle()
 
   if (profileError || !profile) {
-    // User exists but no profile - send to create company
     return {
       confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
-      isExistingProfessional: false
+      isExistingProfessional: false,
     }
   }
 
-  // Check user's professional status
   const userTypes = profile.user_types || []
   const isProfessional = userTypes.includes('professional')
-  // professionals can be null, an object, or an array depending on the join
   const hasProfessionalRecord = profile.professionals
     ? (Array.isArray(profile.professionals) ? profile.professionals.length > 0 : true)
     : false
 
   if (isProfessional && hasProfessionalRecord) {
-    // Existing professional - send to dashboard
-    return {
-      confirmUrl: `${baseUrl}/dashboard/listings`,
-      isExistingProfessional: true
-    }
+    return { confirmUrl: `${baseUrl}/dashboard/listings`, isExistingProfessional: true }
   } else {
-    // Existing user but not professional - send to create company
     return {
       confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
-      isExistingProfessional: false
+      isExistingProfessional: false,
     }
   }
 }

@@ -105,10 +105,10 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
 
   return (
     <>
-      {/* Photo Tour Content - No wrap needed, already inside project-container */}
+      {/* Photo tour Content - No wrap needed, already inside project-container */}
       <div id="photo-tour" className="photo-tour-content">
         <div className="section-header">
-          <h2 className="arco-section-title">Photo Tour</h2>
+          <h2 className="arco-section-title">Photo tour</h2>
         </div>
 
         {/* Category Tags — only show when photos have spaces */}

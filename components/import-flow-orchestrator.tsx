@@ -38,6 +38,7 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
   const [companyDomain, setCompanyDomain] = useState<string | null>(null)
   const [isVerified, setIsVerified] = useState(false)
   const [claimableCompanyId, setClaimableCompanyId] = useState<string | null>(null)
+  const [hasExistingCompany, setHasExistingCompany] = useState(false)
 
   // Domain verification state
   const [verifyEmail, setVerifyEmail] = useState("")
@@ -138,6 +139,7 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
       }
       setCompanyId(result.companyId)
       setProfessionalId(result.professionalId)
+      setHasExistingCompany(false)
       // Skip domain verification in dev, otherwise verify
       if (process.env.NODE_ENV === "development") {
         setPhase("importing")
@@ -147,8 +149,10 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
       return
     }
 
+    // User already has a company — skip company setup, go straight to import
     setCompanyId(proData.company_id)
     setProfessionalId(proData.id)
+    setHasExistingCompany(true)
 
     // Check if company domain matches the URL domain
     const { data: companyData } = await supabase
@@ -164,20 +168,8 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
     setCompanyDomain(storedDomain)
     setIsVerified(Boolean(companyData?.is_verified))
 
-    if (storedDomain && storedDomain === urlDomain && companyData?.is_verified) {
-      // Domain matches and is verified — go to import
-      setPhase("importing")
-      return
-    }
-
-    // TODO: Remove this bypass after testing — skip domain verification temporarily
-    if (process.env.NODE_ENV === "development") {
-      setPhase("importing")
-      return
-    }
-
-    // Need domain verification
-    setPhase("verifying-domain")
+    // Company logged in → skip domain verification, go straight to import
+    setPhase("importing")
   }, [user, supabase, urlDomain, onReset])
 
   const handleSendVerificationCode = useCallback(async () => {
@@ -225,6 +217,7 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
     setCompanyDomain(null)
     setIsVerified(false)
     setClaimableCompanyId(null)
+    setHasExistingCompany(false)
     setVerifyEmail("")
     setVerifyCode("")
     setVerifyCodeSent(false)
@@ -384,8 +377,13 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
         professionalId={professionalId}
         initialUrl={pendingUrl ?? undefined}
         onSuccess={(projectId) => {
-          // Redirect to company edit page — after setup, user goes to project edit
-          router.push(`/dashboard/company?company_id=${companyId}&imported=1&project_id=${projectId}`)
+          if (hasExistingCompany) {
+            // Company already existed — skip company setup, go straight to project edit
+            router.push(`/dashboard/edit/${projectId}`)
+          } else {
+            // New company — go to company setup first, then project edit
+            router.push(`/dashboard/company?company_id=${companyId}&imported=1&project_id=${projectId}`)
+          }
         }}
       />
     )

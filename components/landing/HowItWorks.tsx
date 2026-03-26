@@ -12,7 +12,7 @@ export function HowItWorks({ steps }: HowItWorksProps) {
     <section className="how-section">
       <div className="wrap">
         <div style={{ textAlign: "center" }}>
-          <h2 className="arco-section-title">How It Works</h2>
+          <h2 className="arco-section-title">How it works</h2>
         </div>
         <div className="how-grid">
           {steps.map((step, i) => (

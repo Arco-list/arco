@@ -632,7 +632,7 @@ export async function createCompanyFromPlacesAction(
         state_region: input.stateRegion,
         google_place_id: input.placeId,
         is_verified: true,
-        status: "unlisted",
+        status: "draft",
       })
       .select("id")
       .single()

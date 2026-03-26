@@ -3956,7 +3956,7 @@ export default function ListingEditorPage() {
         .ccm-row:hover { background: #f5f5f3; }
       `}</style>
 
-      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
+      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }, { href: "/dashboard/team", label: "Team" }, { href: "/dashboard/pricing", label: "Plans" }]} />
 
       <div>
 
@@ -4344,7 +4344,7 @@ export default function ListingEditorPage() {
         {/* ── Photos ────────────────────────────────────────────────── */}
         <section id="photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 72, borderBottom: "1px solid #e8e8e6" }}>
           <div style={{ marginBottom: 28 }}>
-            <h2 className="arco-section-title">Photo Tour</h2>
+            <h2 className="arco-section-title">Photo tour</h2>
             <p className="arco-body-text" style={{ marginTop: 6 }}>Add photos to showcase your project and organise them by space.</p>
           </div>
           {renderPhotoTourSection()}
@@ -4353,7 +4353,7 @@ export default function ListingEditorPage() {
         {/* ── Professionals ─────────────────────────────────────────── */}
         <section id="professionals" className="wrap" style={{ paddingTop: 72, paddingBottom: 120 }}>
           <div style={{ marginBottom: 40 }}>
-            <h2 className="arco-section-title">Credited Professionals</h2>
+            <h2 className="arco-section-title">Credited professionals</h2>
             <p className="arco-body-text" style={{ marginTop: 6, maxWidth: 600 }}>
               The trusted team behind this project. Click any field to edit.
             </p>

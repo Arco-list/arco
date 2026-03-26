@@ -9,7 +9,7 @@ import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { logger } from "@/lib/logger"
 
 export const metadata: Metadata = {
-  title: "Browse Projects · Arco",
+  title: "Browse projects · Arco",
   description:
     "Explore architecture and design projects from across the Netherlands. Find inspiration for your next renovation or building project.",
 }

@@ -171,6 +171,26 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
               >
                 Company
               </Link>
+              <Link
+                href="/dashboard/team"
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                  isActive("/dashboard/team")
+                    ? "text-red-500"
+                    : "text-black hover:bg-surface"
+                }`}
+              >
+                Team
+              </Link>
+              <Link
+                href="/dashboard/pricing"
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                  isActive("/dashboard/pricing")
+                    ? "text-red-500"
+                    : "text-black hover:bg-surface"
+                }`}
+              >
+                Plans
+              </Link>
             </div>
           )}
 
@@ -323,14 +343,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       {/* Divider */}
                       <div className="border-t border-border" />
 
-                      {/* Section 2: Pricing & Account */}
+                      {/* Section 2: Plans & Account */}
                       <div className="px-4 py-3">
                         <Link
                           href="/dashboard/pricing"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Pricing
+                          Plans
                         </Link>
                         <Link
                           href="/dashboard/settings"

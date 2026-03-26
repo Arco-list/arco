@@ -1075,9 +1075,12 @@ export async function getUserCompaniesAction(): Promise<{
   companies: Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }>
   activeId: string | null
 }> {
-  const supabase = await createServerActionSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const authClient = await createServerActionSupabaseClient()
+  const { data: { user } } = await authClient.auth.getUser()
   if (!user) return { companies: [], activeId: null }
+
+  // Use service role to bypass RLS for company lookups
+  const supabase = createServiceRoleSupabaseClient()
 
   const { getActiveCompanyId, setActiveCompanyId } = await import("@/lib/active-company")
 
@@ -1098,7 +1101,7 @@ export async function getUserCompaniesAction(): Promise<{
     }
   }
 
-  // Member companies
+  // Member companies (via company_members table)
   const { data: memberships } = await supabase
     .from("company_members")
     .select("company_id, companies(id, name, logo_url)")
@@ -1113,40 +1116,52 @@ export async function getUserCompaniesAction(): Promise<{
     }
   }
 
-  // Active ID: prefer owned company if user owns one
+  // Professional companies (via professionals table)
+  const { data: proLinks } = await supabase
+    .from("professionals")
+    .select("company_id, companies!professionals_company_id_fkey(id, name, logo_url)")
+    .eq("user_id", user.id)
+    .not("company_id", "is", null)
+
+  for (const p of proLinks ?? []) {
+    const c = p.companies as unknown as { id: string; name: string; logo_url: string | null } | null
+    if (c && !seen.has(c.id)) {
+      seen.add(c.id)
+      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, role: "member" })
+    }
+  }
+
+  // Active ID: use cookie if set and valid, otherwise default to first company
   let activeId = await getActiveCompanyId()
-  const firstOwned = companies.find(c => c.role === "owner")
-  if (firstOwned && activeId !== firstOwned.id) {
-    await setActiveCompanyId(firstOwned.id)
-    activeId = firstOwned.id
+  const isActiveValid = activeId && companies.some(c => c.id === activeId)
+  if (!isActiveValid) {
+    const defaultCompany = companies[0] // owned companies are first in the list
+    if (defaultCompany) {
+      await setActiveCompanyId(defaultCompany.id)
+      activeId = defaultCompany.id
+    }
   }
 
   return { companies, activeId }
 }
 
 export async function switchCompanyAction(companyId: string): Promise<ActionResult> {
-  const supabase = await createServerActionSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const authClient = await createServerActionSupabaseClient()
+  const { data: { user } } = await authClient.auth.getUser()
   if (!user) return { success: false, error: "Not signed in." }
 
-  // Verify access
-  const { data: isOwner } = await supabase
-    .from("companies")
-    .select("id")
-    .eq("id", companyId)
-    .eq("owner_id", user.id)
-    .maybeSingle()
+  // Use service role to bypass RLS for access verification
+  const supabase = createServiceRoleSupabaseClient()
 
-  if (!isOwner) {
-    const { data: isMember } = await supabase
-      .from("company_members")
-      .select("id")
-      .eq("company_id", companyId)
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle()
+  // Verify access via any path
+  const [{ data: isOwner }, { data: isMember }, { data: isProfessional }] = await Promise.all([
+    supabase.from("companies").select("id").eq("id", companyId).eq("owner_id", user.id).maybeSingle(),
+    supabase.from("company_members").select("id").eq("company_id", companyId).eq("user_id", user.id).eq("status", "active").maybeSingle(),
+    supabase.from("professionals").select("id").eq("company_id", companyId).eq("user_id", user.id).maybeSingle(),
+  ])
 
-    if (!isMember) return { success: false, error: "No access to this company." }
+  if (!isOwner && !isMember && !isProfessional) {
+    return { success: false, error: "No access to this company." }
   }
 
   const { setActiveCompanyId } = await import("@/lib/active-company")
@@ -1350,11 +1365,12 @@ export async function completeCompanySetupAction(input: {
       return { success: false, error: "Failed to list company" }
     }
   } else {
-    // Even if not listing, mark setup as completed
+    // Even if not listing, mark setup as completed and move from draft to unlisted
     await supabase
       .from("companies")
-      .update({ setup_completed: true })
+      .update({ setup_completed: true, status: "unlisted" })
       .eq("id", companyId)
+      .in("status", ["draft", "unlisted"])
   }
 
   // List selected projects

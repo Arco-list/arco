@@ -99,16 +99,16 @@ export function Footer() {
                 </Link>
               </div>
 
-              {/* For Businesses */}
+              {/* Businesses */}
               <div className="footer-col">
                 <h4 className="arco-eyebrow text-white/35 mb-1.5">
-                  For Businesses
+                  Businesses
                 </h4>
                 <Link href="/businesses/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">
-                  Architects
+                  For Architects
                 </Link>
                 <Link href="/businesses/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">
-                  Professionals
+                  For Professionals
                 </Link>
               </div>
 

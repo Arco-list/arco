@@ -123,6 +123,7 @@ export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
       )
     `)
     .in("project_id", projectIds)
+    .order("is_primary", { ascending: false, nullsFirst: false })
     .order("order_index", { ascending: true, nullsFirst: false })
 
   // ── 3. Owning professional (company) ──────────────────────────────────────

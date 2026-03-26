@@ -39,29 +39,38 @@ export default async function CompanySettingsPage({
 
   let company = null
 
-  // 0. Admin override: allow admins to edit any company via ?company_id=
+  // 0. company_id param: from company switcher or admin override
   if (companyIdParam) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("admin_role, user_types")
-      .eq("id", user.id)
-      .maybeSingle()
+    const serviceSupabase = createServiceRoleSupabaseClient()
 
-    if (profile && isAdminUser(profile.user_types, profile.admin_role)) {
-      const serviceSupabase = createServiceRoleSupabaseClient()
-      const { data: adminCompany } = await serviceSupabase
+    // Check if user has access to this company (owner, member, or professional)
+    const [{ data: isOwner }, { data: isMember }, { data: isProfessional }] = await Promise.all([
+      serviceSupabase.from("companies").select("id").eq("id", companyIdParam).eq("owner_id", user.id).maybeSingle(),
+      serviceSupabase.from("company_members").select("id").eq("company_id", companyIdParam).eq("user_id", user.id).eq("status", "active").maybeSingle(),
+      serviceSupabase.from("professionals").select("id").eq("company_id", companyIdParam).eq("user_id", user.id).maybeSingle(),
+    ])
+
+    // Also allow admins
+    let isAdmin = false
+    if (!isOwner && !isMember && !isProfessional) {
+      const { data: profile } = await supabase.from("profiles").select("admin_role, user_types").eq("id", user.id).maybeSingle()
+      isAdmin = !!(profile && isAdminUser(profile.user_types, profile.admin_role))
+    }
+
+    if (isOwner || isMember || isProfessional || isAdmin) {
+      const { data: paramCompany } = await serviceSupabase
         .from("companies")
         .select(companySelect)
         .eq("id", companyIdParam)
         .maybeSingle()
 
-      if (adminCompany) {
-        company = adminCompany
+      if (paramCompany) {
+        company = paramCompany
       }
     }
   }
 
-  // 1. Always prefer owned company (oldest first)
+  // 1. Fallback: prefer owned company (oldest first)
   if (!company) {
     const { data: ownedCompany, error: companyError } = await supabase
       .from("companies")

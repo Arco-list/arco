@@ -84,7 +84,7 @@ function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: 
     add(match[1])
   }
 
-  return results.slice(0, 12)
+  return results.slice(0, 30)
 }
 
 // ─── JSDOM fallback helpers ───────────────────────────────────────────────────
@@ -151,7 +151,7 @@ function extractImagesFromDom(doc: Document, baseUrl: string): string[] {
     add(src)
   })
 
-  return results.slice(0, 12)
+  return results.slice(0, 30)
 }
 
 // ─── Claude extraction ───────────────────────────────────────────────────────
@@ -658,25 +658,23 @@ async function autoTagPhotosWithSpaces(
   const Anthropic = (await import("@anthropic-ai/sdk")).default
   const client = new Anthropic()
 
-  // Limit to 8 photos to avoid token limits and timeouts
-  const photosToTag = photos.slice(0, 8)
+  // Tag up to 20 photos with compact prompt to stay within Haiku vision limits
+  const photosToTag = photos.slice(0, 20)
   console.log(`[autoTag] Tagging ${photosToTag.length} of ${photos.length} photos`)
 
-  // Build image content blocks for Claude vision
+  // Build image content blocks — use minimal text between images
   const imageBlocks: any[] = []
   for (const photo of photosToTag) {
     imageBlocks.push(
       { type: "image", source: { type: "url", url: photo.url } },
-      { type: "text", text: `Photo index: ${photo.order_index}` }
+      { type: "text", text: `#${photo.order_index}` }
     )
   }
-
-  const validSlugs = SPACE_SLUGS.join(", ")
 
   console.log(`[autoTag] Calling Claude vision...`)
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [
       {
         role: "user",
@@ -684,43 +682,43 @@ async function autoTagPhotosWithSpaces(
           ...imageBlocks,
           {
             type: "text",
-            text: `You are an expert at classifying architecture and interior design photos into room types.
+            text: `Classify each photo into a space and determine overall project attributes.
 
-For each photo above, determine which space/room it shows. Valid space slugs: ${validSlugs}
+Spaces: exterior (outside view of building — facade, roof, entrance, driveway, aerial, twilight. DEFAULT for any outdoor photo showing a building), pool (swimming pool visible), garden (only plants/lawn, NO building visible), terrace (on a terrace/balcony/patio), living (living room, lounge, sitting area), kitchen (kitchen, pantry, dining connected to kitchen), bedroom (bedroom, walk-in closet), bathroom (bathroom, shower, toilet, sauna), home-office (study, workspace, library), hallway (entrance hall, corridor, staircase), other (last resort — indoor only)
 
-Rules (in priority order):
-1. "pool" = any photo where a swimming pool is visible, indoor or outdoor. Always takes priority over other tags.
-2. "exterior" = ANY outdoor photo that shows a building, house, structure, facade, roof, driveway, entrance, or any part of architecture. This includes: front/back/side views, aerial shots, twilight shots, construction progress, and any photo taken outside where a building is visible. THIS IS THE DEFAULT for outdoor photos — use it aggressively.
-3. "garden" = outdoor area showing ONLY plants, greenery, lawn, landscaping with NO building visible. Very rare — if any part of a building is visible, use "exterior" instead.
-4. "terrace" = photo clearly taken ON a terrace/balcony/patio, showing terrace furniture, decking, or railing as the main subject.
-5. "living" = living room, lounge, sitting area, TV room
-6. "kitchen" = kitchen, cooking area, pantry, dining area connected to kitchen
-7. "bedroom" = bedroom, sleeping area, walk-in closet
-8. "bathroom" = bathroom, shower, toilet, powder room, sauna
-9. "home-office" = study, workspace, office room, library
-10. "hallway" = entrance hall, corridor, staircase, landing, mudroom
-11. "other" = LAST RESORT ONLY. Use this only for indoor spaces that truly cannot fit any category above (e.g. laundry room, wine cellar, gym, garage interior). NEVER use "other" for outdoor photos — those should be "exterior".
+Rules: outdoor photo with building visible = always "exterior". Tag every photo. Never skip.
 
-Critical: "other" should be rare. When uncertain, prefer a specific tag over "other". An outdoor photo with a building visible is ALWAYS "exterior", never "other".
+Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/house/apartment/townhouse/penthouse/bungalow/chalet/farm/garden-house/other). Always pick one for each.
 
-Return a JSON array with one entry per photo, in order:
-[{"index": 0, "space": "exterior"}, {"index": 1, "space": "kitchen"}, ...]
-
-Return ONLY the JSON array, no other text.`,
+Return ONLY this JSON:
+{"photos":[{"index":0,"space":"exterior"}],"style":"modern","scope":"new-build","building_type":"villa"}`,
           },
         ],
       },
     ],
   })
 
-  const responseText = message.content.find((b) => b.type === "text")?.text?.trim() ?? "[]"
-  console.log(`[autoTag] Claude response:`, responseText.substring(0, 500))
+  const responseText = message.content.find((b) => b.type === "text")?.text?.trim() ?? "{}"
+  console.log(`[autoTag] Claude response:`, responseText.substring(0, 800))
 
   // Parse the JSON response — handle markdown code blocks
   let classifications: { index: number; space: string }[]
+  let detectedStyle: string | null = null
+  let detectedScope: string | null = null
+  let detectedBuildingType: string | null = null
   try {
     const cleaned = responseText.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
-    classifications = JSON.parse(cleaned)
+    const parsed = JSON.parse(cleaned)
+    // Support both old array format and new object format
+    if (Array.isArray(parsed)) {
+      classifications = parsed
+    } else {
+      classifications = parsed.photos ?? []
+      detectedStyle = typeof parsed.style === "string" ? parsed.style.trim().toLowerCase() : null
+      detectedScope = typeof parsed.scope === "string" ? parsed.scope.trim().toLowerCase() : null
+      detectedBuildingType = typeof parsed.building_type === "string" ? parsed.building_type.trim().toLowerCase() : null
+    }
+    console.log(`[autoTag] Detected style: ${detectedStyle}, scope: ${detectedScope}, building_type: ${detectedBuildingType}`)
   } catch {
     logger.error("Auto-tag: could not parse Claude response", { projectId, responseText })
     return
@@ -743,10 +741,8 @@ Return ONLY the JSON array, no other text.`,
 
   // Map from Claude's slugs to DB slugs (handle mismatches)
   const claudeToDbSlug: Record<string, string> = {
-    "living": "living-room",
-    "living-room": "living-room",
-    "hallway": "exterior", // no hallway in DB, map to exterior
-    "other": "exterior",   // no "other" in DB, fallback
+    "living-room": "living",
+    "living_room": "living",
   }
 
   // Group photos by space slug
@@ -764,9 +760,27 @@ Return ONLY the JSON array, no other text.`,
     photosBySpace.get(finalSlug)!.push(photo.id)
   }
 
-  // Create project_features for each detected space and link photos
-  console.log(`[autoTag] Creating features for ${photosBySpace.size} spaces:`, Array.from(photosBySpace.keys()))
-  let featureOrder = 0
+  // Fetch existing project_features so we can reuse them instead of creating duplicates
+  const { data: existingFeatures } = await serviceSupabase
+    .from("project_features")
+    .select("id, space_id, name, is_building_default")
+    .eq("project_id", projectId)
+
+  const existingBySpaceId = new Map<string, string>()
+  const existingByName = new Map<string, string>()
+  for (const f of existingFeatures ?? []) {
+    if (f.space_id) existingBySpaceId.set(f.space_id, f.id)
+    if (f.name) existingByName.set(f.name.toLowerCase(), f.id)
+  }
+
+  // Determine next order_index
+  const maxExistingOrder = (existingFeatures ?? []).reduce(
+    (max, f) => Math.max(max, (f as any).order_index ?? 0), 0
+  )
+
+  // Create or reuse project_features for each detected space and link photos
+  console.log(`[autoTag] Linking ${photosBySpace.size} spaces:`, Array.from(photosBySpace.keys()))
+  let featureOrder = maxExistingOrder + 1
   let tagged = 0
   for (const [spaceSlug, photoIds] of photosBySpace) {
     const spaceId = spaceMap.get(spaceSlug)
@@ -777,44 +791,171 @@ Return ONLY the JSON array, no other text.`,
 
     const spaceName = spaceSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 
-    // Create the project_feature
-    const { data: feature, error: featureError } = await serviceSupabase
-      .from("project_features")
-      .insert({
-        project_id: projectId,
-        name: spaceName,
-        space_id: spaceId,
-        order_index: featureOrder++,
-        is_highlighted: false,
-        is_building_default: false,
-      })
-      .select("id")
-      .single()
+    // Try to reuse an existing feature: match by space_id first, then by name
+    let featureId = existingBySpaceId.get(spaceId)
+      ?? existingByName.get(spaceName.toLowerCase())
+      ?? null
 
-    if (featureError || !feature) {
-      console.error(`[autoTag] Failed to create feature for "${spaceSlug}":`, featureError)
-      continue
-    }
-
-    // Link photos to this feature
-    const { error: linkError } = await serviceSupabase
-      .from("project_photos")
-      .update({ feature_id: feature.id })
-      .in("id", photoIds)
-
-    if (linkError) {
-      console.error(`[autoTag] Failed to link photos to "${spaceSlug}":`, linkError)
+    if (featureId) {
+      // Update existing feature to set space_id if it was missing
+      await serviceSupabase
+        .from("project_features")
+        .update({ space_id: spaceId })
+        .eq("id", featureId)
+      console.log(`[autoTag] Reusing existing feature "${spaceName}" (${featureId})`)
     } else {
-      tagged += photoIds.length
-      console.log(`[autoTag] Tagged ${photoIds.length} photos as "${spaceSlug}"`)
+      // Create a new feature
+      const { data: feature, error: featureError } = await serviceSupabase
+        .from("project_features")
+        .insert({
+          project_id: projectId,
+          name: spaceName,
+          space_id: spaceId,
+          order_index: featureOrder++,
+          is_highlighted: false,
+          is_building_default: false,
+        })
+        .select("id")
+        .single()
+
+      if (featureError || !feature) {
+        console.error(`[autoTag] Failed to create feature for "${spaceSlug}":`, featureError)
+        continue
+      }
+      featureId = feature.id
+      console.log(`[autoTag] Created new feature "${spaceName}" (${featureId})`)
     }
+
+    // Link photos to this feature — update one at a time to avoid
+    // "tuple already modified" error from the ensure_single_primary_photo trigger
+    let linkedCount = 0
+    for (const photoId of photoIds) {
+      const { error: linkError } = await serviceSupabase
+        .from("project_photos")
+        .update({ feature_id: featureId })
+        .eq("id", photoId)
+
+      if (linkError) {
+        console.error(`[autoTag] Failed to link photo ${photoId} to "${spaceSlug}":`, linkError)
+      } else {
+        linkedCount++
+      }
+    }
+    tagged += linkedCount
+    console.log(`[autoTag] Tagged ${linkedCount}/${photoIds.length} photos as "${spaceSlug}"`)
   }
 
   logger.info("Auto-tagged photos with spaces", {
     projectId,
     spacesDetected: photosBySpace.size,
-    photosTagged: photos.length,
+    photosTagged: tagged,
   })
+
+  // Save vision-detected style and scope as taxonomy selections (fills gaps from text extraction)
+  const taxonomyInserts: { project_id: string; taxonomy_option_id: string }[] = []
+
+  if (detectedStyle) {
+    const { data: styleOpt } = await serviceSupabase
+      .from("project_taxonomy_options")
+      .select("id")
+      .eq("slug", detectedStyle)
+      .eq("taxonomy_type", "project_style")
+      .maybeSingle()
+    if (styleOpt) {
+      // Check if style already set
+      const { data: existing } = await serviceSupabase
+        .from("project_taxonomy_selections")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("taxonomy_option_id", styleOpt.id)
+        .maybeSingle()
+      if (!existing) {
+        taxonomyInserts.push({ project_id: projectId, taxonomy_option_id: styleOpt.id })
+      }
+      // Also update projects.style_preferences if empty
+      await serviceSupabase
+        .from("projects")
+        .update({ style_preferences: [styleOpt.id] })
+        .eq("id", projectId)
+        .is("style_preferences", null)
+    }
+  }
+
+  if (detectedScope) {
+    const scopeToSlug: Record<string, string> = {
+      "new-build": "new-build",
+      "new_build": "new-build",
+      "renovated": "renovated",
+      "renovation": "renovated",
+      "interior-designed": "interior-designed",
+      "interior_designed": "interior-designed",
+      "interior design": "interior-designed",
+    }
+    const scopeSlug = scopeToSlug[detectedScope] ?? detectedScope
+    const { data: scopeOpt } = await serviceSupabase
+      .from("project_taxonomy_options")
+      .select("id")
+      .eq("slug", scopeSlug)
+      .eq("taxonomy_type", "building_type")
+      .maybeSingle()
+    if (scopeOpt) {
+      const { data: existing } = await serviceSupabase
+        .from("project_taxonomy_selections")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("taxonomy_option_id", scopeOpt.id)
+        .maybeSingle()
+      if (!existing) {
+        taxonomyInserts.push({ project_id: projectId, taxonomy_option_id: scopeOpt.id })
+      }
+      // Also update projects.project_type if empty
+      const scopeLabel: Record<string, string> = { "new-build": "New Build", "renovated": "Renovation", "interior-designed": "Interior Design" }
+      await serviceSupabase
+        .from("projects")
+        .update({ project_type: scopeLabel[scopeSlug] ?? null })
+        .eq("id", projectId)
+        .is("project_type", null)
+    }
+  }
+
+  // Save building type to projects.building_type and category if empty
+  if (detectedBuildingType) {
+    const validTypes = ["villa", "house", "apartment", "townhouse", "penthouse", "bungalow", "chalet", "farm", "garden-house", "other"]
+    if (validTypes.includes(detectedBuildingType)) {
+      // Update projects.building_type if empty
+      await serviceSupabase
+        .from("projects")
+        .update({ building_type: detectedBuildingType })
+        .eq("id", projectId)
+        .is("building_type", null)
+
+      // Also set project_type_category_id if empty
+      const { data: cat } = await serviceSupabase
+        .from("categories")
+        .select("id")
+        .eq("slug", detectedBuildingType)
+        .maybeSingle()
+      if (cat) {
+        await serviceSupabase
+          .from("projects")
+          .update({ project_type_category_id: cat.id })
+          .eq("id", projectId)
+          .is("project_type_category_id", null)
+      }
+      console.log(`[autoTag] Set building_type: ${detectedBuildingType}`)
+    }
+  }
+
+  if (taxonomyInserts.length > 0) {
+    const { error: taxError } = await serviceSupabase
+      .from("project_taxonomy_selections")
+      .insert(taxonomyInserts)
+    if (taxError) {
+      console.error(`[autoTag] Failed to save taxonomy selections:`, taxError)
+    } else {
+      console.log(`[autoTag] Saved ${taxonomyInserts.length} taxonomy selections (style/scope/type)`)
+    }
+  }
 }
 
 export type RegenerateResult = { description: string } | { error: string }

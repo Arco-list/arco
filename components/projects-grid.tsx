@@ -32,19 +32,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
   const sortedProjects = useMemo<DiscoverProject[]>(() => {
     let next = [...projects] as DiscoverProject[]
 
-    // When a space filter is active, only show projects that have a photo for that space
-    if (selectedSpace) {
-      next = next.filter((p) => {
-        const pid = p.id ?? ""
-        if (!pid) return false
-        // Check spacePhotoOverrides (client-fetched projects)
-        if (spacePhotoOverrides[pid]) return true
-        // Check SSR-loaded data
-        if ((p.spaces ?? []).includes(selectedSpace)) return true
-        if ((p.photos ?? []).some((photo: any) => photo.space === selectedSpace)) return true
-        return false
-      })
-    }
+    // Note: space filtering is handled server-side in useProjectsQuery
 
     switch (sortBy) {
       case "Most liked":

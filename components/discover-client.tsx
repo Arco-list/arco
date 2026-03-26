@@ -34,7 +34,7 @@ export function DiscoverClient({ initialProjects }: DiscoverClientProps) {
           </nav>
 
           {/* Page title */}
-          <h2 className="arco-section-title">Browse Projects</h2>
+          <h2 className="arco-section-title">Browse projects</h2>
 
         </div>
       </div>

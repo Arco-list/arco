@@ -398,10 +398,75 @@ p a:hover {
 
 .arco-nav-text {
   font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 300;
+  font-size: 14px;
+  font-weight: 400;
   line-height: 1.2;
   color: var(--text-primary);
+}
+
+/* Header & menu link — consistent across nav bar and dropdown */
+.arco-header-link {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+}
+
+.arco-header-link:hover {
+  color: var(--primary);
+}
+
+.arco-header-link.active {
+  color: var(--primary);
+}
+
+.arco-header-link.nav-transparent {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.arco-header-link.nav-transparent:hover {
+  color: #fff;
+}
+
+/* Menu item — icon + text row in dropdown menus */
+.arco-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.arco-menu-item:hover {
+  color: var(--primary);
+}
+
+.arco-menu-item.active {
+  color: var(--primary);
+}
+
+.arco-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.arco-menu-item:hover svg,
+.arco-menu-item.active svg {
+  opacity: 1;
 }
 
 .arco-nav-text a,
@@ -4390,6 +4455,118 @@ body.no-scroll {
 /* Submit review — highlight missing required fields */
 [data-submit-highlight="true"].ec::before { border-color: #dc2626 !important; }
 [data-submit-highlight="true"].spec-item-edit::before { border-color: #dc2626 !important; }
+
+/* Pricing cards */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+  grid-template-rows: subgrid;
+}
+
+.pricing-card {
+  border: 1px solid var(--arco-rule);
+  border-radius: 8px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pricing-card-subgrid {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.pricing-card-featured {
+  border: 2px solid var(--primary);
+  position: relative;
+}
+
+.pricing-card-badge {
+  position: absolute;
+  top: -12px;
+  left: 24px;
+  background: var(--primary);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 4px 12px;
+  border-radius: 100px;
+}
+
+.pricing-card-header {
+  margin-bottom: 24px;
+}
+
+.pricing-card-billing {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--arco-light);
+  margin-top: 4px;
+}
+
+.pricing-card-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--arco-mid-grey);
+  margin-bottom: 12px;
+}
+
+.pricing-card-price {
+  font-family: var(--font-serif);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.pricing-card-desc {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--arco-light);
+  line-height: 1.5;
+}
+
+.pricing-card-features {
+  flex: 1;
+  margin-bottom: 24px;
+}
+
+.pricing-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--arco-black);
+}
+
+.pricing-feature.disabled {
+  color: var(--arco-light);
+}
+
+.pricing-card-footer {
+  margin-top: auto;
+}
+
+@media (max-width: 640px) {
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+  .pricing-card-subgrid {
+    display: flex;
+    flex-direction: column;
+  }
+}
 
 /* AI generate link (used on company edit + project edit description fields) */
 .ec-generate-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 0; background: none; border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 300; color: var(--arco-light); transition: color .15s; }

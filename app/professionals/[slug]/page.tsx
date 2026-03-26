@@ -76,10 +76,12 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
       // Check if user owns or is a member of this company
       if (!professional) {
+        const { createServiceRoleSupabaseClient } = await import("@/lib/supabase/server")
+        const serviceClient = createServiceRoleSupabaseClient()
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)
         const companyQuery = isUuid
-          ? supabase.from("companies").select("id, owner_id").eq("id", slug).maybeSingle()
-          : supabase.from("companies").select("id, owner_id").eq("slug", slug).maybeSingle()
+          ? serviceClient.from("companies").select("id, owner_id").eq("id", slug).maybeSingle()
+          : serviceClient.from("companies").select("id, owner_id").eq("slug", slug).maybeSingle()
         const { data: company } = await companyQuery
 
         if (company) {
@@ -87,8 +89,8 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           let isMember = false
           if (!isOwner) {
             const [memberResult, professionalResult] = await Promise.all([
-              supabase.from("company_members").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
-              supabase.from("professionals").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
+              serviceClient.from("company_members").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
+              serviceClient.from("professionals").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
             ])
             isMember = !!memberResult.data || !!professionalResult.data
           }

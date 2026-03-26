@@ -28,7 +28,7 @@ export function RecentProjects({ projects }: RecentProjectsProps) {
         
         {/* Header */}
         <div className="editorial-header">
-          <h2 className="editorial-title">Recent Projects</h2>
+          <h2 className="editorial-title">Recent projects</h2>
           <Link href="/projects" className="view-all-link">
             View all projects →
           </Link>

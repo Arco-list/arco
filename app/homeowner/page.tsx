@@ -4,8 +4,9 @@ import { Suspense, useEffect, useMemo, useRef, useState, useCallback, type Chang
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Camera } from "lucide-react"
+import { Camera, ChevronLeft, ChevronRight } from "lucide-react"
 import { ShareModal } from "@/components/share-modal"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
 import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
@@ -61,6 +62,10 @@ function HomeownerContent() {
   const [editSaveStatus, setEditSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
   const editSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── Email modal state ──
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [emailModalEmail, setEmailModalEmail] = useState("")
+
   // ── Password state ──
   const [passwordExpanded, setPasswordExpanded] = useState(false)
   const [currentPassword, setCurrentPassword] = useState("")
@@ -78,6 +83,19 @@ function HomeownerContent() {
   const [isCheckingDeletion, setIsCheckingDeletion] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [deletionCheck, setDeletionCheck] = useState<DeletionCheckResult | null>(null)
+
+  // ── Companies count ──
+  const [companyCount, setCompanyCount] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from("professionals")
+      .select("company_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .then(({ count }) => setCompanyCount(count ?? 0))
+  }, [user, supabase])
 
   const isEmailAuthUser = useMemo(() => {
     if (!user) return false
@@ -395,7 +413,7 @@ function HomeownerContent() {
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
       <style>{`
         .ec { position: relative; cursor: pointer; }
-        .ec::before { content: ''; position: absolute; inset: -10px -14px; border: 1px solid transparent; border-radius: 5px; transition: border-color .18s; pointer-events: none; z-index: 0; }
+        .ec::before { content: ''; position: absolute; inset: -6px -14px; border: 1px solid transparent; border-radius: 5px; transition: border-color .18s; pointer-events: none; z-index: 0; }
         .ec:hover::before { border-color: #1c1c1a; }
         .ec.on::before  { border-color: #016D75; }
         .ec.on          { cursor: default; }
@@ -492,7 +510,7 @@ function HomeownerContent() {
           </div>
 
           {/* Name (contentEditable) */}
-          <div className={`ec${activeEditField === "name" ? " on" : ""}`}>
+          <div className={`ec${activeEditField === "name" ? " on" : ""}`} style={{ marginBottom: 16 }}>
             <EditBadge />
             <h1
               className="arco-page-title"
@@ -501,118 +519,20 @@ function HomeownerContent() {
               onFocus={() => setActiveEditField("name")}
               onBlur={handleNameBlur}
               data-placeholder="Your name"
+              style={{ marginBottom: 0 }}
             >
               {displayName !== "Your Name" ? displayName : ""}
             </h1>
           </div>
 
-          {/* Email (contentEditable) */}
-          <div className={`ec${activeEditField === "email" ? " on" : ""}`} style={{ marginTop: -4 }}>
-            <EditBadge />
-            <p
-              className="arco-body-text"
-              contentEditable
-              suppressContentEditableWarning
-              onFocus={() => setActiveEditField("email")}
-              onBlur={(e) => {
-                const newEmail = (e.currentTarget.textContent ?? "").trim()
-                setActiveEditField(null)
-                if (newEmail && newEmail !== email) {
-                  setEmail(newEmail)
-                  saveEmail(newEmail)
-                }
-              }}
-              data-placeholder="your@email.com"
-              style={{ margin: 0, color: "var(--arco-mid-grey)" }}
-            >
-              {email}
-            </p>
-          </div>
-
-          {/* Update password link */}
-          {isEmailAuthUser ? (
-            <button
-              onClick={() => setPasswordExpanded(!passwordExpanded)}
-              style={{
-                background: "none", border: "none", cursor: "pointer", padding: 0,
-                fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline",
-                marginTop: 4, fontFamily: "inherit",
-              }}
-            >
-              Update password
-            </button>
-          ) : (
-            <p style={{ fontSize: 13, color: "var(--arco-mid-grey)", margin: "4px 0 0" }}>
-              Password managed by your sign-in provider
-            </p>
-          )}
-
-          {/* Inline password form */}
-          {passwordExpanded && isEmailAuthUser && (
-            <form onSubmit={handlePasswordSubmit} style={{ marginTop: 16, maxWidth: 400, textAlign: "left" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                    Current password
-                  </label>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={e => setCurrentPassword(e.target.value)}
-                    disabled={isSavingPassword}
-                    placeholder="Enter current password"
-                    style={{
-                      width: "100%", padding: "10px 12px", fontSize: 14,
-                      border: "1px solid var(--arco-light-grey)", borderRadius: 3,
-                      outline: "none", fontFamily: "inherit",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                    New password
-                  </label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={e => setNewPassword(e.target.value)}
-                    disabled={isSavingPassword}
-                    placeholder="At least 8 characters"
-                    style={{
-                      width: "100%", padding: "10px 12px", fontSize: 14,
-                      border: "1px solid var(--arco-light-grey)", borderRadius: 3,
-                      outline: "none", fontFamily: "inherit",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                    Confirm new password
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    disabled={isSavingPassword}
-                    placeholder="Confirm new password"
-                    style={{
-                      width: "100%", padding: "10px 12px", fontSize: 14,
-                      border: "1px solid var(--arco-light-grey)", borderRadius: 3,
-                      outline: "none", fontFamily: "inherit",
-                    }}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={isSavingPassword}
-                  className="btn-primary"
-                  style={{ fontSize: 14, padding: "10px 20px", marginTop: 4, alignSelf: "flex-start" }}
-                >
-                  {isSavingPassword ? "Updating..." : "Update password"}
-                </button>
-              </div>
-            </form>
-          )}
+          {/* Email badge — click to open email change popup (like service selector) */}
+          <p
+            className="professional-badge service-popup-badge"
+            onClick={() => { setEmailModalEmail(email); setEmailModalOpen(true) }}
+            style={{ cursor: "pointer" }}
+          >
+            {email || "Add email address"}
+          </p>
         </section>
 
         {/* ── Details bar ── */}
@@ -732,10 +652,12 @@ function HomeownerContent() {
             </div>
           </div>
 
-          {/* Account Type (read-only) */}
-          <div className="spec-item-edit" style={{ cursor: "default" }}>
-            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Account Type</span>
-            <div className="arco-card-title">{accountType}</div>
+          {/* Companies */}
+          <div className="spec-item-edit" style={{ cursor: companyCount > 0 ? "pointer" : "default" }} onClick={() => { if (companyCount > 0) router.push("/dashboard/listings") }}>
+            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Companies</span>
+            <div className="arco-card-title" style={{ color: companyCount > 0 ? undefined : "#b0b0ae" }}>
+              {companyCount > 0 ? `${companyCount} ${companyCount === 1 ? "company" : "companies"}` : "None"}
+            </div>
           </div>
         </div>
 
@@ -744,40 +666,63 @@ function HomeownerContent() {
           <h2 className="arco-section-title" style={{ marginBottom: 8 }}>
             Notification Preferences
           </h2>
-          <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 32 }}>
+          <p className="arco-body-text" style={{ marginBottom: 32 }}>
             Choose which email notifications you receive.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 400 }}>
             <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 500, color: "var(--arco-black)" }}>Project updates</div>
-                <div style={{ fontSize: 13, color: "var(--arco-mid-grey)" }}>Receive updates about your projects</div>
+                <div className="arco-card-title">Project updates</div>
+                <p className="arco-body-text" style={{ margin: 0 }}>Receive updates about your projects</p>
               </div>
               <ToggleSwitch checked={notifPrefs.project_updates} onChange={() => handleNotifToggle("project_updates")} />
             </label>
             <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 500, color: "var(--arco-black)" }}>Marketing emails</div>
-                <div style={{ fontSize: 13, color: "var(--arco-mid-grey)" }}>Tips, inspiration, and platform news</div>
+                <div className="arco-card-title">Marketing emails</div>
+                <p className="arco-body-text" style={{ margin: 0 }}>Tips, inspiration, and platform news</p>
               </div>
               <ToggleSwitch checked={notifPrefs.marketing} onChange={() => handleNotifToggle("marketing")} />
             </label>
           </div>
         </div>
 
-        <div style={{ borderBottom: "1px solid #e8e8e6" }} />
-
         {/* ── Connected Accounts ── */}
         <div style={{ padding: "48px 0" }}>
           <h2 className="arco-section-title" style={{ marginBottom: 8 }}>
-            Connected Accounts
+            Security & Connections
           </h2>
-          <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 32 }}>
-            Sign-in providers linked to your account.
+          <p className="arco-body-text" style={{ marginBottom: 32 }}>
+            Manage your password and linked sign-in providers.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 400 }}>
+            {/* Password */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1c1c1a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
+                </svg>
+                <span className="arco-card-title">Password</span>
+              </div>
+              {isEmailAuthUser ? (
+                <button
+                  onClick={() => setPasswordExpanded(true)}
+                  style={{
+                    fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 12,
+                    background: "#e6f4f5", color: "#016D75",
+                    border: "none", cursor: "pointer",
+                  }}
+                >
+                  Update
+                </button>
+              ) : (
+                <span style={{ fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 12, background: "#f5f5f4", color: "#b0b0ae" }}>
+                  Managed by provider
+                </span>
+              )}
+            </div>
             {/* Google */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f0f0ee" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <svg width="20" height="20" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -785,7 +730,7 @@ function HomeownerContent() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
-                <span style={{ fontSize: 15, fontWeight: 500 }}>Google</span>
+                <span className="arco-card-title">Google</span>
               </div>
               <span style={{
                 fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 12,
@@ -801,7 +746,7 @@ function HomeownerContent() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#1c1c1a">
                   <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
                 </svg>
-                <span style={{ fontSize: 15, fontWeight: 500 }}>Apple</span>
+                <span className="arco-card-title">Apple</span>
               </div>
               <span style={{
                 fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 12,
@@ -814,28 +759,23 @@ function HomeownerContent() {
           </div>
         </div>
 
-        <div style={{ borderBottom: "1px solid #e8e8e6" }} />
-
         {/* ── Delete Account ── */}
         <div style={{ padding: "48px 0" }}>
-          <h2 className="arco-section-title" style={{ marginBottom: 8, color: "#b91c1c" }}>
-            Delete Account
-          </h2>
-          <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 32 }}>
-            Permanently delete your account and all associated data. This cannot be undone.
-          </p>
-          <div>
-            <button
-              onClick={handleOpenDeleteDialog}
-              style={{
-                background: "none", border: "1px solid #b91c1c", color: "#b91c1c",
-                padding: "10px 24px", borderRadius: 3, fontSize: 14, cursor: "pointer",
-                fontFamily: "inherit", fontWeight: 500,
-              }}
-            >
-              Delete my account
-            </button>
-          </div>
+          <hr style={{ border: "none", borderTop: "1px solid var(--arco-rule)", margin: "0 0 24px" }} />
+          <button
+            onClick={handleOpenDeleteDialog}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 13, fontWeight: 300, padding: 0,
+              color: "#dc2626", background: "none",
+              border: "none", cursor: "pointer",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14M10 11v6M14 11v6" />
+            </svg>
+            Delete account
+          </button>
 
           <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <AlertDialogContent>
@@ -928,32 +868,220 @@ function HomeownerContent() {
       </div>
       )}
 
+      {/* ══════ Email Change Modal ══════ */}
+      {emailModalOpen && (
+        <div className="popup-overlay" onClick={() => setEmailModalOpen(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update email</h3>
+              <button className="popup-close" onClick={() => setEmailModalOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
+              We'll send a confirmation link to your new email address.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  New email address
+                </label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={emailModalEmail}
+                  onChange={e => setEmailModalEmail(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      const trimmed = emailModalEmail.trim()
+                      if (trimmed && trimmed !== email) {
+                        setEmail(trimmed)
+                        saveEmail(trimmed)
+                      }
+                      setEmailModalOpen(false)
+                    }
+                  }}
+                  placeholder="new@email.com"
+                  autoFocus
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <button
+                onClick={() => {
+                  const trimmed = emailModalEmail.trim()
+                  if (trimmed && trimmed !== email) {
+                    setEmail(trimmed)
+                    saveEmail(trimmed)
+                  }
+                  setEmailModalOpen(false)
+                }}
+                disabled={!emailModalEmail.trim()}
+                className="btn-primary"
+                style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
+              >
+                Update email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ Password Change Modal ══════ */}
+      {passwordExpanded && isEmailAuthUser && (
+        <div className="popup-overlay" onClick={() => { setPasswordExpanded(false); setCurrentPassword(""); setNewPassword(""); setConfirmPassword("") }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update password</h3>
+              <button className="popup-close" onClick={() => { setPasswordExpanded(false); setCurrentPassword(""); setNewPassword(""); setConfirmPassword("") }} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
+              Enter your current password and choose a new one.
+            </p>
+            <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  Current password
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  disabled={isSavingPassword}
+                  placeholder="Enter current password"
+                  autoFocus
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  New password
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  disabled={isSavingPassword}
+                  placeholder="At least 8 characters"
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                  Confirm new password
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  disabled={isSavingPassword}
+                  placeholder="Confirm new password"
+                  style={{ marginBottom: 0 }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSavingPassword}
+                className="btn-primary"
+                style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
+              >
+                {isSavingPassword ? "Updating..." : "Update password"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   )
 }
 
 /* ── Saved Projects Tab ── */
-function SavedProjectCard({ entry, isMutating, onRemove }: {
+function SavedProjectCard({ entry, isMutating, onRemove, categories }: {
   entry: { projectId: string; summary: any }
   isMutating: boolean
   onRemove: (id: string) => void
+  categories: Map<string, string>
 }) {
   const [shareOpen, setShareOpen] = useState(false)
+  const [photos, setPhotos] = useState<{ id: string; url: string }[]>([])
+  const [photoIndex, setPhotoIndex] = useState(0)
+  const [typeLabel, setTypeLabel] = useState<string | null>(null)
   const summary = entry.summary
+  const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+
+  // Fetch preview photos and primary category
+  useEffect(() => {
+    if (!summary?.id) return
+    supabase
+      .from("project_photos")
+      .select("id, url, is_primary")
+      .eq("project_id", summary.id)
+      .order("is_primary", { ascending: false, nullsFirst: false })
+      .order("order_index", { ascending: true, nullsFirst: false })
+      .limit(5)
+      .then(({ data }) => {
+        if (data?.length) setPhotos(data.filter(p => p.url))
+      })
+    // Fetch project type from project_categories
+    supabase
+      .from("project_categories")
+      .select("category:categories(name)")
+      .eq("project_id", summary.id)
+      .eq("is_primary", true)
+      .maybeSingle()
+      .then(({ data }) => {
+        const name = (data as any)?.category?.name
+        if (name) setTypeLabel(name)
+      })
+  }, [summary?.id, supabase])
+
   if (!summary) return null
 
-  const imageUrl = summary.primary_photo_url || "/placeholder.svg"
+  const currentPhoto = photos[photoIndex]?.url || summary.primary_photo_url || "/placeholder.svg"
   const title = summary.title || "Project"
   const location = summary.location || null
+  const subtitle = [typeLabel, location].filter(Boolean).join(" · ")
+  const hasMultiplePhotos = photos.length > 1
+
+  const navigatePhoto = (dir: "prev" | "next", e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPhotoIndex(prev =>
+      dir === "next" ? (prev + 1) % photos.length : (prev - 1 + photos.length) % photos.length
+    )
+  }
 
   return (
     <>
       <Link href={summary.slug ? `/projects/${summary.slug}` : "#"} className="discover-card">
         <div className="discover-card-image-wrap">
           <div className="discover-card-image-layer">
-            <img src={imageUrl} alt={title} />
+            <img key={currentPhoto} src={currentPhoto} alt={title} />
           </div>
+
+          {/* Nav arrows */}
+          {hasMultiplePhotos && (
+            <div className="discover-card-nav-arrows">
+              <button className="discover-card-nav-arrow" onClick={(e) => navigatePhoto("prev", e)} aria-label="Previous">
+                <ChevronLeft size={14} />
+              </button>
+              <button className="discover-card-nav-arrow" onClick={(e) => navigatePhoto("next", e)} aria-label="Next">
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Dots */}
+          {hasMultiplePhotos && (
+            <div className="discover-card-dots">
+              {photos.map((_, i) => (
+                <span key={i} className={`discover-card-dot${i === photoIndex ? " active" : ""}`} />
+              ))}
+            </div>
+          )}
+
           <div className="discover-card-actions" data-saved={true}>
             <button
               className="discover-card-action-btn"
@@ -978,15 +1106,15 @@ function SavedProjectCard({ entry, isMutating, onRemove }: {
           </div>
         </div>
         <h3 className="discover-card-title">{title}</h3>
-        {location && <p className="discover-card-sub">{location}</p>}
+        {subtitle && <p className="discover-card-sub">{subtitle}</p>}
       </Link>
 
       <ShareModal
         isOpen={shareOpen}
         onClose={() => setShareOpen(false)}
         title={title}
-        subtitle={location ?? ""}
-        imageUrl={imageUrl}
+        subtitle={subtitle}
+        imageUrl={currentPhoto}
         shareUrl={summary.slug ? `/projects/${summary.slug}` : ""}
       />
     </>
@@ -1000,6 +1128,15 @@ function SavedProjectsTab() {
     isLoading,
     removeProject,
   } = useSavedProjects()
+  const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const [categoryMap, setCategoryMap] = useState<Map<string, string>>(new Map())
+
+  // Fetch category names for subtitle
+  useEffect(() => {
+    supabase.from("categories").select("id, name").then(({ data }) => {
+      if (data) setCategoryMap(new Map(data.map(c => [c.id, c.name])))
+    })
+  }, [supabase])
 
   return (
     <main style={{ flex: 1 }}>
@@ -1039,6 +1176,7 @@ function SavedProjectsTab() {
                   entry={entry}
                   isMutating={mutatingProjectIds.has(entry.projectId)}
                   onRemove={removeProject}
+                  categories={categoryMap}
                 />
               ))}
             </div>

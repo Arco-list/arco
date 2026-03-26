@@ -87,7 +87,7 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
     <section id="professionals" className="credits-section">
       <div className="wrap">
         <div className="credits-header">
-          <h2 className="arco-section-title">Credited Professionals</h2>
+          <h2 className="arco-section-title">Credited professionals</h2>
           <p className="arco-body-text" style={{ maxWidth: '800px', margin: '12px 0 0', textAlign: 'left' }}>
             The trusted team that worked together to bring this project to life.
           </p>

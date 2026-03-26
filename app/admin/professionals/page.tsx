@@ -1,5 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
 
@@ -184,8 +184,14 @@ async function loadAdminCompaniesData() {
       }
     }
 
-    // Get owner emails from auth users metadata via profiles or just use the company email
-    // We'll use the company's contact email as a fallback for the owner email
+    // Fetch owner auth emails for draft companies (company email may not be set yet)
+    const serviceRole = createServiceRoleSupabaseClient()
+    for (const oid of ownerIds) {
+      const { data: userData } = await serviceRole.auth.admin.getUserById(oid)
+      if (userData?.user?.email) {
+        ownerEmailMap.set(oid, userData.user.email)
+      }
+    }
   }
 
   // Build company rows
@@ -232,7 +238,9 @@ async function loadAdminCompaniesData() {
       domain,
       status: isUnclaimed ? ("invited" as const) : company.status,
       ownerName: isUnclaimed ? null : ownerName,
-      ownerEmail: isUnclaimed ? (invitedEmail ?? null) : (company.email ?? null),
+      ownerEmail: isUnclaimed
+        ? (invitedEmail ?? null)
+        : ((company as any).email || ((company as any).owner_id ? ownerEmailMap.get((company as any).owner_id) ?? null : null)),
       ownerAvatarUrl: isUnclaimed ? null : (ownerProfile?.avatar_url ?? null),
       projectsAccepted: companyProjectsAccepted.get(company.id) ?? 0,
       projectsPending: companyProjectsPending.get(company.id) ?? 0,

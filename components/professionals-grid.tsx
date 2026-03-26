@@ -140,7 +140,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
               Netherlands
             </span>
           </nav>
-          <h2 className="arco-section-title">Browse Professionals</h2>
+          <h2 className="arco-section-title">Browse professionals</h2>
         </div>
       </div>
 

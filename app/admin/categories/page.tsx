@@ -35,6 +35,7 @@ export default async function CategoriesPage() {
     sortOrder: row.sort_order ?? 0,
     isActive: row.is_active ?? true,
     photoCount: 0, // will be populated after counts are fetched
+    imageUrl: row.image_url ?? null,
   }))
 
   // Fetch counts for categories and spaces

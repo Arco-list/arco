@@ -332,14 +332,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       return
     }
 
-    if (!canPublishProjects) {
-      // Flow 1: Can't publish → show existing complete popup
-      setPublishPopupOpen(true)
-      return
-    }
-
     if (importedProjectId) {
-      // Flow 3: Came from /businesses/architects with a project → go straight to project edit
+      // Came from /businesses/architects with a project → go straight to project edit
       completeCompanySetupAction({ listCompany: false, listProjectIds: [] }).then((result) => {
         if (result.success) {
           router.push(`/dashboard/edit/${importedProjectId}`)
@@ -350,9 +344,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       return
     }
 
-    // Flow 2: Can publish but no imported project → prompt to import first project
-    setImportFirstProjectOpen(true)
-  }, [allRequiredComplete, canPublishProjects, importedProjectId, router])
+    // Show the appropriate popup
+    setPublishPopupOpen(true)
+  }, [allRequiredComplete, importedProjectId, router])
 
   // ── Project card handlers ──
   const userId = user?.id ?? null
@@ -516,6 +510,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     const ppStatus = p.projectProfessionalStatus
     const isPublished = p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"
     return isPublished && (ppStatus === "listed" || ppStatus === "live_on_page")
+  })
+
+  // Has projects that are invited/listed/featured on published projects (eligible to go live)
+  const hasListableProjects = companyProjects.some((p) => {
+    const ppStatus = p.projectProfessionalStatus
+    const isPublished = p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"
+    return isPublished && (ppStatus === "invited" || ppStatus === "listed" || ppStatus === "live_on_page")
   })
 
   // ── Helpers ──
@@ -1005,7 +1006,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
       `}</style>
 
-      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
+      <Header navLinks={[
+        { href: `/dashboard/listings?company_id=${company.id}`, label: "Listings" },
+        { href: `/dashboard/company?company_id=${company.id}`, label: "Company" },
+        { href: `/dashboard/team?company_id=${company.id}`, label: "Team" },
+        { href: "/dashboard/pricing", label: "Plans" },
+      ]} />
 
       <CompanyEditSubNav
         statusIndicatorClass={statusIndicator}
@@ -1340,7 +1346,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <section id="projects" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 className="arco-section-title">Featured Projects</h2>
+            <h2 className="arco-section-title">Featured projects</h2>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               {companyProjects.length > 3 && (
                 <Link href="/dashboard/listings" className="text-[13px] font-light text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors">
@@ -1394,31 +1400,71 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         )}
                       </div>
 
-                      {/* Hover action pill */}
-                      <div
-                        className="listing-card-hover-overlay"
-                        style={{
-                          position: "absolute", inset: 0, zIndex: 1,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "transparent", transition: "background .2s",
-                          pointerEvents: "none",
-                        }}
-                      >
-                        <span
-                          className="listing-card-hover-pill"
+                      {/* Hover action pill / Accept button for invited */}
+                      {project.projectProfessionalStatus === "invited" ? (
+                        <div
                           style={{
-                            display: "inline-flex", alignItems: "center", gap: 7,
-                            fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
-                            color: "#fff", background: "rgba(0,0,0,.6)",
-                            border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
-                            padding: "8px 18px",
-                            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                            opacity: 0, transition: "opacity .2s",
+                            position: "absolute", inset: 0, zIndex: 1,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            cursor: "pointer",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "rgba(0,0,0,.15)"
+                            const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
+                            if (pill) { pill.style.opacity = "1"; pill.style.background = "rgba(0,0,0,.6)"; pill.style.borderColor = "rgba(255,255,255,.4)" }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent"
+                            const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
+                            if (pill) { pill.style.opacity = "0.7"; pill.style.background = "rgba(0,0,0,.45)"; pill.style.borderColor = "rgba(255,255,255,.25)" }
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleProjectUpdateStatus(project)
                           }}
                         >
-                          {project.isOwner ? "Edit project" : "View project"}
-                        </span>
-                      </div>
+                          <span
+                            data-accept-pill=""
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 7,
+                              fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
+                              color: "#fff", background: "rgba(0,0,0,.45)",
+                              border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
+                              padding: "8px 18px",
+                              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                              opacity: 0.7, transition: "opacity .2s, background .2s, border-color .2s",
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
+                            Accept
+                          </span>
+                        </div>
+                      ) : (
+                        <div
+                          className="listing-card-hover-overlay"
+                          style={{
+                            position: "absolute", inset: 0, zIndex: 1,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            background: "transparent", transition: "background .2s",
+                            pointerEvents: "none",
+                          }}
+                        >
+                          <span
+                            className="listing-card-hover-pill"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 7,
+                              fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
+                              color: "#fff", background: "rgba(0,0,0,.6)",
+                              border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
+                              padding: "8px 18px",
+                              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                              opacity: 0, transition: "opacity .2s",
+                            }}
+                          >
+                            {project.isOwner ? "Edit project" : "View project"}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Owner pill — bottom-left of image */}
                       {project.isOwner && (
@@ -1507,7 +1553,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <section id="contact" className="contact-section" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header">
-            <h2 className="arco-section-title">Contact Information</h2>
+            <h2 className="arco-section-title">Contact information</h2>
           </div>
           <div className="contact-row">
             {/* Office Location */}
@@ -1624,7 +1670,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           <div className="popup-card" onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
               <h3 className="arco-section-title">
-                {hasPublishedProjects ? "Publish your company page" : "Complete your company page"}
+                {hasListableProjects ? "List your company" : "Complete your company"}
               </h3>
               <button
                 className="popup-close"
@@ -1635,40 +1681,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               </button>
             </div>
 
-            {!hasPublishedProjects && (
-              <div className="popup-banner popup-banner--info">
-                <AlertTriangle className="popup-banner-icon" />
-                <div>
-                  <p style={{ fontWeight: 500 }}>Listed project required to go live</p>
-                  <p>
-                    {canPublishProjects
-                      ? "Publish your first project to list your company page."
-                      : "Get invited to a published project to list your company page."}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {hasPublishedProjects && (
+            {!hasListableProjects && (
               <>
                 <p className="arco-body-text" style={{ marginBottom: 20 }}>
-                  Choose what to publish on Arco.
+                  Your company page is ready. To go live on Arco, you need to be credited on a published project. Ask an architect to invite you, or publish your own.
+                </p>
+              </>
+            )}
+
+            {hasListableProjects && (
+              <>
+                <p className="arco-body-text" style={{ marginBottom: 20 }}>
+                  Your company and credited projects will be published on Arco. Invited projects will go live and your company page will be visible to homeowners.
                 </p>
 
-                <div className="publish-popup-options">
-                  <label className="publish-popup-option">
-                    <input
-                      type="checkbox"
-                      checked={goLiveListCompany}
-                      onChange={(e) => setGoLiveListCompany(e.target.checked)}
-                    />
-                    <div>
-                      <p className="publish-popup-option-title">List my company on Arco</p>
-                      <p className="publish-popup-option-desc">Your company will be visible to homeowners</p>
-                    </div>
-                  </label>
-
-                  {pendingProjects.length > 0 && (
+                {pendingProjects.length > 0 && (
+                  <div className="publish-popup-options">
                     <label className="publish-popup-option">
                       <input
                         type="checkbox"
@@ -1682,8 +1710,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         <p className="publish-popup-option-desc">Your company will be shown on the project page</p>
                       </div>
                     </label>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -1693,12 +1721,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               onClick={async () => {
                 setIsCompletingSetup(true)
                 const result = await completeCompanySetupAction({
-                  listCompany: hasPublishedProjects && goLiveListCompany,
-                  listProjectIds: hasPublishedProjects && goLiveListProjects ? pendingProjects.map((p) => p.id) : [],
+                  listCompany: hasListableProjects,
+                  listProjectIds: hasListableProjects && goLiveListProjects ? pendingProjects.map((p) => p.id) : [],
                 })
                 if (result.success) {
                   setPublishPopupOpen(false)
-                  toast.success(hasPublishedProjects ? "Your company is now live!" : "Company page setup complete!")
+                  toast.success(hasListableProjects ? "Your company is now live!" : "Company page setup complete!")
                   router.push("/dashboard/company")
                 } else {
                   toast.error(result.error ?? "Something went wrong")
@@ -1708,8 +1736,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               style={{ opacity: isCompletingSetup ? 0.5 : 1 }}
             >
               {isCompletingSetup
-                ? (hasPublishedProjects ? "Publishing…" : "Completing…")
-                : (hasPublishedProjects ? "Publish" : "Complete company")}
+                ? (hasListableProjects ? "Listing…" : "Completing…")
+                : (hasListableProjects ? "List company" : "Complete company")}
             </button>
           </div>
         </div>
@@ -1791,7 +1819,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           <div className="service-popup" onClick={(e) => e.stopPropagation()}>
             {/* Header — grey background */}
             <div className="service-popup-header">
-              <h3 className="arco-section-title" style={{ margin: 0 }}>Select Services</h3>
+              <h3 className="arco-section-title" style={{ margin: 0 }}>Select services</h3>
               <button type="button" className="popup-close" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }} aria-label="Close">✕</button>
             </div>
 
@@ -2093,7 +2121,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <div className="popup-overlay" onClick={() => setStatusDialogOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Company Visibility</h3>
+              <h3 className="arco-section-title">Company visibility</h3>
               <button className="popup-close" onClick={() => setStatusDialogOpen(false)} aria-label="Close">
                 ✕
               </button>
@@ -2158,7 +2186,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <div className="popup-overlay" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Delete Company</h3>
+              <h3 className="arco-section-title">Delete company</h3>
               <button className="popup-close" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }} aria-label="Close">
                 ✕
               </button>

@@ -5,6 +5,7 @@ import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { MoreHorizontal, Check, AlertTriangle, Info, X } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { ImportProjectModal } from "@/components/import-project-modal"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -98,6 +99,8 @@ const MIN_YEAR = 2000
 
 export default function DashboardListingsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const searchParams = useSearchParams()
+  const companyIdParam = searchParams.get("company_id")
 
   // SECURITY: Validate RLS policies are enforced
   const { isSecure: isRLSSecure, loading: rlsLoading } = useTableRLSValidation("projects", {
@@ -206,18 +209,30 @@ export default function DashboardListingsPage() {
       setUserId(authData.user.id)
 
       // Get professional record and company for this user
-      const { data: professionalData, error: professionalError } = await supabase
-        .from("professionals")
-        .select("id, company_id")
-        .eq("user_id", authData.user.id)
-        .maybeSingle()
+      // Prefer company_id from URL param (set by company switcher)
+      let resolvedCompanyId: string | null = companyIdParam
+      let resolvedProfessionalId: string | null = null
 
-      let resolvedCompanyId = professionalData?.company_id ?? null
+      if (companyIdParam) {
+        // Find professional record for this user + company
+        const { data: proMatch } = await supabase.from("professionals").select("id, company_id").eq("user_id", authData.user.id).eq("company_id", companyIdParam).maybeSingle()
+        resolvedProfessionalId = proMatch?.id ?? null
+        // If no professional record for this company, try any professional record
+        if (!resolvedProfessionalId) {
+          const { data: anyPro } = await supabase.from("professionals").select("id").eq("user_id", authData.user.id).maybeSingle()
+          resolvedProfessionalId = anyPro?.id ?? null
+        }
+      } else {
+        const { data: professionalData } = await supabase.from("professionals").select("id, company_id").eq("user_id", authData.user.id).maybeSingle()
+        resolvedCompanyId = professionalData?.company_id ?? null
+        resolvedProfessionalId = professionalData?.id ?? null
+      }
+
       setCompanyId(resolvedCompanyId)
-      setProfessionalId(professionalData?.id ?? null)
+      setProfessionalId(resolvedProfessionalId)
 
-      // Fallback: if no professional record, check team membership
-      if (!professionalData?.id || professionalError) {
+      // Fallback: if no company resolved yet, check team membership
+      if (!resolvedCompanyId) {
         const { data: membership } = await supabase
           .from("company_members")
           .select("company_id")
@@ -500,7 +515,7 @@ export default function DashboardListingsPage() {
       isActive = false
       abortController.abort()
     }
-  }, [supabase, retryTrigger])
+  }, [supabase, retryTrigger, companyIdParam])
 
   // Retry mechanism for failed metadata loads
   const handleRetryMetadata = useCallback(() => {
@@ -963,12 +978,17 @@ export default function DashboardListingsPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
-      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }]} />
+      <Header navLinks={[
+        { href: `/dashboard/listings${companyId ? `?company_id=${companyId}` : ""}`, label: "Listings" },
+        { href: `/dashboard/company${companyId ? `?company_id=${companyId}` : ""}`, label: "Company" },
+        { href: `/dashboard/team${companyId ? `?company_id=${companyId}` : ""}`, label: "Team" },
+        { href: "/dashboard/pricing", label: "Plans" },
+      ]} />
 
       {/* Page title — matches /projects layout */}
       <div className="discover-page-title">
         <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="arco-section-title">My projects</h2>
+          <h2 className="arco-section-title">Listings</h2>
           {canPublishProjects && hasProjects && (
             <button onClick={() => setImportModalOpen(true)} className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
               Publish your project

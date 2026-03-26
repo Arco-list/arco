@@ -108,12 +108,13 @@ async function loadLandingData() {
         city,
         country,
         logo_url,
+        hero_photo_url,
         primary_service_id,
         primary_service:categories!companies_primary_service_id_fkey(name)
       `)
       .eq("is_featured", true)
       .eq("status", "listed")
-      .limit(6),
+      .limit(3),
   ])
 
   if (heroProjectsResult.error) logger.error("Failed to load featured hero projects", { scope: "landing" }, heroProjectsResult.error)
@@ -247,13 +248,50 @@ async function loadLandingData() {
   })
 
   // BrowseSection data - Spaces (hardcoded for now)
-  const browseSpaces: BrowseCard[] = [
-    { id: '1', title: 'Kitchen', href: '/projects?space=kitchen', imageUrl: null },
-    { id: '2', title: 'Living', href: '/projects?space=living', imageUrl: null },
-    { id: '3', title: 'Bedroom', href: '/projects?space=bedroom', imageUrl: null },
-    { id: '4', title: 'Bathroom', href: '/projects?space=bathroom', imageUrl: null },
-    { id: '5', title: 'Outdoor', href: '/projects?space=outdoor', imageUrl: null },
+  // Fetch best photo per space from published projects
+  const spaceConfig = [
+    { slug: "kitchen", title: "Kitchen" },
+    { slug: "living-room", title: "Living" },
+    { slug: "bedroom", title: "Bedroom" },
+    { slug: "bathroom", title: "Bathroom" },
+    { slug: "exterior", title: "Exterior" },
   ]
+
+  const { data: spacePhotos } = await supabase
+    .from("project_features")
+    .select("space:spaces!space_id(slug), project_photos!project_photos_feature_id_fkey(url, is_primary, order_index)")
+    .not("space_id", "is", null)
+
+  const spacePhotoMap = new Map<string, string>()
+  for (const feature of (spacePhotos ?? []) as any[]) {
+    const slug = feature.space?.slug
+    if (!slug || spacePhotoMap.has(slug)) continue
+    const photos = (feature.project_photos ?? [])
+      .filter((p: any) => p.url)
+      .sort((a: any, b: any) => {
+        if (a.is_primary && !b.is_primary) return -1
+        if (!a.is_primary && b.is_primary) return 1
+        return (a.order_index ?? 0) - (b.order_index ?? 0)
+      })
+    if (photos[0]?.url) spacePhotoMap.set(slug, photos[0].url)
+  }
+
+  // Also check spaces table for admin-uploaded images
+  const { data: spacesWithImages } = await supabase
+    .from("spaces")
+    .select("slug, image_url")
+    .not("image_url", "is", null)
+
+  for (const space of (spacesWithImages ?? []) as any[]) {
+    if (space.image_url) spacePhotoMap.set(space.slug, space.image_url)
+  }
+
+  const browseSpaces: BrowseCard[] = spaceConfig.map((s, i) => ({
+    id: String(i + 1),
+    title: s.title,
+    href: `/projects?space=${s.slug}`,
+    imageUrl: spacePhotoMap.get(s.slug) ?? null,
+  }))
 
   // BrowseSection data - Professionals: use homepage-flagged child services
   const browseProfessionals: BrowseCard[] = homeProfessionalServices
@@ -310,21 +348,17 @@ async function loadLandingData() {
 
   const recentProjectCards: RecentProject[] = popularProjects.slice(0, 6).map((project) => {
     const projectAny = project as any
-    const style = projectAny.style_preferences?.[0] || ""
-    const subType = project.project_type || ""
-    const location = project.location || "Location unavailable"
-    const parts = []
-    if (style) parts.push(labelMap.get(style) || style)
-    if (subType) parts.push(labelMap.get(subType) || subType)
-    parts.push(`in ${location}`)
-    const title = parts.join(" ")
+    const primaryCategory = projectAny.primary_category
+    const typeLabel = primaryCategory ? (labelMap.get(primaryCategory) || primaryCategory) : null
+    const location = project.location || null
+    const subtitle = [typeLabel, location].filter(Boolean).join(" · ")
 
     return {
       id: project.id,
-      title,
+      title: project.title || "Untitled",
       href: project.slug ? `/projects/${project.slug}` : "/projects",
       imageUrl: project.primary_photo_url,
-      subtitle: undefined,  // Architect name not available in search results
+      subtitle: subtitle || undefined,
     }
   })
 
@@ -333,7 +367,7 @@ async function loadLandingData() {
   let companyCoverPhotos: Map<string, string> = new Map()
 
   if (featuredCompanyIds.length > 0) {
-    const [metricsResult, photosResult] = await Promise.all([
+    const [metricsResult, photosResult, projectPhotosResult] = await Promise.all([
       supabase
         .from("company_metrics")
         .select("company_id, average_rating, total_reviews")
@@ -344,6 +378,12 @@ async function loadLandingData() {
         .in("company_id", featuredCompanyIds)
         .order("is_cover", { ascending: false })
         .order("order_index", { ascending: true }),
+      // Fallback: project photos for companies without company_photos
+      supabase
+        .from("project_professionals")
+        .select("company_id, projects!inner(project_photos(url, is_primary, order_index))")
+        .in("company_id", featuredCompanyIds)
+        .in("status", ["live_on_page", "listed"]),
     ])
 
     if (!metricsResult.error && metricsResult.data) {
@@ -365,6 +405,22 @@ async function loadLandingData() {
       })
       companyCoverPhotos = photosByCompany
     }
+
+    // Build project photo fallback map for companies without company_photos
+    if (!projectPhotosResult.error && projectPhotosResult.data) {
+      for (const row of projectPhotosResult.data as any[]) {
+        if (!row.company_id || companyCoverPhotos.has(row.company_id)) continue
+        const photos = row.projects?.project_photos ?? []
+        const sorted = [...photos].sort((a: any, b: any) => {
+          if (a.is_primary && !b.is_primary) return -1
+          if (!a.is_primary && b.is_primary) return 1
+          return (a.order_index ?? 0) - (b.order_index ?? 0)
+        })
+        if (sorted[0]?.url) {
+          companyCoverPhotos.set(row.company_id, sorted[0].url)
+        }
+      }
+    }
   }
 
   const featuredCompanies: FeaturedCompany[] = featuredCompaniesRaw.map((company) => {
@@ -381,7 +437,8 @@ async function loadLandingData() {
       location,
       rating: metrics.averageRating,
       reviews: metrics.totalReviews,
-      image: coverPhoto || company.logo_url || PLACEHOLDER_IMAGE,
+      image: (company as any).hero_photo_url || coverPhoto || PLACEHOLDER_IMAGE,
+      logoUrl: company.logo_url ?? null,
       href: `/professionals/${slug}`,
     }
   })

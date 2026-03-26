@@ -585,3 +585,71 @@ export async function toggleCanPublishProjectsAction(
     canPublishProjects: input.enabled
   })
 }
+
+export async function uploadCategoryImageAction(
+  formData: FormData
+): Promise<ActionResult & { imageUrl?: string }> {
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse('AUTH', error.message, {}, 'admin-categories-upload')
+
+  const file = formData.get("file") as File | null
+  const targetId = formData.get("targetId") as string | null
+  const targetType = formData.get("targetType") as string | null // "category" or "space"
+
+  if (!file || !targetId || !targetType) {
+    return createErrorResponse('VALIDATION', 'Missing file, targetId, or targetType', {}, 'admin-categories-upload')
+  }
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const folder = targetType === "space" ? "spaces" : "categories"
+  const path = `${folder}/${targetId}-${Date.now()}.jpg`
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { error: uploadError } = await serviceSupabase.storage
+    .from("company-assets")
+    .upload(path, buffer, { contentType: "image/jpeg", upsert: true })
+
+  if (uploadError) {
+    return createErrorResponse('DATABASE', `Upload failed: ${uploadError.message}`, {}, 'admin-categories-upload')
+  }
+
+  const { data: urlData } = serviceSupabase.storage.from("company-assets").getPublicUrl(path)
+  const imageUrl = `${urlData.publicUrl}?v=${Date.now()}`
+
+  // Update the record
+  if (targetType === "space") {
+    await serviceSupabase.from("spaces").update({ image_url: imageUrl } as any).eq("id", targetId)
+  } else {
+    await serviceSupabase.from("categories").update({ image_url: imageUrl, updated_at: new Date().toISOString() }).eq("id", targetId)
+  }
+
+  revalidatePath("/admin/categories")
+  return { ...createSuccessResponse({ imageUrl }), imageUrl }
+}
+
+export async function updateSpaceImageAction(
+  input: { spaceId: string; imageUrl: string }
+): Promise<ActionResult> {
+  const parseResult = categoryIdSchema.safeParse(input.spaceId)
+  if (!parseResult.success) {
+    return createErrorResponse('VALIDATION', 'Invalid space id', {}, 'admin-spaces-image')
+  }
+
+  const { error } = await assertAdmin()
+  if (error) {
+    return createErrorResponse('AUTH', error.message, {}, 'admin-spaces-image')
+  }
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const { error: updateError } = await serviceSupabase
+    .from("spaces")
+    .update({ image_url: input.imageUrl } as any)
+    .eq("id", parseResult.data)
+
+  if (updateError) {
+    return createErrorResponse('DATABASE', updateError.message, {}, 'admin-spaces-image')
+  }
+
+  revalidatePath("/admin/categories")
+  return createSuccessResponse({ spaceId: parseResult.data })
+}

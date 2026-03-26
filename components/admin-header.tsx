@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { title: "Projects", href: "/admin/projects" },
   { title: "Companies", href: "/admin/professionals" },
   { title: "Categories", href: "/admin/categories" },
+  { title: "Emails", href: "/admin/emails" },
 ]
 
 export function AdminHeader() {

@@ -183,6 +183,7 @@ type CompanyProfessional = {
 }
 
 const STATUS_DOT: Record<string, string> = {
+  draft: "bg-blue-400",
   listed: "bg-emerald-500",
   unlisted: "bg-[#a1a1a0]",
   deactivated: "bg-rose-500",
@@ -190,6 +191,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
   listed: "Listed",
   unlisted: "Unlisted",
   deactivated: "Deactivated",
@@ -197,6 +199,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
+  { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-blue-400" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-emerald-500" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-rose-500" },
@@ -557,7 +560,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         accessorKey: "status",
         header: "Status",
         sortingFn: (rowA, rowB) => {
-          const order: Record<string, number> = { listed: 0, unlisted: 1, invited: 2, deactivated: 3 }
+          const order: Record<string, number> = { listed: 0, unlisted: 1, draft: 2, invited: 3, deactivated: 4 }
           return (order[rowA.original.status] ?? 4) - (order[rowB.original.status] ?? 4)
         },
         cell: ({ row }) => {
@@ -938,6 +941,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="listed">Listed</SelectItem>
               <SelectItem value="unlisted">Unlisted</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="deactivated">Deactivated</SelectItem>
               <SelectItem value="invited">Invited</SelectItem>
             </SelectContent>
@@ -1239,6 +1243,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="draft">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Draft</span>
+                      <span className="text-xs text-muted-foreground">Setup not yet completed</span>
+                    </div>
+                  </SelectItem>
                   <SelectItem value="unlisted">
                     <div className="flex flex-col">
                       <span className="font-medium">Unlisted</span>

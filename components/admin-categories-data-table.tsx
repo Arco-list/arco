@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
@@ -30,7 +30,7 @@ import {
   toggleCategoryStatusAction,
   toggleHomeCarrouselAction,
   updateCategoryAction,
-  updateCategoryImageAction,
+  uploadCategoryImageAction,
 } from "@/app/admin/categories/actions"
 import {
   DropdownMenu,
@@ -95,6 +95,7 @@ export type AdminSpaceRow = {
   sortOrder: number
   isActive: boolean
   photoCount: number
+  imageUrl: string | null
 }
 
 interface Props {
@@ -177,6 +178,9 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<AdminCategoryRow | null>(null)
+  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null)
+  const [cropTargetId, setCropTargetId] = useState<string | null>(null)
+  const [cropTargetType, setCropTargetType] = useState<"category" | "space">("category")
   const [createMode, setCreateMode] = useState<CreateMode | null>(null)
   const [createName, setCreateName] = useState("")
   const [createParentId, setCreateParentId] = useState<string | null>(null)
@@ -250,33 +254,117 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
     })
   }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editCategory || !e.target.files?.[0]) return
+  // Crop state
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
+  const [cropScale, setCropScale] = useState(1)
+  const cropDragRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null)
+  const cropImgRef = useRef<HTMLImageElement | null>(null)
+  const cropContainerRef = useRef<HTMLDivElement | null>(null)
+
+  const CROP_W = 300
+  const CROP_H = 450 // 2:3 portrait
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0]) return
     const file = e.target.files[0]
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be under 5MB")
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image must be under 10MB")
       return
     }
+    // Store target before opening crop (edit dialog may close)
+    if (editCategory) {
+      setCropTargetId(editCategory.id)
+      setCropTargetType("category")
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string)
+      setCropOffset({ x: 0, y: 0 })
+      setCropScale(1)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
+
+  const handleCropMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    cropDragRef.current = { startX: e.clientX, startY: e.clientY, startOffsetX: cropOffset.x, startOffsetY: cropOffset.y }
+    const handleMove = (ev: MouseEvent) => {
+      if (!cropDragRef.current) return
+      setCropOffset({
+        x: cropDragRef.current.startOffsetX + (ev.clientX - cropDragRef.current.startX),
+        y: cropDragRef.current.startOffsetY + (ev.clientY - cropDragRef.current.startY),
+      })
+    }
+    const handleUp = () => {
+      cropDragRef.current = null
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", handleUp)
+    }
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", handleUp)
+  }
+
+  const handleCropSave = async () => {
+    if (!cropImageSrc || !cropTargetId) return
+    const targetId = cropTargetId
+    const isSpace = cropTargetType === "space"
     setIsUploadingImage(true)
+
     try {
-      const { getBrowserSupabaseClient } = await import("@/lib/supabase/browser")
-      const supabase = getBrowserSupabaseClient()
-      const ext = file.name.split(".").pop() ?? "jpg"
-      const path = `categories/${editCategory.id}.${ext}`
-      const { error: uploadError } = await supabase.storage.from("public-assets").upload(path, file, { upsert: true })
-      if (uploadError) throw uploadError
-      const { data: urlData } = supabase.storage.from("public-assets").getPublicUrl(path)
-      const imageUrl = urlData.publicUrl
-      const result = await updateCategoryImageAction({ categoryId: editCategory.id, imageUrl })
-      if (result.success) {
-        setEditImageUrl(imageUrl)
+      // Draw cropped image to canvas
+      const img = document.createElement("img")
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error("Failed to load image"))
+        img.src = cropImageSrc
+      })
+
+      const canvas = document.createElement("canvas")
+      const outputW = 600
+      const outputH = 900 // 2:3
+      canvas.width = outputW
+      canvas.height = outputH
+      const ctx = canvas.getContext("2d")!
+
+      // Calculate source crop from the visual preview
+      const displayScale = Math.max(CROP_W / img.width, CROP_H / img.height) * cropScale
+      const drawW = img.width * displayScale
+      const drawH = img.height * displayScale
+      const drawX = (CROP_W - drawW) / 2 + cropOffset.x
+      const drawY = (CROP_H - drawH) / 2 + cropOffset.y
+
+      // Map from display coords to source coords
+      const srcX = -drawX / displayScale
+      const srcY = -drawY / displayScale
+      const srcW = CROP_W / displayScale
+      const srcH = CROP_H / displayScale
+
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outputW, outputH)
+
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.9)
+      )
+
+      const formData = new FormData()
+      formData.append("file", new File([blob], "crop.jpg", { type: "image/jpeg" }))
+      formData.append("targetId", targetId)
+      formData.append("targetType", isSpace ? "space" : "category")
+
+      const result = await uploadCategoryImageAction(formData)
+      if (result.success && result.imageUrl) {
+        if (!isSpace) setEditImageUrl(result.imageUrl)
+        setCropImageSrc(null)
+        setCropTargetId(null)
+        setEditingSpaceId(null)
         toast.success("Image uploaded")
         router.refresh()
       } else {
-        toast.error("Failed to save image")
+        toast.error((result as any).error?.message ?? "Failed to save image")
       }
     } catch (err) {
-      console.error("Image upload failed:", err)
+      console.error("Image crop/upload failed:", err)
       toast.error("Failed to upload image")
     } finally {
       setIsUploadingImage(false)
@@ -583,6 +671,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                 <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Name</th>
                 <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Slug</th>
                 <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Icon</th>
+                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Image</th>
                 <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Order</th>
                 <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Photos</th>
                 <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Active</th>
@@ -594,6 +683,32 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                   <td className="px-4 py-2 text-xs text-[#1c1c1a]">{space.name}</td>
                   <td className="px-4 py-2 text-xs text-[#6b6b68] font-mono">{space.slug}</td>
                   <td className="px-4 py-2 text-xs text-[#6b6b68]">{space.iconKey ?? "—"}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      {space.imageUrl ? (
+                        <img src={space.imageUrl} alt="" className="w-8 h-12 object-cover rounded-[2px]" />
+                      ) : (
+                        <div className="w-8 h-12 bg-[#f5f5f4] rounded-[2px]" />
+                      )}
+                      <label className="text-[10px] text-[#a1a1a0] hover:text-[#1c1c1a] cursor-pointer transition-colors">
+                        {space.imageUrl ? "Change" : "Upload"}
+                        <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
+                          if (!e.target.files?.[0]) return
+                          setEditingSpaceId(space.id)
+                          setCropTargetId(space.id)
+                          setCropTargetType("space")
+                          const reader = new FileReader()
+                          reader.onload = () => {
+                            setCropImageSrc(reader.result as string)
+                            setCropOffset({ x: 0, y: 0 })
+                            setCropScale(1)
+                          }
+                          reader.readAsDataURL(e.target.files[0])
+                          e.target.value = ""
+                        }} />
+                      </label>
+                    </div>
+                  </td>
                   <td className="px-4 py-2 text-xs text-[#6b6b68]">{space.sortOrder}</td>
                   <td className="px-4 py-2 text-xs text-[#6b6b68]">{space.photoCount}</td>
                   <td className="px-4 py-2">
@@ -603,7 +718,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
               ))}
               {spaces.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-xs text-[#a1a1a0]">No spaces found</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-xs text-[#a1a1a0]">No spaces found</td>
                 </tr>
               )}
             </tbody>
@@ -823,18 +938,18 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
               <label className="text-xs font-medium text-[#6b6b68] block mb-1">Image</label>
               <div className="flex items-center gap-3">
                 {editImageUrl ? (
-                  <img src={editImageUrl} alt="" className="w-12 h-16 object-cover rounded-[3px] border border-[#e5e5e4]" />
+                  <img src={editImageUrl} alt="" className="w-12 h-[72px] object-cover rounded-[3px] border border-[#e5e5e4]" />
                 ) : (
-                  <div className="w-12 h-16 bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4] flex items-center justify-center text-[10px] text-[#a1a1a0]">
+                  <div className="w-12 h-[72px] bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4] flex items-center justify-center text-[10px] text-[#a1a1a0]">
                     No image
                   </div>
                 )}
                 <div>
                   <label className="text-xs px-3 py-1.5 rounded-[3px] border border-[#e5e5e4] hover:bg-[#f5f5f4] transition-colors cursor-pointer inline-block">
-                    {isUploadingImage ? "Uploading…" : "Upload"}
-                    <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleImageUpload} disabled={isUploadingImage} />
+                    {isUploadingImage ? "Uploading…" : "Upload & crop"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleImageSelect} disabled={isUploadingImage} />
                   </label>
-                  <p className="text-[10px] text-[#a1a1a0] mt-1">Portrait 3:4 ratio, min 600×800px</p>
+                  <p className="text-[10px] text-[#a1a1a0] mt-1">Portrait 2:3, output 600×900px</p>
                 </div>
               </div>
             </div>
@@ -1000,6 +1115,82 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Crop Modal */}
+      {cropImageSrc && (
+        <div className="popup-overlay" onClick={() => { setCropImageSrc(null); setEditingSpaceId(null); setCropTargetId(null) }} style={{ zIndex: 600 }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Crop image</h3>
+              <button className="popup-close" onClick={() => { setCropImageSrc(null); setEditingSpaceId(null); setCropTargetId(null) }} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ marginBottom: 12 }}>Drag to position. Scroll to zoom. Output: 600×900px (2:3 portrait)</p>
+
+            {/* Crop area */}
+            <div
+              ref={cropContainerRef}
+              style={{
+                width: CROP_W, height: CROP_H,
+                margin: "0 auto", overflow: "hidden", position: "relative",
+                borderRadius: 3, cursor: "grab", background: "#1c1c1a",
+                border: "1px solid #e5e5e4",
+              }}
+              onMouseDown={handleCropMouseDown}
+              onWheel={(e) => {
+                e.preventDefault()
+                setCropScale((prev) => Math.max(0.5, Math.min(3, prev + (e.deltaY > 0 ? -0.05 : 0.05))))
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                ref={cropImgRef}
+                src={cropImageSrc}
+                alt=""
+                draggable={false}
+                style={{
+                  position: "absolute",
+                  left: "50%", top: "50%",
+                  transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropScale})`,
+                  maxWidth: "none", maxHeight: "none",
+                  width: "100%", height: "auto",
+                  minHeight: "100%", objectFit: "cover",
+                  userSelect: "none", pointerEvents: "none",
+                }}
+              />
+            </div>
+
+            {/* Zoom slider */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px auto", width: CROP_W }}>
+              <span style={{ fontSize: 10, color: "#a1a1a0" }}>−</span>
+              <input
+                type="range" min="0.5" max="3" step="0.05"
+                value={cropScale}
+                onChange={(e) => setCropScale(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ fontSize: 10, color: "#a1a1a0" }}>+</span>
+            </div>
+
+            {/* Actions */}
+            <div className="popup-actions">
+              <button
+                className="btn-tertiary"
+                onClick={() => { setCropImageSrc(null); setEditingSpaceId(null); setCropTargetId(null) }}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleCropSave}
+                disabled={isUploadingImage}
+                style={{ flex: 1 }}
+              >
+                {isUploadingImage ? "Uploading…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

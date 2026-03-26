@@ -54,7 +54,6 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
                       alt={item.title}
                       fill
                       className="object-cover transition-all duration-500 hover:scale-[1.04]"
-                      style={{ filter: 'brightness(0.72)' }}
                     />
                   ) : (
                     <div className="w-full h-full bg-gray-200" />
@@ -64,9 +63,6 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
                 {/* Label - UPDATED: Use CSS classes */}
                 <div className="flex flex-col gap-0.5 px-0.5">
                   <span className="arco-card-title">{item.title}</span>
-                  {item.count && (
-                    <span className="arco-card-subtitle">{item.count}</span>
-                  )}
                 </div>
               </Link>
             ))}

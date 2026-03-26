@@ -1096,7 +1096,7 @@ export default function ImportReviewPage() {
         {/* ── Professionals ─────────────────────────────────────── */}
         <section id="professionals" className="wrap" style={{ marginBottom: 80 }}>
           <div style={{ marginBottom: 40 }}>
-            <h2 className="arco-section-title">Credited Professionals</h2>
+            <h2 className="arco-section-title">Credited professionals</h2>
             <p className="arco-body-text" style={{ marginTop: 6, maxWidth: 600 }}>
               The trusted team behind this project. Click a card to edit.
             </p>
@@ -1135,7 +1135,7 @@ export default function ImportReviewPage() {
         <section id="photos" className="wrap" style={{ marginBottom: 100 }}>
           <div style={{ marginBottom: 28, display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
             <div>
-              <h2 className="arco-section-title">Photo Tour</h2>
+              <h2 className="arco-section-title">Photo tour</h2>
               <p className="arco-body-text" style={{ marginTop: 6 }}>
                 {photos.length > 0
                   ? `${photos.length} photo${photos.length !== 1 ? "s" : ""} imported from your website.`

@@ -54,8 +54,8 @@ export function CompanySwitcher() {
     })
   }, [router])
 
-  // Don't render if only 1 or 0 companies
-  if (!loaded || companies.length < 2) return null
+  // Don't render if no companies
+  if (!loaded || companies.length === 0) return null
 
   const active = companies.find((c) => c.id === activeId) ?? companies[0]
 

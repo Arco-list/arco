@@ -31,7 +31,7 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
     <section id="projects" className="projects-section">
       <div className="wrap">
         <div className="projects-header">
-          <h2 className="arco-section-title">Featured Projects</h2>
+          <h2 className="arco-section-title">Featured projects</h2>
         </div>
 
         {hasImages ? (

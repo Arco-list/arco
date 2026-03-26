@@ -40,7 +40,7 @@ interface TeamPageClientProps {
   currentUserId: string
 }
 
-export function TeamPageClient({ companyName, members, isOwner, currentUserId }: TeamPageClientProps) {
+export function TeamPageClient({ companyId, companyName, members, isOwner, currentUserId }: TeamPageClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
@@ -144,8 +144,10 @@ export function TeamPageClient({ companyName, members, isOwner, currentUserId }:
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
       <Header navLinks={[
-        { href: "/dashboard/listings", label: "Listings" },
-        { href: "/dashboard/company", label: "Company" },
+        { href: `/dashboard/listings?company_id=${companyId}`, label: "Listings" },
+        { href: `/dashboard/company?company_id=${companyId}`, label: "Company" },
+        { href: `/dashboard/team?company_id=${companyId}`, label: "Team" },
+        { href: "/dashboard/pricing", label: "Plans" },
       ]} />
 
       {/* Page title — matches /dashboard/listings layout */}
@@ -231,13 +233,13 @@ export function TeamPageClient({ companyName, members, isOwner, currentUserId }:
                     <span className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
                       <span
                         className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
-                        style={{ background: m.role === "admin" ? "var(--arco-black)" : "var(--arco-mid-grey)" }}
+                        style={{ background: m.role === "admin" ? "var(--arco-black)" : "#939393" }}
                       />
                       <span className="text-xs font-medium">{m.role === "admin" ? "Admin" : "Member"}</span>
                     </span>
 
-                    {/* 3-dot menu */}
-                    {canManage && !isSelf && (
+                    {/* 3-dot menu (or spacer for alignment) */}
+                    {canManage && !isSelf ? (
                       <div className="dropdown-menu" style={{ position: "relative" }}>
                         <button
                           className="filter-pill"
@@ -275,7 +277,9 @@ export function TeamPageClient({ companyName, members, isOwner, currentUserId }:
                           </div>
                         </div>
                       </div>
-                    )}
+                    ) : canManage ? (
+                      <div style={{ width: 32 }} />
+                    ) : null}
                   </div>
                 )
               })}
@@ -290,7 +294,6 @@ export function TeamPageClient({ companyName, members, isOwner, currentUserId }:
                     gap: 14,
                     padding: "14px 0",
                     borderBottom: "1px solid var(--arco-light-grey)",
-                    opacity: 0.7,
                   }}
                 >
                   {/* Icon */}
@@ -319,25 +322,40 @@ export function TeamPageClient({ companyName, members, isOwner, currentUserId }:
                     <span className="text-xs font-medium">Invited</span>
                   </span>
 
-                  {/* Actions */}
+                  {/* 3-dot menu */}
                   {canManage && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <div className="dropdown-menu" style={{ position: "relative" }}>
                       <button
-                        onClick={() => handleResend(m.id)}
-                        title="Resend invite"
-                        disabled={isPending}
-                        style={{ padding: 4, borderRadius: 4, background: "none", border: "none", cursor: "pointer" }}
+                        className="filter-pill"
+                        onClick={() => setOpenMenuId(openMenuId === m.id ? null : m.id)}
+                        aria-label="Invite options"
+                        style={{ padding: "6px 8px", gap: 0 }}
+                        data-open={openMenuId === m.id ? "true" : undefined}
                       >
-                        <RotateCw size={14} style={{ color: "var(--arco-mid-grey)" }} />
+                        <MoreHorizontal style={{ width: 16, height: 16 }} />
                       </button>
-                      <button
-                        onClick={() => handleRemove(m.id)}
-                        title="Cancel invite"
-                        disabled={isPending}
-                        style={{ padding: 4, borderRadius: 4, background: "none", border: "none", cursor: "pointer" }}
+                      <div
+                        className="filter-dropdown"
+                        data-open={openMenuId === m.id ? "true" : undefined}
+                        data-align="right"
+                        style={{ minWidth: 180, top: "calc(100% + 6px)" }}
                       >
-                        <Trash2 size={14} style={{ color: "var(--arco-mid-grey)" }} />
-                      </button>
+                        <div
+                          className="filter-dropdown-option"
+                          onClick={() => { handleResend(m.id); setOpenMenuId(null) }}
+                          role="menuitem"
+                        >
+                          <span className="filter-dropdown-label">Resend invite</span>
+                        </div>
+                        <div style={{ borderTop: "1px solid var(--arco-rule)", margin: "4px 0" }} />
+                        <div
+                          className="filter-dropdown-option"
+                          onClick={() => { handleRemove(m.id); setOpenMenuId(null) }}
+                          role="menuitem"
+                        >
+                          <span className="filter-dropdown-label" style={{ color: "#dc2626" }}>Cancel invite</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

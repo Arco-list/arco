@@ -34,6 +34,7 @@ import {
   generateLoginAsLinkAction,
   toggleAdminStatusAction,
 } from "@/app/admin/users/actions"
+import { generateCompanyLoginLinkAction } from "@/app/admin/professionals/actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -434,22 +435,46 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           }
           const first = companies[0]
           const overflow = companies.length - 1
+
+          const renderCompanyMenu = (company: AdminUserCompany) => (
+            <DropdownMenu key={company.id}>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left">
+                  <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                  <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{company.name}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[180px]">
+                <DropdownMenuItem asChild>
+                  <a href={`/professionals/${company.slug}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+                    View company
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={async () => {
+                    const result = await generateCompanyLoginLinkAction({ companyId: company.id })
+                    if (result.success && result.loginUrl) {
+                      window.open(result.loginUrl, "_blank", "noopener,noreferrer")
+                    } else {
+                      toast.error(result.error ?? "Failed to generate login link")
+                    }
+                  }}
+                >
+                  Log in as company
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+                    Edit company
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+
           return (
             <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-1.5">
-                <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[first.companyStatus] ?? "bg-muted-foreground"}`} />
-                <Link
-                  href={`/professionals/${first.slug}`}
-                  className="text-xs text-[#1c1c1a] hover:text-[#016D75] transition-colors truncate max-w-[150px]"
-                >
-                  {first.name}
-                </Link>
-                {first.projectCount > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
-                    {first.projectCount} {first.projectCount === 1 ? "project" : "projects"}
-                  </span>
-                )}
-              </div>
+              {renderCompanyMenu(first)}
               {overflow > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -462,19 +487,11 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="min-w-[200px]">
                     {companies.slice(1).map((company) => (
-                      <DropdownMenuItem key={company.id} className="flex items-center gap-1.5">
-                        <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
-                        <Link
-                          href={`/professionals/${company.slug}`}
-                          className="text-xs cursor-pointer truncate"
-                        >
-                          {company.name}
-                        </Link>
-                        {company.projectCount > 0 && (
-                          <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] ml-auto">
-                            {company.projectCount} {company.projectCount === 1 ? "project" : "projects"}
-                          </span>
-                        )}
+                      <DropdownMenuItem key={company.id} asChild>
+                        <button type="button" className="flex items-center gap-1.5 text-xs cursor-pointer w-full text-left" onClick={() => {}}>
+                          <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                          <span className="truncate">{company.name}</span>
+                        </button>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>

@@ -27,7 +27,7 @@ export function FAQSection({ items, paddingTop }: FAQSectionProps) {
     >
       <div className="wrap">
         <div className="faq-header">
-          <h2 className="arco-section-title">Frequently Asked Questions</h2>
+          <h2 className="arco-section-title">Frequently asked questions</h2>
         </div>
         <div className="faq-list">
           {items.map((item, i) => (

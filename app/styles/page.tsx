@@ -120,8 +120,8 @@ export default function StylesPage() {
             </div>
 
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
-              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Nav — .arco-nav-text — 15px, Sans, 400</div>
-              <p className="arco-nav-text">Projects · Professionals · About</p>
+              <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Nav — .arco-nav-text — 14px, Sans, 400</div>
+              <p className="arco-nav-text">Projects · Professionals</p>
             </div>
 
             <div style={{ marginBottom: '32px', paddingBottom: '32px', borderBottom: '1px solid var(--rule)' }}>
@@ -180,21 +180,41 @@ export default function StylesPage() {
             </div>
           </div>
 
-          {/* NEW: Navigation Links */}
+          {/* Navigation Links */}
           <div style={{ marginBottom: '48px' }}>
-            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Navigation Links</h4>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Header &amp; menu links</h4>
             <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px', marginBottom: '16px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <a href="#" className="arco-nav-text">Projects</a>
-                <span style={{ margin: '0 12px', color: 'var(--mid)' }}>·</span>
-                <a href="#" className="arco-nav-text">Professionals</a>
-                <span style={{ margin: '0 12px', color: 'var(--mid)' }}>·</span>
-                <a href="#" className="arco-nav-text">About</a>
+              {/* Header links */}
+              <div style={{ marginBottom: '24px' }}>
+                <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Header link — .arco-header-link</div>
+                <div style={{ display: 'flex', gap: 24 }}>
+                  <a href="#" className="arco-header-link active">Projects</a>
+                  <a href="#" className="arco-header-link">Professionals</a>
+                </div>
+              </div>
+              {/* Menu items */}
+              <div>
+                <div className="arco-eyebrow" style={{ marginBottom: '12px' }}>Menu item — .arco-menu-item</div>
+                <div style={{ maxWidth: 220 }}>
+                  <a href="#" className="arco-menu-item active">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+                    Listings
+                  </a>
+                  <a href="#" className="arco-menu-item">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                    Company
+                  </a>
+                  <a href="#" className="arco-menu-item">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
+                    Saved projects
+                  </a>
+                </div>
               </div>
             </div>
             <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
               <p className="arco-small-text">
-                Uses .arco-nav-text — 15px, Sans, 400 → Teal on hover
+                .arco-header-link — 14px, Sans, 400 → Teal on hover/active<br />
+                .arco-menu-item — 14px, Sans, 400, icon + text row → Teal on hover/active, icon fades in
               </p>
             </div>
           </div>

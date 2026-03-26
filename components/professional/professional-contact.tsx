@@ -22,7 +22,7 @@ export function ProfessionalContact({
     <section id="contact" className="contact-section">
       <div className="wrap">
         <div className="section-header">
-          <h2 className="arco-section-title">Get in Touch</h2>
+          <h2 className="arco-section-title">Get in touch</h2>
         </div>
 
         <div className="contact-grid">
@@ -33,10 +33,10 @@ export function ProfessionalContact({
             </Link>
           </div>
 
-          {/* Office Location */}
+          {/* Office location */}
           {locationDisplay && (
             <div className="contact-card">
-              <span className="arco-eyebrow">Office Location</span>
+              <span className="arco-eyebrow">Office location</span>
               <p className="arco-card-title" style={{ margin: '12px 0 4px' }}>
                 {locationDisplay}
               </p>

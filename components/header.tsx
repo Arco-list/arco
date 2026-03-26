@@ -9,6 +9,8 @@ import { signOutAction } from "@/app/(auth)/actions";
 import { useAuth } from "@/contexts/auth-context";
 import { useLoginModal } from "@/contexts/login-modal-context";
 import { useCreateCompanyModal } from "@/contexts/create-company-modal-context";
+// CompanySwitcher functionality is now integrated into the dropdown menu
+import { getUserCompaniesAction, switchCompanyAction } from "@/app/dashboard/company/actions";
 
 export interface NavLink {
   href: string;
@@ -57,6 +59,26 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const fallbackName = user?.email ? user.email.split("@")[0] : undefined;
   const rawMenuLabel = derivedFirstName || fallbackName;
   const menuLabel = rawMenuLabel && rawMenuLabel.trim().length > 0 ? rawMenuLabel.trim() : "Menu";
+  const avatarUrl = profile?.avatar_url ?? null;
+  const userInitial = (derivedFirstName ?? user?.email ?? "U").charAt(0).toUpperCase();
+
+  // Company data for menu
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }>>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const [showCompanySwitcher, setShowCompanySwitcher] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserCompaniesAction().then(({ companies: c, activeId }) => {
+      console.log("[Header] Companies loaded:", c.length, c.map(co => co.name));
+      setCompanies(c);
+      setActiveCompanyId(activeId);
+    }).catch(() => {});
+  }, [user]);
+
+  const activeCompany = companies.find(c => c.id === activeCompanyId) ?? companies[0] ?? null;
 
   // Check if user has professional role
   const metadataUserTypes = Array.isArray(sessionMetadata.user_types)
@@ -159,80 +181,43 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
       <header className={headerClasses}>
         {/* UPDATED: Use .wrap class */}
         <div className="wrap">
-          <div className="relative grid grid-cols-3 items-center gap-5">
-            {/* Left: Hamburger + Nav Links */}
-            <div className="relative flex items-center gap-6">
+          <div className="relative flex items-center justify-between">
+            {/* Left: Mobile hamburger + Logo + Nav Links */}
+            <div className="flex items-center gap-6">
+              {/* Mobile hamburger — only on mobile */}
               <button
-                className={`flex flex-col gap-1 p-1 transition-opacity hover:opacity-70 ${
+                className={`flex flex-col gap-1 p-1 md:hidden transition-opacity hover:opacity-70 ${
                   transparent && !isScrolled ? "text-white" : "text-black"
                 }`}
-                onClick={toggleMenu}
-                aria-label="Menu"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label="Navigation"
               >
-                <span className={`block w-[18px] h-[1.5px] transition-colors ${
-                  transparent && !isScrolled ? "bg-white" : "bg-black"
-                }`}></span>
-                <span className={`block w-[18px] h-[1.5px] transition-colors ${
-                  transparent && !isScrolled ? "bg-white" : "bg-black"
-                }`}></span>
-                <span className={`block w-[18px] h-[1.5px] transition-colors ${
-                  transparent && !isScrolled ? "bg-white" : "bg-black"
-                }`}></span>
+                <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
+                <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
+                <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
               </button>
 
-              {/* Hamburger Menu */}
-              {isMenuOpen && (
-                <div
-                  className="absolute z-50 w-52 border border-border bg-white shadow-lg"
-                  ref={menuRef}
-                  style={{ left: '0', top: 'calc(100% + 16px)' }}
-                >
-                  <div className="py-1">
-                    {/* EXPLORE */}
-                    <div className="px-4 py-3">
-                      <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Explore</p>
-                      <Link href="/projects" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Projects</Link>
-                      <Link href="/professionals" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Professionals</Link>
-                    </div>
-
-                    <div className="border-t border-border mx-4" />
-
-                    {/* PUBLISH */}
-                    <div className="px-4 py-3">
-                      <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Publish</p>
-                      <Link href="/businesses/architects" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Architects</Link>
-                      <Link href="/businesses/professionals" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Professionals</Link>
-                    </div>
-
-                    <div className="border-t border-border mx-4" />
-
-                    {/* About / Help */}
-                    <div className="px-4 py-3">
-                      <Link href="/about" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>About</Link>
-                      <Link href="/help-center" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsMenuOpen(false)}>Help & FAQ</Link>
-                    </div>
+              {/* Mobile nav dropdown */}
+              {isMobileMenuOpen && (
+                <div className="absolute left-0 top-full z-50 w-48 border border-border bg-white shadow-lg mt-2 md:hidden" ref={menuRef}>
+                  <div className="py-2">
+                    {navLinks.map((link) => {
+                      const linkPath = link.href.split("?")[0]
+                      return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={`block px-5 py-2 text-sm transition-colors ${pathname === linkPath ? "text-primary font-medium" : "text-[#1c1c1a] hover:text-primary"}`}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                      )
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* Nav links white when transparent */}
-              <div className="hidden items-center gap-6 md:flex">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`arco-nav-text whitespace-nowrap ${
-                      transparent && !isScrolled ? "nav-transparent" : "hover:text-primary"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* Center: Logo */}
-            <div className="flex justify-center">
               <Link href="/">
                 <img
                   src={
@@ -247,9 +232,28 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                   }}
                 />
               </Link>
+              <div className="hidden items-center gap-6 md:flex">
+                {navLinks.map((link) => {
+                  const linkPath = link.href.split("?")[0]
+                  const isActive = pathname === linkPath
+                  return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`text-sm font-normal whitespace-nowrap transition-colors ${
+                      isActive
+                        ? "text-primary"
+                        : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                  )
+                })}
+              </div>
             </div>
 
-            {/* Right: Search + Login */}
+            {/* Right: Search + Menu */}
             <div className="relative flex items-center justify-end gap-3">
               {/* Search Icon */}
               <button
@@ -265,88 +269,245 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 </svg>
               </button>
 
-              {/* Account button / Log in */}
-              {isLoggedIn ? (
-                <div className="relative" ref={accountMenuRef}>
+              {/* Account menu button */}
+              <div className="relative" ref={accountMenuRef}>
+                {isLoggedIn ? (
                   <button
                     type="button"
                     onClick={() => setIsAccountMenuOpen((o) => !o)}
-                    className={`arco-nav-text px-[18px] py-[7px] rounded-[3px] whitespace-nowrap ${
-                      transparent && !isScrolled ? "btn-transparent" : "btn-scrolled"
+                    className={`flex items-center gap-2 h-8 rounded-full border pr-3 pl-0.5 transition-colors ${
+                      transparent && !isScrolled
+                        ? "border-white/30 text-white hover:bg-white/10"
+                        : "border-[#e5e5e4] text-[#1c1c1a] hover:bg-[#f5f5f4]"
                     }`}
                   >
-                    {menuLabel}
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style={{ background: transparent && !isScrolled ? "rgba(255,255,255,.2)" : "#1c1c1a", color: "#fff" }}>
+                        {userInitial}
+                      </span>
+                    )}
+                    <span className="text-sm hidden sm:inline">{menuLabel}</span>
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M4 6l4 4 4-4" />
+                    </svg>
                   </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAccountMenuOpen((o) => !o)}
+                    className={`flex items-center gap-2 h-8 rounded-full border pr-3 pl-3 transition-colors ${
+                      transparent && !isScrolled
+                        ? "border-white/30 text-white hover:bg-white/10"
+                        : "border-[#e5e5e4] text-[#1c1c1a] hover:bg-[#f5f5f4]"
+                    }`}
+                  >
+                    <span className="text-sm">Menu</span>
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M4 6l4 4 4-4" />
+                    </svg>
+                  </button>
+                )}
 
-                  {isAccountMenuOpen && (
-                    <div
-                      className="absolute right-0 z-50 w-52 border border-border bg-white shadow-lg"
-                      style={{ top: 'calc(100% + 16px)' }}
-                    >
-                      <div className="py-1">
-                        {/* EXPLORE */}
-                        <div className="px-4 py-3">
-                          <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Explore</p>
-                          <Link href="/homeowner?tab=saved-projects" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Saved projects</Link>
-                          <Link href="/homeowner?tab=saved-professionals" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Saved professionals</Link>
-                        </div>
+                {isAccountMenuOpen && (
+                  <div
+                    className="absolute right-0 z-50 w-56 border border-border bg-white shadow-lg rounded-[3px]"
+                    style={{ top: 'calc(100% + 12px)' }}
+                  >
+                    <div className="py-2">
 
-                        {hasProfessionalRole && (
-                          <>
-                            <div className="border-t border-border mx-4" />
-                            {/* PUBLISH */}
-                            <div className="px-4 py-3">
-                              <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Publish</p>
-                              <Link href="/dashboard/listings" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Listings</Link>
-                              <Link href="/dashboard/company" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Company</Link>
-                              <Link href="/dashboard/team" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Team</Link>
-                              <Link href="/pricing" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Pricing</Link>
+                      {/* Company section — for professionals */}
+                      {hasProfessionalRole && activeCompany && (
+                        <>
+                          {/* Company header — click to expand switcher */}
+                          <div className="px-4 py-3">
+                            <button
+                              type="button"
+                              className="flex items-center gap-2 w-full text-left hover:opacity-80 transition-opacity"
+                              onClick={(e) => { e.stopPropagation(); if (companies.length > 1) setShowCompanySwitcher(!showCompanySwitcher) }}
+                            >
+                              {activeCompany.logo_url ? (
+                                <img src={activeCompany.logo_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                              ) : (
+                                <span className="w-5 h-5 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[9px] font-medium text-[#6b6b68]">
+                                  {activeCompany.name.charAt(0)}
+                                </span>
+                              )}
+                              <span className="text-sm text-[#1c1c1a] truncate flex-1">{activeCompany.name}</span>
+                              {companies.length > 1 && (
+                                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="2" strokeLinecap="round" className="shrink-0 transition-transform" style={{ transform: showCompanySwitcher ? "rotate(180deg)" : "none" }}>
+                                  <path d="M4 6l4 4 4-4" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                          {/* Other companies — separate div to avoid event bubbling */}
+                          {showCompanySwitcher && companies.length > 1 && (
+                            <div className="px-4 pb-2">
+                              <div className="flex flex-col gap-0.5 pt-2 border-t border-[#f0f0ee]">
+                                {companies.filter(c => c.id !== activeCompanyId).map(c => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    className="flex items-center gap-2 px-1 py-1.5 text-sm text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors text-left w-full"
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      const result = await switchCompanyAction(c.id)
+                                      if (result.success) {
+                                        setActiveCompanyId(c.id)
+                                        setShowCompanySwitcher(false)
+                                        setIsAccountMenuOpen(false)
+                                        // If on a dashboard page, navigate with new company_id
+                                        if (pathname?.startsWith("/dashboard/")) {
+                                          const basePath = pathname.split("?")[0]
+                                          window.location.href = `${basePath}?company_id=${c.id}`
+                                        } else {
+                                          router.refresh()
+                                        }
+                                      } else {
+                                        toast.error("Failed to switch company")
+                                      }
+                                    }}
+                                  >
+                                    {c.logo_url ? (
+                                      <img src={c.logo_url} alt="" className="w-4 h-4 rounded-full object-cover" />
+                                    ) : (
+                                      <span className="w-4 h-4 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[8px] font-medium text-[#a1a1a0]">
+                                        {c.name.charAt(0)}
+                                      </span>
+                                    )}
+                                    <span className="truncate">{c.name}</span>
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </>
-                        )}
-
-                        {!hasProfessionalRole && (
-                          <>
-                            <div className="border-t border-border mx-4" />
-                            <div className="px-4 py-3">
-                              <button type="button" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors text-left w-full" onClick={() => { setIsAccountMenuOpen(false); openCreateCompanyModal() }}>Create company</button>
-                            </div>
-                          </>
-                        )}
-
-                        <div className="border-t border-border mx-4" />
-
-                        {/* SETTINGS */}
-                        <div className="px-4 py-3">
-                          <p className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground px-3 pb-2">Settings</p>
-                          {hasAdminRole && (
-                            <Link href="/admin" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Admin</Link>
                           )}
-                          <Link href="/homeowner?tab=account" className="block arco-nav-text px-3 py-1.5 hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>Account</Link>
-                          <button
-                            type="button"
-                            className="block w-full text-left arco-nav-text px-3 py-1.5 hover:text-primary transition-colors"
-                            onClick={handleSignOut}
-                            disabled={isSigningOut}
-                          >
-                            {isSigningOut ? "Signing out..." : "Sign out"}
-                          </button>
-                        </div>
+                          <div className="border-t border-border mx-4" />
+                          <div className="px-4 py-2">
+                            <Link href={`/dashboard/listings${activeCompanyId ? `?company_id=${activeCompanyId}` : ""}`} className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/dashboard/listings" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+                              Listings
+                            </Link>
+                            <Link href={`/dashboard/company${activeCompanyId ? `?company_id=${activeCompanyId}` : ""}`} className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/dashboard/company" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                              Company
+                            </Link>
+                            <Link href={`/dashboard/team${activeCompanyId ? `?company_id=${activeCompanyId}` : ""}`} className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/dashboard/team" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
+                              Team
+                            </Link>
+                            <Link href="/dashboard/pricing" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/dashboard/pricing" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
+                              Plans
+                            </Link>
+                          </div>
+                          <div className="border-t border-border mx-4" />
+                        </>
+                      )}
+
+                      {/* Businesses — for non-professionals */}
+                      {!hasProfessionalRole && (
+                        <>
+                          <div className="px-4 py-2">
+                            <Link href="/businesses/architects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/businesses/architects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                              For Architects
+                            </Link>
+                            <Link href="/businesses/professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/businesses/professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
+                              For Professionals
+                            </Link>
+                          </div>
+                          <div className="border-t border-border mx-4" />
+                        </>
+                      )}
+
+                      {/* Saved — only when logged in */}
+                      {isLoggedIn && (
+                        <>
+                          <div className="px-4 py-2">
+                            <Link href="/homeowner?tab=saved-projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/homeowner" && (!searchParams.get("tab") || searchParams.get("tab") === "saved-projects") ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
+                              Saved projects
+                            </Link>
+                            <Link href="/homeowner?tab=saved-professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/homeowner" && searchParams.get("tab") === "saved-professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
+                              Saved professionals
+                            </Link>
+                          </div>
+                          <div className="border-t border-border mx-4" />
+                        </>
+                      )}
+
+                      {/* Bottom links */}
+                      <div className="px-4 py-2">
+                        {isLoggedIn ? (
+                          <>
+                            {hasAdminRole && (
+                              <>
+                                <Link href="/admin/users" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/admin/users" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>
+                                  Users
+                                </Link>
+                                <Link href="/admin/projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/admin/projects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+                                  Projects
+                                </Link>
+                                <Link href="/admin/professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/admin/professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                                  Companies
+                                </Link>
+                                <Link href="/admin/categories" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/admin/categories" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+                                  Categories
+                                </Link>
+                                <Link href="/admin/emails" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/admin/emails" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                                  Emails
+                                </Link>
+                              </>
+                            )}
+                            {hasAdminRole && <div className="border-t border-border my-2 -mx-1" />}
+                            <Link href="/homeowner?tab=account" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors ${pathname === "/homeowner" && searchParams.get("tab") === "account" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+                              Account
+                            </Link>
+                            <Link href="/help-center" className="flex items-center gap-2.5 px-1 py-1.5 text-sm text-[#1c1c1a] hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                              Help & FAQ
+                            </Link>
+                            <button
+                              type="button"
+                              className="flex items-center gap-2.5 px-1 py-1.5 text-sm text-[#1c1c1a] hover:text-primary transition-colors w-full text-left"
+                              onClick={handleSignOut}
+                              disabled={isSigningOut}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                              {isSigningOut ? "Signing out..." : "Sign out"}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <Link href="/help-center" className="flex items-center gap-2.5 px-1 py-1.5 text-sm text-[#1c1c1a] hover:text-primary transition-colors" onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                              Help & FAQ
+                            </Link>
+                            <button
+                              type="button"
+                              className="flex items-center gap-2.5 px-1 py-1.5 text-sm text-[#1c1c1a] hover:text-primary transition-colors w-full text-left"
+                              onClick={() => { setIsAccountMenuOpen(false); openLoginModal(pathname ?? undefined) }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
+                              Sign up / Log in
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openLoginModal(pathname ?? undefined)}
-                  className={`arco-nav-text px-[18px] py-[7px] rounded-[3px] whitespace-nowrap ${
-                    transparent && !isScrolled ? "btn-transparent" : "btn-scrolled"
-                  }`}
-                >
-                  Log in
-                </button>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

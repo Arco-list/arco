@@ -3,11 +3,19 @@ import { redirect } from "next/navigation"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
-import { AdminHeader } from "@/components/admin-header"
+import { Header } from "@/components/header"
 
 type AdminLayoutProps = {
   children: ReactNode
 }
+
+const ADMIN_NAV_LINKS = [
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/projects", label: "Projects" },
+  { href: "/admin/professionals", label: "Companies" },
+  { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/emails", label: "Emails" },
+]
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {
   const supabase = await createServerSupabaseClient()
@@ -41,7 +49,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen">
-      <AdminHeader />
+      <Header navLinks={ADMIN_NAV_LINKS} />
       <main className="pt-[60px]">
         {children}
       </main>
