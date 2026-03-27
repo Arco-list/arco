@@ -57,7 +57,7 @@ function baseLayout(content: string): string {
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 <!-- Logo -->
 <tr><td style="padding:0 0 32px;">
-<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="56" height="15" style="display:block;" />
+<img src="https://www.arcolist.com/arco-logo-square.png" alt="Arco" width="32" height="32" style="display:block;border-radius:6px;" />
 </td></tr>
 <!-- Content -->
 <tr><td style="padding:0 0 32px;">
@@ -65,9 +65,18 @@ ${content}
 </td></tr>
 <!-- Footer -->
 <tr><td style="padding:24px 0 0;border-top:1px solid #e8e8e6;">
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr>
+<td style="vertical-align:middle;">
 <p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">
 Arco Global BV · The professional network architects trust.
 </p>
+</td>
+<td style="vertical-align:middle;text-align:right;">
+<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="40" height="11" style="display:inline-block;opacity:0.4;" />
+</td>
+</tr>
+</table>
 </td></tr>
 </table>
 </td></tr>
@@ -98,14 +107,19 @@ function divider(): string {
 
 function projectCard(vars: EmailVariables): string {
   const title = vars.project_title || vars.project_name || ''
-  const subtitle = [vars.project_owner, vars.project_location].filter(Boolean).join(' · ')
+  const subtitle = [vars.service_category, vars.project_location].filter(Boolean).join(' · ')
   const image = vars.project_image
   if (!title) return ''
-  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e8e8e6;border-radius:6px;overflow:hidden;">
-${image ? `<tr><td><img src="${image}" alt="${title}" width="100%" style="display:block;max-height:220px;object-fit:cover;" /></td></tr>` : ''}
-<tr><td style="padding:16px 20px;">
-<p style="margin:0 0 4px;font-size:16px;font-weight:500;color:#1c1c1a;font-family:Georgia,'Times New Roman',serif;">${title}</p>
-${subtitle ? `<p style="margin:0;font-size:13px;font-weight:300;color:#a1a1a0;">${subtitle}</p>` : ''}
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border-radius:6px;overflow:hidden;">
+${image ? `<tr><td>
+<div style="width:100%;padding-top:75%;position:relative;overflow:hidden;border-radius:6px 6px 0 0;">
+<!--[if mso]><img src="${image}" alt="${title}" width="520" height="390" style="display:block;" /><![endif]-->
+<!--[if !mso]><!--><img src="${image}" alt="${title}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;" /><!--<![endif]-->
+</div>
+</td></tr>` : ''}
+<tr><td style="padding:14px 0 0;">
+<p style="margin:0 0 4px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${title}</p>
+${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${subtitle}</p>` : ''}
 </td></tr>
 </table>`
 }

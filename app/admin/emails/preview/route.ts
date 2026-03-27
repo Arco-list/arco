@@ -9,6 +9,7 @@ const TEST_VARS = {
   project_location: 'Oisterwijk, Netherlands',
   project_link: 'https://arcolist.com/projects/villa-oisterwijk',
   project_image: 'https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg',
+  service_category: 'Villa',
   dashboard_link: 'https://arcolist.com/dashboard',
   confirmUrl: 'https://arcolist.com/dashboard/listings',
   rejection_reason: 'The project photos do not meet our quality guidelines. Please upload higher resolution images and resubmit.',
@@ -27,13 +28,18 @@ function baseLayout(content: string): string {
 <tr><td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 <tr><td style="padding:0 0 32px;">
-<img src="/arco-logo-email.png" alt="Arco" width="56" height="15" style="display:block;" />
+<img src="/arco-logo-square.png" alt="Arco" width="32" height="32" style="display:block;border-radius:6px;" />
 </td></tr>
 <tr><td style="padding:0 0 32px;">
 ${content}
 </td></tr>
 <tr><td style="padding:24px 0 0;border-top:1px solid #e8e8e6;">
-<p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">Arco Global BV · The professional network architects trust.</p>
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr>
+<td style="vertical-align:middle;"><p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">Arco Global BV · The professional network architects trust.</p></td>
+<td style="vertical-align:middle;text-align:right;"><img src="/arco-logo-email.png" alt="Arco" width="40" height="11" style="display:inline-block;opacity:0.4;" /></td>
+</tr>
+</table>
 </td></tr>
 </table>
 </td></tr>
