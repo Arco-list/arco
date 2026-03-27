@@ -51,22 +51,20 @@ function baseLayout(content: string): string {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:40px 20px;">
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:40px 20px;">
 <tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:8px;overflow:hidden;">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 <!-- Logo -->
-<tr><td style="padding:32px 40px 24px;">
-<img src="https://arcolist.com/arco-logo-email.png" alt="Arco" width="80" height="22" style="display:block;" />
+<tr><td style="padding:0 0 32px;">
+<img src="https://arcolist.com/arco-logo-email.png" alt="Arco" width="56" height="15" style="display:block;" />
 </td></tr>
 <!-- Content -->
-<tr><td style="padding:0 40px 32px;">
+<tr><td style="padding:0 0 32px;">
 ${content}
 </td></tr>
-</table>
 <!-- Footer -->
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-<tr><td style="padding:24px 40px;text-align:center;">
+<tr><td style="padding:24px 0 0;border-top:1px solid #e8e8e6;">
 <p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">
 Arco Global BV · The professional network architects trust.
 </p>
@@ -96,6 +94,20 @@ function button(text: string, url: string): string {
 
 function divider(): string {
   return `<hr style="border:none;border-top:1px solid #e8e8e6;margin:24px 0;" />`
+}
+
+function projectCard(vars: EmailVariables): string {
+  const title = vars.project_title || vars.project_name || ''
+  const subtitle = [vars.project_owner, vars.project_location].filter(Boolean).join(' · ')
+  const image = vars.project_image
+  if (!title) return ''
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border:1px solid #e8e8e6;border-radius:6px;overflow:hidden;">
+${image ? `<tr><td><img src="${image}" alt="${title}" width="100%" style="display:block;max-height:220px;object-fit:cover;" /></td></tr>` : ''}
+<tr><td style="padding:16px 20px;">
+<p style="margin:0 0 4px;font-size:16px;font-weight:500;color:#1c1c1a;font-family:Georgia,'Times New Roman',serif;">${title}</p>
+${subtitle ? `<p style="margin:0;font-size:13px;font-weight:300;color:#a1a1a0;">${subtitle}</p>` : ''}
+</td></tr>
+</table>`
 }
 
 // ─── Template renderers ──────────────────────────────────────────────────────
@@ -134,7 +146,8 @@ function renderProfessionalInvite(vars: EmailVariables): { subject: string; html
     subject: `${vars.project_owner || 'An architect'} credited you on ${projectName}`,
     html: baseLayout(`
       ${heading('You\'ve been credited')}
-      ${body(`${vars.project_owner || 'An architect'} added your company to <strong>${projectName}</strong>${vars.project_location ? ` in ${vars.project_location}` : ''} on Arco.`)}
+      ${body(`${vars.project_owner || 'An architect'} added your company to a project on Arco.`)}
+      ${projectCard(vars)}
       ${body('Accept the invitation to showcase this project on your company page.')}
       ${vars.confirmUrl ? button('View invitation', vars.confirmUrl) : ''}
       ${divider()}
