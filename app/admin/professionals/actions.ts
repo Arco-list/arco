@@ -590,3 +590,85 @@ export async function generateCompanyLoginLinkAction(input: { companyId: string 
 
   return { success: true, loginUrl: loginUrl.toString() }
 }
+
+export async function changeCompanyOwnerAction(input: {
+  companyId: string
+  newOwnerEmail: string
+}): Promise<{ success: boolean; error?: string }> {
+  const idResult = uuidSchema.safeParse(input.companyId)
+  if (!idResult.success) return { success: false, error: "Invalid company ID." }
+
+  const email = input.newOwnerEmail.trim().toLowerCase()
+  if (!email) return { success: false, error: "Email is required." }
+
+  const { error } = await assertAdmin()
+  if (error) return { success: false, error: "Not authorized." }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+
+  // Find user by email — search across all pages
+  let targetUser: { id: string; email?: string } | null = null
+  let page = 1
+  const perPage = 100
+  while (!targetUser) {
+    const { data: { users }, error: listError } = await serviceClient.auth.admin.listUsers({ page, perPage })
+    if (listError) return { success: false, error: "Failed to look up users." }
+    if (!users || users.length === 0) break
+    const found = users.find(u => u.email?.toLowerCase() === email)
+    if (found) { targetUser = found; break }
+    if (users.length < perPage) break
+    page++
+  }
+  if (!targetUser) return { success: false, error: `No user found with email ${email}.` }
+
+  // Update company owner
+  const { error: updateError } = await serviceClient
+    .from("companies")
+    .update({ owner_id: targetUser.id })
+    .eq("id", idResult.data)
+
+  if (updateError) {
+    logger.db("update", "companies", "Failed to change owner", { companyId: idResult.data }, updateError)
+    return { success: false, error: "Failed to update company owner." }
+  }
+
+  // Ensure user has professional role
+  const { data: profile } = await serviceClient
+    .from("profiles")
+    .select("user_types")
+    .eq("id", targetUser.id)
+    .maybeSingle()
+
+  const currentTypes = Array.isArray(profile?.user_types) ? profile.user_types as string[] : []
+  if (!currentTypes.includes("professional")) {
+    await serviceClient
+      .from("profiles")
+      .update({ user_types: [...currentTypes, "professional"] })
+      .eq("id", targetUser.id)
+  }
+
+  // Ensure professional/team member row exists for this company
+  const { data: existingPro } = await serviceClient
+    .from("professionals")
+    .select("id")
+    .eq("user_id", targetUser.id)
+    .eq("company_id", idResult.data)
+    .maybeSingle()
+
+  if (!existingPro) {
+    const { data: company } = await serviceClient
+      .from("companies")
+      .select("name")
+      .eq("id", idResult.data)
+      .maybeSingle()
+
+    await serviceClient.from("professionals").insert({
+      user_id: targetUser.id,
+      company_id: idResult.data,
+      title: company?.name ?? "Team member",
+    })
+  }
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}

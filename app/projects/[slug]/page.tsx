@@ -311,9 +311,16 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   // Format professionals data for components — project owner first
   const formattedProfessionals = professionals
     .sort((a, b) => {
+      // Owner always first
       const aOwner = a.is_project_owner ? 1 : 0
       const bOwner = b.is_project_owner ? 1 : 0
-      return bOwner - aOwner
+      if (aOwner !== bOwner) return bOwner - aOwner
+      // Then sort by primary service order
+      const aServices = (a.invited_service_category_ids as string[] | null) ?? []
+      const bServices = (b.invited_service_category_ids as string[] | null) ?? []
+      const aOrder = Math.min(...aServices.map(id => categorySortOrder.get(id) ?? 999), 999)
+      const bOrder = Math.min(...bServices.map(id => categorySortOrder.get(id) ?? 999), 999)
+      return aOrder - bOrder
     })
     .map(p => {
       let serviceIds = (p.invited_service_category_ids as string[] | null) ?? []

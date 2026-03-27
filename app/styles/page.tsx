@@ -354,6 +354,34 @@ export default function StylesPage() {
           </div>
         </div>
 
+        {/* STATUS PILLS */}
+        <div style={{ marginBottom: '80px' }}>
+          <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Status Pills</h2>
+          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Dot + label pills for status indicators</p>
+
+          <div>
+            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Variants</h4>
+            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--owner" />Owner</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--removed" />Removed</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--rejected" />Rejected</span>
+              </div>
+              <p className="arco-body-text" style={{ marginTop: '20px' }}>
+                <strong>Class:</strong> .status-pill + .status-pill-dot + .status-pill-dot--[variant]<br/>
+                <strong>Size:</strong> 12px font, 4px 12px padding, 7px dot<br/>
+                <strong>Border:</strong> 1px solid var(--arco-rule), 24px radius<br/>
+                <strong>Variants:</strong> owner, featured, listed, invited, unlisted, draft, removed, rejected
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* CATEGORY TAGS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Category Tags</h2>

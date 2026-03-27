@@ -105,7 +105,7 @@ import {
   getUserEmailAction,
   getAvailableProfessionalsAction
 } from "@/app/new-project/actions"
-import { createUnlistedCompanyAction, confirmLinkExistingCompanyAction } from "@/app/dashboard/edit/actions"
+import { createUnlistedCompanyAction, confirmLinkExistingCompanyAction, sendInviteEmailAction, getCompanyOwnerEmailAction } from "@/app/dashboard/edit/actions"
 import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions"
 import { isAdminUser } from "@/lib/auth-utils"
 import {
@@ -129,6 +129,17 @@ const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+-])+(?:\.(?:[a-zA-Z0-9_'^&+-])+)*@(?:[a-
 const getDomain = (email: string) => {
   const parts = email.split("@").map((part) => part.trim().toLowerCase())
   return parts.length === 2 ? parts[1] : ""
+}
+
+/** Resize an input to fit its value (or placeholder) exactly */
+const autoSizeInput = (el: HTMLInputElement) => {
+  const text = el.value || el.placeholder || ""
+  const span = document.createElement("span")
+  span.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:inherit"
+  el.parentElement?.appendChild(span)
+  span.textContent = text
+  el.style.width = `${span.offsetWidth + 1}px`
+  span.remove()
 }
 
 type CategoriesRow = Tables<"categories">
@@ -1606,7 +1617,7 @@ export default function ListingEditorPage() {
   // Inline card editing state
   const [editingInviteField, setEditingInviteField] = useState<{ inviteId: string; field: "service" | "company" | "email" } | null>(null)
   const [companySearchQuery, setCompanySearchQuery] = useState("")
-  const [companySearchResults, setCompanySearchResults] = useState<{ id: string; name: string; city: string | null; logo_url: string | null; email: string | null }[]>([])
+  const [companySearchResults, setCompanySearchResults] = useState<{ id: string; name: string; city: string | null; logo_url: string | null; email: string | null; owner_id: string | null; domain: string | null }[]>([])
   const [isSearchingCompanies, setIsSearchingCompanies] = useState(false)
   const companySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ownerCompanyServices, setOwnerCompanyServices] = useState<{ id: string; name: string; parentName?: string | null }[]>([])
@@ -2447,16 +2458,32 @@ export default function ListingEditorPage() {
     setSelectedProfessional(null)
   }
 
+  // Helper: check if a company/email is already credited on this project (including owner)
+  const findExistingInviteByCompany = (companyId?: string | null, email?: string | null): ProfessionalInviteSummary | undefined => {
+    const allInvites = Object.values(professionalInvites).flat()
+    // Also check the owner
+    if (projectOwnerInvite) allInvites.push(projectOwnerInvite)
+    // Deduplicate by id
+    const seen = new Set<string>()
+    return allInvites.find(inv => {
+      if (seen.has(inv.id)) return false
+      seen.add(inv.id)
+      return (companyId && inv.companyId === companyId) || (email && inv.email === email)
+    })
+  }
+
   const handleProfessionalDirectSelect = async (professional: ProfessionalOption, serviceId: string) => {
     if (!projectId || isInviteMutating) {
       return
     }
 
-    // Check if this company already has a row on this project
-    const existingInvite = Object.values(professionalInvites).flat().find(
-      inv => inv.companyId === professional.company_id || inv.email === professional.email
-    )
+    // Check if this company already has a row on this project (including owner)
+    const existingInvite = findExistingInviteByCompany(professional.company_id, professional.email)
     if (existingInvite) {
+      if (existingInvite.isOwner) {
+        setInviteError("This company is the project owner and is already credited on this project.")
+        return
+      }
       // Add service to existing row
       if (existingInvite.serviceIds.includes(serviceId)) {
         setInviteError("This company is already credited for this service.")
@@ -2650,6 +2677,20 @@ export default function ListingEditorPage() {
   }
 
   const saveInviteCompany = async (inviteId: string, companyId: string | null, companyEmail?: string | null) => {
+    // Check if this company is already on the project (including owner)
+    if (companyId) {
+      const existing = findExistingInviteByCompany(companyId, companyEmail)
+      if (existing && existing.id !== inviteId) {
+        toast.error(existing.isOwner
+          ? "This company is the project owner and is already credited on this project."
+          : "This company is already credited on this project.")
+        setEditingInviteField(null)
+        setCompanySearchQuery("")
+        setCompanySearchResults([])
+        setGoogleResults([])
+        return
+      }
+    }
     try {
       const updateData: Record<string, unknown> = { company_id: companyId }
       if (companyId && companyEmail) {
@@ -2731,7 +2772,7 @@ export default function ListingEditorPage() {
                     prev && prev.googlePlaceId === googlePlaceId
                       ? {
                           ...prev,
-                          prefillEmail: hostname ? `info@${hostname}` : prev.prefillEmail,
+                          prefillEmail: hostname ? `@${hostname}` : prev.prefillEmail,
                           website,
                           domain: hostname,
                           phone: place.international_phone_number ?? place.formatted_phone_number ?? null,
@@ -2760,6 +2801,21 @@ export default function ListingEditorPage() {
     const domain = getDomain(trimmed)
     if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
     if (!projectId || !pendingTier23) return
+
+    // Check if company is already on the project (draft card may have companyId from Arco search)
+    const checkCompanyId = draftCard?.companyId ?? null
+    if (checkCompanyId) {
+      const existing = findExistingInviteByCompany(checkCompanyId, trimmed)
+      if (existing) {
+        toast.error(existing.isOwner
+          ? "This company is the project owner and is already credited on this project."
+          : "This company is already credited on this project.")
+        setDraftCard(null)
+        setPendingTier23(null)
+        setEditingInviteField(null)
+        return
+      }
+    }
 
     const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
     const projectTitle = detailsForm.projectTitle || "Untitled project"
@@ -2888,6 +2944,15 @@ export default function ListingEditorPage() {
   // Handle dedup warning actions
   const handleDupLinkExisting = async () => {
     if (!dupWarning || !projectId) return
+    // Final check: is this company already on the project?
+    const existing = findExistingInviteByCompany(dupWarning.existingId)
+    if (existing) {
+      toast.error(existing.isOwner
+        ? "This company is the project owner and is already credited on this project."
+        : "This company is already credited on this project.")
+      setDupWarning(null)
+      return
+    }
     const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
     const projectTitle = detailsForm.projectTitle || "Untitled project"
 
@@ -2989,9 +3054,9 @@ export default function ListingEditorPage() {
         // Parallel: DB + Google Places
         const dbPromise = supabase
           .from("companies")
-          .select("id, name, city, logo_url, email")
+          .select("id, name, city, logo_url, email, owner_id, domain")
           .ilike("name", `%${query.trim()}%`)
-          .eq("status", "listed")
+          .in("status", ["listed", "unlisted", "draft"])
           .limit(6)
 
         const googlePromise = (async (): Promise<GooglePlaceResult[]> => {
@@ -3077,9 +3142,24 @@ export default function ListingEditorPage() {
   }
 
   // Save draft card with a DB company (tier 1) — uses company email automatically
-  const saveDraftCardWithCompany = async (companyId: string, companyEmail: string | null) => {
+  const saveDraftCardWithCompany = async (companyId: string, companyEmail: string | null, isClaimedCompany?: boolean) => {
     if (!projectId) return
-    if (!companyEmail) {
+
+    // Check if this company is already on the project (including owner)
+    const existing = findExistingInviteByCompany(companyId, companyEmail)
+    if (existing) {
+      toast.error(existing.isOwner
+        ? "This company is the project owner and is already credited on this project."
+        : "This company is already credited on this project.")
+      setDraftCard(null)
+      setEditingInviteField(null)
+      setCompanySearchQuery("")
+      setCompanySearchResults([])
+      setGoogleResults([])
+      return
+    }
+
+    if (!companyEmail && !isClaimedCompany) {
       // No email on file — fall back to asking for email via tier 2/3 flow
       const companyName = companySearchResults.find(c => c.id === companyId)?.name ?? ""
       handleSelectTier23Company("__draft__", companyName, null, null)
@@ -3089,12 +3169,19 @@ export default function ListingEditorPage() {
     }
 
     try {
-      // Fetch company's primary service and services from DB
+      // Fetch company's primary service, services, and owner email from DB
       const { data: companyRow } = await supabase
         .from("companies")
-        .select("primary_service_id, services_offered")
+        .select("primary_service_id, services_offered, email, owner_id")
         .eq("id", companyId)
         .maybeSingle()
+
+      // Resolve email: provided email > company email > owner's auth email
+      let resolvedEmail = companyEmail || companyRow?.email || ""
+      if (!resolvedEmail && companyRow?.owner_id) {
+        const { email: ownerEmail } = await getCompanyOwnerEmailAction(companyId)
+        resolvedEmail = ownerEmail || ""
+      }
 
       const serviceIds = draftCard?.serviceIds?.length ? draftCard.serviceIds
         : companyRow?.primary_service_id ? [companyRow.primary_service_id]
@@ -3103,7 +3190,7 @@ export default function ListingEditorPage() {
       const insertData: Record<string, unknown> = {
         project_id: projectId,
         company_id: companyId,
-        invited_email: companyEmail,
+        invited_email: resolvedEmail || "pending@arcolist.com",
         invited_service_category_ids: serviceIds,
       }
       const { error } = await supabase.from("project_professionals").insert(insertData)
@@ -3115,8 +3202,16 @@ export default function ListingEditorPage() {
         void loadCompanyServices(companyId)
       }
 
+      // Send invite email (fire-and-forget)
+      const inviteEmail = resolvedEmail && resolvedEmail !== "pending@arcolist.com" ? resolvedEmail : null
+      if (inviteEmail) {
+        const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
+        const projectTitle = detailsForm.projectTitle || "Untitled project"
+        sendInviteEmailAction({ email: inviteEmail, projectId, inviterName, projectTitle }).catch(() => {})
+      }
+
       await refreshProfessionalSection()
-      toast.success("Professional added")
+      toast.success(inviteEmail ? "Professional added & invite sent" : "Professional added")
     } catch {
       toast.error("Failed to add professional")
     }
@@ -3829,6 +3924,12 @@ export default function ListingEditorPage() {
         })
       }
     }
+    // Sort non-owner by service order (primary service of each invite)
+    nonOwner.sort((a, b) => {
+      const aOrder = Math.min(...a.serviceIds.map(id => serviceOrder.get(id) ?? 999))
+      const bOrder = Math.min(...b.serviceIds.map(id => serviceOrder.get(id) ?? 999))
+      return aOrder - bOrder
+    })
     // Owner card always first
     if (projectOwnerInvite) {
       return [{ ...projectOwnerInvite, serviceName: formatServiceName(projectOwnerInvite.serviceIds, projectOwnerInvite.primaryService) }, ...nonOwner]
@@ -3896,6 +3997,7 @@ export default function ListingEditorPage() {
         .editable-hint { border-bottom: 1px dashed #d4d4d2; transition: border-color .15s; cursor: pointer; }
         .editable-hint:hover { border-color: #1c1c1a; }
         .card-field-inp { width: 100%; text-align: center; background: transparent; border: none; border-bottom: 1px dashed #d4d4d2; outline: none; padding: 0; margin: 0; font-family: var(--font-sans); }
+        .email-prefix-inp { text-align: right; background: transparent; border: none; border-bottom: 1px dashed #016D75; outline: none; padding: 0; margin: 0; font: inherit; }
         .company-search-menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 6px); background: #fff; border: 1px solid #e8e8e6; border-radius: var(--radius-sm); box-shadow: 0 8px 28px rgba(0,0,0,.14); min-width: 280px; padding: 4px 0; z-index: 30; max-height: 240px; overflow-y: auto; }
         .company-search-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 7px 13px; font-size: 12.5px; font-weight: 300; color: #1c1c1a; cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .company-search-row:hover { background: #f5f5f3; }
@@ -4384,7 +4486,14 @@ export default function ListingEditorPage() {
                   ? inviteCompanyServices[inv.companyId]
                   : professionalServices
               return (
-                <div key={inv.id} className="credit-card-edit" style={{ overflow: isConfirmingDelete ? "visible" : undefined }}>
+                <div
+                  key={inv.id}
+                  className="credit-card-edit"
+                  style={{ overflow: isConfirmingDelete ? "visible" : undefined }}
+                  onClick={!inv.isOwner && inv.status === "invited" && !inv.isListedCompany && !isEditingCompany && !isEditingService && !isEditingEmail
+                    ? () => setEditingInviteField({ inviteId: inv.id, field: "email" })
+                    : undefined}
+                >
                   <span className="ec-badge">
                     <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
                     <span className="ec-txt">Edit</span>
@@ -4542,10 +4651,41 @@ export default function ListingEditorPage() {
                                 <button
                                   key={c.id}
                                   className={`company-search-row${c.id === inv.companyId ? " sel" : ""}`}
-                                  onClick={e => { e.stopPropagation(); void saveInviteCompany(inv.id, c.id, c.email) }}
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    if (c.owner_id || inv.email) {
+                                      // Claimed company or card already has email — just link, no email prompt
+                                      void saveInviteCompany(inv.id, c.id, c.email || inv.email)
+                                    } else {
+                                      // Unclaimed company + no email on card — show email field with domain prefill
+                                      const domain = c.domain?.replace(/^https?:\/\//i, "").replace(/^www\./, "").split("/")[0] ?? null
+                                      setPendingTier23({
+                                        inviteId: inv.id,
+                                        companyName: c.name,
+                                        googlePlaceId: null,
+                                        city: c.city,
+                                        prefillEmail: domain ? `@${domain}` : null,
+                                        website: null,
+                                        domain,
+                                        phone: null,
+                                        fullAddress: null,
+                                        country: null,
+                                        stateRegion: null,
+                                        editorialSummary: null,
+                                        googleTypes: null,
+                                      })
+                                      // Link the company immediately
+                                      void saveInviteCompany(inv.id, c.id, null)
+                                      // Then show email field
+                                      setEditingInviteField({ inviteId: inv.id, field: "email" })
+                                      setCompanySearchQuery("")
+                                      setCompanySearchResults([])
+                                      setGoogleResults([])
+                                    }
+                                  }}
                                 >
                                   <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                                  <span className="tier-badge arco">On Arco</span>
+                                  <span className="tier-badge arco">{c.owner_id ? "On Arco" : "Invited"}</span>
                                 </button>
                               ))}
                               {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
@@ -4562,13 +4702,14 @@ export default function ListingEditorPage() {
                               {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
                                 <>
                                   {(companySearchResults.length > 0 || googleResults.length > 0) && <div className="company-search-divider" />}
-                                  <button
+                                  <div
                                     className="company-search-add"
-                                    onClick={e => { e.stopPropagation(); handleSelectTier23Company(inv.id, companySearchQuery.trim(), null, null) }}
+                                    style={{ cursor: "default", opacity: 0.5 }}
+                                    onClick={e => { e.stopPropagation(); toast.info("Manual company creation is not available. Select a company from the search results.") }}
                                   >
                                     <Plus size={12} />
                                     <span>Add &ldquo;{companySearchQuery.trim()}&rdquo;</span>
-                                  </button>
+                                  </div>
                                 </>
                               )}
                               {isSearchingCompanies && (
@@ -4583,7 +4724,7 @@ export default function ListingEditorPage() {
                     </h3>
                   </div>
 
-                  {/* Subtitle: project count for listed companies, email for unlisted/invited */}
+                  {/* Subtitle: status label or email input for pending invites */}
                   {pendingTier23?.inviteId === inv.id ? (
                     <p
                       className="arco-card-subtitle"
@@ -4591,33 +4732,144 @@ export default function ListingEditorPage() {
                       onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: inv.id, field: "email" }) }}
                     >
                       {isEditingEmail ? (
-                        <input
-                          autoFocus
-                          key={pendingTier23.prefillEmail ?? ""}
-                          className="card-field-inp"
-                          style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
-                          defaultValue={pendingTier23.prefillEmail ?? ""}
-                          onBlur={e => void saveTier23Company(inv.id, e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") void saveTier23Company(inv.id, (e.target as HTMLInputElement).value)
-                            if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
-                          }}
-                          placeholder="Enter email to send invite…"
-                          onClick={e => e.stopPropagation()}
-                        />
+                        pendingTier23.domain ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 0 }}>
+                            <input
+                              autoFocus
+                              className="email-prefix-inp"
+                              ref={el => { if (el) autoSizeInput(el) }}
+                              defaultValue=""
+                              onChange={e => autoSizeInput(e.target)}
+                              onBlur={e => {
+                                const name = e.target.value.trim()
+                                if (name) void saveTier23Company(inv.id, `${name}@${pendingTier23.domain}`)
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                  const name = (e.target as HTMLInputElement).value.trim()
+                                  if (name) void saveTier23Company(inv.id, `${name}@${pendingTier23.domain}`)
+                                }
+                                if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
+                              }}
+                              placeholder="name"
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <span style={{ color: "var(--arco-mid-grey)" }}>@{pendingTier23.domain}</span>
+                          </span>
+                        ) : (
+                          <input
+                            autoFocus
+                            className="card-field-inp"
+                            style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
+                            defaultValue=""
+                            onBlur={e => void saveTier23Company(inv.id, e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") void saveTier23Company(inv.id, (e.target as HTMLInputElement).value)
+                              if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
+                            }}
+                            placeholder="Enter email to send invite…"
+                            onClick={e => e.stopPropagation()}
+                          />
+                        )
                       ) : (
-                        <span className="editable-hint">{pendingTier23.prefillEmail ?? "Enter email to send invite…"}</span>
+                        <span className="editable-hint">{pendingTier23.domain ? `name@${pendingTier23.domain}` : "Enter email to send invite…"}</span>
                       )}
                     </p>
-                  ) : inv.companyId && inv.isListedCompany ? (
-                    <p className="arco-card-subtitle" style={{ marginBottom: 0 }}>
-                      {inv.projectsCount} {inv.projectsCount === 1 ? "project" : "projects"}
+                  ) : isEditingEmail && !inv.isOwner && inv.status === "invited" && !inv.isListedCompany ? (
+                    <p
+                      className="arco-card-subtitle"
+                      style={{ marginBottom: 0, color: "#016D75" }}
+                    >
+                      {(() => {
+                        const emailParts = inv.email?.split("@") ?? []
+                        const emailDomain = emailParts.length === 2 ? emailParts[1] : null
+                        const emailPrefix = emailParts.length === 2 ? emailParts[0] : inv.email ?? ""
+                        return emailDomain ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 0 }}>
+                            <input
+                              autoFocus
+                              className="email-prefix-inp"
+                              ref={el => { if (el) autoSizeInput(el) }}
+                              defaultValue={emailPrefix}
+                              onChange={e => autoSizeInput(e.target)}
+                              onBlur={async e => {
+                                const name = e.target.value.trim()
+                                if (name && name !== emailPrefix) {
+                                  const newEmail = `${name}@${emailDomain}`
+                                  try {
+                                    await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
+                                    await refreshProfessionalSection()
+                                    toast.success("Email updated")
+                                  } catch { toast.error("Failed to update email") }
+                                }
+                                setEditingInviteField(null)
+                              }}
+                              onKeyDown={async e => {
+                                if (e.key === "Enter") {
+                                  const name = (e.target as HTMLInputElement).value.trim()
+                                  if (name && name !== emailPrefix) {
+                                    const newEmail = `${name}@${emailDomain}`
+                                    try {
+                                      await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
+                                      await refreshProfessionalSection()
+                                      toast.success("Email updated")
+                                    } catch { toast.error("Failed to update email") }
+                                  }
+                                  setEditingInviteField(null)
+                                }
+                                if (e.key === "Escape") setEditingInviteField(null)
+                              }}
+                              placeholder="name"
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <span style={{ color: "var(--arco-mid-grey)" }}>@{emailDomain}</span>
+                          </span>
+                        ) : (
+                          <input
+                            autoFocus
+                            className="card-field-inp"
+                            style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
+                            defaultValue={inv.email ?? ""}
+                            onBlur={async e => {
+                              const newEmail = e.target.value.trim()
+                              if (newEmail && newEmail !== inv.email) {
+                                try {
+                                  await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
+                                  await refreshProfessionalSection()
+                                  toast.success("Email updated")
+                                } catch { toast.error("Failed to update email") }
+                              }
+                              setEditingInviteField(null)
+                            }}
+                            onKeyDown={async e => {
+                              if (e.key === "Enter") {
+                                const newEmail = (e.target as HTMLInputElement).value.trim()
+                                if (newEmail && newEmail !== inv.email) {
+                                  try {
+                                    await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
+                                    await refreshProfessionalSection()
+                                    toast.success("Email updated")
+                                  } catch { toast.error("Failed to update email") }
+                                }
+                                setEditingInviteField(null)
+                              }
+                              if (e.key === "Escape") setEditingInviteField(null)
+                            }}
+                            placeholder="Enter email…"
+                            onClick={e => e.stopPropagation()}
+                          />
+                        )
+                      })()}
                     </p>
-                  ) : inv.email ? (
-                    <p className="arco-card-subtitle" style={{ marginBottom: 0 }}>
-                      {inv.email}
-                    </p>
-                  ) : null}
+                  ) : (
+                    <span
+                      className="status-pill"
+                      style={{ marginTop: 4 }}
+                    >
+                      <span className={`status-pill-dot status-pill-dot--${inv.isOwner ? "owner" : inv.status === "live_on_page" ? "featured" : inv.status}`} />
+                      {inv.isOwner ? "Owner" : inv.status === "live_on_page" ? "Featured" : inv.status === "listed" ? "Listed" : inv.status === "invited" ? "Invited" : inv.status === "unlisted" ? "Unlisted" : inv.status.replace(/_/g, " ")}
+                    </span>
+                  )}
                 </div>
               )
             })}
@@ -4771,10 +5023,10 @@ export default function ListingEditorPage() {
                               <button
                                 key={c.id}
                                 className="company-search-row"
-                                onClick={e => { e.stopPropagation(); void saveDraftCardWithCompany(c.id, c.email) }}
+                                onClick={e => { e.stopPropagation(); void saveDraftCardWithCompany(c.id, c.email, !!c.owner_id) }}
                               >
                                 <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                                <span className="tier-badge arco">On Arco</span>
+                                <span className="tier-badge arco">{c.owner_id ? "On Arco" : "Invited"}</span>
                               </button>
                             ))}
                             {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
@@ -4791,13 +5043,14 @@ export default function ListingEditorPage() {
                             {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
                               <>
                                 {(companySearchResults.length > 0 || googleResults.length > 0) && <div className="company-search-divider" />}
-                                <button
+                                <div
                                   className="company-search-add"
-                                  onClick={e => { e.stopPropagation(); setDraftCard(d => d ? { ...d, companyName: companySearchQuery.trim() } : d); handleSelectTier23Company("__draft__", companySearchQuery.trim(), null, null) }}
+                                  style={{ cursor: "default", opacity: 0.5 }}
+                                  onClick={e => { e.stopPropagation(); toast.info("Manual company creation is not available. Select a company from the search results.") }}
                                 >
                                   <Plus size={12} />
                                   <span>Add &ldquo;{companySearchQuery.trim()}&rdquo;</span>
-                                </button>
+                                </div>
                               </>
                             )}
                             {isSearchingCompanies && (
@@ -4820,28 +5073,47 @@ export default function ListingEditorPage() {
                     onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: "__draft__", field: "email" }) }}
                   >
                     {editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "email" ? (
-                      <input
-                        autoFocus
-                        key={pendingTier23.prefillEmail ?? ""}
-                        className="card-field-inp"
-                        style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
-                        defaultValue={pendingTier23.prefillEmail ?? draftCard.email}
-                        onBlur={e => {
-                          const val = e.target.value.trim()
-                          void saveTier23Company("__draft__", val)
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") {
-                            const val = (e.target as HTMLInputElement).value.trim()
-                            void saveTier23Company("__draft__", val)
-                          }
-                          if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
-                        }}
-                        placeholder="Enter email to send invite…"
-                        onClick={e => e.stopPropagation()}
-                      />
+                      pendingTier23.domain ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 0 }}>
+                          <input
+                            autoFocus
+                            className="email-prefix-inp"
+                            ref={el => { if (el) autoSizeInput(el) }}
+                            defaultValue=""
+                            onChange={e => autoSizeInput(e.target)}
+                            onBlur={e => {
+                              const name = e.target.value.trim()
+                              if (name) void saveTier23Company("__draft__", `${name}@${pendingTier23.domain}`)
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                const name = (e.target as HTMLInputElement).value.trim()
+                                if (name) void saveTier23Company("__draft__", `${name}@${pendingTier23.domain}`)
+                              }
+                              if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
+                            }}
+                            placeholder="name"
+                            onClick={e => e.stopPropagation()}
+                          />
+                          <span style={{ color: "var(--arco-mid-grey)" }}>@{pendingTier23.domain}</span>
+                        </span>
+                      ) : (
+                        <input
+                          autoFocus
+                          className="card-field-inp"
+                          style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "inherit" }}
+                          defaultValue=""
+                          onBlur={e => void saveTier23Company("__draft__", e.target.value.trim())}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") void saveTier23Company("__draft__", (e.target as HTMLInputElement).value.trim())
+                            if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
+                          }}
+                          placeholder="Enter email to send invite…"
+                          onClick={e => e.stopPropagation()}
+                        />
+                      )
                     ) : (
-                      <span className="editable-hint">{pendingTier23.prefillEmail ?? "Enter email to send invite…"}</span>
+                      <span className="editable-hint">{pendingTier23.domain ? `name@${pendingTier23.domain}` : "Enter email to send invite…"}</span>
                     )}
                   </p>
                 )}
@@ -4864,11 +5136,11 @@ export default function ListingEditorPage() {
             <div className="popup-overlay" onClick={() => setDupWarning(null)}>
               <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
                 <div className="popup-header">
-                  <h3 className="arco-section-title">Company already exists</h3>
+                  <h3 className="arco-section-title">Company found on Arco</h3>
                   <button type="button" className="popup-close" onClick={() => setDupWarning(null)} aria-label="Close">✕</button>
                 </div>
                 <p className="arco-body-text" style={{ marginBottom: 16 }}>
-                  A company with this name already exists. Would you like to link the existing company instead?
+                  This company is already on Arco. Link them to credit their work on this project.
                 </p>
 
                 {/* Company preview */}
@@ -4893,11 +5165,11 @@ export default function ListingEditorPage() {
                 </div>
 
                 <div className="popup-actions">
-                  <button className="btn-tertiary" onClick={() => void handleDupForceCreate()} style={{ flex: 1 }}>
-                    Create new
+                  <button className="btn-tertiary" onClick={() => setDupWarning(null)} style={{ flex: 1 }}>
+                    Cancel
                   </button>
                   <button className="btn-primary" onClick={() => void handleDupLinkExisting()} style={{ flex: 1 }}>
-                    Link existing
+                    Link company
                   </button>
                 </div>
               </div>

@@ -4906,6 +4906,39 @@ body.no-scroll {
   height: 60px;
 }
 
+/* Status pills (dot + label) */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  padding: 4px 12px;
+  border: 1px solid var(--arco-rule);
+  border-radius: 24px;
+  background: var(--background);
+  color: var(--arco-black);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-pill-dot--owner      { background: var(--arco-black); }
+.status-pill-dot--featured   { background: #016D75; }
+.status-pill-dot--listed     { background: #059669; }
+.status-pill-dot--invited    { background: #f59e0b; }
+.status-pill-dot--unlisted   { background: #a1a1a0; }
+.status-pill-dot--removed    { background: #dc2626; }
+.status-pill-dot--rejected   { background: #dc2626; }
+.status-pill-dot--draft      { background: #3b82f6; }
+
 /* Pill buttons */
 .filter-pill {
   display: inline-flex;

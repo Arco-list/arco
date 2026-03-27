@@ -38,6 +38,7 @@ import {
   adminDeleteCompanyAction,
   generateCompanyLoginLinkAction,
   updateCompanyDomainVerifiedAction,
+  changeCompanyOwnerAction,
 } from "@/app/admin/professionals/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -220,7 +221,7 @@ function ensureHttp(url: string | null): string | null {
 
 export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const router = useRouter()
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [pagination, setPagination] = useState({
@@ -237,6 +238,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [editForm, setEditForm] = useState<EditFormState | null>(null)
   const [deleteCompany, setDeleteCompany] = useState<AdminCompanyRow | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [changeOwnerCompany, setChangeOwnerCompany] = useState<AdminCompanyRow | null>(null)
+  const [changeOwnerEmail, setChangeOwnerEmail] = useState("")
   const [domainVerifyCompany, setDomainVerifyCompany] = useState<AdminCompanyRow | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -654,7 +657,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <button type="button" className="flex items-center gap-1 hover:text-[#016D75] transition-colors cursor-pointer text-left">
                     <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", projDot)} />
                     <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{project.title}</span>
-                    {contribConfig && (
+                    {project.isProjectOwner ? (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#1c1c1a] px-1.5 py-0.5 text-[10px] font-medium text-white shrink-0">
+                        Owner
+                      </span>
+                    ) : contribConfig && (
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
                         <span className={cn("inline-block h-1 w-1 rounded-full", contribConfig.dotColor)} />
                         {contribConfig.label}
@@ -860,6 +867,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 >
                   Update status
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => { setChangeOwnerCompany(company); setChangeOwnerEmail("") }}
+                >
+                  Change owner
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-red-600 focus:text-red-600"
@@ -1036,6 +1048,71 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Change Owner Modal */}
+      {changeOwnerCompany && (
+        <div className="popup-overlay" onClick={() => { if (!isPending) setChangeOwnerCompany(null) }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Change owner</h3>
+              <button type="button" className="popup-close" onClick={() => setChangeOwnerCompany(null)} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ marginBottom: 8 }}>
+              Transfer ownership of <strong>{changeOwnerCompany.name}</strong> to a different user.
+            </p>
+            {changeOwnerCompany.ownerEmail && (
+              <p style={{ fontSize: 12, color: "var(--arco-mid-grey)", marginBottom: 16 }}>
+                Current owner: {changeOwnerCompany.ownerName ?? ""} ({changeOwnerCompany.ownerEmail})
+              </p>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                New owner email
+              </label>
+              <input
+                type="email"
+                className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors"
+                value={changeOwnerEmail}
+                onChange={e => setChangeOwnerEmail(e.target.value)}
+                placeholder="email@company.com"
+                autoFocus
+              />
+            </div>
+            <div className="popup-actions">
+              <button
+                className="btn-tertiary"
+                onClick={() => setChangeOwnerCompany(null)}
+                disabled={isPending}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={isPending || !changeOwnerEmail.trim()}
+                onClick={() => {
+                  startTransition(async () => {
+                    const result = await changeCompanyOwnerAction({
+                      companyId: changeOwnerCompany.id,
+                      newOwnerEmail: changeOwnerEmail.trim(),
+                    })
+                    if (result.success) {
+                      toast.success(`Ownership transferred to ${changeOwnerEmail.trim()}`)
+                      setChangeOwnerCompany(null)
+                      router.refresh()
+                    } else {
+                      toast.error(result.error ?? "Failed to change owner", { duration: 8000 })
+                    }
+                  })
+                }}
+                style={{ flex: 1 }}
+              >
+                {isPending ? "Transferring…" : "Transfer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Domain Verification Modal */}
       {domainVerifyCompany && (

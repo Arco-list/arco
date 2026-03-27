@@ -123,10 +123,42 @@ export async function createUnlistedCompanyAction(
     let emailSent = false
     try {
       const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.email, input.projectId)
+      // Fetch project primary photo for email card
+      const { data: projectPhoto } = await supabase
+        .from("project_photos")
+        .select("url")
+        .eq("project_id", input.projectId)
+        .order("order_index", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      // Fetch project details
+      const { data: projectData } = await supabase
+        .from("projects")
+        .select("location, address_city, building_type, project_type_category_id")
+        .eq("id", input.projectId)
+        .maybeSingle()
+      // Resolve building type label
+      let projectType: string | undefined
+      const bt = projectData?.building_type
+      const isUuid = bt && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bt)
+      if (bt && !isUuid) {
+        projectType = bt.charAt(0).toUpperCase() + bt.slice(1).replace(/-/g, " ")
+      }
+      // Look up category name from building_type UUID or project_type_category_id
+      if (!projectType) {
+        const catId = isUuid ? bt : projectData?.project_type_category_id
+        if (catId) {
+          const { data: cat } = await supabase.from("categories").select("name").eq("id", catId).maybeSingle()
+          projectType = cat?.name ?? undefined
+        }
+      }
       const result = await sendProfessionalInviteEmail(input.email, {
         project_owner: input.inviterName,
         project_name: input.projectTitle,
         project_title: input.projectTitle,
+        project_image: projectPhoto?.url ?? undefined,
+        project_location: projectData?.address_city ?? projectData?.location ?? undefined,
+        project_type: projectType,
         confirmUrl,
       })
       emailSent = result.success
@@ -175,10 +207,30 @@ export async function confirmLinkExistingCompanyAction(
     if (input.email) {
       try {
         const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.email, input.projectId)
+        const { data: projectPhoto } = await supabase
+          .from("project_photos")
+          .select("url")
+          .eq("project_id", input.projectId)
+          .order("order_index", { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        const { data: projectData } = await supabase
+          .from("projects")
+          .select("location, address_city, building_type, project_type_category_id")
+          .eq("id", input.projectId)
+          .maybeSingle()
+        let projectType = projectData?.building_type ? projectData.building_type.charAt(0).toUpperCase() + projectData.building_type.slice(1) : undefined
+        if (!projectType && projectData?.project_type_category_id) {
+          const { data: cat } = await supabase.from("categories").select("name").eq("id", projectData.project_type_category_id).maybeSingle()
+          projectType = cat?.name ?? undefined
+        }
         await sendProfessionalInviteEmail(input.email, {
           project_owner: input.inviterName,
           project_name: input.projectTitle,
           project_title: input.projectTitle,
+          project_image: projectPhoto?.url ?? undefined,
+          project_location: projectData?.address_city ?? projectData?.location ?? undefined,
+          project_type: projectType,
           confirmUrl,
         })
       } catch (e) {
@@ -190,5 +242,71 @@ export async function confirmLinkExistingCompanyAction(
   } catch (error) {
     console.error("confirmLinkExistingCompanyAction error:", error)
     return { success: false, error: "An unexpected error occurred" }
+  }
+}
+
+// Resolve the owner email for a claimed company
+export async function getCompanyOwnerEmailAction(companyId: string): Promise<{ email: string | null }> {
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const { data: company } = await supabase
+      .from("companies")
+      .select("owner_id, email")
+      .eq("id", companyId)
+      .maybeSingle()
+    if (!company) return { email: null }
+    // Use company email first
+    if (company.email) return { email: company.email }
+    // Look up owner's auth email
+    if (company.owner_id) {
+      const { data: userData } = await supabase.auth.admin.getUserById(company.owner_id)
+      if (userData?.user?.email) return { email: userData.user.email }
+    }
+    return { email: null }
+  } catch {
+    return { email: null }
+  }
+}
+
+// Standalone action to send a professional invite email (for paths that insert directly)
+export async function sendInviteEmailAction(input: {
+  email: string
+  projectId: string
+  inviterName: string
+  projectTitle: string
+}): Promise<{ success: boolean }> {
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.email, input.projectId)
+    const { data: projectPhoto } = await supabase
+      .from("project_photos")
+      .select("url")
+      .eq("project_id", input.projectId)
+      .order("order_index", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    const { data: projectData } = await supabase
+      .from("projects")
+      .select("location, address_city, building_type, project_type_category_id")
+      .eq("id", input.projectId)
+      .maybeSingle()
+    let projectType = projectData?.building_type ? projectData.building_type.charAt(0).toUpperCase() + projectData.building_type.slice(1) : undefined
+    if (!projectType && projectData?.project_type_category_id) {
+      const { data: cat } = await supabase.from("categories").select("name").eq("id", projectData.project_type_category_id).maybeSingle()
+      projectType = cat?.name ?? undefined
+    }
+    const result = await sendProfessionalInviteEmail(input.email, {
+      project_owner: input.inviterName,
+      project_name: input.projectTitle,
+      project_title: input.projectTitle,
+      project_image: projectPhoto?.url ?? undefined,
+      project_location: projectData?.address_city ?? projectData?.location ?? undefined,
+      project_type: projectType,
+      confirmUrl,
+    })
+    return { success: result.success }
+  } catch (e) {
+    console.error("sendInviteEmailAction error:", e)
+    return { success: false }
   }
 }

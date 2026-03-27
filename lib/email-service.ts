@@ -27,6 +27,7 @@ export interface EmailVariables {
   project_title?: string
   project_link?: string
   project_image?: string
+  project_type?: string
   company_name?: string
   project_owner?: string
   project_location?: string
@@ -110,16 +111,11 @@ function divider(): string {
 
 function projectCard(vars: EmailVariables): string {
   const title = vars.project_title || vars.project_name || ''
-  const subtitle = [vars.service_category, vars.project_location].filter(Boolean).join(' · ')
+  const subtitle = [vars.project_type, vars.project_location].filter(Boolean).join(' · ')
   const image = vars.project_image
   if (!title) return ''
   return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;border-radius:6px;overflow:hidden;">
-${image ? `<tr><td>
-<div style="width:100%;padding-top:75%;position:relative;overflow:hidden;border-radius:6px 6px 0 0;">
-<!--[if mso]><img src="${image}" alt="${title}" width="520" height="390" style="display:block;" /><![endif]-->
-<!--[if !mso]><!--><img src="${image}" alt="${title}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;" /><!--<![endif]-->
-</div>
-</td></tr>` : ''}
+${image ? `<tr><td style="font-size:0;line-height:0;"><img src="${image}" alt="${title}" width="520" style="display:block;width:100%;height:auto;border-radius:6px 6px 0 0;" /></td></tr>` : ''}
 <tr><td style="padding:14px 0 0;">
 <p style="margin:0 0 4px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${title}</p>
 ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${subtitle}</p>` : ''}
@@ -323,14 +319,14 @@ export async function checkUserAndGenerateInviteUrl(
 
   if (authError) {
     console.error('Failed to list users:', authError)
-    const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
+    const signupUrl = `${baseUrl}/businesses/professionals?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
     return { confirmUrl: signupUrl, isExistingProfessional: false }
   }
 
   const user = allUsers?.find(u => u.email?.toLowerCase() === email.toLowerCase())
 
   if (!user) {
-    const signupUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
+    const signupUrl = `${baseUrl}/businesses/professionals?redirectTo=${encodeURIComponent(`/create-company?projectInvite=${projectId}`)}&inviteEmail=${encodeURIComponent(email)}`
     return { confirmUrl: signupUrl, isExistingProfessional: false }
   }
 
@@ -342,7 +338,7 @@ export async function checkUserAndGenerateInviteUrl(
 
   if (profileError || !profile) {
     return {
-      confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
+      confirmUrl: `${baseUrl}/businesses/professionals`,
       isExistingProfessional: false,
     }
   }
@@ -357,7 +353,7 @@ export async function checkUserAndGenerateInviteUrl(
     return { confirmUrl: `${baseUrl}/dashboard/listings`, isExistingProfessional: true }
   } else {
     return {
-      confirmUrl: `${baseUrl}/create-company?projectInvite=${projectId}`,
+      confirmUrl: `${baseUrl}/businesses/professionals`,
       isExistingProfessional: false,
     }
   }
