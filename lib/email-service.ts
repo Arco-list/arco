@@ -47,7 +47,10 @@ interface EmailResponse {
 
 // ─── Email HTML templates ────────────────────────────────────────────────────
 
-function baseLayout(content: string): string {
+const DEFAULT_LOGO_BASE = 'https://www.arcolist.com'
+
+function baseLayout(content: string, logoBaseUrl?: string): string {
+  const base = logoBaseUrl || DEFAULT_LOGO_BASE
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -57,7 +60,7 @@ function baseLayout(content: string): string {
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 <!-- Logo -->
 <tr><td style="padding:0 0 32px;">
-<img src="https://www.arcolist.com/arco-logo-square.png" alt="Arco" width="32" height="32" style="display:block;border-radius:6px;" />
+<img src="${base}/arco-logo-square.png" alt="Arco" width="32" height="32" style="display:block;border-radius:6px;" />
 </td></tr>
 <!-- Content -->
 <tr><td style="padding:0 0 32px;">
@@ -73,7 +76,7 @@ Arco Global BV · The professional network architects trust.
 </p>
 </td>
 <td style="vertical-align:middle;text-align:right;">
-<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="40" height="11" style="display:inline-block;opacity:0.4;" />
+<img src="${base}/arco-logo-email.png" alt="Arco" width="40" height="11" style="display:inline-block;opacity:0.4;" />
 </td>
 </tr>
 </table>
@@ -126,11 +129,15 @@ ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">
 
 // ─── Template renderers ──────────────────────────────────────────────────────
 
+function lb(vars: EmailVariables, content: string): string {
+  return baseLayout(content, vars._logoBaseUrl)
+}
+
 function renderProjectLive(vars: EmailVariables): { subject: string; html: string } {
   const projectName = vars.project_title || vars.Project_title || vars.project_name || 'Your project'
   return {
     subject: `${projectName} is now live on Arco`,
-    html: baseLayout(`
+    html: lb(vars, `
       ${heading(`${projectName} is live`)}
       ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Great news — your project is now published and visible on Arco.`)}
       ${vars.project_link ? button('View project', vars.project_link) : ''}
@@ -143,7 +150,7 @@ function renderProjectRejected(vars: EmailVariables): { subject: string; html: s
   const projectName = vars.project_title || vars.Project_title || vars.project_name || 'Your project'
   return {
     subject: `Update on ${projectName}`,
-    html: baseLayout(`
+    html: lb(vars, `
       ${heading('Project update')}
       ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>We've reviewed <strong>${projectName}</strong> and it wasn't approved at this time.`)}
       ${vars.rejection_reason ? body(`<strong>Reason:</strong> ${vars.rejection_reason}`) : ''}
@@ -158,7 +165,7 @@ function renderProfessionalInvite(vars: EmailVariables): { subject: string; html
   const projectName = vars.project_title || vars.project_name || 'a project'
   return {
     subject: `${vars.project_owner || 'An architect'} credited you on ${projectName}`,
-    html: baseLayout(`
+    html: lb(vars, `
       ${heading('You\'ve been credited')}
       ${body(`${vars.project_owner || 'An architect'} added your company to a project on Arco.`)}
       ${projectCard(vars)}
@@ -173,7 +180,7 @@ function renderProfessionalInvite(vars: EmailVariables): { subject: string; html
 function renderTeamInvite(vars: EmailVariables): { subject: string; html: string } {
   return {
     subject: `You're invited to join ${vars.company_name || 'a company'} on Arco`,
-    html: baseLayout(`
+    html: lb(vars, `
       ${heading('Team invitation')}
       ${body(`You've been invited to join <strong>${vars.company_name || 'a company'}</strong> on Arco.`)}
       ${body('Accept the invitation to collaborate on your company\'s profile and projects.')}
@@ -185,7 +192,7 @@ function renderTeamInvite(vars: EmailVariables): { subject: string; html: string
 function renderDomainVerification(vars: EmailVariables): { subject: string; html: string } {
   return {
     subject: `${vars.code} is your Arco verification code`,
-    html: baseLayout(`
+    html: lb(vars, `
       ${heading('Verify your domain')}
       ${body(`Use this code to verify ownership of <strong>${vars.businessname || 'your company'}</strong>:`)}
       <div style="margin:24px 0;padding:16px;background:#f5f5f4;border-radius:4px;text-align:center;">
@@ -210,11 +217,13 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subj
  */
 export async function renderEmailTemplate(
   template: EmailTemplate,
-  dataVariables?: EmailVariables
+  dataVariables?: EmailVariables,
+  logoBaseUrl?: string
 ): Promise<{ subject: string; html: string } | null> {
   const renderer = TEMPLATE_RENDERERS[template]
   if (!renderer) return null
-  return renderer(dataVariables || {})
+  const vars = { ...(dataVariables || {}), _logoBaseUrl: logoBaseUrl }
+  return renderer(vars)
 }
 
 // ─── Send function ───────────────────────────────────────────────────────────

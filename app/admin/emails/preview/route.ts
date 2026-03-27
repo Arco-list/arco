@@ -108,15 +108,20 @@ export async function GET(request: NextRequest) {
   const template = request.nextUrl.searchParams.get('template')
   if (!template) return new NextResponse('Template not found', { status: 404 })
 
+  const origin = request.nextUrl.origin
+
   // Check auth templates first
   if (AUTH_TEMPLATES[template]) {
-    return new NextResponse(AUTH_TEMPLATES[template].html, {
+    // Replace relative paths with origin for preview
+    const html = AUTH_TEMPLATES[template].html
+      .replace(/src="\/arco-logo/g, `src="${origin}/arco-logo`)
+    return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
   }
 
   // Then check app transactional templates
-  const result = await renderEmailTemplate(template as EmailTemplate, TEST_VARS)
+  const result = await renderEmailTemplate(template as EmailTemplate, TEST_VARS, origin)
   if (!result) return new NextResponse('Template not found', { status: 404 })
 
   return new NextResponse(result.html, {
