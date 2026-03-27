@@ -78,7 +78,7 @@ function baseLayout(content: string): string {
 <tr><td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:8px;overflow:hidden;">
 <tr><td style="padding:32px 40px 24px;">
-<img src="https://arcolist.com/arco-logo-email.png" alt="Arco" width="56" height="15" style="display:block;" />
+<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="56" height="15" style="display:block;" />
 </td></tr>
 <tr><td style="padding:0 40px 32px;">
 ${content}
