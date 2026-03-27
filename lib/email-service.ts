@@ -154,7 +154,6 @@ function renderProjectRejected(vars: EmailVariables): { subject: string; html: s
       ${heading('Project update')}
       ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>We've reviewed <strong>${projectName}</strong> and it wasn't approved at this time.`)}
       ${vars.rejection_reason ? body(`<strong>Reason:</strong> ${vars.rejection_reason}`) : ''}
-      ${divider()}
       ${body('You can update your project and resubmit it for review.')}
       ${vars.dashboard_link ? button('Go to dashboard', vars.dashboard_link) : ''}
     `),
@@ -171,8 +170,6 @@ function renderProfessionalInvite(vars: EmailVariables): { subject: string; html
       ${projectCard(vars)}
       ${body('Accept the invitation to showcase this project on your company page.')}
       ${vars.confirmUrl ? button('View invitation', vars.confirmUrl) : ''}
-      ${divider()}
-      ${body('<span style="color:#a1a1a0;font-size:13px;">Arco is a curated architecture platform where professionals are credited on real projects.</span>')}
     `),
   }
 }
