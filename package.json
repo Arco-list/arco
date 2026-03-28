@@ -64,6 +64,7 @@
     "lodash-es": "^4.17.21",
     "lucide-react": "^0.454.0",
     "next": "15.2.8",
+    "next-intl": "^4.8.3",
     "next-themes": "latest",
     "react": "^19",
     "react-day-picker": "9.8.0",

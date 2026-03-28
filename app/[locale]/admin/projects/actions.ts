@@ -282,11 +282,44 @@ export async function setProjectStatusAction(input: {
         .from('projects')
         .select(`
           title,
+          slug,
           client_id,
+          location,
+          address_city,
+          building_type,
+          project_type,
+          project_type_category_id,
           profiles!client_id(first_name, last_name)
         `)
         .eq('id', idResult.data)
         .single()
+
+      // Fetch primary photo
+      const { data: projectPhoto } = await serviceClient
+        .from('project_photos')
+        .select('url')
+        .eq('project_id', idResult.data)
+        .order('order_index', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      // Resolve project type label
+      let projectTypeLabel: string | undefined
+      const bt = (project as any)?.building_type
+      const btIsUuid = bt && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bt)
+      if (bt && !btIsUuid) {
+        projectTypeLabel = bt.charAt(0).toUpperCase() + bt.slice(1).replace(/-/g, " ")
+      }
+      if (!projectTypeLabel) {
+        const catId = btIsUuid ? bt : (project as any)?.project_type_category_id
+        if (catId) {
+          const { data: cat } = await serviceClient.from("categories").select("name").eq("id", catId).maybeSingle()
+          if (cat?.name) projectTypeLabel = cat.name
+        }
+      }
+      if (!projectTypeLabel && (project as any)?.project_type) {
+        projectTypeLabel = (project as any).project_type
+      }
       
       logger.info("Project data retrieved", {
         scope: "admin-projects",
@@ -333,6 +366,9 @@ export async function setProjectStatusAction(input: {
                 firstname: ownerFirstName,
                 project_title: project?.title || 'Your Project',
                 project_name: project?.title || 'Your Project',
+                project_image: projectPhoto?.url ?? undefined,
+                project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+                project_type: projectTypeLabel,
                 dashboard_link: `${baseUrl}/dashboard/listings`,
                 rejection_reason: trimmedReason || 'No reason provided'
               }
@@ -369,6 +405,10 @@ export async function setProjectStatusAction(input: {
                 firstname: ownerFirstName,
                 project_title: project?.title || 'Your Project',
                 project_name: project?.title || 'Your Project',
+                project_image: projectPhoto?.url ?? undefined,
+                project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+                project_type: projectTypeLabel,
+                project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
                 dashboard_link: `${baseUrl}/dashboard/listings`
               }
             )

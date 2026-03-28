@@ -3,6 +3,14 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=ogvobdcrectqsegqrquz"
+    },
+    "notion": {
+      "type": "command",
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "OPENAPI_MCP_HEADERS": "{\"Authorization\":\"Bearer ntn_654313732841TM1cnr6GzRFT6CSIBqS3X4QNHU8uknM1v2OKEN\",\"Notion-Version\":\"2022-06-28\"}"
+      }
     }
   }
 }

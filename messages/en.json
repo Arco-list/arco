@@ -1,0 +1,110 @@
+{
+  "nav": {
+    "projects": "Projects",
+    "professionals": "Professionals",
+    "for_architects": "For Architects",
+    "for_professionals": "For Professionals",
+    "listings": "Listings",
+    "company": "Company",
+    "team": "Team",
+    "plans": "Plans",
+    "account": "Account",
+    "help": "Help & FAQ",
+    "sign_out": "Sign out",
+    "sign_in": "Sign in",
+    "saved_projects": "Saved projects",
+    "saved_professionals": "Saved professionals"
+  },
+  "home": {
+    "hero_title": "The curated architecture platform",
+    "hero_subtitle": "Discover exceptional architecture projects and the professionals behind them.",
+    "browse_projects": "Browse projects",
+    "browse_professionals": "Browse professionals",
+    "recent_projects": "Recent projects",
+    "view_all_projects": "View all projects",
+    "featured_studios": "Featured studios",
+    "view_all_studios": "View all studios",
+    "built_for_industry": "Built for the industry",
+    "built_for_industry_subtitle": "Whether you design, build, or furnish — Arco gives your work the visibility it deserves.",
+    "for_architects_title": "Publish your work. Credit your team.",
+    "for_architects_body": "Showcase completed projects, credit the professionals involved, and let your built work speak for itself.",
+    "for_professionals_title": "Be recognised through your work.",
+    "for_professionals_body": "Get credited on real projects by the architects you work with. Build your reputation through built work, not promotion.",
+    "learn_more": "Learn more →"
+  },
+  "projects": {
+    "title": "Projects",
+    "discover": "Discover projects",
+    "no_results": "No projects found",
+    "load_more": "Load more",
+    "filters": {
+      "all": "All",
+      "style": "Style",
+      "type": "Type",
+      "location": "Location",
+      "size": "Size"
+    }
+  },
+  "professionals": {
+    "title": "Professionals",
+    "discover": "Discover professionals",
+    "no_results": "No professionals found",
+    "load_more": "Load more"
+  },
+  "project_detail": {
+    "credited_professionals": "Credited professionals",
+    "credited_subtitle": "The trusted team that worked together to bring this project to life.",
+    "related_projects": "Related projects",
+    "specifications": "Specifications",
+    "year": "Year",
+    "location": "Location",
+    "type": "Type",
+    "size": "Size",
+    "style": "Style",
+    "scope": "Scope"
+  },
+  "professional_detail": {
+    "projects": "Projects",
+    "about": "About",
+    "services": "Services",
+    "contact": "Contact",
+    "team": "Team"
+  },
+  "footer": {
+    "tagline": "The professional network architects trust.",
+    "discover": "Discover",
+    "businesses": "Businesses",
+    "company": "Company",
+    "about": "About",
+    "help_faq": "Help & FAQ",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "copyright": "© {year} Arco Global BV. All rights reserved."
+  },
+  "auth": {
+    "sign_in": "Sign in",
+    "sign_up": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "forgot_password": "Forgot password?",
+    "no_account": "Don't have an account?",
+    "has_account": "Already have an account?",
+    "or_continue_with": "Or continue with",
+    "enter_code": "Enter code",
+    "send_code": "Send code",
+    "verify": "Verify"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "loading": "Loading...",
+    "search": "Search",
+    "view_all": "View all",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit"
+  }
+}

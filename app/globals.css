@@ -4938,6 +4938,7 @@ body.no-scroll {
 .status-pill-dot--removed    { background: #dc2626; }
 .status-pill-dot--rejected   { background: #dc2626; }
 .status-pill-dot--draft      { background: #3b82f6; }
+.status-pill-dot--pending    { background: #a1a1a0; }
 
 /* Pill buttons */
 .filter-pill {

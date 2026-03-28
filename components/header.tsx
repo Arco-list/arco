@@ -226,7 +226,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       : "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                   }
                   alt="Arco"
-                  className="h-auto w-[60px] transition-all"
+                  className="h-auto w-[48px] transition-all"
                   style={{
                     filter: transparent && !isScrolled ? 'brightness(0) invert(1)' : 'brightness(0)'
                   }}

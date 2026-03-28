@@ -1,0 +1,110 @@
+{
+  "nav": {
+    "projects": "Projecten",
+    "professionals": "Professionals",
+    "for_architects": "Voor Architecten",
+    "for_professionals": "Voor Professionals",
+    "listings": "Listings",
+    "company": "Bedrijf",
+    "team": "Team",
+    "plans": "Abonnementen",
+    "account": "Account",
+    "help": "Help & FAQ",
+    "sign_out": "Uitloggen",
+    "sign_in": "Inloggen",
+    "saved_projects": "Opgeslagen projecten",
+    "saved_professionals": "Opgeslagen professionals"
+  },
+  "home": {
+    "hero_title": "Het gecureerde architectuurplatform",
+    "hero_subtitle": "Ontdek uitzonderlijke architectuurprojecten en de professionals erachter.",
+    "browse_projects": "Ontdek projecten",
+    "browse_professionals": "Ontdek professionals",
+    "recent_projects": "Recente projecten",
+    "view_all_projects": "Bekijk alle projecten",
+    "featured_studios": "Uitgelichte studio's",
+    "view_all_studios": "Bekijk alle studio's",
+    "built_for_industry": "Gebouwd voor de branche",
+    "built_for_industry_subtitle": "Of je nu ontwerpt, bouwt of inricht — Arco geeft je werk de zichtbaarheid die het verdient.",
+    "for_architects_title": "Publiceer je werk. Crediteer je team.",
+    "for_architects_body": "Laat voltooide projecten zien, crediteer de betrokken professionals en laat je gerealiseerde werk voor zichzelf spreken.",
+    "for_professionals_title": "Word herkend door je werk.",
+    "for_professionals_body": "Word gecrediteerd op echte projecten door de architecten waarmee je werkt. Bouw je reputatie op door gebouwd werk, niet door promotie.",
+    "learn_more": "Meer informatie →"
+  },
+  "projects": {
+    "title": "Projecten",
+    "discover": "Ontdek projecten",
+    "no_results": "Geen projecten gevonden",
+    "load_more": "Meer laden",
+    "filters": {
+      "all": "Alles",
+      "style": "Stijl",
+      "type": "Type",
+      "location": "Locatie",
+      "size": "Grootte"
+    }
+  },
+  "professionals": {
+    "title": "Professionals",
+    "discover": "Ontdek professionals",
+    "no_results": "Geen professionals gevonden",
+    "load_more": "Meer laden"
+  },
+  "project_detail": {
+    "credited_professionals": "Gecrediteerde professionals",
+    "credited_subtitle": "Het vertrouwde team dat samen dit project tot leven heeft gebracht.",
+    "related_projects": "Gerelateerde projecten",
+    "specifications": "Specificaties",
+    "year": "Jaar",
+    "location": "Locatie",
+    "type": "Type",
+    "size": "Grootte",
+    "style": "Stijl",
+    "scope": "Scope"
+  },
+  "professional_detail": {
+    "projects": "Projecten",
+    "about": "Over",
+    "services": "Diensten",
+    "contact": "Contact",
+    "team": "Team"
+  },
+  "footer": {
+    "tagline": "Het professionele netwerk dat architecten vertrouwen.",
+    "discover": "Ontdek",
+    "businesses": "Bedrijven",
+    "company": "Bedrijf",
+    "about": "Over ons",
+    "help_faq": "Help & FAQ",
+    "privacy": "Privacy",
+    "terms": "Voorwaarden",
+    "copyright": "© {year} Arco Global BV. Alle rechten voorbehouden."
+  },
+  "auth": {
+    "sign_in": "Inloggen",
+    "sign_up": "Registreren",
+    "email": "E-mail",
+    "password": "Wachtwoord",
+    "forgot_password": "Wachtwoord vergeten?",
+    "no_account": "Nog geen account?",
+    "has_account": "Heb je al een account?",
+    "or_continue_with": "Of ga verder met",
+    "enter_code": "Voer code in",
+    "send_code": "Code versturen",
+    "verify": "Verifiëren"
+  },
+  "common": {
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "delete": "Verwijderen",
+    "edit": "Bewerken",
+    "close": "Sluiten",
+    "loading": "Laden...",
+    "search": "Zoeken",
+    "view_all": "Alles bekijken",
+    "back": "Terug",
+    "next": "Volgende",
+    "submit": "Verzenden"
+  }
+}

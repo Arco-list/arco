@@ -78,14 +78,14 @@ function baseLayout(content: string): string {
 <tr><td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 <tr><td style="padding:0 0 32px;">
-<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="56" height="15" style="display:block;" />
+<img src="https://www.arcolist.com/arco-logo-square.png" alt="Arco" width="40" height="40" style="display:block;border-radius:8px;" />
 </td></tr>
 <tr><td style="padding:0 0 32px;">
 ${content}
 </td></tr>
 <tr><td style="padding:24px 0 0;border-top:1px solid #e8e8e6;">
 <p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">
-Arco Global BV · The professional network architects trust.
+<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="36" height="10" style="display:inline-block;vertical-align:middle;opacity:0.4;margin-right:6px;" />Arco Global BV · The professional network architects trust.
 </p>
 </td></tr>
 </table>

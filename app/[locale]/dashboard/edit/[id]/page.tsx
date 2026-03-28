@@ -2459,6 +2459,30 @@ export default function ListingEditorPage() {
   }
 
   // Helper: check if a company/email is already credited on this project (including owner)
+  // Send invite email with 5-second undo window (only for published projects)
+  const sendInviteWithUndo = (email: string, companyName?: string) => {
+    const isPublished = projectStatus === "published" || projectStatus === "completed"
+    if (!isPublished || !projectId) {
+      toast.success("Professional added", { description: "Invite will be sent when the project is published." })
+      return
+    }
+    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
+    const projectTitle = detailsForm.projectTitle || "Untitled project"
+    let cancelled = false
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        sendInviteEmailAction({ email, projectId, inviterName, projectTitle }).catch(() => {})
+      }
+    }, 5000)
+    toast.success(`Invite will be sent to ${companyName || email}`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => { cancelled = true; clearTimeout(timer); toast.info("Invite cancelled") },
+      },
+    })
+  }
+
   const findExistingInviteByCompany = (companyId?: string | null, email?: string | null): ProfessionalInviteSummary | undefined => {
     const allInvites = Object.values(professionalInvites).flat()
     // Also check the owner
@@ -2925,11 +2949,20 @@ export default function ListingEditorPage() {
         if (error) throw error
         setDraftCard(null)
         await refreshProfessionalSection()
-        toast.success(result.emailSent ? "Professional added & invite sent" : "Professional added")
+        if (!result.emailSent) {
+          const isPublished = projectStatus === "published" || projectStatus === "completed"
+          toast.success("Professional added", { description: !isPublished ? "Invite will be sent when the project is published." : undefined })
+        } else {
+          sendInviteWithUndo(trimmed, pendingTier23?.companyName)
+        }
       } else {
         // For existing card: update company_id and email
         await saveInviteCompany(inviteId, result.companyId, trimmed)
-        toast.success(result.emailSent ? "Invite email sent" : "Company linked")
+        if (!result.emailSent) {
+          toast.success("Company linked")
+        } else {
+          sendInviteWithUndo(trimmed, pendingTier23?.companyName)
+        }
       }
       setPendingTier23(null)
       setEditingInviteField(null)
@@ -3030,7 +3063,12 @@ export default function ListingEditorPage() {
           if (error) throw error
           setDraftCard(null)
           await refreshProfessionalSection()
-          toast.success(result.emailSent ? "Professional added & invite sent" : "Professional added")
+          if (result.emailSent) {
+            sendInviteWithUndo(dupWarning.pendingInput.email, dupWarning.pendingInput.name)
+          } else {
+            const isPublished = projectStatus === "published" || projectStatus === "completed"
+            toast.success("Professional added", { description: !isPublished ? "Invite will be sent when the project is published." : undefined })
+          }
         } catch {
           toast.error("Failed to add professional")
         }
@@ -3187,14 +3225,40 @@ export default function ListingEditorPage() {
         : companyRow?.primary_service_id ? [companyRow.primary_service_id]
         : []
 
-      const insertData: Record<string, unknown> = {
+      // If resolved email already exists on this project (e.g. owner owns both project and company),
+      // use a unique placeholder to avoid the unique constraint on (project_id, invited_email)
+      let finalEmail = resolvedEmail || "pending@arcolist.com"
+      const allInvites = Object.values(professionalInvites).flat()
+      if (projectOwnerInvite) allInvites.push(projectOwnerInvite)
+      if (allInvites.some(inv => inv.email?.toLowerCase() === finalEmail.toLowerCase())) {
+        finalEmail = `${companyId.slice(0, 8)}@arcolist.com`
+      }
+      const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
+      const projectTitle = detailsForm.projectTitle || "Untitled project"
+
+      // Use confirmLinkExistingCompanyAction which has service role access
+      // First create a placeholder row, then link the company
+      const { error: insertError } = await supabase.from("project_professionals").insert({
         project_id: projectId,
         company_id: companyId,
-        invited_email: resolvedEmail || "pending@arcolist.com",
+        invited_email: finalEmail,
         invited_service_category_ids: serviceIds,
+      })
+
+      // If RLS blocks the insert, fall back to server action
+      if (insertError) {
+        console.error("Direct insert failed, trying server action:", insertError.message)
+        const result = await createUnlistedCompanyAction({
+          name: companySearchResults.find(c => c.id === companyId)?.name ?? "Company",
+          email: finalEmail,
+          projectId,
+          inviterName,
+          projectTitle,
+          creatorUserId: userId ?? "",
+          skipDedup: true,
+        })
+        if ("error" in result) throw new Error(result.error)
       }
-      const { error } = await supabase.from("project_professionals").insert(insertData)
-      if (error) throw error
       setDraftCard(null)
 
       // Cache company's services for the dropdown
@@ -3202,17 +3266,18 @@ export default function ListingEditorPage() {
         void loadCompanyServices(companyId)
       }
 
-      // Send invite email (fire-and-forget)
       const inviteEmail = resolvedEmail && resolvedEmail !== "pending@arcolist.com" ? resolvedEmail : null
-      if (inviteEmail) {
-        const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
-        const projectTitle = detailsForm.projectTitle || "Untitled project"
-        sendInviteEmailAction({ email: inviteEmail, projectId, inviterName, projectTitle }).catch(() => {})
-      }
 
       await refreshProfessionalSection()
-      toast.success(inviteEmail ? "Professional added & invite sent" : "Professional added")
-    } catch {
+
+      if (inviteEmail) {
+        const companyName = companySearchResults.find(c => c.id === companyId)?.name
+        sendInviteWithUndo(inviteEmail, companyName ?? undefined)
+      } else {
+        toast.success("Professional added")
+      }
+    } catch (err) {
+      console.error("saveDraftCardWithCompany error:", err)
       toast.error("Failed to add professional")
     }
     setEditingInviteField(null)
@@ -4866,8 +4931,13 @@ export default function ListingEditorPage() {
                       className="status-pill"
                       style={{ marginTop: 4 }}
                     >
-                      <span className={`status-pill-dot status-pill-dot--${inv.isOwner ? "owner" : inv.status === "live_on_page" ? "featured" : inv.status}`} />
-                      {inv.isOwner ? "Owner" : inv.status === "live_on_page" ? "Featured" : inv.status === "listed" ? "Listed" : inv.status === "invited" ? "Invited" : inv.status === "unlisted" ? "Unlisted" : inv.status.replace(/_/g, " ")}
+                      {(() => {
+                        const isPublished = projectStatus === "published" || projectStatus === "completed"
+                        const isPending = inv.status === "invited" && !isPublished
+                        const dotClass = inv.isOwner ? "owner" : isPending ? "pending" : inv.status === "live_on_page" ? "featured" : inv.status
+                        const label = inv.isOwner ? "Owner" : isPending ? "Pending" : inv.status === "live_on_page" ? "Featured" : inv.status === "listed" ? "Listed" : inv.status === "invited" ? "Invited" : inv.status === "unlisted" ? "Unlisted" : inv.status.replace(/_/g, " ")
+                        return <><span className={`status-pill-dot status-pill-dot--${dotClass}`} />{label}</>
+                      })()}
                     </span>
                   )}
                 </div>

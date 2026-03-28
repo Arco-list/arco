@@ -73,9 +73,9 @@ export function Footer() {
                 <Image 
                   src="/images/arco-logo-white.svg" 
                   alt="Arco" 
-                  width={60}
-                  height={21}
-                  className="h-auto w-[60px]"
+                  width={48}
+                  height={17}
+                  className="h-auto w-[48px]"
                 />
               </div>
               <p className="arco-small-text text-white/35 max-w-[220px] leading-relaxed">

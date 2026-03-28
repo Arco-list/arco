@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { fetchRecentEmails, sendTestEmail, type ResendEmail } from "./actions"
+import { fetchRecentEmails, fetchTemplateStats, sendTestEmail, type ResendEmail, type TemplateStats } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
 import {
   Select,
@@ -20,6 +20,7 @@ type EmailTemplate = {
   type: "transactional" | "marketing"
   audience: UserAudience
   description: string
+  trigger: string
   subject: string
   sends: number
   deliveryRate: number
@@ -34,17 +35,19 @@ const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
 }
 
 const INITIAL_TEMPLATES: EmailTemplate[] = [
-  { id: "magic-link", name: "Sign-in Code", type: "transactional", audience: "all", description: "OTP code for magic link sign-in", subject: "[Code] is your Arco sign-in code", sends: 0, deliveryRate: 100, active: true },
-  { id: "signup", name: "Signup Confirmation", type: "transactional", audience: "all", description: "Email confirmation after signup", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true },
-  { id: "domain-verification", name: "Domain Verification", type: "transactional", audience: "professional", description: "6-digit code for domain ownership", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true },
-  { id: "professional-invite", name: "Professional Invite", type: "transactional", audience: "professional", description: "Credited on a project", subject: "[Owner] credited you on [Project]", sends: 0, deliveryRate: 100, active: true },
-  { id: "team-invite", name: "Team Invite", type: "transactional", audience: "professional", description: "Invited to join a company", subject: "You're invited to join [Company]", sends: 0, deliveryRate: 100, active: true },
-  { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true },
-  { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true },
-  { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true },
-  { id: "welcome-series", name: "Welcome Series", type: "marketing", audience: "professional", description: "Onboarding after company creation", subject: "Welcome to Arco", sends: 0, deliveryRate: 0, active: false },
-  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false },
-  { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false },
+  { id: "magic-link", name: "Sign-in Code", type: "transactional", audience: "all", description: "OTP code for magic link sign-in", trigger: "User signs in with email (OTP)", subject: "[Code] is your Arco sign-in code", sends: 0, deliveryRate: 100, active: true },
+  { id: "signup", name: "Signup Confirmation", type: "transactional", audience: "all", description: "Email confirmation after signup", trigger: "User creates account with email + password", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true },
+  { id: "domain-verification", name: "Domain Verification", type: "transactional", audience: "professional", description: "6-digit code for domain ownership", trigger: "User verifies company domain during creation", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true },
+  { id: "professional-invite", name: "Professional Invite", type: "transactional", audience: "professional", description: "Credited on a project", trigger: "Architect credits professional on published project", subject: "[Owner] credited you on [Project]", sends: 0, deliveryRate: 100, active: true },
+  { id: "team-invite", name: "Team Invite", type: "transactional", audience: "professional", description: "Invited to join a company", trigger: "Company admin invites team member", subject: "You're invited to join [Company]", sends: 0, deliveryRate: 100, active: true },
+  { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true },
+  { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true },
+  { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true },
+  { id: "welcome-homeowner", name: "Welcome (Day 0)", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true },
+  { id: "discover-projects", name: "Discover Projects (Day 2)", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true },
+  { id: "find-professionals", name: "Find Professionals (Day 5)", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true },
+  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false },
+  { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false },
 ]
 
 type TabKey = "transactional" | "marketing" | "sent"
@@ -57,17 +60,26 @@ export default function AdminEmailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>("transactional")
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES)
+  const [templateStats, setTemplateStats] = useState<Record<string, TemplateStats>>({})
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null)
   const [audienceFilter, setAudienceFilter] = useState<UserAudience | "all-filter">("all-filter")
+  const [timeFilter, setTimeFilter] = useState<string>("all")
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    fetchRecentEmails().then((result) => {
-      if (result.error) setError(result.error)
-      else setEmails(result.emails)
+    const sinceDate = timeFilter === "all" ? undefined
+      : timeFilter === "7d" ? new Date(Date.now() - 7 * 86400000).toISOString()
+      : timeFilter === "30d" ? new Date(Date.now() - 30 * 86400000).toISOString()
+      : timeFilter === "90d" ? new Date(Date.now() - 90 * 86400000).toISOString()
+      : undefined
+    setIsLoading(true)
+    Promise.all([fetchRecentEmails(), fetchTemplateStats(sinceDate)]).then(([emailResult, statsResult]) => {
+      if (emailResult.error) setError(emailResult.error)
+      else setEmails(emailResult.emails)
+      if (statsResult.stats) setTemplateStats(statsResult.stats)
       setIsLoading(false)
     })
-  }, [])
+  }, [timeFilter])
 
   const handleTabChange = (tab: TabKey) => {
     setActiveTab(tab)
@@ -116,12 +128,13 @@ export default function AdminEmailsPage() {
       <div className="discover-page-title">
         <div className="wrap">
 
-          {/* Count */}
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-[#6b6b68]">
+          {/* Header */}
+          <div className="flex flex-col gap-1 mb-6">
+            <h3 className="arco-section-title">Emails</h3>
+            <p className="text-xs text-[#a1a1a0] mt-0.5">
               {activeTab === "sent"
                 ? `${emails.length} emails`
-                : `${totalCount} total · ${activeCount} active`}
+                : `${totalCount} total \u00b7 ${activeCount} active`}
             </p>
           </div>
 
@@ -167,6 +180,20 @@ export default function AdminEmailsPage() {
               <div className="flex flex-1 items-center" />
               <div className="flex flex-wrap items-center gap-2">
                 <Select
+                  value={timeFilter}
+                  onValueChange={setTimeFilter}
+                >
+                  <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+                    <SelectValue placeholder="All time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All time</SelectItem>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                    <SelectItem value="90d">Last 90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
                   value={audienceFilter}
                   onValueChange={(value) => setAudienceFilter(value as UserAudience | "all-filter")}
                 >
@@ -191,9 +218,10 @@ export default function AdminEmailsPage() {
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">User</th>
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Subject</th>
                     <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Sends</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivery</th>
+                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivered</th>
+                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]" title="Enable tracking in Resend dashboard">Opened</th>
+                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]" title="Enable tracking in Resend dashboard">Clicked</th>
                     <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Active</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -205,7 +233,7 @@ export default function AdminEmailsPage() {
                     >
                       <td className="px-4 py-3">
                         <div className="text-sm font-medium text-[#1c1c1a]">{t.name}</div>
-                        <div className="text-[11px] text-[#a1a1a0]">{t.description}</div>
+                        <div className="text-[11px] text-[#a1a1a0]">{t.trigger}</div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[t.audience].cls}`}>
@@ -215,14 +243,33 @@ export default function AdminEmailsPage() {
                       <td className="px-4 py-3 text-xs text-[#6b6b68] max-w-[250px] truncate">
                         {t.subject}
                       </td>
+                      {(() => {
+                        const s = templateStats[t.id]
+                        const sends = s?.sends ?? 0
+                        const deliveryRate = sends > 0 ? Math.round((s.delivered / sends) * 100) : 0
+                        const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
+                        const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
+                        return <>
                       <td className="px-4 py-3 text-xs text-[#6b6b68] text-right">
-                        {t.sends > 0 ? t.sends.toLocaleString() : "—"}
+                        {sends > 0 ? sends.toLocaleString() : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs text-right">
-                        <span className={t.deliveryRate >= 95 ? "text-emerald-600" : t.deliveryRate > 0 ? "text-amber-600" : "text-[#a1a1a0]"}>
-                          {t.deliveryRate > 0 ? `${t.deliveryRate}%` : "—"}
+                        <span className={deliveryRate >= 95 ? "text-emerald-600" : deliveryRate > 0 ? "text-amber-600" : "text-[#a1a1a0]"}>
+                          {sends > 0 ? `${deliveryRate}%` : "—"}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-xs text-right">
+                        <span className={openRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>
+                          {sends > 0 ? `${openRate}%` : "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-right">
+                        <span className={clickRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>
+                          {sends > 0 ? `${clickRate}%` : "—"}
+                        </span>
+                      </td>
+                        </>
+                      })()}
                       <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={(e) => toggleActive(t.id, e)}
@@ -234,16 +281,6 @@ export default function AdminEmailsPage() {
                             width: 14, height: 14, borderRadius: 7, background: "#fff",
                             transition: "left .2s", boxShadow: "0 1px 2px rgba(0,0,0,.15)",
                           }} />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={(e) => handleSendTest(t.id, e)}
-                          disabled={isPending}
-                          className="arco-nav-text h-7 px-2.5 rounded-[3px] btn-scrolled inline-flex items-center text-xs"
-                          style={{ opacity: isPending ? 0.5 : 1 }}
-                        >
-                          Test
                         </button>
                       </td>
                     </tr>

@@ -368,6 +368,7 @@ export default function StylesPage() {
                 <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
                 <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
                 <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
+                <span className="status-pill"><span className="status-pill-dot status-pill-dot--pending" />Pending</span>
                 <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
                 <span className="status-pill"><span className="status-pill-dot status-pill-dot--removed" />Removed</span>
                 <span className="status-pill"><span className="status-pill-dot status-pill-dot--rejected" />Rejected</span>
