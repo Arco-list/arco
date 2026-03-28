@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition, type FormEvent } from "reac
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { signOutAction } from "@/app/(auth)/actions";
 import { useAuth } from "@/contexts/auth-context";
@@ -11,6 +12,7 @@ import { useLoginModal } from "@/contexts/login-modal-context";
 import { useCreateCompanyModal } from "@/contexts/create-company-modal-context";
 // CompanySwitcher functionality is now integrated into the dropdown menu
 import { getUserCompaniesAction, switchCompanyAction } from "@/app/dashboard/company/actions";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 export interface NavLink {
   href: string;
@@ -23,12 +25,8 @@ export interface HeaderProps {
   navLinks?: NavLink[];
 }
 
-const DEFAULT_NAV_LINKS: NavLink[] = [
-  { href: "/projects", label: "Projects" },
-  { href: "/professionals", label: "Professionals" },
-];
-
-export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLinks = DEFAULT_NAV_LINKS }: HeaderProps) {
+export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLinks }: HeaderProps) {
+  const t = useTranslations("nav");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -36,6 +34,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const { profile, user } = useAuth();
   const { openLoginModal } = useLoginModal();
   const { openCreateCompanyModal } = useCreateCompanyModal();
+
+  const defaultNavLinks: NavLink[] = [
+    { href: "/projects", label: t("projects") },
+    { href: "/professionals", label: t("professionals") },
+  ];
+  const resolvedNavLinks = navLinks ?? defaultNavLinks;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
@@ -201,7 +205,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               {isMobileMenuOpen && (
                 <div className="absolute left-0 top-full z-50 w-48 border border-border bg-white shadow-lg mt-2 md:hidden" ref={menuRef}>
                   <div className="py-2">
-                    {navLinks.map((link) => {
+                    {resolvedNavLinks.map((link) => {
                       const linkPath = link.href.split("?")[0]
                       return (
                       <Link
@@ -233,7 +237,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 />
               </Link>
               <div className="hidden items-center gap-6 md:flex">
-                {navLinks.map((link) => {
+                {resolvedNavLinks.map((link) => {
                   const linkPath = link.href.split("?")[0]
                   const isActive = pathname === linkPath
                   return (
@@ -253,8 +257,10 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               </div>
             </div>
 
-            {/* Right: Search + Menu */}
+            {/* Right: Language + Search + Menu */}
             <div className="relative flex items-center justify-end gap-3">
+              {/* Language Switcher */}
+              <LanguageSwitcher />
               {/* Search Icon */}
               <button
                 onClick={toggleSearch}
@@ -484,7 +490,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               disabled={isSigningOut}
                             >
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                              {isSigningOut ? "Signing out..." : "Sign out"}
+                              {isSigningOut ? t("signing_out") : t("sign_out")}
                             </button>
                           </>
                         ) : (
