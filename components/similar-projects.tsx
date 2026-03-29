@@ -1,5 +1,6 @@
 "use client"
 import { useMemo, useRef } from "react"
+import { useTranslations } from "next-intl"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { ProjectCard, type ProjectCardData } from "@/components/project-card"
@@ -8,6 +9,7 @@ import { useProjectLikes } from "@/contexts/project-likes-context"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 
 export function SimilarProjects() {
+  const t = useTranslations("project_detail")
   const { similarProjects } = useProjectPreview()
   const scrollRef = useRef<HTMLDivElement>(null)
   const { likedProjectIds, likeCounts, mutatingProjectIds: likeMutatingProjectIds, toggleLike } = useProjectLikes()
@@ -51,7 +53,7 @@ export function SimilarProjects() {
   return (
     <div className="space-y-6" data-section="similar-projects">
       <div className="flex items-center justify-between">
-        <h2 className="heading-3 font-bold text-black">Similar projects</h2>
+        <h2 className="heading-3 font-bold text-black">{t("similar_projects")}</h2>
         <div className="hidden md:flex gap-2">
           <button
             onClick={scrollLeft}

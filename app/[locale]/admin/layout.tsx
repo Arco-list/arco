@@ -15,6 +15,7 @@ const ADMIN_NAV_LINKS = [
   { href: "/admin/professionals", label: "Companies" },
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/emails", label: "Emails" },
+  { href: "/admin/prospects", label: "Prospects" },
 ]
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {

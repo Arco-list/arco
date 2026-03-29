@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from "react"
 import { X } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { useFilters } from "@/contexts/filter-context"
 import type { ProjectSpaceKey } from "@/types/project-filters"
@@ -17,14 +18,14 @@ import type { ProjectSpaceKey } from "@/types/project-filters"
 
 interface SpaceOption {
   key: ProjectSpaceKey
-  label: string
+  labelKey: string
   icon: React.ReactNode
 }
 
 const SPACE_OPTIONS: SpaceOption[] = [
   {
     key: "exterior",
-    label: "Exterior",
+    labelKey: "exterior",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M2 8l6-5 6 5" />
@@ -35,7 +36,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "living",
-    label: "Living",
+    labelKey: "living",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M2 11V8a2 2 0 012-2h8a2 2 0 012 2v3" />
@@ -47,7 +48,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "kitchen",
-    label: "Kitchen",
+    labelKey: "kitchen",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <rect x="2" y="6" width="12" height="7" rx="1" />
@@ -58,7 +59,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "bedroom",
-    label: "Bedroom",
+    labelKey: "bedroom",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <rect x="1" y="9" width="14" height="4" rx="1" />
@@ -71,7 +72,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "bathroom",
-    label: "Bathroom",
+    labelKey: "bathroom",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <rect x="1" y="8" width="14" height="5" rx="1" />
@@ -83,7 +84,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "home-office",
-    label: "Home office",
+    labelKey: "home-office",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <rect x="2" y="3" width="12" height="8" rx="1" />
@@ -94,7 +95,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "hallway",
-    label: "Hallway",
+    labelKey: "hallway",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <rect x="3" y="2" width="10" height="12" rx="1" />
@@ -105,7 +106,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "garden",
-    label: "Garden",
+    labelKey: "garden",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M8 14V8" />
@@ -116,7 +117,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "pool",
-    label: "Pool",
+    labelKey: "pool",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M1 10c1.5-1.8 3-1.8 4.5 0s3 1.8 4.5 0 3-1.8 4.5 0" />
@@ -126,7 +127,7 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
   {
     key: "terrace",
-    label: "Terrace",
+    labelKey: "terrace",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M1 10h14" />
@@ -210,10 +211,11 @@ function DropdownOption({ label, checked, icon, onToggle }: DropdownOptionProps)
 interface DrawerSectionProps {
   title: string
   activeCount: number
+  selectedLabel: string
   children: React.ReactNode
 }
 
-function DrawerSection({ title, activeCount, children }: DrawerSectionProps) {
+function DrawerSection({ title, activeCount, selectedLabel, children }: DrawerSectionProps) {
   const [collapsed, setCollapsed] = useState(false)
   return (
     <div className="drawer-section" data-collapsed={collapsed}>
@@ -230,7 +232,7 @@ function DrawerSection({ title, activeCount, children }: DrawerSectionProps) {
         <div className="drawer-section-header-left">
           <span className="drawer-section-title">{title}</span>
           {activeCount > 0 && (
-            <span className="drawer-section-badge">{activeCount} selected</span>
+            <span className="drawer-section-badge">{selectedLabel}</span>
           )}
         </div>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -253,6 +255,8 @@ interface DrawerOptionListWithMoreProps<T> {
   getItemValue: (item: T) => string
   getItemLabel: (item: T) => string
   onToggle: (value: string, isCurrentlyChecked: boolean) => void
+  showLessLabel: string
+  showAllLabel: (count: number) => string
 }
 
 function DrawerOptionListWithMore<T>({
@@ -261,6 +265,8 @@ function DrawerOptionListWithMore<T>({
   getItemValue,
   getItemLabel,
   onToggle,
+  showLessLabel,
+  showAllLabel,
 }: DrawerOptionListWithMoreProps<T>) {
   const [showAll, setShowAll] = useState(false)
   const needsShowMore = items.length > DRAWER_SHOW_MORE_LIMIT
@@ -303,7 +309,7 @@ function DrawerOptionListWithMore<T>({
           className="drawer-show-more"
           onClick={() => setShowAll((v) => !v)}
         >
-          {showAll ? "Show less" : `Show all (${items.length})`}
+          {showAll ? showLessLabel : showAllLabel(items.length)}
         </button>
       )}
     </>
@@ -395,6 +401,9 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
+  const t = useTranslations("projects.filters")
+  const tSpaces = useTranslations("spaces")
+
   const {
     selectedTypes,
     selectedStyles,
@@ -425,6 +434,13 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [locationSearch, setLocationSearch] = useState("")
   const barRef = useRef<HTMLDivElement>(null)
+
+  // Sort option label mapping
+  const sortLabelMap: Record<SortOption, string> = {
+    "Most recent": t("sort_most_recent"),
+    "Most liked": t("sort_most_liked"),
+    "Alphabetical": t("sort_alphabetical"),
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -466,8 +482,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const chips = useMemo<Chip[]>(() => {
     const tags: Chip[] = []
     if (selectedSpace) {
-      const opt = SPACE_OPTIONS.find((o) => o.key === selectedSpace)
-      tags.push({ type: "space", value: selectedSpace, label: opt?.label ?? selectedSpace })
+      tags.push({ type: "space", value: selectedSpace, label: tSpaces(selectedSpace as any) })
     }
     selectedTypes.forEach((id) => {
       const cat = topLevelCategories.find((c) => c.id === id)
@@ -490,7 +505,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
       tags.push({ type: "projectYear", value: `${min}-${max}`, label: `${min} – ${max}` })
     }
     return tags
-  }, [selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX])
+  }, [selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces])
 
   const totalCount = chips.length
 
@@ -516,7 +531,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   )
 
   const spaceOption = SPACE_OPTIONS.find((o) => o.key === selectedSpace)
-  const spaceLabel = spaceOption?.label ?? "Space"
+  const spaceLabel = spaceOption ? tSpaces(spaceOption.labelKey as any) : t("space")
 
   const defaultSpaceIcon = (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"
@@ -547,7 +562,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 <line x1="3.5" y1="6.5" x2="9.5" y2="6.5" />
                 <line x1="5.5" y1="9.5" x2="7.5" y2="9.5" />
               </svg>
-              All filters
+              {t("all_filters")}
               {totalCount > 0 && (
                 <span className="filter-pill-badge">{totalCount}</span>
               )}
@@ -576,7 +591,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 {SPACE_OPTIONS.map((opt) => (
                   <DropdownOption
                     key={opt.key}
-                    label={opt.label}
+                    label={tSpaces(opt.labelKey as any)}
                     checked={selectedSpace === opt.key}
                     icon={opt.icon}
                     onToggle={() => { toggleSpace(opt.key); setActiveDropdown(null) }}
@@ -595,7 +610,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 disabled={taxonomyLoading && topLevelCategories.length === 0}
                 aria-expanded={activeDropdown === "type"}
               >
-                Type
+                {t("type")}
                 {selectedTypes.length > 0 && (
                   <span className="filter-pill-badge">{selectedTypes.length}</span>
                 )}
@@ -608,7 +623,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
               >
                 {taxonomyLoading && topLevelCategories.length === 0 ? (
                   <div style={{ padding: "16px", fontSize: 13, color: "var(--text-secondary)" }}>
-                    Loading…
+                    {t("loading")}
                   </div>
                 ) : (
                   topLevelCategories.map((cat) => (
@@ -632,7 +647,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 onClick={() => toggleDropdown("location")}
                 aria-expanded={activeDropdown === "location"}
               >
-                Location
+                {t("location")}
                 {selectedLocations.length > 0 && (
                   <span className="filter-pill-badge">{selectedLocations.length}</span>
                 )}
@@ -646,7 +661,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 <div className="filter-dropdown-search">
                   <input
                     type="text"
-                    placeholder="City or region…"
+                    placeholder={t("city_or_region")}
                     value={locationSearch}
                     onChange={(e) => setLocationSearch(e.target.value)}
                     autoComplete="off"
@@ -671,7 +686,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                     ))
                   ) : (
                     <div style={{ padding: "10px 16px", fontSize: 13, color: "var(--text-secondary)" }}>
-                      No locations found
+                      {t("no_locations")}
                     </div>
                   )}
                 </div>
@@ -686,7 +701,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 onClick={() => toggleDropdown("sort")}
                 aria-expanded={activeDropdown === "sort"}
               >
-                {sortBy}
+                {sortLabelMap[sortBy]}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
               <div
@@ -698,7 +713,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 {SORT_OPTIONS.map((opt) => (
                   <DropdownOption
                     key={opt}
-                    label={opt}
+                    label={sortLabelMap[opt]}
                     checked={sortBy === opt}
                     onToggle={() => { onSortChange(opt); setActiveDropdown(null) }}
                   />
@@ -727,7 +742,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 </button>
               ))}
               <button className="filter-chip-clear-all" onClick={clearAllFilters}>
-                Clear all
+                {t("clear_all")}
               </button>
             </div>
           </div>
@@ -751,7 +766,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
         aria-label="All filters"
       >
         <div className="discover-drawer-header">
-          <span className="discover-drawer-title">All filters</span>
+          <span className="discover-drawer-title">{t("all_filters")}</span>
           <button
             className="discover-drawer-close"
             onClick={() => setDrawerOpen(false)}
@@ -764,7 +779,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
         <div className="discover-drawer-body">
 
           {/* Space */}
-          <DrawerSection title="Space" activeCount={selectedSpace ? 1 : 0}>
+          <DrawerSection title={t("space")} activeCount={selectedSpace ? 1 : 0} selectedLabel={t("selected", { count: 1 })}>
             <div className="drawer-option-list">
               {SPACE_OPTIONS.map((opt) => (
                 <div
@@ -784,7 +799,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                       {selectedSpace === opt.key && <CheckIcon />}
                     </div>
                     <span className="drawer-option-icon">{opt.icon}</span>
-                    <span className="drawer-option-label">{opt.label}</span>
+                    <span className="drawer-option-label">{tSpaces(opt.labelKey as any)}</span>
                   </div>
                 </div>
               ))}
@@ -792,7 +807,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
           </DrawerSection>
 
           {/* Type */}
-          <DrawerSection title="Type" activeCount={selectedTypes.length}>
+          <DrawerSection title={t("type")} activeCount={selectedTypes.length} selectedLabel={t("selected", { count: selectedTypes.length })}>
             <DrawerOptionListWithMore
               items={topLevelCategories}
               selectedValues={selectedTypes}
@@ -805,15 +820,17 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                     : [...selectedTypes, value]
                 )
               }
+              showLessLabel={t("show_less")}
+              showAllLabel={(count) => t("show_all", { count })}
             />
           </DrawerSection>
 
           {/* Location */}
-          <DrawerSection title="Location" activeCount={selectedLocations.length}>
+          <DrawerSection title={t("location")} activeCount={selectedLocations.length} selectedLabel={t("selected", { count: selectedLocations.length })}>
             <input
               className="drawer-search"
               type="text"
-              placeholder="City or region…"
+              placeholder={t("city_or_region")}
               value={locationSearch}
               onChange={(e) => setLocationSearch(e.target.value)}
             />
@@ -861,7 +878,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
           </DrawerSection>
 
           {/* Scope (Building Type) */}
-          <DrawerSection title="Scope" activeCount={selectedBuildingTypes.length}>
+          <DrawerSection title={t("scope")} activeCount={selectedBuildingTypes.length} selectedLabel={t("selected", { count: selectedBuildingTypes.length })}>
             <div className="drawer-option-list">
               {buildingTypeOptions.map((bt) => {
                 const value = bt.id ?? bt.slug ?? bt.name
@@ -905,7 +922,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
           </DrawerSection>
 
           {/* Style */}
-          <DrawerSection title="Style" activeCount={selectedStyles.length}>
+          <DrawerSection title={t("style")} activeCount={selectedStyles.length} selectedLabel={t("selected", { count: selectedStyles.length })}>
             <DrawerOptionListWithMore
               items={styleOptions}
               selectedValues={selectedStyles}
@@ -918,11 +935,13 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                     : [...selectedStyles, value]
                 )
               }
+              showLessLabel={t("show_less")}
+              showAllLabel={(count) => t("show_all", { count })}
             />
           </DrawerSection>
 
           {/* Year */}
-          <DrawerSection title="Year" activeCount={(projectYearRange[0] !== null || projectYearRange[1] !== null) ? 1 : 0}>
+          <DrawerSection title={t("year")} activeCount={(projectYearRange[0] !== null || projectYearRange[1] !== null) ? 1 : 0} selectedLabel={t("selected", { count: 1 })}>
             <DualRangeSlider
               min={YEAR_MIN}
               max={YEAR_MAX}
@@ -944,13 +963,13 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
             className="discover-drawer-clear"
             onClick={() => { clearAllFilters(); setDrawerOpen(false) }}
           >
-            Clear all
+            {t("clear_all")}
           </button>
           <button
             className="discover-drawer-apply"
             onClick={() => setDrawerOpen(false)}
           >
-            Show results
+            {t("show_results")}
           </button>
         </div>
       </aside>

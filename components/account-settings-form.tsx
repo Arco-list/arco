@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react"
 import { toast } from "sonner"
 
+import { useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -39,6 +40,7 @@ export interface AccountSettingsFormProps {
 }
 
 export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
+  const t = useTranslations("dashboard")
   const { user, profile, supabase, refreshSession, refreshProfile, isLoading } = useAuth()
 
   const [profileForm, setProfileForm] = useState<ProfileFormState>({
@@ -115,7 +117,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         void supabase.storage.from("profile-photos").remove([previousStoragePath])
       }
       await refreshProfile()
-      toast.success("Profile photo updated")
+      toast.success(t("settings_profile_photo_updated"))
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected error"
       toast.error("Could not update profile photo", { description: message })
@@ -137,7 +139,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
       if (profileError) { toast.error("Could not remove profile photo", { description: profileError.message }); return }
       setAvatarPreview(null)
       await refreshProfile()
-      toast.success("Profile photo removed")
+      toast.success(t("settings_profile_photo_removed"))
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected error"
       toast.error("Could not remove profile photo", { description: message })
@@ -170,21 +172,21 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
     else updates.last_name = trimmed || null
 
     supabase.from("profiles").update(updates).eq("id", user.id).then(({ error }) => {
-      if (error) toast.error("Could not update name")
-      else { toast.success("Name updated"); refreshProfile() }
+      if (error) toast.error(t("settings_could_not_update_name"))
+      else { toast.success(t("settings_name_updated")); refreshProfile() }
     })
   }
 
   const handleEmailUpdate = async () => {
     const trimmed = newEmail.trim()
     if (!trimmed || !isValidEmail(trimmed)) { toast.error("Please enter a valid email address"); return }
-    if (trimmed === user?.email) { toast("No change"); setEmailModalOpen(false); return }
+    if (trimmed === user?.email) { toast(t("settings_no_change")); setEmailModalOpen(false); return }
 
     setIsSavingProfile(true)
     try {
       const { error } = await supabase.auth.updateUser({ email: trimmed }, { emailRedirectTo: window.location.origin })
       if (error) { toast.error("Could not update email", { description: error.message }); return }
-      toast.warning("Check your inbox", { description: "Confirm the email change to complete the update." })
+      toast.warning(t("settings_check_inbox"), { description: t("settings_confirm_email_change") })
       setEmailModalOpen(false)
       await refreshSession()
     } catch (error) {
@@ -222,7 +224,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
       setPasswordModalOpen(false)
       await refreshSession()
-      toast.success("Password updated")
+      toast.success(t("settings_password_updated"))
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected error"
       toast.error("Unable to change password", { description: message })
@@ -267,7 +269,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                 }
               }
             }}
-            data-placeholder="Your Name"
+            data-placeholder={t("settings_your_name")}
           >
             {displayName || ""}
           </h1>
@@ -279,7 +281,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
           onClick={() => { setNewEmail(profileForm.email); setEmailModalOpen(true) }}
           style={{ cursor: "pointer" }}
         >
-          {profileForm.email || "Add email address"}
+          {profileForm.email || t("settings_add_email")}
         </p>
       </section>
 
@@ -293,29 +295,29 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         borderBottom: "1px solid #e8e8e6",
       }}>
         <div style={{ textAlign: "center" }}>
-          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Member since</span>
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("settings_member_since")}</span>
           <p style={{ fontSize: 15, fontWeight: 300, margin: 0, color: "var(--arco-black)" }}>
             {user?.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—"}
           </p>
         </div>
         <div style={{ textAlign: "center" }}>
-          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Sign-in method</span>
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("settings_sign_in_method")}</span>
           <p style={{ fontSize: 15, fontWeight: 300, margin: 0, color: "var(--arco-black)", textTransform: "capitalize" }}>
-            {authProvider === "google" ? "Google" : authProvider === "email" ? "Email & password" : authProvider}
+            {authProvider === "google" ? "Google" : authProvider === "email" ? t("settings_email_password") : authProvider}
           </p>
         </div>
         <div
           style={{ textAlign: "center", cursor: isEmailAuthUser ? "pointer" : "default" }}
           onClick={() => { if (isEmailAuthUser) setPasswordModalOpen(true) }}
         >
-          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Password</span>
+          <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("settings_password")}</span>
           {isEmailAuthUser ? (
             <p style={{ fontSize: 13, fontWeight: 300, margin: 0, color: "var(--primary)", cursor: "pointer" }}>
-              Update password
+              {t("settings_update_password")}
             </p>
           ) : (
             <p style={{ fontSize: 15, fontWeight: 300, margin: 0, color: "var(--arco-mid-grey)" }}>
-              Managed by {authProvider}
+              {t("settings_managed_by", { provider: authProvider })}
             </p>
           )}
         </div>
@@ -335,36 +337,36 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
               border: "none", cursor: "pointer",
             }}
           >
-            Remove photo
+            {t("settings_remove_photo")}
           </button>
         ) : null}
       </div>
 
       {/* ── Notification Preferences ── */}
       <section style={{ maxWidth: 600, margin: "48px auto 0" }}>
-        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 12 }}>Notification Preferences</h2>
+        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 12 }}>{t("settings_notifications_title")}</h2>
         <p className="arco-body-text" style={{ textAlign: "center", marginBottom: 32 }}>
-          Choose which notifications you'd like to receive. We'll only send you what matters.
+          {t("settings_notifications_description")}
         </p>
         <div style={{ textAlign: "center" }}>
-          <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>Notification settings coming soon.</p>
+          <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>{t("settings_notifications_coming_soon")}</p>
         </div>
       </section>
 
       {/* ── Connected Accounts ── */}
       <section style={{ maxWidth: 600, margin: "48px auto 0" }}>
-        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 12 }}>Connected Accounts</h2>
+        <h2 className="arco-section-title" style={{ textAlign: "center", marginBottom: 12 }}>{t("settings_connected_accounts")}</h2>
         <p className="arco-body-text" style={{ textAlign: "center", marginBottom: 32 }}>
-          Manage the accounts linked to your Arco profile.
+          {t("settings_connected_accounts_description")}
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {connectedProviders.length > 0 ? connectedProviders.map(p => (
             <div key={p} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--arco-rule)" }}>
               <span style={{ fontSize: 14, fontWeight: 400, textTransform: "capitalize" }}>{p === "google" ? "Google" : p}</span>
-              <span style={{ fontSize: 12, color: "var(--arco-mid-grey)" }}>Connected</span>
+              <span style={{ fontSize: 12, color: "var(--arco-mid-grey)" }}>{t("settings_connected")}</span>
             </div>
           )) : (
-            <p className="arco-body-text" style={{ textAlign: "center", color: "var(--arco-mid-grey)" }}>No connected accounts.</p>
+            <p className="arco-body-text" style={{ textAlign: "center", color: "var(--arco-mid-grey)" }}>{t("settings_no_connected")}</p>
           )}
         </div>
       </section>
@@ -384,7 +386,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14M10 11v6M14 11v6" />
           </svg>
-          Delete account
+          {t("settings_delete_account")}
         </button>
       </section>
 
@@ -393,16 +395,16 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         <div className="popup-overlay" onClick={() => setEmailModalOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Update email</h3>
+              <h3 className="arco-section-title">{t("settings_update_email")}</h3>
               <button className="popup-close" onClick={() => setEmailModalOpen(false)} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-              We'll send a confirmation link to your new email address.
+              {t("settings_update_email_description")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  New email address
+                  {t("settings_new_email")}
                 </label>
                 <input
                   type="email"
@@ -421,7 +423,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                 className="btn-primary"
                 style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
               >
-                {isSavingProfile ? "Updating…" : "Update email"}
+                {isSavingProfile ? t("settings_updating") : t("settings_update_email")}
               </button>
             </div>
           </div>
@@ -433,50 +435,50 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         <div className="popup-overlay" onClick={() => setPasswordModalOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Update password</h3>
+              <h3 className="arco-section-title">{t("settings_update_password")}</h3>
               <button className="popup-close" onClick={() => setPasswordModalOpen(false)} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-              Enter your current password and choose a new one.
+              {t("settings_update_password_description")}
             </p>
             <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Current password
+                  {t("settings_current_password")}
                 </label>
                 <input
                   type="password"
                   className="form-input"
                   value={passwordForm.currentPassword}
                   onChange={e => setPasswordForm(s => ({ ...s, currentPassword: e.target.value }))}
-                  placeholder="Enter current password"
+                  placeholder={t("settings_enter_current_password")}
                   autoFocus
                   style={{ marginBottom: 0 }}
                 />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  New password
+                  {t("settings_new_password")}
                 </label>
                 <input
                   type="password"
                   className="form-input"
                   value={passwordForm.newPassword}
                   onChange={e => setPasswordForm(s => ({ ...s, newPassword: e.target.value }))}
-                  placeholder="At least 8 characters"
+                  placeholder={t("settings_at_least_8_chars")}
                   style={{ marginBottom: 0 }}
                 />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Confirm new password
+                  {t("settings_confirm_password")}
                 </label>
                 <input
                   type="password"
                   className="form-input"
                   value={passwordForm.confirmPassword}
                   onChange={e => setPasswordForm(s => ({ ...s, confirmPassword: e.target.value }))}
-                  placeholder="Confirm new password"
+                  placeholder={t("settings_confirm_new_password")}
                   style={{ marginBottom: 0 }}
                 />
               </div>
@@ -486,7 +488,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                 className="btn-primary"
                 style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
               >
-                {isSavingPassword ? "Updating…" : "Update password"}
+                {isSavingPassword ? t("settings_updating") : t("settings_update_password")}
               </button>
             </form>
           </div>
@@ -498,22 +500,22 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         <div className="popup-overlay" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Delete account</h3>
+              <h3 className="arco-section-title">{t("settings_delete_account")}</h3>
               <button className="popup-close" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-              Permanently delete your account and all associated data. This action cannot be undone.
+              {t("settings_delete_description")}
             </p>
 
             <div className="popup-banner popup-banner--danger" style={{ marginBottom: 16 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
-              <span>Your account will be permanently deleted. This cannot be undone.</span>
+              <span>{t("settings_delete_warning")}</span>
             </div>
 
             <p className="arco-body-text" style={{ marginBottom: 12 }}>
-              Type <strong>DELETE</strong> to confirm.
+              {t.rich("settings_delete_confirm", { strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
             <input
               type="text"
@@ -530,14 +532,14 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                 onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }}
                 style={{ flex: 1 }}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 disabled={deleteConfirmText !== "DELETE" || isDeletingAccount}
                 onClick={async () => {
                   setIsDeletingAccount(true)
                   // Account deletion would need a server action
-                  toast.error("Account deletion is not yet available. Please contact support.")
+                  toast.error(t("settings_delete_unavailable"))
                   setIsDeletingAccount(false)
                 }}
                 className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
@@ -547,7 +549,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                 }`}
                 style={{ fontSize: 14 }}
               >
-                {isDeletingAccount ? "Deleting…" : "Delete account"}
+                {isDeletingAccount ? t("settings_deleting") : t("settings_delete_account")}
               </button>
             </div>
           </div>

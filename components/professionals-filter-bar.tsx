@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { X } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import {
   useProfessionalFilters,
@@ -45,10 +46,11 @@ function ChevronDownIcon({ className }: { className?: string }) {
 interface DrawerSectionProps {
   title: string
   activeCount: number
+  selectedLabel: string
   children: React.ReactNode
 }
 
-function DrawerSection({ title, activeCount, children }: DrawerSectionProps) {
+function DrawerSection({ title, activeCount, selectedLabel, children }: DrawerSectionProps) {
   const [collapsed, setCollapsed] = useState(false)
   return (
     <div className="drawer-section" data-collapsed={collapsed}>
@@ -65,7 +67,7 @@ function DrawerSection({ title, activeCount, children }: DrawerSectionProps) {
         <div className="drawer-section-header-left">
           <span className="drawer-section-title">{title}</span>
           {activeCount > 0 && (
-            <span className="drawer-section-badge">{activeCount} selected</span>
+            <span className="drawer-section-badge">{selectedLabel}</span>
           )}
         </div>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -81,6 +83,8 @@ function DrawerSection({ title, activeCount, children }: DrawerSectionProps) {
 // ─── ProfessionalsFilterBar ─────────────────────────────────────────────────
 
 export function ProfessionalsFilterBar() {
+  const t = useTranslations("professionals.filters")
+
   const {
     selectedCategories,
     selectedServices,
@@ -103,6 +107,14 @@ export function ProfessionalsFilterBar() {
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
   const barRef = useRef<HTMLDivElement>(null)
+
+  // Sort option label mapping
+  const sortLabelMap: Record<string, string> = {
+    "Best match": t("sort_best_match"),
+    "Most recent": t("sort_most_recent"),
+    "Highest rated": t("sort_highest_rated"),
+    "Alphabetical": t("sort_alphabetical"),
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -210,7 +222,7 @@ export function ProfessionalsFilterBar() {
                 <line x1="3.5" y1="6.5" x2="9.5" y2="6.5" />
                 <line x1="5.5" y1="9.5" x2="7.5" y2="9.5" />
               </svg>
-              All filters
+              {t("all_filters")}
               {totalCount > 0 && (
                 <span className="filter-pill-badge">{totalCount}</span>
               )}
@@ -227,7 +239,7 @@ export function ProfessionalsFilterBar() {
                 onClick={() => toggleDropdown("service")}
                 aria-expanded={activeDropdown === "service"}
               >
-                Service
+                {t("service")}
                 {serviceFilterCount > 0 && (
                   <span className="filter-pill-badge">{serviceFilterCount}</span>
                 )}
@@ -279,7 +291,7 @@ export function ProfessionalsFilterBar() {
                               gap: 3,
                             }}
                           >
-                            {isExpanded ? "Hide" : "Show all"}
+                            {isExpanded ? t("hide") : t("show_all")}
                             <svg
                               width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
                               style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
@@ -328,7 +340,7 @@ export function ProfessionalsFilterBar() {
                 onClick={() => toggleDropdown("location")}
                 aria-expanded={activeDropdown === "location"}
               >
-                Location
+                {t("location")}
                 {selectedCities.length > 0 && (
                   <span className="filter-pill-badge">{selectedCities.length}</span>
                 )}
@@ -342,7 +354,7 @@ export function ProfessionalsFilterBar() {
                 <div className="filter-dropdown-search">
                   <input
                     type="text"
-                    placeholder="City or region…"
+                    placeholder={t("city_or_region")}
                     value={locationSearch}
                     onChange={(e) => setLocationSearch(e.target.value)}
                     autoComplete="off"
@@ -387,7 +399,7 @@ export function ProfessionalsFilterBar() {
                     })
                   ) : (
                     <div style={{ padding: "10px 16px", fontSize: 13, color: "var(--text-secondary)" }}>
-                      No locations found
+                      {t("no_locations")}
                     </div>
                   )}
                 </div>
@@ -402,7 +414,7 @@ export function ProfessionalsFilterBar() {
                 onClick={() => toggleDropdown("sort")}
                 aria-expanded={activeDropdown === "sort"}
               >
-                {sortBy}
+                {sortLabelMap[sortBy] ?? sortBy}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
               <div
@@ -426,7 +438,7 @@ export function ProfessionalsFilterBar() {
                   >
                     <div className="filter-dropdown-option-left">
                       <div className="filter-checkbox">{sortBy === opt && <CheckIcon />}</div>
-                      <span className="filter-dropdown-label">{opt}</span>
+                      <span className="filter-dropdown-label">{sortLabelMap[opt] ?? opt}</span>
                     </div>
                   </div>
                 ))}
@@ -454,7 +466,7 @@ export function ProfessionalsFilterBar() {
                 </button>
               ))}
               <button className="filter-chip-clear-all" onClick={handleClearAllFilters}>
-                Clear all
+                {t("clear_all")}
               </button>
             </div>
           </div>
@@ -478,7 +490,7 @@ export function ProfessionalsFilterBar() {
         aria-label="All filters"
       >
         <div className="discover-drawer-header">
-          <span className="discover-drawer-title">All filters</span>
+          <span className="discover-drawer-title">{t("all_filters")}</span>
           <button
             className="discover-drawer-close"
             onClick={() => setDrawerOpen(false)}
@@ -491,7 +503,7 @@ export function ProfessionalsFilterBar() {
         <div className="discover-drawer-body">
 
           {/* Services — single section, categories with expandable sub-services */}
-          <DrawerSection title="Services" activeCount={serviceFilterCount}>
+          <DrawerSection title={t("services")} activeCount={serviceFilterCount} selectedLabel={t("selected", { count: serviceFilterCount })}>
             <div className="drawer-option-list">
               {sections.map((section) => {
                 const catId = section.category.id ?? ""
@@ -539,7 +551,7 @@ export function ProfessionalsFilterBar() {
                           gap: 3,
                         }}
                       >
-                        {isExpanded ? "Hide" : "Show all"}
+                        {isExpanded ? t("hide") : t("show_all")}
                         <svg
                           width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
                           style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
@@ -583,11 +595,11 @@ export function ProfessionalsFilterBar() {
           </DrawerSection>
 
           {/* Location */}
-          <DrawerSection title="Location" activeCount={selectedCities.length}>
+          <DrawerSection title={t("location")} activeCount={selectedCities.length} selectedLabel={t("selected", { count: selectedCities.length })}>
             <input
               className="drawer-search"
               type="text"
-              placeholder="City or region…"
+              placeholder={t("city_or_region")}
               value={locationSearch}
               onChange={(e) => setLocationSearch(e.target.value)}
             />
@@ -639,13 +651,13 @@ export function ProfessionalsFilterBar() {
             className="discover-drawer-clear"
             onClick={() => { handleClearAllFilters(); setDrawerOpen(false) }}
           >
-            Clear all
+            {t("clear_all")}
           </button>
           <button
             className="discover-drawer-apply"
             onClick={() => setDrawerOpen(false)}
           >
-            Show results
+            {t("show_results")}
           </button>
         </div>
       </aside>

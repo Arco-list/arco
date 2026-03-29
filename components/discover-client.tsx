@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { FilterBar, type SortOption } from "@/components/filter-bar"
 import { ProjectsGrid } from "@/components/projects-grid"
 import type { DiscoverProject } from "@/lib/projects/queries"
@@ -12,6 +13,7 @@ interface DiscoverClientProps {
 
 export function DiscoverClient({ initialProjects }: DiscoverClientProps) {
   const [sortBy, setSortBy] = useState<SortOption>("Most recent")
+  const t = useTranslations("projects")
 
   return (
     <>
@@ -25,16 +27,16 @@ export function DiscoverClient({ initialProjects }: DiscoverClientProps) {
           {/* Breadcrumb */}
           <nav aria-label="Breadcrumb" className="discover-breadcrumb">
             <Link href="/projects" className="discover-breadcrumb-item">
-              Projects
+              {t("title")}
             </Link>
             <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
             <span className="discover-breadcrumb-item discover-breadcrumb-current">
-              Netherlands
+              {t("breadcrumb_netherlands")}
             </span>
           </nav>
 
           {/* Page title */}
-          <h2 className="arco-section-title">Browse projects</h2>
+          <h2 className="arco-section-title">{t("browse")}</h2>
 
         </div>
       </div>

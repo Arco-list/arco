@@ -1,10 +1,12 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 
 export function ProjectInfo() {
+  const t = useTranslations("project_detail")
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
   const { info, locationLabel } = useProjectPreview()
   
@@ -41,7 +43,7 @@ export function ProjectInfo() {
             className="p-0 text-red-600 hover:text-red-700"
             onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
           >
-            {isDescriptionExpanded ? "Show less" : "Show more"}
+            {isDescriptionExpanded ? t("show_less") : t("show_more")}
           </Button>
         )}
       </div>

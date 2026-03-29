@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 
+import { useLocale } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { getLocalizedName } from "@/lib/locale-name"
 import type { Tables } from "@/lib/supabase/types"
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -33,6 +35,7 @@ type ProfessionalTaxonomyCache = {
   locationFacets: LocationFacet[]
   locationOptions: LocationOptions
   fetchedAt: number
+  locale: string
 }
 
 let taxonomyCache: ProfessionalTaxonomyCache | null = null
@@ -143,6 +146,7 @@ const buildLocationOptions = (facets: LocationFacet[]): LocationOptions => {
 }
 
 export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
+  const locale = useLocale()
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [services, setServices] = useState<CategoryRow[]>([])
   const [locationFacets, setLocationFacets] = useState<LocationFacet[]>([])
@@ -166,7 +170,7 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
 
       try {
         const now = Date.now()
-        if (!force && taxonomyCache && now - taxonomyCache.fetchedAt < CACHE_TTL_MS) {
+        if (!force && taxonomyCache && taxonomyCache.locale === locale && now - taxonomyCache.fetchedAt < CACHE_TTL_MS) {
           applyCache(taxonomyCache)
           return
         }
@@ -183,7 +187,7 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
           const [categoriesResult, locationsResult] = await Promise.all([
             supabase
               .from("categories")
-              .select("id,name,slug,parent_id,sort_order,is_active")
+              .select("id,name,name_nl,slug,parent_id,sort_order,is_active")
               .eq("is_active", true)
               .order("sort_order", { ascending: true, nullsFirst: false })
               .order("name", { ascending: true }),
@@ -200,10 +204,15 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
 
           const categoryRecords = (categoriesResult.data as CategoryRow[] | null) ?? []
 
+          // Localize names
+          const localizedRecords = categoryRecords.map((r) => ({
+            ...r,
+            name: getLocalizedName(r as any, locale),
+          }))
           // Parent categories (no parent_id) = top-level filter categories
-          const allowedCategories = categoryRecords.filter((r) => !r.parent_id)
+          const allowedCategories = localizedRecords.filter((r) => !r.parent_id)
           // Child categories (have parent_id) = services within a category
-          const allowedServices = categoryRecords.filter((r) => !!r.parent_id)
+          const allowedServices = localizedRecords.filter((r) => !!r.parent_id)
 
           const locationRecords = (locationsResult.data as LocationRpcRow[] | null) ?? []
 
@@ -234,6 +243,7 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
             locationFacets: orderedLocations,
             locationOptions: options,
             fetchedAt: Date.now(),
+            locale,
           }
 
           applyCache(taxonomyCache)

@@ -14,11 +14,12 @@ export const metadata: Metadata = {
 
 export const revalidate = 300
 
-export default async function ProfessionalsPage() {
+export default async function ProfessionalsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   let professionals = []
 
   try {
-    professionals = await fetchDiscoverProfessionals()
+    professionals = await fetchDiscoverProfessionals(locale)
   } catch (error) {
     logger.error("Failed to render professionals discover page", { component: "ProfessionalsPage" }, error as Error)
   }

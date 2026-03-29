@@ -12,6 +12,7 @@ import {
   ChevronRight,
   X,
 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { ShareModal } from "./share-modal"
 import { useProfessionalGalleryData } from "@/contexts/professional-gallery-modal-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
@@ -28,6 +29,7 @@ export function ProfessionalGalleryModal({
   onClose,
   selectedGroupId,
 }: ProfessionalGalleryModalProps) {
+  const t = useTranslations("professional_detail")
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
@@ -198,19 +200,19 @@ export function ProfessionalGalleryModal({
           showCloseButton={false}
           className="!max-w-none !w-screen !h-screen p-0 bg-white border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
         >
-          <DialogTitle className="sr-only">{`${professionalName} Gallery`}</DialogTitle>
+          <DialogTitle className="sr-only">{t("gallery_title", { name: professionalName })}</DialogTitle>
           <div className="flex flex-col w-full h-screen">
             {/* Header */}
             <div className="flex items-center justify-between p-3 md:p-4 border-b border-border flex-shrink-0">
               <Button variant="tertiary" size="tertiary" onClick={onClose}>
                 <ArrowLeft className="w-4 h-4" />
-                Back
+                {t("back")}
               </Button>
 
               <div className="flex gap-2">
                 <Button variant="tertiary" size="tertiary" onClick={() => setIsShareModalOpen(true)}>
                   <Share className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Share</span>
+                  <span className="hidden md:inline">{t("share")}</span>
                 </Button>
                 <Button
                   variant="tertiary"
@@ -221,7 +223,7 @@ export function ProfessionalGalleryModal({
                   aria-pressed={isSaved}
                 >
                   <Bookmark className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
-                  <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
+                  <span className="hidden md:inline">{isSaved ? t("saved") : t("save")}</span>
                 </Button>
               </div>
             </div>
@@ -281,7 +283,7 @@ export function ProfessionalGalleryModal({
           showCloseButton={false}
           className="!max-w-none !w-screen !h-screen p-0 bg-black border-none overflow-hidden !m-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none"
         >
-          <DialogTitle className="sr-only">{`${professionalName} Gallery lightbox`}</DialogTitle>
+          <DialogTitle className="sr-only">{t("gallery_lightbox_title", { name: professionalName })}</DialogTitle>
           <div className="relative w-full h-screen flex flex-col">
             {/* Lightbox Header */}
             <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 md:p-6 bg-gradient-to-b from-black/90 to-transparent">
@@ -293,7 +295,7 @@ export function ProfessionalGalleryModal({
                 aria-label="Close lightbox"
               >
                 <X className="w-4 h-4 md:mr-2" />
-                <span className="hidden md:inline">Close</span>
+                <span className="hidden md:inline">{t("close")}</span>
               </Button>
 
               <div className="absolute left-1/2 -translate-x-1/2 text-white font-medium">
@@ -309,7 +311,7 @@ export function ProfessionalGalleryModal({
                   aria-label="Share professional"
                 >
                   <Share className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">Share</span>
+                  <span className="hidden md:inline">{t("share")}</span>
                 </Button>
                 <Button
                   variant="ghost"
@@ -325,7 +327,7 @@ export function ProfessionalGalleryModal({
                   aria-label={isSaved ? "Remove from saved" : "Save professional"}
                 >
                   <Bookmark className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
-                  <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
+                  <span className="hidden md:inline">{isSaved ? t("saved") : t("save")}</span>
                 </Button>
               </div>
             </div>
@@ -335,7 +337,7 @@ export function ProfessionalGalleryModal({
               <div className="relative w-full h-full flex items-center justify-center">
                 <Image
                   src={sanitizeImageUrl(allImages[currentImageIndex]?.src, "/placeholder.svg")}
-                  alt={allImages[currentImageIndex]?.alt || "Professional photo"}
+                  alt={allImages[currentImageIndex]?.alt || t("professional_photo")}
                   width={1200}
                   height={900}
                   className={`max-w-full max-h-[80vh] object-contain transition-transform duration-300 ease-out ${
@@ -347,7 +349,7 @@ export function ProfessionalGalleryModal({
                   }}
                   onClick={toggleZoom}
                   role="img"
-                  aria-label={`${allImages[currentImageIndex]?.alt || "Professional photo"} - ${currentImageIndex + 1} of ${allImages.length}`}
+                  aria-label={`${allImages[currentImageIndex]?.alt || t("professional_photo")} - ${currentImageIndex + 1} of ${allImages.length}`}
                 />
               </div>
             </div>

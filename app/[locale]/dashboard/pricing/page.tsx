@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Check } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -20,15 +21,17 @@ type FeatureRow = {
   pro: string | boolean
 }
 
-const FEATURE_ROWS: FeatureRow[] = [
-  { label: "Published projects", free: "Unlimited", pro: "Unlimited" },
-  { label: "Contributor projects", free: "3 projects", pro: "Unlimited" },
-  { label: "Company page with project portfolio", free: true, pro: true },
-  { label: "Team management", free: false, pro: true },
-  { label: "Portfolio analytics", free: false, pro: true },
-]
+// Feature keys for translation lookup
+const FEATURE_KEYS = [
+  { labelKey: "pricing_feature_published", freeKey: "pricing_unlimited", proKey: "pricing_unlimited", freeBool: true, proBool: true },
+  { labelKey: "pricing_feature_contributor", freeKey: "pricing_3_projects", proKey: "pricing_unlimited", freeBool: true, proBool: true },
+  { labelKey: "pricing_feature_company_page", freeKey: null, proKey: null, freeBool: true, proBool: true },
+  { labelKey: "pricing_feature_team", freeKey: null, proKey: null, freeBool: false, proBool: true },
+  { labelKey: "pricing_feature_analytics", freeKey: null, proKey: null, freeBool: false, proBool: true },
+] as const
 
 export default function PricingPage() {
+  const t = useTranslations("dashboard")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
   const { user, profile } = useAuth()
   const { openLoginModal } = useLoginModal()
@@ -53,10 +56,10 @@ export default function PricingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Header navLinks={[
-        { href: "/dashboard/listings", label: "Listings" },
-        { href: "/dashboard/company", label: "Company" },
-        { href: "/dashboard/team", label: "Team" },
-        { href: "/dashboard/pricing", label: "Plans" },
+        { href: "/dashboard/listings", label: t("listings") },
+        { href: "/dashboard/company", label: t("company") },
+        { href: "/dashboard/team", label: t("team") },
+        { href: "/dashboard/pricing", label: t("plans") },
       ]} />
 
       <main className="flex-1" style={{ paddingTop: 120 }}>
@@ -64,9 +67,9 @@ export default function PricingPage() {
 
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 56 }}>
-            <h1 className="arco-page-title" style={{ marginBottom: 16 }}>Simple, transparent plans</h1>
+            <h1 className="arco-page-title" style={{ marginBottom: 16 }}>{t("pricing_title")}</h1>
             <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto", color: "var(--arco-light)" }}>
-              Publishing projects is always free. Upgrade to grow your visibility as a credited professional.
+              {t("pricing_subtitle")}
             </p>
           </div>
 
@@ -77,14 +80,14 @@ export default function PricingPage() {
                 onClick={() => setBillingCycle("monthly")}
                 className={`toggle-seg${billingCycle === "monthly" ? " active" : ""}`}
               >
-                Monthly
+                {t("pricing_monthly")}
               </button>
               <button
                 onClick={() => setBillingCycle("yearly")}
                 className={`toggle-seg${billingCycle === "yearly" ? " active" : ""}`}
               >
-                Yearly
-                <span style={{ marginLeft: 6, fontSize: 11, color: "var(--primary)", fontWeight: 500 }}>Save 20%</span>
+                {t("pricing_yearly")}
+                <span style={{ marginLeft: 6, fontSize: 11, color: "var(--primary)", fontWeight: 500 }}>{t("pricing_save_20")}</span>
               </button>
             </div>
           </div>
@@ -95,26 +98,27 @@ export default function PricingPage() {
             {/* Free */}
             <div className="pricing-card pricing-card-subgrid">
               <div className="pricing-card-header">
-                <p className="pricing-card-label">Free</p>
+                <p className="pricing-card-label">{t("pricing_free")}</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
                   <h2 className="pricing-card-price">€0</h2>
                 </div>
                 <p style={{ fontSize: 12, minHeight: 18, marginTop: 4 }}>&nbsp;</p>
-                <p className="pricing-card-desc">Publish projects and get started as a professional</p>
+                <p className="pricing-card-desc">{t("pricing_free_desc")}</p>
               </div>
 
               <div className="pricing-card-features">
-                {FEATURE_ROWS.map((f) => {
-                  const value = f.free
-                  const included = value !== false
+                {FEATURE_KEYS.map((f) => {
+                  const included = f.freeBool
+                  const label = t(f.labelKey as any)
+                  const valueStr = f.freeKey ? t(f.freeKey as any) : null
                   return (
-                    <div key={f.label} className={`pricing-feature${!included ? " disabled" : ""}`}>
+                    <div key={f.labelKey} className={`pricing-feature${!included ? " disabled" : ""}`}>
                       {included ? (
                         <Check size={16} style={{ color: "var(--arco-mid-grey)", flexShrink: 0 }} />
                       ) : (
                         <span style={{ width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--arco-rule)" }}>—</span>
                       )}
-                      <span>{typeof value === "string" ? `${f.label}: ${value}` : f.label}</span>
+                      <span>{valueStr ? `${label}: ${valueStr}` : label}</span>
                     </div>
                   )
                 })}
@@ -123,11 +127,11 @@ export default function PricingPage() {
               <div className="pricing-card-footer">
                 {user && hasProfessionalRole ? (
                   <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-light)", cursor: "default" }}>
-                    Current plan
+                    {t("pricing_current_plan")}
                   </button>
                 ) : (
                   <button onClick={handleStartFree} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-black)", cursor: "pointer", transition: "border-color .15s" }}>
-                    Get started
+                    {t("pricing_get_started")}
                   </button>
                 )}
                 <p style={{ textAlign: "center", fontSize: 12, color: "transparent", marginTop: 8, userSelect: "none" }}>&nbsp;</p>
@@ -136,26 +140,27 @@ export default function PricingPage() {
 
             {/* Pro */}
             <div className="pricing-card pricing-card-featured pricing-card-subgrid">
-              <span className="pricing-card-badge">Recommended</span>
+              <span className="pricing-card-badge">{t("pricing_recommended")}</span>
               <div className="pricing-card-header">
-                <p className="pricing-card-label" style={{ color: "var(--primary)" }}>Pro</p>
+                <p className="pricing-card-label" style={{ color: "var(--primary)" }}>{t("pricing_pro")}</p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
                   <h2 className="pricing-card-price">€{proPrice}</h2>
-                  <span style={{ fontSize: 14, color: "var(--arco-light)" }}>/month</span>
+                  <span style={{ fontSize: 14, color: "var(--arco-light)" }}>{t("pricing_per_month")}</span>
                 </div>
                 <p style={{ fontSize: 12, color: "var(--arco-light)", marginTop: 4, minHeight: 18 }}>
-                  {billingCycle === "yearly" ? "Billed annually at €468/year" : "\u00A0"}
+                  {billingCycle === "yearly" ? t("pricing_billed_annually", { amount: "€468" }) : "\u00A0"}
                 </p>
-                <p className="pricing-card-desc">Showcase your best work and grow your visibility</p>
+                <p className="pricing-card-desc">{t("pricing_pro_desc")}</p>
               </div>
 
               <div className="pricing-card-features">
-                {FEATURE_ROWS.map((f) => {
-                  const value = f.pro
+                {FEATURE_KEYS.map((f) => {
+                  const label = t(f.labelKey as any)
+                  const valueStr = f.proKey ? t(f.proKey as any) : null
                   return (
-                    <div key={f.label} className="pricing-feature">
+                    <div key={f.labelKey} className="pricing-feature">
                       <Check size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
-                      <span>{typeof value === "string" ? `${f.label}: ${value}` : f.label}</span>
+                      <span>{valueStr ? `${label}: ${valueStr}` : label}</span>
                     </div>
                   )
                 })}
@@ -163,10 +168,10 @@ export default function PricingPage() {
 
               <div className="pricing-card-footer">
                 <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "default" }}>
-                  Upgrade
+                  {t("pricing_upgrade")}
                 </button>
                 <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8 }}>
-                  Coming soon
+                  {t("pricing_coming_soon")}
                 </p>
               </div>
             </div>
@@ -175,30 +180,30 @@ export default function PricingPage() {
           {/* Architect hero section */}
           <div style={{ margin: "56px 0 0", padding: "40px 32px", background: "var(--arco-off-white)", borderRadius: 8, textAlign: "center" }}>
             <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--primary)", marginBottom: 12 }}>
-              For architects
+              {t("pricing_for_architects")}
             </p>
-            <h3 className="arco-section-title" style={{ marginBottom: 12 }}>Publishing is always free</h3>
+            <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_publishing_free")}</h3>
             <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto", color: "var(--arco-light)" }}>
-              Architects are the backbone of Arco. Every project you publish brings visibility to the professionals you work with — and builds a platform the industry can be proud of. That's why publishing will always be free.
+              {t("pricing_publishing_free_body")}
             </p>
           </div>
 
           {/* FAQ section */}
           <div style={{ maxWidth: 600, margin: "48px auto 0", paddingBottom: 80 }}>
-            <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 32 }}>Frequently asked questions</h3>
+            <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 32 }}>{t("pricing_faq_title")}</h3>
 
             {[
               {
-                q: "What's the difference between publishing and being credited?",
-                a: "Publishing means you upload and own the project on Arco. Being credited means another professional (usually the architect) added you to their project. Publishing is always free."
+                q: t("pricing_faq_q1"),
+                a: t("pricing_faq_a1"),
               },
               {
-                q: "I'm an architect — do I need Pro?",
-                a: "Not for publishing. You can publish unlimited projects for free. Pro gives you team management, portfolio analytics, and a full company page."
+                q: t("pricing_faq_q2"),
+                a: t("pricing_faq_a2"),
               },
               {
-                q: "How does billing work?",
-                a: "Pro is €49/month billed monthly, or €39/month when billed annually (€468/year). We're integrating Stripe — until then, all features are available to help you get started."
+                q: t("pricing_faq_q3"),
+                a: t("pricing_faq_a3"),
               },
             ].map((item) => (
               <details key={item.q} style={{ borderBottom: "1px solid var(--arco-rule)", padding: "16px 0" }}>

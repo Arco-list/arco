@@ -6,6 +6,7 @@ import { ChevronsUpDown, CreditCard, LogOut, Bookmark, Users } from "lucide-reac
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { signOutAction } from "@/app/(auth)/actions"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -32,17 +33,18 @@ export function NavUser({ user, showSavedLinks = true }: Props) {
   const { isMobile } = useSidebar()
   const router = useRouter()
   const [isSigningOut, startSignOutTransition] = useTransition()
+  const t = useTranslations("dashboard")
 
   const handleSignOut = () => {
     startSignOutTransition(async () => {
       const result = await signOutAction()
 
       if (result?.error) {
-        toast.error("Unable to sign out", { description: result.error.message })
+        toast.error(t("unable_to_sign_out"), { description: result.error.message })
         return
       }
 
-      toast.success("Signed out")
+      toast.success(t("signed_out"))
       window.location.href = "/"
     })
   }
@@ -92,13 +94,13 @@ export function NavUser({ user, showSavedLinks = true }: Props) {
                   <DropdownMenuItem asChild>
                     <Link href="/homeowner?tab=saved-professionals">
                       <Users />
-                      Saved professionals
+                      {t("saved_professionals")}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/homeowner?tab=saved-projects">
                       <Bookmark />
-                      Saved projects
+                      {t("saved_projects")}
                     </Link>
                   </DropdownMenuItem>
                 </>
@@ -106,7 +108,7 @@ export function NavUser({ user, showSavedLinks = true }: Props) {
               <DropdownMenuItem asChild>
                 <Link href="/homeowner?tab=account">
                   <CreditCard />
-                  Account
+                  {t("account")}
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
@@ -119,7 +121,7 @@ export function NavUser({ user, showSavedLinks = true }: Props) {
               disabled={isSigningOut}
             >
               <LogOut />
-              {isSigningOut ? "Signing out..." : "Log out"}
+              {isSigningOut ? t("signing_out") : t("sidebar_log_out")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

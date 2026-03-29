@@ -1,5 +1,8 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 export interface FeaturedCompany {
   id: string
@@ -18,6 +21,7 @@ interface FeaturedCompaniesProps {
 }
 
 export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
+  const t = useTranslations("home")
   if (companies.length === 0) {
     return null
   }
@@ -26,9 +30,9 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
     <section className="py-16 bg-white">
       <div className="wrap">
         <div className="section-header">
-          <h2 className="arco-section-title">Featured architects</h2>
+          <h2 className="arco-section-title">{t("featured_architects")}</h2>
           <Link href="/professionals?services=architect" className="view-all-link">
-            View all architects →
+            {t("view_all_architects")}
           </Link>
         </div>
 

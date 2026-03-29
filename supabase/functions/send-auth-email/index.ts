@@ -57,7 +57,11 @@ function buildConfirmationUrl(emailData: AuthHookPayload["email_data"]): string 
   };
 
   const type = typeMap[email_action_type] || email_action_type;
-  const base = `${site_url}/auth/v1/verify`;
+
+  // Strip trailing /auth/v1 if site_url already includes it, to avoid doubling
+  const cleanSiteUrl = site_url.replace(/\/auth\/v1\/?$/, "");
+  const base = `${cleanSiteUrl}/auth/v1/verify`;
+
   const params = new URLSearchParams({
     token: token_hash,
     type,

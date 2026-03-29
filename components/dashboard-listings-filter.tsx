@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { X, Search } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import type { Database } from "@/lib/supabase/types"
 
@@ -22,18 +23,21 @@ export interface FilterState {
   yearTo: number
 }
 
-const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
-  { value: "draft", label: "In progress" },
-  { value: "in_progress", label: "In review" },
-  { value: "published", label: "Listed" },
-  { value: "archived", label: "Unlisted" },
-  { value: "rejected", label: "Rejected" },
-]
+// Labels are resolved at render time via translations
+const STATUS_OPTION_VALUES: ProjectStatus[] = ["draft", "in_progress", "published", "archived", "rejected"]
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  draft: "filter_status_in_progress",
+  in_progress: "filter_status_in_review",
+  published: "filter_status_listed",
+  archived: "filter_status_unlisted",
+  rejected: "filter_status_rejected",
+}
 
-const ROLE_OPTIONS: { value: "owner" | "contributor"; label: string }[] = [
-  { value: "owner", label: "Project owner" },
-  { value: "contributor", label: "Contributor" },
-]
+const ROLE_OPTION_VALUES: ("owner" | "contributor")[] = ["owner", "contributor"]
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  owner: "filter_role_owner",
+  contributor: "filter_role_contributor",
+}
 
 const CURRENT_YEAR = new Date().getFullYear()
 const MIN_YEAR = 2000
@@ -50,6 +54,7 @@ interface FilterContentProps {
   setYearFrom: (value: number) => void
   yearTo: number
   setYearTo: (value: number) => void
+  t: ReturnType<typeof useTranslations<"dashboard">>
 }
 
 function FilterContent({
@@ -64,6 +69,7 @@ function FilterContent({
   setYearFrom,
   yearTo,
   setYearTo,
+  t,
 }: FilterContentProps) {
   const isDesktop = variant === "desktop"
   const sectionSpacing = isDesktop ? "space-y-5" : "space-y-6"
@@ -77,12 +83,12 @@ function FilterContent({
     <div className={sectionSpacing}>
       {/* Keyword Search */}
       <div>
-        <h3 className={headingClass}>Search</h3>
+        <h3 className={headingClass}>{t("filter_search")}</h3>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search by title or type..."
+            placeholder={t("filter_search_placeholder")}
             className="w-full pl-10 pr-4 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -92,17 +98,17 @@ function FilterContent({
 
       {/* Status Filter */}
       <div>
-        <h3 className={headingClass}>Status</h3>
+        <h3 className={headingClass}>{t("filter_status")}</h3>
         <div className={checkboxSpacing}>
-          {STATUS_OPTIONS.map((option) => (
-            <label key={option.value} className={`flex items-center ${checkboxGap} cursor-pointer`}>
+          {STATUS_OPTION_VALUES.map((value) => (
+            <label key={value} className={`flex items-center ${checkboxGap} cursor-pointer`}>
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded"
-                checked={selectedStatuses.includes(option.value)}
-                onChange={() => toggleStatus(option.value)}
+                checked={selectedStatuses.includes(value)}
+                onChange={() => toggleStatus(value)}
               />
-              <span className="body-small">{option.label}</span>
+              <span className="body-small">{t(STATUS_LABEL_KEYS[value] as any)}</span>
             </label>
           ))}
         </div>
@@ -110,17 +116,17 @@ function FilterContent({
 
       {/* Role Filter */}
       <div>
-        <h3 className={headingClass}>Role</h3>
+        <h3 className={headingClass}>{t("filter_role")}</h3>
         <div className={checkboxSpacing}>
-          {ROLE_OPTIONS.map((option) => (
-            <label key={option.value} className={`flex items-center ${checkboxGap} cursor-pointer`}>
+          {ROLE_OPTION_VALUES.map((value) => (
+            <label key={value} className={`flex items-center ${checkboxGap} cursor-pointer`}>
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded"
-                checked={selectedRoles.includes(option.value)}
-                onChange={() => toggleRole(option.value)}
+                checked={selectedRoles.includes(value)}
+                onChange={() => toggleRole(value)}
               />
-              <span className="body-small">{option.label}</span>
+              <span className="body-small">{t(ROLE_LABEL_KEYS[value] as any)}</span>
             </label>
           ))}
         </div>
@@ -128,10 +134,10 @@ function FilterContent({
 
       {/* Year Range Filter */}
       <div>
-        <h3 className={headingClass}>Year</h3>
+        <h3 className={headingClass}>{t("filter_year")}</h3>
         <div className={yearLayout}>
           <div>
-            <label className={yearLabelClass}>From</label>
+            <label className={yearLabelClass}>{t("filter_year_from")}</label>
             <input
               type="number"
               min={MIN_YEAR}
@@ -142,7 +148,7 @@ function FilterContent({
             />
           </div>
           <div>
-            <label className={yearLabelClass}>To</label>
+            <label className={yearLabelClass}>{t("filter_year_to")}</label>
             <input
               type="number"
               min={yearFrom}
@@ -164,6 +170,7 @@ export function DashboardListingsFilter({
   onApply,
   currentFilters,
 }: DashboardListingsFilterProps) {
+  const t = useTranslations("dashboard")
   const [keyword, setKeyword] = useState(currentFilters.keyword)
   const [selectedStatuses, setSelectedStatuses] = useState<ProjectStatus[]>(currentFilters.statuses)
   const [selectedRoles, setSelectedRoles] = useState<("owner" | "contributor")[]>(currentFilters.roles)
@@ -230,6 +237,7 @@ export function DashboardListingsFilter({
     setYearFrom,
     yearTo,
     setYearTo,
+    t,
   }
 
   return (
@@ -246,7 +254,7 @@ export function DashboardListingsFilter({
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h2 id="filter-dialog-title" className="heading-5">
-                Filters
+                {t("filters")}
               </h2>
               <button onClick={onClose} aria-label="Close filter dialog" className="p-1 hover:bg-surface rounded">
                 <X className="h-5 w-5" />
@@ -266,10 +274,10 @@ export function DashboardListingsFilter({
                 className="flex-1 bg-transparent"
                 disabled={!hasActiveFilters}
               >
-                Clear filters
+                {t("clear_filters")}
               </Button>
               <Button onClick={handleApply} className="flex-1 bg-black text-white hover:bg-secondary-hover">
-                Apply filters
+                {t("apply_filters")}
               </Button>
             </div>
           </div>
@@ -287,7 +295,7 @@ export function DashboardListingsFilter({
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <h2 id="filter-drawer-title" className="heading-5">
-              Filters
+              {t("filters")}
             </h2>
             <button onClick={onClose} aria-label="Close filter drawer" className="p-1 hover:bg-surface rounded">
               <X className="h-5 w-5" />
@@ -307,10 +315,10 @@ export function DashboardListingsFilter({
               className="flex-1 bg-transparent"
               disabled={!hasActiveFilters}
             >
-              Clear filters
+              {t("clear_filters")}
             </Button>
             <Button onClick={handleApply} className="flex-1 bg-black text-white hover:bg-secondary-hover">
-              Apply filters
+              {t("apply_filters")}
             </Button>
           </div>
         </div>

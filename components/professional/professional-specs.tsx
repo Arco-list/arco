@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server"
+
 interface ProfessionalSpecsProps {
   location: string | null
   established: number | null
@@ -6,19 +8,21 @@ interface ProfessionalSpecsProps {
   certificates: string[]
 }
 
-export function ProfessionalSpecs({
+export async function ProfessionalSpecs({
   location,
   established,
   teamSize,
   languages,
   certificates,
 }: ProfessionalSpecsProps) {
+  const t = await getTranslations("professional_detail")
+
   const specs = [
-    { label: 'Location', value: location },
-    { label: 'Established', value: established },
-    { label: 'Team Size', value: teamSize ? `${teamSize} People` : null },
-    { label: 'Languages', value: languages.length > 0 ? languages.join(', ') : null },
-    { label: 'Certificates', value: certificates.length > 0 ? certificates.join(', ') : null },
+    { label: t("location"), value: location },
+    { label: t("established"), value: established },
+    { label: t("team_size"), value: teamSize ? t("people_count", { count: teamSize }) : null },
+    { label: t("languages"), value: languages.length > 0 ? languages.join(', ') : null },
+    { label: t("certificates"), value: certificates.length > 0 ? certificates.join(', ') : null },
   ].filter(spec => spec.value) // Only show specs with values
 
   if (specs.length === 0) return null

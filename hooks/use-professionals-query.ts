@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useLocale } from "next-intl"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalCard } from "@/lib/professionals/types"
@@ -29,6 +30,7 @@ type SearchProfessionalsRow = {
   company_longitude: number | null
   primary_specialty: string | null
   primary_service_name: string | null
+  primary_service_name_nl: string | null
   services_offered: string[] | null
   display_rating: number | string | null
   total_reviews: number | null
@@ -65,7 +67,7 @@ const parseRating = (value: number | string | null | undefined) => {
   return 0
 }
 
-const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
+const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): ProfessionalCard | null => {
   if (!row.id || !row.company_id) {
     return null
   }
@@ -74,7 +76,7 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
   const name = row.company_name || fullName || "Professional"
 
   // Use primary service from company's primary_service_id (company-level data only)
-  const profession = row.primary_service_name || "Professional services"
+  const profession = (locale === "nl" && row.primary_service_name_nl) ? row.primary_service_name_nl : (row.primary_service_name || "Professional services")
 
   // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
@@ -111,6 +113,7 @@ const mapRowToCard = (row: SearchProfessionalsRow): ProfessionalCard | null => {
 }
 
 export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] = []): UseProfessionalsQueryResult {
+  const locale = useLocale()
   const {
     selectedCategories,
     selectedServices,
@@ -203,7 +206,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
 
         const rows = Array.isArray(data) ? (data as SearchProfessionalsRow[]) : []
         const mapped = rows
-          .map((row) => mapRowToCard(row))
+          .map((row) => mapRowToCard(row, locale))
           .filter((card): card is ProfessionalCard => card !== null)
 
         setProfessionals((prev) => (replace ? mapped : [...prev, ...mapped]))

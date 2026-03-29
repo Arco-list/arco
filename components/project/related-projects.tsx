@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { useTranslations } from "next-intl"
 
 import { ShareModal } from "@/components/share-modal"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
@@ -22,13 +23,14 @@ interface RelatedProjectsProps {
 }
 
 export function RelatedProjects({ projects, architectName }: RelatedProjectsProps) {
+  const t = useTranslations("project_detail")
   if (projects.length === 0) return null
 
   return (
     <section className="related-projects">
       <div className="wrap">
         <div className="related-header">
-          <h2 className="arco-section-title">More from {architectName}</h2>
+          <h2 className="arco-section-title">{t("more_from", { name: architectName })}</h2>
         </div>
 
         <div className="related-grid">

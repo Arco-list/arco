@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useTranslations } from "next-intl"
 import type { LucideIcon } from "lucide-react"
 import { Grid3x3, Layers, MapPin } from "lucide-react"
 
@@ -31,6 +32,7 @@ const selectIconForFeature = (feature: PreviewFeatureItem, groupId: string): Luc
 }
 
 export function ProjectFeatures() {
+  const t = useTranslations("project_detail")
   const [showModal, setShowModal] = useState(false)
   const { featureGroups } = useProjectPreview()
   const { openModal } = useProjectGalleryModal()
@@ -66,7 +68,7 @@ export function ProjectFeatures() {
 
   return (
     <div className="space-y-4">
-      <h2 className="heading-3 font-bold text-black">Features</h2>
+      <h2 className="heading-3 font-bold text-black">{t("features")}</h2>
 
       {featuredList.length > 0 && (
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
@@ -89,14 +91,14 @@ export function ProjectFeatures() {
 
       {hasMoreFeatures && (
         <Button variant="quaternary" size="quaternary" onClick={() => setShowModal(true)}>
-          Show all features
+          {t("show_all_features")}
         </Button>
       )}
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md">
           <DialogHeader className="pb-4">
-            <DialogTitle className="heading-5 font-semibold">Features</DialogTitle>
+            <DialogTitle className="heading-5 font-semibold">{t("features")}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6">

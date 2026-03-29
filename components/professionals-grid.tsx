@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
 import { MapPreviewCard, ProfessionalsMap } from "@/components/professionals-map"
@@ -17,6 +18,7 @@ const MAP_CARD_POSITION = 2
 
 export function ProfessionalsGrid({ professionals = [] }: { professionals?: ProfessionalCard[] }) {
   const [showMap, setShowMap] = useState(false)
+  const t = useTranslations("professionals")
 
   const {
     selectedCategories,
@@ -65,7 +67,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
           ? `${selectedCities[0]} & ${selectedCities[1]}`
           : selectedCities.length > 2
             ? `${selectedCities.slice(0, -1).join(", ")} & ${selectedCities.at(-1)}`
-            : "the Netherlands"
+            : t("heading_default_location")
 
     if (selectedCategories.length > 0) {
       const labels = selectedCategories
@@ -79,9 +81,9 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
             : `${labels.slice(0, -1).join(", ")} & ${labels.at(-1)}`
       return `${part} in ${locationLabel}`
     }
-    if (selectedCities.length > 0) return `Professionals in ${locationLabel}`
-    return "Professionals in the Netherlands"
-  }, [selectedCategories, selectedCities, taxonomyLabelMap])
+    if (selectedCities.length > 0) return t("heading_in", { location: locationLabel })
+    return t("heading_in", { location: t("heading_default_location") })
+  }, [selectedCategories, selectedCities, taxonomyLabelMap, t])
 
   // Client-side filtered professionals for instant map updates
   const mapProfessionals = useMemo(() => {
@@ -133,14 +135,14 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
         <div className="wrap">
           <nav aria-label="Breadcrumb" className="discover-breadcrumb">
             <Link href="/professionals" className="discover-breadcrumb-item">
-              Professionals
+              {t("title")}
             </Link>
             <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
             <span className="discover-breadcrumb-item discover-breadcrumb-current">
-              Netherlands
+              {t("breadcrumb_netherlands")}
             </span>
           </nav>
-          <h2 className="arco-section-title">Browse professionals</h2>
+          <h2 className="arco-section-title">{t("browse")}</h2>
         </div>
       </div>
 
@@ -188,7 +190,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
                   flexShrink: 0,
                 }}
               >
-                Retry
+                {t("retry")}
               </button>
             </div>
           )}
@@ -242,7 +244,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
                   padding: "48px 0",
                 }}
               >
-                <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>Loading professionals…</p>
+                <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{t("loading")}</p>
               </div>
             )}
           </div>
@@ -250,7 +252,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
           {!isLoading && sortedProfessionals.length === 0 && !error && (
             <div style={{ textAlign: "center", padding: "64px 0" }}>
               <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>
-                No professionals found matching your filters.
+                {t("no_results_filters")}
               </p>
             </div>
           )}
@@ -263,7 +265,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
                 onClick={loadMore}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? "Loading…" : "Load more"}
+                {isLoadingMore ? t("loading_more") : t("load_more")}
                 <ChevronRight size={16} />
               </button>
             </div>

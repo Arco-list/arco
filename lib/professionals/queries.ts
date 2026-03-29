@@ -317,6 +317,7 @@ type SearchProfessionalsRpcRow = {
   company_longitude: number | null
   primary_specialty: string | null
   primary_service_name: string | null
+  primary_service_name_nl: string | null
   services_offered: string[] | null
   display_rating: number | string | null
   total_reviews: number | null
@@ -327,14 +328,14 @@ type SearchProfessionalsRpcRow = {
   specialty_parent_ids: string[] | null
 }
 
-const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): ProfessionalCard | null => {
+const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: string = "en"): ProfessionalCard | null => {
   if (!row.id || !row.company_id) return null
 
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
 
   // Use primary service from company's primary_service_id (company-level data only)
-  const profession = row.primary_service_name || "Professional services"
+  const profession = (locale === "nl" && row.primary_service_name_nl) ? row.primary_service_name_nl : (row.primary_service_name || "Professional services")
 
   // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
@@ -377,7 +378,7 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow): Profession
   }
 }
 
-export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> => {
+export const fetchDiscoverProfessionals = async (locale: string = "en"): Promise<ProfessionalCard[]> => {
   const supabase = await createServerSupabaseClient()
 
   const { data, error } = await supabase.rpc("search_professionals", {
@@ -402,7 +403,7 @@ export const fetchDiscoverProfessionals = async (): Promise<ProfessionalCard[]> 
   const rows = Array.isArray(data) ? (data as SearchProfessionalsRpcRow[]) : []
 
   const cards = rows
-    .map((row) => mapRpcRowToProfessionalCard(row))
+    .map((row) => mapRpcRowToProfessionalCard(row, locale))
     .filter((card): card is ProfessionalCard => card !== null)
 
   return sortProfessionals(cards)
@@ -439,7 +440,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
           plan_expires_at,
           status,
           primary_service_id,
-          primary_service:categories!companies_primary_service_id_fkey(name, parent_id),
+          primary_service:categories!companies_primary_service_id_fkey(name, name_nl, parent_id),
           professionals (
             id,
             title,
@@ -469,7 +470,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
           plan_expires_at,
           status,
           primary_service_id,
-          primary_service:categories!companies_primary_service_id_fkey(name, parent_id),
+          primary_service:categories!companies_primary_service_id_fkey(name, name_nl, parent_id),
           professionals (
             id,
             title,
@@ -571,8 +572,8 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
   // Query companies table first (company-centric approach)
   const companyQuery = isUuid(slugOrId)
-    ? supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name)").eq("id", slugOrId).maybeSingle()
-    : supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name)").eq("slug", slugOrId).maybeSingle()
+    ? supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name, name_nl)").eq("id", slugOrId).maybeSingle()
+    : supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name, name_nl)").eq("slug", slugOrId).maybeSingle()
 
   const companyResult = await companyQuery
 

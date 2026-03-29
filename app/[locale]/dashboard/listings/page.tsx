@@ -6,6 +6,7 @@ import Link from "next/link"
 import { MoreHorizontal, Check, AlertTriangle, Info, X } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { ImportProjectModal } from "@/components/import-project-modal"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -98,6 +99,7 @@ const CURRENT_YEAR = new Date().getFullYear()
 const MIN_YEAR = 2000
 
 export default function DashboardListingsPage() {
+  const t = useTranslations("dashboard")
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const searchParams = useSearchParams()
   const companyIdParam = searchParams.get("company_id")
@@ -199,7 +201,7 @@ export default function DashboardListingsPage() {
       if (!authData?.user || authError) {
         setUserId(null)
         if (isActive && !abortController.signal.aborted) {
-          setLoadError(authError?.message ?? "You need to be signed in to view your projects.")
+          setLoadError(authError?.message ?? t("sign_in_required"))
           setProjects([])
           setIsLoading(false)
         }
@@ -246,7 +248,7 @@ export default function DashboardListingsPage() {
           setCompanyId(resolvedCompanyId)
         } else {
           if (isActive && !abortController.signal.aborted) {
-            setLoadError("No professional profile found. Please complete your profile setup.")
+            setLoadError(t("no_professional_profile"))
             setProjects([])
             setIsLoading(false)
           }
@@ -385,10 +387,10 @@ export default function DashboardListingsPage() {
       // RACE CONDITION CHECK: Before showing toast
       if (metadataLoadFailed && isActive && !metadataErrorShown && !abortController.signal.aborted) {
         metadataErrorShown = true
-        const errorMessage = "Some project details couldn't be loaded. This may affect how projects are displayed."
+        const errorMessage = t("metadata_partial_error")
         setMetadataError(errorMessage)
-        toast.error("Metadata loading failed", {
-          description: "Some project details may be missing. Use the retry button to try again.",
+        toast.error(t("metadata_loading_failed"), {
+          description: t("metadata_loading_failed_description"),
           duration: 5000,
         })
       }
@@ -578,12 +580,12 @@ export default function DashboardListingsPage() {
 
     const statusOption = LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus)
     if (!statusOption) {
-      toast.error("Select a valid status before saving.")
+      toast.error(t("select_valid_status"))
       return
     }
 
     if (!userId) {
-      toast.error("We couldn't verify your account. Please refresh and try again.")
+      toast.error(t("could_not_verify_account"))
       return
     }
 
@@ -620,11 +622,11 @@ export default function DashboardListingsPage() {
         }),
       )
 
-      toast.success("Listing status updated")
+      toast.success(t("listing_status_updated"))
       handleCloseStatusModal()
     } catch (error) {
       console.error("Failed to update listing status", error)
-      toast.error("We couldn't update the listing status. Please try again.")
+      toast.error(t("could_not_update_status"))
     } finally {
       setIsSavingStatus(false)
     }
@@ -636,7 +638,7 @@ export default function DashboardListingsPage() {
     }
 
     if (!selectedCoverPhoto) {
-      toast.error("Select a cover photo to continue.", {
+      toast.error(t("select_cover_photo"), {
         duration: 4000,
       })
       return
@@ -674,12 +676,12 @@ export default function DashboardListingsPage() {
         }),
       )
 
-      toast.success("Cover photo updated")
+      toast.success(t("cover_photo_updated"))
       closeCoverPhotoModal()
       router.refresh()
     } catch (error) {
       console.error("Failed to update cover photo", error)
-      toast.error("We couldn't update the cover photo. Please try again.", {
+      toast.error(t("could_not_update_cover"), {
         duration: 5000,
       })
     } finally {
@@ -722,11 +724,11 @@ export default function DashboardListingsPage() {
       // Clear selected project if it was the deleted one
       setSelectedProject((prev) => (prev?.id === pendingDeleteProject.id ? null : prev))
 
-      toast.success("Listing deleted successfully")
+      toast.success(t("listing_deleted"))
       setPendingDeleteProject(null)
     } catch (error) {
       console.error("Failed to delete project", error)
-      toast.error("Failed to delete listing. Please try again.")
+      toast.error(t("could_not_delete_listing"))
     } finally {
       setIsSavingStatus(false)
     }
@@ -759,8 +761,8 @@ export default function DashboardListingsPage() {
 
     const url = getProjectUrl(project)
     if (!url) {
-      toast.error("Preview unavailable", {
-        description: "This listing does not have a public link yet.",
+      toast.error(t("preview_unavailable"), {
+        description: t("preview_unavailable_description"),
       })
       return
     }
@@ -817,12 +819,12 @@ export default function DashboardListingsPage() {
 
       // Sync company listed status
       if (companyId) await syncCompanyListedStatus(companyId)
-      toast.success("Listing status updated")
+      toast.success(t("listing_status_updated"))
       setContributorStatusModalOpen(false)
       setSelectedProject(null)
     } catch (error) {
       console.error("Failed to update status", error)
-      toast.error("Failed to update listing status. Please try again.")
+      toast.error(t("could_not_update_status"))
     } finally {
       setIsSavingStatus(false)
     }
@@ -904,7 +906,7 @@ export default function DashboardListingsPage() {
 
   const selectedProjectDescriptor = useMemo(() => {
     if (!selectedProject) {
-      return "Add project details"
+      return t("add_project_details")
     }
 
     const typeStyle = [selectedProject.styleLabel, selectedProject.projectType]
@@ -917,7 +919,7 @@ export default function DashboardListingsPage() {
       .filter((value): value is string => Boolean(value && value.trim().length > 0))
       .join(" ")
 
-    return detailLine || "Add project details"
+    return detailLine || t("add_project_details")
   }, [selectedProject])
 
   const isSelectedProjectActive = selectedProject
@@ -979,19 +981,19 @@ export default function DashboardListingsPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
       <Header navLinks={[
-        { href: `/dashboard/listings${companyId ? `?company_id=${companyId}` : ""}`, label: "Listings" },
-        { href: `/dashboard/company${companyId ? `?company_id=${companyId}` : ""}`, label: "Company" },
-        { href: `/dashboard/team${companyId ? `?company_id=${companyId}` : ""}`, label: "Team" },
-        { href: "/dashboard/pricing", label: "Plans" },
+        { href: `/dashboard/listings${companyId ? `?company_id=${companyId}` : ""}`, label: t("listings") },
+        { href: `/dashboard/company${companyId ? `?company_id=${companyId}` : ""}`, label: t("company") },
+        { href: `/dashboard/team${companyId ? `?company_id=${companyId}` : ""}`, label: t("team") },
+        { href: "/dashboard/pricing", label: t("plans") },
       ]} />
 
       {/* Page title — matches /projects layout */}
       <div className="discover-page-title">
         <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="arco-section-title">Listings</h2>
+          <h2 className="arco-section-title">{t("listings")}</h2>
           {canPublishProjects && hasProjects && (
             <button onClick={() => setImportModalOpen(true)} className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
-              Publish your project
+              {t("publish_your_project")}
             </button>
           )}
         </div>
@@ -1011,8 +1013,8 @@ export default function DashboardListingsPage() {
               <div style={{ marginBottom: 20, padding: "12px 14px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fef2f2", display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <AlertTriangle style={{ width: 16, height: 16, color: "#dc2626", flexShrink: 0, marginTop: 2 }} />
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: "#7f1d1d", marginBottom: 2 }}>Security Warning</p>
-                  <p style={{ fontSize: 13, color: "#b91c1c" }}>Row-Level Security validation failed. Contact your administrator immediately.</p>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: "#7f1d1d", marginBottom: 2 }}>{t("security_warning")}</p>
+                  <p style={{ fontSize: 13, color: "#b91c1c" }}>{t("rls_validation_failed")}</p>
                 </div>
               </div>
             )}
@@ -1027,7 +1029,7 @@ export default function DashboardListingsPage() {
                   disabled={isRetrying}
                   style={{ fontSize: 13, color: "#78350f", background: "none", border: "1px solid #fcd34d", borderRadius: 4, padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}
                 >
-                  {isRetrying ? "Retrying…" : "Retry"}
+                  {isRetrying ? t("retrying") : t("retry")}
                 </button>
               </div>
             )}
@@ -1044,7 +1046,7 @@ export default function DashboardListingsPage() {
                   <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
                     {displayedProjects.length.toLocaleString()}
                   </strong>{" "}
-                  {displayedProjects.length === 1 ? "project" : "projects"}
+                  {t("project_count", { count: displayedProjects.length }).replace(String(displayedProjects.length), "").trim()}
                 </p>
               </div>
             )}
@@ -1133,7 +1135,7 @@ export default function DashboardListingsPage() {
                               }}
                             >
                               <Check size={14} />
-                              Accept
+                              {t("accept")}
                             </span>
                           </button>
                         )}
@@ -1161,7 +1163,7 @@ export default function DashboardListingsPage() {
                               }}
                               className="listing-card-hover-pill"
                             >
-                              {project.role === "owner" ? "Edit project" : "View project"}
+                              {project.role === "owner" ? t("edit_project") : t("view_project")}
                             </span>
                           </div>
                         )}
@@ -1178,7 +1180,7 @@ export default function DashboardListingsPage() {
                               backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
                             }}
                           >
-                            Owner
+                            {t("owner")}
                           </span>
                         )}
                       </div>
@@ -1225,10 +1227,10 @@ export default function DashboardListingsPage() {
                           {project.role === "owner" ? (
                             <>
                               {([
-                                { label: "Edit listing", action: () => handleEditListing(project) },
-                                { label: "Update status", action: () => handleUpdateStatus(project) },
-                                { label: "Change cover", action: () => handleEditCoverImage(project) },
-                                ...(getProjectUrl(project) ? [{ label: "View project", action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
+                                { label: t("edit_listing"), action: () => handleEditListing(project) },
+                                { label: t("update_status"), action: () => handleUpdateStatus(project) },
+                                { label: t("change_cover"), action: () => handleEditCoverImage(project) },
+                                ...(getProjectUrl(project) ? [{ label: t("view_project"), action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
                               ] as const).map(({ label, action }) => (
                                 <div
                                   key={label}
@@ -1243,9 +1245,9 @@ export default function DashboardListingsPage() {
                           ) : (
                             <>
                               {([
-                                { label: "Update status", action: () => handleUpdateContributorStatus(project) },
-                                { label: "Change cover", action: () => handleEditCoverImage(project) },
-                                ...(getProjectUrl(project) ? [{ label: "View project", action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
+                                { label: t("update_status"), action: () => handleUpdateContributorStatus(project) },
+                                { label: t("change_cover"), action: () => handleEditCoverImage(project) },
+                                ...(getProjectUrl(project) ? [{ label: t("view_project"), action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
                               ] as const).map(({ label, action }) => (
                                 <div
                                   key={label}
@@ -1285,21 +1287,21 @@ export default function DashboardListingsPage() {
               <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
                 {canPublishProjects ? (
                   <>
-                    <p className="arco-eyebrow" style={{ marginBottom: 16 }}>Get started</p>
-                    <h2 className="arco-section-title" style={{ marginBottom: 12 }}>Publish your first project</h2>
+                    <p className="arco-eyebrow" style={{ marginBottom: 16 }}>{t("get_started")}</p>
+                    <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("publish_first_project")}</h2>
                     <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
-                      Import a project from your website — we'll read the title, photos, and details automatically.
+                      {t("publish_first_project_description")}
                     </p>
                     <button onClick={() => setImportModalOpen(true)} className="btn-primary">
-                      Publish your project
+                      {t("publish_your_project")}
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="arco-eyebrow" style={{ marginBottom: 16 }}>No projects yet</p>
-                    <h2 className="arco-section-title" style={{ marginBottom: 12 }}>Get invited to a project</h2>
+                    <p className="arco-eyebrow" style={{ marginBottom: 16 }}>{t("no_projects_yet")}</p>
+                    <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("get_invited_to_project")}</h2>
                     <p className="arco-body-text" style={{ maxWidth: 400, margin: "0 auto" }}>
-                      When a homeowner or project owner adds your company to their project, it will appear here.
+                      {t("get_invited_description")}
                     </p>
                   </>
                 )}
@@ -1313,14 +1315,14 @@ export default function DashboardListingsPage() {
         <div className="popup-overlay" onClick={handleCancelDelete}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Delete listing</h3>
+              <h3 className="arco-section-title">{t("delete_listing")}</h3>
               <button type="button" className="popup-close" onClick={handleCancelDelete} aria-label="Close">
                 ✕
               </button>
             </div>
 
             <p className="arco-body-text" style={{ marginBottom: 24 }}>
-              This will permanently remove <strong>{pendingDeleteProject.title}</strong> from your dashboard. You can always create the listing again later.
+              {t.rich("delete_listing_description", { title: pendingDeleteProject.title, strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
 
             <div className="popup-actions">
@@ -1331,7 +1333,7 @@ export default function DashboardListingsPage() {
                 disabled={isSavingStatus}
                 style={{ flex: 1 }}
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -1340,7 +1342,7 @@ export default function DashboardListingsPage() {
                 disabled={isSavingStatus}
                 style={{ flex: 1 }}
               >
-                {isSavingStatus ? "Deleting..." : "Delete listing"}
+                {isSavingStatus ? t("deleting") : t("delete_listing")}
               </button>
             </div>
           </div>
@@ -1351,13 +1353,13 @@ export default function DashboardListingsPage() {
         <div className="popup-overlay" onClick={closeCoverPhotoModal}>
           <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Change cover</h3>
+              <h3 className="arco-section-title">{t("change_cover")}</h3>
               <button type="button" className="popup-close" onClick={closeCoverPhotoModal} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ marginBottom: 20 }}>
               {selectedProject.role === "contributor"
-                ? "Choose an image that best represents your service on this project."
-                : "This photo will be displayed with the project on your company portfolio."}
+                ? t("cover_photo_contributor_hint")
+                : t("cover_photo_owner_hint")}
             </p>
 
             {/* Scrollable photo grid */}
@@ -1388,7 +1390,7 @@ export default function DashboardListingsPage() {
                         <img src={photo.url} alt={selectedProject.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                         {isCurrentCover && (
                           <span style={{ position: "absolute", bottom: 6, left: 6, borderRadius: 24, background: "rgba(255,255,255,0.9)", padding: "3px 8px", fontSize: 11, fontWeight: 500, color: "var(--arco-black)" }}>
-                            Current
+                            {t("current")}
                           </span>
                         )}
                         {isSelected && (
@@ -1402,7 +1404,7 @@ export default function DashboardListingsPage() {
                 </div>
               ) : (
                 <div style={{ border: "1px dashed var(--arco-rule)", borderRadius: 4, padding: "40px 24px", textAlign: "center", fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--text-disabled)" }}>
-                  Upload project photos in the listing editor to choose a cover image.
+                  {t("upload_photos_hint")}
                 </div>
               )}
             </div>
@@ -1410,10 +1412,10 @@ export default function DashboardListingsPage() {
             {/* Footer buttons */}
             <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
               <button className="btn-tertiary" onClick={closeCoverPhotoModal} style={{ flex: 1 }}>
-                Cancel
+                {t("cancel")}
               </button>
               <button className="btn-primary" onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto} style={{ flex: 1 }}>
-                {isSavingCoverPhoto ? "Saving..." : "Save"}
+                {isSavingCoverPhoto ? t("saving") : t("save")}
               </button>
             </div>
           </div>
@@ -1431,7 +1433,7 @@ export default function DashboardListingsPage() {
           selectedProject
             ? {
                 title: selectedProject.title,
-                descriptor: selectedProject.invitedServiceCategory || "Service",
+                descriptor: selectedProject.invitedServiceCategory || t("service_fallback"),
                 coverImageUrl: selectedProject.coverImageUrl || "/placeholder.jpg",
               }
             : null

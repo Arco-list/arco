@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Heart, Share, ThumbsUp } from "lucide-react"
 import { ShareModal } from "./share-modal"
@@ -13,6 +14,7 @@ interface ProjectActionButtonsProps {
 }
 
 export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
+  const t = useTranslations("project_detail")
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const { info, shareImageUrl, shareUrl, likesCount: initialLikesCount, isLiked: initialLiked } = useProjectPreview()
   const { savedProjectIds, mutatingProjectIds, saveProject, removeProject } = useSavedProjects()
@@ -40,11 +42,11 @@ export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
           aria-pressed={isLiked}
         >
           <ThumbsUp className="w-4 h-4 md:mr-2" fill={isLiked ? "currentColor" : "none"} />
-          <span className="hidden md:inline">{isLiked ? "Liked" : "Like"} • {likesCount}</span>
+          <span className="hidden md:inline">{isLiked ? t("liked") : t("like")} • {likesCount}</span>
         </Button>
         <Button variant="tertiary" size="tertiary" onClick={() => setIsShareModalOpen(true)}>
           <Share className="w-4 h-4 md:mr-2" />
-          <span className="hidden md:inline">Share</span>
+          <span className="hidden md:inline">{t("share")}</span>
         </Button>
         <Button
           variant="tertiary"
@@ -62,7 +64,7 @@ export function ProjectActionButtons({ projectId }: ProjectActionButtonsProps) {
           aria-pressed={isSaved}
         >
           <Heart className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
-          <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
+          <span className="hidden md:inline">{isSaved ? t("saved") : t("save")}</span>
         </Button>
       </div>
 

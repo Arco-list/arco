@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { useAuth } from "@/contexts/auth-context"
 import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
@@ -38,6 +39,8 @@ export function CreateCompanyModal() {
   const { user, refreshProfile } = useAuth()
   const { isOpen, closeCreateCompanyModal } = useCreateCompanyModal()
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const t = useTranslations("create_company")
+  const tc = useTranslations("common")
 
   const [step, setStep] = useState<Step>("search")
   const [placeData, setPlaceData] = useState<GooglePlaceData | null>(null)
@@ -232,9 +235,9 @@ export function CreateCompanyModal() {
       setStep("verify")
     } catch (e) {
       console.error("Failed to get Google place details:", e)
-      toast.error("Could not load company details. Please try again.")
+      toast.error(t("could_not_load"))
     }
-  }, [])
+  }, [t])
 
   // Handle selecting an unowned Arco company to claim
   const handleSelectClaimableCompany = useCallback((company: ArcoCompanyResult) => {
@@ -285,14 +288,14 @@ export function CreateCompanyModal() {
     const emailDomain = verifyEmail.split("@")[1]?.toLowerCase()
     const targetDomain = placeData.domain || extractDomainFromUrl(manualWebsite)
 
-    if (!targetDomain) { setError("Please enter a website first."); return }
-    if (!emailDomain || emailDomain !== targetDomain.toLowerCase()) { setError(`Email must end with @${targetDomain}`); return }
-    if (BLOCKED_EMAIL_DOMAINS.includes(emailDomain)) { setError("Please use a company email address."); return }
+    if (!targetDomain) { setError(t("please_enter_website")); return }
+    if (!emailDomain || emailDomain !== targetDomain.toLowerCase()) { setError(t("email_must_end_with", { domain: targetDomain })); return }
+    if (BLOCKED_EMAIL_DOMAINS.includes(emailDomain)) { setError(t("use_company_email")); return }
 
     startTransition(async () => {
       const result = await sendDomainVerificationAction({ domain: targetDomain, email: verifyEmail, companyName: placeData.name })
-      if (result.success) { setCodeSent(true); toast.success("Verification code sent") }
-      else { setError(result.error ?? "Failed to send code.") }
+      if (result.success) { setCodeSent(true); toast.success(t("verification_code_sent")) }
+      else { setError(result.error ?? t("failed_create")) }
     })
   }
 
@@ -334,7 +337,7 @@ export function CreateCompanyModal() {
         router.push("/dashboard/company")
         setTimeout(resetState, 300)
       } else {
-        setError(result.error ?? "Failed to create company.")
+        setError(result.error ?? t("failed_create"))
         setStep("verify")
       }
     })
@@ -345,7 +348,11 @@ export function CreateCompanyModal() {
   const hasResults = arcoResults.length > 0 || googleResults.length > 0
   const showDropdown = searchQuery.trim().length >= 2
 
-  const stepTitle = step === "search" ? "Create your company page" : step === "verify" ? (claimingCompanyId ? "Claim your company" : "Verify your company") : (claimingCompanyId ? "Claiming company" : "Creating company")
+  const stepTitle = step === "search"
+    ? t("title_search")
+    : step === "verify"
+      ? (claimingCompanyId ? t("title_claim") : t("title_verify"))
+      : (claimingCompanyId ? t("title_claiming") : t("title_creating"))
   const showBack = step === "verify"
 
   return (
@@ -402,13 +409,13 @@ export function CreateCompanyModal() {
             {step === "search" && (
               <div>
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                  Search for your company to get started
+                  {t("search_description")}
                 </p>
 
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Search for your company..."
+                  placeholder={t("search_placeholder")}
                   value={searchQuery}
                   onChange={(e) => searchCompanies(e.target.value)}
                   autoFocus
@@ -427,14 +434,14 @@ export function CreateCompanyModal() {
                           className={`ccm-row${isOwned ? " disabled" : ""}`}
                           onClick={() => {
                             if (isOwned) {
-                              toast.info("This company is already on Arco", { description: "Contact the admin of this company to be added as a team member." })
+                              toast.info(t("already_on_arco"), { description: t("already_on_arco_description") })
                             } else {
                               handleSelectClaimableCompany(c)
                             }
                           }}
                         >
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                          <span className={`ccm-badge ${isOwned ? "arco" : "claim"}`}>{isOwned ? "On Arco" : "Claim"}</span>
+                          <span className={`ccm-badge ${isOwned ? "arco" : "claim"}`}>{isOwned ? t("on_arco") : t("claim")}</span>
                         </button>
                       )
                     })}
@@ -459,27 +466,27 @@ export function CreateCompanyModal() {
                         <button
                           type="button"
                           className="ccm-add"
-                          onClick={() => toast.info("Manual company creation coming soon")}
+                          onClick={() => toast.info(t("manual_coming_soon"))}
                         >
                           <Plus size={12} />
-                          <span>Add &ldquo;{searchQuery.trim()}&rdquo;</span>
+                          <span>{t("add_company", { name: searchQuery.trim() })}</span>
                         </button>
                       </>
                     )}
 
                     {isSearching && (
-                      <div className="ccm-row" style={{ color: "var(--arco-mid-grey)", cursor: "default" }}>Searching...</div>
+                      <div className="ccm-row" style={{ color: "var(--arco-mid-grey)", cursor: "default" }}>{t("searching")}</div>
                     )}
 
                     {!isSearching && !hasResults && searchQuery.trim().length >= 2 && (
-                      <div className="ccm-row" style={{ color: "var(--arco-mid-grey)", cursor: "default" }}>No companies found</div>
+                      <div className="ccm-row" style={{ color: "var(--arco-mid-grey)", cursor: "default" }}>{t("no_companies_found")}</div>
                     )}
                   </div>
                 )}
 
                 {searchQuery.trim().length < 2 && (
                   <p style={{ fontSize: 13, color: "var(--arco-mid-grey)", marginTop: 8 }}>
-                    Start typing your company name to search
+                    {t("start_typing")}
                   </p>
                 )}
               </div>
@@ -490,8 +497,8 @@ export function CreateCompanyModal() {
               <div>
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 16 }}>
                   {claimingCompanyId
-                    ? "Verify domain ownership to claim this company page"
-                    : "Confirm you own this company before creating your page"}
+                    ? t("verify_claim_description")
+                    : t("verify_create_description")}
                 </p>
 
                 {/* Company preview card */}
@@ -513,7 +520,7 @@ export function CreateCompanyModal() {
                         <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                       <p style={{ fontSize: 13, color: "#065f46" }}>
-                        Your email ({user?.email}) matches <strong style={{ fontWeight: 500 }}>{companyDomain}</strong>. Domain verified.
+                        {t("email_matches", { email: user?.email, domain: companyDomain })}
                       </p>
                     </div>
                     <button
@@ -523,7 +530,7 @@ export function CreateCompanyModal() {
                       disabled={isPending}
                       style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                     >
-                      {isPending ? "Creating..." : "Continue"}
+                      {isPending ? tc("creating") : tc("continue")}
                     </button>
                   </div>
                 )}
@@ -532,7 +539,7 @@ export function CreateCompanyModal() {
                 {!isAutoVerified && hasWebsite && (
                   <div>
                     <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                      To verify ownership, enter your company email ending with <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>@{companyDomain}</strong>.
+                      {t("verify_ownership_prompt", { domain: companyDomain })}
                     </p>
                     {!codeSent ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -552,13 +559,13 @@ export function CreateCompanyModal() {
                           disabled={isPending || !verifyEmail}
                           style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                         >
-                          {isPending ? "Sending..." : "Send code"}
+                          {isPending ? t("sending") : t("send_code")}
                         </button>
                       </div>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                         <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>
-                          We sent a 6-digit code to <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{verifyEmail}</strong>.
+                          {t("code_sent", { email: verifyEmail })}
                         </p>
                         <input
                           type="text"
@@ -578,7 +585,7 @@ export function CreateCompanyModal() {
                             disabled={isPending}
                             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline" }}
                           >
-                            Resend code
+                            {t("resend_code")}
                           </button>
                           <button
                             type="button"
@@ -587,7 +594,7 @@ export function CreateCompanyModal() {
                             disabled={isPending || verifyCode.length !== 6}
                             style={{ fontSize: 14, padding: "10px 20px" }}
                           >
-                            {isPending ? "Verifying..." : "Verify"}
+                            {isPending ? t("verifying") : tc("submit")}
                           </button>
                         </div>
                       </div>
@@ -599,7 +606,7 @@ export function CreateCompanyModal() {
                 {!isAutoVerified && !hasWebsite && (
                   <div>
                     <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                      No website found for this company. Enter your company website to verify ownership.
+                      {t("no_website_found")}
                     </p>
                     <input
                       type="text"
@@ -614,7 +621,7 @@ export function CreateCompanyModal() {
                     {manualWebsite && extractDomainFromUrl(manualWebsite) && (
                       <div style={{ marginTop: 16 }}>
                         <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                          Enter your email ending with <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>@{extractDomainFromUrl(manualWebsite)}</strong>.
+                          {t("enter_email_ending", { domain: extractDomainFromUrl(manualWebsite) })}
                         </p>
                         {!codeSent ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -633,13 +640,13 @@ export function CreateCompanyModal() {
                               disabled={isPending || !verifyEmail}
                               style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                             >
-                              {isPending ? "Sending..." : "Send code"}
+                              {isPending ? t("sending") : t("send_code")}
                             </button>
                           </div>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                             <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>
-                              We sent a 6-digit code to <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{verifyEmail}</strong>.
+                              {t("code_sent", { email: verifyEmail })}
                             </p>
                             <input
                               type="text"
@@ -659,7 +666,7 @@ export function CreateCompanyModal() {
                                 disabled={isPending}
                                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline" }}
                               >
-                                Resend code
+                                {t("resend_code")}
                               </button>
                               <button
                                 type="button"
@@ -668,7 +675,7 @@ export function CreateCompanyModal() {
                                 disabled={isPending || verifyCode.length !== 6}
                                 style={{ fontSize: 14, padding: "10px 20px" }}
                               >
-                                {isPending ? "Verifying..." : "Verify"}
+                                {isPending ? t("verifying") : tc("submit")}
                               </button>
                             </div>
                           </div>
@@ -686,7 +693,7 @@ export function CreateCompanyModal() {
             {step === "creating" && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 0" }}>
                 <Loader2 style={{ width: 24, height: 24, animation: "spin 1s linear infinite", color: "var(--arco-black)", marginBottom: 16 }} />
-                <p style={{ fontSize: 15, color: "var(--arco-mid-grey)" }}>{claimingCompanyId ? "Claiming your company page..." : "Setting up your company page..."}</p>
+                <p style={{ fontSize: 15, color: "var(--arco-mid-grey)" }}>{claimingCompanyId ? t("claiming_page") : t("setting_up_page")}</p>
                 {error && (
                   <div style={{ marginTop: 16, textAlign: "center" }}>
                     <p style={{ fontSize: 13, color: "#dc2626", marginBottom: 12 }}>{error}</p>
@@ -695,7 +702,7 @@ export function CreateCompanyModal() {
                       onClick={() => setStep("verify")}
                       style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline" }}
                     >
-                      Try again
+                      {tc("try_again")}
                     </button>
                   </div>
                 )}

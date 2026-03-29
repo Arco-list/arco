@@ -1,33 +1,21 @@
-// components/features-section.tsx
-// How Arco works section - MATCHES HTML DESIGN
+"use client"
 
-const features = [
-  {
-    number: "01",
-    title: "Architects publish",
-    description:
-      "Leading residential architects submit completed projects for editorial review. Each published project is verified and complete — not a render, not a pitch.",
-  },
-  {
-    number: "02",
-    title: "Teams get credited",
-    description:
-      "Every collaborator on a project — builder, interior designer, landscape architect — is credited by the architect who hired them. That endorsement means something.",
-  },
-  {
-    number: "03",
-    title: "Clients discover",
-    description:
-      "Browse by project type, space, or location. See the actual work. Contact the team directly. No middlemen, no lead fees, no auctions.",
-  },
-]
+import { useTranslations } from "next-intl"
 
 export function FeaturesSection() {
+  const t = useTranslations("home")
+
+  const features = [
+    { number: "01", title: t("feature_1_title"), description: t("feature_1_body") },
+    { number: "02", title: t("feature_2_title"), description: t("feature_2_body") },
+    { number: "03", title: t("feature_3_title"), description: t("feature_3_body") },
+  ]
+
   return (
     <div className="how-section">
       <div className="wrap">
         <div className="section-header" style={{ marginBottom: '40px' }}>
-          <h2 className="section-title">How Arco works</h2>
+          <h2 className="section-title">{t("how_arco_works")}</h2>
         </div>
         <div className="how-grid">
           {features.map((feature) => (

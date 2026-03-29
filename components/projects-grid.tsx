@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { ShareModal } from "@/components/share-modal"
 
@@ -18,6 +19,7 @@ interface ProjectsGridProps {
 }
 
 export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps) {
+  const t = useTranslations("projects")
   const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const { projects, total, isLoading, error, hasMore, loadMore, spacePhotoOverrides } = useProjectsQuery({
@@ -56,7 +58,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
 
     const typePart =
       typeLabels.length === 0
-        ? "Projects"
+        ? t("title")
         : typeLabels.length === 1
           ? typeLabels[0]
           : typeLabels.length === 2
@@ -65,14 +67,14 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
 
     const locationPart =
       selectedLocations.length === 0
-        ? "the Netherlands"
+        ? t("heading_default_location")
         : selectedLocations.length === 1
           ? selectedLocations[0]
           : selectedLocations.length === 2
             ? `${selectedLocations[0]} & ${selectedLocations[1]}`
             : `${selectedLocations.slice(0, -1).join(", ")} & ${selectedLocations.at(-1)}`
     return `${typePart} in ${locationPart}`
-  }, [selectedTypes, selectedLocations, taxonomyLabelMap])
+  }, [selectedTypes, selectedLocations, taxonomyLabelMap, t])
 
   // ── photo navigation ─────────────────────────────────────────────────────────
 
@@ -153,7 +155,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
                 padding: "48px 0",
               }}
             >
-              <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>Loading projects…</p>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{t("loading")}</p>
             </div>
           )}
         </div>
@@ -161,7 +163,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
         {!isLoading && sortedProjects.length === 0 && !error && (
           <div style={{ textAlign: "center", padding: "64px 0" }}>
             <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>
-              No projects found matching your filters.
+              {t("no_results_filters")}
             </p>
           </div>
         )}
@@ -174,7 +176,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
               onClick={loadMore}
               disabled={isLoading}
             >
-              Load more
+              {t("load_more")}
               <ChevronRight size={16} />
             </button>
           </div>
@@ -209,6 +211,7 @@ function ProjectCard({
   isMutating,
   onToggleSave,
 }: ProjectCardProps) {
+  const t = useTranslations("common")
   const photos = project.photos ?? []
   const hasMultiplePhotos = photos.length > 1
 
@@ -227,7 +230,7 @@ function ProjectCard({
     if (current) return { src: current.url, alt: current.alt ?? project.title ?? "" }
     return {
       src: project.primary_photo_url ?? "/placeholder.svg",
-      alt: project.title ?? "Project",
+      alt: project.title ?? t("project"),
     }
   }
 
@@ -332,7 +335,7 @@ function ProjectCard({
       <ShareModal
         isOpen={shareOpen}
         onClose={() => setShareOpen(false)}
-        title={project.title ?? "Project"}
+        title={project.title ?? t("project")}
         subtitle={cardSubtitle}
         imageUrl={src}
         shareUrl={`/projects/${project.slug}`}

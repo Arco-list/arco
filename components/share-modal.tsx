@@ -5,6 +5,7 @@ import Image from "next/image"
 import { Copy, ExternalLink, Mail, MessageCircle, MessageSquare, Share2 } from "lucide-react"
 import { toast } from "sonner"
 import { sanitizeImageUrl } from "@/lib/image-security"
+import { useTranslations } from "next-intl"
 
 interface ShareModalProps {
   isOpen: boolean
@@ -17,6 +18,7 @@ interface ShareModalProps {
 
 export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUrl }: ShareModalProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const t = useTranslations("share")
 
   const resolvedShareUrl = useMemo(() => {
     if (typeof window === "undefined") {
@@ -56,12 +58,12 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
       }
 
       setCopiedKey("link")
-      toast.success("Link copied to clipboard")
+      toast.success(t("link_copied"))
       setTimeout(() => {
         setCopiedKey((previous) => (previous === "link" ? null : previous))
       }, 2000)
     } catch (error) {
-      toast.error("Unable to copy to clipboard")
+      toast.error(t("copy_failed"))
     }
   }
 
@@ -81,7 +83,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
       if (error instanceof DOMException && error.name === "AbortError") {
         return
       }
-      toast.error("Unable to share from this device")
+      toast.error(t("share_failed"))
     }
   }
 
@@ -115,7 +117,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
   const displaySubtitle = subtitle?.trim() ? subtitle.trim() : ""
 
   const shareActions = [
-    { key: "copy", label: copiedKey === "link" ? "Copied!" : "Copy link", icon: Copy, onClick: handleCopy },
+    { key: "copy", label: copiedKey === "link" ? t("copied") : t("copy_link"), icon: Copy, onClick: handleCopy },
     { key: "email", label: "E-mail", icon: Mail, onClick: handleEmailShare },
     { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, onClick: handleWhatsAppShare },
     { key: "messenger", label: "Messenger", icon: MessageCircle, onClick: handleMessengerShare },
@@ -129,7 +131,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
     <div className="popup-overlay" onClick={onClose}>
       <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
         <div className="popup-header">
-          <h3 className="arco-section-title">Share</h3>
+          <h3 className="arco-section-title">{t("title")}</h3>
           <button type="button" className="popup-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -155,7 +157,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
         {/* Native share — primary action */}
         <button type="button" className="btn-secondary" onClick={handleSystemShare} style={{ width: "100%", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <ExternalLink style={{ width: 16, height: 16 }} />
-          Share
+          {t("share_button")}
         </button>
 
         {/* Share options — pill buttons */}

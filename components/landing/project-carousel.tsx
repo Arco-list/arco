@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
+import { useTranslations } from "next-intl"
 
 export interface ProjectCard {
   id: string
@@ -194,6 +195,8 @@ export function ProjectCarousel({
     }
   }, [])
 
+  const t = useTranslations("business")
+
   if (count === 0) return null
 
   return (
@@ -201,7 +204,7 @@ export function ProjectCarousel({
       {/* Eyebrow — inside wrap */}
       <div className="wrap">
         <div className="text-center mb-7">
-          <span className="arco-eyebrow">Recently added projects</span>
+          <span className="arco-eyebrow">{t("recently_added_projects")}</span>
         </div>
       </div>
 
@@ -231,7 +234,7 @@ export function ProjectCarousel({
               />
               <div className="pt-3">
                 <div className="arco-card-title">{project.title}</div>
-                <div className="arco-card-subtitle">by {project.firm}</div>
+                <div className="arco-card-subtitle">{t("by_firm", { firm: project.firm })}</div>
               </div>
             </div>
           ))}

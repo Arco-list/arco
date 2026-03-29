@@ -1,6 +1,7 @@
 "use client"
 import { useMemo, useState, type MouseEvent } from "react"
 import { X, ChevronDown, ChevronUp } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { useFilters } from "@/contexts/filter-context"
@@ -16,6 +17,8 @@ const DEFAULT_YEAR_MIN = 1800
 const DEFAULT_YEAR_MAX = new Date().getFullYear()
 
 export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
+  const t = useTranslations("projects.filters_modal")
+
   const {
     selectedTypes,
     selectedStyles,
@@ -188,7 +191,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h6 className="font-semibold">Filters</h6>
+          <h6 className="font-semibold">{t("title")}</h6>
           <button onClick={onClose} className="p-1 hover:bg-surface rounded">
             <X className="h-5 w-5" />
           </button>
@@ -196,13 +199,13 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {isTaxonomyLoading ? (
-            <div className="text-sm text-text-secondary">Loading filter options…</div>
+            <div className="text-sm text-text-secondary">{t("loading_options")}</div>
           ) : taxonomyError && typeSections.length === 0 ? (
-            <div className="text-sm text-red-600">We couldn’t load filter options. Please try again later.</div>
+            <div className="text-sm text-red-600">{t("error_loading")}</div>
           ) : (
             <>
               <div>
-                <h6 className="mb-3">Building Types</h6>
+                <h6 className="mb-3">{t("building_types")}</h6>
                 <div className="space-y-4">
                   {typeSections.map((section) => (
                     <div key={section.id}>
@@ -253,7 +256,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                                   className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                                   onClick={() => toggleProjectTypeExpansion(section.id)}
                                 >
-                                  {isExpanded ? "Show less" : "View all"}
+                                  {isExpanded ? t("show_less") : t("view_all")}
                                   {isExpanded ? (
                                     <ChevronUp className="h-3 w-3" />
                                   ) : (
@@ -276,7 +279,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Style</h6>
+                <h6 className="mb-3">{t("style")}</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {styleOptions.slice(0, showAllStyles ? undefined : 6).map((style, index) => {
                     const value = style.id ?? style.slug ?? `${style.name}-${index}`
@@ -297,12 +300,12 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                   className="text-sm text-text-secondary hover:text-foreground mt-2 underline"
                   onClick={() => setShowAllStyles(!showAllStyles)}
                 >
-                  {showAllStyles ? "Show less" : "Show all"}
+                  {showAllStyles ? t("show_less") : t("show_all")}
                 </button>
               </div>
 
               <div>
-                <h6 className="mb-3">City</h6>
+                <h6 className="mb-3">{t("city")}</h6>
                 <div className="grid grid-cols-2 gap-2 max-h-[240px] overflow-y-auto">
                   {(taxonomy.cities ?? []).map((city) => {
                     const isChecked = selectedLocations.includes(city)
@@ -328,7 +331,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Location feature</h6>
+                <h6 className="mb-3">{t("location_feature")}</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {locationFeatureOptions.slice(0, showAllLocationFeatures ? undefined : 6).map((feature, index) => {
                     const value = feature.id ?? feature.slug ?? feature.name
@@ -349,12 +352,12 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                   className="text-sm text-text-secondary hover:text-foreground mt-2 underline"
                   onClick={() => setShowAllLocationFeatures(!showAllLocationFeatures)}
                 >
-                  {showAllLocationFeatures ? "Show less" : "Show all"}
+                  {showAllLocationFeatures ? t("show_less") : t("show_all")}
                 </button>
               </div>
 
               <div>
-                <h6 className="mb-3">Building feature</h6>
+                <h6 className="mb-3">{t("building_feature")}</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {buildingFeatureCategories.slice(0, showAllBuildingFeatures ? undefined : 6).map((feature, index) => {
                     const value = feature.id ?? feature.slug ?? feature.name
@@ -375,18 +378,18 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
                   className="text-sm text-text-secondary hover:text-foreground mt-2 underline"
                   onClick={() => setShowAllBuildingFeatures(!showAllBuildingFeatures)}
                 >
-                  {showAllBuildingFeatures ? "Show less" : "Show all"}
+                  {showAllBuildingFeatures ? t("show_less") : t("show_all")}
                 </button>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h6>Material feature</h6>
+                  <h6>{t("material_feature")}</h6>
                   <button
                     className="flex items-center gap-1 text-xs text-text-secondary hover:text-foreground"
                     onClick={() => setShowAllMaterialFeatures(!showAllMaterialFeatures)}
                   >
-                    {showAllMaterialFeatures ? "Show less" : "View all"}
+                    {showAllMaterialFeatures ? t("show_less") : t("view_all")}
                     {showAllMaterialFeatures ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </button>
                 </div>
@@ -409,7 +412,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Building type</h6>
+                <h6 className="mb-3">{t("building_type")}</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {buildingTypeOptions.map((option, index) => {
                     const value = option.id ?? option.slug ?? option.name
@@ -429,7 +432,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Size</h6>
+                <h6 className="mb-3">{t("size")}</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {sizeOptions.map((size, index) => {
                     const value = size.id ?? size.slug ?? size.name
@@ -449,7 +452,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Budget</h6>
+                <h6 className="mb-3">{t("budget")}</h6>
                 <div className="grid grid-cols-2 gap-3">
                   {budgetOptions.map((budget, index) => {
                     const value = budget.budget_level ?? budget.id ?? budget.slug ?? budget.name
@@ -469,7 +472,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Project year</h6>
+                <h6 className="mb-3">{t("project_year")}</h6>
                 <div className="px-2">
                   <input
                     type="range"
@@ -487,7 +490,7 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
               </div>
 
               <div>
-                <h6 className="mb-3">Building year</h6>
+                <h6 className="mb-3">{t("building_year")}</h6>
                 <div className="px-2">
                   <input
                     type="range"
@@ -509,10 +512,10 @@ export function FiltersModal({ isOpen, onClose }: FiltersModalProps) {
 
         <div className="border-t border-border p-4 flex gap-3">
           <Button variant="quaternary" onClick={clearAllFilters} className="flex-1">
-            Clear filters
+            {t("clear_filters")}
           </Button>
           <Button variant="secondary" onClick={applyFilters} className="flex-1">
-            Show projects
+            {t("show_projects")}
           </Button>
         </div>
       </div>

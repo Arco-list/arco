@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { ChevronDown, ChevronUp, X } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { Button } from "@/components/ui/button"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
@@ -21,6 +22,8 @@ interface ProfessionalsFiltersModalProps {
 }
 
 export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: ProfessionalsFiltersModalProps) {
+  const t = useTranslations("professionals.filters_modal")
+
   const {
     selectedCategories,
     selectedServices,
@@ -61,7 +64,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 px-4">
       <div className="relative h-[90vh] w-full max-w-md bg-white rounded-lg shadow-xl flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h6 className="font-semibold">Filters</h6>
+          <h6 className="font-semibold">{t("title")}</h6>
           <button onClick={onClose} className="p-1 hover:bg-surface rounded">
             <X className="h-5 w-5" />
           </button>
@@ -69,13 +72,13 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {taxonomy.isLoading ? (
-            <div className="text-sm text-text-secondary">Loading filter options…</div>
+            <div className="text-sm text-text-secondary">{t("loading_options")}</div>
           ) : sections.length === 0 ? (
-            <div className="text-sm text-text-secondary">No categories available at the moment.</div>
+            <div className="text-sm text-text-secondary">{t("no_categories")}</div>
           ) : (
             <>
               <div>
-                <h6 className="mb-3">Service Categories</h6>
+                <h6 className="mb-3">{t("service_categories")}</h6>
                 <div className="space-y-4">
                   {sections.map((section) => (
                     <div key={section.category.id}>
@@ -100,7 +103,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
                               }))
                             }
                           >
-                            {expandedCategories[section.category.id ?? ""] ? "Show less" : "View all"}
+                            {expandedCategories[section.category.id ?? ""] ? t("show_less") : t("view_all")}
                             {expandedCategories[section.category.id ?? ""] ? (
                               <ChevronUp className="h-3 w-3" />
                             ) : (
@@ -131,7 +134,7 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
               </div>
 
               <div>
-                <h6 className="mb-3">City</h6>
+                <h6 className="mb-3">{t("city")}</h6>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {cities.map((city) => (
                     <label key={city} className="flex items-center gap-3 cursor-pointer">
@@ -166,10 +169,10 @@ export function ProfessionalsFiltersModal({ isOpen, onClose, sections }: Profess
             }}
             className="flex-1"
           >
-            Clear filters
+            {t("clear_filters")}
           </Button>
           <Button variant="secondary" onClick={onClose} className="flex-1">
-            Apply
+            {t("apply")}
           </Button>
         </div>
       </div>

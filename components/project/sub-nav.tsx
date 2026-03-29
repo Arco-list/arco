@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { ShareModal } from "@/components/share-modal"
 
@@ -14,6 +15,7 @@ type SubNavProps = {
 }
 
 export function SubNav({ projectId, title, subtitle = "", imageUrl, slug }: SubNavProps) {
+  const t = useTranslations("project_detail")
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const isSaved = savedProjectIds.has(projectId)
   const isMutating = mutatingProjectIds.has(projectId)
@@ -97,7 +99,7 @@ export function SubNav({ projectId, title, subtitle = "", imageUrl, slug }: SubN
                     strokeLinejoin="round"
                   />
                 </svg>
-                Back
+                {t("back")}
               </Link>
 
               {/*
@@ -115,21 +117,21 @@ export function SubNav({ projectId, title, subtitle = "", imageUrl, slug }: SubN
                   onClick={(e) => handleClick(e, 'details')}
                   className={getLinkClass('details')}
                 >
-                  Details
+                  {t("nav_details")}
                 </a>
                 <a
                   href="#photo-tour"
                   onClick={(e) => handleClick(e, 'photo-tour')}
                   className={getLinkClass('photo-tour')}
                 >
-                  Photos
+                  {t("nav_photos")}
                 </a>
                 <a
                   href="#professionals"
                   onClick={(e) => handleClick(e, 'professionals')}
                   className={getLinkClass('professionals')}
                 >
-                  Professionals
+                  {t("nav_professionals")}
                 </a>
               </div>
             </div>
@@ -153,13 +155,13 @@ export function SubNav({ projectId, title, subtitle = "", imageUrl, slug }: SubN
                 <svg width="13" height="13" viewBox="0 0 16 16" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 13.7C8 13.7 1.5 9.5 1.5 5.5C1.5 3.5 3.2 2 5.2 2C6.5 2 7.6 2.7 8 3.5C8.4 2.7 9.5 2 10.8 2C12.8 2 14.5 3.5 14.5 5.5C14.5 9.5 8 13.7 8 13.7Z" />
                 </svg>
-                {isSaved ? "Saved" : "Save"}
+                {isSaved ? t("saved") : t("save")}
               </button>
               <button className="filter-pill" aria-label="Share project" onClick={() => setShareOpen(true)}>
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
                 </svg>
-                Share
+                {t("share")}
               </button>
             </div>
 

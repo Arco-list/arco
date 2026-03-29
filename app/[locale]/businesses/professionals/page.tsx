@@ -2,6 +2,7 @@
 
 import { useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import {
@@ -12,10 +13,10 @@ import {
 } from "@/components/landing"
 import { EndorsementCarousel } from "@/components/ui/EndorsementCarousel"
 import {
-  professionalBenefits,
-  professionalSteps,
-  professionalFAQ,
-  endorsements,
+  getProfessionalBenefits,
+  getProfessionalSteps,
+  getProfessionalFAQ,
+  getEndorsements,
 } from "./data"
 import { useAuth } from "@/contexts/auth-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
@@ -26,6 +27,13 @@ export default function ProfessionalsPage() {
   const { user } = useAuth()
   const { openLoginModal } = useLoginModal()
   const { openCreateCompanyModal } = useCreateCompanyModal()
+  const t = useTranslations("business.professionals")
+  const tBusiness = useTranslations("business")
+
+  const professionalBenefits = getProfessionalBenefits(t)
+  const professionalSteps = getProfessionalSteps(t)
+  const professionalFAQ = getProfessionalFAQ(t)
+  const endorsements = getEndorsements(t)
 
   const handleCTA = useCallback(() => {
     if (!user) {
@@ -41,27 +49,27 @@ export default function ProfessionalsPage() {
 
       <HeroSection
         audience="professionals"
-        title="Be recognised through the work you've delivered."
-        body="Arco is a curated architecture network where professionals are credited on real projects. When architects tag you, clients see your work and can reach out directly."
+        title={t("hero_title")}
+        body={t("hero_body")}
       >
         <button
           type="button"
           onClick={handleCTA}
           className="landing-cta"
         >
-          Create your company →
+          {t("cta_button")}
         </button>
       </HeroSection>
 
       <BenefitsGrid benefits={professionalBenefits} />
-      <HowItWorks steps={professionalSteps} />
+      <HowItWorks steps={professionalSteps} heading={tBusiness("how_it_works")} />
 
       <EndorsementCarousel
         endorsements={endorsements}
-        subtitle="The professionals on Arco are here because an architect vouched for their work."
+        subtitle={t("endorsement_subtitle")}
       />
 
-      <FAQSection items={professionalFAQ} paddingTop={60} />
+      <FAQSection items={professionalFAQ} paddingTop={60} heading={tBusiness("faq_heading")} />
 
       <Footer />
     </>

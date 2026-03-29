@@ -6,6 +6,7 @@ import { Menu, Search } from "lucide-react"
 import { useState, useTransition, useEffect, useRef, type FormEvent } from "react"
 import { toast } from "sonner"
 
+import { useTranslations } from "next-intl"
 import { signOutAction } from "@/app/(auth)/actions"
 import { HeaderSearch } from "@/components/header-search"
 import { CompanySwitcher } from "@/components/company-switcher"
@@ -23,6 +24,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
   const searchParamQuery = searchParams.get("search") ?? ""
   const { profile, user } = useAuth()
   const { openCreateCompanyModal } = useCreateCompanyModal()
+  const t = useTranslations("dashboard")
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isSigningOut, startSignOutTransition] = useTransition()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -72,11 +74,11 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
       const result = await signOutAction()
 
       if (result?.error) {
-        toast.error("Unable to sign out", { description: result.error.message })
+        toast.error(t("unable_to_sign_out"), { description: result.error.message })
         return
       }
 
-      toast.success("Signed out")
+      toast.success(t("signed_out"))
       setIsMenuOpen(false)
       window.location.href = "/"
     })
@@ -120,7 +122,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       : "text-black hover:bg-surface"
                   }`}
                 >
-                  Projects
+                  {t("projects")}
                 </Link>
                 <Link
                   href="/professionals"
@@ -130,7 +132,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       : "text-black hover:bg-surface"
                   }`}
                 >
-                  Professionals
+                  {t("professionals")}
                 </Link>
               </div>
             )}
@@ -148,7 +150,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       : "text-black hover:bg-surface"
                   }`}
                 >
-                  Admin
+                  {t("admin")}
                 </Link>
               )}
               <Link
@@ -159,7 +161,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                     : "text-black hover:bg-surface"
                 }`}
               >
-                Listings
+                {t("listings")}
               </Link>
               <Link
                 href="/dashboard/company"
@@ -169,7 +171,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                     : "text-black hover:bg-surface"
                 }`}
               >
-                Company
+                {t("company")}
               </Link>
               <Link
                 href="/dashboard/team"
@@ -179,7 +181,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                     : "text-black hover:bg-surface"
                 }`}
               >
-                Team
+                {t("team")}
               </Link>
               <Link
                 href="/dashboard/pricing"
@@ -189,7 +191,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                     : "text-black hover:bg-surface"
                 }`}
               >
-                Plans
+                {t("plans")}
               </Link>
             </div>
           )}
@@ -210,7 +212,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                 href={hasProfessionalRole ? "/new-project" : "/businesses/architects"}
                 className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-surface"
               >
-                {hasProfessionalRole ? "Add new project" : "List with us"}
+                {hasProfessionalRole ? t("add_new_project") : t("list_with_us")}
               </Link>
             )}
             {!isHomeownerPage && canAccessProfessionalDashboard && (
@@ -218,7 +220,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                 href="/new-project"
                 className="hidden md:block text-sm font-medium px-3 py-1.5 rounded-full text-black hover:bg-surface"
               >
-                Add new project
+                {t("add_new_project")}
               </Link>
             )}
             <button
@@ -242,14 +244,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Projects
+                          {t("projects")}
                         </Link>
                         <Link
                           href="/professionals"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Professionals
+                          {t("professionals")}
                         </Link>
                       </div>
 
@@ -263,21 +265,21 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Saved projects
+                          {t("saved_projects")}
                         </Link>
                         <Link
                           href="/homeowner?tab=saved-professionals"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Saved professionals
+                          {t("saved_professionals")}
                         </Link>
                         <Link
                           href="/homeowner?tab=account"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Account
+                          {t("account")}
                         </Link>
                       </div>
 
@@ -291,7 +293,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          List with us
+                          {t("list_with_us")}
                         </Link>
                         {canAccessProfessionalDashboard && (
                           <Link
@@ -299,7 +301,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                             className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
-                            {isAdmin ? "Admin" : "Switch to company"}
+                            {isAdmin ? t("admin") : t("switch_to_company")}
                           </Link>
                         )}
                         <Link
@@ -307,7 +309,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Help center
+                          {t("help_center")}
                         </Link>
                         <button
                           type="button"
@@ -315,7 +317,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           onClick={handleSignOut}
                           disabled={isSigningOut}
                         >
-                          {isSigningOut ? "Signing out..." : "Sign out"}
+                          {isSigningOut ? t("signing_out") : t("sign_out")}
                         </button>
                       </div>
                     </>
@@ -329,14 +331,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Listings
+                          {t("listings")}
                         </Link>
                         <Link
                           href="/dashboard/company"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Company
+                          {t("company")}
                         </Link>
                       </div>
 
@@ -350,14 +352,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Plans
+                          {t("plans")}
                         </Link>
                         <Link
                           href="/dashboard/settings"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Account
+                          {t("account")}
                         </Link>
                       </div>
 
@@ -371,14 +373,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Switch to homeowner
+                          {t("switch_to_homeowner")}
                         </Link>
                         <Link
                           href="/help-center"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Help center
+                          {t("help_center")}
                         </Link>
                         {isAdmin && (
                           <Link
@@ -386,7 +388,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                             className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                             onClick={() => setIsMenuOpen(false)}
                           >
-                            Admin
+                            {t("admin")}
                           </Link>
                         )}
                         <button
@@ -395,7 +397,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           onClick={handleSignOut}
                           disabled={isSigningOut}
                         >
-                          {isSigningOut ? "Signing out..." : "Sign out"}
+                          {isSigningOut ? t("signing_out") : t("sign_out")}
                         </button>
                       </div>
                     </>
@@ -407,14 +409,14 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary text-left w-full"
                           onClick={() => { setIsMenuOpen(false); openCreateCompanyModal() }}
                         >
-                          Create company profile
+                          {t("create_company_profile")}
                         </button>
                         <Link
                           href="/homeowner"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
                           onClick={() => setIsMenuOpen(false)}
                         >
-                          Homeowner Dashboard
+                          {t("homeowner_dashboard")}
                         </Link>
                         <button
                           type="button"
@@ -422,7 +424,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           onClick={handleSignOut}
                           disabled={isSigningOut}
                         >
-                          {isSigningOut ? "Signing out..." : "Sign out"}
+                          {isSigningOut ? t("signing_out") : t("sign_out")}
                         </button>
                       </div>
                     </>

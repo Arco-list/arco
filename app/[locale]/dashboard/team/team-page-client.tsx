@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Mail, MoreHorizontal, RotateCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 
@@ -41,6 +42,7 @@ interface TeamPageClientProps {
 }
 
 export function TeamPageClient({ companyId, companyName, members, isOwner, currentUserId }: TeamPageClientProps) {
+  const t = useTranslations("dashboard")
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
@@ -67,13 +69,13 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
     startTransition(async () => {
       const result = await inviteTeamMemberAction({ email: inviteEmail.trim(), role: inviteRole })
       if (result.success) {
-        toast.success("Invitation sent")
+        toast.success(t("invitation_sent"))
         setInviteEmail("")
         setInviteRole("member")
         setInviteModalOpen(false)
         router.refresh()
       } else {
-        toast.error(result.error ?? "Failed to send invitation")
+        toast.error(result.error ?? t("failed_send_invitation"))
       }
     })
   }
@@ -82,11 +84,11 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
     startTransition(async () => {
       const result = await changeTeamMemberRoleAction({ memberId, role })
       if (result.success) {
-        toast.success("Role updated")
+        toast.success(t("role_updated"))
         setOpenMenuId(null)
         router.refresh()
       } else {
-        toast.error(result.error ?? "Failed to update role")
+        toast.error(result.error ?? t("failed_update_role"))
       }
     })
   }
@@ -95,11 +97,11 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
     startTransition(async () => {
       const result = await removeTeamMemberAction({ memberId })
       if (result.success) {
-        toast.success("Member removed")
+        toast.success(t("member_removed"))
         setOpenMenuId(null)
         router.refresh()
       } else {
-        toast.error(result.error ?? "Failed to remove member")
+        toast.error(result.error ?? t("failed_remove_member"))
       }
     })
   }
@@ -108,9 +110,9 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
     startTransition(async () => {
       const result = await resendTeamInviteAction(memberId)
       if (result.success) {
-        toast.success("Invitation resent")
+        toast.success(t("invitation_resent"))
       } else {
-        toast.error(result.error ?? "Failed to resend invitation")
+        toast.error(result.error ?? t("failed_resend_invitation"))
       }
     })
   }
@@ -144,19 +146,19 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
       <Header navLinks={[
-        { href: `/dashboard/listings?company_id=${companyId}`, label: "Listings" },
-        { href: `/dashboard/company?company_id=${companyId}`, label: "Company" },
-        { href: `/dashboard/team?company_id=${companyId}`, label: "Team" },
-        { href: "/dashboard/pricing", label: "Plans" },
+        { href: `/dashboard/listings?company_id=${companyId}`, label: t("listings") },
+        { href: `/dashboard/company?company_id=${companyId}`, label: t("company") },
+        { href: `/dashboard/team?company_id=${companyId}`, label: t("team") },
+        { href: "/dashboard/pricing", label: t("plans") },
       ]} />
 
       {/* Page title — matches /dashboard/listings layout */}
       <div className="discover-page-title">
         <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="arco-section-title">Team</h2>
+          <h2 className="arco-section-title">{t("team")}</h2>
           {canManage && (
             <button onClick={() => setInviteModalOpen(true)} className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
-              Invite team member
+              {t("invite_team_member")}
             </button>
           )}
         </div>
@@ -172,10 +174,10 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                 <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
                   {activeMembers.length.toLocaleString()}
                 </strong>{" "}
-                {activeMembers.length === 1 ? "member" : "members"}
+                {activeMembers.length === 1 ? t("role_member").toLowerCase() : t("team_member_count", { count: activeMembers.length }).replace(String(activeMembers.length), "").trim()}
                 {pendingInvites.length > 0 && (
                   <span style={{ color: "var(--arco-mid-grey)" }}>
-                    {" "}· {pendingInvites.length} pending
+                    {" "}· {t("pending_count", { count: pendingInvites.length })}
                   </span>
                 )}
               </p>
@@ -221,7 +223,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                           {name ?? m.email}
                         </span>
                         {isSelf && (
-                          <span style={{ fontSize: 11, color: "var(--arco-mid-grey)" }}>(you)</span>
+                          <span style={{ fontSize: 11, color: "var(--arco-mid-grey)" }}>{t("you")}</span>
                         )}
                       </div>
                       {name && (
@@ -235,7 +237,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                         className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
                         style={{ background: m.role === "admin" ? "var(--arco-black)" : "#939393" }}
                       />
-                      <span className="text-xs font-medium">{m.role === "admin" ? "Admin" : "Member"}</span>
+                      <span className="text-xs font-medium">{m.role === "admin" ? t("role_admin") : t("role_member")}</span>
                     </span>
 
                     {/* 3-dot menu (or spacer for alignment) */}
@@ -263,7 +265,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                               role="menuitem"
                             >
                               <span className="filter-dropdown-label">
-                                {m.role === "admin" ? "Change to Member" : "Make Admin"}
+                                {m.role === "admin" ? t("change_to_member") : t("make_admin")}
                               </span>
                             </div>
                           )}
@@ -273,7 +275,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                             onClick={() => handleRemove(m.id)}
                             role="menuitem"
                           >
-                            <span className="filter-dropdown-label" style={{ color: "#dc2626" }}>Remove</span>
+                            <span className="filter-dropdown-label" style={{ color: "#dc2626" }}>{t("remove")}</span>
                           </div>
                         </div>
                       </div>
@@ -309,7 +311,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 14, color: "var(--arco-black)" }}>{m.email}</span>
                     <p style={{ fontSize: 13, color: "var(--arco-mid-grey)", margin: 0 }}>
-                      Invited {new Date(m.invited_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {t("invited_date", { date: new Date(m.invited_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) })}
                     </p>
                   </div>
 
@@ -319,7 +321,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                       className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
                       style={{ background: "#f59e0b" }}
                     />
-                    <span className="text-xs font-medium">Invited</span>
+                    <span className="text-xs font-medium">{t("invited")}</span>
                   </span>
 
                   {/* 3-dot menu */}
@@ -345,7 +347,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                           onClick={() => { handleResend(m.id); setOpenMenuId(null) }}
                           role="menuitem"
                         >
-                          <span className="filter-dropdown-label">Resend invite</span>
+                          <span className="filter-dropdown-label">{t("resend_invite")}</span>
                         </div>
                         <div style={{ borderTop: "1px solid var(--arco-rule)", margin: "4px 0" }} />
                         <div
@@ -353,7 +355,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                           onClick={() => { handleRemove(m.id); setOpenMenuId(null) }}
                           role="menuitem"
                         >
-                          <span className="filter-dropdown-label" style={{ color: "#dc2626" }}>Cancel invite</span>
+                          <span className="filter-dropdown-label" style={{ color: "#dc2626" }}>{t("cancel_invite")}</span>
                         </div>
                       </div>
                     </div>
@@ -366,7 +368,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
             {members.length <= 1 && pendingInvites.length === 0 && (
               <div style={{ textAlign: "center", padding: "60px 0" }}>
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>
-                  Invite team members to collaborate on your company profile.
+                  {t("empty_team")}
                 </p>
               </div>
             )}
@@ -380,20 +382,20 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
         <div className="popup-overlay" onClick={() => setInviteModalOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Invite team member</h3>
+              <h3 className="arco-section-title">{t("invite_modal_title")}</h3>
               <button type="button" className="popup-close" onClick={() => setInviteModalOpen(false)} aria-label="Close">
                 ✕
               </button>
             </div>
 
             <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-              They&apos;ll receive an email to join {companyName} on Arco.
+              {t("invite_modal_description", { company: companyName })}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Email address
+                  {t("invite_email_label")}
                 </label>
                 <input
                   type="email"
@@ -409,7 +411,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
 
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Role
+                  {t("invite_role_label")}
                 </label>
                 <select
                   className="form-input"
@@ -417,8 +419,8 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                   onChange={e => setInviteRole(e.target.value as "member" | "admin")}
                   style={{ marginBottom: 0 }}
                 >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
+                  <option value="member">{t("role_member")}</option>
+                  <option value="admin">{t("role_admin")}</option>
                 </select>
               </div>
 
@@ -428,7 +430,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                 className="btn-primary"
                 style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
               >
-                {isPending ? "Sending…" : "Send invitation"}
+                {isPending ? t("invite_sending") : t("invite_send")}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
+import { useTranslations } from "next-intl"
 import Image from "next/image"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
@@ -9,6 +10,7 @@ import { useProjectPreview } from "@/contexts/project-preview-context"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 export function ProfessionalsSection() {
+  const t = useTranslations("project_detail")
   const [showModal, setShowModal] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { projectProfessionals } = useProjectPreview()
@@ -33,13 +35,13 @@ export function ProfessionalsSection() {
     <>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="heading-3 text-black">Professionals who built it</h2>
+          <h2 className="heading-3 text-black">{t("professionals_who_built_it")}</h2>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowModal(true)}
               className="body-small text-foreground hover:text-foreground font-medium"
             >
-              View all
+              {t("view_all")}
             </button>
             <div className="hidden md:flex gap-2">
               <button
@@ -104,7 +106,7 @@ export function ProfessionalsSection() {
                     href={projectsHref}
                     className="underline hover:text-foreground"
                   >
-                    {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                    {t("projects_count", { count: professional.projectsCount || 0 })}
                   </Link>
                 </p>
               </div>
@@ -116,7 +118,7 @@ export function ProfessionalsSection() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md mx-auto">
           <DialogHeader className="pb-4 border-b">
-            <DialogTitle className="heading-5">Professionals who built it</DialogTitle>
+            <DialogTitle className="heading-5">{t("professionals_who_built_it")}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
@@ -139,7 +141,7 @@ export function ProfessionalsSection() {
                       />
                     ) : (
                       <div className="w-12 h-12 rounded bg-surface flex items-center justify-center body-small text-muted-foreground">
-                        Logo
+                        {t("logo")}
                       </div>
                     )}
                   </Link>
@@ -156,7 +158,7 @@ export function ProfessionalsSection() {
                         href={projectsHref}
                         className="underline hover:text-foreground"
                       >
-                        {professional.projectsCount || 0} project{professional.projectsCount !== 1 ? 's' : ''}
+                        {t("projects_count", { count: professional.projectsCount || 0 })}
                       </Link>
                     </p>
                   </div>

@@ -2,38 +2,40 @@
 
 import type * as React from "react"
 import { Users, Building, UserCheck } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 
-const data = {
-  user: {
-    name: "Admin",
-    email: "admin@arco.com",
-    avatar: "/avatars/admin.jpg",
-  },
-  navMain: [
-    {
-      title: "Users",
-      url: "/admin/users",
-      icon: Users,
-      isActive: true,
-    },
-    {
-      title: "Projects",
-      url: "/admin/projects",
-      icon: Building,
-    },
-    {
-      title: "Professionals",
-      url: "/admin/professionals",
-      icon: UserCheck,
-    },
-  ],
-}
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const t = useTranslations("dashboard")
+
+  const data = {
+    user: {
+      name: "Admin",
+      email: "admin@arco.com",
+      avatar: "/avatars/admin.jpg",
+    },
+    navMain: [
+      {
+        title: t("sidebar_users"),
+        url: "/admin/users",
+        icon: Users,
+        isActive: true,
+      },
+      {
+        title: t("sidebar_projects"),
+        url: "/admin/projects",
+        icon: Building,
+      },
+      {
+        title: t("sidebar_professionals"),
+        url: "/admin/professionals",
+        icon: UserCheck,
+      },
+    ],
+  }
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>

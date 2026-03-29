@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import Link from "next/link"
 import { useState } from "react"
 import { Check, X } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface Signup1Props {
   heading?: string
@@ -21,18 +22,16 @@ interface Signup1Props {
 }
 
 const Signup1 = ({
-  heading = "Signup",
   logo = {
     url: "https://www.shadcnblocks.com",
     src: "https://deifkwefumgah.cloudfront.net/shadcnblocks/block/logos/shadcnblockscom-wordmark.svg",
     alt: "logo",
     title: "shadcnblocks.com",
   },
-  buttonText = "Create Account",
-  signupText = "Already a user?",
   signupUrl = "https://shadcnblocks.com",
 }: Signup1Props) => {
   const [password, setPassword] = useState("")
+  const t = useTranslations("auth")
 
   const hasMinLength = password.length >= 7
   const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password)
@@ -49,12 +48,12 @@ const Signup1 = ({
             <img src={logo.src || "/placeholder.svg"} alt={logo.alt} title={logo.title} className="h-10 dark:invert" />
           </Link>
           <div className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md">
-            {heading && <h3>{heading}</h3>}
-            <Input type="email" placeholder="Email" className="text-sm" required />
+            <h3>{t("signup")}</h3>
+            <Input type="email" placeholder={t("email")} className="text-sm" required />
             <div className="w-full space-y-2">
               <Input
                 type="password"
-                placeholder="Password"
+                placeholder={t("password")}
                 className="text-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -68,27 +67,27 @@ const Signup1 = ({
                     ) : (
                       <X className="h-3 w-3 text-red-500" />
                     )}
-                    <span className={hasMinLength ? "text-green-600" : "text-red-500"}>At least 7 characters</span>
+                    <span className={hasMinLength ? "text-green-600" : "text-red-500"}>{t("at_least_7_chars")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {hasSymbol ? <Check className="h-3 w-3 text-green-600" /> : <X className="h-3 w-3 text-red-500" />}
-                    <span className={hasSymbol ? "text-green-600" : "text-red-500"}>At least 1 symbol</span>
+                    <span className={hasSymbol ? "text-green-600" : "text-red-500"}>{t("at_least_1_symbol")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {hasNumber ? <Check className="h-3 w-3 text-green-600" /> : <X className="h-3 w-3 text-red-500" />}
-                    <span className={hasNumber ? "text-green-600" : "text-red-500"}>At least 1 number</span>
+                    <span className={hasNumber ? "text-green-600" : "text-red-500"}>{t("at_least_1_number")}</span>
                   </div>
                 </div>
               )}
             </div>
             <Button type="submit" variant="secondary" size="sm" className="w-full" disabled={!isPasswordValid}>
-              {buttonText}
+              {t("create_account")}
             </Button>
           </div>
           <div className="text-muted-foreground flex justify-center gap-1 text-sm">
-            <p>{signupText}</p>
+            <p>{t("already_user")}</p>
             <Link href={signupUrl} className="text-primary font-medium hover:underline">
-              Login
+              {t("login")}
             </Link>
           </div>
         </div>

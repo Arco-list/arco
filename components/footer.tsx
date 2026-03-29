@@ -3,6 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
+import { LanguageSwitcher } from "@/components/language-switcher"
 
 export function Footer() {
   const t = useTranslations("footer")
@@ -63,6 +64,7 @@ export function Footer() {
             <span className="arco-small-text text-white/25">
               {t("copyright", { year: new Date().getFullYear() })}
             </span>
+            <LanguageSwitcher />
           </div>
 
         </div>

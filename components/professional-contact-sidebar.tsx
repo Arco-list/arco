@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { IconBrandPinterest } from "@tabler/icons-react"
+import { useTranslations } from "next-intl"
 
 import type { ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
@@ -53,18 +54,19 @@ const normalizeUrl = (value: string | null) => {
 }
 
 export function ProfessionalContactSidebar({ professional }: ProfessionalContactSidebarProps) {
+  const t = useTranslations("professional_detail")
   const company = professional.company
   const phone = company.phone ?? null
   const email = company.email ?? null
   const website = normalizeUrl(company.website ?? company.domain ?? null)
   const location = professional.location ?? null
-  const displayName = company.name || professional.name || "Professional"
+  const displayName = company.name || professional.name || t("professional_fallback")
   const imageSrc = company.logoUrl ?? professional.profile.avatarUrl ?? PLACEHOLDER_IMAGE
 
   const primaryActions = [
     {
       icon: Globe,
-      label: website ? "Visit website" : "Website unavailable",
+      label: website ? t("visit_website") : t("website_unavailable"),
       href: website,
       disabled: !website,
       external: true,
@@ -92,7 +94,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
     <div className="lg:sticky lg:top-24 lg:z-20">
       <Card className="space-y-6 p-6">
         <div className="space-y-4">
-          <h2 className="heading-4 font-bold text-black">Contact {displayName}</h2>
+          <h2 className="heading-4 font-bold text-black">{t("contact_name", { name: displayName })}</h2>
 
           <div className="space-y-3">
             <div className="space-y-3">
@@ -101,7 +103,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
                 {phone ? (
                   <RevealPhoneNumber phone={phone} />
                 ) : (
-                  <span className="text-muted-foreground">Phone unavailable</span>
+                  <span className="text-muted-foreground">{t("phone_unavailable")}</span>
                 )}
               </div>
 
@@ -130,7 +132,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
 
           {socialLinks.length > 0 ? (
             <div className="space-y-2">
-              <h4 className="body-small font-medium text-foreground">Follow</h4>
+              <h4 className="body-small font-medium text-foreground">{t("follow")}</h4>
               <div className="flex justify-start gap-2">
                 {socialLinks.map(({ href, Icon, platform }) => (
                   <a
@@ -153,7 +155,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
             asChild={Boolean(email)}
             disabled={!email}
           >
-            {email ? <a href={`mailto:${email}`}>Contact</a> : <span>Contact</span>}
+            {email ? <a href={`mailto:${email}`}>{t("contact")}</a> : <span>{t("contact")}</span>}
           </Button>
         </div>
       </Card>
@@ -162,6 +164,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
 }
 
 const RevealPhoneNumber = ({ phone }: { phone: string }) => {
+  const t = useTranslations("professional_detail")
   const [isVisible, setIsVisible] = useState(false)
 
   if (isVisible) {
@@ -178,7 +181,7 @@ const RevealPhoneNumber = ({ phone }: { phone: string }) => {
       onClick={() => setIsVisible(true)}
       className="body-small font-medium text-foreground underline hover:no-underline"
     >
-      Show phone number
+      {t("show_phone_number")}
     </button>
   )
 }

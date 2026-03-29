@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation"
 import type { Metadata } from "next"
+import { getTranslations } from "next-intl/server"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -66,9 +67,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle()
 
   if (!project) {
+    const t = await getTranslations("project_detail")
     return {
-      title: "Project Not Found",
-      description: "The requested project could not be found."
+      title: t("not_found_title"),
+      description: t("not_found_description")
     }
   }
 
@@ -84,7 +86,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = project.seo_description?.trim() ||
     (project.description ?
       project.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
-      `Discover ${project.title} on Arco.`)
+      `Discover ${project.title} on Arco`)
 
   const baseUrl = getSiteUrl()
   const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined
@@ -109,6 +111,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
+  const t = await getTranslations("project_detail")
   const resolvedParams = await params
   const resolvedSearchParams = await searchParams
   const supabase = await createServerSupabaseClient()
@@ -341,9 +344,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       return {
         id: p.id,
         companyId: p.company_id,
-        companyName: p.companies?.name ?? "Unknown",
+        companyName: p.companies?.name ?? t("unknown"),
         companySlug: (p.companies as any)?.slug,
-        serviceCategory: serviceCategories.length > 0 ? serviceCategories.join(" · ") : "Service",
+        serviceCategory: serviceCategories.length > 0 ? serviceCategories.join(" · ") : t("service"),
         serviceCategories,
         logo: p.companies?.logo_url ?? (p.company_id ? companyLogoMap.get(p.company_id) ?? null : null),
         projectsCount: p.company_id ? (companyProjectCounts.get(p.company_id)?.size ?? 0) : 0,
@@ -518,7 +521,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         {formattedRelatedProjects.length > 0 && (
           <RelatedProjects
             projects={formattedRelatedProjects}
-            architectName={architect?.companyName ?? "this architect"}
+            architectName={architect?.companyName ?? t("this_architect")}
           />
         )}
 

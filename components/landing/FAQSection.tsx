@@ -11,9 +11,10 @@ interface FAQSectionProps {
   items: FAQItem[]
   /** Optional override for top padding, e.g. 60 when placed close to endorsement carousel */
   paddingTop?: number
+  heading?: string
 }
 
-export function FAQSection({ items, paddingTop }: FAQSectionProps) {
+export function FAQSection({ items, paddingTop, heading = "Frequently asked questions" }: FAQSectionProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
 
   const toggle = (index: number) => {
@@ -27,7 +28,7 @@ export function FAQSection({ items, paddingTop }: FAQSectionProps) {
     >
       <div className="wrap">
         <div className="faq-header">
-          <h2 className="arco-section-title">Frequently asked questions</h2>
+          <h2 className="arco-section-title">{heading}</h2>
         </div>
         <div className="faq-list">
           {items.map((item, i) => (

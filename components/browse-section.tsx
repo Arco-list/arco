@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 // Types for the three browse paths
 export interface BrowseCard {
@@ -19,6 +20,7 @@ interface BrowseSectionProps {
 }
 
 export function BrowseSection({ projects, spaces, professionals }: BrowseSectionProps) {
+  const t = useTranslations("home")
   return (
     <section className="py-16 bg-white">
       {/* UPDATED: Use .wrap class */}
@@ -28,13 +30,12 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
         <div className="mb-16">
           {/* UPDATED: Use section-header pattern from styles page */}
           <div className="section-header">
-            <h2 className="arco-section-title">Published work</h2>
-            {/* UPDATED: Use view-all-link class */}
-            <Link 
+            <h2 className="arco-section-title">{t("published_work")}</h2>
+            <Link
               href="/projects"
               className="hidden md:inline-flex view-all-link"
             >
-              View all projects →
+              {t("view_all_projects")}
             </Link>
           </div>
 
@@ -74,7 +75,7 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
               href="/projects"
               className="inline-flex view-all-link"
             >
-              View all projects →
+              {t("view_all_projects")}
             </Link>
           </div>
         </div>
@@ -86,13 +87,12 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
         <div className="mb-16">
           {/* UPDATED: Use section-header pattern */}
           <div className="section-header">
-            <h2 className="arco-section-title">Featured spaces</h2>
-            {/* UPDATED: Use view-all-link class */}
-            <Link 
+            <h2 className="arco-section-title">{t("featured_spaces")}</h2>
+            <Link
               href="/projects?filter=space"
               className="hidden md:inline-flex view-all-link"
             >
-              View all spaces →
+              {t("view_all_spaces")}
             </Link>
           </div>
 
@@ -131,7 +131,7 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
               href="/projects?filter=space"
               className="inline-flex view-all-link"
             >
-              View all spaces →
+              {t("view_all_spaces")}
             </Link>
           </div>
         </div>
@@ -143,13 +143,12 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
         <div>
           {/* UPDATED: Use section-header pattern */}
           <div className="section-header">
-            <h2 className="arco-section-title">Credited professionals</h2>
-            {/* UPDATED: Use view-all-link class */}
-            <Link 
+            <h2 className="arco-section-title">{t("credited_professionals")}</h2>
+            <Link
               href="/professionals"
               className="hidden md:inline-flex view-all-link"
             >
-              View all professionals →
+              {t("view_all_professionals")}
             </Link>
           </div>
 
@@ -188,7 +187,7 @@ export function BrowseSection({ projects, spaces, professionals }: BrowseSection
               href="/professionals"
               className="inline-flex view-all-link"
             >
-              View all professionals →
+              {t("view_all_professionals")}
             </Link>
           </div>
         </div>

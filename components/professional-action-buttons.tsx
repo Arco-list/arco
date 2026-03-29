@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Bookmark, Share } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { ShareModal } from "./share-modal"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
@@ -20,6 +21,7 @@ export function ProfessionalActionButtons({
   coverImageUrl,
   shareUrl,
 }: ProfessionalActionButtonsProps) {
+  const t = useTranslations("professional_detail")
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const { savedProfessionalIds, mutatingProfessionalIds, saveProfessional, removeProfessional } =
     useSavedProfessionals()
@@ -32,7 +34,7 @@ export function ProfessionalActionButtons({
       <div className="flex gap-2">
         <Button variant="tertiary" size="tertiary" onClick={() => setIsShareModalOpen(true)}>
           <Share className="w-4 h-4 md:mr-2" />
-          <span className="hidden md:inline">Share</span>
+          <span className="hidden md:inline">{t("share")}</span>
         </Button>
         <Button
           variant="tertiary"
@@ -50,7 +52,7 @@ export function ProfessionalActionButtons({
           aria-pressed={isSaved}
         >
           <Bookmark className="w-4 h-4 md:mr-2" fill={isSaved ? "currentColor" : "none"} />
-          <span className="hidden md:inline">{isSaved ? "Saved" : "Save"}</span>
+          <span className="hidden md:inline">{isSaved ? t("saved") : t("save")}</span>
         </Button>
       </div>
 

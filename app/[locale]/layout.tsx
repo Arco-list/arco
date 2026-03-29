@@ -1,50 +1,14 @@
 import type React from "react"
-import type { Metadata } from "next"
-import { Cormorant_Garamond } from "next/font/google"
 import Script from "next/script"
-import "../globals.css"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { RootProviders } from "@/components/root-providers"
 import { buildSession } from "@/lib/auth-utils"
 import { NextIntlClientProvider } from "next-intl"
-import { getMessages } from "next-intl/server"
+import { getMessages, setRequestLocale } from "next-intl/server"
 import { routing } from "@/i18n/routing"
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }))
-}
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-serif",
-  display: "swap",
-})
-
-export const metadata: Metadata = {
-  title: {
-    default: "Arco - Connect with Architecture & Design Professionals",
-    template: "%s | Arco",
-  },
-  description: "Find and collaborate with top architecture, interior design, and construction professionals in the Netherlands. Post projects, browse portfolios, and bring your vision to life.",
-  keywords: [
-    "architecture",
-    "interior design",
-    "construction",
-    "professionals",
-    "Netherlands",
-    "renovation",
-    "building projects",
-  ],
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-    ],
-    apple: "/apple-touch-icon.png",
-  },
-  manifest: "/manifest.webmanifest",
 }
 
 export default async function LocaleLayout({
@@ -55,7 +19,8 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>
 }>) {
   const { locale } = await params
-  const messages = await getMessages()
+  setRequestLocale(locale)
+  const messages = await getMessages({ locale })
 
   const supabase = await createServerSupabaseClient()
   const [{ data: sessionData }, { data: userData }] = await Promise.all([
@@ -68,12 +33,11 @@ export default async function LocaleLayout({
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   return (
-    <html lang={locale} className={cormorant.variable}>
-      <body>
-        <NextIntlClientProvider messages={messages}>
-          <RootProviders initialSession={session}>{children}</RootProviders>
-        </NextIntlClientProvider>
-        {mapsApiKey && (
+    <>
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <RootProviders initialSession={session}>{children}</RootProviders>
+      </NextIntlClientProvider>
+      {mapsApiKey && (
           <Script
             src={`https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places,marker&loading=async`}
             strategy="afterInteractive"
@@ -152,7 +116,6 @@ export default async function LocaleLayout({
             `,
           }}
         />
-      </body>
-    </html>
+    </>
   )
 }

@@ -1,4 +1,7 @@
+"use client"
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { useTranslations } from "next-intl"
 
 interface FaqItem {
   id: string
@@ -12,57 +15,58 @@ interface Faq1Props {
 }
 
 const Faq1 = ({
-  heading = "Frequently asked questions",
-  items = [
+  heading,
+  items,
+}: Faq1Props) => {
+  const t = useTranslations("faq")
+
+  const defaultItems: FaqItem[] = [
     {
       id: "faq-1",
-      question: "What is a FAQ?",
-      answer: "A FAQ is a list of frequently asked questions and answers on a particular topic.",
+      question: t("browsing_q1"),
+      answer: t("browsing_a1"),
     },
     {
       id: "faq-2",
-      question: "What is the purpose of a FAQ?",
-      answer:
-        "The purpose of a FAQ is to provide answers to common questions and help users find the information they need quickly and easily.",
+      question: t("browsing_q2"),
+      answer: t("browsing_a2"),
     },
     {
       id: "faq-3",
-      question: "How do I create a FAQ?",
-      answer:
-        "To create a FAQ, you need to compile a list of common questions and answers on a particular topic and organize them in a clear and easy-to-navigate format.",
+      question: t("browsing_q3"),
+      answer: t("browsing_a3"),
     },
     {
       id: "faq-4",
-      question: "What are the benefits of a FAQ?",
-      answer:
-        "The benefits of a FAQ include providing quick and easy access to information, reducing the number of support requests, and improving the overall user experience.",
+      question: t("browsing_q4"),
+      answer: t("browsing_a4"),
     },
     {
       id: "faq-5",
-      question: "How should I organize my FAQ?",
-      answer:
-        "You should organize your FAQ in a logical manner, grouping related questions together and ordering them from most basic to more advanced topics.",
+      question: t("architects_q1"),
+      answer: t("architects_a1"),
     },
     {
       id: "faq-6",
-      question: "How long should FAQ answers be?",
-      answer:
-        "FAQ answers should be concise and to the point, typically a few sentences or a short paragraph is sufficient for most questions.",
+      question: t("architects_q2"),
+      answer: t("architects_a2"),
     },
     {
       id: "faq-7",
-      question: "Should I include links in my FAQ?",
-      answer:
-        "Yes, including links to more detailed information or related resources can be very helpful for users who want to learn more about a particular topic.",
+      question: t("professionals_q1"),
+      answer: t("professionals_a1"),
     },
-  ],
-}: Faq1Props) => {
+  ]
+
+  const displayHeading = heading ?? t("heading")
+  const displayItems = items ?? defaultItems
+
   return (
     <section className="py-32">
       <div className="container max-w-3xl mx-auto">
-        <h1 className="mb-4 text-3xl font-semibold md:mb-11 md:text-4xl text-center">{heading}</h1>
+        <h1 className="mb-4 text-3xl font-semibold md:mb-11 md:text-4xl text-center">{displayHeading}</h1>
         <Accordion type="single" collapsible>
-          {items.map((item, index) => (
+          {displayItems.map((item, index) => (
             <AccordionItem key={index} value={`item-${index}`}>
               <AccordionTrigger className="font-semibold hover:no-underline">{item.question}</AccordionTrigger>
               <AccordionContent className="text-muted-foreground">{item.answer}</AccordionContent>

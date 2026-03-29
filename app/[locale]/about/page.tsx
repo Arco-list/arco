@@ -17,6 +17,7 @@
 //     .wrap  .arco-eyebrow  .arco-section-title  .arco-h4  .arco-body-text
 
 import { useEffect, useRef, type ReactNode } from "react"
+import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 
@@ -91,13 +92,14 @@ const NUM_STYLE: React.CSSProperties = {
 // ─── SECTIONS ─────────────────────────────────────────────────────────────────
 
 function Mission() {
+  const t = useTranslations("about")
   return (
     <section style={{ padding: "96px 0", background: C.white, textAlign: "center" }}>
       <div className="wrap">
-        <Reveal><span className="arco-eyebrow" style={{ display: "block", marginBottom: 20 }}>Our mission</span></Reveal>
+        <Reveal><span className="arco-eyebrow" style={{ display: "block", marginBottom: 20 }}>{t("mission_eyebrow")}</span></Reveal>
         <Reveal delay={80}>
           <h2 style={{ ...H, maxWidth: 760, margin: "0 auto" }}>
-            Inspiring better architecture through a curated network of architects and professionals worth trusting.
+            {t("mission_title")}
           </h2>
         </Reveal>
       </div>
@@ -105,17 +107,18 @@ function Mission() {
   )
 }
 
-const PROOF_ITEMS = [
-  { n: "01", title: "Built, not speculative",    body: "Every project on Arco is completed and standing. Editorially reviewed and documented with verified credits for every contributor. No concepts. No pitches. No self-published portfolios." },
-  { n: "02", title: "Credited by collaboration", body: "Professionals are credited by the architects who hired them — through real work, delivered together. That endorsement cannot be bought, gamed, or reviewed into existence. It is earned on site, over time." },
-  { n: "03", title: "Curation over scale",       body: "Projects are chosen for their architectural merit. Growth is measured by quality, not volume. A smaller collection of extraordinary work is worth more than an endless catalogue of the ordinary." },
-]
-
 function ProofOfWork() {
+  const t = useTranslations("about")
+  const PROOF_ITEMS = [
+    { n: "01", title: t("proof_1_title"), body: t("proof_1_body") },
+    { n: "02", title: t("proof_2_title"), body: t("proof_2_body") },
+    { n: "03", title: t("proof_3_title"), body: t("proof_3_body") },
+  ]
+
   return (
     <section style={{ padding: "88px 0", background: C.surface }}>
       <div className="wrap">
-        <SectionHeader eyebrow="What we are" title="Proof of Work" />
+        <SectionHeader eyebrow={t("proof_eyebrow")} title={t("proof_title")} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           {PROOF_ITEMS.map((item, i) => (
             <Reveal key={item.n} delay={i * 80}>
@@ -130,17 +133,18 @@ function ProofOfWork() {
   )
 }
 
-const AUDIENCES = [
-  { eyebrow: "For architects",   title: "Your work, presented as it deserves to be.",  body: "Arco is a curated platform for built residential architecture. It exists to present architectural work as it should be seen — through completed projects, carefully documented, and properly credited. Architects are at the centre of Arco. Always.",                                                                            img: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=700&q=80", alt: "Architect" },
-  { eyebrow: "For professionals", title: "Recognised through the work you deliver.",    body: "Professionals on Arco are credited by the architects who hired them — through real work, delivered together. A presence here is earned through collaboration, not promotion. No open listings. No reviews. No self-published portfolios.",                                                                               img: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=700&q=80", alt: "Interior" },
-  { eyebrow: "For clients",       title: "A calmer way to discover architecture.",      body: "Browse by project type, space, or location. See the work first — then discover the professionals behind it. No lead marketplaces. No auctions. Just the work, and the people trusted to do it well.",                                                                                                                    img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=700&q=80", alt: "House" },
-]
-
 function WhoItsFor() {
+  const t = useTranslations("about")
+  const AUDIENCES = [
+    { eyebrow: t("for_architects_eyebrow"), title: t("for_architects_title"), body: t("for_architects_body"), img: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=700&q=80", alt: "Architect" },
+    { eyebrow: t("for_professionals_eyebrow"), title: t("for_professionals_title"), body: t("for_professionals_body"), img: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=700&q=80", alt: "Interior" },
+    { eyebrow: t("for_clients_eyebrow"), title: t("for_clients_title"), body: t("for_clients_body"), img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=700&q=80", alt: "House" },
+  ]
+
   return (
     <section style={{ padding: "96px 0", background: C.white }}>
       <div className="wrap">
-        <SectionHeader eyebrow="Who it's for" title="Three sides of the same door." />
+        <SectionHeader eyebrow={t("audience_eyebrow")} title={t("audience_title")} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-7">
           {AUDIENCES.map((a, i) => (
             <Reveal key={a.eyebrow} delay={i * 80}>
@@ -162,18 +166,19 @@ function WhoItsFor() {
 }
 
 function ArcoStandard() {
+  const t = useTranslations("about")
   return (
     <section style={{ padding: "96px 0", background: C.black }}>
       <div className="wrap">
         <Reveal>
           <div style={{ maxWidth: 680 }}>
-            <span className="arco-eyebrow" style={{ display: "block", color: "rgba(250,250,249,0.22)", marginBottom: 20 }}>The Arco standard</span>
-            <h2 style={{ ...H, color: C.white, marginTop: 16, marginBottom: 20 }}>Not everything belongs here.</h2>
+            <span className="arco-eyebrow" style={{ display: "block", color: "rgba(250,250,249,0.22)", marginBottom: 20 }}>{t("standard_eyebrow")}</span>
+            <h2 style={{ ...H, color: C.white, marginTop: 16, marginBottom: 20 }}>{t("standard_title")}</h2>
             <p style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 300, lineHeight: 1.75, color: "rgba(250,250,249,0.38)" }}>
-              Arco is intentionally selective. Projects are chosen for their architectural merit. Professionals appear through association, not listings. Growth is measured by quality, not volume. Being published on Arco means something.
+              {t("standard_body")}
             </p>
             <p style={{ fontFamily: "var(--font-serif)", fontSize: "clamp(20px, 2vw, 28px)", fontWeight: 300, lineHeight: 1.38, letterSpacing: "-0.2px", color: "rgba(250,250,249,0.6)", fontStyle: "italic", marginTop: 40 }}>
-              &ldquo;We&apos;re not interested in the average. The world already has plenty of ways to find that. Arco is for the work that makes you stop.&rdquo;
+              &ldquo;{t("standard_quote")}&rdquo;
             </p>
           </div>
         </Reveal>
@@ -182,20 +187,21 @@ function ArcoStandard() {
   )
 }
 
-const VALUES = [
-  { n: "01", name: "Fearless forward",    body: "We move with boldness and purpose. Courage is not the absence of doubt — it is the decision to build anyway." },
-  { n: "02", name: "Own the outcome",     body: "We take full responsibility for what we build. When things go wrong, we learn and move — no deflection, no half-measures." },
-  { n: "03", name: "Say what matters",    body: "We speak honestly and listen carefully. Titles do not determine whose view counts — the quality of the thinking does." },
-  { n: "04", name: "Designed to deliver", body: "Clarity is a form of craft. Strong judgement, precise execution, and attention to detail are not finishing touches — they are the foundation." },
-  { n: "05", name: "Rise as a tribe",     body: "We succeed together or not at all. Generous collaboration and shared ownership are what make the work worth doing." },
-  { n: "06", name: "Welcome home",        body: "We make space for every voice. Curiosity and respect are not policies — they are how we work, every day." },
-]
-
 function OurValues() {
+  const t = useTranslations("about")
+  const VALUES = [
+    { n: "01", name: t("value_1_name"), body: t("value_1_body") },
+    { n: "02", name: t("value_2_name"), body: t("value_2_body") },
+    { n: "03", name: t("value_3_name"), body: t("value_3_body") },
+    { n: "04", name: t("value_4_name"), body: t("value_4_body") },
+    { n: "05", name: t("value_5_name"), body: t("value_5_body") },
+    { n: "06", name: t("value_6_name"), body: t("value_6_body") },
+  ]
+
   return (
     <section style={{ padding: "96px 0", background: C.white }}>
       <div className="wrap">
-        <SectionHeader eyebrow="Our values" title="How we make decisions." />
+        <SectionHeader eyebrow={t("values_eyebrow")} title={t("values_title")} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
           {VALUES.map((v, i) => (
             <Reveal key={v.n} delay={(i % 3) * 80}>
@@ -211,22 +217,23 @@ function OurValues() {
 }
 
 function Careers() {
+  const t = useTranslations("about")
   return (
     <section style={{ padding: "96px 0", background: C.surface }}>
       <div className="wrap">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 items-start">
           <Reveal>
             <div>
-              <span className="arco-eyebrow" style={{ display: "block", marginBottom: 16 }}>Join us</span>
-              <h2 style={{ ...H, marginTop: 16, marginBottom: 18 }}>Help build what&apos;s next.</h2>
+              <span className="arco-eyebrow" style={{ display: "block", marginBottom: 16 }}>{t("careers_eyebrow")}</span>
+              <h2 style={{ ...H, marginTop: 16, marginBottom: 18 }}>{t("careers_title")}</h2>
               <p style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 300, lineHeight: 1.7, color: C.mid, marginBottom: 40 }}>
-                Arco is being built by a small team with a clear purpose. We are looking for people who care about quality — in architecture and in the work they do every day.
+                {t("careers_body")}
               </p>
               <div style={{ background: C.white, border: `1px solid ${C.rule}`, padding: "32px 36px 28px", transition: "border-color 0.2s" }} onMouseEnter={e => (e.currentTarget.style.borderColor = C.mid)} onMouseLeave={e => (e.currentTarget.style.borderColor = C.rule)}>
-                <h3 className="arco-h4">Operational Manager</h3>
-                <span className="arco-eyebrow" style={{ display: "block", marginTop: 8, marginBottom: 16 }}>Full-time · Remote or Amsterdam</span>
+                <h3 className="arco-h4">{t("careers_role_title")}</h3>
+                <span className="arco-eyebrow" style={{ display: "block", marginTop: 8, marginBottom: 16 }}>{t("careers_role_location")}</span>
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 300, lineHeight: 1.75, color: C.mid, marginBottom: 20 }}>
-                  A role for someone who brings structure to ambition — who holds the detail without losing sight of the direction, owns outcomes without ego, and understands that building something lasting requires both vision and discipline.
+                  {t("careers_role_body")}
                 </p>
                 <a href="mailto:hello@arcolist.com" style={{ fontFamily: "var(--font-sans)", fontSize: 14, color: C.accent, textDecoration: "none" }}>hello@arcolist.com</a>
               </div>
@@ -246,12 +253,13 @@ function Careers() {
 }
 
 function Closing() {
+  const t = useTranslations("about")
   return (
     <section style={{ padding: "120px 0", background: C.white, textAlign: "center" }}>
       <div className="wrap">
         <Reveal>
           <p style={{ fontFamily: "var(--font-serif)", fontSize: "clamp(20px, 2.6vw, 36px)", fontWeight: 300, lineHeight: 1.4, letterSpacing: "-0.3px", color: C.black, maxWidth: 820, margin: "0 auto" }}>
-            Arco is a curated archive of exceptional architecture projects — giving proper credit to the professionals who realised them, and offering a more deliberate alternative to search, social platforms, and directories.
+            {t("closing_body")}
           </p>
         </Reveal>
       </div>
@@ -262,6 +270,7 @@ function Closing() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AboutPage() {
+  const t = useTranslations("about")
   return (
     <>
       <style>{`
@@ -305,7 +314,7 @@ export default function AboutPage() {
                   color: C.white,
                 }}
               >
-                Build<br />Beautiful
+                {t("hero_line1")}<br />{t("hero_line2")}
               </h1>
               {/*
                 marginTop creates the gap between headline and subtitle.
@@ -323,7 +332,7 @@ export default function AboutPage() {
                   marginTop: 32,
                 }}
               >
-                Exceptional architecture projects and the professionals who realised them.
+                {t("hero_subtitle")}
               </p>
             </div>
           </div>

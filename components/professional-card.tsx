@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { useTranslations } from "next-intl"
 
 import { ShareModal } from "@/components/share-modal"
 import type { ProfessionalCard as ProfessionalCardData } from "@/lib/professionals/types"
@@ -22,6 +23,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
   isMutating,
   onToggleSave,
 }: ProfessionalCardProps) {
+  const t = useTranslations("common")
   const [showServices, setShowServices] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -61,7 +63,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
 
   // Services: first one shown inline, rest in dropdown
   const allServices = professional.specialties ?? []
-  const primaryService = professional.profession || allServices[0] || "Professional services"
+  const primaryService = professional.profession || allServices[0] || t("professional_services")
   const extraServices = allServices.length > 1 ? allServices.slice(1) : []
 
   // City only (not country)

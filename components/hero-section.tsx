@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 export interface HeroProject {
   id: string
@@ -18,6 +19,7 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ projects }: HeroSectionProps) {
+  const t = useTranslations("home")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [progress, setProgress] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
@@ -98,13 +100,12 @@ export function HeroSection({ projects }: HeroSectionProps) {
             <div className="flex-1">
               {/* UPDATED: Explicitly white text */}
               <h1 className="arco-hero-title mb-6" style={{ color: 'white' }}>
-                Exceptional architecture.<br />
-                Trusted professionals.
+                {t("hero_line1")}<br />
+                {t("hero_line2")}
               </h1>
-              
-              {/* UPDATED: All white text for eyebrow */}
+
               <p className="arco-eyebrow" style={{ color: 'white' }}>
-                CURATED BY ARCHITECTS · INVITATION ONLY · CREDITED PROFESSIONALS
+                {t("hero_eyebrow")}
               </p>
             </div>
 
@@ -179,12 +180,12 @@ export function HeroSection({ projects }: HeroSectionProps) {
         <div className="px-4">
           
           {/* Title - UPDATED: Explicitly white */}
-          <h1 className="arco-hero-title mb-8 text-left" style={{ 
+          <h1 className="arco-hero-title mb-8 text-left" style={{
             color: 'white',
-            fontSize: 'clamp(32px, 8vw, 48px)' 
+            fontSize: 'clamp(32px, 8vw, 48px)'
           }}>
-            Exceptional architecture.<br />
-            Trusted professionals.
+            {t("hero_line1")}<br />
+            {t("hero_line2")}
           </h1>
 
           {/* Navigation - Full width bars only */}

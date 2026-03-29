@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   useEffect,
   useMemo,
@@ -36,6 +37,7 @@ export function HeaderSearch({
 }: HeaderSearchProps) {
   const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations("common");
 
   const trimmedQuery = searchQuery.trim();
 
@@ -47,15 +49,15 @@ export function HeaderSearch({
     const encoded = encodeURIComponent(trimmedQuery);
     return [
       {
-        label: `${trimmedQuery} in Projects`,
+        label: t("in_projects", { query: trimmedQuery }),
         href: `/projects?search=${encoded}`,
       },
       {
-        label: `${trimmedQuery} in Professionals`,
+        label: t("in_professionals", { query: trimmedQuery }),
         href: `/professionals?search=${encoded}`,
       },
     ];
-  }, [trimmedQuery]);
+  }, [trimmedQuery, t]);
 
   const showSuggestions = isFocused && suggestions.length > 0;
 
@@ -96,7 +98,7 @@ export function HeaderSearch({
       >
         <input
           type="text"
-          placeholder="Search Arco"
+          placeholder={t("search_arco")}
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           onFocus={() => setIsFocused(true)}

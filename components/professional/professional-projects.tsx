@@ -1,5 +1,6 @@
 import Link from "next/link"
 import Image from "next/image"
+import { getTranslations } from "next-intl/server"
 
 // Match the actual ProfessionalProjectSummary type
 interface Project {
@@ -16,12 +17,14 @@ interface ProfessionalProjectsProps {
   projects: Project[]
 }
 
-export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
+export async function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
   if (projects.length === 0) return null
+
+  const t = await getTranslations("professional_detail")
 
   // Show up to 6 projects with images, or first 10 if no images
   const projectsWithImages = projects.filter(p => p.image)
-  const displayProjects = projectsWithImages.length > 0 
+  const displayProjects = projectsWithImages.length > 0
     ? projectsWithImages.slice(0, 6)
     : projects.slice(0, 10)
 
@@ -31,7 +34,7 @@ export function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
     <section id="projects" className="projects-section">
       <div className="wrap">
         <div className="projects-header">
-          <h2 className="arco-section-title">Featured projects</h2>
+          <h2 className="arco-section-title">{t("featured_projects")}</h2>
         </div>
 
         {hasImages ? (

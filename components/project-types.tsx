@@ -1,6 +1,7 @@
 "use client"
 
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { useRef } from "react"
 import Link from "next/link"
@@ -19,6 +20,7 @@ interface ProjectTypesProps {
 }
 
 export function ProjectTypes({ types }: ProjectTypesProps) {
+  const t = useTranslations("dashboard")
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const scrollLeft = () => {
@@ -41,7 +43,7 @@ export function ProjectTypes({ types }: ProjectTypesProps) {
     <section className="py-10 px-4 md:px-8">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h4 className="heading-4">Popular project types</h4>
+          <h4 className="heading-4">{t("project_types_title")}</h4>
           <div className="hidden md:flex gap-2">
             <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>
               <ChevronLeft className="h-4 w-4" />

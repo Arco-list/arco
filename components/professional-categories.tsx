@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { useTranslations } from "next-intl"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 const FALLBACK_IMAGE = "/placeholder.svg?height=400&width=300"
@@ -22,6 +23,7 @@ interface ProfessionalCategoriesProps {
 }
 
 export function ProfessionalCategories({ categories }: ProfessionalCategoriesProps) {
+  const t = useTranslations("professional_detail")
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const scrollLeft = () => {
@@ -44,10 +46,10 @@ export function ProfessionalCategories({ categories }: ProfessionalCategoriesPro
     <section className="py-10 px-4 md:px-8 bg-white">
       <div className="max-w-[1800px] mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h4 className="heading-4">Popular professional services</h4>
+          <h4 className="heading-4">{t("popular_services")}</h4>
           <div className="flex items-center gap-2">
             <Link href="/professionals" className="body-small text-text-secondary hover:text-foreground transition-colors mr-2">
-              View all
+              {t("view_all")}
             </Link>
             <div className="hidden md:flex items-center gap-2">
               <Button variant="quaternary" size="quaternary" className="w-10 h-10 p-0 bg-transparent rounded-full flex items-center justify-center" onClick={scrollLeft}>

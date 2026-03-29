@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useTranslations } from "next-intl"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
@@ -204,6 +205,7 @@ interface ProfessionalsMapProps {
 }
 
 export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapProps) {
+  const t = useTranslations("professionals")
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
@@ -425,13 +427,13 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
 
       {!isMapsLoaded && (
         <div className="professionals-map-loading">
-          <p>Loading map…</p>
+          <p>{t("loading_map")}</p>
         </div>
       )}
 
       {/* Professional count */}
       <div className="professionals-map-count">
-        {mappable.length} of {professionals.length} professionals on map
+        {t("map_count", { shown: mappable.length, total: professionals.length })}
       </div>
 
       {/* Show list button — centered at bottom */}
@@ -439,7 +441,7 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M2 4h12M2 8h12M2 12h12" />
         </svg>
-        Show list
+        {t("show_list")}
       </button>
     </div>
   )
@@ -453,6 +455,7 @@ interface MapPreviewCardProps {
 }
 
 export function MapPreviewCard({ professionals, onClick }: MapPreviewCardProps) {
+  const t = useTranslations("professionals")
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
   const markersRef = useRef<google.maps.Marker[]>([])
@@ -518,7 +521,7 @@ export function MapPreviewCard({ professionals, onClick }: MapPreviewCardProps) 
               <path d="M8 1C5.24 1 3 3.13 3 5.75C3 9.5 8 15 8 15C8 15 13 9.5 13 5.75C13 3.13 10.76 1 8 1Z" />
               <circle cx="8" cy="5.75" r="1.75" />
             </svg>
-            Show on map
+            {t("show_on_map")}
           </span>
         </div>
       </div>

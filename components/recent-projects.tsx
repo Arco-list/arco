@@ -1,5 +1,8 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 export interface RecentProject {
   id: string
@@ -14,6 +17,7 @@ interface RecentProjectsProps {
 }
 
 export function RecentProjects({ projects }: RecentProjectsProps) {
+  const t = useTranslations("home")
   if (projects.length === 0) {
     return null
   }
@@ -28,9 +32,9 @@ export function RecentProjects({ projects }: RecentProjectsProps) {
         
         {/* Header */}
         <div className="editorial-header">
-          <h2 className="editorial-title">Recent projects</h2>
+          <h2 className="editorial-title">{t("recent_projects")}</h2>
           <Link href="/projects" className="view-all-link">
-            View all projects →
+            {t("view_all_projects")}
           </Link>
         </div>
 

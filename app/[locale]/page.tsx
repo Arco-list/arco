@@ -13,6 +13,8 @@ import { MembershipCTA } from "@/components/membership-cta"
 import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
+import { getTranslations } from "next-intl/server"
+import { getLocalizedName } from "@/lib/locale-name"
 
 type SearchProjectsRow = Database["public"]["Functions"]["search_projects"]["Returns"][number]
 
@@ -57,7 +59,7 @@ const FALLBACK_HERO_PROJECTS: HeroProject[] = [
   },
 ]
 
-async function loadLandingData() {
+async function loadLandingData(locale: string) {
   const supabase = await createServerSupabaseClient()
 
   const [
@@ -72,7 +74,7 @@ async function loadLandingData() {
     supabase.rpc("search_projects", { limit_count: 12 }),
     supabase
       .from("categories")
-      .select("id,name,slug,parent_id,sort_order,project_category_attributes(is_listable)")
+      .select("id,name,name_nl,slug,parent_id,sort_order,project_category_attributes(is_listable)")
       .eq("is_active", true)
       .is("parent_id", null)
       .order("sort_order", { ascending: true, nullsFirst: false })
@@ -80,7 +82,7 @@ async function loadLandingData() {
     // Homepage carousel: child project types flagged for homepage (exclude groups)
     supabase
       .from("categories")
-      .select("id,name,slug,parent_id,sort_order,image_url")
+      .select("id,name,name_nl,slug,parent_id,sort_order,image_url")
       .eq("is_active", true)
       .eq("in_home_carrousel", true)
       .eq("category_type", "Project")
@@ -91,7 +93,7 @@ async function loadLandingData() {
     // Homepage carousel: child professional services flagged for homepage (exclude groups)
     supabase
       .from("categories")
-      .select("id,name,slug,parent_id,sort_order,image_url")
+      .select("id,name,name_nl,slug,parent_id,sort_order,image_url")
       .eq("is_active", true)
       .eq("in_home_carrousel", true)
       .eq("category_type", "Professional")
@@ -110,7 +112,7 @@ async function loadLandingData() {
         logo_url,
         hero_photo_url,
         primary_service_id,
-        primary_service:categories!companies_primary_service_id_fkey(name)
+        primary_service:categories!companies_primary_service_id_fkey(name, name_nl)
       `)
       .eq("is_featured", true)
       .eq("status", "listed")
@@ -137,7 +139,7 @@ async function loadLandingData() {
     const parentIds = parentCategories.map((category) => category.id)
     const childCategoriesResult = await supabase
       .from("categories")
-      .select("id,name,slug,parent_id,sort_order,project_category_attributes(is_listable)")
+      .select("id,name,name_nl,slug,parent_id,sort_order,project_category_attributes(is_listable)")
       .eq("is_active", true)
       .in("parent_id", parentIds)
       .order("sort_order", { ascending: true, nullsFirst: false })
@@ -240,7 +242,7 @@ async function loadLandingData() {
 
     return {
       id: category.id,
-      title: category.name ?? "",
+      title: getLocalizedName(category as any, locale),
       href: typeSlug ? `/projects?type=${encodeURIComponent(typeSlug)}` : "/projects",
       imageUrl: projectImage,
       count: projectCount > 0 ? `${projectCount}+ projects` : undefined,
@@ -249,12 +251,15 @@ async function loadLandingData() {
 
   // BrowseSection data - Spaces (hardcoded for now)
   // Fetch best photo per space from published projects
+  const ts = await getTranslations("spaces")
+  const tc = await getTranslations("common")
+
   const spaceConfig = [
-    { slug: "kitchen", title: "Kitchen" },
-    { slug: "living-room", title: "Living" },
-    { slug: "bedroom", title: "Bedroom" },
-    { slug: "bathroom", title: "Bathroom" },
-    { slug: "exterior", title: "Exterior" },
+    { slug: "kitchen", title: ts("kitchen") },
+    { slug: "living-room", title: ts("living") },
+    { slug: "bedroom", title: ts("bedroom") },
+    { slug: "bathroom", title: ts("bathroom") },
+    { slug: "exterior", title: ts("exterior") },
   ]
 
   const { data: spacePhotos } = await supabase
@@ -300,7 +305,7 @@ async function loadLandingData() {
       // For child services, link with the service filter
       return {
         id: category.id,
-        title: category.name ?? "",
+        title: getLocalizedName(category as any, locale),
         href: `/professionals?services=${encodeURIComponent(category.id)}`,
         imageUrl: image ?? null,
       } as BrowseCard
@@ -309,7 +314,7 @@ async function loadLandingData() {
   const allCategories = [...parentCategories, ...childCategories]
   const labelMap = new Map<string, string>()
   allCategories.forEach((category) => {
-    if (category.id && category.name) labelMap.set(category.id, category.name)
+    if (category.id && category.name) labelMap.set(category.id, getLocalizedName(category as any, locale))
   })
 
   const taxonomyOptionsResult = await supabase
@@ -424,11 +429,12 @@ async function loadLandingData() {
   }
 
   const featuredCompanies: FeaturedCompany[] = featuredCompaniesRaw.map((company) => {
-    const location = [company.city, company.country].filter(Boolean).join(", ") || "Location unavailable"
+    const location = [company.city, company.country].filter(Boolean).join(", ") || tc("location_unavailable")
     const slug = company.slug ?? company.id ?? ""
     const metrics = companyMetrics.get(company.id) || { averageRating: 0, totalReviews: 0 }
     const coverPhoto = companyCoverPhotos.get(company.id)
-    const title = (company.primary_service as { name: string } | null)?.name || "Professional services"
+    const svc = company.primary_service as { name: string; name_nl?: string | null } | null
+    const title = (locale === "nl" && svc?.name_nl) ? svc.name_nl : (svc?.name || tc("professional_services"))
 
     return {
       id: company.id,
@@ -453,7 +459,9 @@ async function loadLandingData() {
   }
 }
 
-export default async function HomePage() {
+export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  const t = await getTranslations("home")
   const {
     heroProjects,
     browseProjects,
@@ -461,7 +469,7 @@ export default async function HomePage() {
     browseProfessionals,
     recentProjects,
     featuredCompanies,
-  } = await loadLandingData()
+  } = await loadLandingData(locale)
 
   return (
     <div className="min-h-screen bg-background">
@@ -475,10 +483,10 @@ export default async function HomePage() {
         <section className="py-16 bg-white">
           <div className="wrap text-center">
             <h2 className="arco-page-title mb-8">
-              The professional network architects trust
+              {t("positioning_title")}
             </h2>
             <p className="arco-body-text max-w-[900px] mx-auto">
-              Arco is where leading architects publish their residential work and credential the professionals they collaborate with. We help discerning clients discover exceptional teams through real projects — builders, interior designers, landscape architects, and specialists who have earned their reputation through craft, not advertising.
+              {t("positioning_body")}
             </p>
           </div>
         </section>

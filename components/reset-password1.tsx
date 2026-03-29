@@ -8,43 +8,37 @@ import Link from "next/link"
 import { useState } from "react"
 import { resetPasswordAction } from "@/app/(auth)/actions"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 
 interface ResetPassword1Props {
-  heading?: string
   logo: {
     url: string
     src: string
     alt: string
     title?: string
   }
-  buttonText?: string
-  loginText?: string
   loginUrl?: string
-  description?: string
 }
 
 const ResetPassword1 = ({
-  heading = "Reset Password",
   logo = {
     url: "/",
     src: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg",
     alt: "Arco Logo",
     title: "Arco",
   },
-  buttonText = "Send Reset Link",
-  loginText = "Remember your password?",
   loginUrl = "/login",
-  description = "Enter your email address and we'll send you a link to reset your password.",
 }: ResetPassword1Props) => {
   const [email, setEmail] = useState("")
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const t = useTranslations("auth")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!email.trim()) {
-      toast.error("Please enter your email address")
+      toast.error(t("please_enter_email"))
       return
     }
 
@@ -54,7 +48,7 @@ const ResetPassword1 = ({
       const result = await resetPasswordAction(email)
 
       if (result.error) {
-        toast.error("Failed to send reset link", {
+        toast.error(t("failed_send_reset"), {
           description: result.error.message,
         })
         setIsLoading(false)
@@ -62,8 +56,8 @@ const ResetPassword1 = ({
         setIsSubmitted(true)
       }
     } catch (error) {
-      toast.error("Something went wrong", {
-        description: "Please try again later",
+      toast.error(t("something_went_wrong"), {
+        description: t("try_again_later"),
       })
       setIsLoading(false)
     }
@@ -83,10 +77,10 @@ const ResetPassword1 = ({
               />
             </Link>
             <div className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md text-center">
-              <h3 className="heading-3">Check Your Email</h3>
-              <p className="body-small text-muted-foreground">We've sent a password reset link to {email}</p>
+              <h3 className="heading-3">{t("check_your_email")}</h3>
+              <p className="body-small text-muted-foreground">{t("reset_link_sent", { email })}</p>
               <Button asChild variant="secondary" className="w-full">
-                <Link href={loginUrl}>Back to Login</Link>
+                <Link href={loginUrl}>{t("back_to_login")}</Link>
               </Button>
             </div>
           </div>
@@ -106,11 +100,11 @@ const ResetPassword1 = ({
             onSubmit={handleSubmit}
             className="min-w-sm border-border bg-background flex w-full max-w-sm flex-col items-center gap-y-4 rounded-md border px-6 py-8 shadow-md"
           >
-            <h3 className="heading-3">{heading}</h3>
-            <p className="body-small text-muted-foreground text-center">{description}</p>
+            <h3 className="heading-3">{t("reset_password")}</h3>
+            <p className="body-small text-muted-foreground text-center">{t("reset_description")}</p>
             <Input
               type="email"
-              placeholder="Email"
+              placeholder={t("email")}
               className="text-sm"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -118,13 +112,13 @@ const ResetPassword1 = ({
               disabled={isLoading}
             />
             <Button type="submit" variant="secondary" className="w-full" disabled={isLoading}>
-              {isLoading ? "Sending..." : buttonText}
+              {isLoading ? t("sending") : t("send_reset_link")}
             </Button>
           </form>
           <div className="body-small text-muted-foreground flex justify-center gap-1">
-            <p>{loginText}</p>
+            <p>{t("remember_password")}</p>
             <Link href={loginUrl} className="text-primary font-medium hover:underline">
-              Login
+              {t("login")}
             </Link>
           </div>
         </div>

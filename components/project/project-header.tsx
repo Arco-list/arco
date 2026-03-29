@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { getTranslations } from "next-intl/server"
 
 interface ProjectHeaderProps {
   title: string
@@ -7,7 +8,8 @@ interface ProjectHeaderProps {
   description: string | null
 }
 
-export function ProjectHeader({ title, architectName, architectSlug, description }: ProjectHeaderProps) {
+export async function ProjectHeader({ title, architectName, architectSlug, description }: ProjectHeaderProps) {
+  const t = await getTranslations("project_detail")
   // Strip HTML tags from description
   const stripHtml = (html: string | null) => {
     if (!html) return null
@@ -27,7 +29,7 @@ export function ProjectHeader({ title, architectName, architectSlug, description
       
       {architectName && (
         <p className="architect-attribution">
-          by{' '}
+          {t("by_architect")}{' '}
           {architectSlug ? (
             <Link href={`/professionals/${architectSlug}`}>{architectName}</Link>
           ) : (

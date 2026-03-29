@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
+import { useTranslations } from "next-intl"
 import { getUserCompaniesAction, switchCompanyAction } from "@/app/dashboard/company/actions"
 
 type Company = { id: string; name: string; logo_url: string | null; role: "owner" | "member" }
 
 export function CompanySwitcher() {
   const router = useRouter()
+  const t = useTranslations("dashboard")
   const [companies, setCompanies] = useState<Company[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -49,7 +51,7 @@ export function CompanySwitcher() {
         setActiveId(companyId)
         router.refresh()
       } else {
-        toast.error(result.error ?? "Could not switch company")
+        toast.error(result.error ?? t("could_not_switch_company"))
       }
     })
   }, [router])

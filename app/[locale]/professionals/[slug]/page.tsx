@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { getTranslations } from "next-intl/server"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -21,17 +22,20 @@ export const revalidate = 300
 
 export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
   const { slug } = await params
+  const t = await getTranslations("professional_detail")
   const professional = await fetchProfessionalMetadata(slug)
 
   if (!professional) {
     return {
-      title: "Professional not found · Arco",
+      title: `${t("professional_not_found")} · Arco`,
     }
   }
 
   const description =
     professional.description ??
-    (professional.location ? `Discover ${professional.name} in ${professional.location}.` : `Discover ${professional.name}.`)
+    (professional.location
+      ? t("discover_in_location", { name: professional.name, location: professional.location })
+      : t("discover_name", { name: professional.name }))
 
   const image = professional.coverImageUrl ?? "/placeholder.svg"
 
@@ -53,6 +57,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 
 export default async function ProfessionalDetailPage({ params }: { params: Promise<PageParams> }) {
   const { slug } = await params
+  const t = await getTranslations("professional_detail")
 
   // First try normal fetch (listed companies)
   let professional = await fetchProfessionalDetail(slug)
@@ -112,9 +117,9 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
   const companyInitials = getInitials(professional.name)
 
   // Services for badge
-  const servicesBadge = professional.services.length > 0 
+  const servicesBadge = professional.services.length > 0
     ? professional.services.slice(0, 2).join(' · ')
-    : 'Professional Services'
+    : t("professional_services_fallback")
 
   // Specs
   const specs = {

@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react"
 import { Upload, X, ImageIcon } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
 import {
@@ -30,11 +31,14 @@ export function ImageUploadDialog({
   open,
   onOpenChange,
   onUploadComplete,
-  title = "Upload Image",
-  description = "Choose an image file to upload (PNG, JPG, JPEG, WebP)",
+  title,
+  description,
   bucketName = "category-images",
   maxSizeMB = 2,
 }: ImageUploadDialogProps) {
+  const t = useTranslations("dashboard")
+  const resolvedTitle = title ?? t("image_upload_title")
+  const resolvedDescription = description ?? t("image_upload_description")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -45,14 +49,14 @@ export function ImageUploadDialog({
     // Validate file type
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
     if (!validTypes.includes(file.type)) {
-      toast.error("Invalid file type. Please select a PNG, JPG, JPEG, or WebP image.")
+      toast.error(t("image_upload_invalid_type"))
       return
     }
 
     // Validate file size
     const maxSize = maxSizeMB * 1024 * 1024
     if (file.size > maxSize) {
-      toast.error(`File size must be less than ${maxSizeMB}MB`)
+      toast.error(t("image_upload_too_large", { size: maxSizeMB }))
       return
     }
 
@@ -102,7 +106,7 @@ export function ImageUploadDialog({
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      toast.error("Please select a file to upload")
+      toast.error(t("image_upload_select_file"))
       return
     }
 
@@ -127,7 +131,7 @@ export function ImageUploadDialog({
 
       if (error) {
         console.error("Upload error:", error)
-        toast.error("Failed to upload image. Please try again.")
+        toast.error(t("image_upload_failed"))
         return
       }
 
@@ -138,7 +142,7 @@ export function ImageUploadDialog({
 
       const imageUrl = publicUrlData.publicUrl
 
-      toast.success("Image uploaded successfully")
+      toast.success(t("image_upload_success"))
       onUploadComplete(imageUrl)
 
       // Reset state
@@ -146,7 +150,7 @@ export function ImageUploadDialog({
       onOpenChange(false)
     } catch (error) {
       console.error("Upload error:", error)
-      toast.error("An unexpected error occurred during upload")
+      toast.error(t("image_upload_unexpected"))
     } finally {
       setIsUploading(false)
     }
@@ -161,8 +165,8 @@ export function ImageUploadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogTitle>{resolvedTitle}</DialogTitle>
+          <DialogDescription>{resolvedDescription}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -180,10 +184,10 @@ export function ImageUploadDialog({
             >
               <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
               <p className="mb-2 text-sm font-medium">
-                Drag and drop your image here
+                {t("image_upload_drag")}
               </p>
               <p className="mb-4 text-xs text-muted-foreground">
-                or click to browse
+                {t("image_upload_browse")}
               </p>
               <Button
                 type="button"
@@ -191,7 +195,7 @@ export function ImageUploadDialog({
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
               >
-                Choose File
+                {t("image_upload_choose")}
               </Button>
               <input
                 ref={fileInputRef}
@@ -201,7 +205,7 @@ export function ImageUploadDialog({
                 className="hidden"
               />
               <p className="mt-4 text-xs text-muted-foreground">
-                PNG, JPG, JPEG, or WebP • Max {maxSizeMB}MB
+                {t("image_upload_max_size", { size: maxSizeMB })}
               </p>
             </div>
           ) : (
@@ -243,13 +247,13 @@ export function ImageUploadDialog({
             onClick={handleCancel}
             disabled={isUploading}
           >
-            Cancel
+            {t("image_upload_cancel")}
           </Button>
           <Button
             onClick={handleUpload}
             disabled={!selectedFile || isUploading}
           >
-            {isUploading ? "Uploading..." : "Upload"}
+            {isUploading ? t("image_upload_uploading") : t("image_upload_upload")}
           </Button>
         </DialogFooter>
       </DialogContent>

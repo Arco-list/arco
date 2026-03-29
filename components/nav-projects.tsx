@@ -1,6 +1,7 @@
 "use client"
 
 import { type LucideIcon, MoreHorizontal, Plus } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import {
   DropdownMenu,
@@ -29,10 +30,11 @@ export function NavProjects({
   }[]
 }) {
   const { isMobile } = useSidebar()
+  const t = useTranslations("dashboard")
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Projects</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("sidebar_projects")}</SidebarGroupLabel>
       <SidebarMenu>
         {projects.map((item) => (
           <SidebarMenuItem key={item.name}>
@@ -55,14 +57,14 @@ export function NavProjects({
                 align={isMobile ? "end" : "start"}
               >
                 <DropdownMenuItem>
-                  <span>View Project</span>
+                  <span>{t("sidebar_view_project")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <span>Share Project</span>
+                  <span>{t("sidebar_share_project")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>
-                  <span>Delete Project</span>
+                  <span>{t("sidebar_delete_project")}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -71,7 +73,7 @@ export function NavProjects({
         <SidebarMenuItem>
           <SidebarMenuButton className="text-sidebar-foreground/70">
             <Plus className="text-sidebar-foreground/70" />
-            <span>More</span>
+            <span>{t("sidebar_more")}</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

@@ -1,6 +1,7 @@
 "use client"
 
 import { AlertTriangle } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 export type ListingStatusModalOption<T extends string> = {
   value: T
@@ -52,6 +53,8 @@ export function ListingStatusModal<TStatus extends string>({
   onSubmitForReview,
   isSubmittingForReview = false,
 }: ListingStatusModalProps<TStatus>) {
+  const t = useTranslations("dashboard")
+
   if (!open || !project) {
     return null
   }
@@ -60,7 +63,7 @@ export function ListingStatusModal<TStatus extends string>({
     <div className="popup-overlay" onClick={onClose}>
       <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
         <div className="popup-header">
-          <h3 className="arco-section-title">Update status</h3>
+          <h3 className="arco-section-title">{t("status_modal_title")}</h3>
           <button type="button" className="popup-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -70,9 +73,9 @@ export function ListingStatusModal<TStatus extends string>({
           <div className="popup-banner popup-banner--info">
             <AlertTriangle className="popup-banner-icon" />
             <div>
-              <p style={{ fontWeight: 500 }}>This project is a draft</p>
+              <p style={{ fontWeight: 500 }}>{t("status_modal_draft")}</p>
               <p>
-                Submit your project for review to make it eligible for publishing. Status changes are disabled until approved.
+                {t("status_modal_draft_description")}
               </p>
             </div>
           </div>
@@ -82,9 +85,9 @@ export function ListingStatusModal<TStatus extends string>({
           <div className="popup-banner popup-banner--info">
             <AlertTriangle className="popup-banner-icon" />
             <div>
-              <p style={{ fontWeight: 500 }}>Under review by the Arco team</p>
+              <p style={{ fontWeight: 500 }}>{t("status_modal_under_review")}</p>
               <p>
-                We&apos;ll email you once the review is complete. Status changes are disabled until approval.
+                {t("status_modal_under_review_description")}
               </p>
             </div>
           </div>
@@ -94,7 +97,7 @@ export function ListingStatusModal<TStatus extends string>({
           <div className="popup-banner popup-banner--danger">
             <AlertTriangle className="popup-banner-icon" />
             <div>
-              <p style={{ fontWeight: 500 }}>Project rejected</p>
+              <p style={{ fontWeight: 500 }}>{t("status_modal_rejected")}</p>
               {rejectionReason && (
                 <p>{rejectionReason}</p>
               )}
@@ -129,7 +132,7 @@ export function ListingStatusModal<TStatus extends string>({
           {isDraft && onSubmitForReview ? (
             <>
               <button type="button" className="btn-tertiary" onClick={onClose} style={{ flex: 1 }}>
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 type="button"
@@ -138,16 +141,16 @@ export function ListingStatusModal<TStatus extends string>({
                 disabled={isSubmittingForReview}
                 style={{ flex: 1, ...(isSubmittingForReview ? { opacity: 0.5 } : undefined) }}
               >
-                {isSubmittingForReview ? "Submitting…" : "Submit"}
+                {isSubmittingForReview ? t("status_modal_submitting") : t("status_modal_submit")}
               </button>
             </>
           ) : (
             <>
               <button type="button" className="btn-tertiary" onClick={onClose} style={{ flex: 1 }}>
-                Cancel
+                {t("cancel")}
               </button>
               <button type="button" className="btn-secondary" onClick={onSave} disabled={saveDisabled} style={{ flex: 1 }}>
-                Save
+                {t("save")}
               </button>
             </>
           )}

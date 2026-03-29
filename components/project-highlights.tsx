@@ -2,12 +2,14 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useCallback, useRef } from "react"
+import { useTranslations } from "next-intl"
 import Image from "next/image"
 import { useProjectPreview } from "@/contexts/project-preview-context"
 import { useProjectGalleryModal } from "@/contexts/project-gallery-modal-context"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 export function ProjectHighlights() {
+  const t = useTranslations("project_detail")
   const scrollRef = useRef<HTMLDivElement>(null)
   const { highlights, hero } = useProjectPreview()
   const { openModal } = useProjectGalleryModal()
@@ -43,7 +45,7 @@ export function ProjectHighlights() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="heading-3 font-bold text-black">Highlights</h2>
+        <h2 className="heading-3 font-bold text-black">{t("highlights")}</h2>
         <div className="hidden md:flex gap-2">
           <button
             onClick={scrollLeft}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
+import { useTranslations } from "next-intl"
 
 interface ReportModalProps {
   isOpen: boolean
@@ -16,15 +17,17 @@ interface ReportModalProps {
 export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) {
   const [selectedReason, setSelectedReason] = useState("")
   const [description, setDescription] = useState("")
+  const t = useTranslations("report")
+  const tc = useTranslations("common")
 
-  const reasons = [
-    "Inappropriate content",
-    "Spam or misleading information",
-    "Copyright infringement",
-    "Fake listing",
-    "Offensive language or behavior",
-    "Other",
-  ]
+  const reasonKeys = [
+    "reason_inappropriate",
+    "reason_spam",
+    "reason_copyright",
+    "reason_fake",
+    "reason_offensive",
+    "reason_other",
+  ] as const
 
   const handleSubmit = () => {
     if (!selectedReason) return
@@ -42,18 +45,20 @@ export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Report this {listingType}</DialogTitle>
+          <DialogTitle>{listingType === "project" ? t("title_project") : t("title_professional")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
-            <Label className="body-small font-medium mb-3 block">Why are you reporting this {listingType}?</Label>
+            <Label className="body-small font-medium mb-3 block">
+              {listingType === "project" ? t("why_reporting_project") : t("why_reporting_professional")}
+            </Label>
             <RadioGroup value={selectedReason} onValueChange={setSelectedReason}>
-              {reasons.map((reason) => (
-                <div key={reason} className="flex items-center space-x-2">
-                  <RadioGroupItem value={reason} id={reason} />
-                  <Label htmlFor={reason} className="body-small">
-                    {reason}
+              {reasonKeys.map((key) => (
+                <div key={key} className="flex items-center space-x-2">
+                  <RadioGroupItem value={key} id={key} />
+                  <Label htmlFor={key} className="body-small">
+                    {t(key)}
                   </Label>
                 </div>
               ))}
@@ -62,11 +67,11 @@ export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) 
 
           <div>
             <Label htmlFor="description" className="body-small font-medium mb-2 block">
-              Additional details (optional)
+              {t("additional_details")}
             </Label>
             <Textarea
               id="description"
-              placeholder="Please provide more details about your report..."
+              placeholder={t("details_placeholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
@@ -75,10 +80,10 @@ export function ReportModal({ isOpen, onClose, listingType }: ReportModalProps) 
 
           <div className="flex gap-2 pt-4">
             <Button variant="tertiary" size="tertiary" onClick={onClose} className="flex-1 bg-transparent">
-              Cancel
+              {tc("cancel")}
             </Button>
             <Button onClick={handleSubmit} disabled={!selectedReason} className="flex-1">
-              Send Report
+              {t("send_report")}
             </Button>
           </div>
         </div>

@@ -1,3 +1,5 @@
+import { getTranslations } from "next-intl/server"
+
 interface SpecificationsBarProps {
   location: string | null
   year: number | null
@@ -6,13 +8,14 @@ interface SpecificationsBarProps {
   style: string | null
 }
 
-export function SpecificationsBar({ location, year, type, scope, style }: SpecificationsBarProps) {
+export async function SpecificationsBar({ location, year, type, scope, style }: SpecificationsBarProps) {
+  const t = await getTranslations("project_detail")
   const specs = [
-    { label: "Location", value: location },
-    { label: "Year", value: year },
-    { label: "Type", value: type },
-    { label: "Scope", value: scope },
-    { label: "Style", value: style },
+    { label: t("location"), value: location },
+    { label: t("year"), value: year },
+    { label: t("type"), value: type },
+    { label: t("scope"), value: scope },
+    { label: t("style"), value: style },
   ].filter(spec => spec.value)
 
   if (specs.length === 0) return null

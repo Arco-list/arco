@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { ChevronRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface Photo {
   id: string
@@ -21,6 +22,7 @@ interface PhotoTourProps {
 }
 
 export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
+  const t = useTranslations("project_detail")
   const [activeCategory, setActiveCategory] = useState('All')
   const [showMore, setShowMore] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -108,7 +110,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
       {/* Photo tour Content - No wrap needed, already inside project-container */}
       <div id="photo-tour" className="photo-tour-content">
         <div className="section-header">
-          <h2 className="arco-section-title">Photo tour</h2>
+          <h2 className="arco-section-title">{t("photo_tour")}</h2>
         </div>
 
         {/* Category Tags — only show when photos have spaces */}
@@ -120,7 +122,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
                 className={`category-tag ${activeCategory === category ? 'active' : ''}`}
                 onClick={() => handleCategoryChange(category)}
               >
-                {category}
+                {category === 'All' ? t("all_photos") : category}
               </button>
             ))}
           </div>
@@ -202,7 +204,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
                 className="btn-tertiary"
                 onClick={() => setShowMore(true)}
               >
-                More photos
+                {t("more_photos")}
                 <ChevronRight size={16} />
               </button>
             ) : (
@@ -210,7 +212,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
                 className="btn-tertiary"
                 onClick={() => setShowMore(false)}
               >
-                Less photos
+                {t("less_photos")}
                 <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
               </button>
             )}

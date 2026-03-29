@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { ReportModal } from "@/components/report-modal"
 import type { ProfessionalDetail } from "@/lib/professionals/types"
@@ -36,6 +37,7 @@ const formatArray = (values: string[], options?: { limit?: number }) => {
 }
 
 export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalInfoProps) {
+  const t = useTranslations("professional_detail")
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
 
@@ -49,21 +51,21 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
     if (typeof years !== "number" || Number.isNaN(years) || years <= 0) {
       return null
     }
-    return years >= 20 ? `${years}+ years` : `${years} years`
+    return years >= 20 ? t("years_plus", { years }) : t("years_count", { years })
   }
 
   const formatTeamSize = (min: number | null, max: number | null) => {
     if (typeof min === "number" && typeof max === "number") {
       if (min === max) {
-        return `${min} team members`
+        return t("team_members_exact", { count: min })
       }
-      return `${min}-${max} team members`
+      return t("team_members_range", { min, max })
     }
     if (typeof min === "number") {
-      return `${min}+ team members`
+      return t("team_members_min", { min })
     }
     if (typeof max === "number") {
-      return `Up to ${max} people`
+      return t("team_members_max", { max })
     }
     return null
   }
@@ -96,16 +98,16 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
 
   // Build details in grid format (similar to project details)
   const detailItems = [
-    { label: "Services", value: formatArray(combinedServices) || "⚠️ Missing primary service" },
-    { label: "Experience", value: experience },
-    { label: "Team size", value: teamSize },
-    { label: "Languages", value: formatArray(professional.company.languages) },
-    { label: "Address", value: address },
-    { label: "Hourly rate", value: professional.hourlyRateDisplay },
-    { label: "Founded", value: founded },
-    { label: "Certificates", value: certificates },
-    { label: "Joined", value: formatJoinedYear(professional.profile.joinedAt ?? null) },
-    { label: "Verified", value: professional.isVerified ? "Yes" : undefined },
+    { label: t("services"), value: formatArray(combinedServices) || `\u26A0\uFE0F ${t("missing_primary_service")}` },
+    { label: t("experience"), value: experience },
+    { label: t("team_size"), value: teamSize },
+    { label: t("languages"), value: formatArray(professional.company.languages) },
+    { label: t("address"), value: address },
+    { label: t("hourly_rate"), value: professional.hourlyRateDisplay },
+    { label: t("founded"), value: founded },
+    { label: t("certificates"), value: certificates },
+    { label: t("joined"), value: formatJoinedYear(professional.profile.joinedAt ?? null) },
+    { label: t("verified"), value: professional.isVerified ? t("yes") : undefined },
   ].filter((item) => Boolean(item.value))
 
   const subtitle = useMemo(() => {
@@ -114,7 +116,7 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
     const location = professional.location
 
     if (service && location) {
-      return `${service} in ${location}`
+      return t("service_in_location", { service, location })
     }
     if (service) {
       return service
@@ -123,7 +125,7 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
       return location
     }
     return professional.title || null
-  }, [professional.company.primaryService, professional.company.services, professional.location, professional.title])
+  }, [professional.company.primaryService, professional.company.services, professional.location, professional.title, t])
 
   const description = professional.description || ""
   const MAX_CHARS = 200
@@ -148,7 +150,7 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
                   className="p-0 text-red-600 hover:text-red-700"
                   onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
                 >
-                  {isDescriptionExpanded ? "Show less" : "Show more"}
+                  {isDescriptionExpanded ? t("show_less") : t("show_more")}
                 </Button>
               )}
             </div>
@@ -167,7 +169,7 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
       </div>
 
       <div className="space-y-4">
-        <h2 className="heading-4 font-bold text-black">Meet the professional</h2>
+        <h2 className="heading-4 font-bold text-black">{t("meet_the_professional")}</h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {detailItems.map((detail) => (
@@ -182,7 +184,7 @@ export function ProfessionalInfo({ professional, shareUrl = "" }: ProfessionalIn
           className="body-small text-text-secondary hover:text-foreground underline mt-4"
           onClick={() => setIsReportModalOpen(true)}
         >
-          Report this listing
+          {t("report_listing")}
         </button>
 
         <ReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} listingType="professional" />

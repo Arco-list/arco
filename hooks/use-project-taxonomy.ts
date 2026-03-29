@@ -1,7 +1,9 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 
+import { useLocale } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { getLocalizedName } from "@/lib/locale-name"
 import type { Tables } from "@/lib/supabase/types"
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -11,6 +13,7 @@ let taxonomyCache: {
   taxonomyOptions: TaxonomyMap
   cities: string[]
   fetchedAt: number
+  locale: string
 } | null = null
 
 let inFlightPromise: Promise<void> | null = null
@@ -42,6 +45,7 @@ interface ProjectTaxonomyState {
 }
 
 export function useProjectTaxonomy(): ProjectTaxonomyState {
+  const locale = useLocale()
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [taxonomyOptions, setTaxonomyOptions] = useState<TaxonomyMap>({})
   const [cities, setCities] = useState<string[]>([])
@@ -62,7 +66,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
 
     try {
       const now = Date.now()
-      if (!force && taxonomyCache && now - taxonomyCache.fetchedAt < CACHE_TTL_MS) {
+      if (!force && taxonomyCache && taxonomyCache.locale === locale && now - taxonomyCache.fetchedAt < CACHE_TTL_MS) {
         applyCache(taxonomyCache)
         return
       }
@@ -80,7 +84,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           supabase
             .from("categories")
             .select(
-              "id,name,slug,parent_id,sort_order,category_type,project_category_attributes(is_listable)",
+              "id,name,name_nl,slug,parent_id,sort_order,category_type,project_category_attributes(is_listable)",
             )
             .eq("is_active", true)
             .order("sort_order", { ascending: true, nullsFirst: false })
@@ -88,7 +92,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           supabase
             .from("project_taxonomy_options")
             .select(
-              "id,name,slug,taxonomy_type,sort_order,icon,budget_level,size_min_sqm,size_max_sqm,is_active",
+              "id,name,name_nl,slug,taxonomy_type,sort_order,icon,budget_level,size_min_sqm,size_max_sqm,is_active",
             )
             .eq("is_active", true)
             .in("taxonomy_type", TAXONOMY_TYPES)
@@ -108,10 +112,16 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           throw citiesResult.error
         }
 
-        const nextCategories = (categoriesResult.data as CategoryRow[]) ?? []
+        const nextCategories = ((categoriesResult.data as CategoryRow[]) ?? []).map((c) => ({
+          ...c,
+          name: getLocalizedName(c as any, locale),
+        }))
 
         const grouped: TaxonomyMap = {}
-        for (const option of (taxonomyResult.data as TaxonomyOptionRow[]) ?? []) {
+        for (const option of ((taxonomyResult.data as TaxonomyOptionRow[]) ?? []).map((o) => ({
+          ...o,
+          name: getLocalizedName(o as any, locale),
+        }))) {
           if (!grouped[option.taxonomy_type]) {
             grouped[option.taxonomy_type] = []
           }
@@ -127,6 +137,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           taxonomyOptions: grouped,
           cities: nextCities,
           fetchedAt: Date.now(),
+          locale,
         }
 
         applyCache(taxonomyCache)

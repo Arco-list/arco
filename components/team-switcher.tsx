@@ -3,6 +3,7 @@
 import * as React from "react"
 import { ChevronsUpDown, Plus } from "lucide-react"
 import Image from "next/image"
+import { useTranslations } from "next-intl"
 
 import {
   DropdownMenu,
@@ -26,6 +27,7 @@ export function TeamSwitcher({
 }) {
   const { isMobile } = useSidebar()
   const [activeTeam, setActiveTeam] = React.useState(teams[0])
+  const t = useTranslations("dashboard")
 
   return (
     <SidebarMenu>
@@ -52,7 +54,7 @@ export function TeamSwitcher({
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">Teams</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">{t("sidebar_teams")}</DropdownMenuLabel>
             {teams.map((team, index) => (
               <DropdownMenuItem key={team.name} onClick={() => setActiveTeam(team)} className="gap-2 p-2">
                 <div className="flex size-6 items-center justify-center rounded-sm border">
@@ -67,7 +69,7 @@ export function TeamSwitcher({
               <div className="flex size-6 items-center justify-center rounded-md border bg-background">
                 <Plus className="size-4" />
               </div>
-              <div className="font-medium text-muted-foreground">Add team</div>
+              <div className="font-medium text-muted-foreground">{t("sidebar_add_team")}</div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

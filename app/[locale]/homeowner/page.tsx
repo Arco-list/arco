@@ -8,6 +8,7 @@ import { Camera, ChevronLeft, ChevronRight } from "lucide-react"
 import { ShareModal } from "@/components/share-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
+import { useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -22,12 +23,6 @@ import {
 
 type HomeownerTab = "saved-projects" | "saved-professionals" | "account"
 
-const TAB_ITEMS: { value: HomeownerTab; label: string }[] = [
-  { value: "saved-projects", label: "Saved projects" },
-  { value: "saved-professionals", label: "Saved professionals" },
-  { value: "account", label: "Account" },
-]
-
 const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 const AVATAR_MIME_TO_EXTENSION: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -40,6 +35,13 @@ function HomeownerContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, profile, supabase, refreshSession, refreshProfile, isLoading } = useAuth()
+  const t = useTranslations("homeowner")
+
+  const TAB_ITEMS: { value: HomeownerTab; label: string }[] = [
+    { value: "saved-projects", label: t("saved_projects") },
+    { value: "saved-professionals", label: t("saved_professionals") },
+    { value: "account", label: t("account") },
+  ]
 
   const activeTab = (searchParams.get("tab") as HomeownerTab) || "saved-projects"
   const setActiveTab = (tab: HomeownerTab) => {
@@ -140,16 +142,16 @@ function HomeownerContent() {
     return email?.trim().charAt(0)?.toUpperCase() ?? "U"
   }
 
-  const displayName = [firstName, lastName].filter(Boolean).join(" ") || "Your Name"
+  const displayName = [firstName, lastName].filter(Boolean).join(" ") || t("your_name")
   const memberSince = user?.created_at
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : null
   const userTypes = profile?.user_types ?? []
   const accountType = userTypes.includes("professional")
-    ? "Professional"
+    ? t("professional")
     : userTypes.includes("client")
-      ? "Client"
-      : "Member"
+      ? t("client")
+      : t("member")
 
   // ── Save profile field ──
   const saveProfileField = useCallback(async (fields: Record<string, string | null>) => {
@@ -504,7 +506,7 @@ function HomeownerContent() {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontWeight: 500, color: "var(--arco-mid-grey)",
               }}>
-                Uploading...
+                {t("uploading")}
               </div>
             )}
           </div>
@@ -518,10 +520,10 @@ function HomeownerContent() {
               suppressContentEditableWarning
               onFocus={() => setActiveEditField("name")}
               onBlur={handleNameBlur}
-              data-placeholder="Your name"
+              data-placeholder={t("your_name")}
               style={{ marginBottom: 0 }}
             >
-              {displayName !== "Your Name" ? displayName : ""}
+              {displayName !== t("your_name") ? displayName : ""}
             </h1>
           </div>
 
@@ -531,7 +533,7 @@ function HomeownerContent() {
             onClick={() => { setEmailModalEmail(email); setEmailModalOpen(true) }}
             style={{ cursor: "pointer" }}
           >
-            {email || "Add email address"}
+            {email || t("add_email")}
           </p>
         </section>
 
@@ -547,7 +549,7 @@ function HomeownerContent() {
             onClick={() => { if (editingSpecBar !== "location") { setEditingSpecBar("location"); setLocationQuery("") } }}
           >
             <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Location</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("location")}</span>
             {editingSpecBar === "location" ? (
               <div style={{ position: "relative" }}>
                 <input
@@ -555,7 +557,7 @@ function HomeownerContent() {
                   className="spec-inp"
                   value={locationQuery}
                   onChange={(e) => searchLocation(e.target.value)}
-                  placeholder="Search city..."
+                  placeholder={t("search_city")}
                   onKeyDown={(e) => {
                     if (e.key === "Escape") {
                       setEditingSpecBar(null)
@@ -598,17 +600,17 @@ function HomeownerContent() {
                       </button>
                     ))}
                     {isLocationSearching && (
-                      <div style={{ padding: "10px 14px", fontSize: 13, color: "#a1a1a0" }}>Searching...</div>
+                      <div style={{ padding: "10px 14px", fontSize: 13, color: "#a1a1a0" }}>{t("searching")}</div>
                     )}
                     {!isLocationSearching && locationResults.length === 0 && (
-                      <div style={{ padding: "10px 14px", fontSize: 13, color: "#a1a1a0" }}>No results found</div>
+                      <div style={{ padding: "10px 14px", fontSize: 13, color: "#a1a1a0" }}>{t("no_results_found")}</div>
                     )}
                   </div>
                 )}
               </div>
             ) : (
               <div className="arco-card-title" style={{ color: location ? undefined : "#b0b0ae" }}>
-                {location || "Add location"}
+                {location || t("add_location")}
               </div>
             )}
           </div>
@@ -619,7 +621,7 @@ function HomeownerContent() {
             onClick={() => { if (editingSpecBar !== "phone") setEditingSpecBar("phone") }}
           >
             <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Phone</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("phone")}</span>
             {editingSpecBar === "phone" ? (
               <input
                 autoFocus
@@ -639,14 +641,14 @@ function HomeownerContent() {
               />
             ) : (
               <div className="arco-card-title" style={{ color: phone ? undefined : "#b0b0ae" }}>
-                {phone || "Add phone"}
+                {phone || t("add_phone")}
               </div>
             )}
           </div>
 
           {/* Member Since (read-only) */}
           <div className="spec-item-edit" style={{ cursor: "default" }}>
-            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Member Since</span>
+            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("member_since")}</span>
             <div className="arco-card-title" style={{ color: memberSince ? undefined : "#b0b0ae" }}>
               {memberSince ?? "—"}
             </div>
@@ -654,9 +656,9 @@ function HomeownerContent() {
 
           {/* Companies */}
           <div className="spec-item-edit" style={{ cursor: companyCount > 0 ? "pointer" : "default" }} onClick={() => { if (companyCount > 0) router.push("/dashboard/listings") }}>
-            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Companies</span>
+            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("companies")}</span>
             <div className="arco-card-title" style={{ color: companyCount > 0 ? undefined : "#b0b0ae" }}>
-              {companyCount > 0 ? `${companyCount} ${companyCount === 1 ? "company" : "companies"}` : "None"}
+              {companyCount > 0 ? t("company_count", { count: companyCount }) : t("none")}
             </div>
           </div>
         </div>
@@ -664,23 +666,23 @@ function HomeownerContent() {
         {/* ── Notification Preferences ── */}
         <div style={{ padding: "48px 0" }}>
           <h2 className="arco-section-title" style={{ marginBottom: 8 }}>
-            Notification Preferences
+            {t("notification_preferences")}
           </h2>
           <p className="arco-body-text" style={{ marginBottom: 32 }}>
-            Choose which email notifications you receive.
+            {t("notification_description")}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 400 }}>
             <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
               <div>
-                <div className="arco-card-title">Project updates</div>
-                <p className="arco-body-text" style={{ margin: 0 }}>Receive updates about your projects</p>
+                <div className="arco-card-title">{t("project_updates")}</div>
+                <p className="arco-body-text" style={{ margin: 0 }}>{t("project_updates_description")}</p>
               </div>
               <ToggleSwitch checked={notifPrefs.project_updates} onChange={() => handleNotifToggle("project_updates")} />
             </label>
             <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
               <div>
-                <div className="arco-card-title">Marketing emails</div>
-                <p className="arco-body-text" style={{ margin: 0 }}>Tips, inspiration, and platform news</p>
+                <div className="arco-card-title">{t("marketing_emails")}</div>
+                <p className="arco-body-text" style={{ margin: 0 }}>{t("marketing_description")}</p>
               </div>
               <ToggleSwitch checked={notifPrefs.marketing} onChange={() => handleNotifToggle("marketing")} />
             </label>
@@ -690,10 +692,10 @@ function HomeownerContent() {
         {/* ── Connected Accounts ── */}
         <div style={{ padding: "48px 0" }}>
           <h2 className="arco-section-title" style={{ marginBottom: 8 }}>
-            Security & Connections
+            {t("security_connections")}
           </h2>
           <p className="arco-body-text" style={{ marginBottom: 32 }}>
-            Manage your password and linked sign-in providers.
+            {t("security_description")}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 400 }}>
             {/* Password */}
@@ -702,7 +704,7 @@ function HomeownerContent() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1c1c1a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
                 </svg>
-                <span className="arco-card-title">Password</span>
+                <span className="arco-card-title">{t("password")}</span>
               </div>
               {isEmailAuthUser ? (
                 <button
@@ -713,11 +715,11 @@ function HomeownerContent() {
                     border: "none", cursor: "pointer",
                   }}
                 >
-                  Update
+                  {t("update")}
                 </button>
               ) : (
                 <span style={{ fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 12, background: "#f5f5f4", color: "#b0b0ae" }}>
-                  Managed by provider
+                  {t("managed_by_provider")}
                 </span>
               )}
             </div>
@@ -737,7 +739,7 @@ function HomeownerContent() {
                 background: connectedProviders.includes("google") ? "#e6f4f5" : "#f5f5f4",
                 color: connectedProviders.includes("google") ? "#016D75" : "#b0b0ae",
               }}>
-                {connectedProviders.includes("google") ? "Connected" : "Not connected"}
+                {connectedProviders.includes("google") ? t("connected") : t("not_connected")}
               </span>
             </div>
             {/* Apple */}
@@ -753,7 +755,7 @@ function HomeownerContent() {
                 background: connectedProviders.includes("apple") ? "#e6f4f5" : "#f5f5f4",
                 color: connectedProviders.includes("apple") ? "#016D75" : "#b0b0ae",
               }}>
-                {connectedProviders.includes("apple") ? "Connected" : "Not connected"}
+                {connectedProviders.includes("apple") ? t("connected") : t("not_connected")}
               </span>
             </div>
           </div>
@@ -774,25 +776,25 @@ function HomeownerContent() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14M10 11v6M14 11v6" />
             </svg>
-            Delete account
+            {t("delete_account")}
           </button>
 
           <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>{t("delete_confirm_title")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete your account and all associated data.
+                  {t("delete_confirm_description")}
                 </AlertDialogDescription>
               </AlertDialogHeader>
 
               {isCheckingDeletion ? (
-                <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>Checking account status...</p>
+                <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>{t("checking_account")}</p>
               ) : deletionCheck ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {deletionCheck.warnings.length > 0 && (
                     <div style={{ background: "#fef3c7", padding: 12, borderRadius: 4, fontSize: 13 }}>
-                      <strong>The following data will be deleted:</strong>
+                      <strong>{t("data_deleted_warning")}</strong>
                       <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
                         {deletionCheck.warnings.map((w, i) => <li key={i}>{w}</li>)}
                       </ul>
@@ -801,7 +803,7 @@ function HomeownerContent() {
 
                   {deletionCheck.blockers.length > 0 && (
                     <div style={{ background: "#fee2e2", padding: 12, borderRadius: 4, fontSize: 13 }}>
-                      <strong>Cannot delete account:</strong>
+                      <strong>{t("cannot_delete")}</strong>
                       <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
                         {deletionCheck.blockers.map((b, i) => <li key={i}>{b}</li>)}
                       </ul>
@@ -813,22 +815,20 @@ function HomeownerContent() {
                       {isEmailAuthUser && (
                         <div>
                           <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
-                            Enter your password
+                            {t("enter_password")}
                           </label>
                           <input
                             type="password"
                             value={deletePassword}
                             onChange={e => setDeletePassword(e.target.value)}
-                            placeholder="Your current password"
+                            placeholder={t("your_current_password")}
                             style={{ width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid var(--arco-light-grey)", borderRadius: 3, fontFamily: "inherit", outline: "none" }}
                           />
                         </div>
                       )}
 
                       <div>
-                        <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
-                          Type <strong>DELETE</strong> to confirm
-                        </label>
+                        <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }} dangerouslySetInnerHTML={{ __html: t("type_delete_confirm") }} />
                         <input
                           type="text"
                           value={deleteConfirmText}
@@ -845,7 +845,7 @@ function HomeownerContent() {
 
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => { setDeleteDialogOpen(false); setDeletionCheck(null) }}>
-                  Cancel
+                  {t("cancel")}
                 </AlertDialogCancel>
                 {deletionCheck?.canDelete && (
                   <button
@@ -858,7 +858,7 @@ function HomeownerContent() {
                       opacity: (isDeletingAccount || deleteConfirmText !== "DELETE" || (isEmailAuthUser && !deletePassword)) ? 0.5 : 1,
                     }}
                   >
-                    {isDeletingAccount ? "Deleting..." : "Delete my account"}
+                    {isDeletingAccount ? t("deleting") : t("delete_my_account")}
                   </button>
                 )}
               </AlertDialogFooter>
@@ -873,16 +873,16 @@ function HomeownerContent() {
         <div className="popup-overlay" onClick={() => setEmailModalOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Update email</h3>
+              <h3 className="arco-section-title">{t("update_email")}</h3>
               <button className="popup-close" onClick={() => setEmailModalOpen(false)} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-              We'll send a confirmation link to your new email address.
+              {t("email_confirmation")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  New email address
+                  {t("new_email_address")}
                 </label>
                 <input
                   type="email"
@@ -917,7 +917,7 @@ function HomeownerContent() {
                 className="btn-primary"
                 style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
               >
-                Update email
+                {t("update_email")}
               </button>
             </div>
           </div>
@@ -929,16 +929,16 @@ function HomeownerContent() {
         <div className="popup-overlay" onClick={() => { setPasswordExpanded(false); setCurrentPassword(""); setNewPassword(""); setConfirmPassword("") }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Update password</h3>
+              <h3 className="arco-section-title">{t("update_password")}</h3>
               <button className="popup-close" onClick={() => { setPasswordExpanded(false); setCurrentPassword(""); setNewPassword(""); setConfirmPassword("") }} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-              Enter your current password and choose a new one.
+              {t("password_instructions")}
             </p>
             <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Current password
+                  {t("current_password")}
                 </label>
                 <input
                   type="password"
@@ -946,14 +946,14 @@ function HomeownerContent() {
                   value={currentPassword}
                   onChange={e => setCurrentPassword(e.target.value)}
                   disabled={isSavingPassword}
-                  placeholder="Enter current password"
+                  placeholder={t("enter_current_password")}
                   autoFocus
                   style={{ marginBottom: 0 }}
                 />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  New password
+                  {t("new_password")}
                 </label>
                 <input
                   type="password"
@@ -961,13 +961,13 @@ function HomeownerContent() {
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   disabled={isSavingPassword}
-                  placeholder="At least 8 characters"
+                  placeholder={t("at_least_8_chars")}
                   style={{ marginBottom: 0 }}
                 />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Confirm new password
+                  {t("confirm_new_password")}
                 </label>
                 <input
                   type="password"
@@ -975,7 +975,7 @@ function HomeownerContent() {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   disabled={isSavingPassword}
-                  placeholder="Confirm new password"
+                  placeholder={t("confirm_new_password")}
                   style={{ marginBottom: 0 }}
                 />
               </div>
@@ -985,7 +985,7 @@ function HomeownerContent() {
                 className="btn-primary"
                 style={{ width: "100%", marginTop: 4, fontSize: 14, padding: "12px 20px" }}
               >
-                {isSavingPassword ? "Updating..." : "Update password"}
+                {isSavingPassword ? t("updating") : t("update_password")}
               </button>
             </form>
           </div>
@@ -1130,6 +1130,7 @@ function SavedProjectsTab() {
   } = useSavedProjects()
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const [categoryMap, setCategoryMap] = useState<Map<string, string>>(new Map())
+  const t = useTranslations("homeowner")
 
   // Fetch category names for subtitle
   useEffect(() => {
@@ -1142,7 +1143,7 @@ function SavedProjectsTab() {
     <main style={{ flex: 1 }}>
       <div className="discover-page-title">
         <div className="wrap">
-          <h2 className="arco-section-title">Saved projects</h2>
+          <h2 className="arco-section-title">{t("saved_projects")}</h2>
         </div>
       </div>
       <div className="discover-results">
@@ -1153,7 +1154,7 @@ function SavedProjectsTab() {
                 <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
                   {savedProjects.length}
                 </strong>{" "}
-                saved {savedProjects.length === 1 ? "project" : "projects"}
+                {t("saved_projects_count", { count: savedProjects.length })}
               </p>
             </div>
           )}
@@ -1182,12 +1183,12 @@ function SavedProjectsTab() {
             </div>
           ) : (
             <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
-              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>No saved projects yet</h2>
+              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("no_saved_projects")}</h2>
               <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
-                Save projects you love and they will appear here.
+                {t("no_saved_projects_description")}
               </p>
               <Link href="/projects" className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
-                Discover projects
+                {t("discover_projects")}
               </Link>
             </div>
           )}
@@ -1207,6 +1208,7 @@ function SavedProfessionalsTab() {
     saveProfessional,
     removeProfessional,
   } = useSavedProfessionals()
+  const t = useTranslations("homeowner")
 
   const handleToggleSave = (professional: any) => {
     if (savedProfessionalIds.has(professional.companyId)) {
@@ -1220,7 +1222,7 @@ function SavedProfessionalsTab() {
     <main style={{ flex: 1 }}>
       <div className="discover-page-title">
         <div className="wrap">
-          <h2 className="arco-section-title">Saved professionals</h2>
+          <h2 className="arco-section-title">{t("saved_professionals")}</h2>
         </div>
       </div>
       <div className="discover-results">
@@ -1231,7 +1233,7 @@ function SavedProfessionalsTab() {
                 <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
                   {savedProfessionals.length}
                 </strong>{" "}
-                saved {savedProfessionals.length === 1 ? "professional" : "professionals"}
+                {t("saved_professionals_count", { count: savedProfessionals.length })}
               </p>
             </div>
           )}
@@ -1260,12 +1262,12 @@ function SavedProfessionalsTab() {
             </div>
           ) : (
             <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
-              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>No saved professionals yet</h2>
+              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("no_saved_professionals")}</h2>
               <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
-                Save professionals you like and they will appear here.
+                {t("no_saved_professionals_description")}
               </p>
               <Link href="/professionals" className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
-                Discover professionals
+                {t("discover_professionals")}
               </Link>
             </div>
           )}
@@ -1295,16 +1297,19 @@ const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: () =>
   </button>
 )
 
-const EditBadge = () => (
-  <span className="ec-badge">
-    <span className="ec-ico">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
-      </svg>
+function EditBadge() {
+  const t = useTranslations("homeowner")
+  return (
+    <span className="ec-badge">
+      <span className="ec-ico">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+        </svg>
+      </span>
+      <span className="ec-txt">{t("edit")}</span>
     </span>
-    <span className="ec-txt">Edit</span>
-  </span>
-)
+  )
+}
 
 export default function Homeowner() {
   return (

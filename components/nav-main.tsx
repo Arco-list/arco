@@ -1,6 +1,7 @@
 "use client"
 
 import type { LucideIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import {
   SidebarGroup,
@@ -20,9 +21,10 @@ export function NavMain({
     isActive?: boolean
   }[]
 }) {
+  const t = useTranslations("dashboard")
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("sidebar_platform")}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.title}>
