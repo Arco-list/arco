@@ -1,6 +1,14 @@
 "use server"
 
+import { cookies } from "next/headers"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+
+const LOCALE_NAMES: Record<string, string> = { nl: "Dutch", en: "English", de: "German", fr: "French" }
+async function getDescriptionLocale(): Promise<string> {
+  const cookieStore = await cookies()
+  const locale = cookieStore.get("NEXT_LOCALE")?.value ?? "en"
+  return LOCALE_NAMES[locale] ?? "English"
+}
 import { checkRateLimit } from "@/lib/rate-limit"
 import { JSDOM } from "jsdom"
 import { logger } from "@/lib/logger"
@@ -82,6 +90,77 @@ function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: 
   let match
   while ((match = imgRegex.exec(markdown)) !== null) {
     add(match[1])
+  }
+
+  return results.slice(0, 30)
+}
+
+/**
+ * Extract images from raw HTML string — catches lazy-loaded images, srcset, data-src,
+ * WordPress galleries, and other patterns missed by markdown extraction.
+ */
+function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
+  const seen = new Set<string>()
+  const results: string[] = []
+
+  const add = (src: string) => {
+    try {
+      const abs = new URL(src, baseUrl).toString()
+      const fullRes = upgradeToFullRes(abs)
+      const key = fullRes || abs
+      if (seen.has(key)) return
+      if (/\.(svg|ico|gif)(\?|$)/i.test(key)) return
+      if (/logo|icon|avatar|favicon|sprite|placeholder|gravatar/i.test(key)) return
+      if (/data:image/i.test(key)) return
+      seen.add(key)
+      results.push(key)
+    } catch {}
+  }
+
+  // Match src, data-src, data-lazy-src, data-original attributes
+  const imgTagRegex = /<img[^>]+>/gi
+  let match
+  while ((match = imgTagRegex.exec(html)) !== null) {
+    const tag = match[0]
+
+    // Skip small images
+    const widthMatch = tag.match(/width=["']?(\d+)/i)
+    const heightMatch = tag.match(/height=["']?(\d+)/i)
+    if (widthMatch && parseInt(widthMatch[1]) < 200) continue
+    if (heightMatch && parseInt(heightMatch[1]) < 200) continue
+
+    // Extract from various attributes
+    for (const attr of ["data-src", "data-lazy-src", "data-original", "data-full", "src"]) {
+      const attrMatch = tag.match(new RegExp(`${attr}=["']([^"']+)["']`, "i"))
+      if (attrMatch?.[1] && !attrMatch[1].startsWith("data:")) {
+        add(attrMatch[1])
+      }
+    }
+
+    // Extract from srcset (take the largest)
+    const srcsetMatch = tag.match(/srcset=["']([^"']+)["']/i)
+    if (srcsetMatch?.[1]) {
+      const candidates = srcsetMatch[1].split(",").map((s) => s.trim().split(/\s+/))
+      // Sort by width descriptor (e.g. "1024w") descending
+      candidates.sort((a, b) => {
+        const aW = parseInt(a[1]?.replace("w", "") ?? "0")
+        const bW = parseInt(b[1]?.replace("w", "") ?? "0")
+        return bW - aW
+      })
+      if (candidates[0]?.[0]) add(candidates[0][0])
+    }
+  }
+
+  // Match WordPress gallery links: <a href="...jpg">
+  const linkRegex = /<a[^>]+href=["']([^"']+\.(?:jpe?g|png|webp))["'][^>]*>/gi
+  while ((match = linkRegex.exec(html)) !== null) {
+    add(match[1])
+  }
+
+  // Match background-image URLs in style attributes
+  const bgRegex = /background(?:-image)?:\s*url\(["']?([^"')]+)["']?\)/gi
+  while ((match = bgRegex.exec(html)) !== null) {
+    if (!match[1].startsWith("data:")) add(match[1])
   }
 
   return results.slice(0, 30)
@@ -257,7 +336,7 @@ function extractWithJsdom(doc: Document): ExtractedProject {
 
 // ─── Main scrape action ──────────────────────────────────────────────────────
 
-export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResult> {
+export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: string): Promise<ScrapeResult> {
   // 1. Auth
   const supabase = await createServerActionSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -278,67 +357,63 @@ export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResu
     return { error: "Only http/https URLs are supported." }
   }
 
-  // 3b. Domain verification — URL must match company's verified domain
-  const { data: proRow } = await supabase
-    .from("professionals")
-    .select("company_id")
-    .eq("user_id", user.id)
-    .maybeSingle()
+  // Admin mode: skip domain verification, use provided company ID
+  let resolvedCompanyId: string | null = adminCompanyId ?? null
 
-  if (!proRow?.company_id) {
-    return { error: "You need a company profile to import projects." }
-  }
+  if (!adminCompanyId) {
+    // 3b. Domain verification — URL must match company's verified domain
+    const { data: proRow } = await supabase
+      .from("professionals")
+      .select("company_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
 
-  const { data: companyRow } = await supabase
-    .from("companies")
-    .select("domain, is_verified")
-    .eq("id", proRow.company_id)
-    .maybeSingle()
-
-  // TODO: Remove development bypass after testing
-  if (process.env.NODE_ENV !== "development") {
-    if (!companyRow?.domain) {
-      return { error: "Add your website domain in company settings before importing." }
-    }
-    if (!companyRow.is_verified) {
-      return { error: "Verify your website domain in company settings before importing." }
+    if (!proRow?.company_id) {
+      return { error: "You need a company profile to import projects." }
     }
 
-    const stripWww = (h: string) => h.replace(/^www\./, "").toLowerCase()
-    const companyDomain = stripWww(companyRow.domain.replace(/^https?:\/\//i, "").split("/")[0])
-    const urlDomain = stripWww(url.hostname)
+    resolvedCompanyId = proRow.company_id
 
-    if (urlDomain !== companyDomain) {
-      return { error: `This URL doesn't match your verified domain (${companyDomain}).` }
-    }
-  }
+    const { data: companyRow } = await supabase
+      .from("companies")
+      .select("domain, is_verified")
+      .eq("id", proRow.company_id)
+      .maybeSingle()
 
-  // 3c. Check for duplicate imports — same URL already imported by this user's company
-  if (proRow?.company_id) {
-    const normalizedUrl = url.toString().replace(/\/+$/, "").toLowerCase()
-    const { data: existingProjects } = await supabase
-      .from("project_professionals")
-      .select("project_id, projects!inner(slug)")
-      .eq("company_id", proRow.company_id)
-      .eq("is_project_owner", true)
-
-    if (existingProjects?.length) {
-      // Check slugs derived from the URL path (e.g. /projecten/villa-enschede → villa-enschede)
-      const urlPath = url.pathname.replace(/\/+$/, "").split("/").pop() ?? ""
-      const urlSlug = urlPath.toLowerCase().replace(/[^a-z0-9-]/g, "")
-
-      const duplicate = existingProjects.find((pp: any) => {
-        const projectSlug = (pp.projects?.slug ?? "").toLowerCase()
-        return urlSlug && projectSlug.startsWith(urlSlug)
-      })
-
-      if (duplicate) {
-        return {
-          projectId: duplicate.project_id,
-          title: "Existing project",
-          duplicate: true,
-        } as any
+    // TODO: Remove development bypass after testing
+    if (process.env.NODE_ENV !== "development") {
+      if (!companyRow?.domain) {
+        return { error: "Add your website domain in company settings before importing." }
       }
+      if (!companyRow.is_verified) {
+        return { error: "Verify your website domain in company settings before importing." }
+      }
+
+      const stripWww = (h: string) => h.replace(/^www\./, "").toLowerCase()
+      const companyDomain = stripWww(companyRow.domain.replace(/^https?:\/\//i, "").split("/")[0])
+      const urlDomain = stripWww(url.hostname)
+
+      if (urlDomain !== companyDomain) {
+        return { error: `This URL doesn't match your verified domain (${companyDomain}).` }
+      }
+    }
+  }
+
+  // 3c. Check for duplicate imports — same source URL already imported
+  const normalizedUrl = url.toString().replace(/\/+$/, "").toLowerCase()
+  {
+    const { data: existingProject } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("source_url", normalizedUrl)
+      .maybeSingle()
+
+    if (existingProject) {
+      return {
+        projectId: existingProject.id,
+        title: "Existing project",
+        duplicate: true,
+      } as any
     }
   }
 
@@ -352,8 +427,9 @@ export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResu
     try {
       const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
       const result = await firecrawl.scrape(url.toString(), {
-        formats: ["markdown"],
+        formats: ["markdown", "html"],
         timeout: 30000,
+        waitFor: 3000,
       }) as any
 
       if (!result || (!result.markdown && !result.metadata)) {
@@ -363,6 +439,15 @@ export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResu
       pageText = (result.markdown ?? "").slice(0, 6000)
       const ogImage = result.metadata?.ogImage ?? undefined
       imageUrls = extractImagesFromMarkdown(result.markdown ?? "", url.toString(), ogImage)
+
+      // Also extract images from raw HTML (catches lazy-loaded, srcset, data-src)
+      if (result.html) {
+        const htmlImages = extractImagesFromRawHtml(result.html, url.toString())
+        for (const img of htmlImages) {
+          if (!imageUrls.includes(img)) imageUrls.push(img)
+        }
+        imageUrls = imageUrls.slice(0, 30)
+      }
 
       // Extract structured data with Claude (or basic fallback)
       console.log("[scrape] ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY, "pageText length:", pageText.length)
@@ -531,6 +616,7 @@ export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResu
     style_preferences: styleOptionId ? [styleOptionId] : null,
     status: "draft" as const,
     client_id: user.id,
+    source_url: url.toString().replace(/\/+$/, "").toLowerCase(),
   }
 
   let project: { id: string } | null = null
@@ -607,19 +693,18 @@ export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResu
     }
   }
 
-  // 11. Link project to user's company (so it appears in Listings)
-  const { data: professional } = await supabase
-    .from("professionals")
-    .select("id, company_id")
-    .eq("user_id", user.id)
-    .maybeSingle()
+  // 11. Link project to company (so it appears in Listings)
+  const targetCompanyId = resolvedCompanyId ?? null
 
-  if (professional?.company_id) {
-    // Fetch company's services to set invited_service_category_ids
-    const { data: companyServices } = await supabase
+  if (adminCompanyId && targetCompanyId) {
+    // Admin mode: link project to the target company using service role
+    const { createServiceRoleSupabaseClient } = await import("@/lib/supabase/server")
+    const serviceClient = createServiceRoleSupabaseClient()
+
+    const { data: companyServices } = await serviceClient
       .from("companies")
       .select("primary_service_id, services_offered")
-      .eq("id", professional.company_id)
+      .eq("id", targetCompanyId)
       .maybeSingle()
 
     const serviceCategoryIds: string[] = []
@@ -629,20 +714,56 @@ export async function scrapeAndCreateProject(rawUrl: string): Promise<ScrapeResu
       serviceCategoryIds.push(companyServices.services_offered[0])
     }
 
-    await supabase
+    await serviceClient
       .from("project_professionals")
       .insert({
         project_id: project.id,
-        professional_id: professional.id,
-        company_id: professional.company_id,
-        invited_email: user.email ?? "",
+        company_id: targetCompanyId,
+        invited_email: "",
         is_project_owner: true,
         status: "live_on_page",
         invited_service_category_ids: serviceCategoryIds.length > 0 ? serviceCategoryIds : null,
       } as any)
       .then(({ error }) => {
-        if (error) logger.error("Scrape project_professionals insert failed", { projectId: project.id }, error as Error)
+        if (error) logger.error("Admin scrape project_professionals insert failed", { projectId: project.id }, error as Error)
       })
+  } else {
+    // Normal mode: link to user's own company
+    const { data: professional } = await supabase
+      .from("professionals")
+      .select("id, company_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    if (professional?.company_id) {
+      const { data: companyServices } = await supabase
+        .from("companies")
+        .select("primary_service_id, services_offered")
+        .eq("id", professional.company_id)
+        .maybeSingle()
+
+      const serviceCategoryIds: string[] = []
+      if (companyServices?.primary_service_id) {
+        serviceCategoryIds.push(companyServices.primary_service_id)
+      } else if (companyServices?.services_offered?.length) {
+        serviceCategoryIds.push(companyServices.services_offered[0])
+      }
+
+      await supabase
+        .from("project_professionals")
+        .insert({
+          project_id: project.id,
+          professional_id: professional.id,
+          company_id: professional.company_id,
+          invited_email: user.email ?? "",
+          is_project_owner: true,
+          status: "live_on_page",
+          invited_service_category_ids: serviceCategoryIds.length > 0 ? serviceCategoryIds : null,
+        } as any)
+        .then(({ error }) => {
+          if (error) logger.error("Scrape project_professionals insert failed", { projectId: project.id }, error as Error)
+        })
+    }
   }
 
   return { projectId: project.id, title }
@@ -1011,28 +1132,116 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
       }
     }
 
+    const userLocale = await getDescriptionLocale()
+
     content.push({
       type: "text",
-      text: `Write exactly 2 sentences describing this architecture/interior design project for a professional portfolio. Third-person tone, under 300 characters total. Capture the project's character and one key design decision based on the photos and metadata. Return only the description text, no quotes.\n\n${context}`,
+      text: `Write a short description of this architecture/interior design project for a professional portfolio. 3-4 sentences, 60-80 words. Third-person tone, professional and warm. Capture the project's character, context, and one or two key design decisions based on the photos and metadata.
+
+Return a JSON object with "en" and "nl" keys, each containing the description in that language. Example: {"en": "English description...", "nl": "Dutch description..."}
+Return ONLY the JSON, no markdown code fences or other text.
+
+${context}`,
     })
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5",
-      max_tokens: 180,
+      max_tokens: 500,
       messages: [{ role: "user", content }],
     })
 
-    const text = message.content.find((b) => b.type === "text")?.text?.trim() ?? ""
-    if (!text) return { error: "Could not generate description. Try again." }
+    const rawText = message.content.find((b) => b.type === "text")?.text?.trim() ?? ""
+    if (!rawText) return { error: "Could not generate description. Try again." }
 
-    const description = text.slice(0, 320)
+    // Parse bilingual response
+    let enDesc = ""
+    let nlDesc = ""
+    try {
+      const cleaned = rawText.replace(/```json\s*|```\s*/g, "").trim()
+      const parsed = JSON.parse(cleaned)
+      enDesc = (parsed.en ?? "").slice(0, 750)
+      nlDesc = (parsed.nl ?? "").slice(0, 750)
+    } catch {
+      // Fallback: use raw text as the user's locale
+      enDesc = rawText.slice(0, 750)
+      nlDesc = rawText.slice(0, 750)
+    }
+
+    // Use the user's locale as the primary description
+    const description = userLocale === "Dutch" ? nlDesc : enDesc
+
+    // Fetch existing translations to merge
+    const { data: existing } = await supabase.from("projects").select("translations").eq("id", projectId).single()
+    const translations = (existing?.translations as Record<string, any>) ?? {}
+    translations.en = { ...(translations.en ?? {}), description: enDesc }
+    translations.nl = { ...(translations.nl ?? {}), description: nlDesc }
 
     // Save to DB
-    await supabase.from("projects").update({ description }).eq("id", projectId)
+    await supabase.from("projects").update({ description, translations }).eq("id", projectId)
 
     return { description }
   } catch (err) {
     logger.error("regenerateDescription failed", { projectId }, err as Error)
     return { error: "Generation failed. Please try again." }
   }
+}
+
+/**
+ * Save a project field (title or description) for a specific locale,
+ * update the translations JSONB, and auto-translate the other language.
+ */
+export async function saveProjectTranslatedField(
+  projectId: string,
+  field: "title" | "description",
+  value: string,
+  locale: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Not authenticated." }
+
+  // Fetch existing translations
+  const { data: proj } = await supabase
+    .from("projects")
+    .select("translations, title, description")
+    .eq("id", projectId)
+    .single()
+  if (!proj) return { success: false, error: "Project not found." }
+
+  const translations = (proj.translations as Record<string, any>) ?? {}
+  if (!translations[locale]) translations[locale] = {}
+  translations[locale][field] = value
+
+  // Update the main column + translations
+  const update: Record<string, any> = { [field]: value, translations }
+  await supabase.from("projects").update(update).eq("id", projectId)
+
+  // Auto-translate to the other language in the background
+  const otherLocale = locale === "nl" ? "en" : "nl"
+  const otherLang = locale === "nl" ? "English" : "Dutch"
+
+  if (value && process.env.ANTHROPIC_API_KEY) {
+    try {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default
+      const client = new Anthropic()
+      const msg = await client.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 300,
+        messages: [{
+          role: "user",
+          content: `Translate the following ${field === "title" ? "project title" : "project description"} to ${otherLang}. Keep the same tone and style. Return only the translated text, no quotes or labels.\n\n${value}`,
+        }],
+      })
+      const translated = msg.content.find((b) => b.type === "text")?.text?.trim()
+      if (translated) {
+        if (!translations[otherLocale]) translations[otherLocale] = {}
+        translations[otherLocale][field] = translated.slice(0, 750)
+        await supabase.from("projects").update({ translations }).eq("id", projectId)
+      }
+    } catch {
+      // Translation failed — non-fatal, the other locale just won't update
+    }
+  }
+
+  return { success: true }
 }

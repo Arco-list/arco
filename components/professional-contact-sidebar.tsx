@@ -15,6 +15,7 @@ import { useTranslations } from "next-intl"
 import type { ProfessionalDetail } from "@/lib/professionals/types"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { trackProfessionalContacted } from "@/lib/tracking"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=120&width=120"
 
@@ -101,7 +102,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
               <div className="flex items-center gap-2 body-small text-text-secondary">
                 <Phone className="h-4 w-4 flex-shrink-0" />
                 {phone ? (
-                  <RevealPhoneNumber phone={phone} />
+                  <RevealPhoneNumber phone={phone} companyId={company.id} />
                 ) : (
                   <span className="text-muted-foreground">{t("phone_unavailable")}</span>
                 )}
@@ -115,6 +116,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
                       target={external ? "_blank" : undefined}
                       rel={external ? "noreferrer" : undefined}
                       className="flex items-center gap-2 text-text-secondary hover:text-foreground"
+                      onClick={() => trackProfessionalContacted(company.id, "website")}
                     >
                       <Icon className="h-4 w-4 flex-shrink-0" />
                       <span>{label}</span>
@@ -154,6 +156,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
             className="w-full bg-red-500 text-white hover:bg-red-600"
             asChild={Boolean(email)}
             disabled={!email}
+            onClick={() => { if (email) trackProfessionalContacted(company.id, "form") }}
           >
             {email ? <a href={`mailto:${email}`}>{t("contact")}</a> : <span>{t("contact")}</span>}
           </Button>
@@ -163,7 +166,7 @@ export function ProfessionalContactSidebar({ professional }: ProfessionalContact
   )
 }
 
-const RevealPhoneNumber = ({ phone }: { phone: string }) => {
+const RevealPhoneNumber = ({ phone, companyId }: { phone: string; companyId: string }) => {
   const t = useTranslations("professional_detail")
   const [isVisible, setIsVisible] = useState(false)
 
@@ -178,7 +181,7 @@ const RevealPhoneNumber = ({ phone }: { phone: string }) => {
   return (
     <button
       type="button"
-      onClick={() => setIsVisible(true)}
+      onClick={() => { setIsVisible(true); trackProfessionalContacted(companyId, "phone") }}
       className="body-small font-medium text-foreground underline hover:no-underline"
     >
       {t("show_phone_number")}

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { trackPageView } from "@/lib/tracking"
 import { useSearchParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
@@ -26,6 +27,7 @@ export function ArchitectsClient({ projects }: ArchitectsClientProps) {
 
   // Track prospect landing visit from ref param
   useEffect(() => {
+    trackPageView("/businesses/architects")
     const ref = searchParams.get("ref")
     if (ref) {
       fetch(`/api/prospect-track?ref=${encodeURIComponent(ref)}`).catch(() => {})

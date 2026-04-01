@@ -123,6 +123,7 @@ export type UseProjectPhotoTourResult = {
   handlePhotoDropOnCard: (event: React.DragEvent<HTMLDivElement>, targetId: string) => void
   handlePhotoDragEnd: () => void
   setCoverPhoto: (photoId: string) => void
+  reorderFeaturePhotos: (featureId: string, reorderedPhotoIds: string[]) => Promise<void>
   deletePhoto: (photoId: string) => void
   setOpenMenuId: (menuId: string | null) => void
   setShowAddFeatureModal: (value: boolean) => void
@@ -2137,6 +2138,23 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     ],
   )
 
+  // Reorder photos within a feature and set first as cover
+  const reorderFeaturePhotos = useCallback(
+    async (featureId: string, reorderedPhotoIds: string[]) => {
+      setFeaturePhotos((prev) => ({ ...prev, [featureId]: reorderedPhotoIds }))
+
+      // Update cover_photo_id to the first photo
+      const dbFeatureId = featureIdMap[featureId]
+      if (dbFeatureId && reorderedPhotoIds[0]) {
+        await supabase
+          .from("project_features")
+          .update({ cover_photo_id: reorderedPhotoIds[0] })
+          .eq("id", dbFeatureId)
+      }
+    },
+    [featureIdMap, supabase],
+  )
+
   const appendUploadError = useCallback((message: string) => {
     setUploadErrors((prev) => (prev.includes(message) ? prev : [...prev, message]))
   }, [])
@@ -2238,6 +2256,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     handlePhotoDropOnCard,
     handlePhotoDragEnd,
     setCoverPhoto,
+    reorderFeaturePhotos,
     deletePhoto,
     setOpenMenuId,
     setShowAddFeatureModal,

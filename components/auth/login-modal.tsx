@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { signInWithOtpAction, signInWithPasswordAction, updateProfileNameAction, checkUserExistsAction, signUpWithOtpAction } from "@/app/(auth)/actions";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { resolveRedirectPath, sanitizeRedirectPath } from "@/lib/auth-redirect";
+import { trackSignup } from "@/lib/tracking";
 
 type Screen = "email" | "name-capture" | "otp" | "password" | "welcome";
 
@@ -155,12 +156,15 @@ export function LoginModal() {
     const token = otp.join("");
     if (token.length < 6) return;
     startVerify(async () => {
-      const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+      const { error, data: otpData } = await supabase.auth.verifyOtp({ email, token, type: "email" });
       if (error) {
         toast.error("Invalid or expired code", { description: error.message });
         setOtp(["", "", "", "", "", ""]);
         setTimeout(() => inputRefs.current[0]?.focus(), 50);
         return;
+      }
+      if (isNewUser && otpData?.user?.id) {
+        trackSignup(otpData.user.id, "email", "client");
       }
       await completeSignIn(currentRedirectTo);
     });

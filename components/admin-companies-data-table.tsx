@@ -1,13 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { createPortal } from "react-dom"
 import { format } from "date-fns"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
+import { AdminAddCompanyModal } from "@/components/admin-add-company-modal"
 import {
   ColumnDef,
   ColumnFiltersState,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -36,6 +39,7 @@ import {
   updateCompanyAutoApproveAction,
   updateProfessionalFeaturedAction,
   adminDeleteCompanyAction,
+  adminDeleteInviteAction,
   generateCompanyLoginLinkAction,
   updateCompanyDomainVerifiedAction,
   changeCompanyOwnerAction,
@@ -77,6 +81,50 @@ import type { Database } from "@/lib/supabase/types"
 
 type CompanyStatus = Database["public"]["Enums"]["company_status"]
 type PlanTier = Database["public"]["Enums"]["company_plan_tier"]
+
+function ServiceDropdown({ services, extraCount }: { services: string[]; extraCount: number }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [open])
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: rect.left })
+    }
+  }, [open])
+
+  return (
+    <span className="ml-1 inline-block">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open) }}
+        className="inline-flex items-center justify-center rounded-[3px] bg-[#f5f5f4] px-1 py-0.5 text-[10px] font-medium text-[#6b6b68] hover:bg-[#e5e5e4] transition-colors"
+      >
+        +{extraCount}
+      </button>
+      {open && createPortal(
+        <div ref={dropRef} className="fixed z-[500] bg-white border border-[#e5e5e4] rounded-lg shadow-lg py-1.5 min-w-[160px]" style={{ top: pos.top, left: pos.left }}>
+          {services.map((s, i) => (
+            <span key={i} className="block px-3 py-1 text-xs text-[#1c1c1a]">{s}</span>
+          ))}
+        </div>,
+        document.body
+      )}
+    </span>
+  )
+}
 
 const PROJECT_STATUS_DOT: Record<string, string> = {
   draft: "bg-[#a1a1a0]",
@@ -184,8 +232,8 @@ type CompanyProfessional = {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  draft: "bg-blue-400",
-  listed: "bg-emerald-500",
+  draft: "bg-[#2563eb]",
+  listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
   deactivated: "bg-rose-500",
   invited: "bg-amber-500",
@@ -200,9 +248,9 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
-  { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-blue-400" },
+  { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
-  { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-emerald-500" },
+  { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-rose-500" },
 ]
 
@@ -221,6 +269,7 @@ function ensureHttp(url: string | null): string | null {
 
 export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const router = useRouter()
+  const [showAddModal, setShowAddModal] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -228,6 +277,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     pageIndex: 0,
     pageSize: 20,
   })
+
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | CompanyStatus | "invited">("all")
@@ -388,7 +441,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     if (!deleteCompany) return
     startTransition(async () => {
       try {
-        const result = await adminDeleteCompanyAction({ companyId: deleteCompany.id })
+        const isInvite = deleteCompany.id.startsWith("invite-")
+        const result = isInvite
+          ? await adminDeleteInviteAction({ email: deleteCompany.name })
+          : await adminDeleteCompanyAction({ companyId: deleteCompany.id })
         if (!result.success) {
           toast.error("Delete failed", { description: result.error })
           return
@@ -464,6 +520,28 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const columns = useMemo<ColumnDef<AdminCompanyRow>[]>(() => {
     return [
       {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+            className="h-3.5 w-3.5"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            className="h-3.5 w-3.5"
+          />
+        ),
+        size: 32,
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
         accessorKey: "name",
         header: "Company",
         cell: ({ row }) => {
@@ -503,12 +581,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <span className="text-sm font-medium text-[#1c1c1a] truncate">{company.name}</span>
                 )}
                 {firstService && (
-                  <span className="text-xs text-[#a1a1a0] truncate">
-                    {firstService}
+                  <span className="text-xs text-[#a1a1a0] flex items-center gap-0">
+                    <span className="truncate">{firstService}</span>
                     {extraCount > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center rounded-[3px] bg-[#f5f5f4] px-1 py-0.5 text-[10px] font-medium text-[#6b6b68]">
-                        +{extraCount}
-                      </span>
+                      <ServiceDropdown services={company.services} extraCount={extraCount} />
                     )}
                   </span>
                 )}
@@ -658,7 +734,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", projDot)} />
                     <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{project.title}</span>
                     {project.isProjectOwner ? (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#1c1c1a] px-1.5 py-0.5 text-[10px] font-medium text-white shrink-0">
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
                         Owner
                       </span>
                     ) : contribConfig && (
@@ -736,7 +812,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                           <DropdownMenuSubTrigger className="flex items-center gap-1 text-xs">
                             <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", pDot)} />
                             <span className="truncate">{project.title}</span>
-                            {cConfig && (
+                            {project.isProjectOwner ? (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
+                                Owner
+                              </span>
+                            ) : cConfig && (
                               <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
                                 <span className={cn("inline-block h-1 w-1 rounded-full", cConfig.dotColor)} />
                                 {cConfig.label}
@@ -848,13 +928,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   onClick={async () => {
                     const result = await generateCompanyLoginLinkAction({ companyId: company.id })
                     if (result.success && result.loginUrl) {
-                      window.open(result.loginUrl, "_blank", "noopener,noreferrer")
+                      await navigator.clipboard.writeText(result.loginUrl)
+                      toast.success("Login link copied — paste in an incognito window")
                     } else {
                       toast.error(result.error ?? "Failed to generate login link")
                     }
                   }}
                 >
-                  Log in as company
+                  Copy login link
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer">
@@ -897,7 +978,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       columnFilters,
       columnVisibility,
       pagination,
+      rowSelection,
     },
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -906,21 +989,47 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
+    onRowSelectionChange: setRowSelection,
   })
 
-  const totalCompanies = data.filter((r) => r.type === "company").length
-  const totalInvites = data.filter((r) => r.type === "invite").length
+  const totalCompanies = data.filter((r) => r.status !== "invited").length
+  const totalInvites = data.filter((r) => r.status === "invited").length
+  const filteredRows = table.getFilteredRowModel().rows
+  const filteredCompanies = filteredRows.filter((r) => r.original.status !== "invited").length
+  const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
+  const isFiltered = columnFilters.length > 0 || table.getState().globalFilter
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h3 className="arco-section-title">Companies</h3>
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <h3 className="arco-section-title">Companies</h3>
         <p className="text-xs text-[#a1a1a0] mt-0.5">
-          {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
-          {totalInvites > 0 && ` · ${totalInvites} unclaimed ${totalInvites === 1 ? "invite" : "invites"}`}
+          {isFiltered ? (
+            <>
+              {filteredCompanies} of {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
+              {filteredInvites > 0 && ` · ${filteredInvites} unclaimed`}
+            </>
+          ) : (
+            <>
+              {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
+              {totalInvites > 0 && ` · ${totalInvites} unclaimed ${totalInvites === 1 ? "invite" : "invites"}`}
+            </>
+          )}
         </p>
+        </div>
+        <button
+          type="button"
+          className="btn-primary"
+          style={{ fontSize: 14, padding: "10px 20px" }}
+          onClick={() => setShowAddModal(true)}
+        >
+          Add company
+        </button>
       </div>
+
+      <AdminAddCompanyModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
 
       {/* Filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -946,20 +1055,84 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
             }}
           >
-            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All statuses" />
+            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+              <SelectValue placeholder="All statuses">
+                {statusFilter === "all" ? "All statuses" : (
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[statusFilter]}`} />
+                    {STATUS_LABEL[statusFilter]}
+                  </span>
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="listed">Listed</SelectItem>
-              <SelectItem value="unlisted">Unlisted</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="deactivated">Deactivated</SelectItem>
-              <SelectItem value="invited">Invited</SelectItem>
+              {["listed", "unlisted", "draft", "deactivated", "invited"].map((s) => (
+                <SelectItem key={s} value={s}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
+                    {STATUS_LABEL[s]}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
+
+      {/* Bulk actions */}
+      {Object.keys(rowSelection).length > 0 && (() => {
+        const selectedCount = Object.keys(rowSelection).length
+        return (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4]">
+            <span className="text-xs text-[#6b6b68]">{selectedCount} selected</span>
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors" disabled={isBulkProcessing}>
+                    Change status
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[160px]">
+                  {(["draft", "listed", "unlisted", "deactivated"] as const).map((s) => (
+                    <DropdownMenuItem
+                      key={s}
+                      className="text-xs cursor-pointer flex items-center gap-1.5"
+                      onClick={async () => {
+                        const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                        setIsBulkProcessing(true)
+                        let success = 0
+                        for (const company of selectedRows) {
+                          if (company.status === s) continue
+                          const result = await updateCompanyStatusAction({ companyId: company.id, status: s })
+                          if (result.success) success++
+                        }
+                        if (success > 0) {
+                          toast.success(`${success} ${success === 1 ? "company" : "companies"} updated to ${STATUS_LABEL[s]}`)
+                          setRowSelection({})
+                          router.refresh()
+                        }
+                        setIsBulkProcessing(false)
+                      }}
+                    >
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[s]}`} />
+                      {STATUS_LABEL[s]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-red-200 bg-white text-red-600 hover:bg-red-50 transition-colors"
+                disabled={isBulkProcessing}
+                onClick={() => setShowBulkDeleteConfirm(true)}
+              >
+                Delete
+              </button>
+            </div>
+            {isBulkProcessing && <span className="text-xs text-[#a1a1a0]">Processing…</span>}
+          </div>
+        )
+      })()}
 
       {/* Table */}
       <div className="border border-[#e5e5e4] overflow-x-auto">
@@ -975,6 +1148,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                       key={header.id}
                       colSpan={header.colSpan}
                       className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
+                      style={header.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
@@ -1004,7 +1178,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle">
+                    <td key={cell.id} className="px-4 py-3 align-middle" style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -1591,6 +1765,60 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk delete confirmation */}
+      {showBulkDeleteConfirm && (() => {
+        const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+        const count = selectedRows.length
+        return (
+          <div className="popup-overlay" onClick={() => { if (!isBulkProcessing) setShowBulkDeleteConfirm(false) }}>
+            <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">Delete {count} {count === 1 ? "company" : "companies"}</h3>
+                <button type="button" className="popup-close" onClick={() => setShowBulkDeleteConfirm(false)} aria-label="Close" disabled={isBulkProcessing}>✕</button>
+              </div>
+              <div className="popup-banner popup-banner--warn">
+                <AlertTriangle className="popup-banner-icon" />
+                <div><p>This will permanently delete {count} {count === 1 ? "company" : "companies"} and all associated data. This action cannot be undone.</p></div>
+              </div>
+              <div style={{ maxHeight: 160, overflowY: "auto", margin: "12px 0" }}>
+                {selectedRows.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1.5 py-1 text-xs text-[#6b6b68]">
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[c.status] ?? "bg-[#a1a1a0]"}`} />
+                    {c.name}
+                  </div>
+                ))}
+              </div>
+              <div className="popup-actions">
+                <button type="button" className="btn-tertiary" onClick={() => setShowBulkDeleteConfirm(false)} disabled={isBulkProcessing} style={{ flex: 1 }}>Cancel</button>
+                <button
+                  type="button" className="btn-secondary" disabled={isBulkProcessing} style={{ flex: 1, backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
+                  onClick={async () => {
+                    setIsBulkProcessing(true)
+                    let success = 0
+                    for (const company of selectedRows) {
+                      const isInvite = company.id.startsWith("invite-")
+                      const result = isInvite
+                        ? await adminDeleteInviteAction({ email: company.name })
+                        : await adminDeleteCompanyAction({ companyId: company.id })
+                      if (result.success) success++
+                    }
+                    if (success > 0) {
+                      toast.success(`${success} ${success === 1 ? "company" : "companies"} deleted`)
+                      setRowSelection({})
+                      router.refresh()
+                    }
+                    setIsBulkProcessing(false)
+                    setShowBulkDeleteConfirm(false)
+                  }}
+                >
+                  {isBulkProcessing ? "Deleting…" : `Delete ${count} ${count === 1 ? "company" : "companies"}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
     </div>
   )

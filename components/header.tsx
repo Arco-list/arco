@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type Dispatch, type SetStateAction, type RefObject } from "react";
+import Image from "next/image";
+import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -23,6 +25,134 @@ export interface HeaderProps {
   transparent?: boolean;
   maxWidth?: string;
   navLinks?: NavLink[];
+}
+
+type SearchResult = {
+  projects: Array<{ id: string; title: string; slug: string; location: string | null; photo: string | null; category: string | null }>;
+  professionals: Array<{ id: string; name: string; slug: string; logo: string | null; city: string | null; service: string | null }>;
+};
+
+function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClose, t }: {
+  searchQuery: string;
+  setSearchQuery: Dispatch<SetStateAction<string>>;
+  inputRef: RefObject<HTMLInputElement | null>;
+  onSearch: (e: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [results, setResults] = useState<SearchResult>({ projects: [], professionals: [] });
+  const [isLoading, setIsLoading] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const trimmedQuery = searchQuery.trim();
+  const hasResults = results.projects.length > 0 || results.professionals.length > 0;
+  const encoded = encodeURIComponent(trimmedQuery);
+
+  const fetchResults = useCallback((query: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.length < 2) { setResults({ projects: [], professionals: [] }); return; }
+    setIsLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        if (res.ok) setResults(await res.json());
+      } catch {}
+      setIsLoading(false);
+    }, 250);
+  }, []);
+
+  useEffect(() => { fetchResults(trimmedQuery); }, [trimmedQuery, fetchResults]);
+
+  return (
+    <div className="popup-overlay" style={{ alignItems: "flex-start", paddingTop: 80 }} onClick={onClose}>
+      <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        {/* Header */}
+        <div className="popup-header">
+          <h3 className="arco-section-title">Search</h3>
+          <button type="button" className="popup-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        {/* Search input */}
+        <form onSubmit={(e) => { onSearch(e); onClose(); }}>
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a1a1a0]" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 10L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={String(t("search_arco"))}
+              className="w-full h-11 pl-9 pr-4 border border-[#e5e5e4] rounded-[3px] text-sm outline-none focus:border-[#1c1c1a] transition-colors"
+              autoFocus
+            />
+          </div>
+        </form>
+
+        {/* Results */}
+        {trimmedQuery.length >= 2 && (
+          <div style={{ maxHeight: "50vh", overflowY: "auto", marginTop: 16 }}>
+            {isLoading && !hasResults && (
+              <p className="text-xs text-[#a1a1a0] py-2">Searching…</p>
+            )}
+
+            {results.projects.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 8 }}>Projects</p>
+                {results.projects.map((p) => (
+                  <Link key={p.id} href={`/projects/${p.slug}`} className="flex items-center gap-3 py-2.5 hover:bg-[#fafaf9] -mx-3 px-3 transition-colors" onClick={onClose}>
+                    {p.photo ? (
+                      <Image src={sanitizeImageUrl(p.photo, IMAGE_SIZES.thumbnail)} alt={p.title} width={40} height={40} className="rounded-[3px] object-cover shrink-0" style={{ width: 40, height: 40 }} />
+                    ) : (
+                      <div className="w-10 h-10 rounded-[3px] bg-[#f5f5f4] shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#1c1c1a] truncate">{p.title}</p>
+                      {(p.location || p.category) && <p className="text-xs text-[#a1a1a0] truncate">{[p.category, p.location].filter(Boolean).join(" · ")}</p>}
+                    </div>
+                  </Link>
+                ))}
+                <Link href={`/projects?search=${encoded}`} className="block py-2 text-xs font-medium text-[#016D75] hover:underline" onClick={onClose}>
+                  {String(t("search_all_projects"))}
+                </Link>
+              </div>
+            )}
+
+            {results.professionals.length > 0 && (
+              <div className={results.projects.length > 0 ? "border-t border-[#e5e5e4] pt-3" : ""}>
+                <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 8 }}>Professionals</p>
+                {results.professionals.map((p) => (
+                  <Link key={p.id} href={`/professionals/${p.slug}`} className="flex items-center gap-3 py-2.5 hover:bg-[#fafaf9] -mx-3 px-3 transition-colors" onClick={onClose}>
+                    {p.logo ? (
+                      <Image src={sanitizeImageUrl(p.logo, IMAGE_SIZES.thumbnail)} alt={p.name} width={40} height={40} className="rounded-full object-cover shrink-0" style={{ width: 40, height: 40 }} />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-[#f5f5f4] shrink-0 flex items-center justify-center text-xs font-medium text-[#6b6b68]">{p.name.charAt(0).toUpperCase()}</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#1c1c1a] truncate">{p.name}</p>
+                      {(p.service || p.city) && <p className="text-xs text-[#a1a1a0] truncate">{[p.service, p.city].filter(Boolean).join(" · ")}</p>}
+                    </div>
+                  </Link>
+                ))}
+                <Link href={`/professionals?search=${encoded}`} className="block py-2 text-xs font-medium text-[#016D75] hover:underline" onClick={onClose}>
+                  {String(t("search_all_professionals"))}
+                </Link>
+              </div>
+            )}
+
+            {!isLoading && !hasResults && (
+              <div className="py-2">
+                <p className="text-xs text-[#a1a1a0] mb-3">No results found</p>
+                <div className="flex flex-col gap-1">
+                  <Link href={`/projects?search=${encoded}`} className="text-xs font-medium text-[#016D75] hover:underline" onClick={onClose}>{String(t("search_all_projects"))}</Link>
+                  <Link href={`/professionals?search=${encoded}`} className="text-xs font-medium text-[#016D75] hover:underline" onClick={onClose}>{String(t("search_all_professionals"))}</Link>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLinks }: HeaderProps) {
@@ -404,6 +534,10 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
                               {t("team")}
                             </Link>
+                            <Link href="/dashboard/inbox" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors truncate ${pathname === "/dashboard/inbox" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-6l-2 3H10l-2-3H2" /><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>
+                              {t("inbox")}
+                            </Link>
                             <Link href="/dashboard/pricing" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors truncate ${pathname === "/dashboard/pricing" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
                               {t("plans")}
@@ -430,10 +564,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                         </>
                       )}
 
-                      {/* Saved — only when logged in */}
+                      {/* Messages + Saved — only when logged in */}
                       {isLoggedIn && (
                         <>
                           <div className="px-4 py-2">
+                            <Link href="/homeowner?tab=messages" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors truncate ${pathname === "/homeowner" && searchParams.get("tab") === "messages" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                              {t("messages")}
+                            </Link>
                             <Link href="/homeowner?tab=saved-projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors truncate ${pathname === "/homeowner" && (!searchParams.get("tab") || searchParams.get("tab") === "saved-projects") ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
                               {t("saved_projects")}
@@ -473,9 +611,13 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                                   {t("admin_emails")}
                                 </Link>
+                                <Link href="/admin/growth" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors truncate ${pathname === "/admin/growth" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                                  {t("admin_growth")}
+                                </Link>
                                 <Link href="/admin/prospects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm transition-colors truncate ${pathname === "/admin/prospects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
-                                  {t("admin_prospects")}
+                                  {t("admin_sales")}
                                 </Link>
                               </>
                             )}
@@ -526,42 +668,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
       {/* Search Overlay - full screen modal */}
       {isSearchOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-[400] flex items-start justify-center pt-20"
-          onClick={() => setIsSearchOpen(false)}
-        >
-          <div 
-            className="bg-white w-full max-w-[600px] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <form onSubmit={handleSearch} className="p-6">
-              <div className="relative">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search projects..."
-                  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-[3px] text-[15px] outline-none focus:border-black transition-colors"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black transition-colors"
-                  aria-label="Submit search"
-                >
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
-                    <path d="M10 10L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </div>
-              <p className="arco-small-text mt-3 text-center">
-                Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">ESC</kbd> to close
-              </p>
-            </form>
-          </div>
-        </div>
+        <SearchOverlay
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          inputRef={searchInputRef}
+          onSearch={handleSearch}
+          onClose={() => setIsSearchOpen(false)}
+          t={t}
+        />
       )}
     </>
   );

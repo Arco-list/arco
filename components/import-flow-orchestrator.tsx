@@ -10,6 +10,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { checkDomainOwnership, autoCreateCompanyFromDomain, type DomainCheckResult } from "@/app/businesses/actions"
 import { sendDomainVerificationAction, verifyDomainCodeAction } from "@/app/create-company/actions"
 import { ImportProjectModal } from "@/components/import-project-modal"
+import { startSessionRecording } from "@/lib/tracking"
 
 type Phase =
   | "idle"
@@ -68,6 +69,7 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
     if (phase !== "idle") return
 
     setPhase("checking-domain")
+    startSessionRecording()
     checkDomainOwnership(pendingUrl).then((result) => {
       setDomainResult(result)
 
@@ -128,33 +130,21 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
 
     if (!proData?.company_id) {
       if (!urlDomain) return
-      // No company — auto-create or claim from URL domain
-      setPhase("creating-company")
-      const result = await autoCreateCompanyFromDomain(urlDomain, claimId ?? undefined)
-      if (!result.success) {
-        toast.error(result.error)
-        setPhase("idle")
-        onReset()
-        return
-      }
-      setCompanyId(result.companyId)
-      setProfessionalId(result.professionalId)
+      // No company yet — require domain verification BEFORE creating company
+      // Store the claimable company ID for after verification
+      if (claimId) setClaimableCompanyId(claimId)
+      setCompanyDomain(urlDomain)
       setHasExistingCompany(false)
-      // Skip domain verification in dev, otherwise verify
-      if (process.env.NODE_ENV === "development") {
-        setPhase("importing")
-      } else {
-        setPhase("verifying-domain")
-      }
+      setPhase("verifying-domain")
       return
     }
 
-    // User already has a company — skip company setup, go straight to import
+    // User already has a company
     setCompanyId(proData.company_id)
     setProfessionalId(proData.id)
     setHasExistingCompany(true)
 
-    // Check if company domain matches the URL domain
+    // Check if company domain is verified
     const { data: companyData } = await supabase
       .from("companies")
       .select("domain, is_verified")
@@ -168,7 +158,20 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
     setCompanyDomain(storedDomain)
     setIsVerified(Boolean(companyData?.is_verified))
 
-    // Company logged in → skip domain verification, go straight to import
+    // If company domain matches and is verified, proceed to import
+    if (companyData?.is_verified && storedDomain === urlDomain) {
+      setPhase("importing")
+      return
+    }
+
+    // If company is not verified, require verification
+    if (!companyData?.is_verified) {
+      setPhase("verifying-domain")
+      return
+    }
+
+    // Domain is verified but URL domain doesn't match — still allow import
+    // (the ImportProjectModal will do its own domain check)
     setPhase("importing")
   }, [user, supabase, urlDomain, onReset])
 
@@ -191,23 +194,40 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
   }, [urlDomain, verifyEmail])
 
   const handleVerifyCode = useCallback(async () => {
-    if (!urlDomain || !verifyCode || !companyId) return
+    if (!urlDomain || !verifyCode) return
     setVerifyError(null)
     setIsVerifying(true)
     const result = await verifyDomainCodeAction({ domain: urlDomain, code: verifyCode })
     if (result.verified) {
-      // Update company domain and mark as verified
-      await supabase
-        .from("companies")
-        .update({ domain: urlDomain, is_verified: true } as never)
-        .eq("id", companyId)
+      if (companyId) {
+        // Company already exists — mark as verified
+        await supabase
+          .from("companies")
+          .update({ domain: urlDomain, is_verified: true } as never)
+          .eq("id", companyId)
+      } else {
+        // Company doesn't exist yet — create it now that domain is verified
+        const createResult = await autoCreateCompanyFromDomain(urlDomain, claimableCompanyId ?? undefined)
+        if (!createResult.success) {
+          setVerifyError(createResult.error)
+          setIsVerifying(false)
+          return
+        }
+        setCompanyId(createResult.companyId)
+        setProfessionalId(createResult.professionalId)
+        // Mark the newly created company as verified
+        await supabase
+          .from("companies")
+          .update({ is_verified: true } as never)
+          .eq("id", createResult.companyId)
+      }
       toast.success("Domain verified")
       setPhase("importing")
     } else {
       setVerifyError(result.error ?? "Invalid or expired code.")
     }
     setIsVerifying(false)
-  }, [urlDomain, verifyCode, companyId, supabase])
+  }, [urlDomain, verifyCode, companyId, claimableCompanyId, supabase])
 
   const handleClose = useCallback(() => {
     setPhase("idle")

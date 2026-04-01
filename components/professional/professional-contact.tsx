@@ -1,25 +1,33 @@
-import Link from "next/link"
 import { getTranslations } from "next-intl/server"
+import { IntroductionButton } from "./introduction-button"
 
 interface ProfessionalContactProps {
+  companyId: string
   companyName: string
+  companyLogoUrl: string | null
+  companyInitials: string
+  serviceLabel: string | null
   officeAddress: string | null
   city: string | null
   websiteUrl: string | null
 }
 
 export async function ProfessionalContact({
+  companyId,
   companyName,
+  companyLogoUrl,
+  companyInitials,
+  serviceLabel,
   officeAddress,
   city: cityProp,
   websiteUrl,
 }: ProfessionalContactProps) {
   const t = await getTranslations("professional_detail")
 
-  // Build display: "street + housenumber, city" — matching company edit page format
   const city = cityProp ?? null
   const street = officeAddress?.split(",")[0]?.trim() ?? null
   const locationDisplay = [street, city].filter(Boolean).join(', ') || null
+  const subtitle = [serviceLabel, city].filter(Boolean).join(' · ') || null
 
   return (
     <section id="contact" className="contact-section">
@@ -31,9 +39,13 @@ export async function ProfessionalContact({
         <div className="contact-grid">
           {/* Request Introduction CTA */}
           <div className="contact-card">
-            <Link href="#" className="btn-contact">
-              {t("request_introduction")}
-            </Link>
+            <IntroductionButton
+              companyId={companyId}
+              companyName={companyName}
+              companyLogoUrl={companyLogoUrl}
+              companyInitials={companyInitials}
+              subtitle={subtitle}
+            />
           </div>
 
           {/* Office location */}

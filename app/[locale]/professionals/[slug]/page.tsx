@@ -10,6 +10,7 @@ import { ProfessionalSpecs } from "@/components/professional/professional-specs"
 import { ProfessionalProjects } from "@/components/professional/professional-projects"
 import { ProfessionalContact } from "@/components/professional/professional-contact"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
+import { TrackProfessionalView } from "@/components/track-view"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
@@ -138,6 +139,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
   return (
     <div className="min-h-screen bg-white">
+      <TrackProfessionalView companyId={professional.company.id} slug={slug} />
       <Header />
 
       <ProfessionalSubNav
@@ -154,6 +156,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
         <ProfessionalHeader
           name={professional.name}
           services={servicesBadge}
+          allServices={professional.services}
           description={professional.description}
           companyIcon={companyIcon}
           companyInitials={companyInitials}
@@ -174,7 +177,11 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
       )}
 
       <ProfessionalContact
+        companyId={professional.company.id}
         companyName={professional.name}
+        companyLogoUrl={companyIcon}
+        companyInitials={companyInitials}
+        serviceLabel={servicesBadge}
         officeAddress={contact.officeAddress}
         city={professional.company.city ?? null}
         websiteUrl={contact.websiteUrl}

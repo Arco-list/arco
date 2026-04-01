@@ -148,7 +148,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
         </div>
       </Link>
 
-      <ShareModal
+      <ShareModal shareType="professional"
         isOpen={shareOpen}
         onClose={() => setShareOpen(false)}
         title={professional.name}

@@ -39,6 +39,10 @@ export default async function CompanySettingsPage({
 
   let company = null
 
+  // Check admin status
+  const { data: adminCheckProfile } = await supabase.from("profiles").select("admin_role, user_types").eq("id", user.id).maybeSingle()
+  const isAdmin = !!(adminCheckProfile && isAdminUser(adminCheckProfile.user_types, adminCheckProfile.admin_role))
+
   // 0. company_id param: from company switcher or admin override
   if (companyIdParam) {
     const serviceSupabase = createServiceRoleSupabaseClient()
@@ -49,13 +53,6 @@ export default async function CompanySettingsPage({
       serviceSupabase.from("company_members").select("id").eq("company_id", companyIdParam).eq("user_id", user.id).eq("status", "active").maybeSingle(),
       serviceSupabase.from("professionals").select("id").eq("company_id", companyIdParam).eq("user_id", user.id).maybeSingle(),
     ])
-
-    // Also allow admins
-    let isAdmin = false
-    if (!isOwner && !isMember && !isProfessional) {
-      const { data: profile } = await supabase.from("profiles").select("admin_role, user_types").eq("id", user.id).maybeSingle()
-      isAdmin = !!(profile && isAdminUser(profile.user_types, profile.admin_role))
-    }
 
     if (isOwner || isMember || isProfessional || isAdmin) {
       const { data: paramCompany } = await serviceSupabase
@@ -288,6 +285,7 @@ export default async function CompanySettingsPage({
       canPublishProjects={canPublishProjects}
       showImportedBanner={imported === "1"}
       importedProjectId={importedProjectId ?? null}
+      adminCompanyId={isAdmin ? company.id : undefined}
     />
   )
 }

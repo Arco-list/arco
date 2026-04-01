@@ -257,6 +257,25 @@ export const signUpAction = async (
     },
   });
 
+  // Step 3.5: Clean up ghost users (created but never confirmed/signed in)
+  try {
+    const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
+    const adminClient = createServiceRoleSupabaseClient();
+    const { data: { users: existingUsers } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const ghost = existingUsers?.find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase().trim()
+        && !u.email_confirmed_at
+        && !u.last_sign_in_at
+    );
+    if (ghost) {
+      logger.auth('signup', 'Removing ghost user before re-creation', { requestId, ghostId: ghost.id });
+      await adminClient.from('profiles').delete().eq('id', ghost.id);
+      await adminClient.auth.admin.deleteUser(ghost.id);
+    }
+  } catch (err) {
+    logger.auth('signup', 'Ghost cleanup failed (non-fatal)', { requestId }, err as Error);
+  }
+
   // Step 4: Attempt Supabase auth signup
   let authData, authError;
   try {
@@ -359,6 +378,17 @@ export const signUpAction = async (
             requestId,
             userId: authData.user.id,
           });
+
+          // Match prospect on signup (auto-confirmed invited user)
+          try {
+            const { cookies } = await import('next/headers');
+            const cookieStore = await cookies();
+            const prospectRef = cookieStore.get('prospect_ref')?.value ?? null;
+            const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
+            await matchProspectOnSignup(email, authData.user.id, prospectRef);
+          } catch (err) {
+            logger.error("Failed to match prospect on invited signup", { userId: authData.user.id }, err as Error);
+          }
         }
       }
     } catch (error) {
@@ -529,10 +559,24 @@ export const signUpWithOtpAction = async (
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
 
   try {
-    // Step 1: Create user via admin API (auto-confirmed, with metadata)
     const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
     const adminClient = createServiceRoleSupabaseClient();
 
+    // Step 0: Clean up ghost users (created but never confirmed/signed in)
+    const { data: { users: existingUsers } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+    const ghost = existingUsers?.find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase().trim()
+        && !u.email_confirmed_at
+        && !u.last_sign_in_at
+    );
+    if (ghost) {
+      logger.auth('signup-otp', 'Removing ghost user before re-creation', { ghostId: ghost.id });
+      // Clean up profile and auth user
+      await adminClient.from('profiles').delete().eq('id', ghost.id);
+      await adminClient.auth.admin.deleteUser(ghost.id);
+    }
+
+    // Step 1: Create user via admin API (auto-confirmed, with metadata)
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email: email.toLowerCase().trim(),
       email_confirm: true,
@@ -547,7 +591,7 @@ export const signUpWithOtpAction = async (
         error: { message: createError.message },
       });
 
-      // If user already exists (race condition), fall through to OTP send
+      // If user already exists (confirmed account), fall through to OTP send
       if (
         createError.message?.toLowerCase().includes('already') ||
         createError.message?.toLowerCase().includes('exists') ||
@@ -566,6 +610,17 @@ export const signUpWithOtpAction = async (
       logger.auth('signup-otp', 'User created via admin API', {
         userId: newUser.user.id,
       });
+
+      // Match prospect on signup (OTP flow — user is auto-confirmed, won't go through auth callback)
+      try {
+        const { cookies: getCookies } = await import('next/headers');
+        const cookieStore = await getCookies();
+        const prospectRef = cookieStore.get('prospect_ref')?.value ?? null;
+        const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
+        await matchProspectOnSignup(email, newUser.user.id, prospectRef);
+      } catch (err) {
+        logger.error("Failed to match prospect on OTP signup", { userId: newUser.user.id }, err as Error);
+      }
     }
 
     // Step 2: Send OTP via the standard flow (goes through Loops.so)

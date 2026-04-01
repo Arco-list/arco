@@ -198,7 +198,7 @@ async function loadAdminCompaniesData() {
   const companyRows: AdminCompanyRow[] = companies.map((company) => {
     // Detect unclaimed companies: unlisted + no active team members
     // These were auto-created from project invites — owner_id is the project client, not the professional
-    const isUnclaimed = company.status === "unlisted" && !claimedCompanyIds.has(company.id)
+    const isUnclaimed = (company.status === "unlisted" || company.status === "draft") && !claimedCompanyIds.has(company.id) && !company.owner_id
 
     // For claimed companies: use owner profile; for unclaimed: use invited email
     const ownerProfile = !isUnclaimed && company.owner_id ? ownerProfileMap.get(company.owner_id) : null
@@ -218,6 +218,10 @@ async function loadAdminCompaniesData() {
       serviceIds = Array.isArray(company.services_offered)
         ? company.services_offered.filter((v): v is string => typeof v === "string")
         : []
+      // Fall back to primary_service_id if services_offered is empty
+      if (serviceIds.length === 0 && company.primary_service_id) {
+        serviceIds = [company.primary_service_id]
+      }
       resolvedServices = serviceIds
         .map((id) => serviceNameMap.get(id))
         .filter((name): name is string => Boolean(name))
@@ -240,7 +244,7 @@ async function loadAdminCompaniesData() {
       ownerName: isUnclaimed ? null : ownerName,
       ownerEmail: isUnclaimed
         ? (invitedEmail ?? null)
-        : ((company as any).email || ((company as any).owner_id ? ownerEmailMap.get((company as any).owner_id) ?? null : null)),
+        : ((company as any).owner_id ? ownerEmailMap.get((company as any).owner_id) ?? null : null),
       ownerAvatarUrl: isUnclaimed ? null : (ownerProfile?.avatar_url ?? null),
       projectsAccepted: companyProjectsAccepted.get(company.id) ?? 0,
       projectsPending: companyProjectsPending.get(company.id) ?? 0,

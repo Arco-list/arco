@@ -24,7 +24,7 @@ async function loadAdminProjectsData() {
     serviceSupabase
       .from("projects")
       .select(
-        "id, title, slug, status, rejection_reason, project_type, client_id, project_year, created_at, location, address_city, address_region, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
+        "id, title, slug, status, is_featured, rejection_reason, project_type, client_id, project_year, created_at, location, address_city, address_region, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
       )
       .eq("client.is_active", true)
       .order("created_at", { ascending: false, nullsFirst: false }),
@@ -172,6 +172,7 @@ async function loadAdminProjectsData() {
       status: (project.status ?? "draft") as ProjectStatusValue,
       projectType,
       imageCount,
+      isFeatured: project.is_featured ?? false,
       location,
       createdAt: project.created_at ?? null,
       owner,

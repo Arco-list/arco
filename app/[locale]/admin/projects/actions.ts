@@ -433,6 +433,12 @@ export async function setProjectStatusAction(input: {
           })
         }
 
+        // Get owner company name for invite emails
+        const { data: ownerCompanyRow } = ownerPP?.company_id
+          ? await serviceClient.from("companies").select("name").eq("id", ownerPP.company_id).maybeSingle()
+          : { data: null }
+        const ownerCompanyName = ownerCompanyRow?.name ?? undefined
+
         // Get ALL professional invites and send emails (both 'invited' and 'listed')
         // Exclude project owner from receiving invite email
         const { data: invites } = await supabase
@@ -485,8 +491,13 @@ export async function setProjectStatusAction(input: {
               invite.invited_email,
               {
                 project_owner: ownerFullName,
+                company_name: ownerCompanyName,
                 project_name: project?.title || 'Project',
                 project_title: project?.title || 'Project',
+                project_image: projectPhoto?.url ?? undefined,
+                project_type: projectTypeLabel,
+                project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+                project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
                 confirmUrl
               }
             )
@@ -905,12 +916,24 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   if (!company) return
 
+  let statusChanged = false
   if (hasActiveProjects && company.status === "unlisted") {
     await supabase.from("companies").update({ status: "listed" }).eq("id", companyId)
     logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId })
+    statusChanged = true
   } else if (!hasActiveProjects && company.status === "listed") {
     await supabase.from("companies").update({ status: "unlisted" }).eq("id", companyId)
     logger.info("admin-projects", "Company auto-unlisted (no active projects)", { companyId })
+    statusChanged = true
+  }
+
+  if (statusChanged) {
+    try {
+      const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
+      await syncCompanyToApollo(companyId)
+    } catch (err) {
+      logger.error("admin-projects", "Failed to sync company to Apollo after status sync", { companyId }, err as Error)
+    }
   }
 }
 
@@ -966,5 +989,51 @@ export async function updateProjectProfessionalStatusAction(input: {
 
   revalidatePath("/admin/projects")
   revalidatePath("/admin/professionals")
+  return { success: true }
+}
+
+// ---------------------------------------------------------------------------
+// Toggle project featured status (homepage hero)
+// ---------------------------------------------------------------------------
+
+export async function toggleProjectFeaturedAction(input: {
+  projectId: string
+  isFeatured: boolean
+}): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createServerActionSupabaseClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Unauthorized" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("user_types")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (!isAdminUser(profile?.user_types)) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ is_featured: input.isFeatured })
+    .eq("id", input.projectId)
+
+  if (error) {
+    logger.db("update", "projects", "Failed to toggle featured", { projectId: input.projectId }, error)
+    return { success: false, error: error.message }
+  }
+
+  // Refresh materialized view so homepage picks up the change
+  try {
+    const serviceClient = createServiceRoleSupabaseClient()
+    await serviceClient.rpc("refresh_project_summary")
+  } catch {}
+
+  revalidatePath("/admin/projects")
+  revalidatePath("/")
   return { success: true }
 }

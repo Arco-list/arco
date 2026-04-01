@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useId, useState } from "react"
-import { AlertCircle, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { AlertCircle, GripVertical, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -51,6 +51,7 @@ type FeaturePhotoSelectorModalProps = {
   overlayClassName?: string
   saveLabel?: string
   cancelLabel?: string
+  onReorderPhotos?: (reorderedIds: string[]) => void
 }
 
 export function FeaturePhotoSelectorModal({
@@ -86,10 +87,13 @@ export function FeaturePhotoSelectorModal({
   overlayClassName = OVERLAY_CLASSES,
   saveLabel = "Save selection",
   cancelLabel = "Cancel",
+  onReorderPhotos,
 }: FeaturePhotoSelectorModalProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const taglineInputId = useId()
   const highlightToggleId = useId()
+  const dragItemRef = useRef<string | null>(null)
+  const dragOverItemRef = useRef<string | null>(null)
 
   useEffect(() => {
     setOpenMenuId(null)
@@ -146,6 +150,61 @@ export function FeaturePhotoSelectorModal({
         </div>
 
         <div className="space-y-6 p-6 pb-8 overflow-y-auto overflow-x-hidden flex-1">
+
+          {/* Reorderable selected photos — drag to reorder, first = space cover */}
+          {selectedCount > 0 && onReorderPhotos && (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="heading-5 font-semibold text-foreground">
+                  Selected photos
+                </h3>
+                <p className="body-small text-text-secondary">
+                  Drag to reorder · First photo is the space cover
+                </p>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {selectedPhotoIds.map((photoId, index) => {
+                  const photo = selectablePhotos.find((p) => p.id === photoId)
+                  if (!photo) return null
+                  return (
+                    <div
+                      key={photoId}
+                      draggable
+                      onDragStart={() => { dragItemRef.current = photoId }}
+                      onDragOver={(e) => { e.preventDefault(); dragOverItemRef.current = photoId }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        if (!dragItemRef.current || !dragOverItemRef.current || dragItemRef.current === dragOverItemRef.current) return
+                        const reordered = [...selectedPhotoIds]
+                        const fromIdx = reordered.indexOf(dragItemRef.current)
+                        const toIdx = reordered.indexOf(dragOverItemRef.current)
+                        if (fromIdx === -1 || toIdx === -1) return
+                        reordered.splice(fromIdx, 1)
+                        reordered.splice(toIdx, 0, dragItemRef.current)
+                        onReorderPhotos(reordered)
+                        dragItemRef.current = null
+                        dragOverItemRef.current = null
+                      }}
+                      onDragEnd={() => { dragItemRef.current = null; dragOverItemRef.current = null }}
+                      className="relative flex-shrink-0 cursor-grab active:cursor-grabbing"
+                      style={{ width: 100, height: 100, borderRadius: 6, overflow: "hidden", border: index === 0 ? "2px solid #016D75" : "2px solid transparent" }}
+                    >
+                      <img src={photo.url || "/placeholder.svg"} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.3)" }}>
+                        <GripVertical className="w-5 h-5 text-white" />
+                      </div>
+                      {index === 0 && (
+                        <div className="absolute left-1 top-1 rounded px-1.5 py-0.5 text-[9px] font-semibold text-white" style={{ background: "#016D75" }}>
+                          Cover
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="heading-5 font-semibold text-foreground">Select from existing photos</h3>

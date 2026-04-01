@@ -6,6 +6,7 @@ import { ProfessionalFilterProvider } from "@/contexts/professional-filter-conte
 import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { fetchDiscoverProfessionals } from "@/lib/professionals/queries"
 import { logger } from "@/lib/logger"
+import { TrackPageView } from "@/components/track-view"
 
 export const metadata: Metadata = {
   title: "Browse Professionals",
@@ -26,6 +27,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
 
   return (
     <div className="min-h-screen bg-white">
+      <TrackPageView path="/professionals" />
       <Header />
       <FilterErrorBoundary>
         <ProfessionalFilterProvider>

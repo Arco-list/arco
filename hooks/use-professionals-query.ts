@@ -68,7 +68,8 @@ const parseRating = (value: number | string | null | undefined) => {
 }
 
 const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): ProfessionalCard | null => {
-  if (!row.id || !row.company_id) {
+  // company_id_full is always set; id (professional record) may be null for unclaimed companies
+  if (!row.company_id && !row.company_name) {
     return null
   }
 

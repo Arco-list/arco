@@ -64,6 +64,17 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
 
   const now = new Date().toISOString()
 
+  // Get invite details
+  const { data: invite } = await supabase
+    .from("project_professionals")
+    .select("invited_email, project_id")
+    .eq("id", idResult.data)
+    .single()
+
+  if (!invite?.invited_email || !invite?.project_id) {
+    return { success: false, error: "Invite not found" }
+  }
+
   const { error: updateError } = await supabase
     .from("project_professionals")
     .update({ invited_at: now, responded_at: null, status: "invited" })
@@ -77,8 +88,81 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
     return { success: false, error: updateError.message }
   }
 
+  // Send the actual email
+  try {
+    const { data: project } = await supabase
+      .from("projects")
+      .select("title, slug, address_city, location, building_type, project_type, client_id, profiles!client_id(first_name, last_name)")
+      .eq("id", invite.project_id)
+      .single()
+
+    const { data: photo } = await supabase
+      .from("project_photos")
+      .select("url")
+      .eq("project_id", invite.project_id)
+      .order("order_index", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    const ownerName = [project?.profiles?.first_name, project?.profiles?.last_name].filter(Boolean).join(" ") || "An architect"
+    const { checkUserAndGenerateInviteUrl } = await import("@/app/new-project/actions")
+    const { confirmUrl } = await checkUserAndGenerateInviteUrl(invite.invited_email, invite.project_id)
+    const { getSiteUrl } = await import("@/lib/utils")
+    const baseUrl = getSiteUrl()
+
+    // Get owner company name
+    const { data: ownerPP } = await supabase
+      .from("project_professionals")
+      .select("company_id")
+      .eq("project_id", invite.project_id)
+      .eq("is_project_owner", true)
+      .maybeSingle()
+    const { data: ownerCompany } = ownerPP?.company_id
+      ? await supabase.from("companies").select("name").eq("id", ownerPP.company_id).maybeSingle()
+      : { data: null }
+
+    const { sendProfessionalInviteEmail } = await import("@/lib/email-service")
+    await sendProfessionalInviteEmail(invite.invited_email, {
+      project_owner: ownerName,
+      company_name: ownerCompany?.name ?? undefined,
+      project_name: project?.title || "Project",
+      project_title: project?.title || "Project",
+      project_image: photo?.url ?? undefined,
+      project_type: (project as any)?.building_type ?? (project as any)?.project_type ?? undefined,
+      project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+      project_link: `${baseUrl}/projects/${(project as any)?.slug ?? invite.project_id}`,
+      confirmUrl,
+    })
+  } catch (err) {
+    logger.error("admin-professionals", "Failed to send invite email", { inviteId: idResult.data }, err as Error)
+  }
+
   revalidatePath("/admin/professionals")
 
+  return { success: true }
+}
+
+export async function adminDeleteInviteAction(input: { email: string }): Promise<{ success: true } | { success: false; error: string }> {
+  const email = input.email?.trim().toLowerCase()
+  if (!email) return { success: false, error: "Email is required" }
+
+  const { error } = await assertAdmin()
+  if (error) return { success: false, error: error.message }
+
+  const serviceRole = createServiceRoleSupabaseClient()
+
+  const { error: deleteErr } = await serviceRole
+    .from("project_professionals")
+    .delete()
+    .eq("invited_email", email)
+    .is("professional_id", null)
+
+  if (deleteErr) {
+    logger.error("admin-delete-invite", "Failed to delete invite rows", { email, error: deleteErr.message })
+    return { success: false, error: "Failed to delete invite." }
+  }
+
+  revalidatePath("/", "layout")
   return { success: true }
 }
 
@@ -109,6 +193,14 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
       error: updateError.message,
     })
     return { success: false, error: updateError.message }
+  }
+
+  // Sync company status to Apollo account stage
+  try {
+    const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
+    await syncCompanyToApollo(parsedCompanyId.data)
+  } catch (err) {
+    logger.error("admin-professionals", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
   }
 
   revalidatePath("/admin/professionals")
@@ -475,6 +567,8 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
   const serviceRole = createServiceRoleSupabaseClient()
 
   // Delete child rows that may not CASCADE or are RLS-restricted
+  await serviceRole.from("professionals").delete().eq("company_id", companyId)
+
   const { error: ppErr } = await serviceRole
     .from("project_professionals")
     .delete()
@@ -504,6 +598,9 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
     logger.error("admin-delete-company", "Failed to delete company social links", { companyId, error: linksErr.message })
     return { success: false, error: "Failed to delete company social links." }
   }
+
+  await serviceRole.from("saved_companies").delete().eq("company_id", companyId)
+  await serviceRole.from("reviews").delete().eq("company_id", companyId)
 
   // Get owner_id before deleting
   const { data: company } = await serviceRole
@@ -669,6 +766,6 @@ export async function changeCompanyOwnerAction(input: {
     })
   }
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/", "layout")
   return { success: true }
 }

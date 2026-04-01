@@ -85,6 +85,7 @@ export type AdminProjectRow = {
   status: ProjectStatus
   projectType: string | null
   imageCount: number
+  isFeatured: boolean
   location: string | null
   createdAt: string | null
   owner: { name: string; avatarUrl: string | null } | null
@@ -230,6 +231,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           className="h-3.5 w-3.5"
         />
       ),
+      size: 32,
       enableSorting: false,
       enableHiding: false,
     },
@@ -363,13 +365,14 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                 onClick={async () => {
                   const result = await generateCompanyLoginLinkAction({ companyId: company.id })
                   if (result.success && result.loginUrl) {
-                    window.open(result.loginUrl, "_blank", "noopener,noreferrer")
+                    await navigator.clipboard.writeText(result.loginUrl)
+                    toast.success("Login link copied — paste in an incognito window")
                   } else {
                     toast.error(result.error ?? "Failed to generate login link")
                   }
                 }}
               >
-                Log in as company
+                Copy login link
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
@@ -637,16 +640,26 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
             }}
           >
-            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All statuses" />
+            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+              <SelectValue placeholder="All statuses">
+                {statusFilter === "all" ? "All statuses" : (
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter].dotColor}`} />
+                    {STATUS_CONFIG[statusFilter].label}
+                  </span>
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="draft">In progress</SelectItem>
-              <SelectItem value="in_progress">In review</SelectItem>
-              <SelectItem value="published">Listed</SelectItem>
-              <SelectItem value="archived">Unlisted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
+              {(["draft", "in_progress", "published", "archived", "rejected"] as ProjectStatus[]).map((s) => (
+                <SelectItem key={s} value={s}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dotColor}`} />
+                    {STATUS_CONFIG[s].label}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -728,6 +741,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                       key={header.id}
                       colSpan={header.colSpan}
                       className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
+                      style={header.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
@@ -757,7 +771,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle">
+                    <td key={cell.id} className="px-4 py-3 align-middle" style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

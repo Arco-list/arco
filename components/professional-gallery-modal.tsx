@@ -390,7 +390,7 @@ export function ProfessionalGalleryModal({
       </Dialog>
 
       {/* Share Modal */}
-      <ShareModal
+      <ShareModal shareType="professional"
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         title={professionalName}

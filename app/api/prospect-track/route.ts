@@ -8,5 +8,15 @@ export async function GET(request: NextRequest) {
   }
 
   await trackProspectLandingVisit(ref)
-  return NextResponse.json({ ok: true })
+
+  // Set cookie so we can link this prospect on signup (even with a different email)
+  const response = NextResponse.json({ ok: true })
+  response.cookies.set("prospect_ref", ref, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 90, // 90 days
+    path: "/",
+  })
+  return response
 }

@@ -8,10 +8,11 @@ import { useTranslations } from "next-intl"
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
 import { MapPreviewCard, ProfessionalsMap } from "@/components/professionals-map"
 import { Footer } from "@/components/footer"
-import { useProfessionalFilters } from "@/contexts/professional-filter-context"
+import { useProfessionalFilters, PROFESSIONAL_SORT_OPTIONS } from "@/contexts/professional-filter-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
+import { SortLinks } from "@/components/sort-links"
 
 // Map preview card appears as the 3rd card (top-right in 3-col grid)
 const MAP_CARD_POSITION = 2
@@ -27,6 +28,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
     keyword,
     taxonomyLabelMap,
     sortBy,
+    setSortBy,
   } = useProfessionalFilters()
 
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
@@ -150,13 +152,14 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
         <div className="wrap">
 
           {/* Result meta */}
-          <div className="discover-results-meta">
+          <div className="discover-results-meta" style={{ justifyContent: "space-between" }}>
             <p className="discover-results-count">
               <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
                 {(total > sortedProfessionals.length ? total : sortedProfessionals.length).toLocaleString()}
               </strong>{" "}
               {headingText}
             </p>
+            <SortLinks options={PROFESSIONAL_SORT_OPTIONS} current={sortBy} onChange={setSortBy} namespace="professionals" />
           </div>
 
           {/* Error */}

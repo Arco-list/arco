@@ -81,7 +81,17 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
         return;
       }
 
-      setProfile((data as UserProfile | null) ?? null);
+      const p = (data as UserProfile | null) ?? null;
+      setProfile(p);
+
+      // Identify user in PostHog
+      if (p && userId && typeof window !== "undefined" && (window as any).posthog) {
+        (window as any).posthog.identify(userId, {
+          email: p.email ?? undefined,
+          name: [p.first_name, p.last_name].filter(Boolean).join(" ") || undefined,
+          user_types: p.user_types ?? undefined,
+        });
+      }
     },
     [supabase]
   );
@@ -137,6 +147,9 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
           setSession(null);
           setUser(null);
           setProfile(null);
+          if (typeof window !== "undefined" && (window as any).posthog) {
+            (window as any).posthog.reset();
+          }
           window.location.href = "/";
           return;
         }

@@ -96,6 +96,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${requestUrl.origin}/update-password`);
       }
 
+      // Match prospect on signup (updates prospect status + syncs Apollo stage)
+      if (data.user?.email) {
+        try {
+          const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
+          const prospectRef = request.cookies.get('prospect_ref')?.value ?? null;
+          await matchProspectOnSignup(data.user.email, data.user.id, prospectRef);
+        } catch (err) {
+          logger.error("Failed to match prospect on signup callback", { userId: data.user.id }, err as Error);
+        }
+      }
+
       // Check if user has a profile, if not create one (for email confirmation flow)
       if (data.user) {
         logger.db('select', 'profiles', 'Checking for existing profile', {

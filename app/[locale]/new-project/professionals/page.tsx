@@ -18,6 +18,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
 import { isAdminUser } from "@/lib/auth-utils"
+import { trackProfessionalInvited } from "@/lib/tracking"
 import { toast } from "sonner"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
@@ -792,6 +793,10 @@ export default function ProfessionalsPage() {
 
         return { ...prev, [serviceId]: [nextInvite] }
       })
+
+      if (projectId) {
+        trackProfessionalInvited(projectId, data.invited_email)
+      }
     } catch (error) {
       setInviteError(error instanceof Error ? error.message : "We couldn't add this professional. Please try again.")
     } finally {
@@ -919,6 +924,10 @@ export default function ProfessionalsPage() {
 
           return { ...prev, [inviteServiceId]: [nextInvite] }
         })
+
+        if (projectId) {
+          trackProfessionalInvited(projectId, email)
+        }
       }
 
       closeInviteModal()

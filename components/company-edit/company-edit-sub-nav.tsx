@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { useTranslations } from "next-intl"
 
 interface CompanyEditSubNavProps {
   statusIndicatorClass: string
@@ -14,11 +15,7 @@ interface CompanyEditSubNavProps {
   onCompleteSetup?: () => void
 }
 
-const SECTIONS = [
-  { id: "header", label: "Details" },
-  { id: "projects", label: "Projects" },
-  { id: "contact", label: "Contact" },
-]
+const SECTION_IDS = ["header", "projects", "contact"] as const
 
 export function CompanyEditSubNav({
   statusIndicatorClass,
@@ -31,6 +28,7 @@ export function CompanyEditSubNav({
   isSetupMode,
   onCompleteSetup,
 }: CompanyEditSubNavProps) {
+  const t = useTranslations("company_edit")
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down")
   const lastScrollY = useRef(0)
@@ -43,7 +41,7 @@ export function CompanyEditSubNav({
 
       // Find active section (top third of viewport)
       let active: string | null = null
-      for (const { id } of SECTIONS) {
+      for (const id of SECTION_IDS) {
         const element = document.getElementById(id)
         if (element) {
           const rect = element.getBoundingClientRect()
@@ -96,7 +94,11 @@ export function CompanyEditSubNav({
         <div className="sub-nav-content">
           <div className="sub-nav-left">
             <div className="sub-nav-links" style={{ paddingRight: 0, marginRight: 0 }}>
-              {SECTIONS.map(({ id, label }) => (
+              {([
+                { id: "header", label: t("nav_details") },
+                { id: "projects", label: t("nav_projects") },
+                { id: "contact", label: t("nav_contact") },
+              ]).map(({ id, label }) => (
                 <a key={id} href={`#${id}`} onClick={(e) => handleClick(e, id)} className={getLinkClass(id)}>
                   {label}
                 </a>
@@ -107,7 +109,7 @@ export function CompanyEditSubNav({
           <div className="sub-nav-actions">
             {editSaveStatus !== "idle" && (
               <span style={{ fontSize: 12, color: isSaving ? "#a1a1a0" : "#016D75" }}>
-                {isSaving ? "Saving…" : "✓ Saved"}
+                {isSaving ? t("saving_status") : t("saved_status")}
               </span>
             )}
             <button className="filter-pill" onClick={onStatusClick}>
@@ -122,7 +124,7 @@ export function CompanyEditSubNav({
                 <circle cx="7" cy="7" r="5" />
                 <path d="M14 14L10.5 10.5" />
               </svg>
-              Search preview
+              {t("search_preview")}
             </button>
             <a
               className="filter-pill"
@@ -134,11 +136,11 @@ export function CompanyEditSubNav({
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
               </svg>
-              Preview
+              {t("preview")}
             </a>
             {isSetupMode && onCompleteSetup && (
               <button className="btn-primary setup-nav-cta" onClick={onCompleteSetup}>
-                Complete company
+                {t("complete_company_btn")}
               </button>
             )}
           </div>

@@ -286,7 +286,7 @@ export function useProjectsQuery({
         .order("created_at", { ascending: false, nullsFirst: false })
         .range(from, to)
 
-      // Space filter: find project IDs with features in the selected space
+      // Space filter: find project IDs that have photos tagged with the selected space
       if (selectedSpace) {
         const { data: spaceRows } = await supabase
           .from("spaces")
@@ -296,16 +296,21 @@ export function useProjectsQuery({
 
         const spaceId = spaceRows?.[0]?.id
         if (spaceId) {
+          // Only include projects that have photos assigned to features in this space
           const { data: featureRows } = await supabase
             .from("project_features")
-            .select("project_id")
+            .select("project_id, project_photos!project_photos_feature_id_fkey(id)")
             .eq("space_id", spaceId)
 
-          const projectIds = [...new Set((featureRows ?? []).map((f) => f.project_id).filter(Boolean))]
+          const projectIds = [...new Set(
+            (featureRows ?? [])
+              .filter((f) => f.project_id && Array.isArray(f.project_photos) && f.project_photos.length > 0)
+              .map((f) => f.project_id as string)
+          )]
           if (projectIds.length > 0) {
             query = query.in("id", projectIds)
           } else {
-            // No projects have this space — return empty
+            // No projects have photos in this space — return empty
             return { data: [], total: 0 }
           }
         }
@@ -522,36 +527,64 @@ export function useProjectsQuery({
       const spaceId = spaceRows?.[0]?.id
       if (!spaceId) return {}
 
-      // Find project features with this space that have a cover photo
+      // Find project features with this space
       const { data: featureRows } = await supabase
         .from("project_features")
-        .select("project_id, cover_photo_id")
+        .select("id, project_id, cover_photo_id")
         .in("project_id", projectIds)
         .eq("space_id", spaceId)
-        .not("cover_photo_id", "is", null)
 
       if (!featureRows?.length) return {}
 
+      // 1. Get cover photos for features that have one
       const coverIds = featureRows
         .map((f) => f.cover_photo_id)
         .filter((id): id is string => typeof id === "string")
 
-      const { data: photos } = await supabase
-        .from("project_photos")
-        .select("id, url, alt_text")
-        .in("id", coverIds)
+      let photoMap = new Map<string, { url: string; alt: string | null }>()
 
-      const photoMap = new Map(
-        (photos ?? [])
-          .filter((p) => p.id && p.url)
-          .map((p) => [p.id as string, { url: p.url as string, alt: p.alt_text ?? null }]),
-      )
+      if (coverIds.length > 0) {
+        const { data: coverPhotos } = await supabase
+          .from("project_photos")
+          .select("id, url, alt_text")
+          .in("id", coverIds)
+
+        for (const p of coverPhotos ?? []) {
+          if (p.id && p.url) photoMap.set(p.id, { url: p.url, alt: p.alt_text ?? null })
+        }
+      }
+
+      // 2. For features without a cover photo, find any photo assigned to that feature
+      const featureIdsWithoutCover = featureRows
+        .filter((f) => !f.cover_photo_id)
+        .map((f) => f.id)
+        .filter(Boolean) as string[]
+
+      let featurePhotoMap = new Map<string, { url: string; alt: string | null }>()
+
+      if (featureIdsWithoutCover.length > 0) {
+        const { data: featurePhotos } = await supabase
+          .from("project_photos")
+          .select("feature_id, url, alt_text")
+          .in("feature_id", featureIdsWithoutCover)
+          .order("is_primary", { ascending: false })
+          .order("order_index", { ascending: true })
+
+        for (const p of featurePhotos ?? []) {
+          if (p.feature_id && p.url && !featurePhotoMap.has(p.feature_id)) {
+            featurePhotoMap.set(p.feature_id, { url: p.url, alt: p.alt_text ?? null })
+          }
+        }
+      }
 
       const overrides: Record<string, { url: string; alt?: string | null }> = {}
       featureRows.forEach((f) => {
-        if (f.project_id && f.cover_photo_id) {
-          const photo = photoMap.get(f.cover_photo_id)
-          if (photo) overrides[f.project_id] = photo
+        if (!f.project_id || overrides[f.project_id]) return
+        // Prefer cover photo, fall back to any photo in the feature
+        if (f.cover_photo_id && photoMap.has(f.cover_photo_id)) {
+          overrides[f.project_id] = photoMap.get(f.cover_photo_id)!
+        } else if (f.id && featurePhotoMap.has(f.id)) {
+          overrides[f.project_id] = featurePhotoMap.get(f.id)!
         }
       })
 

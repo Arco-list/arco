@@ -406,44 +406,7 @@ export function ProfessionalsFilterBar() {
               </div>
             </div>
 
-            {/* Sort — right side */}
-            <div className="discover-filter-sort" style={{ position: "relative" }}>
-              <button
-                className="filter-pill"
-                data-open={activeDropdown === "sort"}
-                onClick={() => toggleDropdown("sort")}
-                aria-expanded={activeDropdown === "sort"}
-              >
-                {sortLabelMap[sortBy] ?? sortBy}
-                <ChevronDownIcon className="filter-pill-chevron" />
-              </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "sort"}
-                data-align="right"
-                style={{ minWidth: 192 }}
-              >
-                {PROFESSIONAL_SORT_OPTIONS.map((opt) => (
-                  <div
-                    key={opt}
-                    className="filter-dropdown-option"
-                    data-checked={sortBy === opt}
-                    role="option"
-                    aria-selected={sortBy === opt}
-                    tabIndex={0}
-                    onClick={() => { setSortBy(opt); setActiveDropdown(null) }}
-                    onKeyDown={(e) => {
-                      if (e.key === " " || e.key === "Enter") { e.preventDefault(); setSortBy(opt); setActiveDropdown(null) }
-                    }}
-                  >
-                    <div className="filter-dropdown-option-left">
-                      <div className="filter-checkbox">{sortBy === opt && <CheckIcon />}</div>
-                      <span className="filter-dropdown-label">{sortLabelMap[opt] ?? opt}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Sort moved to results meta row */}
 
           </div>
         </div>

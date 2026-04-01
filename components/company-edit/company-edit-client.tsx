@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { AlertTriangle, ImageIcon, MoreHorizontal, ExternalLink } from "lucide-react"
+import { ImportProjectModal } from "@/components/import-project-modal"
 
 import {
   updateCompanyProfileAction,
@@ -116,6 +118,7 @@ export interface CompanyEditClientProps {
   canPublishProjects?: boolean
   showImportedBanner?: boolean
   importedProjectId?: string | null
+  adminCompanyId?: string
 }
 
 // ── Constants ──
@@ -150,10 +153,20 @@ const EditBadge = () => (
 
 // ── Component ──
 
-export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, showImportedBanner = false, importedProjectId = null }: CompanyEditClientProps) {
+export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, showImportedBanner = false, importedProjectId = null, adminCompanyId }: CompanyEditClientProps) {
   const router = useRouter()
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
+  const t = useTranslations("company_edit")
+
+  // Admin override: set the active company cookie so server actions can access it
+  useEffect(() => {
+    if (adminCompanyId) {
+      import("@/app/dashboard/company/actions").then(({ switchCompanyAction }) => {
+        switchCompanyAction(adminCompanyId)
+      })
+    }
+  }, [adminCompanyId])
 
   // ── Profile state ──
   const [name, setName] = useState(company.name)
@@ -203,6 +216,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [companyStatus, setCompanyStatus] = useState<CompanyStatus>(company.status)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [projectDropdown, setProjectDropdown] = useState<string | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   // ── Project card modal state ──
   const supabaseClient = useMemo(() => getBrowserSupabaseClient(), [])
@@ -254,6 +268,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── AI description state ──
   const [generatingDesc, setGeneratingDesc] = useState(false)
+  const [descCharCount, setDescCharCount] = useState(() => (description ?? "").replace(/<[^>]*>/g, "").trim().length)
   const descRef = useRef<HTMLParagraphElement>(null)
   const autoGenerateTriggered = useRef(false)
 
@@ -338,7 +353,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         if (result.success) {
           router.push(`/dashboard/edit/${importedProjectId}`)
         } else {
-          toast.error(result.error ?? "Something went wrong")
+          toast.error(result.error ?? t("something_wrong"))
         }
       })
       return
@@ -377,7 +392,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         statusLabel: PROJECT_STATUS_LABELS[selectedProjectStatus as ProjectStatus],
         statusDotClass: PROJECT_STATUS_DOT_CLASS[selectedProjectStatus as ProjectStatus],
       } : p))
-      toast.success("Listing status updated")
+      toast.success(t("listing_updated"))
       setProjectStatusModalOpen(false)
       setSelectedCardProject(null)
     } catch {
@@ -402,7 +417,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       } : p))
       // Sync company listed status
       await syncCompanyListedStatus(company.id)
-      toast.success("Listing status updated")
+      toast.success(t("listing_updated"))
       setContributorStatusModalOpen(false)
       setSelectedCardProject(null)
     } catch {
@@ -435,7 +450,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         const newCover = p.photos.find(ph => ph.id === selectedCoverPhoto)
         return { ...p, coverPhotoId: selectedCoverPhoto, coverImage: newCover?.url ?? p.coverImage, photos: p.photos.map(ph => ({ ...ph, isPrimary: ph.id === selectedCoverPhoto })) }
       }))
-      toast.success("Cover photo updated")
+      toast.success(t("cover_updated"))
       setCoverPhotoModalOpen(false)
       setSelectedCardProject(null)
       router.refresh()
@@ -498,11 +513,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     .map((id) => services.find((s) => s.id === id)?.name)
     .filter(Boolean) as string[]
   const servicesBadge = orderedServiceNames.length > 0
-    ? orderedServiceNames.length <= 2
+    ? orderedServiceNames.length <= 3
       ? orderedServiceNames.join(" · ")
-      : `${orderedServiceNames[0]} · +${orderedServiceNames.length - 1} more`
-    : "Add services"
-  const statusLabel = STATUS_LABELS[companyStatus] ?? "Unlisted"
+      : `${orderedServiceNames.slice(0, 3).join(" · ")} · +${orderedServiceNames.length - 3} more`
+    : t("add_services")
+  const statusLabelMap: Record<string, string> = { listed: t("status_listed"), unlisted: t("status_unlisted"), deactivated: t("status_deactivated") }
+  const statusLabel = statusLabelMap[companyStatus] ?? t("status_unlisted")
   const statusIndicator = STATUS_INDICATOR[companyStatus]
 
   // A company needs at least one visible published project to be listed
@@ -581,7 +597,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     startTransition(async () => {
       const result = await updateCompanyProfileAction({ name: n, description: d || null })
       if (!result.success) {
-        toast.error(result.error ?? "Could not save")
+        toast.error(result.error ?? t("save_error"))
         setEditSaveStatus("idle")
         return
       }
@@ -601,7 +617,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         address: (overrides?.address !== undefined ? overrides.address : address) as string | null,
       })
       if (!result.success) {
-        toast.error(result.error ?? "Could not save specs")
+        toast.error(result.error ?? t("specs_error"))
         setEditSaveStatus("idle")
         return
       }
@@ -622,7 +638,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         ...socialForm,
       })
       if (!result.success) {
-        toast.error(result.error ?? "Could not save contact")
+        toast.error(result.error ?? t("contact_error"))
         setEditSaveStatus("idle")
         return
       }
@@ -666,7 +682,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       setAddressResults([])
       saveContact({ address: newAddress, city: newCity || city, country: newCountry || country })
     } catch {
-      toast.error("Could not load address details")
+      toast.error(t("address_error"))
     }
   }, [city, country, saveContact])
 
@@ -724,7 +740,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         certificates: overrides?.certificates ?? certificates,
       })
       if (!result.success) {
-        toast.error(result.error ?? "Could not save services")
+        toast.error(result.error ?? t("services_error"))
         setEditSaveStatus("idle")
         return
       }
@@ -742,7 +758,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         ...newSocial,
       })
       if (!result.success) {
-        toast.error(result.error ?? "Could not save social link")
+        toast.error(result.error ?? t("social_error"))
         setEditSaveStatus("idle")
         return
       }
@@ -761,7 +777,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     startTransition(async () => {
       const result = await uploadCompanyLogoAction(formData)
       if (!result.success) {
-        toast.error(result.error ?? "Could not upload logo")
+        toast.error(result.error ?? t("logo_error"))
         setEditSaveStatus("idle")
         return
       }
@@ -779,7 +795,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     startTransition(async () => {
       const result = await changeCompanyStatusAction({ status: selectedStatus })
       if (!result.success) {
-        toast.error(result.error ?? "Could not change status")
+        toast.error(result.error ?? t("status_error"))
         setCompanyStatus(company.status)
         return
       }
@@ -796,7 +812,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     startTransition(async () => {
       const result = await setCompanyHeroPhotoAction({ projectId: project.id, photoUrl })
       if (!result.success) {
-        toast.error(result.error ?? "Could not set cover photo")
+        toast.error(result.error ?? t("cover_set_error"))
         setHeroUrl(initialHeroUrl)
         setHeroProjectId(initialHeroProjectId)
       }
@@ -809,7 +825,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     startTransition(async () => {
       const result = await clearCompanyHeroPhotoAction()
       if (!result.success) {
-        toast.error(result.error ?? "Could not clear cover photo")
+        toast.error(result.error ?? t("cover_clear_error"))
         setHeroUrl(initialHeroUrl)
         setHeroProjectId(initialHeroProjectId)
       }
@@ -875,13 +891,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       if (result.success && result.description) {
         setDescription(result.description)
         if (descRef.current) descRef.current.textContent = result.description
+        setDescCharCount(result.description.length)
         saveProfile({ description: result.description })
-        toast.success("Description generated")
+        toast.success(t("description_generated"))
       } else {
-        toast.error(result.error ?? "Failed to generate description")
+        toast.error(result.error ?? t("description_failed"))
       }
     } catch {
-      toast.error("Failed to generate description")
+      toast.error(t("description_failed"))
     } finally {
       setGeneratingDesc(false)
     }
@@ -1010,6 +1027,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         { href: `/dashboard/listings?company_id=${company.id}`, label: "Listings" },
         { href: `/dashboard/company?company_id=${company.id}`, label: "Company" },
         { href: `/dashboard/team?company_id=${company.id}`, label: "Team" },
+        { href: "/dashboard/inbox", label: "Messages" },
         { href: "/dashboard/pricing", label: "Plans" },
       ]} />
 
@@ -1031,7 +1049,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           <div className="popup-card">
             <div className="popup-header">
               <h3 className="arco-section-title">
-                {highlightMissing ? "Complete your company page" : "Create your company page"}
+                {highlightMissing ? t("complete_page") : t("create_page")}
               </h3>
               <button
                 className="popup-close"
@@ -1048,11 +1066,11 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </p>
             <div className="setup-popup-checklist">
               {([
-                ["name", "Company name"],
-                ["services", "Services"],
-                ["description", "Description"],
-                ["location", "Location"],
-                ["domain", "Domain"],
+                ["name", t("company_name")],
+                ["services", t("services")],
+                ["description", t("description")],
+                ["location", t("location")],
+                ["domain", t("domain")],
               ] as const).map(([key, label]) => (
                 <div key={key} className="setup-popup-checklist-item">
                   <span
@@ -1088,7 +1106,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 }
               }}
             >
-              {highlightMissing ? "Complete fields" : "Get started"}
+              {highlightMissing ? t("complete_fields") : t("get_started")}
             </button>
           </div>
         </div>
@@ -1148,33 +1166,43 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               suppressContentEditableWarning
               onFocus={() => setActiveEditField("desc")}
               onBlur={handleDescBlur}
-              data-placeholder="Add a company description..."
+              onInput={() => {
+                setDescCharCount((descRef.current?.textContent?.trim() ?? "").length)
+              }}
+              data-placeholder={t("add_description")}
               style={{ minHeight: 40, margin: 0 }}
             >
               {description ? description.replace(/<[^>]*>/g, "").trim() : ""}
             </p>
-            <button
-              type="button"
-              className="ec-generate-link"
-              onClick={(e) => { e.stopPropagation(); handleGenerateDescription() }}
-              disabled={generatingDesc}
-            >
-              {generatingDesc ? (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
-                    <path d="M21 12a9 9 0 11-6.219-8.56" />
-                  </svg>
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9.937 15.5A2 2 0 008.5 14.063l-6.135-1.582a.5.5 0 010-.962L8.5 9.936A2 2 0 009.937 8.5l1.582-6.135a.5.5 0 01.963 0L14.063 8.5A2 2 0 0015.5 9.937l6.135 1.582a.5.5 0 010 .963L15.5 14.063a2 2 0 00-1.437 1.437l-1.582 6.135a.5.5 0 01-.963 0z" />
-                  </svg>
-                  {description ? "Regenerate" : "Generate with AI"}
-                </>
+            <div className="flex items-center justify-center" style={{ position: "relative" }}>
+              <button
+                type="button"
+                className="ec-generate-link"
+                onClick={(e) => { e.stopPropagation(); handleGenerateDescription() }}
+                disabled={generatingDesc}
+              >
+                {generatingDesc ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                      <path d="M21 12a9 9 0 11-6.219-8.56" />
+                    </svg>
+                    {t("generating")}
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9.937 15.5A2 2 0 008.5 14.063l-6.135-1.582a.5.5 0 010-.962L8.5 9.936A2 2 0 009.937 8.5l1.582-6.135a.5.5 0 01.963 0L14.063 8.5A2 2 0 0015.5 9.937l6.135 1.582a.5.5 0 010 .963L15.5 14.063a2 2 0 00-1.437 1.437l-1.582 6.135a.5.5 0 01-.963 0z" />
+                    </svg>
+                    {description ? t("regenerate") : t("generate_ai")}
+                  </>
+                )}
+              </button>
+              {activeEditField === "desc" && (
+                <span className={`text-[11px] absolute right-0 ${descCharCount > 750 ? "text-red-500" : "text-[#a1a1a0]"}`}>
+                  {descCharCount} / 750
+                </span>
               )}
-            </button>
+            </div>
           </div>
         </section>
 
@@ -1193,9 +1221,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             }}
             data-setup-highlight={highlightMissing && !setupComplete.location ? "true" : undefined}
           >
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Location</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("location")}</span>
             <span className="spec-inp-inline" style={{ display: "block" }}>
-              {city ? `${city}, NL` : <span style={{ color: "var(--arco-light)" }}>Add location</span>}
+              {city ? `${city}, NL` : <span style={{ color: "var(--arco-light)" }}>{t("location")}</span>}
             </span>
           </div>
 
@@ -1205,14 +1233,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             onClick={() => { if (editingSpecBar !== "established") setEditingSpecBar("established") }}
           >
             <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Established</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("established")}</span>
             <input
               type="number"
               className="spec-inp-inline"
               value={foundedYear ?? ""}
               readOnly={editingSpecBar !== "established"}
               autoFocus={editingSpecBar === "established"}
-              placeholder="Add year"
+              placeholder={t("add_year")}
               min={1800}
               max={new Date().getFullYear()}
               onChange={(e) => {
@@ -1237,14 +1265,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             onClick={() => { if (editingSpecBar !== "teamSize") setEditingSpecBar("teamSize") }}
           >
             <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Team Size</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("team_size")}</span>
             {editingSpecBar === "teamSize" ? (
               <input
                 type="number"
                 className="spec-inp-inline"
                 value={teamSizeMin ?? ""}
                 autoFocus
-                placeholder="Add size"
+                placeholder={t("add_size")}
                 min={1}
                 onChange={(e) => {
                   const val = e.target.value.trim()
@@ -1263,7 +1291,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               />
             ) : (
               <span className="spec-inp-inline" style={{ display: "block" }}>
-                {teamSizeMin ? `${teamSizeMin} People` : <span style={{ color: "#b0b0ae" }}>Add size</span>}
+                {teamSizeMin ? `${teamSizeMin}` : <span style={{ color: "#b0b0ae" }}>{t("add_size")}</span>}
               </span>
             )}
           </div>
@@ -1275,9 +1303,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             onClick={() => { if (editingSpecBar !== "languages") setEditingSpecBar("languages") }}
           >
             <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Languages</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("languages")}</span>
             <div className="arco-card-title" style={{ color: languages.length > 0 ? undefined : "#b0b0ae" }}>
-              {languages.length > 0 ? languages.join(", ") : "Add languages"}
+              {languages.length > 0 ? languages.join(", ") : t("add_languages")}
             </div>
             {editingSpecBar === "languages" && (
               <>
@@ -1311,9 +1339,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             onClick={() => { if (editingSpecBar !== "certificates") setEditingSpecBar("certificates") }}
           >
             <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Certificates</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("certificates")}</span>
             <div className="arco-card-title" style={{ color: certificates.length > 0 ? undefined : "#b0b0ae" }}>
-              {certificates.length > 0 ? certificates.join(", ") : "Add certificates"}
+              {certificates.length > 0 ? certificates.join(", ") : t("add_certificates")}
             </div>
             {editingSpecBar === "certificates" && (
               <>
@@ -1346,12 +1374,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <section id="projects" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 className="arco-section-title">Featured projects</h2>
+            <h2 className="arco-section-title">{t("featured_projects")}</h2>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               {companyProjects.length > 3 && (
                 <Link href="/dashboard/listings" className="text-[13px] font-light text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors">
                   View all listings →
                 </Link>
+              )}
+              {companyProjects.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ fontSize: 13, padding: "8px 18px" }}
+                  onClick={() => setImportModalOpen(true)}
+                >
+                  {t("publish_your_project")}
+                </button>
               )}
             </div>
           </div>
@@ -1461,7 +1499,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                               opacity: 0, transition: "opacity .2s",
                             }}
                           >
-                            {project.isOwner ? "Edit project" : "View project"}
+                            {project.isOwner ? t("edit_project") : t("view_project")}
                           </span>
                         </div>
                       )}
@@ -1542,9 +1580,28 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               })}
             </div>
           ) : (
-            <p className="arco-body-text" style={{ color: "var(--arco-light)" }}>
-              No published projects yet. Projects will appear here when companies credit your profile.
-            </p>
+            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
+              {canPublishProjects ? (
+                <>
+                  <p className="arco-eyebrow" style={{ marginBottom: 16 }}>{t("get_started")}</p>
+                  <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("publish_first_project")}</h2>
+                  <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
+                    {t("publish_first_project_description")}
+                  </p>
+                  <button onClick={() => setImportModalOpen(true)} className="btn-primary">
+                    {t("publish_your_project")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="arco-eyebrow" style={{ marginBottom: 16 }}>{t("no_projects_yet")}</p>
+                  <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("get_invited_title")}</h2>
+                  <p className="arco-body-text" style={{ maxWidth: 400, margin: "0 auto" }}>
+                    {t("get_invited_description")}
+                  </p>
+                </>
+              )}
+            </div>
           )}
         </div>
       </section>
@@ -1670,7 +1727,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           <div className="popup-card" onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
               <h3 className="arco-section-title">
-                {hasListableProjects ? "List your company" : "Complete your company"}
+                {hasListableProjects ? t("list_company") : t("complete_company")}
               </h3>
               <button
                 className="popup-close"
@@ -1729,15 +1786,15 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   toast.success(hasListableProjects ? "Your company is now live!" : "Company page setup complete!")
                   router.push("/dashboard/company")
                 } else {
-                  toast.error(result.error ?? "Something went wrong")
+                  toast.error(result.error ?? t("something_wrong"))
                   setIsCompletingSetup(false)
                 }
               }}
               style={{ opacity: isCompletingSetup ? 0.5 : 1 }}
             >
               {isCompletingSetup
-                ? (hasListableProjects ? "Listing…" : "Completing…")
-                : (hasListableProjects ? "List company" : "Complete company")}
+                ? (hasListableProjects ? t("listing_updated") + "…" : t("generating") )
+                : (hasListableProjects ? t("list_company_btn") : t("complete_company_btn"))}
             </button>
           </div>
         </div>
@@ -1937,7 +1994,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 className="btn-secondary"
                 onClick={() => {
                   if (servicesOffered.length === 0) {
-                    toast.error("Select at least one service")
+                    toast.error(t("select_service"))
                     return
                   }
                   saveServices()
@@ -1958,7 +2015,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <div className="popup-overlay" onClick={() => setSearchPreviewOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Search preview</h3>
+              <h3 className="arco-section-title">{t("search_preview")}</h3>
               <button className="popup-close" onClick={() => setSearchPreviewOpen(false)}>
                 ✕
               </button>
@@ -1989,7 +2046,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 400, lineHeight: 1.3, color: "#1c1c1a" }}>{name}</div>
                     <div style={{ fontSize: 13, fontWeight: 300, color: "#a1a1a0" }}>
-                      {orderedServiceNames[0] ?? "Professional services"}
+                      {orderedServiceNames[0] ?? t("professional_services")}
                       {city && <> · {city}</>}
                     </div>
                   </div>
@@ -2225,13 +2282,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 {deletionCheck.canDelete && (
                   <>
                     <p className="body-small text-text-secondary mb-3">
-                      Type <strong>DELETE</strong> to confirm deletion of <strong>{deletionCheck.companyName}</strong>.
+                      {t("delete_confirm_text")} <strong>{deletionCheck.companyName}</strong>.
                     </p>
                     <input
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
-                      placeholder="DELETE"
+                      placeholder={t("delete_confirm_placeholder")}
                       className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
                     />
                   </>
@@ -2255,17 +2312,17 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         router.push("/dashboard")
                       } else {
                         setIsDeletingCompany(false)
-                        toast.error(result.error ?? "Failed to delete company")
+                        toast.error(result.error ?? t("delete_failed"))
                       }
                     }}
                     className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
-                      deletionCheck.canDelete && deleteConfirmText === "DELETE"
+                      deletionCheck.canDelete && deleteConfirmText === t("delete_confirm_placeholder")
                         ? "bg-red-600 text-white"
                         : "bg-surface text-text-secondary"
                     } ${isDeletingCompany ? "opacity-60" : ""}`}
                     style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
                   >
-                    {isDeletingCompany ? "Deleting…" : "Delete company"}
+                    {isDeletingCompany ? t("deleting") : t("delete_company")}
                   </button>
                 </div>
               </>
@@ -2278,6 +2335,16 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
       <Footer />
 
+      {/* ════════════════════ IMPORT PROJECT MODAL ════════════════════ */}
+      <ImportProjectModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        userId={userId}
+        companyId={company.id}
+        professionalId={professionalId ?? null}
+        adminCompanyId={adminCompanyId}
+      />
+
       {/* ════════════════════ PROJECT STATUS MODAL ════════════════════ */}
       <ListingStatusModal
         open={contributorStatusModalOpen}
@@ -2285,7 +2352,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         onSave={handleSaveContributorStatus}
         project={selectedCardProject ? {
           title: selectedCardProject.title,
-          descriptor: selectedCardProject.subtitle || "Project",
+          descriptor: selectedCardProject.subtitle || t("project_label"),
           coverImageUrl: selectedCardProject.coverImage || "/placeholder.svg",
         } : null}
         companyPlan={companyPlan}
@@ -2368,7 +2435,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 Cancel
               </button>
               <button className="btn-primary" onClick={handleSaveCoverPhoto} disabled={isSavingCoverPhoto || !selectedCoverPhoto} style={{ flex: 1 }}>
-                {isSavingCoverPhoto ? "Saving..." : "Save"}
+                {isSavingCoverPhoto ? t("saving") : t("save")}
               </button>
             </div>
           </div>
@@ -2420,7 +2487,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       const result = await sendDomainVerificationAction({ domain: pendingDomain, email: verifyEmail, companyName: name })
                       if (result.success) {
                         setVerifyCodeSent(true)
-                        toast.success("Verification code sent")
+                        toast.success(t("verify_code_sent"))
                       } else {
                         setVerifyError(result.error ?? "Failed to send code.")
                       }
@@ -2428,7 +2495,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     }}
                     style={{ flex: 1 }}
                   >
-                    {isVerifying ? "Sending…" : "Send code"}
+                    {isVerifying ? t("verify_sending") : t("verify_send_code")}
                   </button>
                 </div>
               </>
@@ -2455,7 +2522,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     setVerifyError(null)
                     setIsVerifying(true)
                     const result = await sendDomainVerificationAction({ domain: pendingDomain, email: verifyEmail, companyName: name })
-                    if (result.success) toast.success("New code sent")
+                    if (result.success) toast.success(t("verify_new_code"))
                     else setVerifyError(result.error ?? "Failed to resend.")
                     setIsVerifying(false)
                   }}
@@ -2477,7 +2544,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         setDomain(pendingDomain)
                         saveContact({ domain: pendingDomain })
                         setDomainVerifyOpen(false)
-                        toast.success("Domain verified and updated")
+                        toast.success(t("verify_success"))
                       } else {
                         setVerifyError(result.error ?? "Invalid or expired code.")
                       }
@@ -2485,7 +2552,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     }}
                     style={{ flex: 1 }}
                   >
-                    {isVerifying ? "Verifying…" : "Verify"}
+                    {isVerifying ? t("verify_verifying") : t("verify_btn")}
                   </button>
                 </div>
               </>

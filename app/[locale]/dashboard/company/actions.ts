@@ -1,7 +1,15 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { cookies } from "next/headers"
 import { z } from "zod"
+
+const LOCALE_NAMES: Record<string, string> = { nl: "Dutch", en: "English", de: "German", fr: "French" }
+async function getDescriptionLocale(): Promise<string> {
+  const cookieStore = await cookies()
+  const locale = cookieStore.get("NEXT_LOCALE")?.value ?? "en"
+  return LOCALE_NAMES[locale] ?? "English"
+}
 
 import { randomUUID } from "node:crypto"
 import { Buffer } from "node:buffer"
@@ -32,7 +40,7 @@ const nameSchema = z
 const descriptionSchema = z
   .string()
   .trim()
-  .max(2000, "Description cannot exceed 2000 characters")
+  .max(750, "Description cannot exceed 750 characters")
   .optional()
 
 const contactSchema = z.object({
@@ -117,7 +125,7 @@ type SocialPlatform = Database["public"]["Enums"]["company_social_platform"]
 
 type UploadActionResult = ActionResult & { url?: string; photo?: Database["public"]["Tables"]["company_photos"]["Row"]; nextCoverPhotoId?: string | null }
 
-async function getCompanyContext() {
+async function getCompanyContext(overrideCompanyId?: string) {
   const supabase = await createServerActionSupabaseClient()
   const {
     data: { user },
@@ -133,8 +141,28 @@ async function getCompanyContext() {
     return { supabase, user: null as const, error: "You need to be signed in." }
   }
 
-  // 1. Always prefer owned company (oldest first)
+  // 0. Admin with active company cookie pointing to a different company
   const { getActiveCompanyId, setActiveCompanyId } = await import("@/lib/active-company")
+  const activeCompanyId = overrideCompanyId ?? await getActiveCompanyId()
+
+  if (activeCompanyId) {
+    const { data: adminProfile } = await supabase.from("profiles").select("user_types, admin_role").eq("id", user.id).maybeSingle()
+    const isAdmin = adminProfile?.user_types?.includes("admin") || adminProfile?.admin_role === "admin" || adminProfile?.admin_role === "super_admin"
+    if (isAdmin) {
+      // Check if the active company is NOT owned by this user (admin override)
+      const { data: isOwned } = await supabase.from("companies").select("id").eq("id", activeCompanyId).eq("owner_id", user.id).maybeSingle()
+      if (!isOwned) {
+        const { createServiceRoleSupabaseClient: createSR } = await import("@/lib/supabase/server")
+        const sr = createSR()
+        const { data: adminCompany } = await sr.from("companies").select("id, name, logo_url").eq("id", activeCompanyId).maybeSingle()
+        if (adminCompany) {
+          return { supabase: sr, user, company: adminCompany, error: null as const }
+        }
+      }
+    }
+  }
+
+  // 1. Always prefer owned company (oldest first)
   const { data: ownedCompany, error: companyError } = await supabase
     .from("companies")
     .select("id, name, logo_url")
@@ -504,15 +532,21 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
     certificates,
   })
 
-  // Use atomic function to update services and refresh materialized views
-  // This ensures data consistency - either both operations succeed or both fail
-  const { error: updateError } = await supabase.rpc("update_company_services", {
-    p_company_id: company!.id,
-    p_primary_service_id: primaryServiceId || null,
-    p_services_offered: servicesOffered,
-    p_languages: languages,
-    p_certificates: certificates,
-  })
+  // Update services — use direct update to avoid RPC auth check (needed for admin override)
+  const { error: updateError } = await supabase
+    .from("companies")
+    .update({
+      primary_service_id: primaryServiceId || null,
+      services_offered: servicesOffered,
+      languages,
+      certificates,
+    })
+    .eq("id", company!.id)
+
+  // Refresh materialized views
+  if (!updateError) {
+    try { await supabase.rpc("refresh_all_materialized_views") } catch {}
+  }
 
   if (updateError) {
     console.error("[updateCompanyServices] RPC error:", updateError)
@@ -608,6 +642,14 @@ export async function changeCompanyStatusAction(input: z.infer<typeof statusSche
       updateError
     )
     return { success: false, error: "Could not update company status." }
+  }
+
+  // Sync company status to Apollo account stage
+  try {
+    const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
+    await syncCompanyToApollo(company!.id)
+  } catch (err) {
+    logger.error("Failed to sync company to Apollo after status change", { companyId: company!.id }, err as Error)
   }
 
   revalidatePath("/dashboard/company")
@@ -1051,7 +1093,7 @@ export async function generateCompanyDescriptionAction(
         role: "user",
         content: `You write company descriptions for Arco, a curated marketplace for architecture, interior design and construction professionals in the Netherlands.
 
-Tone: professional, warm, confident. Third-person. Active voice. No superlatives or clichés. Focus on what the company does, their expertise, and what makes them distinctive. 2-4 sentences, 150-300 characters ideal, max 500 characters. Return only the description text — no quotes, labels, or preamble.
+Tone: professional, warm, confident. Third-person. Active voice. No superlatives or clichés. Focus on what the company does, their expertise, and what makes them distinctive. 3-4 sentences, 60-80 words. Write in ${await getDescriptionLocale()}. Return only the description text — no quotes, labels, or preamble.
 
 ${context}`,
       }],
@@ -1060,7 +1102,7 @@ ${context}`,
     const text = message.content.find((b) => b.type === "text")?.text?.trim()
     if (!text) return { success: false, error: "AI returned empty response." }
 
-    return { success: true, description: text.slice(0, 2000) }
+    return { success: true, description: text.slice(0, 750) }
   } catch (e) {
     const errMsg = isError(e) ? e.message : String(e)
     console.error("[ai-description] Failed:", errMsg, e)
@@ -1161,7 +1203,12 @@ export async function switchCompanyAction(companyId: string): Promise<ActionResu
   ])
 
   if (!isOwner && !isMember && !isProfessional) {
-    return { success: false, error: "No access to this company." }
+    // Allow admins to switch to any company
+    const { data: profile } = await supabase.from("profiles").select("user_types, admin_role").eq("id", user.id).maybeSingle()
+    const isAdmin = profile?.user_types?.includes("admin") || profile?.admin_role === "admin" || profile?.admin_role === "super_admin"
+    if (!isAdmin) {
+      return { success: false, error: "No access to this company." }
+    }
   }
 
   const { setActiveCompanyId } = await import("@/lib/active-company")
@@ -1373,17 +1420,25 @@ export async function completeCompanySetupAction(input: {
       .in("status", ["draft", "unlisted"])
   }
 
-  // List selected projects
+  // Sync company status to Apollo account stage
+  try {
+    const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
+    await syncCompanyToApollo(companyId)
+  } catch (err) {
+    logger.error("Failed to sync company to Apollo after setup", { companyId }, err as Error)
+  }
+
+  // Feature selected projects (live_on_page = listed on project page + shown in portfolio)
   if (input.listProjectIds.length > 0) {
     const { error: ppErr } = await supabase
       .from("project_professionals")
-      .update({ status: "listed" })
+      .update({ status: "live_on_page" })
       .eq("company_id", companyId)
       .in("project_id", input.listProjectIds)
 
     if (ppErr) {
-      logger.db("update", "project_professionals", "Failed to list projects", { companyId, projectIds: input.listProjectIds }, ppErr)
-      return { success: false, error: "Failed to list projects" }
+      logger.db("update", "project_professionals", "Failed to feature projects", { companyId, projectIds: input.listProjectIds }, ppErr)
+      return { success: false, error: "Failed to feature projects" }
     }
   }
 

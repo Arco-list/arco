@@ -1,4 +1,5 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { updateContactStage, updateAccountStage } from "@/lib/apollo-client"
 import { logger } from "@/lib/logger"
 
 const APOLLO_API_URL = "https://api.apollo.io/api/v1"
@@ -42,14 +43,6 @@ interface ApolloContact {
   website_url?: string
 }
 
-interface ApolloEmailActivity {
-  emailer_campaign_id?: string
-  email_sent_at?: string
-  email_opened_at?: string
-  email_clicked_at?: string
-  email_bounced_at?: string
-  email_unsubscribed_at?: string
-}
 
 // ─── Sync contacts from an Apollo list ──────────────────────────────────────
 
@@ -127,9 +120,9 @@ export async function syncApolloActivity() {
   // Get all prospects with an Apollo contact ID that aren't terminal
   const { data: prospects, error } = await supabase
     .from("prospects")
-    .select("id, email, apollo_contact_id, status, emails_sent, emails_opened, emails_clicked")
+    .select("id, email, apollo_contact_id, status, emails_sent")
     .not("apollo_contact_id", "is", null)
-    .not("status", "in", '("unsubscribed","bounced","converted","project_published")')
+    .not("status", "eq", "active")
     .order("updated_at", { ascending: true })
     .limit(100) // Process in batches to avoid rate limits
 
@@ -144,71 +137,68 @@ export async function syncApolloActivity() {
     try {
       // Fetch contact details from Apollo (includes email activity)
       const data = await apolloRequest(`/contacts/${prospect.apollo_contact_id}`)
-      const contact = data.contact as ApolloContact & ApolloEmailActivity & {
-        emailer_campaigns?: Array<{
-          id: string
-          emails_sent?: number
-          emails_opened?: number
-          emails_clicked?: number
-          email_bounced?: boolean
-          unsubscribed?: boolean
-        }>
-      }
+      const contact = data.contact as ApolloContact
 
       if (!contact) continue
 
-      // Aggregate email stats from campaigns
-      const campaigns = contact.emailer_campaigns ?? []
+      // Extract engagement data from contact_campaign_statuses
+      const campaignStatuses = (contact as any).contact_campaign_statuses ?? []
       let totalSent = 0
-      let totalOpened = 0
-      let totalClicked = 0
-      let isBounced = false
-      let isUnsubscribed = false
       let sequenceId: string | null = null
+      let sequenceStatus = "not_started"
 
-      for (const campaign of campaigns) {
-        totalSent += campaign.emails_sent ?? 0
-        totalOpened += campaign.emails_opened ?? 0
-        totalClicked += campaign.emails_clicked ?? 0
-        if (campaign.email_bounced) isBounced = true
-        if (campaign.unsubscribed) isUnsubscribed = true
-        if (!sequenceId && campaign.id) sequenceId = campaign.id
+      for (const cs of campaignStatuses) {
+        // current_step_position = number of steps completed (emails sent)
+        const stepsSent = cs.current_step_position ?? 0
+        totalSent += stepsSent
+        if (!sequenceId && cs.emailer_campaign_id) sequenceId = cs.emailer_campaign_id
+
+        // Map Apollo sequence status to our sequence_status
+        if (cs.status === "finished") {
+          sequenceStatus = "finished"
+        } else if (cs.status === "active" || cs.status === "paused") {
+          // Only override if not already finished by another campaign
+          if (sequenceStatus !== "finished") sequenceStatus = "active"
+        }
       }
 
-      // Determine new status based on activity
+      // If no campaign statuses but has campaign IDs, they're queued (not started yet)
+      const campaignIds = (contact as any).emailer_campaign_ids ?? []
+      if (campaignStatuses.length === 0 && campaignIds.length > 0) {
+        sequenceStatus = "active"
+        if (!sequenceId) sequenceId = campaignIds[0]
+      }
+
+      // Store Apollo email status and calculate delivered
+      const emailStatus = (contact as any).email_status ?? "unknown"
+      // Delivered = sent emails where email is verified and no failure
+      const hasFailed = campaignStatuses.some((cs: any) => cs.failure_reason)
+      const delivered = (emailStatus === "verified" && !hasFailed) ? totalSent : 0
+
+      // Determine new prospect status based on activity
       const STATUS_ORDER = [
-        "imported", "sequence_active", "email_opened", "email_clicked",
-        "landing_visited", "signed_up", "company_created", "project_started",
-        "project_published", "converted",
+        "prospect", "contacted", "visitor", "signup",
+        "company", "active",
       ]
       const currentIdx = STATUS_ORDER.indexOf(prospect.status)
 
       let newStatus = prospect.status
-      if (isUnsubscribed) {
-        newStatus = "unsubscribed"
-      } else if (isBounced) {
-        newStatus = "bounced"
-      } else if (totalClicked > 0 && currentIdx < STATUS_ORDER.indexOf("email_clicked")) {
-        newStatus = "email_clicked"
-      } else if (totalOpened > 0 && currentIdx < STATUS_ORDER.indexOf("email_opened")) {
-        newStatus = "email_opened"
-      } else if (totalSent > 0 && currentIdx < STATUS_ORDER.indexOf("sequence_active")) {
-        newStatus = "sequence_active"
+      // Only advance to contacted if email was delivered
+      if (delivered > 0 && currentIdx < STATUS_ORDER.indexOf("contacted")) {
+        newStatus = "contacted"
       }
 
       // Build update
       const updates: Record<string, any> = {
         emails_sent: totalSent,
-        emails_opened: totalOpened,
-        emails_clicked: totalClicked,
+        emails_delivered: delivered,
         status: newStatus,
+        sequence_status: sequenceStatus,
+        email_status: emailStatus,
       }
 
       if (sequenceId) updates.apollo_sequence_id = sequenceId
       if (totalSent > 0) updates.last_email_sent_at = new Date().toISOString()
-      if (totalOpened > 0) updates.last_email_opened_at = new Date().toISOString()
-      if (totalClicked > 0) updates.last_email_clicked_at = new Date().toISOString()
-      if (isUnsubscribed) updates.unsubscribed_at = new Date().toISOString()
 
       const { error: updateError } = await supabase
         .from("prospects")
@@ -226,9 +216,27 @@ export async function syncApolloActivity() {
             event_source: "apollo_sync",
             old_status: prospect.status,
             new_status: newStatus,
-            metadata: { emails_sent: totalSent, emails_opened: totalOpened, emails_clicked: totalClicked },
+            metadata: { emails_sent: totalSent, sequence_status: sequenceStatus },
           })
         }
+
+        // Always sync current Arco status → Apollo stage (catches cases where Arco is ahead)
+        const stageMap: Record<string, string> = {
+          prospect: "Prospect", contacted: "Contacted", visitor: "Visitor",
+          signup: "Signup", company: "Draft", active: "Listed",
+        }
+        const stageName = stageMap[newStatus]
+        if (stageName) {
+          try {
+            await Promise.all([
+              updateContactStage(prospect.apollo_contact_id, stageName),
+              updateAccountStage(prospect.apollo_contact_id, stageName),
+            ])
+          } catch (err) {
+            logger.error("Failed to sync Apollo stage during activity sync", { id: prospect.id }, err as Error)
+          }
+        }
+
         updated++
       }
 

@@ -329,7 +329,8 @@ type SearchProfessionalsRpcRow = {
 }
 
 const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: string = "en"): ProfessionalCard | null => {
-  if (!row.id || !row.company_id) return null
+  // company_id is required; id (professional record) may be null for unclaimed companies
+  if (!row.company_id) return null
 
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
@@ -649,21 +650,25 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   // Get the first available professional or just the first one
   const detailRow = professionals.find((p: any) => p.is_available === true) || professionals[0]
 
-  if (!detailRow) {
-    logger.warn("No professionals found for company", { companyId })
-    return null
-  }
+  // Companies without professionals (unclaimed) are still valid — use company data directly
+  const professionalId = detailRow?.id ?? null
 
-  const professionalId = detailRow.id
+  const projectLinksQuery = professionalId
+    ? supabase
+        .from("project_professionals")
+        .select("project_id, status, cover_photo_id")
+        .or(`professional_id.eq.${professionalId},company_id.eq.${companyId}`)
+        .limit(50)
+    : supabase
+        .from("project_professionals")
+        .select("project_id, status, cover_photo_id")
+        .eq("company_id", companyId)
+        .limit(50)
 
   const [photosResult, socialLinksResult, projectLinksResult] = await Promise.all([
     supabase.rpc("get_public_company_photos", { p_company_id: companyId }),
     supabase.from("company_social_links").select("platform, url").eq("company_id", companyId),
-    supabase
-      .from("project_professionals")
-      .select("project_id, status, cover_photo_id")
-      .or(`professional_id.eq.${professionalId},company_id.eq.${companyId}`)
-      .limit(50),
+    projectLinksQuery,
   ])
 
   if (photosResult.error) {
@@ -849,7 +854,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     }
   }
 
-  const profile = detailRow.profiles ?? {
+  const profile = detailRow?.profiles ?? {
     first_name: null,
     last_name: null,
     avatar_url: null,
@@ -860,17 +865,17 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   const name =
     (company.name && company.name.trim().length > 0 ? company.name.trim() : null) ??
     ([profile.first_name, profile.last_name].filter(Boolean).join(" ").trim() ||
-      detailRow.title ||
+      detailRow?.title ||
       "Professional")
 
   const location = formatLocation([company.city, company.country], profile.location ?? null)
   const specialties =
-    detailRow.specialties
+    detailRow?.specialties
       ?.map((entry) => entry?.category?.name?.trim())
       .filter((value): value is string => typeof value === "string" && value.length > 0) ?? []
 
   const companyServicesRaw = toNonEmptyStrings(company.services_offered)
-  const rawServices = mergeUniqueStrings(company.services_offered, detailRow.services_offered)
+  const rawServices = mergeUniqueStrings(company.services_offered, detailRow?.services_offered ?? null)
   const serviceIds = rawServices.filter((value) => isUuid(value))
   let serviceNameMap = new Map<string, string>()
 
@@ -916,9 +921,9 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   const services = resolveServiceLabels(rawServices)
   const companyServices = resolveServiceLabels(companyServicesRaw)
   const companyLanguages = toNonEmptyStrings(company.languages)
-  const languages = mergeUniqueStrings(company.languages, detailRow.languages_spoken)
+  const languages = mergeUniqueStrings(company.languages, detailRow?.languages_spoken ?? null)
 
-  const companyRating = detailRow.companies?.company_ratings
+  const companyRating = detailRow?.companies?.company_ratings
   const ratings: ProfessionalRatingsBreakdown = {
     overall:
       typeof companyRating?.overall_rating === "number" && !Number.isNaN(companyRating.overall_rating)
@@ -949,18 +954,18 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     id: company.id,
     slug: company.slug || company.id,
     name,
-    title: detailRow.title ?? "Professional",
-    description: company.description ?? detailRow.bio ?? null,
-    bio: detailRow.bio ?? null,
+    title: detailRow?.title ?? "Professional",
+    description: company.description ?? detailRow?.bio ?? null,
+    bio: detailRow?.bio ?? null,
     location,
     specialties,
     services,
     languages,
-    yearsExperience: detailRow.years_experience ?? null,
-    hourlyRateDisplay: formatHourlyRate(detailRow.hourly_rate_min ?? null, detailRow.hourly_rate_max ?? null),
-    isVerified: Boolean(detailRow.is_verified),
-    isAvailable: Boolean(detailRow.is_available),
-    portfolioUrl: detailRow.portfolio_url ?? null,
+    yearsExperience: detailRow?.years_experience ?? null,
+    hourlyRateDisplay: formatHourlyRate(detailRow?.hourly_rate_min ?? null, detailRow?.hourly_rate_max ?? null),
+    isVerified: Boolean(company.is_verified ?? detailRow?.is_verified),
+    isAvailable: Boolean(detailRow?.is_available),
+    portfolioUrl: detailRow?.portfolio_url ?? null,
     profile: {
       firstName: profile.first_name ?? null,
       lastName: profile.last_name ?? null,

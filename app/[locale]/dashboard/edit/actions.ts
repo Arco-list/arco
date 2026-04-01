@@ -312,13 +312,32 @@ export async function sendInviteEmailAction(input: {
       const { data: cat } = await supabase.from("categories").select("name").eq("id", projectData.project_type_category_id).maybeSingle()
       projectType = cat?.name ?? undefined
     }
+    const { data: projectSlug } = await supabase
+      .from("projects")
+      .select("slug")
+      .eq("id", input.projectId)
+      .maybeSingle()
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://arcolist.com"
+    // Get the owner's company name
+    const { data: ownerPP } = await supabase
+      .from("project_professionals")
+      .select("company_id")
+      .eq("project_id", input.projectId)
+      .eq("is_project_owner", true)
+      .maybeSingle()
+    const { data: ownerCompany } = ownerPP?.company_id
+      ? await supabase.from("companies").select("name").eq("id", ownerPP.company_id).maybeSingle()
+      : { data: null }
+
     const result = await sendProfessionalInviteEmail(input.email, {
       project_owner: input.inviterName,
+      company_name: ownerCompany?.name ?? undefined,
       project_name: input.projectTitle,
       project_title: input.projectTitle,
       project_image: projectPhoto?.url ?? undefined,
       project_location: projectData?.address_city ?? projectData?.location ?? undefined,
       project_type: projectType,
+      project_link: `${baseUrl}/projects/${projectSlug?.slug ?? input.projectId}`,
       confirmUrl,
     })
     return { success: result.success }

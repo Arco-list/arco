@@ -56,7 +56,7 @@ export function ProfessionalActionButtons({
         </Button>
       </div>
 
-      <ShareModal
+      <ShareModal shareType="professional"
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         title={professional.name}

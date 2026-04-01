@@ -104,6 +104,7 @@ export function PhotoTourManager({
     deletePhoto,
     resetModalUploadErrors,
     modalDragOver,
+    setTempSelectedPhotos,
   } = photoTour
 
   const selectablePhotos = useMemo(
@@ -293,6 +294,10 @@ export function PhotoTourManager({
         selectablePhotos={selectablePhotos}
         selectedPhotoIds={tempSelectedPhotos}
         coverPhotoId={tempCoverPhoto}
+        onReorderPhotos={(reorderedIds) => {
+          setTempSelectedPhotos(reorderedIds)
+          if (reorderedIds[0]) setTempCoverPhoto(reorderedIds[0])
+        }}
         uploadedPhotosCount={uploadedPhotos.length}
         modalUploadErrors={modalUploadErrors}
         isSaving={isSavingSelection}

@@ -1,20 +1,17 @@
 "use server"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { updateContactStage, updateAccountStage } from "@/lib/apollo-client"
 
 export type ProspectStatus =
-  | "imported"
-  | "sequence_active"
-  | "email_opened"
-  | "email_clicked"
-  | "landing_visited"
-  | "signed_up"
-  | "company_created"
-  | "project_started"
-  | "project_published"
-  | "converted"
-  | "unsubscribed"
-  | "bounced"
+  | "prospect"
+  | "contacted"
+  | "visitor"
+  | "signup"
+  | "company"
+  | "active"
+
+export type SequenceStatus = "not_started" | "active" | "finished"
 
 export type Prospect = {
   id: string
@@ -27,24 +24,18 @@ export type Prospect = {
   ref_code: string
   apollo_contact_id: string | null
   apollo_account_id: string | null
+  sequence_status: SequenceStatus
   emails_sent: number
-  emails_opened: number
-  emails_clicked: number
+  emails_delivered: number
   linked_user_id: string | null
   linked_company_id: string | null
   linked_project_id: string | null
-  first_email_sent_at: string | null
   last_email_sent_at: string | null
-  opened_at: string | null
-  clicked_at: string | null
   landing_visited_at: string | null
   signed_up_at: string | null
   company_created_at: string | null
-  project_started_at: string | null
   project_published_at: string | null
   converted_at: string | null
-  unsubscribed_at: string | null
-  bounced_at: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -60,26 +51,20 @@ export type ProspectEvent = {
 
 export type ProspectFunnel = {
   total: number
-  imported: number
-  sequence_active: number
-  email_opened: number
-  email_clicked: number
-  landing_visited: number
-  signed_up: number
-  company_created: number
-  project_started: number
-  project_published: number
-  converted: number
-  unsubscribed: number
-  bounced: number
-  with_opens: number
-  with_clicks: number
+  prospect: number
+  contacted: number
+  visitor: number
+  signup: number
+  company: number
+  publisher: number
+  active: number
   total_emails_sent: number
 }
 
 type FetchProspectsFilters = {
   status?: ProspectStatus | "all"
   source?: string
+  sequence?: SequenceStatus | "all"
   search?: string
   offset?: number
   limit?: number
@@ -87,7 +72,7 @@ type FetchProspectsFilters = {
 
 export async function fetchProspects(filters: FetchProspectsFilters = {}) {
   const supabase = createServiceRoleSupabaseClient()
-  const { status, source, search, offset = 0, limit = 50 } = filters
+  const { status, source, sequence, search, offset = 0, limit = 50 } = filters
 
   let query = supabase
     .from("prospects")
@@ -101,6 +86,10 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
 
   if (source && source !== "all") {
     query = query.eq("source", source)
+  }
+
+  if (sequence && sequence !== "all") {
+    query = query.eq("sequence_status", sequence)
   }
 
   if (search) {
@@ -118,10 +107,8 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
 }
 
 const EMPTY_FUNNEL: ProspectFunnel = {
-  total: 0, imported: 0, sequence_active: 0, email_opened: 0,
-  email_clicked: 0, landing_visited: 0, signed_up: 0, company_created: 0,
-  project_started: 0, project_published: 0, converted: 0,
-  unsubscribed: 0, bounced: 0, with_opens: 0, with_clicks: 0,
+  total: 0, prospect: 0, contacted: 0, visitor: 0,
+  signup: 0, company: 0, publisher: 0, active: 0,
   total_emails_sent: 0,
 }
 
@@ -131,10 +118,10 @@ export async function fetchFunnel() {
   // get_prospect_funnel returns rows like [{status: 'imported', count: 5}, ...]
   const { data: funnelRows, error: funnelError } = await supabase.rpc("get_prospect_funnel")
 
-  // Also get aggregate email stats
-  const { data: statsData, error: statsError } = await supabase
+  // Also get aggregate email stats + contacted breakdown
+  const { data: statsData } = await supabase
     .from("prospects")
-    .select("emails_sent, emails_opened, emails_clicked")
+    .select("emails_sent")
 
   if (funnelError) {
     console.error("Failed to fetch funnel", funnelError)
@@ -154,11 +141,9 @@ export async function fetchFunnel() {
   }
 
   // Calculate email aggregate stats
-  const prospects = (statsData as Array<{ emails_sent: number; emails_opened: number; emails_clicked: number }>) ?? []
+  const prospects = (statsData as Array<{ emails_sent: number }>) ?? []
   for (const p of prospects) {
     funnel.total_emails_sent += p.emails_sent || 0
-    if (p.emails_opened > 0) funnel.with_opens++
-    if (p.emails_clicked > 0) funnel.with_clicks++
   }
 
   return { funnel }
@@ -181,7 +166,7 @@ export async function addProspect(formData: {
       company_name: formData.company_name || null,
       city: formData.city || null,
       source: formData.source || "manual",
-      status: "imported",
+      status: "prospect",
     })
     .select()
     .single()
@@ -201,20 +186,24 @@ export async function addProspect(formData: {
   return { success: true, prospect: data as Prospect }
 }
 
+const STATUS_TO_APOLLO_STAGE: Record<string, string> = {
+  prospect: "Prospect",
+  contacted: "Contacted",
+  visitor: "Visitor",
+  signup: "Signup",
+  company: "Draft",
+  active: "Listed",
+}
+
 export async function updateProspectStatus(id: string, newStatus: ProspectStatus) {
   const supabase = createServiceRoleSupabaseClient()
 
   const timestampField = {
-    signed_up: "signed_up_at",
-    company_created: "company_created_at",
-    project_started: "project_started_at",
-    project_published: "project_published_at",
-    converted: "converted_at",
-    unsubscribed: "unsubscribed_at",
-    bounced: "bounced_at",
-    email_opened: "opened_at",
-    email_clicked: "clicked_at",
-    landing_visited: "landing_visited_at",
+    contacted: "last_email_sent_at",
+    visitor: "landing_visited_at",
+    signup: "signed_up_at",
+    company: "company_created_at",
+    active: "converted_at",
   } as Record<string, string>
 
   const updateData: Record<string, unknown> = { status: newStatus }
@@ -239,6 +228,27 @@ export async function updateProspectStatus(id: string, newStatus: ProspectStatus
     event_type: "status_changed",
     metadata: { new_status: newStatus },
   })
+
+  // Sync Apollo contact stage
+  const stageName = STATUS_TO_APOLLO_STAGE[newStatus]
+  if (stageName) {
+    const { data: prospect } = await supabase
+      .from("prospects")
+      .select("apollo_contact_id")
+      .eq("id", id)
+      .single()
+    const apolloId = (prospect as any)?.apollo_contact_id
+    if (apolloId) {
+      try {
+        await Promise.all([
+          updateContactStage(apolloId, stageName),
+          updateAccountStage(apolloId, stageName),
+        ])
+      } catch (err) {
+        console.error("Failed to sync Apollo stage", err)
+      }
+    }
+  }
 
   return { success: true }
 }

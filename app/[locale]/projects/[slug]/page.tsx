@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation"
+import { getProjectTranslation } from "@/lib/project-translations"
 import type { Metadata } from "next"
 import { getTranslations } from "next-intl/server"
 
@@ -13,6 +14,7 @@ import { CreditedProfessionals } from "@/components/project/credited-professiona
 import { ProjectCTA } from "@/components/project/project-cta"
 import { RelatedProjects } from "@/components/project/related-projects"
 import { ProjectStructuredData } from "@/components/project-structured-data"
+import { TrackProjectView } from "@/components/track-view"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
@@ -50,7 +52,7 @@ async function resolveRedirect(slug: string, supabase: any, visited = new Set<st
 }
 
 type PageProps = {
-  params: { slug: string }
+  params: { slug: string; locale: string }
   searchParams?: { [key: string]: string | string[] | undefined }
 }
 
@@ -62,7 +64,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title, description, seo_title, seo_description, slug")
+    .select("id, title, description, translations, seo_title, seo_description, slug")
     .eq("slug", finalSlug)
     .maybeSingle()
 
@@ -82,11 +84,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .limit(1)
 
   const primaryPhoto = photos?.[0]
-  const title = project.seo_title?.trim() || `${project.title} · Arco`
+  const metaLocale = resolvedParams.locale ?? "en"
+  const localizedMetaTitle = getProjectTranslation(project, "title", metaLocale) || project.title
+  const localizedMetaDesc = getProjectTranslation(project, "description", metaLocale) || project.description
+  const title = project.seo_title?.trim() || `${localizedMetaTitle} · Arco`
   const description = project.seo_description?.trim() ||
-    (project.description ?
-      project.description.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
-      `Discover ${project.title} on Arco`)
+    (localizedMetaDesc ?
+      localizedMetaDesc.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
+      `Discover ${localizedMetaTitle} on Arco`)
 
   const baseUrl = getSiteUrl()
   const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined
@@ -147,6 +152,11 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   if (!project || !isProjectRow(project)) {
     notFound()
   }
+
+  // Locale-aware title and description
+  const locale = resolvedParams.locale ?? "en"
+  const localizedTitle = getProjectTranslation(project, "title", locale) || project.title
+  const localizedDescription = getProjectTranslation(project, "description", locale) || project.description
 
   // Check permissions
   const previewRequested = Boolean(resolvedSearchParams?.[PREVIEW_PARAM])
@@ -457,11 +467,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   return (
     <>
+      <TrackProjectView projectId={project.id} slug={project.slug ?? finalSlug} />
       <ProjectStructuredData
         project={{
           id: project.id,
-          title: project.title,
-          description: project.description,
+          title: localizedTitle,
+          description: localizedDescription,
           slug: project.slug,
           createdAt: project.created_at,
           location: {
@@ -477,9 +488,9 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       <div className="min-h-screen bg-white">
         <Header />
 
-        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={project.title} />
+        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={localizedTitle} />
 
-        <SubNav projectId={project.id} title={project.title} subtitle={[resolvedType, project.address_city].filter(Boolean).join(" · ")} imageUrl={coverPhoto?.url ?? null} slug={project.slug} />
+        <SubNav projectId={project.id} title={localizedTitle} subtitle={[resolvedType, project.address_city].filter(Boolean).join(" · ")} imageUrl={coverPhoto?.url ?? null} slug={project.slug} />
 
         {/*
           ── Details section ───────────────────────────────────────────────────
@@ -490,10 +501,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         */}
         <div id="details" className="wrap" style={{ marginTop: '60px' }}>
           <ProjectHeader
-            title={project.title}
+            title={localizedTitle}
             architectName={architect?.companyName ?? null}
             architectSlug={architect?.companySlug ?? null}
-            description={project.description}
+            description={localizedDescription}
           />
 
           <SpecificationsBar

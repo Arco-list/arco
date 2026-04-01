@@ -7,6 +7,7 @@ import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { DiscoverClient } from "@/components/discover-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { logger } from "@/lib/logger"
+import { TrackPageView } from "@/components/track-view"
 
 export const metadata: Metadata = {
   title: "Browse projects · Arco",
@@ -31,6 +32,7 @@ export default async function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <TrackPageView path="/projects" />
       <Header />
 
       <FilterErrorBoundary>

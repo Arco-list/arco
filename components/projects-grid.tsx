@@ -11,14 +11,16 @@ import { useFilters } from "@/contexts/filter-context"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
 import type { DiscoverProject } from "@/lib/projects/queries"
-import type { SortOption } from "@/components/filter-bar"
+import { SORT_OPTIONS, type SortOption } from "@/components/filter-bar"
+import { SortLinks } from "@/components/sort-links"
 
 interface ProjectsGridProps {
   initialProjects: DiscoverProject[]
   sortBy: SortOption
+  onSortChange: (sort: SortOption) => void
 }
 
-export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps) {
+export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: ProjectsGridProps) {
   const t = useTranslations("projects")
   const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
@@ -96,13 +98,14 @@ export function ProjectsGrid({ initialProjects = [], sortBy }: ProjectsGridProps
       <div className="wrap">
 
         {/* Result meta */}
-        <div className="discover-results-meta">
+        <div className="discover-results-meta" style={{ justifyContent: "space-between" }}>
           <p className="discover-results-count">
             <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>
               {(total > sortedProjects.length ? total : sortedProjects.length).toLocaleString()}
             </strong>{" "}
             {headingText}
           </p>
+          <SortLinks options={SORT_OPTIONS} current={sortBy} onChange={onSortChange} />
         </div>
 
         {/* Error */}
@@ -257,8 +260,8 @@ function ProjectCard({
             <img key={src} src={src} alt={alt} />
           </div>
 
-          {/* Hover nav arrows */}
-          {hasMultiplePhotos && (
+          {/* Hover nav arrows — hidden when space filter locks to a single photo */}
+          {hasMultiplePhotos && !selectedSpace && (
             <div className="discover-card-nav-arrows">
               <button
                 className="discover-card-nav-arrow"

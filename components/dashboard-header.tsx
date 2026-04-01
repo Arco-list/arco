@@ -184,6 +184,16 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                 {t("team")}
               </Link>
               <Link
+                href="/dashboard/inbox"
+                className={`text-sm font-medium px-3 py-1.5 rounded-full ${
+                  isActive("/dashboard/inbox")
+                    ? "text-red-500"
+                    : "text-black hover:bg-surface"
+                }`}
+              >
+                {t("messages")}
+              </Link>
+              <Link
                 href="/dashboard/pricing"
                 className={`text-sm font-medium px-3 py-1.5 rounded-full ${
                   isActive("/dashboard/pricing")
@@ -258,8 +268,15 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                       {/* Divider */}
                       <div className="border-t border-border" />
 
-                      {/* Section 2: Saved items */}
+                      {/* Section 2: Messages + Saved items */}
                       <div className="px-4 py-3">
+                        <Link
+                          href="/homeowner?tab=messages"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          {t("messages")}
+                        </Link>
                         <Link
                           href="/homeowner?tab=saved-projects"
                           className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
@@ -324,7 +341,7 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                   ) : canAccessProfessionalDashboard ? (
                     <>
                       {/* Professional Dashboard Menu */}
-                      {/* Section 1: Listings & Company */}
+                      {/* Section 1: Listings, Company & Inbox */}
                       <div className="px-4 py-3">
                         <Link
                           href="/dashboard/listings"
@@ -339,6 +356,20 @@ export function DashboardHeader({ maxWidth = "max-w-[1800px]" }: DashboardHeader
                           onClick={() => setIsMenuOpen(false)}
                         >
                           {t("company")}
+                        </Link>
+                        <Link
+                          href="/dashboard/team"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          {t("team")}
+                        </Link>
+                        <Link
+                          href="/dashboard/inbox"
+                          className="block text-sm text-foreground px-3 py-1.5 rounded-full hover:bg-surface hover:text-text-secondary"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          {t("messages")}
                         </Link>
                       </div>
 

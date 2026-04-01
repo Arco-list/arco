@@ -1,5 +1,6 @@
 "use client";
 
+import { trackProjectSaved } from "@/lib/tracking";
 import {
   createContext,
   useCallback,
@@ -220,6 +221,7 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
           throw insertError;
         }
 
+        trackProjectSaved(projectId);
         toast.success("Project saved");
         await refresh();
         return { success: true };

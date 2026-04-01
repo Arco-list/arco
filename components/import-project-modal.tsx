@@ -29,6 +29,8 @@ interface ImportProjectModalProps {
   initialUrl?: string
   /** Custom callback on successful import — overrides default redirect to edit page */
   onSuccess?: (projectId: string) => void
+  /** Admin mode: skip domain verification and use this company ID for the project */
+  adminCompanyId?: string | null
 }
 
 export function ImportProjectModal({
@@ -39,6 +41,7 @@ export function ImportProjectModal({
   professionalId,
   initialUrl,
   onSuccess,
+  adminCompanyId,
 }: ImportProjectModalProps) {
   const router = useRouter()
   const [phase, setPhase] = useState<ModalPhase>("input")
@@ -63,19 +66,6 @@ export function ImportProjectModal({
     }
   }, [open])
 
-  // Auto-start scraping when initialUrl is provided and modal opens
-  const initialUrlTriggered = useRef(false)
-  useEffect(() => {
-    if (open && initialUrl && !initialUrlTriggered.current) {
-      initialUrlTriggered.current = true
-      setScrapeUrl(initialUrl)
-      setPhase("processing")
-    }
-    if (!open) {
-      initialUrlTriggered.current = false
-    }
-  }, [open, initialUrl])
-
   // Run scraping when URL is submitted
   useEffect(() => {
     if (!scrapeUrl || phase !== "processing") return
@@ -92,7 +82,7 @@ export function ImportProjectModal({
       setTimeout(() => setStatuses(["done", "done", "active"]), STEP_DELAYS_MS[2])
     )
 
-    scrapeAndCreateProject(scrapeUrl).then((result) => {
+    scrapeAndCreateProject(scrapeUrl, adminCompanyId ?? undefined).then((result) => {
       timersRef.current.forEach(clearTimeout)
       timersRef.current = []
 
@@ -129,10 +119,72 @@ export function ImportProjectModal({
     }
   }, [scrapeUrl, phase, router, onOpenChange])
 
-  const handleSubmitUrl = useCallback((url: string) => {
+  const handleSubmitUrl = useCallback(async (url: string) => {
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(url.startsWith("http") ? url : `https://${url}`)
+    } catch {
+      setError("Please enter a valid URL")
+      setPhase("error")
+      return
+    }
+
+    const inputDomain = parsedUrl.hostname.replace(/^www\./, "").toLowerCase()
+
+    // Domain verification check (skip for admin)
+    if (companyId && !adminCompanyId) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("domain, website, is_verified")
+        .eq("id", companyId)
+        .maybeSingle()
+
+      const companyDomain = (company?.domain ?? company?.website ?? "")
+        .replace(/^https?:\/\//i, "").split("/")[0].replace(/^www\./, "").toLowerCase()
+
+      if (!companyDomain) {
+        setError("Add your website domain in company settings before importing projects.")
+        setPhase("error")
+        return
+      }
+
+      if (companyDomain && inputDomain !== companyDomain && !inputDomain.endsWith(`.${companyDomain}`) && !companyDomain.endsWith(`.${inputDomain}`)) {
+        setError(`This URL doesn't match your company domain (${companyDomain}). Import a project from your own website.`)
+        setPhase("error")
+        return
+      }
+    }
+
+    // Duplicate check — look for existing project with same source URL
+    const normalizedUrl = parsedUrl.toString().replace(/\/+$/, "").toLowerCase()
+    const { data: existingProject } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("source_url", normalizedUrl)
+      .maybeSingle()
+
+    if (existingProject) {
+      toast.info("This project was already imported.")
+      onOpenChange(false)
+      router.push(`/dashboard/edit/${existingProject.id}`)
+      return
+    }
+
     setScrapeUrl(url)
     setPhase("processing")
-  }, [])
+  }, [companyId, adminCompanyId, supabase, onOpenChange, router])
+
+  // Auto-start when initialUrl is provided and modal opens
+  const initialUrlTriggered = useRef(false)
+  useEffect(() => {
+    if (open && initialUrl && !initialUrlTriggered.current) {
+      initialUrlTriggered.current = true
+      handleSubmitUrl(initialUrl)
+    }
+    if (!open) {
+      initialUrlTriggered.current = false
+    }
+  }, [open, initialUrl, handleSubmitUrl])
 
   const handleTryAgain = useCallback(() => {
     setPhase("input")
@@ -158,12 +210,16 @@ export function ImportProjectModal({
 
       if (error || !project) throw error
 
+      // Get user email for invited_email field
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+
       await supabase.from("project_professionals").insert({
         project_id: project.id,
         professional_id: professionalId,
         company_id: companyId,
         is_project_owner: true,
-        status: "accepted",
+        status: "live_on_page",
+        invited_email: authUser?.email ?? "",
       })
 
       onOpenChange(false)
@@ -264,8 +320,8 @@ export function ImportProjectModal({
                 </div>
               )}
 
-              {/* Steps */}
-              <div className="scrape-steps">
+              {/* Steps — only show when scraping was actually started */}
+              {scrapeUrl && <div className="scrape-steps">
                 {STEPS.map((label, i) => {
                   const status = statuses[i]
                   return (
@@ -277,7 +333,7 @@ export function ImportProjectModal({
                     </div>
                   )
                 })}
-              </div>
+              </div>}
 
               {/* Progress bar */}
               {isProcessing && (

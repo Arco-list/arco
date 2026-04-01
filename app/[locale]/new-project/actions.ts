@@ -269,59 +269,59 @@ export async function findProfessionalByEmailAction(
 }
 
 /**
- * Claim pending invites when user becomes a professional
- * Called after professional record is created in create-company flow
- * Matches invited_email to professional_id and updates status to 'listed'
+ * Claim pending invites when user becomes a professional.
+ * Called after professional record is created in create-company flow.
+ * Links the professional/company to the invite but keeps status as 'invited'
+ * so the professional can explicitly accept via the dashboard.
  */
 export async function claimPendingInvitesAction(
   userId: string
 ): Promise<{ success: boolean; claimedCount: number; error?: any }> {
   try {
     const supabase = createServiceRoleSupabaseClient()
-    
+
     // Get user's email from auth
     const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId)
-    
+
     if (authError || !authUser.user?.email) {
       return { success: false, claimedCount: 0, error: authError }
     }
-    
+
     const userEmail = authUser.user.email
-    
+
     // Get professional record
     const { data: professional, error: professionalError } = await supabase
       .from('professionals')
       .select('id, company_id')
       .eq('user_id', userId)
       .maybeSingle()
-    
+
     if (professionalError || !professional) {
       return { success: false, claimedCount: 0, error: professionalError }
     }
-    
-    // Update all pending invites with matching email
+
+    // Link professional/company to pending invites but keep status as 'invited'
+    // so the professional can accept/decline from their dashboard
     const { data: updatedInvites, error: updateError } = await supabase
       .from('project_professionals')
       .update({
         professional_id: professional.id,
         company_id: professional.company_id,
-        status: 'listed',
-        responded_at: new Date().toISOString()
       })
       .eq('invited_email', userEmail)
       .is('professional_id', null)
       .select('id')
-    
+
     if (updateError) {
       return { success: false, claimedCount: 0, error: updateError }
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       claimedCount: updatedInvites?.length || 0,
-      error: null 
+      error: null
     }
-    
+
   } catch (error) {
     return { success: false, claimedCount: 0, error }
   }

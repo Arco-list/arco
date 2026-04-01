@@ -183,7 +183,7 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
       </div>
     </div>
 
-    <ShareModal
+    <ShareModal shareType="professional"
       isOpen={shareOpen}
       onClose={() => setShareOpen(false)}
       title={name}

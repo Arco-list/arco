@@ -127,13 +127,14 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
       const { data: unlistedMatch } = await supabase
         .from("companies")
         .select("id")
-        .eq("status", "unlisted")
+        .is("owner_id", null)
         .or(`domain.ilike.%${userDomain}%,email.ilike.%@${userDomain}`)
         .limit(1)
         .maybeSingle()
 
       if (unlistedMatch) {
         // Claim this unlisted company: transfer ownership and merge user-provided fields
+        // Keep status as "draft" until company signup is completed
         const { error: claimError } = await supabase
           .from("companies")
           .update({
@@ -143,6 +144,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
             email,
             phone,
             primary_service_id: primaryServiceId || null,
+            status: "draft",
           })
           .eq("id", unlistedMatch.id)
 
@@ -204,6 +206,14 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
     }
 
     companyId = newCompany.id;
+
+    // Match prospect on company creation
+    try {
+      const { matchProspectOnCompanyCreated } = await import('@/lib/prospect-matching');
+      await matchProspectOnCompanyCreated(user.id, companyId);
+    } catch (err) {
+      logger.error("Failed to match prospect on company creation", { userId: user.id, companyId }, err as Error);
+    }
   }
 
   // Ensure professional profile exists
@@ -354,12 +364,13 @@ export async function claimCompanyAction(input: {
   if (companyError || !company) return { success: false, error: "Company not found." }
   if (company.owner_id) return { success: false, error: "This company already has an owner." }
 
-  // Claim: set owner_id, mark verified
+  // Claim: set owner_id, mark verified, keep as draft until signup is completed
   const { error: claimError } = await supabase
     .from("companies")
     .update({
       owner_id: user.id,
       is_verified: true,
+      status: "draft",
       ...(domain ? { domain } : {}),
     })
     .eq("id", companyId)
@@ -557,12 +568,12 @@ export async function createCompanyFromPlacesAction(
 
   let companyId = existingCompany?.id ?? null
 
-  // Check for unlisted company matching domain (claim flow)
+  // Check for ownerless company matching domain (claim flow)
   if (!existingCompany && input.domain) {
     const { data: unlistedMatch } = await supabase
       .from("companies")
       .select("id")
-      .eq("status", "unlisted")
+      .is("owner_id", null)
       .or(`domain.ilike.%${input.domain}%,email.ilike.%@${input.domain}`)
       .limit(1)
       .maybeSingle()
@@ -582,6 +593,7 @@ export async function createCompanyFromPlacesAction(
           state_region: input.stateRegion,
           google_place_id: input.placeId,
           is_verified: true,
+          status: "draft",
         })
         .eq("id", unlistedMatch.id)
 
@@ -617,6 +629,25 @@ export async function createCompanyFromPlacesAction(
       return { success: false, error: "Unable to update your company." }
     }
   } else if (!companyId) {
+    // Geocode address for map placement
+    let latitude: number | null = null
+    let longitude: number | null = null
+    if (input.formattedAddress) {
+      try {
+        const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+        if (mapsKey) {
+          const geoRes = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.formattedAddress)}&key=${mapsKey}`
+          )
+          const geoData = await geoRes.json()
+          if (geoData?.results?.[0]?.geometry?.location) {
+            latitude = geoData.results[0].geometry.location.lat
+            longitude = geoData.results[0].geometry.location.lng
+          }
+        }
+      } catch {}
+    }
+
     // Insert new company
     const { data: newCompany, error: insertError } = await supabase
       .from("companies")
@@ -633,6 +664,8 @@ export async function createCompanyFromPlacesAction(
         google_place_id: input.placeId,
         is_verified: true,
         status: "draft",
+        latitude,
+        longitude,
       })
       .select("id")
       .single()

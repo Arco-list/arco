@@ -186,8 +186,11 @@ export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
     }
 
     const existing = photosByProject.get(rawPhoto.project_id) ?? []
-    // Limit to 5 photos per project for card carousel performance
-    if (existing.length < 5) {
+    // Include up to 5 photos for carousel, plus one photo per unique space
+    // so space filtering works on SSR-loaded projects
+    const spacesIncluded = new Set(existing.map((p) => p.space).filter(Boolean))
+    const isNewSpace = spaceSlug && !spacesIncluded.has(spaceSlug)
+    if (existing.length < 5 || isNewSpace) {
       existing.push(mapped)
     }
     photosByProject.set(rawPhoto.project_id, existing)

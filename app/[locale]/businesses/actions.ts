@@ -323,3 +323,128 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
 
   return { success: true, companyId: newCompany.id, professionalId: newPro.id }
 }
+
+// ---------------------------------------------------------------------------
+// Lookup company from email domain via Google Places (no auth required)
+// Used to pre-populate the "Claim [Company]" CTA on the invite landing page
+// ---------------------------------------------------------------------------
+
+const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com", "live.com", "aol.com", "protonmail.com"]
+
+export type PreloadedCompany = {
+  name: string
+  placeId: string
+  formattedAddress: string | null
+  city: string | null
+  country: string | null
+  stateRegion: string | null
+  phone: string | null
+  website: string | null
+  domain: string | null
+  editorialSummary: string | null
+  googleTypes: string[] | null
+  /** Set when a matching unowned Arco company already exists */
+  arcoCompanyId?: string
+}
+
+export async function lookupCompanyByEmailDomain(
+  email: string
+): Promise<PreloadedCompany | null> {
+  const domain = email.split("@")[1]?.toLowerCase()
+  if (!domain || BLOCKED_EMAIL_DOMAINS.includes(domain)) return null
+
+  const supabase = await createServerSupabaseClient()
+
+  // 1. Check if there's already an unowned Arco company matching this domain
+  const { data: arcoMatch } = await supabase
+    .from("companies")
+    .select("id, name, city, country, address, domain, website, phone, google_place_id, owner_id")
+    .or(`domain.ilike.%${domain}%,email.ilike.%@${domain}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (arcoMatch) {
+    return {
+      name: arcoMatch.name,
+      placeId: arcoMatch.google_place_id ?? "",
+      formattedAddress: arcoMatch.address ?? null,
+      city: arcoMatch.city ?? null,
+      country: arcoMatch.country ?? null,
+      stateRegion: null,
+      phone: arcoMatch.phone ?? null,
+      website: arcoMatch.website ?? null,
+      domain: arcoMatch.domain ?? domain,
+      editorialSummary: null,
+      googleTypes: null,
+      arcoCompanyId: arcoMatch.owner_id ? undefined : arcoMatch.id,
+    }
+  }
+
+  // 2. Look up via Google Places
+  const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  if (!mapsKey) return null
+
+  const companyNameGuess = domain
+    .replace(/\.(com|nl|co\.uk|org|net|io|eu|de|fr|be)$/i, "")
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+
+  try {
+    const searchQueries = [companyNameGuess, domain, `https://${domain}`]
+    let placeId: string | null = null
+
+    for (const query of searchQueries) {
+      const res = await fetch(
+        `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query)}&inputtype=textquery&fields=name,place_id&key=${mapsKey}`,
+        { next: { revalidate: 86400 } } // cache 24h
+      )
+      const data = await res.json()
+      if (data?.candidates?.[0]?.place_id) {
+        placeId = data.candidates[0].place_id
+        break
+      }
+    }
+
+    if (!placeId) return null
+
+    const detailRes = await fetch(
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,address_components,website,editorial_summary,types&key=${mapsKey}`,
+      { next: { revalidate: 86400 } }
+    )
+    const detailData = await detailRes.json()
+    const result = detailData?.result
+    if (!result?.name) return null
+
+    let city: string | null = null
+    let country: string | null = null
+    let stateRegion: string | null = null
+    for (const comp of result.address_components ?? []) {
+      const types: string[] = comp.types ?? []
+      if (types.includes("locality")) city = comp.long_name
+      if (types.includes("country")) country = comp.long_name
+      if (types.includes("administrative_area_level_1")) stateRegion = comp.long_name
+    }
+
+    let placeDomain: string | null = null
+    if (result.website) {
+      try { placeDomain = new URL(result.website).hostname.replace(/^www\./, "") } catch {}
+    }
+
+    return {
+      name: result.name,
+      placeId,
+      formattedAddress: result.formatted_address ?? null,
+      city,
+      country,
+      stateRegion,
+      phone: result.formatted_phone_number ?? null,
+      website: result.website ?? null,
+      domain: placeDomain ?? domain,
+      editorialSummary: result.editorial_summary?.text ?? null,
+      googleTypes: result.types ?? null,
+    }
+  } catch (e) {
+    console.error("[lookupCompanyByEmailDomain] Google Places lookup failed:", e)
+    return null
+  }
+}

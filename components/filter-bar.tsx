@@ -693,33 +693,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
               </div>
             </div>
 
-            {/* Sort — right side */}
-            <div className="discover-filter-sort" style={{ position: "relative" }}>
-              <button
-                className="filter-pill"
-                data-open={activeDropdown === "sort"}
-                onClick={() => toggleDropdown("sort")}
-                aria-expanded={activeDropdown === "sort"}
-              >
-                {sortLabelMap[sortBy]}
-                <ChevronDownIcon className="filter-pill-chevron" />
-              </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "sort"}
-                data-align="right"
-                style={{ minWidth: 192 }}
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <DropdownOption
-                    key={opt}
-                    label={sortLabelMap[opt]}
-                    checked={sortBy === opt}
-                    onToggle={() => { onSortChange(opt); setActiveDropdown(null) }}
-                  />
-                ))}
-              </div>
-            </div>
+            {/* Sort moved to results meta row */}
 
           </div>
         </div>

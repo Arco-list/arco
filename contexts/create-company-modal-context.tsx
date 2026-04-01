@@ -1,10 +1,12 @@
 "use client"
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react"
+import type { PreloadedCompany } from "@/app/businesses/actions"
 
 type CreateCompanyModalContextValue = {
   isOpen: boolean
-  openCreateCompanyModal: () => void
+  initialCompany: PreloadedCompany | undefined
+  openCreateCompanyModal: (preloaded?: PreloadedCompany) => void
   closeCreateCompanyModal: () => void
 }
 
@@ -12,18 +14,21 @@ const CreateCompanyModalContext = createContext<CreateCompanyModalContextValue |
 
 export function CreateCompanyModalProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [initialCompany, setInitialCompany] = useState<PreloadedCompany | undefined>(undefined)
 
-  const openCreateCompanyModal = useCallback(() => {
+  const openCreateCompanyModal = useCallback((preloaded?: PreloadedCompany) => {
+    setInitialCompany(preloaded)
     setIsOpen(true)
   }, [])
 
   const closeCreateCompanyModal = useCallback(() => {
     setIsOpen(false)
+    setInitialCompany(undefined)
   }, [])
 
   const value = useMemo(
-    () => ({ isOpen, openCreateCompanyModal, closeCreateCompanyModal }),
-    [isOpen, openCreateCompanyModal, closeCreateCompanyModal],
+    () => ({ isOpen, initialCompany, openCreateCompanyModal, closeCreateCompanyModal }),
+    [isOpen, initialCompany, openCreateCompanyModal, closeCreateCompanyModal],
   )
 
   return (

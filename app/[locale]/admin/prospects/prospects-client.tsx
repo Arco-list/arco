@@ -13,6 +13,7 @@ import {
   type ProspectFunnel,
   type ProspectStatus,
   type ProspectEvent,
+  type SequenceStatus,
 } from "./actions"
 import {
   Select,
@@ -24,33 +25,47 @@ import {
 
 // -- Status config -----------------------------------------------------------
 
-const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string }> = {
-  imported: { label: "Imported", cls: "bg-[#f5f5f4] text-[#6b6b68]" },
-  sequence_active: { label: "Sequence Active", cls: "bg-blue-50 text-blue-700" },
-  email_opened: { label: "Email Opened", cls: "bg-indigo-50 text-indigo-700" },
-  email_clicked: { label: "Email Clicked", cls: "bg-purple-50 text-purple-700" },
-  landing_visited: { label: "Landing Visited", cls: "bg-amber-50 text-amber-700" },
-  signed_up: { label: "Signed Up", cls: "bg-teal-50 text-teal-700" },
-  company_created: { label: "Company Created", cls: "bg-cyan-50 text-cyan-700" },
-  project_started: { label: "Project Started", cls: "bg-orange-50 text-orange-700" },
-  project_published: { label: "Project Published", cls: "bg-green-50 text-green-700" },
-  converted: { label: "Converted", cls: "bg-emerald-50 text-emerald-800 font-semibold" },
-  unsubscribed: { label: "Unsubscribed", cls: "bg-red-50 text-red-700" },
-  bounced: { label: "Bounced", cls: "bg-red-50 text-red-700" },
+const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: string }> = {
+  prospect: { label: "Prospect", cls: "bg-orange-50 text-orange-700", dot: "bg-[#ea580c]" },
+  contacted: { label: "Contacted", cls: "bg-orange-50 text-orange-700", dot: "bg-[#ea580c]" },
+  visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  signup: { label: "Signup", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  company: { label: "Draft", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]" },
 }
 
 const ALL_STATUSES: ProspectStatus[] = [
-  "imported", "sequence_active", "email_opened", "email_clicked",
-  "landing_visited", "signed_up", "company_created", "project_started",
-  "project_published", "converted", "unsubscribed", "bounced",
+  "prospect", "contacted", "visitor", "signup", "company", "active",
 ]
 
-// Funnel stages (ordered, excluding unsubscribed/bounced)
-const FUNNEL_STAGES: ProspectStatus[] = [
-  "imported", "sequence_active", "email_opened", "email_clicked",
-  "landing_visited", "signed_up", "company_created", "project_started",
-  "project_published", "converted",
+const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
+  not_started: { label: "Not started", dot: "bg-[#a1a1a0]" },
+  active: { label: "Active", dot: "bg-blue-400" },
+  finished: { label: "Finished", dot: "bg-emerald-500" },
+}
+
+// Funnel stages aligned with Growth lifecycle model
+const FUNNEL_STAGES: { status: ProspectStatus; label: string; driver: "prospect" | "acquisition" | "retention" }[] = [
+  { status: "prospect", label: "Prospect", driver: "prospect" },
+  { status: "contacted", label: "Contacted", driver: "prospect" },
+  { status: "visitor", label: "Visitor", driver: "acquisition" },
+  { status: "signup", label: "Signup", driver: "acquisition" },
+  { status: "company", label: "Draft", driver: "acquisition" },
+  { status: "active", label: "Listed", driver: "retention" },
 ]
+
+// First card where each driver label should appear
+const DRIVER_LABEL_AT: Record<string, string> = {
+  prospect: "prospect",
+  acquisition: "visitor",
+  retention: "active",
+}
+
+const DRIVER_COLORS: Record<string, string> = {
+  prospect: "#ea580c",
+  acquisition: "#2563eb",
+  retention: "#7c3aed",
+}
 
 // -- Helpers -----------------------------------------------------------------
 
@@ -80,19 +95,19 @@ function conversionRate(from: number, to: number): string {
 
 function exportToCsv(prospects: Prospect[]) {
   const headers = [
-    "Email", "Contact Name", "Company", "Status", "Source", "City",
-    "Emails Sent", "Emails Opened", "Emails Clicked", "Created",
+    "Email", "Contact Name", "Company", "Status", "Sequence", "Source", "City",
+    "Emails Sent", "Emails Delivered", "Created",
   ]
   const rows = prospects.map((p) => [
     p.email,
     p.contact_name ?? "",
     p.company_name ?? "",
     p.status,
+    p.sequence_status ?? "not_started",
     p.source,
     p.city ?? "",
     p.emails_sent,
-    p.emails_opened,
-    p.emails_clicked,
+    p.emails_delivered,
     p.created_at,
   ])
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
@@ -117,6 +132,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
   const [funnel, setFunnel] = useState(initialFunnel)
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">("all")
   const [sourceFilter, setSourceFilter] = useState("all")
+  const [sequenceFilter, setSequenceFilter] = useState<SequenceStatus | "all">("all")
   const [search, setSearch] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [events, setEvents] = useState<ProspectEvent[]>([])
@@ -135,7 +151,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
   const refreshData = useCallback(() => {
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ status: statusFilter, source: sourceFilter, search, offset: 0, limit: 50 }),
+        fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 }),
         fetchFunnel(),
       ])
       setProspects(prospectsResult.prospects)
@@ -143,17 +159,19 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
       setOffset(0)
       setHasMore(prospectsResult.prospects.length >= 50)
     })
-  }, [statusFilter, sourceFilter, search])
+  }, [statusFilter, sourceFilter, sequenceFilter, search])
 
   // Filter change
-  const handleFilterChange = useCallback((newStatus?: ProspectStatus | "all", newSource?: string) => {
+  const handleFilterChange = useCallback((newStatus?: ProspectStatus | "all", newSource?: string, newSequence?: SequenceStatus | "all") => {
     const s = newStatus ?? statusFilter
     const src = newSource ?? sourceFilter
+    const seq = newSequence ?? sequenceFilter
     if (newStatus !== undefined) setStatusFilter(s)
     if (newSource !== undefined) setSourceFilter(src)
+    if (newSequence !== undefined) setSequenceFilter(seq)
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ status: s, source: src, search, offset: 0, limit: 50 }),
+        fetchProspects({ status: s, source: src, sequence: seq, search, offset: 0, limit: 50 }),
         fetchFunnel(),
       ])
       setProspects(prospectsResult.prospects)
@@ -161,28 +179,28 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
       setOffset(0)
       setHasMore(prospectsResult.prospects.length >= 50)
     })
-  }, [statusFilter, sourceFilter, search])
+  }, [statusFilter, sourceFilter, sequenceFilter, search])
 
   // Search
   const handleSearch = useCallback(() => {
     startTransition(async () => {
-      const result = await fetchProspects({ status: statusFilter, source: sourceFilter, search, offset: 0, limit: 50 })
+      const result = await fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 })
       setProspects(result.prospects)
       setOffset(0)
       setHasMore(result.prospects.length >= 50)
     })
-  }, [statusFilter, sourceFilter, search])
+  }, [statusFilter, sourceFilter, sequenceFilter, search])
 
   // Load more
   const handleLoadMore = useCallback(() => {
     const newOffset = offset + 50
     startTransition(async () => {
-      const result = await fetchProspects({ status: statusFilter, source: sourceFilter, search, offset: newOffset, limit: 50 })
+      const result = await fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: newOffset, limit: 50 })
       setProspects((prev) => [...prev, ...result.prospects])
       setOffset(newOffset)
       setHasMore(result.prospects.length >= 50)
     })
-  }, [offset, statusFilter, sourceFilter, search])
+  }, [offset, statusFilter, sourceFilter, sequenceFilter, search])
 
   // Expand row
   const handleRowClick = useCallback((id: string) => {
@@ -278,9 +296,9 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
       <div className="flex flex-col gap-1 mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="arco-section-title">Prospects</h3>
+            <h3 className="arco-section-title">Sales</h3>
             <p className="text-xs text-[#a1a1a0] mt-0.5">
-              {funnel.total} total prospects · {funnel.converted} converted
+              {funnel.total} total · {funnel.active} active
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -322,57 +340,63 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
 
       {/* Conversion funnel */}
       <div className="mb-8">
-        <div className="flex items-center gap-1 overflow-x-auto pb-2">
-          {FUNNEL_STAGES.map((stage, i) => {
-            const count = funnel[stage]
-            const prevCount = i > 0 ? funnel[FUNNEL_STAGES[i - 1]] : funnel.total
-            const rate = i === 0 ? "100%" : conversionRate(prevCount, count)
-            const cfg = STATUS_CONFIG[stage]
-            return (
-              <div key={stage} className="flex items-center">
-                {i > 0 && (
-                  <div className="flex flex-col items-center mx-1 shrink-0">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d4d4d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                    <span className="text-[9px] text-[#a1a1a0] mt-0.5 whitespace-nowrap">{rate}</span>
-                  </div>
-                )}
-                <button
-                  onClick={() => handleFilterChange(stage)}
-                  className="flex flex-col items-center px-3 py-2 rounded-md border border-[#e5e5e4] hover:border-[#d4d4d4] transition-colors min-w-[90px] shrink-0"
-                  style={{ background: statusFilter === stage ? "#fafaf9" : "white" }}
-                >
-                  <span className="text-lg font-semibold text-[#1c1c1a] leading-none">{count}</span>
-                  <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full mt-1.5 whitespace-nowrap ${cfg.cls}`}>
-                    {cfg.label}
-                  </span>
-                </button>
-              </div>
-            )
-          })}
-        </div>
-        {/* Separate metrics for unsubscribed/bounced */}
-        <div className="flex items-center gap-3 mt-3">
+        {/* Single grid row: connector cells align center, card cells align end */}
+        {(() => {
+          const cols = FUNNEL_STAGES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
+          // Cohorted counts: everyone who reached stage X = count at X + all later stages
+          const stageKeys = FUNNEL_STAGES.map((s) => s.status)
+          const cohorted = stageKeys.map((key, i) =>
+            stageKeys.slice(i).reduce((sum, k) => sum + (funnel[k] ?? 0), 0)
+          )
+
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: cols, gap: 0, alignItems: "start" }}>
+              {FUNNEL_STAGES.map((stage, i) => {
+                const count = funnel[stage.status]
+                const prevCohort = i > 0 ? cohorted[i - 1] : funnel.total
+                const thisCohort = cohorted[i]
+                const rate = i === 0 ? "" : conversionRate(prevCohort, thisCohort)
+                const color = DRIVER_COLORS[stage.driver]
+                const driverLabel = Object.entries(DRIVER_LABEL_AT).find(([, s]) => s === stage.status)?.[0]
+                return (
+                  <Fragment key={stage.status}>
+                    {i > 0 && (
+                      <div className="relative px-1 self-center" style={{ minWidth: 32 }}>
+                        <div className="w-full border-t border-[#d4d4d3]" />
+                        {rate && (
+                          <span className="absolute text-[10px] font-medium text-[#6b6b68]" style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{rate}</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      {driverLabel ? (
+                        <p className="arco-eyebrow mb-2" style={{ color: DRIVER_COLORS[driverLabel] }}>{driverLabel.charAt(0).toUpperCase() + driverLabel.slice(1)}</p>
+                      ) : (
+                        <div style={{ height: 24 }} />
+                      )}
+                      <button
+                        onClick={() => handleFilterChange(stage.status)}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${statusFilter === stage.status ? "border-[#c4c4c2] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        style={{ width: 100 }}
+                      >
+                        <div className="flex items-center gap-[6px] mb-1.5">
+                          <span className="status-pill-dot shrink-0" style={{ background: color }} />
+                          <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 400, color: "var(--text-primary)" }}>{stage.label}</span>
+                        </div>
+                        <p className="arco-card-title text-left">{count}</p>
+                      </button>
+                    </div>
+                  </Fragment>
+                )
+              })}
+            </div>
+          )
+        })()}
+        {/* Email stats */}
+        <div className="flex items-center gap-3 mt-4 justify-end">
           <div className="flex items-center gap-1.5">
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_CONFIG.unsubscribed.cls}`}>Unsubscribed</span>
-            <span className="text-xs font-medium text-[#6b6b68]">{funnel.unsubscribed}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${STATUS_CONFIG.bounced.cls}`}>Bounced</span>
-            <span className="text-xs font-medium text-[#6b6b68]">{funnel.bounced}</span>
-          </div>
-          <div className="flex items-center gap-1.5 ml-auto">
             <span className="text-[10px] text-[#a1a1a0]">Emails sent</span>
-            <span className="text-xs font-medium text-[#6b6b68]">{funnel.total_emails_sent.toLocaleString()}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#a1a1a0]">Open rate</span>
-            <span className="text-xs font-medium text-[#6b6b68]">{conversionRate(funnel.total_emails_sent, funnel.with_opens)}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#a1a1a0]">Click rate</span>
-            <span className="text-xs font-medium text-[#6b6b68]">{conversionRate(funnel.total_emails_sent, funnel.with_clicks)}</span>
+            <span className="text-[11px] font-medium text-[#1c1c1a]">{funnel.total_emails_sent.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -397,12 +421,47 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           <Select value={statusFilter} onValueChange={(v) => handleFilterChange(v as ProspectStatus | "all")}>
             <SelectTrigger className="w-[170px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All statuses" />
+              <SelectValue placeholder="All statuses">
+                {statusFilter === "all" ? "All statuses" : (
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter as ProspectStatus].dot}`} />
+                    {STATUS_CONFIG[statusFilter as ProspectStatus].label}
+                  </span>
+                )}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               {ALL_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+                <SelectItem key={s} value={s}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dot}`} />
+                    {STATUS_CONFIG[s].label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sequenceFilter} onValueChange={(v) => handleFilterChange(undefined, undefined, v as SequenceStatus | "all")}>
+            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+              <SelectValue placeholder="All sequences">
+                {sequenceFilter === "all" ? "All sequences" : (
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_CONFIG[sequenceFilter as SequenceStatus].dot}`} />
+                    {SEQUENCE_CONFIG[sequenceFilter as SequenceStatus].label}
+                  </span>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All sequences</SelectItem>
+              {(["not_started", "active", "finished"] as SequenceStatus[]).map((s) => (
+                <SelectItem key={s} value={s}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_CONFIG[s].dot}`} />
+                    {SEQUENCE_CONFIG[s].label}
+                  </span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -426,12 +485,11 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
           <thead>
             <tr className="border-b border-[#e5e5e4]">
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Contact</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Email</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Company</th>
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Status</th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Sequence</th>
+              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Company</th>
               <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Sent</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Opened</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Clicked</th>
+              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivered</th>
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Source</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Created</th>
             </tr>
@@ -439,54 +497,102 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
           <tbody>
             {prospects.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
                   No prospects found.
                 </td>
               </tr>
             )}
-            {prospects.map((p) => (
+            {prospects.map((p) => {
+              const initials = (p.contact_name ?? "")
+                .split(" ")
+                .filter(Boolean)
+                .map((t) => t[0]?.toUpperCase())
+                .slice(0, 2)
+                .join("") || (p.email?.charAt(0).toUpperCase() ?? "?")
+
+              const companyInitials = (p.company_name ?? "")
+                .split(" ")
+                .filter(Boolean)
+                .map((t) => t[0]?.toUpperCase())
+                .slice(0, 2)
+                .join("")
+
+              return (
               <Fragment key={p.id}>
                 <tr
                   className={`border-b border-[#e5e5e4] hover:bg-[#fafaf9] cursor-pointer transition-colors ${expandedId === p.id ? "bg-[#fafaf9]" : ""}`}
                   onClick={() => handleRowClick(p.id)}
                 >
-                  <td className="px-4 py-3 text-sm text-[#1c1c1a] max-w-[160px] truncate">
-                    {p.contact_name || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-[#1c1c1a] max-w-[200px] truncate">
-                    {p.email}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-[#6b6b68] max-w-[160px] truncate">
-                    {p.company_name || "—"}
-                  </td>
+                  {/* Contact — name + email */}
                   <td className="px-4 py-3">
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_CONFIG[p.status].cls}`}>
-                      {STATUS_CONFIG[p.status].label}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                        {initials}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium text-[#1c1c1a] truncate">{p.contact_name || "—"}</span>
+                        <span className="text-xs text-[#a1a1a0] truncate">{p.email}</span>
+                      </div>
+                    </div>
+                  </td>
+                  {/* Status — dot + label */}
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[p.status].dot}`} />
+                      <span className="text-xs font-medium text-[#1c1c1a] whitespace-nowrap">{STATUS_CONFIG[p.status].label}</span>
+                    </div>
+                  </td>
+                  {/* Sequence — dot + label */}
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const seq = (p.sequence_status ?? "not_started") as SequenceStatus
+                      const cfg = SEQUENCE_CONFIG[seq] ?? SEQUENCE_CONFIG.not_started
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                          <span className="text-xs text-[#1c1c1a] whitespace-nowrap">{cfg.label}</span>
+                        </div>
+                      )
+                    })()}
+                  </td>
+                  {/* Company — owner design (initials + name) */}
+                  <td className="px-4 py-3">
+                    {p.company_name ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                          {companyInitials}
+                        </div>
+                        <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.company_name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-[#a1a1a0]">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_sent}</td>
-                  <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_opened}</td>
-                  <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_clicked}</td>
+                  <td className="px-4 py-3 text-xs text-center font-medium">
+                    {p.emails_sent > 0 ? (() => {
+                      const pct = Math.round((p.emails_delivered / p.emails_sent) * 100)
+                      const color = pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"
+                      return <span className={color}>{pct}%</span>
+                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] capitalize">{p.source}</td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] text-right whitespace-nowrap">{formatDate(p.created_at)}</td>
                 </tr>
                 {/* Expanded detail row */}
                 {expandedId === p.id && (
                   <tr key={`${p.id}-detail`} className="border-b border-[#e5e5e4] bg-[#fafaf9]">
-                    <td colSpan={9} className="px-6 py-4">
+                    <td colSpan={8} className="px-6 py-4">
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <DetailField label="Ref Code" value={p.ref_code} />
                         <DetailField label="City" value={p.city} />
                         <DetailField label="Apollo Contact ID" value={p.apollo_contact_id} />
                         <DetailField label="Apollo Account ID" value={p.apollo_account_id} />
-                        <DetailField label="First Email Sent" value={formatDateTime(p.first_email_sent_at)} />
                         <DetailField label="Last Email Sent" value={formatDateTime(p.last_email_sent_at)} />
-                        <DetailField label="Opened At" value={formatDateTime(p.opened_at)} />
-                        <DetailField label="Clicked At" value={formatDateTime(p.clicked_at)} />
-                        <DetailField label="Landing Visited At" value={formatDateTime(p.landing_visited_at)} />
+                        <DetailField label="Visited At" value={formatDateTime(p.landing_visited_at)} />
                         <DetailField label="Signed Up At" value={formatDateTime(p.signed_up_at)} />
                         <DetailField label="Company Created At" value={formatDateTime(p.company_created_at)} />
-                        <DetailField label="Converted At" value={formatDateTime(p.converted_at)} />
+                        <DetailField label="Active At" value={formatDateTime(p.converted_at)} />
                         <DetailField label="Linked User ID" value={p.linked_user_id} />
                         <DetailField label="Linked Company ID" value={p.linked_company_id} />
                         <DetailField label="Linked Project ID" value={p.linked_project_id} />
@@ -542,7 +648,8 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                   </tr>
                 )}
               </Fragment>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>

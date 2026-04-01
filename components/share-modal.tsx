@@ -6,6 +6,7 @@ import { Copy, ExternalLink, Mail, MessageCircle, MessageSquare, Share2 } from "
 import { toast } from "sonner"
 import { sanitizeImageUrl } from "@/lib/image-security"
 import { useTranslations } from "next-intl"
+import { trackProjectShared, trackProfessionalShared } from "@/lib/tracking"
 
 interface ShareModalProps {
   isOpen: boolean
@@ -14,9 +15,10 @@ interface ShareModalProps {
   subtitle: string
   imageUrl: string
   shareUrl: string
+  shareType?: "project" | "professional"
 }
 
-export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUrl }: ShareModalProps) {
+export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUrl, shareType = "project" }: ShareModalProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const t = useTranslations("share")
 
@@ -58,12 +60,22 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
       }
 
       setCopiedKey("link")
+      trackShare("link")
       toast.success(t("link_copied"))
       setTimeout(() => {
         setCopiedKey((previous) => (previous === "link" ? null : previous))
       }, 2000)
     } catch (error) {
       toast.error(t("copy_failed"))
+    }
+  }
+
+  const slug = resolvedShareUrl.split("/").pop() ?? ""
+  const trackShare = (channel: string) => {
+    if (shareType === "professional") {
+      trackProfessionalShared(slug, channel)
+    } else {
+      trackProjectShared(slug, channel)
     }
   }
 
@@ -79,6 +91,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
         text: subtitle || title,
         url: resolvedShareUrl,
       })
+      trackShare("system")
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return
@@ -90,27 +103,32 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
   const handleEmailShare = () => {
     const subject = encodeURIComponent(`Check out: ${title}`)
     const body = encodeURIComponent(`I thought you might be interested in this:\n${resolvedShareUrl}`)
+    trackShare("email")
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
   const handleWhatsAppShare = () => {
     const text = encodeURIComponent(`Check out: ${title}\n${resolvedShareUrl}`)
+    trackShare("whatsapp")
     window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer")
   }
 
   const handleMessengerShare = () => {
     const url = encodeURIComponent(resolvedShareUrl)
+    trackShare("messenger")
     window.open(`https://www.messenger.com/new?link=${url}`, "_blank", "noopener,noreferrer")
   }
 
   const handleFacebookShare = () => {
     const url = encodeURIComponent(resolvedShareUrl)
+    trackShare("facebook")
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "noopener,noreferrer")
   }
 
   const handleTwitterShare = () => {
     const text = encodeURIComponent(`Check out: ${title}`)
     const url = encodeURIComponent(resolvedShareUrl)
+    trackShare("x")
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank", "noopener,noreferrer")
   }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus } from "lucide-react"
@@ -16,6 +16,7 @@ import {
   claimCompanyAction,
   type GooglePlaceData,
 } from "@/app/create-company/actions"
+import { trackCompanyCreated, startSessionRecording } from "@/lib/tracking"
 
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
 
@@ -37,7 +38,7 @@ function extractDomainFromUrl(input: string): string | null {
 export function CreateCompanyModal() {
   const router = useRouter()
   const { user, refreshProfile } = useAuth()
-  const { isOpen, closeCreateCompanyModal } = useCreateCompanyModal()
+  const { isOpen, initialCompany, closeCreateCompanyModal } = useCreateCompanyModal()
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const t = useTranslations("create_company")
   const tc = useTranslations("common")
@@ -80,6 +81,29 @@ export function CreateCompanyModal() {
     setManualWebsite("")
     googleService.current = null
   }, [])
+
+  // When opened with preloaded company data, skip straight to verify step
+  useEffect(() => {
+    if (isOpen && initialCompany) {
+      setPlaceData({
+        name: initialCompany.name,
+        placeId: initialCompany.placeId,
+        formattedAddress: initialCompany.formattedAddress,
+        city: initialCompany.city,
+        country: initialCompany.country,
+        stateRegion: initialCompany.stateRegion,
+        phone: initialCompany.phone,
+        website: initialCompany.website,
+        domain: initialCompany.domain,
+        editorialSummary: initialCompany.editorialSummary,
+        googleTypes: initialCompany.googleTypes,
+      })
+      if (initialCompany.arcoCompanyId) {
+        setClaimingCompanyId(initialCompany.arcoCompanyId)
+      }
+      setStep("verify")
+    }
+  }, [isOpen, initialCompany])
 
   const handleClose = useCallback(() => {
     if (step === "creating") return
@@ -332,6 +356,11 @@ export function CreateCompanyModal() {
       }
 
       if (result.success) {
+        startSessionRecording()
+        const trackId = claimingCompanyId ?? ("companyId" in result ? (result as any).companyId : undefined)
+        if (trackId) {
+          trackCompanyCreated(trackId, placeData.name)
+        }
         await refreshProfile()
         closeCreateCompanyModal()
         router.push("/dashboard/company")

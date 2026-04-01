@@ -16,12 +16,13 @@ import { ProfessionalCard } from "@/components/professional-card"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { checkSelfDeletionAction, deleteSelfAccountAction, type DeletionCheckResult } from "@/app/homeowner/actions"
+import { ClientMessagesTab } from "@/components/client-messages-tab"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-type HomeownerTab = "saved-projects" | "saved-professionals" | "account"
+type HomeownerTab = "saved-projects" | "saved-professionals" | "messages" | "account"
 
 const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 const AVATAR_MIME_TO_EXTENSION: Record<string, string> = {
@@ -37,7 +38,9 @@ function HomeownerContent() {
   const { user, profile, supabase, refreshSession, refreshProfile, isLoading } = useAuth()
   const t = useTranslations("homeowner")
 
+  const tMessages = useTranslations("messages")
   const TAB_ITEMS: { value: HomeownerTab; label: string }[] = [
+    { value: "messages", label: tMessages("title") },
     { value: "saved-projects", label: t("saved_projects") },
     { value: "saved-professionals", label: t("saved_professionals") },
     { value: "account", label: t("account") },
@@ -466,6 +469,9 @@ function HomeownerContent() {
 
       {/* ── Saved Professionals Tab ── */}
       {activeTab === "saved-professionals" && <SavedProfessionalsTab />}
+
+      {/* ── Messages Tab ── */}
+      {activeTab === "messages" && <ClientMessagesTab />}
 
       {/* ── Account Tab ── */}
       {activeTab === "account" && (

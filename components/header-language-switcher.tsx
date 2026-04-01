@@ -41,7 +41,7 @@ export function HeaderLanguageSwitcher({ isLight }: { isLight?: boolean }) {
         break
       }
     }
-    window.location.href = `/${newLocale}${path}`
+    window.location.href = `/${newLocale}${path}${window.location.search}`
   }
 
   const current = languages.find((l) => l.code === locale)

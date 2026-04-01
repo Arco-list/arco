@@ -15,6 +15,7 @@ import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { getTranslations } from "next-intl/server"
 import { getLocalizedName } from "@/lib/locale-name"
+import { TrackPageView } from "@/components/track-view"
 
 type SearchProjectsRow = Database["public"]["Functions"]["search_projects"]["Returns"][number]
 
@@ -63,14 +64,17 @@ async function loadLandingData(locale: string) {
   const supabase = await createServerSupabaseClient()
 
   const [
-    heroProjectsResult,
+    heroCoversResult,
     popularProjectsResult,
     parentCategoriesResult,
     homeProjectTypesResult,
     homeProfessionalServicesResult,
     featuredCompaniesResult,
   ] = await Promise.all([
-    supabase.rpc("search_projects", { featured_only: true, limit_count: 5 }),
+    supabase
+      .from("hero_covers")
+      .select("slot, project_id, photo_url, projects(id, title, slug, location, project_type)")
+      .order("slot", { ascending: true }),
     supabase.rpc("search_projects", { limit_count: 12 }),
     supabase
       .from("categories")
@@ -119,14 +123,25 @@ async function loadLandingData(locale: string) {
       .limit(3),
   ])
 
-  if (heroProjectsResult.error) logger.error("Failed to load featured hero projects", { scope: "landing" }, heroProjectsResult.error)
+  if (heroCoversResult.error) logger.error("Failed to load hero covers", { scope: "landing" }, heroCoversResult.error)
   if (popularProjectsResult.error) logger.error("Failed to load popular projects", { scope: "landing" }, popularProjectsResult.error)
   if (parentCategoriesResult.error) logger.error("Failed to load project categories", { scope: "landing" }, parentCategoriesResult.error)
   if (homeProjectTypesResult.error) logger.error("Failed to load home project types", { scope: "landing" }, homeProjectTypesResult.error)
   if (homeProfessionalServicesResult.error) logger.error("Failed to load home professional services", { scope: "landing" }, homeProfessionalServicesResult.error)
   if (featuredCompaniesResult.error) logger.error("Failed to load featured companies", { scope: "landing" }, featuredCompaniesResult.error)
 
-  const heroProjects = (heroProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
+  // Build hero projects from hero_covers table
+  const heroCovers = (heroCoversResult.data ?? []) as any[]
+  const heroProjects = heroCovers
+    .filter((cover) => cover.projects?.slug)
+    .map((cover) => ({
+      id: cover.projects.id,
+      title: cover.projects.title ?? "Untitled",
+      slug: cover.projects.slug,
+      location: cover.projects.location,
+      project_type: cover.projects.project_type,
+      primary_photo_url: cover.photo_url,
+    }))
   const popularProjects = (popularProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
   const parentCategories = (parentCategoriesResult.data as CategoryRow[] | null) ?? []
   const homeProjectTypes = (homeProjectTypesResult.data as Tables<"categories">[] | null) ?? []
@@ -289,6 +304,38 @@ async function loadLandingData(locale: string) {
 
   for (const space of (spacesWithImages ?? []) as any[]) {
     if (space.image_url) spacePhotoMap.set(space.slug, space.image_url)
+  }
+
+  // Check categories table for images (mapped from space slugs to category slugs)
+  const spaceToCategorySlug: Record<string, string[]> = {
+    kitchen: ["kitchen-living"],
+    "living-room": ["kitchen-living"],
+    bedroom: ["bed-bath"],
+    bathroom: ["bathrooms", "bed-bath"],
+    exterior: ["outdoor", "house", "villa"],
+  }
+  const allCategorySlugs = [...new Set(Object.values(spaceToCategorySlug).flat())]
+  const { data: categoryImages } = await supabase
+    .from("categories")
+    .select("slug, image_url")
+    .in("slug", allCategorySlugs)
+    .not("image_url", "is", null)
+
+  const categoryImageMap = new Map<string, string>()
+  for (const cat of (categoryImages ?? []) as any[]) {
+    if (cat.image_url) categoryImageMap.set(cat.slug, cat.image_url)
+  }
+
+  // Apply category images as fallback (don't override spaces/project photos)
+  for (const [spaceSlug, catSlugs] of Object.entries(spaceToCategorySlug)) {
+    if (spacePhotoMap.has(spaceSlug)) continue
+    for (const catSlug of catSlugs) {
+      const img = categoryImageMap.get(catSlug)
+      if (img) {
+        spacePhotoMap.set(spaceSlug, img)
+        break
+      }
+    }
   }
 
   const browseSpaces: BrowseCard[] = spaceConfig.map((s, i) => ({
@@ -471,13 +518,29 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     featuredCompanies,
   } = await loadLandingData(locale)
 
+  // Check if current user is super admin (for hero editor)
+  let isSuperAdmin = false
+  try {
+    const supabaseAuth = await createServerSupabaseClient()
+    const { data: { session } } = await supabaseAuth.auth.getSession()
+    if (session?.user) {
+      const { data: profile } = await supabaseAuth
+        .from("profiles")
+        .select("admin_role")
+        .eq("id", session.user.id)
+        .maybeSingle()
+      isSuperAdmin = profile?.admin_role === "super_admin"
+    }
+  } catch {}
+
   return (
     <div className="min-h-screen bg-background">
+      <TrackPageView path="/" />
       <Header transparent />
       <main className="pt-0">
 
         {/* 1. Hero — full bleed, editorial headline */}
-        <HeroSection projects={heroProjects} />
+        <HeroSection projects={heroProjects} isSuperAdmin={isSuperAdmin} />
 
         {/* 2. Positioning Statement - UPDATED: Uses .wrap class */}
         <section className="py-16 bg-white">

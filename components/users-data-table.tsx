@@ -5,6 +5,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import {
   ColumnDef,
   ColumnFiltersState,
+  RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
@@ -25,6 +26,7 @@ import {
   Shield,
 } from "lucide-react"
 import { toast } from "sonner"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import {
   changeAdminRoleAction,
@@ -93,13 +95,13 @@ function getUserRoleLabel(user: AdminUserRow): string {
   if (user.role === "super_admin") return "Super Admin"
   if (user.role === "admin") return "Admin"
   if (user.companies.length > 0) return "Professional"
-  return "Homeowner"
+  return "Client"
 }
 
 const ROLE_LABELS: Record<AdminUserRow["role"], string> = {
   admin: "Admin",
   super_admin: "Super Admin",
-  client: "Homeowner",
+  client: "Client",
 }
 
 const STATUS_DOT: Record<AdminUserRow["status"], string> = {
@@ -115,7 +117,7 @@ const STATUS_LABEL: Record<AdminUserRow["status"], string> = {
 }
 
 const ROLE_OPTIONS: { value: AdminUserRow["role"]; label: string; description: string; dotColor: string }[] = [
-  { value: "client", label: "Homeowner", description: "Standard user account, no admin access", dotColor: "bg-[#a1a1a0]" },
+  { value: "client", label: "Client", description: "Standard user account, no admin access", dotColor: "bg-[#a1a1a0]" },
   { value: "admin", label: "Admin", description: "Manage listings, professionals, and reviews", dotColor: "bg-blue-500" },
   { value: "super_admin", label: "Super Admin", description: "Full access including billing and settings", dotColor: "bg-[#016D75]" },
 ]
@@ -160,6 +162,10 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const [statusSelection, setStatusSelection] = useState<"active" | "inactive">("active")
 
   const [resettingUserId, setResettingUserId] = useState<string | null>(null)
+
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | AdminUserRow["role"]>("all")
@@ -290,9 +296,9 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           })
           return
         }
-        window.open(result.data.loginUrl, "_blank")
-        toast.success("Login link opened", {
-          description: `A new tab was opened as ${user.email}. Use an incognito window to keep your admin session.`,
+        await navigator.clipboard.writeText(result.data.loginUrl)
+        toast.success("Login link copied", {
+          description: `Paste in an incognito window to log in as ${user.email}`,
         })
       } catch (err) {
         console.error(err)
@@ -367,6 +373,28 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
 
   const columns = useMemo<ColumnDef<AdminUserRow>[]>(() => {
     return [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+            className="h-3.5 w-3.5"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            className="h-3.5 w-3.5"
+          />
+        ),
+        size: 32,
+        enableSorting: false,
+        enableHiding: false,
+      },
       {
         accessorKey: "displayName",
         header: "Name",
@@ -455,13 +483,14 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                   onClick={async () => {
                     const result = await generateCompanyLoginLinkAction({ companyId: company.id })
                     if (result.success && result.loginUrl) {
-                      window.open(result.loginUrl, "_blank", "noopener,noreferrer")
+                      await navigator.clipboard.writeText(result.loginUrl)
+                      toast.success("Login link copied — paste in an incognito window")
                     } else {
                       toast.error(result.error ?? "Failed to generate login link")
                     }
                   }}
                 >
-                  Log in as company
+                  Copy login link
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
@@ -624,7 +653,9 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       columnFilters,
       columnVisibility,
       pagination,
+      rowSelection,
     },
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -633,6 +664,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
+    onRowSelectionChange: setRowSelection,
   })
 
   const totalAdmins = data.length
@@ -689,7 +721,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               <SelectItem value="all">All roles</SelectItem>
               <SelectItem value="super_admin">Super admins</SelectItem>
               <SelectItem value="admin">Admins</SelectItem>
-              <SelectItem value="client">Homeowners</SelectItem>
+              <SelectItem value="client">Clients</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -713,6 +745,70 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         </div>
       </div>
 
+      {/* Bulk actions */}
+      {Object.keys(rowSelection).length > 0 && (() => {
+        const selectedCount = Object.keys(rowSelection).length
+        return (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4]">
+            <span className="text-xs text-[#6b6b68]">{selectedCount} selected</span>
+            <div className="flex items-center gap-2">
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  for (const user of selectedRows) {
+                    if (user.status === "active") continue
+                    const result = await toggleAdminStatusAction({ userId: user.id, active: true })
+                    if (result.success) success++
+                  }
+                  if (success > 0) {
+                    toast.success(`${success} user${success > 1 ? "s" : ""} activated`)
+                    setRowSelection({})
+                    router.refresh()
+                  }
+                  setIsBulkProcessing(false)
+                }}
+              >
+                Activate
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  for (const user of selectedRows) {
+                    if (user.status === "inactive") continue
+                    const result = await toggleAdminStatusAction({ userId: user.id, active: false })
+                    if (result.success) success++
+                  }
+                  if (success > 0) {
+                    toast.success(`${success} user${success > 1 ? "s" : ""} deactivated`)
+                    setRowSelection({})
+                    router.refresh()
+                  }
+                  setIsBulkProcessing(false)
+                }}
+              >
+                Deactivate
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-red-200 bg-white text-red-600 hover:bg-red-50 transition-colors"
+                disabled={isBulkProcessing}
+                onClick={() => setShowBulkDeleteConfirm(true)}
+              >
+                Delete
+              </button>
+            </div>
+            {isBulkProcessing && <span className="text-xs text-[#a1a1a0]">Processing…</span>}
+          </div>
+        )
+      })()}
+
       {/* Table */}
       <div className="border border-[#e5e5e4] overflow-hidden">
         <table className="w-full text-sm">
@@ -727,6 +823,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                       key={header.id}
                       colSpan={header.colSpan}
                       className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
+                      style={header.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
@@ -756,7 +853,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle">
+                    <td key={cell.id} className="px-4 py-3 align-middle" style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -1051,6 +1148,58 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           </div>
         </div>
       )}
+
+      {/* Bulk delete confirmation */}
+      {showBulkDeleteConfirm && (() => {
+        const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+        const count = selectedRows.length
+        return (
+          <div className="popup-overlay" onClick={() => { if (!isBulkProcessing) setShowBulkDeleteConfirm(false) }}>
+            <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">Delete {count} user{count > 1 ? "s" : ""}</h3>
+                <button type="button" className="popup-close" onClick={() => setShowBulkDeleteConfirm(false)} aria-label="Close" disabled={isBulkProcessing}>✕</button>
+              </div>
+              <div className="popup-banner popup-banner--warn">
+                <AlertTriangle className="popup-banner-icon" />
+                <div><p>This will permanently delete {count} user{count > 1 ? "s" : ""} and all associated data. This action cannot be undone.</p></div>
+              </div>
+              <div style={{ maxHeight: 160, overflowY: "auto", margin: "12px 0" }}>
+                {selectedRows.map((u) => (
+                  <div key={u.id} className="flex items-center gap-2 py-1 text-xs text-[#6b6b68]">
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${u.status === "active" ? "bg-emerald-500" : "bg-[#a1a1a0]"}`} />
+                    <span>{u.displayName}</span>
+                    <span className="text-[#a1a1a0]">{u.email}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="popup-actions">
+                <button type="button" className="btn-tertiary" onClick={() => setShowBulkDeleteConfirm(false)} disabled={isBulkProcessing} style={{ flex: 1 }}>Cancel</button>
+                <button
+                  type="button" className="btn-secondary" disabled={isBulkProcessing} style={{ flex: 1, backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
+                  onClick={async () => {
+                    setIsBulkProcessing(true)
+                    let success = 0
+                    for (const user of selectedRows) {
+                      const result = await deleteUserAction({ userId: user.id })
+                      if (result.success) success++
+                    }
+                    if (success > 0) {
+                      toast.success(`${success} user${success > 1 ? "s" : ""} deleted`)
+                      setRowSelection({})
+                      router.refresh()
+                    }
+                    setIsBulkProcessing(false)
+                    setShowBulkDeleteConfirm(false)
+                  }}
+                >
+                  {isBulkProcessing ? "Deleting…" : `Delete ${count} user${count > 1 ? "s" : ""}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

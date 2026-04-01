@@ -1,23 +1,20 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { updateContactStage, updateAccountStage } from "@/lib/apollo-client";
 import { logger } from "@/lib/logger";
 
 /**
  * Status progression order for checking advancement.
  */
 const STATUS_ORDER = [
-  "imported",
-  "sequence_active",
-  "email_opened",
-  "email_clicked",
-  "landing_visited",
-  "signed_up",
-  "company_created",
-  "project_started",
-  "project_published",
-  "converted",
+  "prospect",
+  "contacted",
+  "visitor",
+  "signup",
+  "company",
+  "active",
 ] as const;
 
-type ProspectStatus = (typeof STATUS_ORDER)[number] | "unsubscribed" | "bounced";
+type ProspectStatus = (typeof STATUS_ORDER)[number];
 
 function statusIndex(status: string): number {
   return STATUS_ORDER.indexOf(status as (typeof STATUS_ORDER)[number]);
@@ -27,9 +24,6 @@ function canAdvanceTo(
   currentStatus: string | null,
   newStatus: ProspectStatus
 ): boolean {
-  if (currentStatus === "unsubscribed" || currentStatus === "bounced") {
-    return false;
-  }
   const currentIdx = currentStatus ? statusIndex(currentStatus) : -1;
   const newIdx = statusIndex(newStatus);
   return newIdx > currentIdx;
@@ -62,14 +56,14 @@ export async function trackProspectLandingVisit(
   // Try email first (from Apollo {{email}} variable), then ref_code, then apollo_contact_id
   let { data: prospect, error } = await supabase
     .from("prospects")
-    .select("id, status, landing_visited_at")
+    .select("id, status, landing_visited_at, apollo_contact_id")
     .eq("email", refCode.toLowerCase())
     .maybeSingle();
 
   if (!prospect) {
     const result = await supabase
       .from("prospects")
-      .select("id, status, landing_visited_at")
+      .select("id, status, landing_visited_at, apollo_contact_id")
       .eq("ref_code", refCode)
       .maybeSingle();
     prospect = result.data;
@@ -79,7 +73,7 @@ export async function trackProspectLandingVisit(
   if (!prospect) {
     const result = await supabase
       .from("prospects")
-      .select("id, status, landing_visited_at")
+      .select("id, status, landing_visited_at, apollo_contact_id")
       .eq("apollo_contact_id", refCode)
       .maybeSingle();
     prospect = result.data;
@@ -99,8 +93,8 @@ export async function trackProspectLandingVisit(
     updates.landing_visited_at = new Date().toISOString();
   }
 
-  if (canAdvanceTo(oldStatus, "landing_visited")) {
-    updates.status = "landing_visited";
+  if (canAdvanceTo(oldStatus, "visitor")) {
+    updates.status = "visitor";
   }
 
   // Nothing to update
@@ -138,4 +132,19 @@ export async function trackProspectLandingVisit(
     refCode,
     statusAdvanced: !!updates.status,
   });
+
+  // Sync Apollo stage if status advanced
+  if (updates.status) {
+    const apolloContactId = (prospect as any).apollo_contact_id;
+    if (apolloContactId) {
+      try {
+        await Promise.all([
+          updateContactStage(apolloContactId, "Visitor"),
+          updateAccountStage(apolloContactId, "Visitor"),
+        ]);
+      } catch (err) {
+        logger.error("Failed to sync Apollo stage on landing visit", { apolloContactId }, err as Error);
+      }
+    }
+  }
 }

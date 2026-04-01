@@ -43,7 +43,7 @@ export function DiscoverClient({ initialProjects }: DiscoverClientProps) {
 
       {/* Results */}
       <main>
-        <ProjectsGrid initialProjects={initialProjects} sortBy={sortBy} />
+        <ProjectsGrid initialProjects={initialProjects} sortBy={sortBy} onSortChange={setSortBy} />
       </main>
     </>
   )

@@ -111,7 +111,11 @@ export default async function LocaleLayout({
 
               posthog.init('phc_l2sj1VywF62O0tnCg8tAOsOrvsqdlZ1njSr7KlAg3WD', {
                 api_host: 'https://eu.i.posthog.com',
-                person_profiles: 'identified_only'
+                person_profiles: 'identified_only',
+                autocapture: false,
+                capture_pageview: false,
+                capture_pageleave: false,
+                disable_session_recording: true
               });
             `,
           }}

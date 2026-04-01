@@ -138,6 +138,164 @@ export async function updateContact(
   return data.contact;
 }
 
+// ── Contact stage endpoints ───────────────────────────────────────────
+
+export interface ApolloContactStage {
+  id: string;
+  name: string;
+  display_order: number;
+}
+
+/**
+ * Fetch all contact stages from Apollo.
+ */
+export async function getContactStages(): Promise<ApolloContactStage[]> {
+  const data = await apolloRequest<{ contact_stages: ApolloContactStage[] }>({
+    method: "GET",
+    path: "/api/v1/contact_stages",
+  });
+  return data.contact_stages ?? [];
+}
+
+/**
+ * Cached stage name → ID mapping. Populated on first use.
+ */
+let stageMapCache: Record<string, string> | null = null;
+
+async function getStageMap(): Promise<Record<string, string>> {
+  if (stageMapCache) return stageMapCache;
+  const stages = await getContactStages();
+  stageMapCache = {};
+  for (const s of stages) {
+    stageMapCache[s.name.toLowerCase()] = s.id;
+  }
+  return stageMapCache;
+}
+
+/**
+ * Update a contact's stage in Apollo by stage name (e.g. "Prospect", "Contacted").
+ * Silently skips if the stage name is not found in Apollo.
+ */
+export async function updateContactStage(
+  contactId: string,
+  stageName: string
+): Promise<void> {
+  const map = await getStageMap();
+  const stageId = map[stageName.toLowerCase()];
+  if (!stageId) {
+    logger.warn("Apollo stage not found, skipping update", { stageName });
+    return;
+  }
+  await updateContact(contactId, { contact_stage_id: stageId });
+  logger.info("Updated Apollo contact stage", { contactId, stageName, stageId });
+}
+
+// ── Account (company) stage endpoints ─────────────────────────────────
+
+export interface ApolloAccountStage {
+  id: string;
+  name: string;
+  display_order: number;
+}
+
+/**
+ * Fetch all account stages from Apollo.
+ */
+export async function getAccountStages(): Promise<ApolloAccountStage[]> {
+  const data = await apolloRequest<{ account_stages: ApolloAccountStage[] }>({
+    method: "GET",
+    path: "/api/v1/account_stages",
+  });
+  return data.account_stages ?? [];
+}
+
+let accountStageMapCache: Record<string, string> | null = null;
+
+async function getAccountStageMap(): Promise<Record<string, string>> {
+  if (accountStageMapCache) return accountStageMapCache;
+  const stages = await getAccountStages();
+  accountStageMapCache = {};
+  for (const s of stages) {
+    accountStageMapCache[s.name.toLowerCase()] = s.id;
+  }
+  return accountStageMapCache;
+}
+
+/**
+ * Update an account's stage in Apollo by stage name.
+ * Looks up the account by contact's account_id.
+ */
+export async function updateAccountStage(
+  contactId: string,
+  stageName: string
+): Promise<void> {
+  // First get the contact to find their account_id
+  const contact = await getContact(contactId);
+  const accountId = (contact as any).account_id;
+  if (!accountId) {
+    logger.warn("No account_id on contact, skipping account stage update", { contactId });
+    return;
+  }
+
+  const map = await getAccountStageMap();
+  const stageId = map[stageName.toLowerCase()];
+  if (!stageId) {
+    logger.warn("Apollo account stage not found, skipping update", { stageName });
+    return;
+  }
+
+  await apolloRequest({
+    method: "PUT",
+    path: `/api/v1/accounts/${accountId}`,
+    body: { account_stage_id: stageId },
+  });
+  logger.info("Updated Apollo account stage", { contactId, accountId, stageName, stageId });
+}
+
+/**
+ * Search for an Apollo account by domain. Returns the account ID if found.
+ */
+export async function findAccountByDomain(domain: string): Promise<string | null> {
+  try {
+    const data = await apolloRequest<{ accounts: Array<{ id: string; domain?: string }> }>({
+      method: "POST",
+      path: "/api/v1/accounts/search",
+      body: {
+        q_organization_domains: domain,
+        page: 1,
+        per_page: 1,
+      },
+    });
+    const account = data.accounts?.[0];
+    return account?.id ?? null;
+  } catch (err) {
+    logger.error("Failed to search Apollo account by domain", { domain }, err as Error);
+    return null;
+  }
+}
+
+/**
+ * Update an Apollo account's stage by account ID directly.
+ */
+export async function updateAccountStageById(
+  accountId: string,
+  stageName: string
+): Promise<void> {
+  const map = await getAccountStageMap();
+  const stageId = map[stageName.toLowerCase()];
+  if (!stageId) {
+    logger.warn("Apollo account stage not found, skipping update", { stageName });
+    return;
+  }
+
+  await apolloRequest({
+    method: "PUT",
+    path: `/api/v1/accounts/${accountId}`,
+    body: { account_stage_id: stageId },
+  });
+  logger.info("Updated Apollo account stage by ID", { accountId, stageName, stageId });
+}
+
 // ── Sequence (emailer campaign) endpoints ──────────────────────────────
 
 /**

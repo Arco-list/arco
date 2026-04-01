@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Settings2 } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { HeroCoversEditor } from "@/components/hero-covers-editor"
 
 export interface HeroProject {
   id: string
@@ -16,9 +17,11 @@ export interface HeroProject {
 
 interface HeroSectionProps {
   projects: HeroProject[]
+  isSuperAdmin?: boolean
 }
 
-export function HeroSection({ projects }: HeroSectionProps) {
+export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps) {
+  const [showEditor, setShowEditor] = useState(false)
   const t = useTranslations("home")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [progress, setProgress] = useState(0)
@@ -70,7 +73,8 @@ export function HeroSection({ projects }: HeroSectionProps) {
     return null
   }
 
-  const currentProject = projects[currentIndex]
+  const safeIndex = currentIndex < projects.length ? currentIndex : 0
+  const currentProject = projects[safeIndex]
 
   return (
     <section className="relative w-full h-[600px] md:h-[700px] lg:h-[82vh] overflow-hidden bg-black" style={{ minHeight: '560px' }}>
@@ -162,12 +166,10 @@ export function HeroSection({ projects }: HeroSectionProps) {
                   </button>
                 </div>
 
-                {/* Caption - UPDATED: All white text */}
-                {currentProject.caption && (
-                  <p className="arco-eyebrow text-left" style={{ color: 'white' }}>
-                    {currentProject.caption}
-                  </p>
-                )}
+                {/* Project name linking to project page */}
+                <Link href={currentProject.href} className="arco-eyebrow text-left hover:opacity-80 transition-opacity" style={{ color: 'white' }}>
+                  {currentProject.title}
+                </Link>
               </div>
             )}
 
@@ -216,20 +218,51 @@ export function HeroSection({ projects }: HeroSectionProps) {
                 ))}
               </div>
               
-              {/* Caption - UPDATED: All white text */}
-              {currentProject.caption && (
-                <p className="arco-eyebrow text-left" style={{ 
-                  color: 'white',
-                  fontSize: '10px' 
-                }}>
-                  {currentProject.caption}
-                </p>
-              )}
+              {/* Project name linking to project page */}
+              <Link href={currentProject.href} className="arco-eyebrow text-left hover:opacity-80 transition-opacity" style={{ color: 'white', fontSize: '10px' }}>
+                {currentProject.title}
+              </Link>
             </div>
           )}
           
         </div>
       </div>
+
+      {/* Super admin: edit hero covers */}
+      {isSuperAdmin && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowEditor(true)}
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 50,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 14px",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "white",
+              background: "rgba(0,0,0,0.5)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 20,
+              cursor: "pointer",
+              backdropFilter: "blur(4px)",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.7)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.5)")}
+          >
+            <Settings2 style={{ width: 14, height: 14 }} />
+            Select covers
+          </button>
+          <HeroCoversEditor isOpen={showEditor} onClose={() => setShowEditor(false)} />
+        </>
+      )}
     </section>
   )
 }

@@ -21,6 +21,7 @@ export type EmailTemplate =
   | 'welcome-homeowner'
   | 'discover-projects'
   | 'find-professionals'
+  | 'introduction-request'
 
 export interface EmailVariables {
   firstname?: string
@@ -41,6 +42,9 @@ export interface EmailVariables {
   confirmUrl?: string
   code?: string
   businessname?: string
+  client_name?: string
+  client_email?: string
+  message_preview?: string
   [key: string]: any
 }
 
@@ -154,16 +158,33 @@ function renderProjectRejected(vars: EmailVariables): { subject: string; html: s
 
 function renderProfessionalInvite(vars: EmailVariables): { subject: string; html: string } {
   const projectName = vars.project_title || vars.project_name || 'a project'
+  const ownerLabel = vars.company_name || vars.project_owner || 'An architect'
+  const projectLink = vars.project_link
   return {
-    subject: `${vars.project_owner || 'An architect'} credited you on ${projectName}`,
+    subject: `${ownerLabel} credited you on ${projectName}`,
     html: lb(vars, `
       ${heading('You\'ve been credited')}
-      ${body(`${vars.project_owner || 'An architect'} added your company to a project on Arco.`)}
-      ${projectCard(vars)}
+      ${body(`${ownerLabel} added your company to a project on Arco.`)}
+      ${projectLink ? linkedProjectCard(vars, projectLink) : projectCard(vars)}
       ${body('Accept the invitation to showcase this project on your company page.')}
       ${vars.confirmUrl ? button('View invitation', vars.confirmUrl) : ''}
     `),
   }
+}
+
+function linkedProjectCard(vars: EmailVariables, projectLink: string): string {
+  const title = vars.project_title || vars.project_name || ''
+  const subtitle = [vars.project_type, vars.project_location].filter(Boolean).join(' · ')
+  const image = vars.project_image
+  if (!title) return ''
+  return `<a href="${projectLink}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+${image ? `<tr><td style="font-size:0;line-height:0;"><img src="${image}" alt="${title}" width="520" style="display:block;width:100%;height:auto;border-radius:8px;" /></td></tr>` : ''}
+<tr><td style="padding:14px 0 0;">
+<p style="margin:0 0 4px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${title}</p>
+${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${subtitle}</p>` : ''}
+</td></tr>
+</table></a>`
 }
 
 function renderTeamInvite(vars: EmailVariables): { subject: string; html: string } {
@@ -244,6 +265,22 @@ function renderFindProfessionals(vars: EmailVariables): { subject: string; html:
   }
 }
 
+function renderIntroductionRequest(vars: EmailVariables): { subject: string; html: string } {
+  const clientName = vars.client_name || 'A client'
+  return {
+    subject: `${clientName} requested an introduction on Arco`,
+    html: lb(vars, `
+      ${heading('New introduction request')}
+      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br><strong>${clientName}</strong> is interested in working with you and sent a message via Arco.`)}
+      <div style="margin:20px 0;padding:16px;background:#f5f5f4;border-radius:4px;">
+        <p style="margin:0;font-size:14px;color:#4a4a48;line-height:1.6;white-space:pre-wrap;">${vars.message_preview || ''}</p>
+      </div>
+      ${vars.client_email ? body(`<strong>Email:</strong> ${vars.client_email}`) : ''}
+      ${vars.dashboard_link ? button('View message', vars.dashboard_link) : ''}
+    `),
+  }
+}
+
 const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subject: string; html: string }> = {
   'project-live': renderProjectLive,
   'project-rejected': renderProjectRejected,
@@ -253,6 +290,7 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subj
   'welcome-homeowner': renderWelcomeHomeowner,
   'discover-projects': renderDiscoverProjects,
   'find-professionals': renderFindProfessionals,
+  'introduction-request': renderIntroductionRequest,
 }
 
 /**
@@ -338,8 +376,13 @@ export const sendProfessionalInviteEmail = async (
   email: string,
   inviteData: {
     project_owner: string
+    company_name?: string
     project_name: string
     project_title: string
+    project_image?: string
+    project_type?: string
+    project_location?: string
+    project_link?: string
     confirmUrl: string
   }
 ): Promise<EmailResponse> => {

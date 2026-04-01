@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { useRequireAuth } from "@/hooks/use-require-auth";
 import type { ProfessionalCard } from "@/lib/professionals/types";
+import { trackProfessionalSaved } from "@/lib/tracking";
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300";
 
@@ -222,6 +223,7 @@ export const SavedProfessionalsProvider = ({ children }: { children: ReactNode }
           throw upsertError;
         }
 
+        trackProfessionalSaved(professional.companyId);
         toast.success("Professional saved");
         await refresh();
 
