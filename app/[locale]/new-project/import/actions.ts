@@ -45,9 +45,98 @@ function cleanPageTitle(raw: string): string {
   return title.trim().slice(0, 120) || "Untitled Project"
 }
 
+/**
+ * Try to discover project images via CMS-specific API patterns.
+ * Works for DNN (DotNetNuke) sites like mecanoo.nl where images are loaded via AJAX.
+ */
+async function tryDiscoverCmsImages(html: string, pageUrl: string): Promise<string[]> {
+  const results: string[] = []
+  const base = new URL(pageUrl)
+
+  // DNN ProjectImagesService pattern: new ProjectImagesService($, {...}, moduleId, projectId)
+  const dnnMatch = html.match(/new\s+ProjectImagesService\s*\(\s*\$\s*,\s*\{[^}]*\}\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/)
+  if (dnnMatch) {
+    const moduleId = dnnMatch[1]
+    const projectId = dnnMatch[2]
+    // DNN WebAPI endpoint pattern
+    const apiPaths = [
+      `/DesktopModules/MVC/Mecanoo.Projects/API/ProjectImage/List?projectId=${projectId}`,
+      `/API/Mecanoo.Projects/ProjectImage/List?projectId=${projectId}`,
+      `/DesktopModules/Mecanoo.Projects/API/ProjectImage/List?projectId=${projectId}`,
+    ]
+    for (const apiPath of apiPaths) {
+      try {
+        const apiUrl = `${base.origin}${apiPath}`
+        const res = await fetch(apiUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)",
+            "ModuleId": moduleId,
+            "TabId": "0",
+            "Accept": "application/json",
+          },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (!res.ok) continue
+        const data = await res.json()
+        const items = Array.isArray(data) ? data : data?.Results ?? data?.data ?? []
+        for (const item of items) {
+          const link = item.Link ?? item.FileName ?? item.ImageUrl ?? item.Url ?? item.src ?? ""
+          if (link && /\.(jpe?g|png|webp)/i.test(link)) {
+            try {
+              // Build full URL from the image path pattern found in the page
+              const imgPath = link.startsWith("/") ? link : `/Portals/_default/Mecanoo/PRProjects/${projectId}/${link}`
+              results.push(new URL(imgPath, base.origin).toString())
+            } catch {}
+          }
+        }
+        if (results.length > 0) break
+      } catch { continue }
+    }
+  }
+
+  // Also try: find the project image base path and enumerate from page content
+  if (results.length === 0) {
+    const basePathMatch = html.match(/['"]([^'"]*\/PRProjects\/\d+\/)['"]/i)
+      || html.match(/['"]([^'"]*\/Portals\/[^'"]*\/PRProjects\/\d+\/)['"]/i)
+    if (basePathMatch) {
+      const basePath = basePathMatch[1]
+      // Find all image filenames referenced for this path
+      const escapedPath = basePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      const fileRegex = new RegExp(`${escapedPath}([\\w\\-]+\\.(?:jpe?g|png|webp))`, "gi")
+      let match
+      while ((match = fileRegex.exec(html)) !== null) {
+        try {
+          results.push(new URL(basePath + match[1], base.origin).toString())
+        } catch {}
+      }
+    }
+  }
+
+  return results
+}
+
 // ─── Firecrawl helpers ────────────────────────────────────────────────────────
 
-/** Extract image URLs from Firecrawl markdown (![alt](url) patterns) */
+/** Decode HTML entities and clean up image URLs */
+function cleanImageSrc(src: string): string {
+  // Decode HTML entities
+  let cleaned = src
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim()
+  // Strip surrounding quotes
+  cleaned = cleaned.replace(/^["']|["']$/g, "")
+  // If the URL contains an embedded URL (e.g. from malformed HTML), extract the inner one
+  const embeddedMatch = cleaned.match(/(https?:\/\/[^\s"']+\.(?:jpe?g|png|webp)(?:\?[^\s"']*)?)/i)
+  if (embeddedMatch && embeddedMatch[1] !== cleaned) {
+    cleaned = embeddedMatch[1]
+  }
+  return cleaned
+}
+
 /** Try to upgrade an image URL to its full-resolution variant */
 function upgradeToFullRes(url: string): string {
   let upgraded = url
@@ -68,8 +157,9 @@ function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: 
   const seen = new Set<string>()
   const results: string[] = []
 
-  const add = (src: string) => {
+  const add = (rawSrc: string) => {
     try {
+      const src = cleanImageSrc(rawSrc)
       const abs = new URL(src, baseUrl).toString()
       // Try full-res variant
       const fullRes = upgradeToFullRes(abs)
@@ -103,8 +193,9 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
   const seen = new Set<string>()
   const results: string[] = []
 
-  const add = (src: string) => {
+  const add = (rawSrc: string) => {
     try {
+      const src = cleanImageSrc(rawSrc)
       const abs = new URL(src, baseUrl).toString()
       const fullRes = upgradeToFullRes(abs)
       const key = fullRes || abs
@@ -163,6 +254,25 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
     if (!match[1].startsWith("data:")) add(match[1])
   }
 
+  // Match data-image, data-bg, data-thumb and similar attributes on any element
+  const dataAttrRegex = /data-(?:image|bg|thumb|full|large|zoom|hi-res|hires|original-src|src-retina)=["']([^"']+)["']/gi
+  while ((match = dataAttrRegex.exec(html)) !== null) {
+    if (!match[1].startsWith("data:")) add(match[1])
+  }
+
+  // Match image URLs in inline JavaScript (common gallery/slider patterns)
+  // Catches: image.Link patterns, JSON image arrays, and quoted image paths
+  const jsImageRegex = /["']([^"']*\/(?:PRProjects|projects|portfolio|gallery|uploads|images|media|wp-content\/uploads)\/[^"']*\.(?:jpe?g|png|webp))["']/gi
+  while ((match = jsImageRegex.exec(html)) !== null) {
+    add(match[1])
+  }
+
+  // Match common JS gallery data: {src: "...", url: "...", image: "..."}
+  const jsObjRegex = /(?:src|url|image|href|path|file)["']?\s*[:=]\s*["']([^"']+\.(?:jpe?g|png|webp)(?:\?[^"']*)?)["']/gi
+  while ((match = jsObjRegex.exec(html)) !== null) {
+    if (!match[1].startsWith("data:") && match[1].length > 10) add(match[1])
+  }
+
   return results.slice(0, 30)
 }
 
@@ -197,8 +307,9 @@ function extractImagesFromDom(doc: Document, baseUrl: string): string[] {
   const seen = new Set<string>()
   const results: string[] = []
 
-  const add = (src: string) => {
+  const add = (rawSrc: string) => {
     try {
+      const src = cleanImageSrc(rawSrc)
       const abs = new URL(src, baseUrl).toString()
       if (seen.has(abs)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(abs)) return
@@ -222,13 +333,28 @@ function extractImagesFromDom(doc: Document, baseUrl: string): string[] {
     clone.body
 
   mainEl?.querySelectorAll("img").forEach((img) => {
-    const src = img.getAttribute("src") || img.getAttribute("data-src") || img.getAttribute("data-lazy-src")
+    const src = img.getAttribute("src") || img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || img.getAttribute("data-original")
     if (!src) return
     const w = parseInt(img.getAttribute("width") ?? "0", 10)
     const h = parseInt(img.getAttribute("height") ?? "0", 10)
     if ((w && w < 200) || (h && h < 200)) return
     add(src)
   })
+
+  // Extract background-image from style attributes
+  mainEl?.querySelectorAll("[style]").forEach((el) => {
+    const style = el.getAttribute("style") ?? ""
+    const bgMatch = style.match(/background(?:-image)?:\s*url\(["']?([^"')]+)["']?\)/i)
+    if (bgMatch?.[1] && !bgMatch[1].startsWith("data:")) add(bgMatch[1])
+  })
+
+  // Extract image URLs from inline scripts (JS galleries)
+  const fullHtml = doc.documentElement.outerHTML
+  const jsImageRegex = /["']([^"']*\/(?:PRProjects|projects|portfolio|gallery|uploads|images|media|wp-content\/uploads)\/[^"']*\.(?:jpe?g|png|webp))["']/gi
+  let jsMatch
+  while ((jsMatch = jsImageRegex.exec(fullHtml)) !== null) {
+    add(jsMatch[1])
+  }
 
   return results.slice(0, 30)
 }
@@ -428,8 +554,8 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
       const result = await firecrawl.scrape(url.toString(), {
         formats: ["markdown", "html"],
-        timeout: 30000,
-        waitFor: 3000,
+        timeout: 45000,
+        waitFor: 10000,
       }) as any
 
       if (!result || (!result.markdown && !result.metadata)) {
@@ -440,14 +566,40 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       const ogImage = result.metadata?.ogImage ?? undefined
       imageUrls = extractImagesFromMarkdown(result.markdown ?? "", url.toString(), ogImage)
 
-      // Also extract images from raw HTML (catches lazy-loaded, srcset, data-src)
+      // Also extract images from raw HTML (catches lazy-loaded, srcset, data-src, JS galleries)
       if (result.html) {
         const htmlImages = extractImagesFromRawHtml(result.html, url.toString())
         for (const img of htmlImages) {
           if (!imageUrls.includes(img)) imageUrls.push(img)
         }
-        imageUrls = imageUrls.slice(0, 30)
       }
+
+      // Extract from full raw HTML including script blocks (for AJAX-loaded galleries)
+      if (result.rawHtml || result.html) {
+        const fullHtml = result.rawHtml ?? result.html
+        const rawHtmlImages = extractImagesFromRawHtml(fullHtml, url.toString())
+        for (const img of rawHtmlImages) {
+          if (!imageUrls.includes(img)) imageUrls.push(img)
+        }
+      }
+
+      // If we found very few images, try CMS-specific API discovery
+      if (imageUrls.length < 4 && (result.html || result.rawHtml)) {
+        try {
+          const cmsImages = await tryDiscoverCmsImages(result.rawHtml ?? result.html, url.toString())
+          for (const img of cmsImages) {
+            if (!imageUrls.includes(img)) imageUrls.push(img)
+          }
+          if (cmsImages.length > 0) {
+            console.log(`[scrape] CMS discovery found ${cmsImages.length} additional images`)
+          }
+        } catch (err) {
+          console.log("[scrape] CMS image discovery failed:", err)
+        }
+      }
+
+      imageUrls = imageUrls.slice(0, 30)
+      console.log(`[scrape] Found ${imageUrls.length} images from ${url.toString()}`)
 
       // Extract structured data with Claude (or basic fallback)
       console.log("[scrape] ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY, "pageText length:", pageText.length)
@@ -508,6 +660,17 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     const doc = dom.window.document
 
     imageUrls = extractImagesFromDom(doc, url.toString())
+
+    // If few images found, try CMS-specific API discovery
+    if (imageUrls.length < 4) {
+      try {
+        const cmsImages = await tryDiscoverCmsImages(html, url.toString())
+        for (const img of cmsImages) {
+          if (!imageUrls.includes(img)) imageUrls.push(img)
+        }
+      } catch {}
+      imageUrls = imageUrls.slice(0, 30)
+    }
 
     if (process.env.ANTHROPIC_API_KEY) {
       try {
@@ -601,6 +764,14 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
   }
 
+  // Store initial title + description in translations (AI extraction always returns English)
+  const initialTranslations: Record<string, any> = {}
+  if (title || description) {
+    initialTranslations.en = {}
+    if (title) initialTranslations.en.title = title
+    if (description) initialTranslations.en.description = description
+  }
+
   const projectData = {
     title,
     description,
@@ -617,6 +788,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     status: "draft" as const,
     client_id: user.id,
     source_url: url.toString().replace(/\/+$/, "").toLowerCase(),
+    translations: initialTranslations,
   }
 
   let project: { id: string } | null = null
@@ -766,6 +938,41 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
   }
 
+  // Translate title and description to Dutch in the background
+  if ((title || description) && process.env.ANTHROPIC_API_KEY) {
+    (async () => {
+      try {
+        const Anthropic = (await import("@anthropic-ai/sdk")).default
+        const client = new Anthropic()
+        const parts: string[] = []
+        if (title) parts.push(`Title: ${title}`)
+        if (description) parts.push(`Description: ${description}`)
+
+        const msg = await client.messages.create({
+          model: "claude-haiku-4-5",
+          max_tokens: 400,
+          messages: [{
+            role: "user",
+            content: `Translate the following to Dutch. Return a JSON object with "title" and "description" keys (only include keys that were provided). Keep the same tone and style. Return only JSON, no markdown.\n\n${parts.join("\n")}`,
+          }],
+        })
+        const rawText = msg.content.find((b) => b.type === "text")?.text?.trim() ?? ""
+        const cleaned = rawText.replace(/```json\s*|```\s*/g, "").trim()
+        const parsed = JSON.parse(cleaned)
+
+        const { data: existing } = await supabase.from("projects").select("translations").eq("id", project!.id).single()
+        const translations = (existing?.translations as Record<string, any>) ?? {}
+        if (!translations.nl) translations.nl = {}
+        if (parsed.title) translations.nl.title = String(parsed.title).slice(0, 120)
+        if (parsed.description) translations.nl.description = String(parsed.description).slice(0, 750)
+
+        await supabase.from("projects").update({ translations }).eq("id", project!.id)
+      } catch {
+        // Non-fatal — Dutch translation will be generated later via regenerateDescription
+      }
+    })()
+  }
+
   return { projectId: project.id, title }
 }
 
@@ -779,9 +986,19 @@ async function autoTagPhotosWithSpaces(
   const Anthropic = (await import("@anthropic-ai/sdk")).default
   const client = new Anthropic()
 
+  // Filter out malformed URLs before tagging
+  const validPhotos = photos.filter((p) => {
+    try {
+      const u = new URL(p.url)
+      return u.protocol === "https:" || u.protocol === "http:"
+    } catch { return false }
+  })
+
   // Tag up to 20 photos with compact prompt to stay within Haiku vision limits
-  const photosToTag = photos.slice(0, 20)
-  console.log(`[autoTag] Tagging ${photosToTag.length} of ${photos.length} photos`)
+  const photosToTag = validPhotos.slice(0, 20)
+  console.log(`[autoTag] Tagging ${photosToTag.length} of ${photos.length} photos (${photos.length - validPhotos.length} skipped as invalid)`)
+
+  if (photosToTag.length === 0) return
 
   // Build image content blocks — use minimal text between images
   const imageBlocks: any[] = []
@@ -794,7 +1011,7 @@ async function autoTagPhotosWithSpaces(
 
   console.log(`[autoTag] Calling Claude vision...`)
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: "claude-haiku-4-5",
     max_tokens: 2048,
     messages: [
       {
@@ -1138,7 +1355,9 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
       type: "text",
       text: `Write a short description of this architecture/interior design project for a professional portfolio. 3-4 sentences, 60-80 words. Third-person tone, professional and warm. Capture the project's character, context, and one or two key design decisions based on the photos and metadata.
 
-Return a JSON object with "en" and "nl" keys, each containing the description in that language. Example: {"en": "English description...", "nl": "Dutch description..."}
+Also translate the project title to both English and Dutch.
+
+Return a JSON object with "en" and "nl" keys, each containing "description" and "title" in that language. Example: {"en": {"title": "English title", "description": "English description..."}, "nl": {"title": "Dutch title", "description": "Dutch description..."}}
 Return ONLY the JSON, no markdown code fences or other text.
 
 ${context}`,
@@ -1156,11 +1375,21 @@ ${context}`,
     // Parse bilingual response
     let enDesc = ""
     let nlDesc = ""
+    let enTitle = ""
+    let nlTitle = ""
     try {
       const cleaned = rawText.replace(/```json\s*|```\s*/g, "").trim()
       const parsed = JSON.parse(cleaned)
-      enDesc = (parsed.en ?? "").slice(0, 750)
-      nlDesc = (parsed.nl ?? "").slice(0, 750)
+      // Support both flat {"en": "...", "nl": "..."} and nested {"en": {"title": "...", "description": "..."}}
+      if (typeof parsed.en === "object") {
+        enDesc = (parsed.en?.description ?? "").slice(0, 750)
+        nlDesc = (parsed.nl?.description ?? "").slice(0, 750)
+        enTitle = (parsed.en?.title ?? "").slice(0, 120)
+        nlTitle = (parsed.nl?.title ?? "").slice(0, 120)
+      } else {
+        enDesc = (parsed.en ?? "").slice(0, 750)
+        nlDesc = (parsed.nl ?? "").slice(0, 750)
+      }
     } catch {
       // Fallback: use raw text as the user's locale
       enDesc = rawText.slice(0, 750)
@@ -1171,13 +1400,24 @@ ${context}`,
     const description = userLocale === "Dutch" ? nlDesc : enDesc
 
     // Fetch existing translations to merge
-    const { data: existing } = await supabase.from("projects").select("translations").eq("id", projectId).single()
+    const { data: existing } = await supabase.from("projects").select("translations, title").eq("id", projectId).single()
     const translations = (existing?.translations as Record<string, any>) ?? {}
     translations.en = { ...(translations.en ?? {}), description: enDesc }
     translations.nl = { ...(translations.nl ?? {}), description: nlDesc }
 
+    // Add title translations (use existing title as EN fallback)
+    if (enTitle) translations.en.title = enTitle
+    else if (existing?.title) translations.en.title = existing.title
+    if (nlTitle) translations.nl.title = nlTitle
+
+    // Update the main title if user locale is Dutch and we have a Dutch title
+    const titleUpdate: Record<string, any> = { description, translations }
+    if (userLocale === "Dutch" && nlTitle) {
+      titleUpdate.title = nlTitle
+    }
+
     // Save to DB
-    await supabase.from("projects").update({ description, translations }).eq("id", projectId)
+    await supabase.from("projects").update(titleUpdate).eq("id", projectId)
 
     return { description }
   } catch (err) {

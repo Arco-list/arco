@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import Image from "next/image"
 import { ChevronRight } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -104,6 +104,28 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
     if (e.key === 'ArrowRight') nextImage()
     if (e.key === 'ArrowLeft') prevImage()
   }
+
+  // Touch swipe support
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }, [])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    touchStartX.current = null
+    touchStartY.current = null
+    // Only swipe if horizontal movement is dominant and > 50px
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0) nextImage()
+      else prevImage()
+    }
+  }, [])
 
   return (
     <>
@@ -228,7 +250,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
           onKeyDown={handleKeyDown}
           tabIndex={0}
         >
-          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             {/* Close button */}
             <button 
               className="lightbox-close"

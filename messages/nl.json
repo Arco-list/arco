@@ -154,9 +154,8 @@
     "loading_map": "Kaart laden…",
     "map_count": "{shown} van {total} professionals op de kaart",
     "sort_best_match": "Beste match",
+    "sort_most_popular": "Populairst",
     "sort_most_recent": "Meest recent",
-    "sort_highest_rated": "Hoogst beoordeeld",
-    "sort_alphabetical": "Alfabetisch",
     "filters": {
       "all_filters": "Alle filters",
       "service": "Dienst",
@@ -170,9 +169,8 @@
       "selected": "{count} geselecteerd",
       "services": "Diensten",
       "sort_best_match": "Beste match",
-      "sort_most_recent": "Meest recent",
-      "sort_highest_rated": "Hoogst beoordeeld",
-      "sort_alphabetical": "Alfabetisch"
+      "sort_most_popular": "Populairst",
+      "sort_most_recent": "Meest recent"
     },
     "filters_modal": {
       "title": "Filters",
@@ -912,12 +910,14 @@
     "how_it_works": "Hoe het werkt",
     "faq_heading": "Veelgestelde vragen",
     "recently_added_projects": "Recent toegevoegde projecten",
+    "recently_added_professionals": "Recent toegevoegde professionals",
+    "view_portfolio": "Bekijk portfolio",
     "by_firm": "door {firm}",
     "architects": {
       "hero_title": "Publiceer je werk. Crediteer je team. Zet de standaard.",
       "hero_body": "Arco is een gecureerd architectuurplatform waar projecten centraal staan en erkenning wordt verdiend door gebouwd werk — niet door promotie.",
       "cta_placeholder": "Plak een projectlink van je website",
-      "cta_button": "Project genereren →",
+      "cta_button": "Project genereren",
       "benefit_1_title": "Gecureerd platform",
       "benefit_1_body": "Word lid van een selectief netwerk van uitzonderlijke architecten. Elk project wordt beoordeeld om de hoge standaard van het platform te waarborgen.",
       "benefit_1_feature_1": "Kwalitatieve redactionele showcases",
@@ -953,7 +953,7 @@
     "professionals": {
       "hero_title": "Word herkend door het werk dat je hebt geleverd.",
       "hero_body": "Arco is een gecureerd architectuurnetwerk waar professionals worden gecrediteerd op echte projecten. Wanneer architecten je taggen, zien opdrachtgevers je werk en kunnen ze direct contact opnemen.",
-      "cta_button": "Maak je bedrijf aan →",
+      "cta_button": "Maak je bedrijf aan",
       "cta_claim_button": "Claim {company} →",
       "endorsement_subtitle": "De professionals op Arco zijn hier omdat een architect instond voor hun werk.",
       "benefit_1_title": "Aanbevolen, niet vermeld",

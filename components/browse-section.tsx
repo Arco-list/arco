@@ -34,7 +34,7 @@ function BrowseCarousel({ items, sectionTitle, viewAllHref, viewAllLabel }: {
         </Link>
       </div>
 
-      <div className="grid grid-cols-5 gap-5 lg:grid-cols-5 max-lg:flex max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:scrollbar-hide max-lg:gap-4">
+      <div className="grid grid-cols-5 lg:grid-cols-5 max-lg:flex max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:scrollbar-hide" style={{ gap: 'var(--grid-gap)' }}>
         {items.map((item) => (
           <Link
             key={item.id}

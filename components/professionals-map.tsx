@@ -453,9 +453,10 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
 interface MapPreviewCardProps {
   professionals: ProfessionalCard[]
   onClick: () => void
+  className?: string
 }
 
-export function MapPreviewCard({ professionals, onClick }: MapPreviewCardProps) {
+export function MapPreviewCard({ professionals, onClick, className }: MapPreviewCardProps) {
   const t = useTranslations("professionals")
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
@@ -509,7 +510,7 @@ export function MapPreviewCard({ professionals, onClick }: MapPreviewCardProps) 
 
   return (
     <button
-      className="professionals-map-preview"
+      className={`professionals-map-preview${className ? ` ${className}` : ""}`}
       onClick={onClick}
       aria-label="Show all professionals on map"
     >

@@ -48,7 +48,7 @@ async function assertAdmin() {
   return { supabase, user, error: null }
 }
 
-const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated"])
+const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "draft", "prospected"])
 const companyPlanTierSchema = z.enum(["basic", "plus"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
@@ -765,6 +765,102 @@ export async function changeCompanyOwnerAction(input: {
       title: company?.name ?? "Team member",
     })
   }
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+// ─── Prospect outreach ──────────────────────────────────────────────────────
+
+export async function sendProspectEmailAction(input: {
+  companyId: string
+  emailTo: string
+}): Promise<{ success: boolean; error?: string }> {
+  const { supabase, user, error } = await assertAdmin()
+  if (error) return { success: false, error: error.message }
+
+  const idResult = uuidSchema.safeParse(input.companyId)
+  if (!idResult.success) return { success: false, error: "Invalid company ID" }
+
+  const emailResult = z.string().email().safeParse(input.emailTo)
+  if (!emailResult.success) return { success: false, error: "Invalid email address" }
+
+  // Fetch company details
+  const serviceClient = createServiceRoleSupabaseClient()
+  const { data: company } = await serviceClient
+    .from("companies")
+    .select("id, name, slug, email, hero_photo_url, logo_url, city, country, owner_id, primary_service:categories!companies_primary_service_id_fkey(name)")
+    .eq("id", idResult.data)
+    .single()
+
+  if (!company) return { success: false, error: "Company not found" }
+  if (company.owner_id) return { success: false, error: "Company already has an owner" }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+  const companyPageUrl = `${siteUrl}/professionals/${company.slug}`
+  const claimUrl = `${siteUrl}/businesses/professionals?inviteEmail=${encodeURIComponent(emailResult.data)}`
+  const serviceName = (company.primary_service as any)?.name ?? null
+  const locationParts = [serviceName, company.city].filter(Boolean)
+
+  // Send email via Resend
+  const { sendTransactionalEmail } = await import("@/lib/email-service")
+  const sendResult = await sendTransactionalEmail(emailResult.data, "prospect-intro", {
+    company_name: company.name,
+    company_page_url: companyPageUrl,
+    claim_url: claimUrl,
+    hero_image_url: company.hero_photo_url ?? undefined,
+    logo_url: company.logo_url ?? undefined,
+    company_subtitle: locationParts.join(" · ") || undefined,
+  })
+
+  if (!sendResult.success) {
+    return { success: false, error: sendResult.message ?? "Failed to send email" }
+  }
+
+  // Track in company_outreach
+  await serviceClient.from("company_outreach" as any).insert({
+    company_id: company.id,
+    email_to: emailResult.data,
+    template: "prospect_intro",
+  })
+
+  // Update company status to prospected (only if no owner)
+  await serviceClient
+    .from("companies")
+    .update({ status: "prospected" } as any)
+    .eq("id", company.id)
+    .is("owner_id", null)
+
+  logger.info("admin-professionals", "Prospect email sent", {
+    companyId: company.id,
+    emailTo: emailResult.data,
+    adminId: user!.id,
+  })
+
+  revalidatePath("/", "layout")
+  return { success: true }
+}
+
+export async function updateCompanyEmailAction(input: {
+  companyId: string
+  email: string
+}): Promise<{ success: boolean; error?: string }> {
+  const { error } = await assertAdmin()
+  if (error) return { success: false, error: error.message }
+
+  const idResult = uuidSchema.safeParse(input.companyId)
+  if (!idResult.success) return { success: false, error: "Invalid company ID" }
+
+  const emailValidation = z.string().email().safeParse(input.email)
+  if (!emailValidation.success) return { success: false, error: "Invalid email address" }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+  const { error: updateError } = await serviceClient
+    .from("companies")
+    .update({ email: emailValidation.data })
+    .eq("id", idResult.data)
+
+  if (updateError) return { success: false, error: updateError.message }
 
   revalidatePath("/", "layout")
   return { success: true }

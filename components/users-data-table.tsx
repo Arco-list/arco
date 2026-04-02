@@ -533,6 +533,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       {
         accessorKey: "status",
         header: "Status",
+        size: 160,
         sortingFn: (rowA, rowB) => {
           const order = { active: 0, invited: 1, inactive: 2 }
           const statusDiff = order[rowA.original.status] - order[rowB.original.status]
@@ -574,6 +575,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       {
         accessorKey: "createdAt",
         header: "Created",
+        size: 120,
         cell: ({ row }) => {
           const date = parseDate(row.original.createdAt)
           if (!date) return <span className="text-xs text-[#a1a1a0]">—</span>
@@ -671,7 +673,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const totalSuperAdmins = data.filter((row) => row.role === "super_admin").length
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Warning banner */}
       {singleActiveSuperAdmin && (
         <div className="flex items-start gap-2.5 border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
@@ -810,8 +812,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full">
+        <table className="w-full text-sm" style={{ minWidth: 800 }}>
           <thead>
             <tr className="border-b border-[#e5e5e4]">
               {table.getHeaderGroups().map((headerGroup) =>
@@ -823,7 +825,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                       key={header.id}
                       colSpan={header.colSpan}
                       className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
-                      style={header.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
+                      style={header.id === "select" ? { width: 32, paddingRight: 0 } : header.column.columnDef.size ? { minWidth: header.column.columnDef.size } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button

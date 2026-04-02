@@ -22,6 +22,7 @@ export type EmailTemplate =
   | 'discover-projects'
   | 'find-professionals'
   | 'introduction-request'
+  | 'prospect-intro'
 
 export interface EmailVariables {
   firstname?: string
@@ -281,6 +282,57 @@ function renderIntroductionRequest(vars: EmailVariables): { subject: string; htm
   }
 }
 
+function renderProspectIntro(vars: EmailVariables): { subject: string; html: string } {
+  const companyName = vars.company_name || 'Uw bedrijf'
+  const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+  const heroImageUrl = vars.hero_image_url
+  const logoUrl = vars.logo_url
+  const subtitle = vars.company_subtitle || ''
+
+  // Company card — matches professional discover card design
+  const logoBlock = logoUrl
+    ? `<img src="${logoUrl}" alt="${companyName}" width="44" height="44" style="display:block;width:44px;height:44px;border-radius:50%;object-fit:cover;" />`
+    : `<div style="width:44px;height:44px;border-radius:50%;background:#f5f5f4;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;color:#6b6b68;">${companyName.charAt(0)}</div>`
+
+  const companyCard = `
+    <a href="${companyPageUrl}" target="_blank" style="display:block;text-decoration:none;border:1px solid #e5e5e4;border-radius:3px;overflow:hidden;margin:24px 0;">
+      ${heroImageUrl ? `<img src="${heroImageUrl}" alt="${companyName}" width="520" style="display:block;width:100%;max-width:520px;object-fit:cover;height:200px;" />` : ''}
+      <div style="padding:16px 20px;">
+        <table cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;padding-right:12px;">
+            ${logoBlock}
+          </td>
+          <td style="vertical-align:middle;">
+            <p style="margin:0;font-size:15px;font-weight:500;color:#1c1c1a;line-height:1.3;">${companyName}</p>
+            ${subtitle ? `<p style="margin:2px 0 0;font-size:13px;font-weight:300;color:#a1a1a0;line-height:1.3;">${subtitle}</p>` : ''}
+          </td>
+        </tr></table>
+      </div>
+    </a>`
+
+  return {
+    subject: `${companyName} staat op Arco`,
+    html: baseLayout(`
+      ${heading(`${companyName} is een van de eerste bedrijven op Arco`)}
+      ${body(`Ik ben Niek, oprichter van Arco. Arco is een nieuw platform voor architecten en interieurontwerpers. Het idee is simpel: <strong>Publish your work. Credit your team. Set the standard.</strong>`)}
+      ${body(`We hebben ${companyName} op Arco gezet met een bedrijfs- en projectpagina. Bekijk hoe het eruitziet:`)}
+      ${companyCard}
+      ${body(`Wil je de pagina claimen? Dan krijg je volledige controle over je profiel, kun je projecten toevoegen en word je zichtbaar voor potentiele opdrachtgevers.`)}
+      ${button(`Claim ${companyName}`, claimUrl)}
+      ${body(`Wil je liever dat we de pagina verwijderen? Laat het me weten door op deze email te reageren.`)}
+      <div style="border-top:1px solid #e8e8e6;margin:32px 0 24px;" />
+      <p style="margin:0 0 16px;font-size:14px;font-weight:300;line-height:1.6;color:#6b6b68;font-style:italic;">
+        We bouwen Arco met de missie om betere architectuur te inspireren, door middel van een gecureerd netwerk van architecten en professionals die het vertrouwen waard zijn.
+      </p>
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">Oprichter, Arco</span>
+      </p>
+    `),
+  }
+}
+
 const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subject: string; html: string }> = {
   'project-live': renderProjectLive,
   'project-rejected': renderProjectRejected,
@@ -291,6 +343,7 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subj
   'discover-projects': renderDiscoverProjects,
   'find-professionals': renderFindProfessionals,
   'introduction-request': renderIntroductionRequest,
+  'prospect-intro': renderProspectIntro,
 }
 
 /**
@@ -336,6 +389,7 @@ export async function sendTransactionalEmail(
       to: email,
       subject,
       html,
+      ...(template === 'prospect-intro' ? { reply_to: 'niek@arcolist.com' } : {}),
     })
 
     if (error) {

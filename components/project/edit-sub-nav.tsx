@@ -117,8 +117,10 @@ export function EditSubNav({
                   strokeLinejoin="round"
                 />
               </svg>
-              {isAdminReview ? "Projects" : "Listings"}
+              <span className="sub-nav-back-label">{isAdminReview ? "Projects" : "Listings"}</span>
             </Link>
+
+            <div className="sub-nav-mobile-divider" aria-hidden="true" />
 
             {/* Section links */}
             <div className="sub-nav-links" style={{ paddingRight: 0, marginRight: 0 }}>
@@ -141,7 +143,7 @@ export function EditSubNav({
                 {isSaving ? "Saving…" : "✓ Saved"}
               </span>
             )}
-            {!isAdminReview && (
+            {!isAdminReview && projectStatus !== "draft" && (
               <button className="filter-pill" onClick={onStatusClick}>
                 <span
                   className={`inline-block rounded-full ${statusIndicatorClass}`}
@@ -161,7 +163,7 @@ export function EditSubNav({
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
                 </svg>
-                Preview
+                <span className="sub-nav-pill-label">Preview</span>
               </a>
             )}
             {!isAdminReview && projectStatus === "draft" && onSubmitForReview && (

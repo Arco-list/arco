@@ -430,11 +430,16 @@ function HomeownerContent() {
         [contenteditable]:focus { outline: none; }
         [contenteditable]:empty:before { content: attr(data-placeholder); color: #b0b0ae; pointer-events: none; }
 
-        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; }
-        .spec-item-edit::before { content: ''; position: absolute; inset: -32px -6px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; z-index: 1; }
+        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; z-index: 2; }
+        .spec-item-edit::before { content: ''; position: absolute; inset: -24px -10px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; background: white; z-index: -1; }
         .spec-item-edit:hover::before { border-color: #1c1c1a; }
         .spec-item-edit.editing::before { border-color: #016D75; }
-        .spec-item-edit .ec-badge { top: -40px; left: 50%; transform: translateX(-50%); padding: 0 6px; background: #fff; z-index: 2; }
+        .spec-item-edit .ec-badge { top: -32px; left: 50%; transform: translateX(-50%); padding: 0 6px; background: #fff; z-index: 2; }
+        @media (max-width: 768px) {
+          .specifications-bar { gap: 32px 16px; padding: 32px 0; }
+          .spec-item-edit::before { inset: -16px -8px; }
+          .spec-item-edit .ec-badge { top: -24px; }
+        }
         .spec-item-edit:hover .ec-ico, .spec-item-edit:hover .ec-txt { color: #1c1c1a; }
         .spec-item-edit.editing .ec-ico, .spec-item-edit.editing .ec-txt { color: #016D75; }
         .spec-item-edit.editing .spec-eyebrow { color: #016D75; }
@@ -544,11 +549,7 @@ function HomeownerContent() {
         </section>
 
         {/* ── Details bar ── */}
-        <div id="details" style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-          gap: 32, padding: "32px 0",
-          borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6",
-        }}>
+        <div id="details" className="specifications-bar">
           {/* Location */}
           <div
             className={`spec-item-edit${editingSpecBar === "location" ? " editing" : ""}`}

@@ -15,50 +15,54 @@ const DRIVER_COLORS: Record<string, string> = {
 function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; labels: string[]; color: string }) {
   const max = Math.max(...datapoints, 1)
   const n = datapoints.length
-  const padX = 20
+  const padX = 14
   const padY = 16
   const w = 100
   const h = 50
+  const lastCompleted = n - 2 // index of last completed period
 
   const points = datapoints.map((v, i) => ({
     x: padX + (i / (n - 1)) * (w - padX * 2),
     y: h - padY - (v / max) * (h - padY * 2),
     v,
+    isRolling: i === n - 1,
   }))
 
-  const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ")
+  // Solid line for completed periods (0 to n-2)
+  const solidPoints = points.slice(0, lastCompleted + 1).map((p) => `${p.x},${p.y}`).join(" ")
+  // Dotted line from last completed to rolling
+  const dottedLine = points.length >= 2 ? { x1: points[lastCompleted].x, y1: points[lastCompleted].y, x2: points[n - 1].x, y2: points[n - 1].y } : null
 
   return (
     <div className="relative w-full" style={{ height: 60 }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-        {/* Grid lines at each data point */}
         {points.map((p, i) => (
           <line key={i} x1={p.x} y1={0} x2={p.x} y2={h} stroke="#f0f0ee" strokeWidth="0.3" vectorEffect="non-scaling-stroke" />
         ))}
-        {/* Trend line */}
-        <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Dots — rendered outside preserveAspectRatio=none to keep them round */}
+        {/* Solid trend line (completed periods) */}
+        <polyline points={solidPoints} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Dotted line to rolling period */}
+        {dottedLine && (
+          <line x1={dottedLine.x1} y1={dottedLine.y1} x2={dottedLine.x2} y2={dottedLine.y2}
+            stroke={color} strokeWidth="1.5" strokeDasharray="3,3" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+        )}
       </svg>
 
-      {/* Dots and value labels */}
       {points.map((p, i) => {
         const leftPct = (p.x / w) * 100
         const topPct = (p.y / h) * 100
         return (
           <div key={i} className="absolute" style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%, -50%)" }}>
-            {/* Dot */}
-            <div className="w-[7px] h-[7px] rounded-full border-[1.5px] bg-white" style={{ borderColor: color }} />
-            {/* Value label above */}
+            <div className="w-[7px] h-[7px] rounded-full border-[1.5px] bg-white" style={{ borderColor: color, opacity: p.isRolling ? 0.6 : 1 }} />
             <span
-              className="absolute text-[11px] font-medium text-[#1c1c1a] whitespace-nowrap"
-              style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 4 }}
+              className="absolute text-[11px] font-medium whitespace-nowrap"
+              style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 4, color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : "·"}
             </span>
           </div>
         )
       })}
-
     </div>
   )
 }
@@ -76,34 +80,40 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
 
   const max = Math.max(...datapoints, 1)
   const n = datapoints.length
-  const padX = 20
+  const padX = 14
   const padY = 10
   const w = 100
   const h = 40
+  const lastCompleted = n - 2
 
   const points = datapoints.map((v, i) => ({
     x: padX + (i / Math.max(n - 1, 1)) * (w - padX * 2),
     y: h - padY - (v / max) * (h - padY * 2),
     v,
+    isRolling: i === n - 1,
   }))
 
-  const linePoints = points.map((p) => `${p.x},${p.y}`).join(" ")
+  const solidPoints = points.slice(0, lastCompleted + 1).map((p) => `${p.x},${p.y}`).join(" ")
+  const dottedLine = points.length >= 2 ? { x1: points[lastCompleted].x, y1: points[lastCompleted].y, x2: points[n - 1].x, y2: points[n - 1].y } : null
 
   return (
     <div className="relative w-full" style={{ height: 40 }}>
       <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-        <polyline points={linePoints} fill="none" stroke="#a1a1a0" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={solidPoints} fill="none" stroke="#a1a1a0" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+        {dottedLine && (
+          <line x1={dottedLine.x1} y1={dottedLine.y1} x2={dottedLine.x2} y2={dottedLine.y2}
+            stroke="#a1a1a0" strokeWidth="1" strokeDasharray="3,3" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+        )}
       </svg>
-      {/* Dots and labels */}
       {points.map((p, i) => {
         const leftPct = (p.x / w) * 100
         const topPct = (p.y / h) * 100
         return (
           <div key={i} className="absolute" style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%, -50%)" }}>
-            <div className="w-[5px] h-[5px] rounded-full border bg-white" style={{ borderColor: "#a1a1a0" }} />
+            <div className="w-[5px] h-[5px] rounded-full border bg-white" style={{ borderColor: "#a1a1a0", opacity: p.isRolling ? 0.5 : 1 }} />
             <span
-              className="absolute text-[10px] font-medium text-[#1c1c1a] whitespace-nowrap"
-              style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 2 }}
+              className="absolute text-[10px] font-medium whitespace-nowrap"
+              style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 2, color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : ""}
             </span>
@@ -128,7 +138,7 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
         {/* Metric name */}
-        <td className="px-4 py-2" style={{ width: "18%" }}>
+        <td className="px-4 py-2" style={{ width: "14%" }}>
           <div className="flex items-center gap-2">
             {hasSubs ? (
               <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
@@ -140,13 +150,13 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
           </div>
         </td>
 
-        {/* Total */}
-        <td className="px-3 py-2 text-right" style={{ width: "8%" }}>
-          <span className="arco-card-title">{row.total}</span>
+        {/* Definition */}
+        <td className="px-3 py-2" style={{ width: "24%" }}>
+          <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
         </td>
 
         {/* Combined trendline */}
-        <td className="px-4 py-2" style={{ width: "74%" }}>
+        <td className="px-4 py-2" style={{ width: "60%" }}>
           <TrendlineCell datapoints={row.datapoints} labels={labels} color={color} />
         </td>
       </tr>
@@ -159,8 +169,8 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
               <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
             </div>
           </td>
-          <td className="px-3 py-1.5 text-right">
-            <span className="text-[13px] font-normal text-[#1c1c1a]">{sub.total}</span>
+          <td className="px-3 py-1.5">
+            <span className="text-[10px] text-[#c4c4c2]">{sub.definition ?? ""}</span>
           </td>
           <td className="px-4 py-1.5">
             <SubTrendlineCell datapoints={sub.datapoints} />
@@ -194,10 +204,10 @@ interface Props {
 }
 
 export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVisitors, proVisitorsSeries, clientVisitorsSeries, clientActives, clientActivesSeries, sharers, sharersSeries, clientSources, proSources, apolloVisitorsSeries, inviteVisitorsSeries, clientSourceSeries, proSourceSeries }: Props) {
-  const pad6 = (arr: number[] | undefined): number[] => {
-    if (!arr || arr.length === 0) return [0, 0, 0, 0, 0, 0]
-    if (arr.length >= 6) return arr.slice(0, 6)
-    return [...arr, ...Array(6 - arr.length).fill(0)]
+  const pad8 = (arr: number[] | undefined): number[] => {
+    if (!arr || arr.length === 0) return [0, 0, 0, 0, 0, 0, 0, 0]
+    if (arr.length >= 8) return arr.slice(0, 8)
+    return [...arr, ...Array(8 - arr.length).fill(0)]
   }
 
   // Map source label → sub key for matching
@@ -222,8 +232,8 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
       const match = sources.find((s) => sourceKeyMap[s.label] === sub.key)
       const series = seriesMap?.[sub.key]
       return match
-        ? { ...sub, total: match.count, datapoints: series ? pad6(series) : sub.datapoints }
-        : { ...sub, datapoints: series ? pad6(series) : sub.datapoints }
+        ? { ...sub, total: match.count, datapoints: series ? pad8(series) : sub.datapoints }
+        : { ...sub, datapoints: series ? pad8(series) : sub.datapoints }
     })
   }
 
@@ -232,7 +242,7 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
     if (r.key === "pro_visitors") return {
       ...r,
       total: proVisitors ?? 0,
-      datapoints: pad6(proVisitorsSeries),
+      datapoints: pad8(proVisitorsSeries),
       subs: overrideSubs(r.subs, proSources, {
         sales_apollo: apolloVisitorsSeries ?? [],
         invites: inviteVisitorsSeries ?? [],
@@ -245,11 +255,10 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
     if (r.key === "client_visitors") return {
       ...r,
       total: clientVisitors ?? 0,
-      datapoints: pad6(clientVisitorsSeries),
+      datapoints: pad8(clientVisitorsSeries),
       subs: overrideSubs(r.subs, clientSources, clientSourceSeries),
     }
-    if (r.key === "client_actives") return { ...r, total: clientActives ?? 0, datapoints: pad6(clientActivesSeries) }
-    if (r.key === "sharers") return { ...r, total: sharers ?? 0, datapoints: pad6(sharersSeries) }
+    if (r.key === "sharers") return { ...r, total: sharers ?? 0, datapoints: pad8(sharersSeries) }
     return r
   })
 
@@ -262,12 +271,12 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
       <table className="w-full table-fixed">
         <thead>
           <tr className="bg-[#fafaf9] border-b border-[#e5e5e4]">
-            <th className="px-4 py-2 text-left" style={{ width: "18%" }}><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
-            <th className="px-3 py-2 text-right" style={{ width: "8%" }}><span className="arco-eyebrow text-[#a1a1a0]">Total</span></th>
-            <th className="px-4 py-2" style={{ width: "74%" }}>
-              <div className="flex justify-between" style={{ paddingLeft: "calc(20%)", paddingRight: "calc(20%)" }}>
-                {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—"]).map((l, i) => (
-                  <span key={i} className="arco-eyebrow text-[#a1a1a0]">{l}</span>
+            <th className="px-4 py-2 text-left" style={{ width: "16%" }}><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
+            <th className="px-3 py-2 text-left" style={{ width: "24%" }}><span className="arco-eyebrow text-[#a1a1a0]">Definition</span></th>
+            <th className="px-4 py-2" style={{ width: "60%" }}>
+              <div className="flex justify-between" style={{ paddingLeft: "calc(14%)", paddingRight: "calc(14%)" }}>
+                {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => (
+                  <span key={i} className="arco-eyebrow" style={{ color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
                 ))}
               </div>
             </th>

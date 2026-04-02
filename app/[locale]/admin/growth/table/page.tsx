@@ -4,7 +4,7 @@ import { GrowthTableClient } from "./table-client"
 export const dynamic = "force-dynamic"
 
 export default async function GrowthTablePage() {
-  const metrics = await fetchGrowthMetrics("all")
+  const metrics = await fetchGrowthMetrics("months")
 
   return (
     <div className="min-h-screen bg-white">

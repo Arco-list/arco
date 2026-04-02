@@ -33,7 +33,7 @@ export function RelatedProjects({ projects, architectName }: RelatedProjectsProp
           <h2 className="arco-section-title">{t("more_from", { name: architectName })}</h2>
         </div>
 
-        <div className="related-grid">
+        <div className="discover-grid">
           {projects.map((project) => (
             <RelatedProjectCard key={project.id} project={project} />
           ))}

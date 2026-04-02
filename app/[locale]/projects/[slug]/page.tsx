@@ -11,7 +11,6 @@ import { ProjectHeader } from "@/components/project/project-header"
 import { SpecificationsBar } from "@/components/project/specifications-bar"
 import { PhotoTour } from "@/components/project/photo-tour"
 import { CreditedProfessionals } from "@/components/project/credited-professionals"
-import { ProjectCTA } from "@/components/project/project-cta"
 import { RelatedProjects } from "@/components/project/related-projects"
 import { ProjectStructuredData } from "@/components/project-structured-data"
 import { TrackProjectView } from "@/components/track-view"
@@ -526,8 +525,6 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         </div>
 
         <CreditedProfessionals professionals={formattedProfessionals} />
-
-        <ProjectCTA />
 
         {formattedRelatedProjects.length > 0 && (
           <RelatedProjects

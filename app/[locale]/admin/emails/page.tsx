@@ -48,6 +48,7 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "find-professionals", name: "Find Professionals (Day 5)", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true },
   { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false },
   { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false },
+  { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "[Company] is now on Arco", sends: 0, deliveryRate: 100, active: true },
 ]
 
 type TabKey = "transactional" | "marketing" | "sent"
@@ -210,8 +211,8 @@ export default function AdminEmailsPage() {
                 </Select>
               </div>
             </div>
-            <div className="border border-[#e5e5e4] overflow-hidden mt-4">
-              <table className="w-full text-sm">
+            <div className="border border-[#e5e5e4] overflow-x-auto max-w-full mt-4">
+              <table className="w-full text-sm" style={{ minWidth: 600 }}>
                 <thead>
                   <tr className="border-b border-[#e5e5e4]">
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Email</th>
@@ -293,7 +294,7 @@ export default function AdminEmailsPage() {
 
           {/* Sent emails table */}
           {activeTab === "sent" && (
-            <div className="border border-[#e5e5e4] overflow-hidden mt-4">
+            <div className="border border-[#e5e5e4] overflow-x-auto max-w-full mt-4">
               {isLoading ? (
                 <p className="text-sm text-[#a1a1a0] text-center py-10">Loading sent emails...</p>
               ) : error ? (
@@ -301,7 +302,7 @@ export default function AdminEmailsPage() {
               ) : emails.length === 0 ? (
                 <p className="text-sm text-[#a1a1a0] text-center py-10">No emails sent yet.</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full text-sm" style={{ minWidth: 600 }}>
                   <thead>
                     <tr className="border-b border-[#e5e5e4]">
                       <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">To</th>

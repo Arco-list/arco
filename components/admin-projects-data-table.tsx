@@ -596,7 +596,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
   }, [projects])
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h3 className="arco-section-title">Projects</h3>
@@ -728,8 +728,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full">
+        <table className="w-full text-sm" style={{ minWidth: 800 }}>
           <thead>
             <tr className="border-b border-[#e5e5e4]">
               {table.getHeaderGroups().map((headerGroup) =>

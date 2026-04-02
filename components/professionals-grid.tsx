@@ -14,8 +14,7 @@ import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
 import { SortLinks } from "@/components/sort-links"
 
-// Map preview card appears as the 3rd card (top-right in 3-col grid)
-const MAP_CARD_POSITION = 2
+// Map preview card: positioned via CSS order (3rd on desktop, 2nd on iPad, hidden on mobile)
 
 export function ProfessionalsGrid({ professionals = [] }: { professionals?: ProfessionalCard[] }) {
   const [showMap, setShowMap] = useState(false)
@@ -49,12 +48,11 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
   const sortedProfessionals = useMemo(() => {
     const next = [...queryProfessionals]
     switch (sortBy) {
+      case "Most popular":
+        // TODO: Replace with actual project views (last 7 days) when available
+        return next.sort((a, b) => b.reviewCount - a.reviewCount)
       case "Most recent":
         return next.sort((a, b) => b.name.localeCompare(a.name))
-      case "Highest rated":
-        return next.sort((a, b) => b.rating - a.rating)
-      case "Alphabetical":
-        return next.sort((a, b) => a.name.localeCompare(b.name))
       case "Best match":
       default:
         return next
@@ -207,9 +205,18 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
 
               return (
                 <Fragment key={`${professional.companyId}-${professional.professionalId}`}>
-                  {/* Insert map preview card at position */}
-                  {index === MAP_CARD_POSITION && hasMappable && (
+                  {/* Map card at position 1 — visible only on iPad (2nd card in 2-col row) */}
+                  {index === 1 && hasMappable && (
                     <MapPreviewCard
+                      className="map-card-tablet"
+                      professionals={sortedProfessionals}
+                      onClick={() => setShowMap(true)}
+                    />
+                  )}
+                  {/* Map card at position 2 — visible only on desktop (3rd card in 3-col row) */}
+                  {index === 2 && hasMappable && (
+                    <MapPreviewCard
+                      className="map-card-desktop"
                       professionals={sortedProfessionals}
                       onClick={() => setShowMap(true)}
                     />
@@ -230,8 +237,8 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
               )
             })}
 
-            {/* Show map card at end if fewer items than position */}
-            {sortedProfessionals.length > 0 && sortedProfessionals.length <= MAP_CARD_POSITION && hasMappable && (
+            {/* Show map card at end if fewer items than positions */}
+            {sortedProfessionals.length > 0 && sortedProfessionals.length <= 1 && hasMappable && (
               <MapPreviewCard
                 professionals={sortedProfessionals}
                 onClick={() => setShowMap(true)}
@@ -276,6 +283,21 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
 
         </div>
       </div>
+
+      {/* Floating map button */}
+      {hasMappable && sortedProfessionals.length > 0 && (
+        <button
+          className="floating-map-btn"
+          onClick={() => setShowMap(true)}
+          aria-label={t("show_on_map")}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 1C5.24 1 3 3.13 3 5.75C3 9.5 8 15 8 15C8 15 13 9.5 13 5.75C13 3.13 10.76 1 8 1Z" />
+            <circle cx="8" cy="5.75" r="1.75" />
+          </svg>
+          {t("show_on_map")}
+        </button>
+      )}
 
       <Footer />
     </>

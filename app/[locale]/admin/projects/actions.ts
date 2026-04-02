@@ -188,6 +188,7 @@ export async function setProjectStatusAction(input: {
     status_updated_at: new Date().toISOString(),
     status_updated_by: user.id,
     rejection_reason: statusResult.data === "rejected" ? trimmedReason : null,
+    ...(statusResult.data === "published" ? { is_featured: true } : {}),
   }
 
   const { error: updateError } = await supabase
@@ -204,8 +205,15 @@ export async function setProjectStatusAction(input: {
     )
   }
 
-  // When admin publishes a project, auto-enable auto_approve_projects for the owning company
+  // When admin publishes a project, set owner to Featured and auto-enable auto_approve
   if (statusResult.data === "published") {
+    // Set owner's project_professionals status to live_on_page (Featured)
+    await supabase
+      .from("project_professionals")
+      .update({ status: "live_on_page" })
+      .eq("project_id", idResult.data)
+      .eq("is_project_owner", true)
+
     const { data: ownerPP } = await supabase
       .from("project_professionals")
       .select("company_id")

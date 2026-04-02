@@ -11,6 +11,7 @@ import {
   FAQSection,
 } from "@/components/landing"
 import { EndorsementCarousel } from "@/components/ui/EndorsementCarousel"
+import { ProfessionalCarousel, type ProfessionalCarouselCard } from "@/components/landing/professional-carousel"
 import {
   getProfessionalBenefits,
   getProfessionalSteps,
@@ -26,11 +27,13 @@ import type { PreloadedCompany } from "@/app/businesses/actions"
 interface ProfessionalsLandingClientProps {
   preloadedCompany?: PreloadedCompany | null
   inviteEmail?: string | null
+  recentProfessionals?: ProfessionalCarouselCard[]
 }
 
 export default function ProfessionalsLandingClient({
   preloadedCompany,
   inviteEmail,
+  recentProfessionals = [],
 }: ProfessionalsLandingClientProps) {
   const { user } = useAuth()
   const { openLoginModal } = useLoginModal()
@@ -90,12 +93,15 @@ export default function ProfessionalsLandingClient({
         </button>
       </HeroSection>
 
+      {recentProfessionals.length > 0 && (
+        <ProfessionalCarousel professionals={recentProfessionals} />
+      )}
+
       <BenefitsGrid benefits={professionalBenefits} />
       <HowItWorks steps={professionalSteps} heading={tBusiness("how_it_works")} />
 
       <EndorsementCarousel
         endorsements={endorsements}
-        subtitle={t("endorsement_subtitle")}
       />
 
       <FAQSection items={professionalFAQ} paddingTop={60} heading={tBusiness("faq_heading")} />

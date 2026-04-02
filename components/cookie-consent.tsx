@@ -119,14 +119,16 @@ export function CookieConsent() {
         <button
           type="button"
           onClick={handleReject}
-          className="px-5 py-2 text-[13px] font-normal text-foreground bg-transparent border border-border rounded-full cursor-pointer transition-colors hover:bg-surface"
+          className="btn-secondary"
+          style={{ fontSize: 13, padding: "10px 20px" }}
         >
           Reject
         </button>
         <button
           type="button"
           onClick={handleAccept}
-          className="px-5 py-2 text-[13px] font-normal text-white bg-[var(--arco-black)] border border-[var(--arco-black)] rounded-full cursor-pointer transition-opacity hover:opacity-85"
+          className="btn-primary"
+          style={{ fontSize: 13, padding: "10px 20px" }}
         >
           Accept
         </button>

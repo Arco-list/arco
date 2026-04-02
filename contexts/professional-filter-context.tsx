@@ -16,7 +16,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 import { useProfessionalTaxonomy, type LocationOptions } from "@/hooks/use-professional-taxonomy"
 
-export const PROFESSIONAL_SORT_OPTIONS = ["Best match", "Most recent", "Highest rated", "Alphabetical"] as const
+export const PROFESSIONAL_SORT_OPTIONS = ["Best match", "Most popular", "Most recent"] as const
 export type ProfessionalSortOption = (typeof PROFESSIONAL_SORT_OPTIONS)[number]
 
 const normalizeToken = (value: string) => value.trim().toLowerCase()

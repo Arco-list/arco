@@ -272,7 +272,7 @@ export default async function UsersPage() {
   const singleActiveSuperAdmin = activeSuperAdminsCount <= 1
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white overflow-x-hidden">
       <div className="discover-page-title">
         <div className="wrap">
           <UsersDataTable data={hydratedRows} singleActiveSuperAdmin={singleActiveSuperAdmin} />

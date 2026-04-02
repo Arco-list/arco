@@ -2,7 +2,7 @@
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 
-export type Timeframe = "7d" | "30d" | "90d" | "ytd" | "all"
+export type Timeframe = "days" | "weeks" | "months" | "years"
 
 export type UserFunnel = {
   visitors: number | null
@@ -59,11 +59,10 @@ export type GrowthMetrics = {
 function getTimeframeCutoff(tf: Timeframe): Date | null {
   const now = new Date()
   switch (tf) {
-    case "7d": return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    case "30d": return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    case "90d": return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-    case "ytd": return new Date(now.getFullYear(), 0, 1)
-    case "all": return null
+    case "days": return new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)
+    case "weeks": return new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000)
+    case "months": return new Date(now.getFullYear(), now.getMonth() - 8, now.getDate())
+    case "years": return null
   }
 }
 
@@ -77,7 +76,7 @@ function cohortRate(cohortSize: number, converted: number): string {
   return `${Math.round((converted / cohortSize) * 100)}%`
 }
 
-export async function fetchGrowthMetrics(timeframe: Timeframe = "all"): Promise<GrowthMetrics> {
+export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promise<GrowthMetrics> {
   const supabase = createServiceRoleSupabaseClient()
   const cutoff = getTimeframeCutoff(timeframe)
 
@@ -144,7 +143,8 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "all"): Promise<
     allInvites.filter((i: any) => i.company_id && publishedProjectIds.has(i.project_id)).map((i: any) => i.company_id)
   )
   const publisherCompanies = publisherCompanyIds.size
-  const paidCompanies = companies.filter((c: any) => c.plan_tier != null).length
+  const paidTiers = ["pro", "premium", "enterprise"]
+  const paidCompanies = companies.filter((c: any) => paidTiers.includes(c.plan_tier)).length
 
   const signupsLast30d = allProfiles.filter((p: any) => new Date(p.created_at) > d30).length
   const signupsLast7d = allProfiles.filter((p: any) => new Date(p.created_at) > d7).length
@@ -204,7 +204,7 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "all"): Promise<
 
   // How many cohort companies subscribed?
   const cohortSubscribed = allCompanies.filter(
-    (c: any) => cohortCompanyIds.has(c.id) && c.plan_tier != null
+    (c: any) => cohortCompanyIds.has(c.id) && paidTiers.includes(c.plan_tier)
   ).length
 
   // Client cohort

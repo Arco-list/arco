@@ -4,14 +4,13 @@ import { useState, useEffect, useTransition } from "react"
 import { METRIC_DEFS, type MetricDef } from "./metric-definitions"
 import { fetchMetricTimeSeries, type TimeSeriesPoint } from "./metric-detail-actions"
 
-type Timeframe = "7d" | "30d" | "90d" | "ytd" | "all"
+type Timeframe = "days" | "weeks" | "months" | "years"
 
 const TIMEFRAMES: { value: Timeframe; label: string }[] = [
-  { value: "7d", label: "7d" },
-  { value: "30d", label: "30d" },
-  { value: "90d", label: "90d" },
-  { value: "ytd", label: "YTD" },
-  { value: "all", label: "All" },
+  { value: "days", label: "Days" },
+  { value: "weeks", label: "Weeks" },
+  { value: "months", label: "Months" },
+  { value: "years", label: "Years" },
 ]
 
 const DRIVER_COLORS: Record<string, string> = {

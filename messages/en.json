@@ -154,9 +154,8 @@
     "loading_map": "Loading map…",
     "map_count": "{shown} of {total} professionals on map",
     "sort_best_match": "Best match",
+    "sort_most_popular": "Most popular",
     "sort_most_recent": "Most recent",
-    "sort_highest_rated": "Highest rated",
-    "sort_alphabetical": "Alphabetical",
     "filters": {
       "all_filters": "All filters",
       "service": "Service",
@@ -170,9 +169,8 @@
       "selected": "{count} selected",
       "services": "Services",
       "sort_best_match": "Best match",
-      "sort_most_recent": "Most recent",
-      "sort_highest_rated": "Highest rated",
-      "sort_alphabetical": "Alphabetical"
+      "sort_most_popular": "Most popular",
+      "sort_most_recent": "Most recent"
     },
     "filters_modal": {
       "title": "Filters",
@@ -912,12 +910,14 @@
     "how_it_works": "How it works",
     "faq_heading": "Frequently asked questions",
     "recently_added_projects": "Recently added projects",
+    "recently_added_professionals": "Recently added professionals",
+    "view_portfolio": "View Portfolio",
     "by_firm": "by {firm}",
     "architects": {
       "hero_title": "Publish your work. Credit your team. Set the standard.",
       "hero_body": "Arco is a curated architecture platform where projects come first and recognition is earned through built work — not promotion.",
       "cta_placeholder": "Paste a project link from your website",
-      "cta_button": "Generate Project →",
+      "cta_button": "Generate Project",
       "benefit_1_title": "Curated Platform",
       "benefit_1_body": "Join a selective network of exceptional architects. Every project is reviewed to maintain the platform's high standards.",
       "benefit_1_feature_1": "High-quality editorial showcases",
@@ -953,7 +953,7 @@
     "professionals": {
       "hero_title": "Be recognised through the work you've delivered.",
       "hero_body": "Arco is a curated architecture network where professionals are credited on real projects. When architects tag you, clients see your work and can reach out directly.",
-      "cta_button": "Create your company →",
+      "cta_button": "Create your company",
       "cta_claim_button": "Claim {company} →",
       "endorsement_subtitle": "The professionals on Arco are here because an architect vouched for their work.",
       "benefit_1_title": "Endorsed, Not Listed",

@@ -43,6 +43,8 @@ import {
   generateCompanyLoginLinkAction,
   updateCompanyDomainVerifiedAction,
   changeCompanyOwnerAction,
+  sendProspectEmailAction,
+  updateCompanyEmailAction,
 } from "@/app/admin/professionals/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -237,6 +239,7 @@ const STATUS_DOT: Record<string, string> = {
   unlisted: "bg-[#a1a1a0]",
   deactivated: "bg-rose-500",
   invited: "bg-amber-500",
+  prospected: "bg-[#f59e0b]",
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -245,12 +248,14 @@ const STATUS_LABEL: Record<string, string> = {
   unlisted: "Unlisted",
   deactivated: "Deactivated",
   invited: "Invited",
+  prospected: "Prospected",
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
   { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
+  { value: "prospected" as any, label: "Prospected", description: "Contacted by platform, not yet claimed", dotColor: "bg-[#f59e0b]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-rose-500" },
 ]
 
@@ -265,6 +270,70 @@ function ensureHttp(url: string | null): string | null {
     return url
   }
   return `https://${url}`
+}
+
+// Inline component for prospect email + send button in Owner column
+function ProspectEmailCell({ companyId, email: initialEmail }: { companyId: string; email: string }) {
+  const [email, setEmail] = useState(initialEmail)
+  const [editing, setEditing] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  const handleSave = async () => {
+    setEditing(false)
+    if (email !== initialEmail) {
+      await updateCompanyEmailAction({ companyId, email })
+    }
+  }
+
+  const handleSend = async () => {
+    setSending(true)
+    const result = await sendProspectEmailAction({ companyId, emailTo: email })
+    setSending(false)
+    if (result.success) {
+      setSent(true)
+      toast.success("Prospect email sent")
+    } else {
+      toast.error(result.error ?? "Failed to send")
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {editing ? (
+        <input
+          autoFocus
+          className="text-[11px] text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-[140px]"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setEmail(initialEmail); setEditing(false) } }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="text-[11px] text-[#6b6b68] hover:text-[#1c1c1a] truncate max-w-[140px] text-left transition-colors"
+          onClick={() => setEditing(true)}
+          title="Click to edit email"
+        >
+          {email}
+        </button>
+      )}
+      {!editing && !sent && (
+        <button
+          type="button"
+          className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-[#1c1c1a] text-white hover:opacity-80 transition-opacity"
+          onClick={handleSend}
+          disabled={sending}
+        >
+          {sending ? "..." : "Send"}
+        </button>
+      )}
+      {sent && (
+        <span className="text-[10px] text-[#016D75] font-medium">Sent</span>
+      )}
+    </div>
+  )
 }
 
 export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
@@ -283,7 +352,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | CompanyStatus | "invited">("all")
+  const [statusFilter, setStatusFilter] = useState<"all" | CompanyStatus | "invited" | "prospected">("all")
 
   const [pendingAction, setPendingAction] = useState<PendingStatusAction | null>(null)
   const [statusChange, setStatusChange] = useState<StatusChangeState | null>(null)
@@ -651,7 +720,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation()
-                setStatusChange({ company, selectedStatus: (status === "invited" ? "unlisted" : status) as CompanyStatus })
+                setStatusChange({ company, selectedStatus: (status === "invited" ? "unlisted" : status === "prospected" ? "prospected" : status) as CompanyStatus })
               }}
             >
               <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[status] ?? "bg-gray-400")} />
@@ -669,39 +738,51 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         header: "Owner",
         cell: ({ row }) => {
           const company = row.original
-          if (!company.ownerName && !company.ownerEmail) {
-            return <span className="text-xs text-[#a1a1a0]">—</span>
-          }
-          const initials = (company.ownerName ?? "")
-            .split(" ")
-            .filter(Boolean)
-            .map((t) => t[0]?.toUpperCase())
-            .slice(0, 2)
-            .join("") || (company.ownerEmail?.charAt(0).toUpperCase() ?? "?")
 
-          return (
-            <div className="flex items-center gap-3">
-              {company.ownerAvatarUrl ? (
-                <img
-                  src={company.ownerAvatarUrl}
-                  alt={company.ownerName ?? "Owner"}
-                  className="h-8 w-8 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
-                  {initials}
+          // Company has an owner — show owner info
+          if (company.ownerName || company.ownerEmail) {
+            const initials = (company.ownerName ?? "")
+              .split(" ")
+              .filter(Boolean)
+              .map((t) => t[0]?.toUpperCase())
+              .slice(0, 2)
+              .join("") || (company.ownerEmail?.charAt(0).toUpperCase() ?? "?")
+
+            return (
+              <div className="flex items-center gap-3">
+                {company.ownerAvatarUrl ? (
+                  <img
+                    src={company.ownerAvatarUrl}
+                    alt={company.ownerName ?? "Owner"}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                    {initials}
+                  </div>
+                )}
+                <div className="flex flex-col min-w-0">
+                  {company.ownerName && (
+                    <span className="text-xs font-medium text-[#1c1c1a] truncate">{company.ownerName}</span>
+                  )}
+                  {company.ownerEmail && (
+                    <span className="text-[11px] text-[#a1a1a0] truncate">{company.ownerEmail}</span>
+                  )}
                 </div>
-              )}
-              <div className="flex flex-col min-w-0">
-                {company.ownerName && (
-                  <span className="text-xs font-medium text-[#1c1c1a] truncate">{company.ownerName}</span>
-                )}
-                {company.ownerEmail && (
-                  <span className="text-[11px] text-[#a1a1a0] truncate">{company.ownerEmail}</span>
-                )}
               </div>
-            </div>
-          )
+            )
+          }
+
+          // No owner — show prospect email with Send button only when status is prospected
+          const prospectEmail = company.contactEmail
+          if (!prospectEmail) return <span className="text-xs text-[#a1a1a0]">—</span>
+
+          if (company.status === "prospected") {
+            return <ProspectEmailCell companyId={company.id} email={prospectEmail} />
+          }
+
+          // Other statuses without owner — just show the email
+          return <span className="text-[11px] text-[#a1a1a0] truncate">{prospectEmail}</span>
         },
       },
       {
@@ -1067,7 +1148,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["listed", "unlisted", "draft", "deactivated", "invited"].map((s) => (
+              {["listed", "unlisted", "draft", "prospected", "deactivated", "invited"].map((s) => (
                 <SelectItem key={s} value={s}>
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />

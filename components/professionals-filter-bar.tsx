@@ -111,9 +111,8 @@ export function ProfessionalsFilterBar() {
   // Sort option label mapping
   const sortLabelMap: Record<string, string> = {
     "Best match": t("sort_best_match"),
+    "Most popular": t("sort_most_popular"),
     "Most recent": t("sort_most_recent"),
-    "Highest rated": t("sort_highest_rated"),
-    "Alphabetical": t("sort_alphabetical"),
   }
 
   // Close on outside click

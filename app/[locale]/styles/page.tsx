@@ -408,38 +408,6 @@ export default function StylesPage() {
           </div>
         </div>
 
-        {/* CARDS */}
-        <div style={{ marginBottom: '80px' }}>
-          <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Cards</h2>
-          <p className="arco-body-text" style={{ marginBottom: '32px' }}>Project and content card components</p>
-
-          <div>
-            <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Project Cards</h4>
-            <div style={{ background: 'white', border: '1px solid var(--rule)', borderRadius: '6px', padding: '40px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '30px' }}>
-                {[1, 2, 3].map((i) => (
-                  <div key={i}>
-                    <div style={{ 
-                      width: '100%', 
-                      aspectRatio: '4/3', 
-                      background: 'var(--surface)', 
-                      borderRadius: '3px', 
-                      marginBottom: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <span className="arco-small-text">Image {i}</span>
-                    </div>
-                    <h4 className="arco-card-title" style={{ marginBottom: '4px' }}>Villa Project {i}</h4>
-                    <p className="arco-card-subtitle">Amsterdam · 2024</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* SECTION HEADERS */}
         <div style={{ marginBottom: '80px' }}>
           <h2 className="arco-section-title" style={{ marginBottom: '8px' }}>Section Headers</h2>
@@ -625,7 +593,6 @@ export default function StylesPage() {
                     </div>
                     <h3 className="discover-card-title">Contemporary Villa {i}</h3>
                     <p className="discover-card-sub">House · Amsterdam</p>
-                    <p className="discover-card-professional">Studio Modijefsky</p>
                   </div>
                 ))}
               </div>
@@ -635,8 +602,7 @@ export default function StylesPage() {
                 <strong>.discover-card</strong> — block link, no underline<br/>
                 <strong>.discover-card-image-wrap</strong> — 4:3 aspect ratio, overflow hidden, 3px radius<br/>
                 <strong>.discover-card-title</strong> — 15px, sans, 400, black<br/>
-                <strong>.discover-card-sub</strong> — 13px, sans, 400, mid gray<br/>
-                <strong>.discover-card-professional</strong> — 13px, sans, 400, light gray
+                <strong>.discover-card-sub</strong> — 13px, sans, 400, mid gray
               </p>
             </div>
           </div>
@@ -645,7 +611,9 @@ export default function StylesPage() {
             <h4 className="arco-h4" style={{ marginBottom: '20px' }}>Discover Grid</h4>
             <div style={{ background: 'var(--surface)', padding: '16px 20px', borderRadius: '6px' }}>
               <p className="arco-small-text">
-                <strong>.discover-grid</strong> — repeat(3, 1fr), 28px gap; collapses to 1fr on mobile<br/>
+                <strong>.discover-grid</strong> — repeat(3, 1fr), uses var(--grid-gap); 2-col on iPad, 1-col on mobile<br/>
+                <strong>--grid-gap</strong> — 20px (desktop) → 16px (≤1024px iPad) → 12px (≤768px mobile)<br/>
+                <strong>.photo-gallery / .gallery-row</strong> — uses var(--grid-gap); overrides to 6px on mobile (≤768px)<br/>
                 <strong>.discover-results</strong> — wrapper with 80px bottom padding<br/>
                 <strong>.discover-results-meta</strong> — flex row, 36px top / 24px bottom margin<br/>
                 <strong>.discover-results-count</strong> — 14px, mid gray; bold count in arco-black

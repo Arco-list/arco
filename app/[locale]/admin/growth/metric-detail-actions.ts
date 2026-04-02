@@ -9,16 +9,15 @@ export type MetricDetailData = {
   total: number
 }
 
-type Timeframe = "7d" | "30d" | "90d" | "ytd" | "all"
+type Timeframe = "days" | "weeks" | "months" | "years"
 
 function getFrom(tf: Timeframe): Date {
   const now = new Date()
   switch (tf) {
-    case "7d": return new Date(now.getTime() - 7 * 86400000)
-    case "30d": return new Date(now.getTime() - 30 * 86400000)
-    case "90d": return new Date(now.getTime() - 90 * 86400000)
-    case "ytd": return new Date(now.getFullYear(), 0, 1)
-    case "all": return new Date(2024, 0, 1)
+    case "days": return new Date(now.getTime() - 8 * 86400000)
+    case "weeks": return new Date(now.getTime() - 8 * 7 * 86400000)
+    case "months": return new Date(now.getFullYear(), now.getMonth() - 8, now.getDate())
+    case "years": return new Date(now.getFullYear() - 8, now.getMonth(), now.getDate())
   }
 }
 

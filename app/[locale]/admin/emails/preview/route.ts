@@ -17,6 +17,11 @@ const TEST_VARS = {
   company_name: 'Marco van Veldhuizen',
   code: '847291',
   businessname: 'Studio Architectuur',
+  company_page_url: 'https://arcolist.com/professionals/marco-van-veldhuizen',
+  claim_url: 'https://arcolist.com/businesses/professionals?inviteEmail=info@marcovanveldhuizen.nl',
+  hero_image_url: 'https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg',
+  logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-logos/marco-van-veldhuizen.png',
+  company_subtitle: 'Architect · Naarden',
 }
 
 // Auth email templates (mirror of Edge Function templates for preview purposes)

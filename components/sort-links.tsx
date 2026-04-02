@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 const SORT_LABEL_KEYS: Record<string, string> = {
   "Most recent": "sort_most_recent",
   "Most liked": "sort_most_liked",
+  "Most popular": "sort_most_popular",
   "Alphabetical": "sort_alphabetical",
   "Best match": "sort_best_match",
   "Highest rated": "sort_highest_rated",

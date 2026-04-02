@@ -1739,19 +1739,20 @@ export default function ListingEditorPage() {
       setIsSubmittingForReview(true)
       setShowSubmitReviewPopup(false)
 
-      // Check if company has auto-approve enabled
+      // Check if the project's owning company has auto-approve enabled
       let autoApprove = false
-      const { data: proData } = await supabase
-        .from("professionals")
+      const { data: ppData } = await supabase
+        .from("project_professionals")
         .select("company_id")
-        .eq("user_id", userId)
+        .eq("project_id", projectId)
+        .eq("is_project_owner", true)
         .maybeSingle()
 
-      if (proData?.company_id) {
+      if (ppData?.company_id) {
         const { data: companyData } = await supabase
           .from("companies")
           .select("auto_approve_projects")
-          .eq("id", proData.company_id)
+          .eq("id", ppData.company_id)
           .maybeSingle()
         autoApprove = Boolean((companyData as any)?.auto_approve_projects)
       }
@@ -1760,7 +1761,7 @@ export default function ListingEditorPage() {
 
       const { error } = await supabase
         .from("projects")
-        .update({ status: newStatus })
+        .update({ status: newStatus, ...(autoApprove ? { is_featured: true } : {}) })
         .eq("id", projectId)
 
       if (error) {
@@ -1773,7 +1774,7 @@ export default function ListingEditorPage() {
           .from("project_professionals")
           .update({ status: ppStatus })
           .eq("project_id", projectId)
-          .eq("status", "unlisted")
+          .eq("is_project_owner", true)
 
         setProjectStatus(newStatus)
         if (autoApprove) {
@@ -4106,12 +4107,21 @@ export default function ListingEditorPage() {
         .ec-txt { font-size: 10px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase; color: #c8c8c6; white-space: nowrap; transition: color .15s; }
         .ec:hover .ec-ico, .ec:hover .ec-txt { color: #1c1c1a; }
         .ec.on    .ec-ico, .ec.on    .ec-txt { color: #016D75; }
-        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; }
-        .spec-item-edit::before { content: ''; position: absolute; inset: -32px -6px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; z-index: 1; }
+        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; z-index: 2; }
+        .spec-item-edit::before { content: ''; position: absolute; inset: -32px -6px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; background: white; z-index: -1; }
         .spec-item-edit:hover::before   { border-color: #1c1c1a; }
         .spec-item-edit.editing::before { border-color: #016D75; }
         .spec-item-edit .ec-badge { top: -40px; left: 50%; transform: translateX(-50%); padding: 0 6px; background: #fff; z-index: 2; }
+        @media (max-width: 768px) {
+          .edit-specs-bar { grid-template-columns: repeat(2, 1fr) !important; gap: 84px 16px !important; padding: 36px 0 !important; }
+          .spec-item-edit::before { inset: -36px -8px; }
+          .spec-item-edit .ec-badge { top: -44px; }
+          .credits-grid { grid-template-columns: repeat(2, 1fr); }
+          .edit-details-header { padding-left: 24px !important; padding-right: 24px !important; padding-top: 48px !important; padding-bottom: 48px !important; }
+          .setup-nav-cta { font-size: 12px !important; padding: 6px 12px !important; white-space: nowrap; }
+        }
         .spec-item-edit:hover   .ec-ico, .spec-item-edit:hover   .ec-txt { color: #1c1c1a; }
+        .spec-item-edit.editing { z-index: 10; }
         .spec-item-edit.editing .ec-ico, .spec-item-edit.editing .ec-txt { color: #016D75; }
         .spec-item-edit.editing .spec-eyebrow { color: #016D75; }
         .dd-panel { position: absolute; left: 50%; transform: translateX(-50%); background: #fff; border: 1px solid #e8e8e6; border-radius: 7px; box-shadow: 0 12px 40px rgba(0,0,0,.12); overflow: hidden; overflow-y: auto; min-width: 180px; z-index: 20; top: calc(100% + 4px); }
@@ -4174,6 +4184,9 @@ export default function ListingEditorPage() {
 
         /* ── Photo edit grid ── */
         .photo-edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        @media (max-width: 768px) {
+          .photo-edit-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        }
         .photo-edit-thumb { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #f0f0ee; }
         .photo-edit-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
@@ -4306,7 +4319,8 @@ export default function ListingEditorPage() {
         {/* ── Project header (editable title + description) ─────── */}
         <section
           id="details"
-          style={{ maxWidth: 800, margin: "0 auto", padding: "80px 0 72px", textAlign: "center" }}
+          className="edit-details-header"
+          style={{ maxWidth: 800, margin: "0 auto", padding: "80px 24px 72px", textAlign: "center" }}
         >
           {/* Title */}
           <EditableTitle
@@ -4385,7 +4399,7 @@ export default function ListingEditorPage() {
 
         {/* ── Specs bar ──────────────────────────────────────────── */}
         <div className="wrap">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
+          <div className="edit-specs-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
 
           {/* Location */}
           <div
@@ -4613,7 +4627,7 @@ export default function ListingEditorPage() {
         </div>
 
         {/* ── Photos ────────────────────────────────────────────────── */}
-        <section id="photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 72, borderBottom: "1px solid #e8e8e6" }}>
+        <section id="photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 0 }}>
           <div style={{ marginBottom: 28 }}>
             <h2 className="arco-section-title">Photo tour</h2>
             <p className="arco-body-text" style={{ marginTop: 6 }}>Add photos to showcase your project and organise them by space.</p>

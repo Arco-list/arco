@@ -5,11 +5,10 @@ import type { GrowthMetrics, Timeframe } from "../actions"
 import { fetchMetricTable, type MetricRow } from "./table-actions"
 
 const TIMEFRAMES: { value: Timeframe; label: string }[] = [
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "90d", label: "90 days" },
-  { value: "ytd", label: "Year to date" },
-  { value: "all", label: "All time" },
+  { value: "days", label: "Days" },
+  { value: "weeks", label: "Weeks" },
+  { value: "months", label: "Months" },
+  { value: "years", label: "Years" },
 ]
 
 const DRIVER_COLORS: Record<string, string> = {
@@ -82,6 +81,11 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
           </div>
         </td>
 
+        {/* Definition */}
+        <td className="px-3 py-3">
+          <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
+        </td>
+
         {/* Total */}
         <td className="px-3 py-3 text-right">
           <span className="arco-card-title">{row.total}</span>
@@ -108,6 +112,7 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
               <span className="text-[11px] text-[#6b6b68]">{sub.label}</span>
             </div>
           </td>
+          <td className="px-3 py-2" />
           <td className="px-3 py-2 text-right">
             <span className="text-[11px] text-[#6b6b68]">{sub.total}</span>
           </td>
@@ -132,7 +137,7 @@ interface Props {
 }
 
 export function GrowthTableClient({ initialMetrics }: Props) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("all")
+  const [timeframe, setTimeframe] = useState<Timeframe>("months")
   const [rows, setRows] = useState<MetricRow[]>([])
   const [labels, setLabels] = useState<string[]>([])
   const [isPending, startTransition] = useTransition()
@@ -184,8 +189,9 @@ export function GrowthTableClient({ initialMetrics }: Props) {
         <table className="w-full">
           <thead>
             <tr className="bg-[#fafaf9] border-b border-[#e5e5e4]">
-              <th className="px-4 py-2 text-left text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "20%" }}>Metric</th>
-              <th className="px-3 py-2 text-right text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "8%" }}>Total</th>
+              <th className="px-4 py-2 text-left text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "16%" }}>Metric</th>
+              <th className="px-3 py-2 text-left text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "22%" }}>Definition</th>
+              <th className="px-3 py-2 text-right text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "7%" }}>Total</th>
               {labels.map((l, i) => (
                 <th key={i} className="px-2 py-2 text-center text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "8%" }}>{l}</th>
               ))}
@@ -200,7 +206,7 @@ export function GrowthTableClient({ initialMetrics }: Props) {
           <tbody>
             {/* Professional section */}
             <tr className="border-b border-[#e5e5e4]">
-              <td colSpan={9} className="px-4 py-2 bg-white">
+              <td colSpan={10} className="px-4 py-2 bg-white">
                 <p className="arco-eyebrow text-[#a1a1a0]">Professionals</p>
               </td>
             </tr>
@@ -210,7 +216,7 @@ export function GrowthTableClient({ initialMetrics }: Props) {
 
             {/* Client section */}
             <tr className="border-b border-[#e5e5e4]">
-              <td colSpan={9} className="px-4 py-2 bg-white">
+              <td colSpan={10} className="px-4 py-2 bg-white">
                 <p className="arco-eyebrow text-[#a1a1a0]">Clients</p>
               </td>
             </tr>
