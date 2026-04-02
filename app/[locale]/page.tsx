@@ -542,10 +542,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         {/* 1. Hero — full bleed, editorial headline */}
         <HeroSection projects={heroProjects} isSuperAdmin={isSuperAdmin} />
 
-        {/* 2. Positioning Statement - UPDATED: Uses .wrap class */}
-        <section className="py-16 bg-white">
+        {/* 2. Positioning Statement */}
+        <section className="py-16 max-md:py-10 bg-white">
           <div className="wrap text-center">
-            <h2 className="arco-page-title mb-8">
+            <h2 className="arco-page-title mb-8 max-md:mb-5">
               {t("positioning_title")}
             </h2>
             <p className="arco-body-text max-w-[900px] mx-auto">

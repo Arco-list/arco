@@ -317,7 +317,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
         <div className="wrap">
           <div className="relative flex items-center justify-between">
             {/* Left: Mobile hamburger + Logo + Nav Links */}
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-6 max-md:gap-3">
               {/* Mobile hamburger — only on mobile */}
               <button
                 className={`flex flex-col gap-1 p-1 md:hidden transition-opacity hover:opacity-70 ${

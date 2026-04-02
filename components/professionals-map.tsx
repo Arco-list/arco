@@ -358,6 +358,7 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
     })
 
     // Re-cluster on every zoom/pan — always calls latest renderMarkers via ref
+    // Re-cluster on every zoom/pan
     map.addListener("idle", () => {
       renderMarkersRef.current()
     })

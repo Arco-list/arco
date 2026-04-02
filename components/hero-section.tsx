@@ -95,14 +95,13 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
 
       {/* Desktop Content - Bottom Aligned */}
       <div className="hidden md:block absolute bottom-0 left-0 right-0 pb-12" style={{ zIndex: 20 }}>
-        <div className="max-w-[1680px] mx-auto px-[80px]">
-          
-          {/* Bottom Layout: Left (Title) | Right (Navigation) */}
-          <div className="flex items-end justify-between gap-8">
-            
+        <div className="max-w-[1680px] mx-auto px-[80px] max-lg:px-[40px]">
+
+          {/* Large screens: Left (Title) | Right (Navigation) */}
+          <div className="lg:flex lg:items-end lg:justify-between lg:gap-8">
+
             {/* Left Side - Title & Stats */}
             <div className="flex-1">
-              {/* UPDATED: Explicitly white text */}
               <h1 className="arco-hero-title mb-6" style={{ color: 'white' }}>
                 {t("hero_line1")}<br />
                 {t("hero_line2")}
@@ -113,19 +112,18 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
               </p>
             </div>
 
-            {/* Right Side - Navigation */}
+            {/* Navigation - right on desktop, below title on tablet */}
             {projects.length > 1 && (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 mt-6 lg:mt-0">
                 {/* Progress Bars & Arrows Row */}
                 <div className="flex items-center gap-3">
-                  {/* Progress Bars - Thinner, more elegant */}
                   <div className="flex gap-2">
                     {projects.map((_, index) => (
                       <button
                         key={index}
                         onClick={() => goToSlide(index)}
                         className="relative overflow-hidden transition-opacity hover:opacity-80"
-                        style={{ 
+                        style={{
                           width: '60px',
                           height: '2px',
                           backgroundColor: 'rgba(255, 255, 255, 0.3)',
@@ -133,7 +131,6 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
                         }}
                         aria-label={`Go to slide ${index + 1}`}
                       >
-                        {/* ONLY current bar fills white - others stay grey */}
                         {index === currentIndex && (
                           <div
                             className="absolute top-0 left-0 h-full bg-white transition-all ease-linear"
@@ -147,7 +144,6 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
                     ))}
                   </div>
 
-                  {/* Previous Arrow */}
                   <button
                     onClick={goToPrevious}
                     className="w-10 h-10 flex items-center justify-center text-white hover:opacity-70 transition-opacity"
@@ -156,7 +152,6 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
                     <ChevronLeft className="w-6 h-6" />
                   </button>
 
-                  {/* Next Arrow */}
                   <button
                     onClick={goToNext}
                     className="w-10 h-10 flex items-center justify-center text-white hover:opacity-70 transition-opacity"
@@ -166,7 +161,6 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
                   </button>
                 </div>
 
-                {/* Project name linking to project page */}
                 <Link href={currentProject.href} className="arco-eyebrow text-left hover:opacity-80 transition-opacity" style={{ color: 'white' }}>
                   {currentProject.title}
                 </Link>

@@ -18,8 +18,8 @@ export function Footer() {
         .footer-bottom-flex { display: flex; justify-content: space-between; align-items: center; }
         @media (max-width: 768px) {
           .footer-top-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
-          .footer-links-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 32px !important; }
-          .footer-bottom-flex { flex-direction: column !important; gap: 16px; text-align: center; }
+          .footer-links-grid { gap: 24px !important; }
+          .footer-bottom-flex { gap: 12px; }
         }
         @media (max-width: 480px) { .footer-links-grid { grid-template-columns: 1fr !important; } }
       `}</style>

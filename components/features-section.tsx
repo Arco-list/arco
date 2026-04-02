@@ -14,8 +14,8 @@ export function FeaturesSection() {
   return (
     <div className="how-section">
       <div className="wrap">
-        <div className="section-header" style={{ marginBottom: '40px' }}>
-          <h2 className="section-title">{t("how_arco_works")}</h2>
+        <div className="section-header">
+          <h2 className="arco-section-title">{t("how_arco_works")}</h2>
         </div>
         <div className="how-grid">
           {features.map((feature) => (

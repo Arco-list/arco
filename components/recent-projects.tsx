@@ -16,176 +16,119 @@ interface RecentProjectsProps {
   projects: RecentProject[]
 }
 
+function Card({ project, className }: { project: RecentProject; className?: string }) {
+  return (
+    <Link href={project.href} className={`discover-card ${className ?? ""}`}>
+      <div className="discover-card-image-wrap">
+        <div className="discover-card-image-layer">
+          {project.imageUrl ? (
+            <img src={project.imageUrl} alt={project.title} />
+          ) : (
+            <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
+          )}
+        </div>
+      </div>
+      <h3 className="discover-card-title">{project.title}</h3>
+      {project.subtitle && <p className="discover-card-sub">{project.subtitle}</p>}
+    </Link>
+  )
+}
+
 export function RecentProjects({ projects }: RecentProjectsProps) {
   const t = useTranslations("home")
-  if (projects.length === 0) {
-    return null
-  }
+  if (projects.length === 0) return null
 
-  // Need at least 6 projects for the layout
-  const displayProjects = projects.slice(0, 6)
+  const p = projects.slice(0, 6)
 
   return (
-    <section className="py-16 bg-white">
-      {/* UPDATED: Use .wrap class */}
+    <section className="py-16 max-md:py-10 bg-white">
       <div className="wrap">
-        
-        {/* Header */}
-        <div className="editorial-header">
-          <h2 className="editorial-title">{t("recent_projects")}</h2>
+        <div className="section-header">
+          <h2 className="arco-section-title">{t("recent_projects")}</h2>
           <Link href="/projects" className="view-all-link">
             {t("view_all_projects")}
           </Link>
         </div>
 
-        {/* Row 1: 1 Large (A) + 2 Stacked (B, C) */}
-        <div className="editorial-row-1">
-          {/* Large Card (A) */}
-          {displayProjects[0] && (
-            <Link href={displayProjects[0].href} className="ed-card ed-card-large">
-              <div className="ed-img">
-                {displayProjects[0].imageUrl ? (
-                  <Image
-                    src={displayProjects[0].imageUrl}
-                    alt={displayProjects[0].title}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200" />
-                )}
-              </div>
-              <div className="ed-info">
-                <h3 className="ed-name">{displayProjects[0].title}</h3>
-                {displayProjects[0].subtitle && (
-                  <p className="ed-by">{displayProjects[0].subtitle}</p>
-                )}
-              </div>
-            </Link>
-          )}
-
-          {/* Stacked Cards (B, C) */}
-          <div className="ed-stack">
-            {displayProjects[1] && (
-              <Link href={displayProjects[1].href} className="ed-card">
-                <div className="ed-img">
-                  {displayProjects[1].imageUrl ? (
-                    <Image
-                      src={displayProjects[1].imageUrl}
-                      alt={displayProjects[1].title}
-                      fill
-                      className="object-cover"
-                    />
+        {/* Desktop / iPad: 1 big + 5 smaller in a row */}
+        <div className="hidden md:block">
+          <div className="editorial-row-1">
+            {p[0] && (
+              <Link href={p[0].href} className="ed-card ed-card-large">
+                <div className="ed-img" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  {p[0].imageUrl ? (
+                    <Image src={p[0].imageUrl} alt={p[0].title} fill className="object-cover" />
                   ) : (
                     <div className="w-full h-full bg-gray-200" />
                   )}
                 </div>
                 <div className="ed-info">
-                  <h3 className="ed-name">{displayProjects[1].title}</h3>
-                  {displayProjects[1].subtitle && (
-                    <p className="ed-by">{displayProjects[1].subtitle}</p>
-                  )}
+                  <h3 className="ed-name">{p[0].title}</h3>
+                  {p[0].subtitle && <p className="ed-by">{p[0].subtitle}</p>}
                 </div>
               </Link>
             )}
-
-            {displayProjects[2] && (
-              <Link href={displayProjects[2].href} className="ed-card">
-                <div className="ed-img">
-                  {displayProjects[2].imageUrl ? (
-                    <Image
-                      src={displayProjects[2].imageUrl}
-                      alt={displayProjects[2].title}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200" />
-                  )}
-                </div>
-                <div className="ed-info">
-                  <h3 className="ed-name">{displayProjects[2].title}</h3>
-                  {displayProjects[2].subtitle && (
-                    <p className="ed-by">{displayProjects[2].subtitle}</p>
-                  )}
-                </div>
+            <div className="ed-stack">
+              {p[1] && (
+                <Link href={p[1].href} className="ed-card">
+                  <div className="ed-img"><Image src={p[1].imageUrl!} alt={p[1].title} fill className="object-cover" /></div>
+                  <div className="ed-info"><h3 className="ed-name">{p[1].title}</h3>{p[1].subtitle && <p className="ed-by">{p[1].subtitle}</p>}</div>
+                </Link>
+              )}
+              {p[2] && (
+                <Link href={p[2].href} className="ed-card">
+                  <div className="ed-img"><Image src={p[2].imageUrl!} alt={p[2].title} fill className="object-cover" /></div>
+                  <div className="ed-info"><h3 className="ed-name">{p[2].title}</h3>{p[2].subtitle && <p className="ed-by">{p[2].subtitle}</p>}</div>
+                </Link>
+              )}
+            </div>
+          </div>
+          <div className="editorial-row-2">
+            {p[3] && (
+              <Link href={p[3].href} className="ed-card">
+                <div className="ed-img"><Image src={p[3].imageUrl!} alt={p[3].title} fill className="object-cover" /></div>
+                <div className="ed-info"><h3 className="ed-name">{p[3].title}</h3>{p[3].subtitle && <p className="ed-by">{p[3].subtitle}</p>}</div>
+              </Link>
+            )}
+            {p[4] && (
+              <Link href={p[4].href} className="ed-card">
+                <div className="ed-img"><Image src={p[4].imageUrl!} alt={p[4].title} fill className="object-cover" /></div>
+                <div className="ed-info"><h3 className="ed-name">{p[4].title}</h3>{p[4].subtitle && <p className="ed-by">{p[4].subtitle}</p>}</div>
+              </Link>
+            )}
+            {p[5] && (
+              <Link href={p[5].href} className="ed-card">
+                <div className="ed-img"><Image src={p[5].imageUrl!} alt={p[5].title} fill className="object-cover" /></div>
+                <div className="ed-info"><h3 className="ed-name">{p[5].title}</h3>{p[5].subtitle && <p className="ed-by">{p[5].subtitle}</p>}</div>
               </Link>
             )}
           </div>
         </div>
 
-        {/* Row 2: 3 Equal Cards (D, E, F) */}
-        <div className="editorial-row-2">
-          {displayProjects[3] && (
-            <Link href={displayProjects[3].href} className="ed-card">
-              <div className="ed-img">
-                {displayProjects[3].imageUrl ? (
-                  <Image
-                    src={displayProjects[3].imageUrl}
-                    alt={displayProjects[3].title}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200" />
-                )}
-              </div>
-              <div className="ed-info">
-                <h3 className="ed-name">{displayProjects[3].title}</h3>
-                {displayProjects[3].subtitle && (
-                  <p className="ed-by">{displayProjects[3].subtitle}</p>
-                )}
-              </div>
-            </Link>
+        {/* Mobile: 1 big, 2 small, 2 small, 1 big */}
+        <div className="md:hidden">
+          {/* Big */}
+          {p[0] && <div className="mb-3"><Card project={p[0]} /></div>}
+
+          {/* 2 small */}
+          {(p[1] || p[2]) && (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {p[1] && <Card project={p[1]} />}
+              {p[2] && <Card project={p[2]} />}
+            </div>
           )}
 
-          {displayProjects[4] && (
-            <Link href={displayProjects[4].href} className="ed-card">
-              <div className="ed-img">
-                {displayProjects[4].imageUrl ? (
-                  <Image
-                    src={displayProjects[4].imageUrl}
-                    alt={displayProjects[4].title}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200" />
-                )}
-              </div>
-              <div className="ed-info">
-                <h3 className="ed-name">{displayProjects[4].title}</h3>
-                {displayProjects[4].subtitle && (
-                  <p className="ed-by">{displayProjects[4].subtitle}</p>
-                )}
-              </div>
-            </Link>
+          {/* 2 small */}
+          {(p[3] || p[4]) && (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {p[3] && <Card project={p[3]} />}
+              {p[4] && <Card project={p[4]} />}
+            </div>
           )}
 
-          {displayProjects[5] && (
-            <Link href={displayProjects[5].href} className="ed-card">
-              <div className="ed-img">
-                {displayProjects[5].imageUrl ? (
-                  <Image
-                    src={displayProjects[5].imageUrl}
-                    alt={displayProjects[5].title}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200" />
-                )}
-              </div>
-              <div className="ed-info">
-                <h3 className="ed-name">{displayProjects[5].title}</h3>
-                {displayProjects[5].subtitle && (
-                  <p className="ed-by">{displayProjects[5].subtitle}</p>
-                )}
-              </div>
-            </Link>
-          )}
+          {/* Big */}
+          {p[5] && <Card project={p[5]} />}
         </div>
-
       </div>
     </section>
   )

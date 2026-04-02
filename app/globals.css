@@ -903,6 +903,16 @@ a.arco-nav-text.nav-transparent:hover {
   width: 100%;
 }
 
+@media (max-width: 768px) {
+  .wrap {
+    padding: 0 20px;
+  }
+
+  .section-header {
+    margin-bottom: 20px;
+  }
+}
+
 .section {
   padding: 52px 0;
 }
@@ -1140,6 +1150,22 @@ a.arco-nav-text.nav-transparent:hover {
   font-family: var(--font-sans);
   font-size: 14px;
   color: #a1a1a0;
+}
+
+/* Editorial layout — tablet adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .editorial-row-1 {
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .editorial-row-2 {
+    gap: 12px;
+  }
+
+  .ed-stack {
+    gap: 12px;
+  }
 }
 
 .view-all-link {
@@ -4194,11 +4220,19 @@ body.no-scroll {
 /* ─── Legal Pages (Privacy, Terms) ──────────────────── */
 
 .legal-page {
-  padding: 80px 0 120px;
+  padding: 0 0 120px;
+  background: white;
 }
 
 .legal-page .arco-page-title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
   margin-bottom: 12px;
+  padding: 36px 0 0;
 }
 
 .legal-date {
@@ -4223,13 +4257,8 @@ body.no-scroll {
   font-weight: 400;
   letter-spacing: -0.3px;
   color: var(--text-primary);
-  margin-top: 48px;
-  margin-bottom: 16px;
-}
-
-.legal-content h2.legal-part-title {
-  font-size: 34px;
   margin-top: 64px;
+  margin-bottom: 16px;
 }
 
 .legal-content h3 {
@@ -4237,7 +4266,8 @@ body.no-scroll {
   font-size: 16px;
   font-weight: 500;
   color: var(--text-primary);
-  margin-top: 32px;
+  margin-top: 40px;
+  scroll-margin-top: 100px;
   margin-bottom: 12px;
 }
 
@@ -4315,9 +4345,9 @@ body.no-scroll {
     margin-top: 36px;
   }
 
-  .legal-content h2.legal-part-title {
-    font-size: 26px;
-    margin-top: 48px;
+  .legal-content h3 {
+    font-size: 16px;
+    margin-top: 28px;
   }
 }
 
@@ -4817,6 +4847,30 @@ body.no-scroll {
   }
 }
 
+
+/* ── Membership CTA Grid ── */
+.membership-cta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.membership-cta-card {
+  padding: 40px 36px;
+  border: 1px solid #e8e8e6;
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .membership-cta-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .membership-cta-card {
+    padding: 28px 24px;
+  }
+}
 
 /* ========================================
    DISCOVER PROJECTS PAGE
@@ -5570,6 +5624,13 @@ body.no-scroll {
   grid-template-columns: repeat(3, 1fr);
   gap: 28px;
   margin-bottom: 48px;
+}
+
+@media (max-width: 1024px) {
+  .discover-grid {
+    gap: 16px;
+    margin-bottom: 32px;
+  }
 }
 
 @media (max-width: 768px) {

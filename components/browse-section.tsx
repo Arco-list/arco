@@ -19,181 +19,82 @@ interface BrowseSectionProps {
   professionals: BrowseCard[]
 }
 
+function BrowseCarousel({ items, sectionTitle, viewAllHref, viewAllLabel }: {
+  items: BrowseCard[]
+  sectionTitle: string
+  viewAllHref: string
+  viewAllLabel: string
+}) {
+  return (
+    <div>
+      <div className="section-header">
+        <h2 className="arco-section-title">{sectionTitle}</h2>
+        <Link href={viewAllHref} className="view-all-link">
+{viewAllLabel}
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-5 gap-5 lg:grid-cols-5 max-lg:flex max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:scrollbar-hide max-lg:gap-4">
+        {items.map((item) => (
+          <Link
+            key={item.id}
+            href={item.href}
+            className="block flex-shrink-0 lg:w-auto max-lg:w-[30vw] max-md:w-[42vw] snap-start"
+          >
+            <div className="relative w-full overflow-hidden mb-2.5" style={{ aspectRatio: '2/3' }}>
+              {item.imageUrl ? (
+                <Image
+                  src={item.imageUrl}
+                  alt={item.title}
+                  fill
+                  className="object-cover transition-all duration-500 hover:scale-[1.04]"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-200" />
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5 px-0.5">
+              <span className="arco-card-title">{item.title}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function BrowseSection({ projects, spaces, professionals }: BrowseSectionProps) {
   const t = useTranslations("home")
   return (
-    <section className="py-16 bg-white">
-      {/* UPDATED: Use .wrap class */}
+    <section className="py-16 max-md:py-10 bg-white">
       <div className="wrap">
-        
-        {/* Path 1: Browse by Project */}
-        <div className="mb-16">
-          {/* UPDATED: Use section-header pattern from styles page */}
-          <div className="section-header">
-            <h2 className="arco-section-title">{t("published_work")}</h2>
-            <Link
-              href="/projects"
-              className="hidden md:inline-flex view-all-link"
-            >
-              {t("view_all_projects")}
-            </Link>
-          </div>
 
-          {/* Desktop: 5 cols, Tablet/Mobile: 280px carousel */}
-          <div className="grid grid-cols-5 gap-5 lg:grid-cols-5 max-lg:flex max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:scrollbar-hide max-lg:gap-5">
-            {projects.map((item) => (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="block flex-shrink-0 lg:w-auto max-lg:w-[280px] snap-start"
-              >
-                {/* Image - 2:3 portrait aspect */}
-                <div className="relative w-full overflow-hidden mb-2.5" style={{ aspectRatio: '2/3' }}>
-                  {item.imageUrl ? (
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.title}
-                      fill
-                      className="object-cover transition-all duration-500 hover:scale-[1.04]"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200" />
-                  )}
-                </div>
+        <BrowseCarousel
+          items={projects}
+          sectionTitle={t("published_work")}
+          viewAllHref="/projects"
+          viewAllLabel={t("view_all_projects")}
+        />
 
-                {/* Label - UPDATED: Use CSS classes */}
-                <div className="flex flex-col gap-0.5 px-0.5">
-                  <span className="arco-card-title">{item.title}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+        <div className="my-16 max-md:my-10" />
 
-          {/* Mobile View All - UPDATED: Use view-all-link class */}
-          <div className="md:hidden mt-4">
-            <Link 
-              href="/projects"
-              className="inline-flex view-all-link"
-            >
-              {t("view_all_projects")}
-            </Link>
-          </div>
-        </div>
+        <BrowseCarousel
+          items={spaces}
+          sectionTitle={t("featured_spaces")}
+          viewAllHref="/projects?filter=space"
+          viewAllLabel={t("view_all_spaces")}
+        />
 
-        {/* Divider */}
-        <div className="my-16" />
+        <div className="my-16 max-md:my-10" />
 
-        {/* Path 2: Browse by Space */}
-        <div className="mb-16">
-          {/* UPDATED: Use section-header pattern */}
-          <div className="section-header">
-            <h2 className="arco-section-title">{t("featured_spaces")}</h2>
-            <Link
-              href="/projects?filter=space"
-              className="hidden md:inline-flex view-all-link"
-            >
-              {t("view_all_spaces")}
-            </Link>
-          </div>
-
-          {/* Desktop: 5 cols, Tablet/Mobile: 280px carousel */}
-          <div className="grid grid-cols-5 gap-5 lg:grid-cols-5 max-lg:flex max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:scrollbar-hide max-lg:gap-5">
-            {spaces.map((item) => (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="block flex-shrink-0 lg:w-auto max-lg:w-[280px] snap-start"
-              >
-                {/* Image - 2:3 portrait aspect */}
-                <div className="relative w-full overflow-hidden mb-2.5" style={{ aspectRatio: '2/3' }}>
-                  {item.imageUrl ? (
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.title}
-                      fill
-                      className="object-cover transition-all duration-500 hover:scale-105"
-                      style={{ filter: 'brightness(0.72)' }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200" />
-                  )}
-                </div>
-
-                {/* Label - UPDATED: Use arco-card-title class */}
-                <span className="arco-card-title block px-0.5">{item.title}</span>
-              </Link>
-            ))}
-          </div>
-
-          {/* Mobile View All - UPDATED: Use view-all-link class */}
-          <div className="md:hidden mt-4">
-            <Link 
-              href="/projects?filter=space"
-              className="inline-flex view-all-link"
-            >
-              {t("view_all_spaces")}
-            </Link>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="my-16" />
-
-        {/* Path 3: Browse by Professional */}
-        <div>
-          {/* UPDATED: Use section-header pattern */}
-          <div className="section-header">
-            <h2 className="arco-section-title">{t("credited_professionals")}</h2>
-            <Link
-              href="/professionals"
-              className="hidden md:inline-flex view-all-link"
-            >
-              {t("view_all_professionals")}
-            </Link>
-          </div>
-
-          {/* Desktop: 5 cols, Tablet/Mobile: 280px carousel */}
-          <div className="grid grid-cols-5 gap-5 lg:grid-cols-5 max-lg:flex max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:scrollbar-hide max-lg:gap-5">
-            {professionals.map((item) => (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="block flex-shrink-0 lg:w-auto max-lg:w-[280px] snap-start"
-              >
-                {/* Image - 2:3 portrait aspect */}
-                <div className="relative w-full overflow-hidden mb-2.5" style={{ aspectRatio: '2/3' }}>
-                  {item.imageUrl ? (
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.title}
-                      fill
-                      className="object-cover transition-all duration-500 hover:scale-105"
-                      style={{ filter: 'brightness(0.72)' }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200" />
-                  )}
-                </div>
-
-                {/* Label - UPDATED: Use arco-card-title class */}
-                <span className="arco-card-title block px-0.5">{item.title}</span>
-              </Link>
-            ))}
-          </div>
-
-          {/* Mobile View All - UPDATED: Use view-all-link class */}
-          <div className="md:hidden mt-4">
-            <Link 
-              href="/professionals"
-              className="inline-flex view-all-link"
-            >
-              {t("view_all_professionals")}
-            </Link>
-          </div>
-        </div>
+        <BrowseCarousel
+          items={professionals}
+          sectionTitle={t("credited_professionals")}
+          viewAllHref="/professionals"
+          viewAllLabel={t("view_all_professionals")}
+        />
 
       </div>
-
     </section>
   )
 }

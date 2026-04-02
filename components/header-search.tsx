@@ -121,7 +121,7 @@ export function HeaderSearch({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           onFocus={() => setIsFocused(true)}
-          className={`w-full h-9 rounded-full border px-3 pr-8 text-sm focus:outline-none focus:ring-2 ${inputClasses}`}
+          className={`w-full h-9 rounded-full border px-3 pr-8 text-sm max-md:text-base focus:outline-none focus:ring-2 ${inputClasses}`}
         />
         <button
           type="submit"
@@ -131,7 +131,7 @@ export function HeaderSearch({
         </button>
 
         {showDropdown && (
-          <div className={`${baseDropdownClasses} ${dropdownClasses}`} style={{ minWidth: 320 }}>
+          <div className={`${baseDropdownClasses} ${dropdownClasses}`} style={{ minWidth: "min(320px, calc(100vw - 40px))" }}>
             {isLoading && !hasResults && (
               <div className="px-4 py-3 text-xs text-[#a1a1a0]">Searching…</div>
             )}

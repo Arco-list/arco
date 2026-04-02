@@ -346,6 +346,13 @@ export function LoginModal() {
                   Continue with Apple
                 </button>
               </div>
+
+              <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 20, lineHeight: 1.5 }}>
+                By continuing, you agree to our{" "}
+                <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</Link>
+                {" "}and{" "}
+                <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</Link>.
+              </p>
             </div>
           )}
 
@@ -397,6 +404,13 @@ export function LoginModal() {
                 >
                   {isSendingOtp ? "Creating account..." : "Continue"}
                 </button>
+
+                <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 16, lineHeight: 1.5 }}>
+                  By creating an account, you agree to our{" "}
+                  <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</Link>
+                  {" "}and{" "}
+                  <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</Link>.
+                </p>
               </form>
             </div>
           )}

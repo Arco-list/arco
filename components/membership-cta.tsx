@@ -18,9 +18,9 @@ export function MembershipCTA() {
           {t("built_for_industry_subtitle")}
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div className="membership-cta-grid">
 
-          <div style={{ padding: "40px 36px", border: "1px solid #e8e8e6", borderRadius: 8 }}>
+          <div className="membership-cta-card">
             <p className="arco-eyebrow" style={{ marginBottom: 12 }}>{tn("for_architects")}</p>
             <h3 className="arco-section-title" style={{ marginBottom: 12 }}>
               {t("for_architects_title")}
@@ -33,7 +33,7 @@ export function MembershipCTA() {
             </Link>
           </div>
 
-          <div style={{ padding: "40px 36px", border: "1px solid #e8e8e6", borderRadius: 8 }}>
+          <div className="membership-cta-card">
             <p className="arco-eyebrow" style={{ marginBottom: 12 }}>{tn("for_professionals")}</p>
             <h3 className="arco-section-title" style={{ marginBottom: 12 }}>
               {t("for_professionals_title")}
