@@ -295,14 +295,7 @@ async function fetchTimeSeries(
 
   // Take last 8 values (7 completed + 1 rolling)
   if (values.length <= 8) return values
-  const bucketSize = Math.ceil(values.length / 8)
-  const buckets: number[] = []
-  for (let i = 0; i < 8; i++) {
-    const start = i * bucketSize
-    const end = Math.min(start + bucketSize, values.length)
-    buckets.push(values.slice(start, end).reduce((a, b) => a + b, 0))
-  }
-  return buckets
+  return values.slice(-8)
 }
 
 async function fetchChannelBreakdown(

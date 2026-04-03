@@ -182,7 +182,13 @@ const TIMEFRAMES: { value: Timeframe; label: string }[] = [
 
 export function GrowthClient({ initialMetrics }: Props) {
   const [metrics, setMetrics] = useState(initialMetrics)
-  const [timeframe, setTimeframe] = useState<Timeframe>("months")
+  const [timeframe, setTimeframe] = useState<Timeframe>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("arco_growth_timeframe")
+      if (saved && ["days", "weeks", "months", "years"].includes(saved)) return saved as Timeframe
+    }
+    return "months"
+  })
   const [isPending, startTransition] = useTransition()
   const [view, setView] = useState<"lifecycle" | "table">("lifecycle")
   const [tableRows, setTableRows] = useState<MetricRow[]>([])
@@ -300,6 +306,7 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   const handleTimeframeChange = (tf: Timeframe) => {
     setTimeframe(tf)
+    if (typeof window !== "undefined") localStorage.setItem("arco_growth_timeframe", tf)
     fetchPosthog(tf)
     startTransition(async () => {
       const [metricsData, tableData] = await Promise.all([
