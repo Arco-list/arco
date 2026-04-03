@@ -54,9 +54,10 @@ function loadPostHog() {
       api_host: 'https://eu.i.posthog.com',
       person_profiles: 'identified_only',
       autocapture: false,
-      capture_pageview: false,
-      capture_pageleave: false,
-      disable_session_recording: true
+      capture_pageview: true,
+      capture_pageleave: true,
+      disable_session_recording: true,
+      persistence: 'memory'
     });
   `
   document.head.appendChild(script)
@@ -66,25 +67,32 @@ export function CookieConsent() {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    // Always load PostHog with cookieless tracking (memory persistence)
+    loadPostHog()
+
     const consent = getConsent()
     if (!consent) {
-      // No consent yet — show banner
       setVisible(true)
-    } else if (consent === "accepted") {
-      // Previously accepted — load PostHog
-      loadPostHog()
+    }
+    // If previously accepted, upgrade to cookie-based persistence for richer tracking
+    if (consent === "accepted" && typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.set_config({ persistence: "localStorage+cookie" })
     }
   }, [])
 
   const handleAccept = () => {
     setConsent("accepted")
     setVisible(false)
-    loadPostHog()
+    // Upgrade to cookie-based persistence
+    if (typeof window !== "undefined" && (window as any).posthog) {
+      (window as any).posthog.set_config({ persistence: "localStorage+cookie" })
+    }
   }
 
   const handleReject = () => {
     setConsent("rejected")
     setVisible(false)
+    // Stay on memory persistence — no cookies stored
   }
 
   if (!visible) return null

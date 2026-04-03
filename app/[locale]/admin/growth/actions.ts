@@ -126,14 +126,17 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
   const professionalProfiles = profiles.filter((p: any) => p.user_types?.includes("professional"))
-  const clientProfiles = profiles.filter((p: any) => p.user_types?.includes("client") && !p.user_types?.includes("professional"))
+  const clientProfiles = profiles.filter((p: any) => p.user_types?.includes("client"))
 
   const totalUsers = profiles.length
   const professionalUsers = professionalProfiles.length
   const clientUsers = clientProfiles.length
   const totalCompanies = allCompanies.length
-  const draftCompanies = allCompanies.filter((c: any) => c.status === "draft").length
-  const listedCompanies = allCompanies.filter((c: any) => c.status === "listed").length
+  // Drafts = all companies ever created in the timeframe (every company starts as draft)
+  const draftCompanies = companies.length
+  // Listed = companies that have been listed (current status is listed, unlisted, or deactivated)
+  const listedStatuses = ["listed", "unlisted", "deactivated"]
+  const listedCompanies = allCompanies.filter((c: any) => listedStatuses.includes(c.status)).length
   const unlistedCompanies = allCompanies.filter((c: any) => c.status === "unlisted").length
   const totalProjects = projects.length
   const publishedProjects = projects.filter((p: any) => p.status === "published").length

@@ -91,8 +91,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     savedCompaniesResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
-    supabase.from("companies").select("id, status, plan_tier, created_at"),
-    supabase.from("projects").select("id, status, client_id, created_at"),
+    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at"),
+    supabase.from("projects").select("id, status, client_id, created_at, updated_at"),
     supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
@@ -105,9 +105,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const savedProjects = (savedProjectsResult.data ?? []) as any[]
   const savedCompanies = (savedCompaniesResult.data ?? []) as any[]
 
-  // Helper to filter and bucket
+  // Helper to filter and bucket by created_at
   const makeDates = (items: any[], filter?: (item: any) => boolean) =>
     (filter ? items.filter(filter) : items).map((i: any) => new Date(i.created_at)).filter((d: Date) => d >= from)
+
+  // Helper to bucket by updated_at (for status transitions)
+  const makeDatesByUpdated = (items: any[], filter?: (item: any) => boolean) =>
+    (filter ? items.filter(filter) : items).map((i: any) => new Date(i.updated_at ?? i.created_at)).filter((d: Date) => d >= from)
 
   // Generate labels from first bucket call
   const labels = buckets.labels
@@ -117,27 +121,33 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const proSignupDates = makeDates(profiles, (p) => p.user_types?.includes("professional"))
   const proSignups = bucket8(proSignupDates, buckets)
 
-  const draftDates = makeDates(companies, (c) => c.status === "draft")
+  // Drafts = ALL companies ever created (every company starts as draft)
+  const draftDates = makeDates(companies)
   const drafts = bucket8(draftDates, buckets)
 
-  const activeDates = makeDates(companies, (c) => c.status === "listed")
+  // Listed = companies that have been listed (status is listed, unlisted, or deactivated — they all passed through listed)
+  // Use updated_at as the "when they became listed" timestamp
+  const listedStatuses = ["listed", "unlisted", "deactivated"]
+  const activeDates = makeDatesByUpdated(companies, (c) => listedStatuses.includes(c.status))
   const actives = bucket8(activeDates, buckets)
 
-  const unlistedDates = makeDates(companies, (c) => c.status === "unlisted")
-  const unlisted = bucket8(unlistedDates, buckets)
-
+  // Current totals and bucketed data for supporting metrics
   const totalListed = companies.filter((c: any) => c.status === "listed").length
   const totalUnlisted = companies.filter((c: any) => c.status === "unlisted").length
+  const unlistedDates = makeDatesByUpdated(companies, (c) => c.status === "unlisted")
+  const unlisted = bucket8(unlistedDates, buckets)
 
   const allCompanyDates = makeDates(companies)
   const allCompanies = bucket8(allCompanyDates, buckets)
 
+  // Published = ALL projects that have been published (status published — they stay counted even if archived later)
   const publishedDates = makeDates(projects, (p) => p.status === "published")
   const publishers = bucket8(publishedDates, buckets)
 
   const allProjectDates = makeDates(projects)
   const allProjects = bucket8(allProjectDates, buckets)
 
+  // Current totals for supporting metrics
   const inProgressDates = makeDates(projects, (p) => p.status === "in_progress")
   const inProgress = bucket8(inProgressDates, buckets)
 
@@ -182,7 +192,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
 
   // ── Client metrics ────────────────────────────────────────────────────
 
-  const clientSignupDates = makeDates(profiles, (p) => p.user_types?.includes("client") && !p.user_types?.includes("professional"))
+  const clientSignupDates = makeDates(profiles, (p) => p.user_types?.includes("client"))
   const clientSignups = bucket8(clientSignupDates, buckets)
 
   const savedProjectDates = makeDates(savedProjects)
