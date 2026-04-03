@@ -23,13 +23,12 @@ export type Prospect = {
   status: ProspectStatus
   ref_code: string
   apollo_contact_id: string | null
-  apollo_account_id: string | null
   sequence_status: SequenceStatus
   emails_sent: number
   emails_delivered: number
-  linked_user_id: string | null
-  linked_company_id: string | null
-  linked_project_id: string | null
+  user_id: string | null
+  company_id: string | null
+  project_id: string | null
   last_email_sent_at: string | null
   landing_visited_at: string | null
   signed_up_at: string | null
@@ -281,6 +280,202 @@ export async function deleteProspect(id: string) {
   if (error) {
     console.error("Failed to delete prospect", error)
     return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}
+
+// ─── Arco & Invite prospect sync ────────────────────────────────────────────
+
+/**
+ * Sync prospected companies (source: arco) and invited companies (source: invites)
+ * into the prospects table. Called on page load.
+ */
+export async function syncPlatformProspects() {
+  const supabase = createServiceRoleSupabaseClient()
+
+  // 1. Sync prospected companies (status = 'prospected') → source 'arco'
+  const { data: prospectedCompanies } = await supabase
+    .from("companies")
+    .select("id, name, email, city, slug")
+    .eq("status", "prospected" as any)
+    .is("owner_id", null)
+
+  for (const company of prospectedCompanies ?? []) {
+    const { data: existing } = await supabase
+      .from("prospects")
+      .select("id")
+      .eq("company_id", company.id)
+      .eq("source", "arco")
+      .maybeSingle()
+
+    if (!existing) {
+      const { count } = await supabase
+        .from("company_outreach" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", company.id)
+
+      const emailsSent = count ?? 0
+
+      await supabase.from("prospects").insert({
+        email: company.email ?? "",
+        contact_name: null,
+        company_name: company.name,
+        city: company.city ?? null,
+        source: "arco",
+        status: "prospect",
+        sequence_status: emailsSent > 0 ? "finished" : "not_started",
+        emails_sent: emailsSent,
+        emails_delivered: emailsSent,
+        company_id: company.id,
+        ref_code: company.slug ?? company.id,
+      })
+    }
+  }
+
+  // 2. Sync invited companies (from project_professionals, not project owner, no company owner)
+  const { data: invitedPros } = await supabase
+    .from("project_professionals")
+    .select("company_id, invited_email, status, companies(id, name, email, city, slug, owner_id)")
+    .eq("is_project_owner", false)
+    .not("company_id", "is", null)
+
+  const invitedByCompany = new Map<string, { email: string; companyName: string; city: string | null; slug: string | null; inviteCount: number; hasSentEmail: boolean }>()
+
+  for (const pp of invitedPros ?? []) {
+    const company = (pp as any).companies
+    if (!company || company.owner_id) continue
+    const key = company.id as string
+    const prev = invitedByCompany.get(key)
+    const isSent = pp.status !== "invited" // if status moved past invited, email was sent
+    if (prev) {
+      prev.inviteCount++
+      if (isSent) prev.hasSentEmail = true
+    } else {
+      invitedByCompany.set(key, {
+        email: pp.invited_email ?? company.email ?? "",
+        companyName: company.name,
+        city: company.city ?? null,
+        slug: company.slug ?? null,
+        inviteCount: 1,
+        hasSentEmail: isSent,
+      })
+    }
+  }
+
+  for (const [companyId, info] of invitedByCompany) {
+    if (!info.email) continue
+    const { data: existing } = await supabase
+      .from("prospects")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("source", "invites")
+      .maybeSingle()
+
+    if (!existing) {
+      await supabase.from("prospects").insert({
+        email: info.email,
+        contact_name: null,
+        company_name: info.companyName,
+        city: info.city,
+        source: "invites",
+        status: "prospect",
+        sequence_status: info.hasSentEmail ? "finished" : "not_started",
+        emails_sent: info.hasSentEmail ? info.inviteCount : 0,
+        emails_delivered: info.hasSentEmail ? info.inviteCount : 0,
+        company_id: companyId,
+        ref_code: info.slug ?? companyId,
+      })
+    }
+  }
+
+  // 3. Remove invited prospects where company no longer has any invites
+  const { data: inviteProspects } = await supabase
+    .from("prospects")
+    .select("id, company_id")
+    .eq("source", "invites")
+
+  for (const p of inviteProspects ?? []) {
+    if (!p.company_id) continue
+    const { count } = await supabase
+      .from("project_professionals")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", p.company_id)
+      .eq("is_project_owner", false)
+
+    if (!count || count === 0) {
+      await supabase.from("prospects").delete().eq("id", p.id)
+    }
+  }
+}
+
+/**
+ * Start prospect sequence: send the prospect email and update status
+ */
+export async function startProspectSequence(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, email, company_id, source, emails_sent")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (!prospect.company_id) return { success: false, error: "No linked company" }
+
+  // Set sequence to active
+  await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
+
+  // Send the prospect email
+  const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
+  const result = await sendProspectEmailAction({
+    companyId: prospect.company_id,
+    emailTo: prospect.email,
+  })
+
+  if (!result.success) {
+    await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+    return { success: false, error: result.error }
+  }
+
+  // Update: sequence finished, increment sent count
+  await supabase.from("prospects").update({
+    sequence_status: "finished",
+    emails_sent: (prospect.emails_sent ?? 0) + 1,
+    emails_delivered: (prospect.emails_delivered ?? 0) + 1,
+    last_email_sent_at: new Date().toISOString(),
+    status: "contacted",
+  }).eq("id", prospectId)
+
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "email_sent",
+    metadata: { template: "prospect_intro", email: prospect.email },
+  })
+
+  return { success: true }
+}
+
+/**
+ * Update prospect email and sync to company record
+ */
+export async function updateProspectEmail(prospectId: string, newEmail: string) {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, company_id, source")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+
+  await supabase.from("prospects").update({ email: newEmail }).eq("id", prospectId)
+
+  // Sync to companies table for Arco source
+  if (prospect.source === "arco" && prospect.company_id) {
+    await supabase.from("companies").update({ email: newEmail }).eq("id", prospect.company_id)
   }
 
   return { success: true }

@@ -1,10 +1,13 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProspectsClient } from "./prospects-client"
-import { fetchFunnel, type Prospect } from "./actions"
+import { fetchFunnel, syncPlatformProspects, type Prospect } from "./actions"
 
 export const dynamic = "force-dynamic"
 
 export default async function ProspectsPage() {
+  // Sync prospected/invited companies into prospects table
+  await syncPlatformProspects()
+
   const supabase = createServiceRoleSupabaseClient()
 
   const { data, error } = await supabase

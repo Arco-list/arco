@@ -203,6 +203,41 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     logger.error("admin-professionals", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
   }
 
+  // When status is set to prospected, add to Sales table immediately
+  if (parsedStatus.data === "prospected") {
+    const serviceClient = createServiceRoleSupabaseClient()
+    const { data: company } = await serviceClient
+      .from("companies")
+      .select("id, name, email, city, slug, owner_id")
+      .eq("id", parsedCompanyId.data)
+      .single()
+
+    if (company && !company.owner_id) {
+      const { data: existing } = await serviceClient
+        .from("prospects")
+        .select("id")
+        .eq("company_id", company.id)
+        .eq("source", "arco")
+        .maybeSingle()
+
+      if (!existing) {
+        await serviceClient.from("prospects").insert({
+          email: company.email ?? "",
+          contact_name: null,
+          company_name: company.name,
+          city: company.city ?? null,
+          source: "arco",
+          status: "prospect",
+          sequence_status: "not_started",
+          emails_sent: 0,
+          emails_delivered: 0,
+          company_id: company.id,
+          ref_code: company.slug ?? company.id,
+        })
+      }
+    }
+  }
+
   revalidatePath("/admin/professionals")
   return { success: true }
 }

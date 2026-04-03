@@ -9,6 +9,8 @@ import {
   updateProspectStatus,
   deleteProspect,
   fetchFunnel,
+  startProspectSequence,
+  updateProspectEmail,
   type Prospect,
   type ProspectFunnel,
   type ProspectStatus,
@@ -118,6 +120,56 @@ function exportToCsv(prospects: Prospect[]) {
   a.download = `prospects-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// -- Editable email field for arco/invites sources --------------------------
+
+function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRefresh: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [email, setEmail] = useState(prospect.email)
+  const isEditable = prospect.source === "arco"
+
+  const handleSave = async () => {
+    setEditing(false)
+    if (email !== prospect.email && email.includes("@")) {
+      const result = await updateProspectEmail(prospect.id, email)
+      if (result.success) {
+        toast.success("Email updated")
+        onRefresh()
+      } else {
+        toast.error(result.error ?? "Failed to update")
+        setEmail(prospect.email)
+      }
+    } else {
+      setEmail(prospect.email)
+    }
+  }
+
+  if (editing && isEditable) {
+    return (
+      <input
+        autoFocus
+        placeholder="email@company.com"
+        className="text-xs text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-full max-w-[200px]"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setEmail(prospect.email); setEditing(false) } }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className={`text-xs truncate max-w-[200px] text-left ${isEditable ? "text-[#6b6b68] hover:text-[#1c1c1a] cursor-pointer" : "text-[#a1a1a0] cursor-default"}`}
+      onClick={(e) => { if (isEditable) { e.stopPropagation(); setEditing(true) } }}
+      title={isEditable ? "Click to edit email" : undefined}
+    >
+      {email || (isEditable ? <span className="text-[#c4c4c2] italic">Add email...</span> : "—")}
+    </button>
+  )
 }
 
 // -- Component ---------------------------------------------------------------
@@ -472,6 +524,8 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
             <SelectContent>
               <SelectItem value="all">All sources</SelectItem>
               <SelectItem value="apollo">Apollo</SelectItem>
+              <SelectItem value="arco">Arco</SelectItem>
+              <SelectItem value="invites">Invites</SelectItem>
               <SelectItem value="manual">Manual</SelectItem>
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
@@ -480,8 +534,8 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
       </div>
 
       {/* Prospects table */}
-      <div className="border border-[#e5e5e4] overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full">
+        <table className="w-full text-sm" style={{ minWidth: 900 }}>
           <thead>
             <tr className="border-b border-[#e5e5e4]">
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Contact</th>
@@ -489,7 +543,8 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Sequence</th>
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Company</th>
               <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Sent</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivered</th>
+              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Opened</th>
+              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Clicked</th>
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Source</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Created</th>
             </tr>
@@ -497,7 +552,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
           <tbody>
             {prospects.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={9} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
                   No prospects found.
                 </td>
               </tr>
@@ -523,17 +578,21 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                   className={`border-b border-[#e5e5e4] hover:bg-[#fafaf9] cursor-pointer transition-colors ${expandedId === p.id ? "bg-[#fafaf9]" : ""}`}
                   onClick={() => handleRowClick(p.id)}
                 >
-                  {/* Contact — name + email */}
+                  {/* Contact — name + email (email-only for arco/invites, editable for arco) */}
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
-                        {initials}
+                    {(p.source === "arco" || p.source === "invites") ? (
+                      <ProspectEmailField prospect={p} onRefresh={refreshData} />
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                          {initials}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium text-[#1c1c1a] truncate">{p.contact_name || "—"}</span>
+                          <span className="text-xs text-[#a1a1a0] truncate">{p.email}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium text-[#1c1c1a] truncate">{p.contact_name || "—"}</span>
-                        <span className="text-xs text-[#a1a1a0] truncate">{p.email}</span>
-                      </div>
-                    </div>
+                    )}
                   </td>
                   {/* Status — dot + label */}
                   <td className="px-4 py-3">
@@ -542,15 +601,34 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                       <span className="text-xs font-medium text-[#1c1c1a] whitespace-nowrap">{STATUS_CONFIG[p.status].label}</span>
                     </div>
                   </td>
-                  {/* Sequence — dot + label */}
+                  {/* Sequence — dot + label + Start button for arco prospects */}
                   <td className="px-4 py-3">
                     {(() => {
                       const seq = (p.sequence_status ?? "not_started") as SequenceStatus
                       const cfg = SEQUENCE_CONFIG[seq] ?? SEQUENCE_CONFIG.not_started
+                      const canStart = p.source === "arco" && seq === "not_started"
                       return (
                         <div className="flex items-center gap-1.5">
                           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
                           <span className="text-xs text-[#1c1c1a] whitespace-nowrap">{cfg.label}</span>
+                          {canStart && (
+                            <button
+                              type="button"
+                              className="ml-1 text-[10px] font-medium px-2 py-0.5 rounded bg-[#1c1c1a] text-white hover:opacity-80 transition-opacity"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                const result = await startProspectSequence(p.id)
+                                if (result.success) {
+                                  toast.success("Prospect email sent")
+                                  refreshData()
+                                } else {
+                                  toast.error(result.error ?? "Failed to send")
+                                }
+                              }}
+                            >
+                              Start
+                            </button>
+                          )}
                         </div>
                       )
                     })()}
@@ -568,34 +646,28 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                       <span className="text-xs text-[#a1a1a0]">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_sent}</td>
-                  <td className="px-4 py-3 text-xs text-center font-medium">
-                    {p.emails_sent > 0 ? (() => {
-                      const pct = Math.round((p.emails_delivered / p.emails_sent) * 100)
-                      const color = pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"
-                      return <span className={color}>{pct}%</span>
-                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
-                  </td>
+                  <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_sent || "—"}</td>
+                  <td className="px-4 py-3 text-xs text-center text-[#a1a1a0]">—</td>
+                  <td className="px-4 py-3 text-xs text-center text-[#a1a1a0]">—</td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] capitalize">{p.source}</td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] text-right whitespace-nowrap">{formatDate(p.created_at)}</td>
                 </tr>
                 {/* Expanded detail row */}
                 {expandedId === p.id && (
                   <tr key={`${p.id}-detail`} className="border-b border-[#e5e5e4] bg-[#fafaf9]">
-                    <td colSpan={8} className="px-6 py-4">
+                    <td colSpan={9} className="px-6 py-4">
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <DetailField label="Ref Code" value={p.ref_code} />
                         <DetailField label="City" value={p.city} />
                         <DetailField label="Apollo Contact ID" value={p.apollo_contact_id} />
-                        <DetailField label="Apollo Account ID" value={p.apollo_account_id} />
                         <DetailField label="Last Email Sent" value={formatDateTime(p.last_email_sent_at)} />
                         <DetailField label="Visited At" value={formatDateTime(p.landing_visited_at)} />
                         <DetailField label="Signed Up At" value={formatDateTime(p.signed_up_at)} />
                         <DetailField label="Company Created At" value={formatDateTime(p.company_created_at)} />
                         <DetailField label="Active At" value={formatDateTime(p.converted_at)} />
-                        <DetailField label="Linked User ID" value={p.linked_user_id} />
-                        <DetailField label="Linked Company ID" value={p.linked_company_id} />
-                        <DetailField label="Linked Project ID" value={p.linked_project_id} />
+                        <DetailField label="Linked User ID" value={p.user_id} />
+                        <DetailField label="Linked Company ID" value={p.company_id} />
+                        <DetailField label="Linked Project ID" value={p.project_id} />
                       </div>
                       {p.notes && (
                         <div className="mb-4">

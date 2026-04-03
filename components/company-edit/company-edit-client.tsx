@@ -924,11 +924,17 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         [contenteditable]:empty:before { content: attr(data-placeholder); color: #b0b0ae; pointer-events: none; }
 
         /* Spec bar editable */
-        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; }
-        .spec-item-edit::before { content: ''; position: absolute; inset: -32px -6px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; z-index: 1; }
+        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; z-index: 2; }
+        .spec-item-edit::before { content: ''; position: absolute; inset: -32px -6px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; background: white; z-index: -1; }
         .spec-item-edit:hover::before { border-color: #1c1c1a; }
         .spec-item-edit.editing::before { border-color: #016D75; }
+        .spec-item-edit.editing { z-index: 10; }
         .spec-item-edit .ec-badge { top: -40px; left: 50%; transform: translateX(-50%); padding: 0 6px; background: #fff; z-index: 2; }
+        @media (max-width: 768px) {
+          .edit-specs-bar { grid-template-columns: repeat(2, 1fr) !important; gap: 84px 16px !important; padding: 36px 0 !important; }
+          .spec-item-edit::before { inset: -36px -8px; }
+          .spec-item-edit .ec-badge { top: -44px; }
+        }
         .spec-item-edit:hover .ec-ico, .spec-item-edit:hover .ec-txt { color: #1c1c1a; }
         .spec-item-edit.editing .ec-ico, .spec-item-edit.editing .ec-txt { color: #016D75; }
         .spec-item-edit.editing .spec-eyebrow { color: #016D75; }
@@ -1207,7 +1213,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         </section>
 
         {/* ════════════════════ SPECS BAR ════════════════════ */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
+        <div className="edit-specs-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
           {/* Location — read-only, clicks scroll to Office Location */}
           <div
             className="spec-item-edit"

@@ -43,8 +43,6 @@ import {
   generateCompanyLoginLinkAction,
   updateCompanyDomainVerifiedAction,
   changeCompanyOwnerAction,
-  sendProspectEmailAction,
-  updateCompanyEmailAction,
 } from "@/app/admin/professionals/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -270,70 +268,6 @@ function ensureHttp(url: string | null): string | null {
     return url
   }
   return `https://${url}`
-}
-
-// Inline component for prospect email + send button in Owner column
-function ProspectEmailCell({ companyId, email: initialEmail }: { companyId: string; email: string }) {
-  const [email, setEmail] = useState(initialEmail)
-  const [editing, setEditing] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
-
-  const handleSave = async () => {
-    setEditing(false)
-    if (email !== initialEmail) {
-      await updateCompanyEmailAction({ companyId, email })
-    }
-  }
-
-  const handleSend = async () => {
-    setSending(true)
-    const result = await sendProspectEmailAction({ companyId, emailTo: email })
-    setSending(false)
-    if (result.success) {
-      setSent(true)
-      toast.success("Prospect email sent")
-    } else {
-      toast.error(result.error ?? "Failed to send")
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      {editing ? (
-        <input
-          autoFocus
-          className="text-[11px] text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-[140px]"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setEmail(initialEmail); setEditing(false) } }}
-        />
-      ) : (
-        <button
-          type="button"
-          className="text-[11px] text-[#6b6b68] hover:text-[#1c1c1a] truncate max-w-[140px] text-left transition-colors"
-          onClick={() => setEditing(true)}
-          title="Click to edit email"
-        >
-          {email}
-        </button>
-      )}
-      {!editing && !sent && (
-        <button
-          type="button"
-          className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded bg-[#1c1c1a] text-white hover:opacity-80 transition-opacity"
-          onClick={handleSend}
-          disabled={sending}
-        >
-          {sending ? "..." : "Send"}
-        </button>
-      )}
-      {sent && (
-        <span className="text-[10px] text-[#016D75] font-medium">Sent</span>
-      )}
-    </div>
-  )
 }
 
 export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
@@ -773,15 +707,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             )
           }
 
-          // No owner — show prospect email with Send button only when status is prospected
+          // No owner — show email (read-only, managed via Sales table for prospected)
           const prospectEmail = company.contactEmail
           if (!prospectEmail) return <span className="text-xs text-[#a1a1a0]">—</span>
 
-          if (company.status === "prospected") {
-            return <ProspectEmailCell companyId={company.id} email={prospectEmail} />
-          }
-
-          // Other statuses without owner — just show the email
           return <span className="text-[11px] text-[#a1a1a0] truncate">{prospectEmail}</span>
         },
       },

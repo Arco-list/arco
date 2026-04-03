@@ -112,19 +112,21 @@ export function CompanyEditSubNav({
                 {isSaving ? t("saving_status") : t("saved_status")}
               </span>
             )}
-            <button className="filter-pill" onClick={onStatusClick}>
-              <span
-                className={`inline-block rounded-full ${statusIndicatorClass}`}
-                style={{ width: 7, height: 7, flexShrink: 0 }}
-              />
-              {currentStatusLabel}
-            </button>
+            {!isSetupMode && (
+              <button className="filter-pill" onClick={onStatusClick}>
+                <span
+                  className={`inline-block rounded-full ${statusIndicatorClass}`}
+                  style={{ width: 7, height: 7, flexShrink: 0 }}
+                />
+                {currentStatusLabel}
+              </button>
+            )}
             <button className="filter-pill" onClick={onSearchPreviewClick}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="7" cy="7" r="5" />
                 <path d="M14 14L10.5 10.5" />
               </svg>
-              {t("search_preview")}
+              <span className="sub-nav-pill-label">{t("search_preview")}</span>
             </button>
             <a
               className="filter-pill"
@@ -136,7 +138,7 @@ export function CompanyEditSubNav({
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
               </svg>
-              {t("preview")}
+              <span className="sub-nav-pill-label">{t("preview")}</span>
             </a>
             {isSetupMode && onCompleteSetup && (
               <button className="btn-primary setup-nav-cta" onClick={onCompleteSetup}>
