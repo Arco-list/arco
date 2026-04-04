@@ -52,6 +52,7 @@ export interface EmailVariables {
 interface EmailResponse {
   success: boolean
   message?: string
+  messageId?: string
 }
 
 // ─── Email HTML templates ────────────────────────────────────────────────────
@@ -291,40 +292,40 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
   const subtitle = vars.company_subtitle || ''
 
   // Company card — matches professional discover card design
-  const logoBlock = logoUrl
-    ? `<img src="${logoUrl}" alt="${companyName}" width="44" height="44" style="display:block;width:44px;height:44px;border-radius:50%;object-fit:cover;" />`
-    : `<div style="width:44px;height:44px;border-radius:50%;background:#f5f5f4;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;color:#6b6b68;">${companyName.charAt(0)}</div>`
+  // Skip SVG logos (not supported in email clients) and use initial fallback instead
+  const useLogo = logoUrl && !logoUrl.endsWith('.svg')
+  const logoBlock = useLogo
+    ? `<img src="${logoUrl}" alt="${companyName}" width="36" height="36" style="display:block;width:36px;height:36px;border-radius:50%;object-fit:cover;" />`
+    : `<table cellpadding="0" cellspacing="0"><tr><td style="width:36px;height:36px;border-radius:50%;background:#f5f5f4;text-align:center;vertical-align:middle;font-size:14px;font-weight:500;color:#6b6b68;">${companyName.charAt(0)}</td></tr></table>`
+
+  const heroBlock = heroImageUrl
+    ? `<img src="${heroImageUrl}" alt="${companyName}" width="520" style="display:block;width:100%;max-width:520px;border-radius:3px;object-fit:cover;" />`
+    : ''
 
   const companyCard = `
-    <a href="${companyPageUrl}" target="_blank" style="display:block;text-decoration:none;border:1px solid #e5e5e4;border-radius:3px;overflow:hidden;margin:24px 0;">
-      ${heroImageUrl ? `<img src="${heroImageUrl}" alt="${companyName}" width="520" style="display:block;width:100%;max-width:520px;object-fit:cover;height:200px;" />` : ''}
-      <div style="padding:16px 20px;">
-        <table cellpadding="0" cellspacing="0"><tr>
-          <td style="vertical-align:middle;padding-right:12px;">
-            ${logoBlock}
-          </td>
-          <td style="vertical-align:middle;">
-            <p style="margin:0;font-size:15px;font-weight:500;color:#1c1c1a;line-height:1.3;">${companyName}</p>
-            ${subtitle ? `<p style="margin:2px 0 0;font-size:13px;font-weight:300;color:#a1a1a0;line-height:1.3;">${subtitle}</p>` : ''}
-          </td>
-        </tr></table>
-      </div>
+    <a href="${companyPageUrl}" target="_blank" style="display:block;text-decoration:none;margin:24px 0;">
+      ${heroBlock}
+      <table cellpadding="0" cellspacing="0" style="${heroBlock ? 'margin-top:12px;' : ''}"><tr>
+        <td style="vertical-align:middle;padding-right:10px;">
+          ${logoBlock}
+        </td>
+        <td style="vertical-align:middle;">
+          <p style="margin:0;font-size:15px;font-weight:400;color:#1c1c1a;line-height:1.3;">${companyName}</p>
+          ${subtitle ? `<p style="margin:2px 0 0;font-size:13px;font-weight:300;color:#a1a1a0;line-height:1.3;">${subtitle}</p>` : ''}
+        </td>
+      </tr></table>
     </a>`
 
   return {
     subject: `${companyName} staat op Arco`,
     html: baseLayout(`
-      ${heading(`${companyName} is een van de eerste bedrijven op Arco`)}
-      ${body(`Ik ben Niek, oprichter van Arco. Arco is een nieuw platform voor architecten en interieurontwerpers. Het idee is simpel: <strong>Publish your work. Credit your team. Set the standard.</strong>`)}
-      ${body(`We hebben ${companyName} op Arco gezet met een bedrijfs- en projectpagina. Bekijk hoe het eruitziet:`)}
+      ${heading(`Een podium voor ${companyName}`)}
+      ${body(`Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`)}
+      ${body(`We hebben ${companyName} live gezet op Arco met een bedrijfs- en projectpagina om te laten zien hoe het eruitziet:`)}
       ${companyCard}
-      ${body(`Wil je de pagina claimen? Dan krijg je volledige controle over je profiel, kun je projecten toevoegen en word je zichtbaar voor potentiele opdrachtgevers.`)}
+      ${body(`Wil je op Arco? Claim je pagina en krijg volledige controle over je profiel, voeg projecten toe en word zichtbaar voor opdrachtgevers die een professional zoeken om hun project te realiseren.`)}
       ${button(`Claim ${companyName}`, claimUrl)}
       ${body(`Wil je liever dat we de pagina verwijderen? Laat het me weten door op deze email te reageren.`)}
-      <div style="border-top:1px solid #e8e8e6;margin:32px 0 24px;" />
-      <p style="margin:0 0 16px;font-size:14px;font-weight:300;line-height:1.6;color:#6b6b68;font-style:italic;">
-        We bouwen Arco met de missie om betere architectuur te inspireren, door middel van een gecureerd netwerk van architecten en professionals die het vertrouwen waard zijn.
-      </p>
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">Oprichter, Arco</span>
@@ -398,7 +399,7 @@ export async function sendTransactionalEmail(
     }
 
     console.log(`Email sent: ${template} to ${email} (id: ${data?.id})`)
-    return { success: true }
+    return { success: true, messageId: data?.id }
   } catch (error) {
     console.error('Email service error:', error)
     return { success: false, message: error instanceof Error ? error.message : 'Network error sending email' }

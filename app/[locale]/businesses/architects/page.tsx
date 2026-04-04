@@ -1,9 +1,42 @@
 import { Suspense } from "react"
 import { ArchitectsClient } from "./architects-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
+import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { ProjectCard } from "@/components/landing/project-carousel"
 
-export default async function ArchitectsPage() {
+interface PageProps {
+  searchParams: Promise<{ inviteEmail?: string; url?: string }>
+}
+
+export default async function ArchitectsPage({ searchParams }: PageProps) {
+  const params = await searchParams
+  const inviteEmail = params.inviteEmail ?? null
+
+  let preloadedCompany = null
+  if (inviteEmail) {
+    try {
+      preloadedCompany = await lookupCompanyByEmailDomain(inviteEmail)
+    } catch {}
+
+    // Track prospect visit
+    try {
+      const serviceClient = createServiceRoleSupabaseClient()
+      const { data: prospect } = await serviceClient
+        .from("prospects")
+        .select("id, status")
+        .eq("email", inviteEmail)
+        .in("status", ["prospect", "contacted"])
+        .maybeSingle()
+      if (prospect) {
+        await serviceClient.from("prospects").update({
+          status: "visitor",
+          landing_visited_at: new Date().toISOString(),
+        }).eq("id", prospect.id)
+      }
+    } catch {}
+  }
+
   const rawProjects = await fetchDiscoverProjects()
 
   // Deduplicate by firm (max 1 project per owner), then take 6
@@ -25,7 +58,7 @@ export default async function ArchitectsPage() {
 
   return (
     <Suspense>
-      <ArchitectsClient projects={carouselProjects} />
+      <ArchitectsClient projects={carouselProjects} preloadedCompany={preloadedCompany} inviteEmail={inviteEmail} />
     </Suspense>
   )
 }

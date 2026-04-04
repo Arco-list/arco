@@ -22,7 +22,7 @@ type Driver = keyof typeof DRIVER
 const G = 36 // grid gap — enough for conversion % labels
 
 // Mini sparkline for lifecycle cards — with dots and value labels
-function CardSparkline({ datapoints, color, rollingLabel }: { datapoints: number[]; color: string; rollingLabel?: string }) {
+function CardSparkline({ datapoints, color }: { datapoints: number[]; color: string }) {
   if (!datapoints || datapoints.length === 0) return null
   const max = Math.max(...datapoints, 1)
   const n = datapoints.length
@@ -45,35 +45,33 @@ function CardSparkline({ datapoints, color, rollingLabel }: { datapoints: number
 
   return (
     <div className="relative w-full" style={{ height: h }}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
+      {/* Lines SVG — stretched to fill */}
+      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
         <polyline points={solidLine} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
         {last && rolling && (
           <line x1={last.x} y1={last.y} x2={rolling.x} y2={rolling.y}
             stroke={color} strokeWidth="1.5" strokeDasharray="3,3" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
         )}
       </svg>
+      {/* Dots + labels — positioned with percentage */}
       {points.map((p, i) => {
         const leftPct = (p.x / w) * 100
         const topPct = (p.y / h) * 100
         return (
-          <div key={i} className="absolute" style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%, -50%)" }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", border: `1.5px solid ${color}`, background: "white", opacity: p.isRolling ? 0.5 : 1 }} />
-            {p.isRolling && (
-              <span
-                className="absolute whitespace-nowrap"
-                style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 2, fontSize: 12, fontWeight: 600, color: "#1c1c1a" }}
-              >
-                {p.v}
-              </span>
-            )}
+          <div key={i} className="group/dot" style={{ position: "absolute", left: `${leftPct}%`, top: `${topPct}%`, padding: 4, margin: -4, zIndex: 2 }}>
+            <svg width="7" height="7" viewBox="0 0 7 7" style={{ display: "block", position: "absolute", left: "50%", top: "50%", marginLeft: "-3.5px", marginTop: "-3.5px" }}>
+              <circle cx="3.5" cy="3.5" r="2.5" fill="white" stroke={color} strokeWidth="1.5" opacity={p.isRolling ? 0.6 : 1} />
+            </svg>
+            {/* Number label above dot */}
+            <span
+              className={`absolute whitespace-nowrap ${p.isRolling ? "" : "opacity-0 group-hover/dot:opacity-100 transition-opacity"}`}
+              style={{ left: 0, top: 0, transform: "translate(-50%, -100%)", marginTop: -5, fontSize: 11, fontWeight: 500, color: "#1c1c1a", pointerEvents: p.isRolling ? undefined : "none" }}
+            >
+              {p.v}
+            </span>
           </div>
         )
       })}
-      {rollingLabel && (
-        <div style={{ textAlign: "right", marginTop: 1 }}>
-          <span style={{ fontSize: 8, color: "#a1a1a0" }}>{rollingLabel}</span>
-        </div>
-      )}
     </div>
   )
 }
@@ -134,7 +132,10 @@ function Card({ label, value, driver, connRight, connDown, connUp, datapoints, m
           <span className="status-pill-dot" style={{ background: c.label }} />
           <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 400, color: "var(--text-primary)" }}>{label}</span>
         </div>
-        {datapoints && <CardSparkline datapoints={datapoints} color={c.label} rollingLabel={timeframe ? ROLLING_LABEL[timeframe] : undefined} />}
+        {datapoints && <CardSparkline datapoints={datapoints} color={c.label} />}
+        {timeframe && (
+          <span className="absolute bottom-2 right-3" style={{ fontSize: 8, color: "#a1a1a0" }}>{ROLLING_LABEL[timeframe]}</span>
+        )}
       </div>
     </div>
   )
@@ -190,7 +191,13 @@ export function GrowthClient({ initialMetrics }: Props) {
     return "months"
   })
   const [isPending, startTransition] = useTransition()
-  const [view, setView] = useState<"lifecycle" | "table">("lifecycle")
+  const [view, setView] = useState<"lifecycle" | "table">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("arco_growth_view")
+      if (saved === "lifecycle" || saved === "table") return saved
+    }
+    return "lifecycle"
+  })
   const [tableRows, setTableRows] = useState<MetricRow[]>([])
   const [tableLabels, setTableLabels] = useState<string[]>([])
   const [posthogData, setPosthogData] = useState<{
@@ -321,6 +328,7 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   const handleViewChange = (v: "lifecycle" | "table") => {
     setView(v)
+    if (typeof window !== "undefined") localStorage.setItem("arco_growth_view", v)
     if (v === "table" && tableRows.length === 0) {
       startTransition(async () => {
         const data = await fetchMetricTable(timeframe)
@@ -342,14 +350,14 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h3 className="arco-section-title">Growth</h3>
           <p className="text-xs text-[#a1a1a0] mt-0.5">
             Lifecycle model and key metrics · <a href="/admin/growth/events" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Tracking events</a>
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {/* View toggle */}
           <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
             <button
@@ -396,8 +404,8 @@ export function GrowthClient({ initialMetrics }: Props) {
           clientSourceSeries={posthogData.clientSourceSeries} proSourceSeries={posthogData.proSourceSeries}
         />
       ) : (
-      <div className="mb-12">
-        <p className="arco-h4 mb-6">Lifecycle Model</p>
+      <div className="mb-12 overflow-x-auto">
+        <div style={{ minWidth: 1100 }}>
 
         {/* Column headers */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: G, marginBottom: 16 }}>
@@ -491,6 +499,7 @@ export function GrowthClient({ initialMetrics }: Props) {
           <Empty /><Empty />
           <Card label="Inviters" metricKey="inviters" onCardClick={openDetail} value={pr.inviterCompanies} driver="retention" connUp="" timeframe={timeframe} datapoints={dp("inviters")} />
           <Empty /><Empty /><Empty /><Empty />
+        </div>
         </div>
       </div>
       )}

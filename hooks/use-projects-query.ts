@@ -32,8 +32,13 @@ const escapeIlikePattern = (value: string) =>
     .replace(/[%_]/g, "\\$&")
     .replace(/'/g, "''")
 
-const applyTypeFilters = (query: any, selectedTypes: string[]) => {
-  return query.in("project_type", selectedTypes)
+const applyTypeFilters = (query: any, selectedTypes: string[], categoriesById: Map<string, any>) => {
+  // Resolve category UUIDs to slugs for matching against primary_category_slug
+  const slugs = selectedTypes
+    .map((id) => categoriesById.get(id)?.slug)
+    .filter(Boolean) as string[]
+  if (slugs.length === 0) return query
+  return query.in("primary_category_slug", slugs)
 }
 
 interface UseProjectsQueryOptions {
@@ -317,7 +322,7 @@ export function useProjectsQuery({
       }
 
       if (filters.types.length > 0) {
-        query = applyTypeFilters(query, filters.types)
+        query = applyTypeFilters(query, filters.types, categoriesById)
       }
 
       if (filters.styles.length > 0) {

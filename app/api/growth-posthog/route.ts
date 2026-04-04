@@ -42,74 +42,65 @@ export async function GET(request: NextRequest) {
   const dateFrom = dateFromMap[tf] ?? "-8m"
   const posthogInterval = intervalMap[tf] ?? "month"
 
+  const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
   try {
-    const [proVisitors, clientVisitors, totalProjectShares, uniqueProjectSharers, totalProShares, uniqueProSharers, apolloVisitors, inviteVisitors, clientActives, sharersSeries, proVisitorsSeries, clientVisitorsSeries, clientActivesSeries, apolloVisitorsSeries, inviteVisitorsSeries, clientSourcesRaw, proSourcesRaw] = await Promise.all([
-      // Pro visitors: /businesses pages
+    // Batch 1: Core counts (6 calls)
+    const [proVisitors, clientVisitors, totalProjectShares, uniqueProjectSharers, totalProShares, uniqueProSharers] = await Promise.all([
       fetchEventCount(apiKey, dateFrom, "$pageview", [
         { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
       ], "dau"),
-      // Client visitors: everything except /businesses, /admin, /dashboard
       fetchEventCount(apiKey, dateFrom, "$pageview", [
         { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
       ], "dau"),
-      // Total shares (projects + professionals)
       fetchEventCount(apiKey, dateFrom, "project_shared", [], "total"),
-      // Unique users who shared (projects)
       fetchEventCount(apiKey, dateFrom, "project_shared", [], "dau"),
-      // Total professional shares
       fetchEventCount(apiKey, dateFrom, "professional_shared", [], "total"),
-      // Unique users who shared (professionals)
       fetchEventCount(apiKey, dateFrom, "professional_shared", [], "dau"),
-      // Pro visitors from Apollo (URL contains ref=)
-      fetchEventCount(apiKey, dateFrom, "$pageview", [
-        { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
-        { key: "$current_url", operator: "icontains", value: "ref=", type: "event" },
-      ], "dau"),
-      // Pro visitors from invites (URL contains inviteEmail=)
-      fetchEventCount(apiKey, dateFrom, "$pageview", [
-        { key: "$current_url", operator: "icontains", value: "inviteEmail=", type: "event" },
-      ], "dau"),
-      // Client actives: unique visitors
-      fetchEventCount(apiKey, dateFrom, "$pageview", [
-        { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
-      ], "dau"),
-      // Sharers time series
+    ])
+
+    await delay(500)
+
+    // Batch 2: Time series (6 calls)
+    const [sharersSeries, proVisitorsSeries, clientVisitorsSeries, clientActivesSeries, apolloVisitorsSeries, inviteVisitorsSeries] = await Promise.all([
       fetchTimeSeries(apiKey, dateFrom, [], "project_shared", posthogInterval),
-      // Pro visitors time series (6 buckets)
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
       ], "$pageview", posthogInterval),
-      // Client visitors time series
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
       ], "$pageview", posthogInterval),
-      // Client actives time series
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
       ], "$pageview", posthogInterval),
-      // Apollo visitors time series
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "icontains", value: "ref=", type: "event" },
       ], "$pageview", posthogInterval),
-      // Invite visitors time series
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "inviteEmail=", type: "event" },
       ], "$pageview", posthogInterval),
-      // Client source breakdown (referring domain)
+    ])
+
+    // Derive counts from series to avoid extra API calls
+    const clientActives = clientVisitors // same query
+    const apolloVisitors = apolloVisitorsSeries.reduce((a, b) => a + b, 0)
+    const inviteVisitors = inviteVisitorsSeries.reduce((a, b) => a + b, 0)
+
+    await delay(500)
+
+    // Batch 3: Source breakdowns (2 calls)
+    const [clientSourcesRaw, proSourcesRaw] = await Promise.all([
       fetchSourceBreakdown(apiKey, dateFrom, [
         { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
       ]),
-      // Pro source breakdown (referring domain)
       fetchSourceBreakdown(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
       ]),
@@ -132,7 +123,9 @@ export async function GET(request: NextRequest) {
     const uniqueSharers = Math.max(uniqueProjectSharers ?? 0, uniqueProSharers ?? 0)
     const sharesPerClient = uniqueSharers > 0 ? Math.round((totalShares / uniqueSharers) * 10) / 10 : 0
 
-    // Fetch per-source time series for visitor breakdown charts
+    await delay(500)
+
+    // Batch 4: Per-source time series (8 calls)
     const [directClientSeries, googleClientSeries, socialClientSeries, emailClientSeries, referralClientSeries,
            directProSeries, googleProSeries, referralProSeries] = await Promise.all([
       // Client source series

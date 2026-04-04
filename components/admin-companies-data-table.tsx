@@ -270,6 +270,65 @@ function ensureHttp(url: string | null): string | null {
   return `https://${url}`
 }
 
+function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow; onVerify: () => void; onRefresh: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(company.domain ?? "")
+
+  const handleSave = async () => {
+    setEditing(false)
+    const trimmed = value.trim().toLowerCase()
+    if (trimmed === (company.domain ?? "")) return
+    const supabase = getBrowserSupabaseClient()
+    await supabase.from("companies").update({ domain: trimmed || null } as any).eq("id", company.id)
+    toast.success("Domain updated")
+    onRefresh()
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        className="text-xs text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-[120px]"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setValue(company.domain ?? ""); setEditing(false) } }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    )
+  }
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        className="text-xs text-[#6b6b68] hover:text-[#1c1c1a] transition-colors cursor-pointer"
+        onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+        title="Click to edit domain"
+      >
+        {company.domain || <span className="text-[#c4c4c2] italic">Add domain...</span>}
+      </button>
+      <button
+        type="button"
+        className="shrink-0 hover:opacity-70 transition-opacity cursor-pointer"
+        onClick={(e) => { e.stopPropagation(); onVerify() }}
+        title={company.isVerified ? "Verified" : "Click to verify"}
+      >
+        {company.isVerified ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-emerald-500">
+            <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[#a1a1a0]">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        )}
+      </button>
+    </div>
+  )
+}
+
 export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const router = useRouter()
   const [showAddModal, setShowAddModal] = useState(false)
@@ -429,7 +488,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           toast.error(result.error ?? "Failed to update company status")
           return
         }
-        toast.success(`${statusChange.company.name} status updated to ${STATUS_LABEL[statusChange.selectedStatus]}`)
+        if (statusChange.selectedStatus === ("prospected" as any)) {
+          toast.success(`${statusChange.company.name} set to Prospected — prospect email sent`)
+        } else {
+          toast.success(`${statusChange.company.name} status updated to ${STATUS_LABEL[statusChange.selectedStatus]}`)
+        }
         router.refresh()
       } catch (error) {
         console.error("Failed to update company status", error)
@@ -614,28 +677,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         header: "Domain",
         cell: ({ row }) => {
           const company = row.original
-          const domain = company.domain
-          const verified = company.isVerified
-          if (!domain) return <span className="text-xs text-[#a1a1a0]">—</span>
-          return (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 text-xs text-[#6b6b68] hover:opacity-70 transition-opacity cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); setDomainVerifyCompany(company) }}
-            >
-              {domain}
-              {verified ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-emerald-500 shrink-0">
-                  <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-[#a1a1a0] shrink-0">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              )}
-            </button>
-          )
+          return <DomainCell company={company} onVerify={() => setDomainVerifyCompany(company)} onRefresh={() => router.refresh()} />
         },
       },
       {
@@ -673,21 +715,21 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         cell: ({ row }) => {
           const company = row.original
 
-          // Company has an owner — show owner info
-          if (company.ownerName || company.ownerEmail) {
-            const initials = (company.ownerName ?? "")
+          // Claimed company with owner — show avatar + name + email
+          if (company.ownerName) {
+            const initials = company.ownerName
               .split(" ")
               .filter(Boolean)
               .map((t) => t[0]?.toUpperCase())
               .slice(0, 2)
-              .join("") || (company.ownerEmail?.charAt(0).toUpperCase() ?? "?")
+              .join("") || "?"
 
             return (
               <div className="flex items-center gap-3">
                 {company.ownerAvatarUrl ? (
                   <img
                     src={company.ownerAvatarUrl}
-                    alt={company.ownerName ?? "Owner"}
+                    alt={company.ownerName}
                     className="h-8 w-8 shrink-0 rounded-full object-cover"
                   />
                 ) : (
@@ -696,9 +738,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </div>
                 )}
                 <div className="flex flex-col min-w-0">
-                  {company.ownerName && (
-                    <span className="text-xs font-medium text-[#1c1c1a] truncate">{company.ownerName}</span>
-                  )}
+                  <span className="text-xs font-medium text-[#1c1c1a] truncate">{company.ownerName}</span>
                   {company.ownerEmail && (
                     <span className="text-[11px] text-[#a1a1a0] truncate">{company.ownerEmail}</span>
                   )}
@@ -707,11 +747,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             )
           }
 
-          // No owner — show email (read-only, managed via Sales table for prospected)
-          const prospectEmail = company.contactEmail
-          if (!prospectEmail) return <span className="text-xs text-[#a1a1a0]">—</span>
+          // Not claimed — show email only (no icon)
+          const email = company.ownerEmail || company.contactEmail
+          if (!email) return <span className="text-xs text-[#a1a1a0]">—</span>
 
-          return <span className="text-[11px] text-[#a1a1a0] truncate">{prospectEmail}</span>
+          return <span className="text-[11px] text-[#a1a1a0] truncate">{email}</span>
         },
       },
       {
@@ -885,15 +925,34 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       },
       {
         id: "autoApprove",
-        header: "Auto-approve",
+        header: "Publish",
         cell: ({ row }) => {
           const company = row.original
           if (company.type === "invite") return null
+
+          const isOff = !company.canPublishProjects
+          const isAuto = company.canPublishProjects && company.autoApproveProjects
+          const isOn = company.canPublishProjects && !company.autoApproveProjects
+          const bg = isOff ? "#d4d4d3" : isAuto ? "#016D75" : "#1c1c1a"
+          const label = isOff ? "Off" : isAuto ? "Auto" : "On"
+          const dotLeft = isOff || isOn ? 2 : "calc(100% - 16px)"
+
           return (
-            <Checkbox
-              checked={company.autoApproveProjects}
-              onCheckedChange={(checked) => toggleAutoApproveProjects(company.id, checked === true)}
-            />
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="relative inline-block shrink-0"
+                style={{ width: 30, height: 16, borderRadius: 8, border: "none", cursor: isOff ? "default" : "pointer", background: bg, transition: "background .2s" }}
+                onClick={isOff ? undefined : (e) => { e.stopPropagation(); toggleAutoApproveProjects(company.id, !company.autoApproveProjects) }}
+              >
+                <span style={{
+                  position: "absolute", top: 2, left: isAuto ? 16 : 2,
+                  width: 12, height: 12, borderRadius: 6, background: "#fff",
+                  transition: "left .2s", boxShadow: "0 1px 2px rgba(0,0,0,.15)",
+                }} />
+              </button>
+              <span style={{ fontSize: 10, fontWeight: 500, color: isOff ? "#c4c4c2" : "#6b6b68" }}>{label}</span>
+            </div>
           )
         },
       },
@@ -1104,7 +1163,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
-                  {(["draft", "listed", "unlisted", "deactivated"] as const).map((s) => (
+                  {(["draft", "listed", "unlisted", "prospected", "deactivated"] as const).map((s) => (
                     <DropdownMenuItem
                       key={s}
                       className="text-xs cursor-pointer flex items-center gap-1.5"
@@ -1452,6 +1511,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               })}
             </div>
 
+            {statusChange.selectedStatus === ("prospected" as any) && (
+              <p style={{ fontSize: 12, color: "#ea580c", margin: "0 0 12px", padding: "8px 12px", background: "#fff7ed", borderRadius: 4 }}>
+                Setting status to Prospected will send a prospect email to {statusChange.company.contactEmail || "the company email"}.
+              </p>
+            )}
+
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" onClick={() => setStatusChange(null)} disabled={isPending} style={{ flex: 1 }}>
                 Cancel
@@ -1463,7 +1528,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 disabled={isPending || statusChange.selectedStatus === (statusChange.company.status === "invited" ? "unlisted" : statusChange.company.status)}
                 style={{ flex: 1 }}
               >
-                {isPending ? "Updating…" : "Update status"}
+                {isPending ? "Updating…" : statusChange.selectedStatus === ("prospected" as any) ? "Send & Update" : "Update status"}
               </button>
             </div>
           </div>

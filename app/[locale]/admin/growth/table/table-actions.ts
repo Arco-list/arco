@@ -4,15 +4,18 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 
 export type Timeframe = "days" | "weeks" | "months" | "years"
 
+export type MetricSource = "posthog" | "supabase"
+
 export type MetricRow = {
   key: string
   label: string
   definition?: string
+  source?: MetricSource
   driver: "acquisition" | "retention" | "monetization" | "churn"
   total: number
   datapoints: number[] // 8 data points (7 completed + 1 rolling)
   labels: string[]     // 8 labels
-  subs: Array<{ key: string; label: string; definition?: string; total: number; datapoints: number[] }>
+  subs: Array<{ key: string; label: string; definition?: string; source?: MetricSource; total: number; datapoints: number[] }>
 }
 
 const DAY_MS = 86400000
@@ -249,7 +252,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const rows: MetricRow[] = [
     // ── Professionals ──────────────────────────────────────────────────
     {
-      key: "pro_visitors", label: "Visitors", definition: "Unique visitors to /businesses pages", driver: "acquisition",
+      key: "pro_visitors", label: "Visitors", definition: "Unique visitors to /businesses pages", source: "posthog" as MetricSource, driver: "acquisition",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "sales_apollo", label: "Sales (Apollo)", definition: "Visitors from Apollo outbound campaigns", total: 0, datapoints: empty8 },
@@ -262,12 +265,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "drafts", label: "Drafts", definition: "Unique companies created", driver: "acquisition",
+      key: "drafts", label: "Drafts", definition: "Unique companies created", source: "supabase" as MetricSource, driver: "acquisition",
       total: draftDates.length, ...drafts,
       subs: [],
     },
     {
-      key: "actives", label: "Listed", definition: "Unique first time listed companies", driver: "retention",
+      key: "actives", label: "Listed", definition: "Unique first time listed companies", source: "supabase" as MetricSource, driver: "retention",
       total: activeDates.length, ...actives,
       subs: [
         { key: "total_listed", label: "Total Listed", definition: "Total listed companies", total: totalListed, datapoints: actives.datapoints },
@@ -275,14 +278,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "responders", label: "Responders", definition: "Unique companies that received an inquiry", driver: "retention",
-      total: 0, datapoints: empty8, labels,
-      subs: [
-        { key: "replies", label: "Replies", definition: "Total replies sent to client inquiries", total: 0, datapoints: empty8 },
-      ],
-    },
-    {
-      key: "publishers", label: "Publishers", definition: "Unique companies that published one or more projects", driver: "retention",
+      key: "publishers", label: "Publishers", definition: "Unique companies that published one or more projects", source: "supabase" as MetricSource, driver: "retention",
       total: publishedDates.length, ...publishers,
       subs: [
         { key: "projects_per_publisher", label: "Projects/publisher", definition: "Avg. published projects per publishing company", total: projectsPerPublisher, datapoints: projectsPerPublisherSeries },
@@ -291,7 +287,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "inviters", label: "Inviters", definition: "Unique companies that invited one or more professionals on a project", driver: "retention",
+      key: "inviters", label: "Inviters", definition: "Unique companies that invited one or more professionals on a project", source: "supabase" as MetricSource, driver: "retention",
       total: inviteDates.length, ...inviters,
       subs: [
         { key: "invites_per_project", label: "Invites/project", definition: "Professionals invited per published project", total: invitesPerProject, datapoints: empty8 },
@@ -299,35 +295,42 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "subscribers", label: "Subscribers", definition: "Unique first time subscriptions", driver: "monetization",
+      key: "responders", label: "Responders", definition: "Unique companies that received an inquiry", source: "posthog" as MetricSource, driver: "retention",
+      total: 0, datapoints: empty8, labels,
+      subs: [
+        { key: "replies", label: "Replies", definition: "Total replies sent to client inquiries", total: 0, datapoints: empty8 },
+      ],
+    },
+    {
+      key: "subscribers", label: "Subscribers", definition: "Unique first time subscriptions", source: "supabase" as MetricSource, driver: "monetization",
       total: subscribedDates.length, ...subscribers,
       subs: [
         { key: "mrr", label: "MRR", definition: "Monthly recurring revenue", total: 0, datapoints: empty8 },
       ],
     },
     {
-      key: "renewals", label: "Renewers", definition: "Unique subscribers that renewed their plan", driver: "monetization",
+      key: "renewals", label: "Renewers", definition: "Unique subscribers that renewed their plan", source: "supabase" as MetricSource, driver: "monetization",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "renewed", label: "Renewed", definition: "Subscriptions renewed this period", total: 0, datapoints: empty8 },
       ],
     },
     {
-      key: "expansions", label: "Expanders", definition: "Unique subscribers that upgraded to a higher plan", driver: "monetization",
+      key: "expansions", label: "Expanders", definition: "Unique subscribers that upgraded to a higher plan", source: "supabase" as MetricSource, driver: "monetization",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "upgrades", label: "Upgrades", definition: "Subscribers that moved to a higher tier", total: 0, datapoints: empty8 },
       ],
     },
     {
-      key: "contractions", label: "Contractors", definition: "Unique subscribers that downgraded to a lower plan", driver: "monetization",
+      key: "contractions", label: "Contractors", definition: "Unique subscribers that downgraded to a lower plan", source: "supabase" as MetricSource, driver: "monetization",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "downgrades", label: "Downgrades", definition: "Subscribers that moved to a lower tier", total: 0, datapoints: empty8 },
       ],
     },
     {
-      key: "churn", label: "Churners", definition: "Unique companies that cancelled or let their subscription expire", driver: "churn",
+      key: "churn", label: "Churners", definition: "Unique companies that cancelled or let their subscription expire", source: "supabase" as MetricSource, driver: "churn",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "lost", label: "Lost", definition: "Companies that left the platform", total: 0, datapoints: empty8 },
@@ -341,7 +344,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     },
     // ── Clients ────────────────────────────────────────────────────────
     {
-      key: "client_visitors", label: "Visitors", definition: "Unique visitors browsing projects and professionals pages", driver: "acquisition",
+      key: "client_visitors", label: "Visitors", definition: "Unique visitors browsing projects and professionals pages", source: "posthog" as MetricSource, driver: "acquisition",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer", total: 0, datapoints: empty8 },
@@ -352,7 +355,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "client_signups", label: "Signups", definition: "New client accounts created", driver: "acquisition",
+      key: "client_signups", label: "Signups", definition: "New client accounts created", source: "supabase" as MetricSource, driver: "acquisition",
       total: clientSignupDates.length, ...clientSignups,
       subs: [
         { key: "google", label: "Google", definition: "Signups via Google OAuth", total: 0, datapoints: empty8 },
@@ -360,28 +363,28 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "sharers", label: "Sharers", definition: "Unique clients that shared a project or professional", driver: "retention",
+      key: "sharers", label: "Sharers", definition: "Unique clients that shared a project or professional", source: "posthog" as MetricSource, driver: "retention",
       total: 0, datapoints: empty8, labels,
       subs: [
-        { key: "shares_per_client", label: "Shares/client", definition: "Average shares per active sharer", total: 0, datapoints: empty8 },
-        { key: "projects_shared", label: "Projects shared", definition: "Total projects shared", total: 0, datapoints: empty8 },
-        { key: "professionals_shared", label: "Professionals shared", definition: "Total professionals shared", total: 0, datapoints: empty8 },
+        { key: "shares_per_client", label: "Shares/client", definition: "Average shares per active sharer", source: "posthog" as MetricSource, total: 0, datapoints: empty8 },
+        { key: "projects_shared", label: "Projects shared", definition: "Total projects shared", source: "posthog" as MetricSource, total: 0, datapoints: empty8 },
+        { key: "professionals_shared", label: "Professionals shared", definition: "Total professionals shared", source: "posthog" as MetricSource, total: 0, datapoints: empty8 },
       ],
     },
     {
-      key: "savers", label: "Savers", definition: "Unique clients that saved a project or professional", driver: "retention",
+      key: "savers", label: "Savers", definition: "Unique clients that saved a project or professional", source: "supabase" as MetricSource, driver: "retention",
       total: uniqueSavers, ...uniqueSaversBucketed,
       subs: [
-        { key: "saves_per_client", label: "Saves/client", definition: "Average saves per active saver", total: savesPerClient, datapoints: savesPerClientSeries },
-        { key: "projects_saved", label: "Projects saved", definition: "Total projects saved", total: savedProjectDates.length, datapoints: savers.datapoints },
-        { key: "pros_saved", label: "Professionals saved", definition: "Total professionals saved", total: savedCompanyDates.length, datapoints: savedPros.datapoints },
+        { key: "saves_per_client", label: "Saves/client", definition: "Average saves per active saver", source: "supabase" as MetricSource, total: savesPerClient, datapoints: savesPerClientSeries },
+        { key: "projects_saved", label: "Projects saved", definition: "Total projects saved", source: "supabase" as MetricSource, total: savedProjectDates.length, datapoints: savers.datapoints },
+        { key: "pros_saved", label: "Professionals saved", definition: "Total professionals saved", source: "supabase" as MetricSource, total: savedCompanyDates.length, datapoints: savedPros.datapoints },
       ],
     },
     {
-      key: "inquirers", label: "Contacters", definition: "Unique clients that contacted a professional via the platform", driver: "retention",
+      key: "inquirers", label: "Contacters", definition: "Unique clients that contacted a professional via the platform", source: "posthog" as MetricSource, driver: "retention",
       total: 0, datapoints: empty8, labels,
       subs: [
-        { key: "contacted", label: "Professionals contacted", definition: "Unique professionals contacted by clients", total: 0, datapoints: empty8 },
+        { key: "contacted", label: "Professionals contacted", definition: "Unique professionals contacted by clients", source: "posthog" as MetricSource, total: 0, datapoints: empty8 },
       ],
     },
   ]

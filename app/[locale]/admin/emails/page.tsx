@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { Fragment, useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { fetchRecentEmails, fetchTemplateStats, sendTestEmail, type ResendEmail, type TemplateStats } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
@@ -25,6 +25,8 @@ type EmailTemplate = {
   sends: number
   deliveryRate: number
   active: boolean
+  drip?: string  // group key for drip sequences
+  dripDay?: number  // day number in the drip
 }
 
 const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
@@ -43,9 +45,9 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true },
   { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true },
   { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true },
-  { id: "welcome-homeowner", name: "Welcome (Day 0)", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true },
-  { id: "discover-projects", name: "Discover Projects (Day 2)", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true },
-  { id: "find-professionals", name: "Find Professionals (Day 5)", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true },
+  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0 },
+  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2 },
+  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5 },
   { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false },
   { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false },
   { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "[Company] is now on Arco", sends: 0, deliveryRate: 100, active: true },
@@ -114,6 +116,25 @@ export default function AdminEmailsPage() {
     .filter(t => audienceFilter === "all-filter" || t.audience === audienceFilter)
   const activeCount = templates.filter(t => t.type === activeTab && t.active).length
   const totalCount = templates.filter(t => t.type === activeTab).length
+
+  // Group drip sequences: first email is the header, rest are collapsed
+  const [expandedDrips, setExpandedDrips] = useState<Set<string>>(new Set())
+  const groupedTemplates = (() => {
+    const result: Array<{ template: EmailTemplate; isDripHeader: boolean; dripCount: number; dripChildren: EmailTemplate[] }> = []
+    const seenDrips = new Set<string>()
+
+    for (const t of filteredTemplates) {
+      if (t.drip) {
+        if (seenDrips.has(t.drip)) continue // skip non-first drip items
+        seenDrips.add(t.drip)
+        const dripItems = filteredTemplates.filter(x => x.drip === t.drip).sort((a, b) => (a.dripDay ?? 0) - (b.dripDay ?? 0))
+        result.push({ template: dripItems[0], isDripHeader: true, dripCount: dripItems.length, dripChildren: dripItems.slice(1) })
+      } else {
+        result.push({ template: t, isDripHeader: false, dripCount: 0, dripChildren: [] })
+      }
+    }
+    return result
+  })()
 
   const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
     sent: { label: "Sent", cls: "bg-[#e6f4f5] text-[#016D75]" },
@@ -226,15 +247,45 @@ export default function AdminEmailsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTemplates.map((t) => (
+                  {groupedTemplates.map(({ template: t, isDripHeader, dripCount, dripChildren }) => (
+                    <Fragment key={t.id}>
                     <tr
-                      key={t.id}
                       className="border-b border-[#e5e5e4] hover:bg-[#fafaf9] cursor-pointer transition-colors"
                       onClick={() => setPreviewTemplate(t.id)}
                     >
                       <td className="px-4 py-3">
-                        <div className="text-sm font-medium text-[#1c1c1a]">{t.name}</div>
-                        <div className="text-[11px] text-[#a1a1a0]">{t.trigger}</div>
+                        <div className="flex items-center gap-2">
+                          {isDripHeader && (
+                            <button
+                              className="shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExpandedDrips((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(t.drip!)) next.delete(t.drip!)
+                                  else next.add(t.drip!)
+                                  return next
+                                })
+                              }}
+                            >
+                              <svg width="10" height="10" viewBox="0 0 10 10" className={`transition-transform ${expandedDrips.has(t.drip!) ? "rotate-90" : ""}`}>
+                                <path d="M3 2L7 5L3 8" stroke="#a1a1a0" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-[#1c1c1a]">{t.name}</span>
+                              {isDripHeader && (
+                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-[#f5f5f4] text-[#6b6b68]">{dripCount} emails</span>
+                              )}
+                              {t.dripDay !== undefined && (
+                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Day {t.dripDay}</span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-[#a1a1a0]">{t.trigger}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[t.audience].cls}`}>
@@ -285,6 +336,61 @@ export default function AdminEmailsPage() {
                         </button>
                       </td>
                     </tr>
+                    {/* Drip children — shown when expanded */}
+                    {isDripHeader && expandedDrips.has(t.drip!) && dripChildren.map((child) => (
+                      <tr
+                        key={child.id}
+                        className="border-b border-[#e5e5e4] bg-[#fafaf9] hover:bg-[#f0f0ee] cursor-pointer transition-colors"
+                        onClick={() => setPreviewTemplate(child.id)}
+                      >
+                        <td className="px-4 py-3 pl-10">
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-[#1c1c1a]">{child.name}</span>
+                                {child.dripDay !== undefined && (
+                                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Day {child.dripDay}</span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-[#a1a1a0]">{child.trigger}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[child.audience].cls}`}>
+                            {AUDIENCE_CONFIG[child.audience].label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-[#6b6b68] max-w-[250px] truncate">{child.subject}</td>
+                        {(() => {
+                          const s = templateStats[child.id]
+                          const sends = s?.sends ?? 0
+                          const deliveryRate = sends > 0 ? Math.round((s.delivered / sends) * 100) : 0
+                          const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
+                          const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
+                          return <>
+                            <td className="px-4 py-2.5 text-xs text-[#6b6b68] text-right">{sends > 0 ? sends.toLocaleString() : "—"}</td>
+                            <td className="px-4 py-2.5 text-xs text-right"><span className={deliveryRate >= 95 ? "text-emerald-600" : deliveryRate > 0 ? "text-amber-600" : "text-[#a1a1a0]"}>{sends > 0 ? `${deliveryRate}%` : "—"}</span></td>
+                            <td className="px-4 py-2.5 text-xs text-right"><span className={openRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
+                            <td className="px-4 py-2.5 text-xs text-right"><span className={clickRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
+                          </>
+                        })()}
+                        <td className="px-4 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={(e) => toggleActive(child.id, e)}
+                            className="relative inline-block"
+                            style={{ width: 34, height: 18, borderRadius: 9, border: "none", cursor: "pointer", background: child.active ? "#016D75" : "#d4d4d4", transition: "background .2s" }}
+                          >
+                            <span style={{
+                              position: "absolute", top: 2, left: child.active ? 18 : 2,
+                              width: 14, height: 14, borderRadius: 7, background: "#fff",
+                              transition: "left .2s", boxShadow: "0 1px 2px rgba(0,0,0,.15)",
+                            }} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

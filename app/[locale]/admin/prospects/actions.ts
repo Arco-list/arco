@@ -11,7 +11,7 @@ export type ProspectStatus =
   | "company"
   | "active"
 
-export type SequenceStatus = "not_started" | "active" | "finished"
+export type SequenceStatus = "not_started" | "active" | "paused" | "finished"
 
 export type Prospect = {
   id: string
@@ -26,6 +26,10 @@ export type Prospect = {
   sequence_status: SequenceStatus
   emails_sent: number
   emails_delivered: number
+  emails_opened: number
+  emails_clicked: number
+  last_email_opened_at: string | null
+  last_email_clicked_at: string | null
   user_id: string | null
   company_id: string | null
   project_id: string | null
@@ -111,37 +115,31 @@ const EMPTY_FUNNEL: ProspectFunnel = {
   total_emails_sent: 0,
 }
 
-export async function fetchFunnel() {
+export async function fetchFunnel(source?: string) {
   const supabase = createServiceRoleSupabaseClient()
 
-  // get_prospect_funnel returns rows like [{status: 'imported', count: 5}, ...]
-  const { data: funnelRows, error: funnelError } = await supabase.rpc("get_prospect_funnel")
+  // Query prospects directly with optional source filter
+  let query = supabase.from("prospects").select("status, emails_sent, source")
+  if (source && source !== "all") {
+    query = query.eq("source", source)
+  }
 
-  // Also get aggregate email stats + contacted breakdown
-  const { data: statsData } = await supabase
-    .from("prospects")
-    .select("emails_sent")
+  const { data: allProspects, error } = await query
 
-  if (funnelError) {
-    console.error("Failed to fetch funnel", funnelError)
+  if (error) {
+    console.error("Failed to fetch funnel", error)
     return { funnel: EMPTY_FUNNEL }
   }
 
   const funnel: ProspectFunnel = { ...EMPTY_FUNNEL }
+  const prospects = (allProspects ?? []) as Array<{ status: string; emails_sent: number; source: string }>
 
-  // Map RPC rows to funnel object
-  const rows = (funnelRows as Array<{ status: string; count: number }>) ?? []
-  for (const row of rows) {
-    const key = row.status as keyof ProspectFunnel
-    if (key in funnel) {
-      (funnel as any)[key] = Number(row.count) || 0
-    }
-    funnel.total += Number(row.count) || 0
-  }
-
-  // Calculate email aggregate stats
-  const prospects = (statsData as Array<{ emails_sent: number }>) ?? []
   for (const p of prospects) {
+    funnel.total++
+    const key = p.status as keyof ProspectFunnel
+    if (key in funnel && typeof (funnel as any)[key] === "number") {
+      (funnel as any)[key] = ((funnel as any)[key] || 0) + 1
+    }
     funnel.total_emails_sent += p.emails_sent || 0
   }
 
@@ -471,12 +469,114 @@ export async function updateProspectEmail(prospectId: string, newEmail: string) 
 
   if (!prospect) return { success: false, error: "Prospect not found" }
 
-  await supabase.from("prospects").update({ email: newEmail }).eq("id", prospectId)
+  // Check if email is already used by another prospect
+  const { data: existing } = await supabase
+    .from("prospects")
+    .select("id")
+    .eq("email", newEmail)
+    .neq("id", prospectId)
+    .maybeSingle()
+
+  if (existing) {
+    return { success: false, error: `Email ${newEmail} is already used by another prospect` }
+  }
+
+  const { error: updateError } = await supabase.from("prospects").update({ email: newEmail }).eq("id", prospectId)
+
+  if (updateError) {
+    return { success: false, error: "Failed to update email" }
+  }
 
   // Sync to companies table for Arco source
   if (prospect.source === "arco" && prospect.company_id) {
     await supabase.from("companies").update({ email: newEmail }).eq("id", prospect.company_id)
   }
+
+  return { success: true }
+}
+
+/**
+ * Pause a prospect sequence
+ */
+export async function pauseProspectSequence(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, sequence_status")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (prospect.sequence_status !== "active" && prospect.sequence_status !== "finished") {
+    return { success: false, error: "Sequence is not active" }
+  }
+
+  await supabase.from("prospects").update({ sequence_status: "paused" }).eq("id", prospectId)
+  return { success: true }
+}
+
+/**
+ * Resume a paused prospect sequence
+ */
+export async function resumeProspectSequence(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, sequence_status")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (prospect.sequence_status !== "paused") {
+    return { success: false, error: "Sequence is not paused" }
+  }
+
+  await supabase.from("prospects").update({ sequence_status: "finished" }).eq("id", prospectId)
+  return { success: true }
+}
+
+/**
+ * Restart a prospect sequence — resend the email
+ */
+export async function restartProspectSequence(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, email, company_id, source, emails_sent, sequence_status")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (!prospect.company_id) return { success: false, error: "No linked company" }
+  if (prospect.source !== "arco") return { success: false, error: "Restart only available for Arco prospects" }
+
+  // Set sequence to active
+  await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
+
+  // Send the prospect email
+  const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
+  const result = await sendProspectEmailAction({
+    companyId: prospect.company_id,
+    emailTo: prospect.email,
+  })
+
+  if (!result.success) {
+    await supabase.from("prospects").update({ sequence_status: prospect.sequence_status ?? "not_started" }).eq("id", prospectId)
+    return { success: false, error: result.error }
+  }
+
+  await supabase.from("prospects").update({
+    sequence_status: "finished",
+    emails_sent: (prospect.emails_sent ?? 0) + 1,
+    emails_delivered: (prospect.emails_delivered ?? 0) + 1,
+    last_email_sent_at: new Date().toISOString(),
+  }).eq("id", prospectId)
+
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "email_resent",
+    metadata: { template: "prospect_intro", email: prospect.email },
+  })
 
   return { success: true }
 }

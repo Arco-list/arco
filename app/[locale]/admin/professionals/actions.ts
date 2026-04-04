@@ -221,7 +221,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
         .maybeSingle()
 
       if (!existing) {
-        await serviceClient.from("prospects").insert({
+        const { data: newProspect } = await serviceClient.from("prospects").insert({
           email: company.email ?? "",
           contact_name: null,
           company_name: company.name,
@@ -233,7 +233,17 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
           emails_delivered: 0,
           company_id: company.id,
           ref_code: company.slug ?? company.id,
-        })
+        }).select("id").single()
+
+        // Auto-send prospect email if company has an email
+        if (newProspect && company.email) {
+          try {
+            const { startProspectSequence } = await import("@/app/admin/prospects/actions")
+            await startProspectSequence(newProspect.id)
+          } catch (err) {
+            console.error("Auto-send prospect email failed:", err)
+          }
+        }
       }
     }
   }
@@ -636,6 +646,8 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
 
   await serviceRole.from("saved_companies").delete().eq("company_id", companyId)
   await serviceRole.from("reviews").delete().eq("company_id", companyId)
+  await serviceRole.from("prospects").delete().eq("company_id", companyId)
+  await serviceRole.from("company_outreach" as any).delete().eq("company_id", companyId)
 
   // Get owner_id before deleting
   const { data: company } = await serviceRole
@@ -833,9 +845,25 @@ export async function sendProspectEmailAction(input: {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
   const companyPageUrl = `${siteUrl}/professionals/${company.slug}`
-  const claimUrl = `${siteUrl}/businesses/professionals?inviteEmail=${encodeURIComponent(emailResult.data)}`
+  const claimUrl = `${siteUrl}/businesses/architects?inviteEmail=${encodeURIComponent(emailResult.data)}`
   const serviceName = (company.primary_service as any)?.name ?? null
   const locationParts = [serviceName, company.city].filter(Boolean)
+
+  // Get hero image — fallback to primary photo of first published project
+  let heroImageUrl = company.hero_photo_url
+  if (!heroImageUrl) {
+    const { data: projectPhoto } = await serviceClient
+      .from("project_professionals")
+      .select("project_id, projects!inner(id, status, project_photos(url, is_primary, order_index))")
+      .eq("company_id", company.id)
+      .eq("projects.status", "published")
+      .limit(1)
+      .maybeSingle()
+
+    const photos = (projectPhoto as any)?.projects?.project_photos ?? []
+    const primary = photos.find((p: any) => p.is_primary) ?? photos.sort((a: any, b: any) => a.order_index - b.order_index)[0]
+    heroImageUrl = primary?.url ?? null
+  }
 
   // Send email via Resend
   const { sendTransactionalEmail } = await import("@/lib/email-service")
@@ -843,7 +871,7 @@ export async function sendProspectEmailAction(input: {
     company_name: company.name,
     company_page_url: companyPageUrl,
     claim_url: claimUrl,
-    hero_image_url: company.hero_photo_url ?? undefined,
+    hero_image_url: heroImageUrl ?? undefined,
     logo_url: company.logo_url ?? undefined,
     company_subtitle: locationParts.join(" · ") || undefined,
   })
@@ -857,6 +885,7 @@ export async function sendProspectEmailAction(input: {
     company_id: company.id,
     email_to: emailResult.data,
     template: "prospect_intro",
+    resend_message_id: sendResult.messageId ?? null,
   })
 
   // Update company status to prospected (only if no owner)

@@ -1,5 +1,5 @@
 import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import ProfessionalsLandingClient from "./professionals-landing-client"
 
 export interface RecentProfessional {
@@ -25,6 +25,26 @@ export default async function ProfessionalsPage({ searchParams }: PageProps) {
       preloadedCompany = await lookupCompanyByEmailDomain(inviteEmail)
     } catch (e) {
       console.error("[ProfessionalsPage] Company lookup failed:", e)
+    }
+
+    // Track prospect visit: update status from contacted → visitor
+    try {
+      const serviceClient = createServiceRoleSupabaseClient()
+      const { data: prospect } = await serviceClient
+        .from("prospects")
+        .select("id, status")
+        .eq("email", inviteEmail)
+        .in("status", ["prospect", "contacted"])
+        .maybeSingle()
+
+      if (prospect) {
+        await serviceClient.from("prospects").update({
+          status: "visitor",
+          landing_visited_at: new Date().toISOString(),
+        }).eq("id", prospect.id)
+      }
+    } catch (e) {
+      console.error("[ProfessionalsPage] Prospect tracking failed:", e)
     }
   }
 

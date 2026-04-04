@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import type { MetricRow } from "./table-actions"
 
 const DRIVER_COLORS: Record<string, string> = {
@@ -15,7 +15,7 @@ const DRIVER_COLORS: Record<string, string> = {
 function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; labels: string[]; color: string }) {
   const max = Math.max(...datapoints, 1)
   const n = datapoints.length
-  const padX = 14
+  const padX = 6
   const padY = 16
   const w = 100
   const h = 50
@@ -35,28 +35,31 @@ function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; la
 
   return (
     <div className="relative w-full" style={{ height: 60 }}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      {/* Lines SVG — stretched to fill */}
+      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
         {points.map((p, i) => (
           <line key={i} x1={p.x} y1={0} x2={p.x} y2={h} stroke="#f0f0ee" strokeWidth="0.3" vectorEffect="non-scaling-stroke" />
         ))}
-        {/* Solid trend line (completed periods) */}
         <polyline points={solidPoints} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Dotted line to rolling period */}
         {dottedLine && (
           <line x1={dottedLine.x1} y1={dottedLine.y1} x2={dottedLine.x2} y2={dottedLine.y2}
             stroke={color} strokeWidth="1.5" strokeDasharray="3,3" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
         )}
       </svg>
 
+      {/* Dots + labels — positioned with percentage to match viewBox */}
       {points.map((p, i) => {
         const leftPct = (p.x / w) * 100
         const topPct = (p.y / h) * 100
         return (
-          <div key={i} className="absolute" style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%, -50%)" }}>
-            <div className="w-[7px] h-[7px] rounded-full border-[1.5px] bg-white" style={{ borderColor: color, opacity: p.isRolling ? 0.6 : 1 }} />
+          <div key={i} style={{ position: "absolute", left: `${leftPct}%`, top: `${topPct}%` }}>
+            {/* Dot — rendered as a separate non-stretched SVG centered on the point */}
+            <svg width="7" height="7" viewBox="0 0 7 7" style={{ display: "block", position: "absolute", left: "-3.5px", top: "-3.5px" }}>
+              <circle cx="3.5" cy="3.5" r="2.5" fill="white" stroke={color} strokeWidth="1.5" opacity={p.isRolling ? 0.6 : 1} />
+            </svg>
             <span
               className="absolute text-[11px] font-medium whitespace-nowrap"
-              style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 4, color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
+              style={{ bottom: 4, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : "·"}
             </span>
@@ -80,7 +83,7 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
 
   const max = Math.max(...datapoints, 1)
   const n = datapoints.length
-  const padX = 14
+  const padX = 6
   const padY = 10
   const w = 100
   const h = 40
@@ -98,7 +101,7 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
 
   return (
     <div className="relative w-full" style={{ height: 40 }}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
         <polyline points={solidPoints} fill="none" stroke="#a1a1a0" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
         {dottedLine && (
           <line x1={dottedLine.x1} y1={dottedLine.y1} x2={dottedLine.x2} y2={dottedLine.y2}
@@ -109,11 +112,13 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
         const leftPct = (p.x / w) * 100
         const topPct = (p.y / h) * 100
         return (
-          <div key={i} className="absolute" style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: "translate(-50%, -50%)" }}>
-            <div className="w-[5px] h-[5px] rounded-full border bg-white" style={{ borderColor: "#a1a1a0", opacity: p.isRolling ? 0.5 : 1 }} />
+          <div key={i} style={{ position: "absolute", left: `${leftPct}%`, top: `${topPct}%` }}>
+            <svg width="5" height="5" viewBox="0 0 5 5" style={{ display: "block", position: "absolute", left: "-2.5px", top: "-2.5px" }}>
+              <circle cx="2.5" cy="2.5" r="1.75" fill="white" stroke="#a1a1a0" strokeWidth="1" opacity={p.isRolling ? 0.5 : 1} />
+            </svg>
             <span
               className="absolute text-[10px] font-medium whitespace-nowrap"
-              style={{ bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 2, color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
+              style={{ bottom: 3, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : ""}
             </span>
@@ -133,12 +138,12 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
 
   return (
     <>
+      {/* Desktop row */}
       <tr
-        className={`border-b border-[#f0f0ee] hover:bg-[#fafaf9] transition-colors ${hasSubs ? "cursor-pointer" : ""}`}
+        className={`border-b border-[#f0f0ee] hover:bg-[#fafaf9] transition-colors hidden md:table-row ${hasSubs ? "cursor-pointer" : ""}`}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
-        {/* Metric name */}
-        <td className="px-4 py-2" style={{ width: "14%" }}>
+        <td className="px-4 py-2">
           <div className="flex items-center gap-2">
             {hasSubs ? (
               <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
@@ -149,33 +154,69 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
             <span className="text-[12px] font-medium text-[#1c1c1a]">{row.label}</span>
           </div>
         </td>
-
-        {/* Definition */}
-        <td className="px-3 py-2" style={{ width: "24%" }}>
+        <td className="px-3 py-2">
           <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
+          {row.source && (
+            <span className={`ml-1.5 text-[9px] font-medium px-1.5 py-0.5 rounded ${row.source === "posthog" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>
+              {row.source === "posthog" ? "PostHog" : "Supabase"}
+            </span>
+          )}
         </td>
-
-        {/* Combined trendline */}
-        <td className="px-4 py-2" style={{ width: "60%" }}>
+        <td className="px-4 py-2">
+          <TrendlineCell datapoints={row.datapoints} labels={labels} color={color} />
+        </td>
+      </tr>
+      {/* Mobile row — single cell spanning full width */}
+      <tr
+        className={`border-b border-[#f0f0ee] md:hidden ${hasSubs ? "cursor-pointer" : ""}`}
+        onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
+      >
+        <td className="px-3 py-2" colSpan={3}>
+          <div className="flex items-center gap-1.5 mb-1">
+            {hasSubs ? (
+              <svg width="8" height="8" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
+                <path d="M3 2L7 5L3 8" stroke="#a1a1a0" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+              </svg>
+            ) : <div style={{ width: 8 }} />}
+            <span className="status-pill-dot shrink-0" style={{ background: color, width: 5, height: 5 }} />
+            <span className="text-[11px] font-medium text-[#1c1c1a]">{row.label}</span>
+          </div>
           <TrendlineCell datapoints={row.datapoints} labels={labels} color={color} />
         </td>
       </tr>
 
       {/* Expanded sub-metrics */}
       {expanded && row.subs.map((sub) => (
-        <tr key={sub.key} className="border-b border-[#f0f0ee]">
-          <td className="px-4 py-1.5">
-            <div className="flex items-center gap-2 pl-7">
-              <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
-            </div>
-          </td>
-          <td className="px-3 py-1.5">
-            <span className="text-[10px] text-[#c4c4c2]">{sub.definition ?? ""}</span>
-          </td>
-          <td className="px-4 py-1.5">
-            <SubTrendlineCell datapoints={sub.datapoints} />
-          </td>
-        </tr>
+        <Fragment key={sub.key}>
+          {/* Desktop sub-row */}
+          <tr className="border-b border-[#f0f0ee] hidden md:table-row">
+            <td className="px-4 py-1.5">
+              <div className="flex items-center gap-2 pl-7">
+                <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
+              </div>
+            </td>
+            <td className="px-3 py-1.5">
+              <span className="text-[10px] text-[#c4c4c2]">{sub.definition ?? ""}</span>
+              {sub.source && (
+                <span className={`ml-1 text-[8px] font-medium px-1 py-0.5 rounded ${sub.source === "posthog" ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"}`}>
+                  {sub.source === "posthog" ? "PostHog" : "Supabase"}
+                </span>
+              )}
+            </td>
+            <td className="px-4 py-1.5">
+              <SubTrendlineCell datapoints={sub.datapoints} />
+            </td>
+          </tr>
+          {/* Mobile sub-row */}
+          <tr className="border-b border-[#f0f0ee] md:hidden">
+            <td className="px-3 py-1.5" colSpan={3}>
+              <div className="flex items-center gap-1.5 mb-0.5 pl-3">
+                <span className="text-[10px] text-[#6b6b68]">{sub.label}</span>
+              </div>
+              <SubTrendlineCell datapoints={sub.datapoints} />
+            </td>
+          </tr>
+        </Fragment>
       ))}
     </>
   )
@@ -268,16 +309,37 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
 
   return (
     <div className="border border-[#e5e5e4] rounded-[3px] overflow-hidden">
-      <table className="w-full table-fixed">
-        <thead>
+      {/* Date labels — full width on mobile, positioned to match SVG dot coordinates */}
+      <div className="bg-[#fafaf9] border-b border-[#e5e5e4] md:hidden py-2 px-3">
+        <div className="relative" style={{ height: 16 }}>
+          {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => {
+            const n = arr.length
+            const leftPct = (6 + (i / (n - 1)) * (100 - 12))
+            return (
+              <span key={i} className="absolute text-[9px] font-medium uppercase tracking-wider" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
+            )
+          })}
+        </div>
+      </div>
+      <table className="w-full md:table-fixed">
+        <colgroup className="hidden md:table-column-group">
+          <col style={{ width: "16%" }} />
+          <col style={{ width: "24%" }} />
+          <col />
+        </colgroup>
+        <thead className="hidden md:table-header-group">
           <tr className="bg-[#fafaf9] border-b border-[#e5e5e4]">
-            <th className="px-4 py-2 text-left" style={{ width: "16%" }}><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
-            <th className="px-3 py-2 text-left" style={{ width: "24%" }}><span className="arco-eyebrow text-[#a1a1a0]">Definition</span></th>
-            <th className="px-4 py-2" style={{ width: "60%" }}>
-              <div className="flex justify-between" style={{ paddingLeft: "calc(14%)", paddingRight: "calc(14%)" }}>
-                {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => (
-                  <span key={i} className="arco-eyebrow" style={{ color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
-                ))}
+            <th className="px-4 py-2 text-left"><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
+            <th className="px-3 py-2 text-left"><span className="arco-eyebrow text-[#a1a1a0]">Definition</span></th>
+            <th className="px-4 py-2">
+              <div className="relative" style={{ height: 16 }}>
+                {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => {
+                  const n = arr.length
+                  const leftPct = (6 + (i / (n - 1)) * (100 - 12))
+                  return (
+                    <span key={i} className="absolute arco-eyebrow" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
+                  )
+                })}
               </div>
             </th>
           </tr>

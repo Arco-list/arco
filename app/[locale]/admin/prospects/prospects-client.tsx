@@ -11,6 +11,9 @@ import {
   fetchFunnel,
   startProspectSequence,
   updateProspectEmail,
+  pauseProspectSequence,
+  resumeProspectSequence,
+  restartProspectSequence,
   type Prospect,
   type ProspectFunnel,
   type ProspectStatus,
@@ -24,6 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { MoreHorizontal } from "lucide-react"
 
 // -- Status config -----------------------------------------------------------
 
@@ -43,6 +54,7 @@ const ALL_STATUSES: ProspectStatus[] = [
 const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
   not_started: { label: "Not started", dot: "bg-[#a1a1a0]" },
   active: { label: "Active", dot: "bg-blue-400" },
+  paused: { label: "Paused", dot: "bg-amber-400" },
   finished: { label: "Finished", dot: "bg-emerald-500" },
 }
 
@@ -204,7 +216,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
         fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 }),
-        fetchFunnel(),
+        fetchFunnel(sourceFilter),
       ])
       setProspects(prospectsResult.prospects)
       setFunnel(funnelResult.funnel)
@@ -224,7 +236,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
         fetchProspects({ status: s, source: src, sequence: seq, search, offset: 0, limit: 50 }),
-        fetchFunnel(),
+        fetchFunnel(src),
       ])
       setProspects(prospectsResult.prospects)
       setFunnel(funnelResult.funnel)
@@ -350,7 +362,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
           <div>
             <h3 className="arco-section-title">Sales</h3>
             <p className="text-xs text-[#a1a1a0] mt-0.5">
-              {funnel.total} total · {funnel.active} active
+              {prospects.length} shown · {funnel.total} total
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -535,7 +547,7 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
 
       {/* Prospects table */}
       <div className="border border-[#e5e5e4] overflow-x-auto max-w-full">
-        <table className="w-full text-sm" style={{ minWidth: 900 }}>
+        <table className="w-full text-sm" style={{ minWidth: 1050 }}>
           <thead>
             <tr className="border-b border-[#e5e5e4]">
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Contact</th>
@@ -543,16 +555,18 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Sequence</th>
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Company</th>
               <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Sent</th>
+              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivered</th>
               <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Opened</th>
               <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Clicked</th>
               <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Source</th>
               <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Created</th>
+              <th className="w-[40px]"></th>
             </tr>
           </thead>
           <tbody>
             {prospects.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={11} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
                   No prospects found.
                 </td>
               </tr>
@@ -601,34 +615,15 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                       <span className="text-xs font-medium text-[#1c1c1a] whitespace-nowrap">{STATUS_CONFIG[p.status].label}</span>
                     </div>
                   </td>
-                  {/* Sequence — dot + label + Start button for arco prospects */}
+                  {/* Sequence — dot + label */}
                   <td className="px-4 py-3">
                     {(() => {
                       const seq = (p.sequence_status ?? "not_started") as SequenceStatus
                       const cfg = SEQUENCE_CONFIG[seq] ?? SEQUENCE_CONFIG.not_started
-                      const canStart = p.source === "arco" && seq === "not_started"
                       return (
                         <div className="flex items-center gap-1.5">
                           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
                           <span className="text-xs text-[#1c1c1a] whitespace-nowrap">{cfg.label}</span>
-                          {canStart && (
-                            <button
-                              type="button"
-                              className="ml-1 text-[10px] font-medium px-2 py-0.5 rounded bg-[#1c1c1a] text-white hover:opacity-80 transition-opacity"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                const result = await startProspectSequence(p.id)
-                                if (result.success) {
-                                  toast.success("Prospect email sent")
-                                  refreshData()
-                                } else {
-                                  toast.error(result.error ?? "Failed to send")
-                                }
-                              }}
-                            >
-                              Start
-                            </button>
-                          )}
                         </div>
                       )
                     })()}
@@ -647,15 +642,91 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_sent || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-center text-[#a1a1a0]">—</td>
-                  <td className="px-4 py-3 text-xs text-center text-[#a1a1a0]">—</td>
+                  <td className="px-4 py-3 text-xs text-center font-medium">
+                    {p.emails_sent > 0 ? (() => {
+                      const pct = Math.round((p.emails_delivered / p.emails_sent) * 100)
+                      const color = pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"
+                      return <span className={color}>{pct}%</span>
+                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-center font-medium">
+                    {p.emails_sent > 0 && p.emails_opened > 0 ? (
+                      <span className="text-emerald-600">{Math.round((p.emails_opened / p.emails_sent) * 100)}%</span>
+                    ) : <span className="text-[#a1a1a0] font-normal">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-center font-medium">
+                    {p.emails_sent > 0 && p.emails_clicked > 0 ? (
+                      <span className="text-emerald-600">{Math.round((p.emails_clicked / p.emails_sent) * 100)}%</span>
+                    ) : <span className="text-[#a1a1a0] font-normal">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] capitalize">{p.source}</td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] text-right whitespace-nowrap">{formatDate(p.created_at)}</td>
+                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1 rounded hover:bg-[#f5f5f4] transition-colors">
+                          <MoreHorizontal size={14} className="text-[#a1a1a0]" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[160px]">
+                        {/* Pause / Resume */}
+                        {(p.source === "arco" || p.source === "invites") && (p.sequence_status === "active" || p.sequence_status === "finished") && (
+                          <DropdownMenuItem
+                            className="text-xs cursor-pointer"
+                            onClick={async () => {
+                              const result = await pauseProspectSequence(p.id)
+                              if (result.success) { toast.success("Sequence paused"); refreshData() }
+                              else toast.error(result.error ?? "Failed to pause")
+                            }}
+                          >
+                            Pause sequence
+                          </DropdownMenuItem>
+                        )}
+                        {(p.source === "arco" || p.source === "invites") && p.sequence_status === "paused" && (
+                          <DropdownMenuItem
+                            className="text-xs cursor-pointer"
+                            onClick={async () => {
+                              const result = await resumeProspectSequence(p.id)
+                              if (result.success) { toast.success("Sequence resumed"); refreshData() }
+                              else toast.error(result.error ?? "Failed to resume")
+                            }}
+                          >
+                            Resume sequence
+                          </DropdownMenuItem>
+                        )}
+                        {/* Restart — Arco only */}
+                        {p.source === "arco" && p.emails_sent > 0 && p.sequence_status !== "active" && (
+                          <DropdownMenuItem
+                            className="text-xs cursor-pointer"
+                            onClick={async () => {
+                              const result = await restartProspectSequence(p.id)
+                              if (result.success) { toast.success("Email resent"); refreshData() }
+                              else toast.error(result.error ?? "Failed to restart")
+                            }}
+                          >
+                            Restart sequence
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        {/* Remove */}
+                        <DropdownMenuItem
+                          className="text-xs cursor-pointer text-red-600"
+                          onClick={async () => {
+                            const result = await deleteProspect(p.id)
+                            if (result.success) { toast.success("Prospect removed"); refreshData() }
+                            else toast.error(result.error ?? "Failed to remove")
+                          }}
+                        >
+                          Remove
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
                 </tr>
                 {/* Expanded detail row */}
                 {expandedId === p.id && (
                   <tr key={`${p.id}-detail`} className="border-b border-[#e5e5e4] bg-[#fafaf9]">
-                    <td colSpan={9} className="px-6 py-4">
+                    <td colSpan={11} className="px-6 py-4">
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <DetailField label="Ref Code" value={p.ref_code} />
                         <DetailField label="City" value={p.city} />
