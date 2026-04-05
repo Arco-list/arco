@@ -1007,6 +1007,12 @@ export async function updateCompanyEmailAction(input: {
 
   if (updateError) return { success: false, error: updateError.message }
 
+  // Sync to prospects table so sales emails go to the new address
+  await serviceClient
+    .from("prospects")
+    .update({ email: emailValidation.data })
+    .eq("company_id", idResult.data)
+
   revalidatePath("/", "layout")
   return { success: true }
 }

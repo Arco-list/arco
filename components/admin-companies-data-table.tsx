@@ -44,6 +44,7 @@ import {
   updateCompanyDomainVerifiedAction,
   changeCompanyOwnerAction,
   removeCompanyOwnerAction,
+  updateCompanyEmailAction,
 } from "@/app/admin/professionals/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -298,12 +299,14 @@ function OwnerEmailCell({ company, onRefresh }: { company: AdminCompanyRow; onRe
     setEditing(false)
     const trimmed = value.trim().toLowerCase()
     if (trimmed === email) return
-    const supabase = getBrowserSupabaseClient()
-    await supabase.from("companies").update({ email: trimmed || null } as any).eq("id", company.id)
-    // Sync to prospects table so sales emails go to the new address
-    await supabase.from("prospects").update({ email: trimmed || null } as any).eq("company_id", company.id)
-    toast.success("Email updated")
-    onRefresh()
+    const result = await updateCompanyEmailAction({ companyId: company.id, email: trimmed })
+    if (result.success) {
+      toast.success("Email updated")
+      onRefresh()
+    } else {
+      toast.error(result.error ?? "Failed to update email")
+      setValue(email)
+    }
   }
 
   if (editing) {
