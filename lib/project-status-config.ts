@@ -38,15 +38,15 @@ export const PROJECT_STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
 
 export const LISTING_STATUS_OPTIONS: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
   {
-    value: "archived",
-    label: "Unlisted",
-    description: "Project is not visible to users.",
-    colorClass: "bg-muted-foreground",
-  },
-  {
     value: "published",
     label: "Listed",
     description: "Project is visible to users and you are displayed on the project page.",
     colorClass: "bg-emerald-500",
+  },
+  {
+    value: "archived",
+    label: "Unlisted",
+    description: "Project is not visible to users.",
+    colorClass: "bg-muted-foreground",
   },
 ]

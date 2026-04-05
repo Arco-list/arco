@@ -113,10 +113,10 @@ const STATUS_CONFIG: Record<ProjectStatus, { label: string; className: string; d
 }
 
 const STATUS_OPTIONS: { value: ProjectStatus; label: string; description: string }[] = [
-  { value: "draft", label: "In progress", description: "Not visible to the public" },
-  { value: "in_progress", label: "In review", description: "Submitted by client, awaiting admin approval" },
   { value: "published", label: "Listed", description: "Live and visible to everyone" },
   { value: "archived", label: "Unlisted", description: "Hidden from public, preserved for records" },
+  { value: "in_progress", label: "In review", description: "Submitted by client, awaiting admin approval" },
+  { value: "draft", label: "In progress", description: "Not visible to the public" },
   { value: "rejected", label: "Rejected", description: "Declined by admin with feedback" },
 ]
 
@@ -652,7 +652,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {(["draft", "in_progress", "published", "archived", "rejected"] as ProjectStatus[]).map((s) => (
+              {(["published", "archived", "in_progress", "draft", "rejected"] as ProjectStatus[]).map((s) => (
                 <SelectItem key={s} value={s}>
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dotColor}`} />
