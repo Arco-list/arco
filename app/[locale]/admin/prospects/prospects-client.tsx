@@ -40,8 +40,8 @@ import { MoreHorizontal } from "lucide-react"
 // -- Status config -----------------------------------------------------------
 
 const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: string }> = {
-  prospect: { label: "Prospect", cls: "bg-orange-50 text-orange-700", dot: "bg-[#ea580c]" },
-  contacted: { label: "Contacted", cls: "bg-orange-50 text-orange-700", dot: "bg-[#ea580c]" },
+  prospect: { label: "Prospect", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
+  contacted: { label: "Contacted", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
   visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   signup: { label: "Signup", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   company: { label: "Draft", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
@@ -77,7 +77,7 @@ const DRIVER_LABEL_AT: Record<string, string> = {
 }
 
 const DRIVER_COLORS: Record<string, string> = {
-  prospect: "#ea580c",
+  prospect: "#f59e0b",
   acquisition: "#2563eb",
   retention: "#7c3aed",
 }

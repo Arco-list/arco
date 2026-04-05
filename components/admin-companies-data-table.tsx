@@ -255,7 +255,7 @@ type CompanyProfessional = {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  added: "bg-[#0ea5e9]",
+  added: "bg-[#f59e0b]",
   draft: "bg-[#2563eb]",
   listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
@@ -279,7 +279,7 @@ const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "prospected" as any, label: "Prospected", description: "Contacted by platform, not yet claimed", dotColor: "bg-[#f59e0b]" },
-  { value: "added" as any, label: "Added", description: "Added by admin, not yet visible or contacted", dotColor: "bg-[#0ea5e9]" },
+  { value: "added" as any, label: "Added", description: "Added by admin, not yet visible or contacted", dotColor: "bg-[#f59e0b]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-rose-500" },
 ]
 
@@ -1216,7 +1216,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 { dot: "bg-[#2563eb]", label: "Draft", desc: "Company has been claimed. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
                 { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
                 { dot: "bg-[#f59e0b]", label: "Prospected", desc: "Added by admin and contacted via the sales funnel. Visible on the platform while unclaimed.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
-                { dot: "bg-[#0ea5e9]", label: "Added", desc: "Added by admin, not yet visible. Ready to be moved to Prospected when outreach begins.", specs: "No owner · Not visible · No outreach yet" },
+                { dot: "bg-[#f59e0b]", label: "Added", desc: "Added by admin, not yet visible. Ready to be moved to Prospected when outreach begins.", specs: "No owner · Not visible · No outreach yet" },
                 { dot: "bg-rose-500", label: "Deactivated", desc: "Suspended and hidden from the platform.", specs: "Hidden · No access" },
               ].map((s) => (
                 <div key={s.label} style={{ display: "flex", gap: 12 }}>
