@@ -266,7 +266,16 @@
     "saving_status": "Saving…",
     "saved_status": "✓ Saved",
     "preview": "Preview",
-    "add_location": "Add location"
+    "add_location": "Add location",
+    "services_title": "Select services",
+    "services_your": "Your services",
+    "services_drag_hint": "Drag to reorder. The first service is your primary service.",
+    "services_empty": "Select services from the list below",
+    "services_primary": "Primary",
+    "services_add": "Add services",
+    "services_search": "Search services...",
+    "services_cancel": "Cancel",
+    "services_save": "Save"
   },
   "project_detail": {
     "credited_professionals": "Credited professionals",

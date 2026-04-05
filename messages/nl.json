@@ -266,7 +266,16 @@
     "saving_status": "Opslaan…",
     "saved_status": "✓ Opgeslagen",
     "preview": "Voorbeeld",
-    "add_location": "Locatie toevoegen"
+    "add_location": "Locatie toevoegen",
+    "services_title": "Selecteer diensten",
+    "services_your": "Je diensten",
+    "services_drag_hint": "Sleep om te herschikken. De eerste dienst is je hoofddienst.",
+    "services_empty": "Selecteer diensten uit de lijst hieronder",
+    "services_primary": "Primair",
+    "services_add": "Diensten toevoegen",
+    "services_search": "Zoek diensten...",
+    "services_cancel": "Annuleren",
+    "services_save": "Opslaan"
   },
   "project_detail": {
     "credited_professionals": "Gecrediteerde professionals",

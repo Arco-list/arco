@@ -1883,18 +1883,18 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           <div className="service-popup" onClick={(e) => e.stopPropagation()}>
             {/* Header — grey background */}
             <div className="service-popup-header">
-              <h3 className="arco-section-title" style={{ margin: 0 }}>Select services</h3>
+              <h3 className="arco-section-title" style={{ margin: 0 }}>{t("services_title")}</h3>
               <button type="button" className="popup-close" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }} aria-label="Close">✕</button>
             </div>
 
             {/* Scrollable body */}
             <div className="service-popup-body">
             {/* Selected services — ordered, draggable, first = primary */}
-            <label className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Your services</label>
-            <p style={{ fontSize: 12, color: "#9a9a98", margin: "0 0 10px" }}>Drag to reorder. The first service is your primary service.</p>
+            <label className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("services_your")}</label>
+            <p style={{ fontSize: 12, color: "#9a9a98", margin: "0 0 10px" }}>{t("services_drag_hint")}</p>
             <div className="sp-selected-list">
               {servicesOffered.length === 0 && (
-                <div className="sp-selected-empty">Select services from the list below</div>
+                <div className="sp-selected-empty">{t("services_empty")}</div>
               )}
               {servicesOffered.map((id, idx) => {
                 const svc = services.find((s) => s.id === id)
@@ -1926,7 +1926,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     <span className="sp-grip">
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>
                     </span>
-                    {idx === 0 && <span className="sp-primary-badge">Primary</span>}
+                    {idx === 0 && <span className="sp-primary-badge">{t("services_primary")}</span>}
                     <span className="sp-item-name">{svc.name}</span>
                     <button
                       className="sp-remove"
@@ -1941,10 +1941,10 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </div>
 
             {/* Available services grouped by category */}
-            <label className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>Add services</label>
+            <label className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("services_add")}</label>
             <input
               className="sp-search"
-              placeholder="Search services..."
+              placeholder={t("services_search")}
               value={serviceSearch}
               onChange={(e) => setServiceSearch(e.target.value)}
             />
@@ -1994,7 +1994,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}
                 style={{ fontSize: 14, padding: "10px 20px" }}
               >
-                Cancel
+                {t("services_cancel")}
               </button>
               <button
                 type="button"
@@ -2010,7 +2010,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 }}
                 style={{ fontSize: 14, padding: "10px 20px" }}
               >
-                Save
+                {t("services_save")}
               </button>
             </div>
           </div>
