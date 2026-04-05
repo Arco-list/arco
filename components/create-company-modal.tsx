@@ -591,11 +591,11 @@ export function CreateCompanyModal() {
                 {/* Email verification needed */}
                 {!isAutoVerified && hasWebsite && (
                   <div>
-                    <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                      {t("verify_ownership_prompt", { domain: companyDomain })}
-                    </p>
                     {!codeSent ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                        <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", margin: 0 }}>
+                          {t("verify_ownership_prompt", { domain: companyDomain })}
+                        </p>
                         <input
                           type="email"
                           className="form-input"
@@ -663,7 +663,7 @@ export function CreateCompanyModal() {
                             disabled={isPending || verifyOtp.join("").length !== 6 || !termsAccepted}
                             style={{ fontSize: 14, padding: "10px 20px" }}
                           >
-                            {isPending ? t("verifying") : tc("submit")}
+                            {isPending ? t("verifying") : "Claim company"}
                           </button>
                         </div>
                       </div>
@@ -689,11 +689,11 @@ export function CreateCompanyModal() {
 
                     {manualWebsite && extractDomainFromUrl(manualWebsite) && (
                       <div style={{ marginTop: 16 }}>
-                        <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                          {t("enter_email_ending", { domain: extractDomainFromUrl(manualWebsite) })}
-                        </p>
                         {!codeSent ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                            <p style={{ fontSize: 14, color: "var(--arco-mid-grey)", margin: 0 }}>
+                              {t("enter_email_ending", { domain: extractDomainFromUrl(manualWebsite) })}
+                            </p>
                             <input
                               type="email"
                               className="form-input"
@@ -760,7 +760,7 @@ export function CreateCompanyModal() {
                                 disabled={isPending || verifyOtp.join("").length !== 6 || !termsAccepted}
                                 style={{ fontSize: 14, padding: "10px 20px" }}
                               >
-                                {isPending ? t("verifying") : tc("submit")}
+                                {isPending ? t("verifying") : "Claim company"}
                               </button>
                             </div>
                           </div>
