@@ -407,9 +407,8 @@ export default function ListingEditorPage() {
   const [photoDeleteConfirmId, setPhotoDeleteConfirmId] = useState<string | null>(null)
   const photoDragItemRef = useRef<string | null>(null)
   const photoDragOverRef = useRef<string | null>(null)
-  const uploadToastIdRef = useRef<string | number | null>(null)
-  const uploadFileCountRef = useRef(0)
-  const prevIsUploadingRef = useRef(false)
+  const [uploadTracker, setUploadTracker] = useState<Array<{ name: string; thumbnail: string; status: "pending" | "uploading" | "done" | "error"; error?: string }>>([])
+  const [showUploadPopup, setShowUploadPopup] = useState(false)
   const [showCoverPicker, setShowCoverPicker] = useState(false)
   const [editingSpecBar, setEditingSpecBar] = useState<string | null>(null)
   const [specScope, setSpecScope] = useState("")
@@ -884,24 +883,41 @@ export default function ListingEditorPage() {
     })
   }, [searchParams])
 
-  // Track photo upload completion
+  // Mark upload tracker entries as done/error when upload finishes
+  const prevIsUploadingRef = useRef(false)
   useEffect(() => {
-    if (prevIsUploadingRef.current && !isUploading && uploadToastIdRef.current != null) {
-      const toastId = uploadToastIdRef.current
-      if (uploadErrors.length > 0) {
-        toast.error(`${uploadErrors.length} ${uploadErrors.length === 1 ? "photo" : "photos"} failed`, {
-          id: toastId,
-          description: uploadErrors[0],
-        })
-      } else {
-        const count = uploadFileCountRef.current
-        toast.success(`${count} ${count === 1 ? "photo" : "photos"} uploaded`, { id: toastId })
+    if (prevIsUploadingRef.current && !isUploading && showUploadPopup) {
+      // Build a set of filenames that had errors
+      const errorFileNames = new Set<string>()
+      for (const err of uploadErrors) {
+        const match = err.match(/^(.+?):/)
+        if (match) errorFileNames.add(match[1])
       }
-      uploadToastIdRef.current = null
-      uploadFileCountRef.current = 0
+      setUploadTracker(prev => prev.map(f => {
+        if (f.status !== "uploading") return f
+        const hasError = errorFileNames.has(f.name)
+        return hasError
+          ? { ...f, status: "error", error: uploadErrors.find(e => e.startsWith(f.name + ":")) ?? "Upload failed" }
+          : { ...f, status: "done" }
+      }))
     }
     prevIsUploadingRef.current = isUploading
-  }, [isUploading, uploadErrors])
+  }, [isUploading, uploadErrors, showUploadPopup])
+
+  // Auto-close upload popup when all succeeded
+  useEffect(() => {
+    if (!showUploadPopup) return
+    const allDone = uploadTracker.length > 0 && uploadTracker.every(f => f.status === "done" || f.status === "error")
+    if (!allDone) return
+    const hasErrors = uploadTracker.some(f => f.status === "error")
+    if (!hasErrors) {
+      const timer = setTimeout(() => {
+        setShowUploadPopup(false)
+        setUploadTracker(prev => { prev.forEach(f => URL.revokeObjectURL(f.thumbnail)); return [] })
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [showUploadPopup, uploadTracker])
 
   // Keep activeSection as "location" for map initialization in the new layout
   useEffect(() => {
@@ -3667,8 +3683,13 @@ export default function ListingEditorPage() {
               onChange={e => {
                 const files = e.target.files
                 if (files && files.length > 0) {
-                  uploadFileCountRef.current = files.length
-                  uploadToastIdRef.current = toast.loading(`Uploading ${files.length} ${files.length === 1 ? "photo" : "photos"}…`)
+                  const entries = Array.from(files).map(f => ({
+                    name: f.name,
+                    thumbnail: URL.createObjectURL(f),
+                    status: "uploading" as const,
+                  }))
+                  setUploadTracker(entries)
+                  setShowUploadPopup(true)
                   void handleFileUpload(files)
                 }
                 e.target.value = ""
@@ -5840,6 +5861,68 @@ export default function ListingEditorPage() {
       )}
 
       {/* ── Delete project confirmation ───────────────────────── */}
+      {/* ── Upload progress popup ────────────────────────────── */}
+      {showUploadPopup && uploadTracker.length > 0 && (
+        <div className="popup-overlay" onClick={() => { if (!isUploading) { setShowUploadPopup(false); setUploadTracker(prev => { prev.forEach(f => URL.revokeObjectURL(f.thumbnail)); return [] }) } }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">
+                {isUploading
+                  ? `Uploading ${uploadTracker.length} ${uploadTracker.length === 1 ? "photo" : "photos"}…`
+                  : uploadTracker.some(f => f.status === "error")
+                    ? "Upload completed with errors"
+                    : "Upload complete"}
+              </h3>
+              {!isUploading && (
+                <button type="button" className="popup-close" onClick={() => { setShowUploadPopup(false); setUploadTracker(prev => { prev.forEach(f => URL.revokeObjectURL(f.thumbnail)); return [] }) }} aria-label="Close">
+                  ✕
+                </button>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 8, maxHeight: 360, overflowY: "auto", padding: "4px 0" }}>
+              {uploadTracker.map((file, i) => (
+                <div key={i} style={{ position: "relative", borderRadius: 6, overflow: "hidden", aspectRatio: "1", background: "#f5f5f4" }}>
+                  <img src={file.thumbnail} alt={file.name} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: file.status === "uploading" ? 0.5 : file.status === "error" ? 0.3 : 1, transition: "opacity 0.3s" }} />
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {file.status === "uploading" && (
+                      <Loader2 size={20} className="animate-spin" style={{ color: "#016D75" }} />
+                    )}
+                    {file.status === "done" && (
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="11" fill="#16a34a" />
+                        <path d="M7 12.5l3 3 7-7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                    {file.status === "error" && (
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="11" fill="#dc2626" />
+                        <path d="M8 8l8 8M16 8l-8 8" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </div>
+                  {file.status === "error" && file.error && (
+                    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "2px 4px", background: "rgba(220,38,38,0.85)", fontSize: 9, color: "white", lineHeight: 1.2, textAlign: "center" }}>
+                      Failed
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {isUploading && (
+              <div style={{ marginTop: 12, height: 3, background: "#e5e5e4", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  background: "#016D75",
+                  borderRadius: 2,
+                  width: `${Math.round((uploadTracker.filter(f => f.status === "done" || f.status === "error").length / uploadTracker.length) * 100)}%`,
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showDeleteConfirm && (
         <div className="popup-overlay" onClick={() => { if (!isDeletingProject) { setShowDeleteConfirm(false); setDeleteConfirmText("") } }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
