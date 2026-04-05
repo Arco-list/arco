@@ -577,7 +577,7 @@
     "manual_coming_soon": "Manual company creation coming soon",
     "already_on_arco": "This company is already on Arco",
     "already_on_arco_description": "Contact the admin of this company to be added as a team member.",
-    "verify_claim_description": "Verify domain ownership to claim this company page",
+    "verify_claim_description": "Verify domain ownership to claim this company",
     "verify_create_description": "Confirm you own this company before creating your page",
     "email_matches": "Your email ({email}) matches {domain}. Domain verified.",
     "verify_ownership_prompt": "To verify ownership, enter your company email ending with @{domain}.",

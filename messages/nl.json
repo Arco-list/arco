@@ -577,7 +577,7 @@
     "manual_coming_soon": "Handmatig bedrijf aanmaken komt binnenkort",
     "already_on_arco": "Dit bedrijf is al op Arco",
     "already_on_arco_description": "Neem contact op met de beheerder van dit bedrijf om als teamlid te worden toegevoegd.",
-    "verify_claim_description": "Verifieer domeinbezit om deze bedrijfspagina te claimen",
+    "verify_claim_description": "Verifieer domeinbezit om dit bedrijf te claimen",
     "verify_create_description": "Bevestig dat je dit bedrijf bezit voordat je je pagina aanmaakt",
     "email_matches": "Je e-mail ({email}) komt overeen met {domain}. Domein geverifieerd.",
     "verify_ownership_prompt": "Om eigendom te verifiëren, voer je bedrijfse-mail in eindigend op @{domain}.",
