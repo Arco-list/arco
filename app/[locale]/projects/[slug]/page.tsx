@@ -204,7 +204,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         // In preview mode, show listed/featured professionals + the project owner
         q = q.or("status.in.(live_on_page,listed),is_project_owner.eq.true")
       } else {
-        q = q.in("status", ["live_on_page", "listed"]).neq("companies.status", "unlisted")
+        q = q.in("status", ["live_on_page", "listed"]).neq("companies.status", "unlisted").neq("companies.status", "added")
       }
       return q
     })(),
@@ -217,6 +217,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const photos = photosResult.data ?? []
   const professionals = professionalsResult.data ?? []
+
+  // Block access if the project owner's company has "added" status (not yet visible)
+  if (!canPreview) {
+    const ownerPro = professionals.find((p: any) => p.is_project_owner)
+    const ownerCompanyStatus = (ownerPro?.companies as any)?.status
+    if (ownerCompanyStatus === "added") {
+      notFound()
+    }
+  }
 
   // Build feature_id → space slug map
   const featureSpaceMap = new Map<string, string>()

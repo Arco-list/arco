@@ -76,6 +76,7 @@ interface ProjectProfessional {
   company: {
     name: string
     slug: string | null
+    status: string | null
   } | null
 }
 
@@ -136,7 +137,8 @@ export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
       project_id,
       company:companies!company_id (
         name,
-        slug
+        slug,
+        status
       )
     `)
     .in("project_id", projectIds)
@@ -202,8 +204,14 @@ export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
     { name: string; slug: string | null }
   >()
 
+  const hiddenProjectIds = new Set<string>()
   for (const row of (professionalsResult.data ?? []) as unknown as ProjectProfessional[]) {
     if (!row.project_id || !row.company) continue
+    // Hide projects owned by "added" companies (not yet visible)
+    if (row.company.status === "added") {
+      hiddenProjectIds.add(row.project_id)
+      continue
+    }
     // First entry wins (there should only be one owner per project)
     if (!professionalByProject.has(row.project_id)) {
       professionalByProject.set(row.project_id, {
@@ -215,7 +223,7 @@ export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
 
   // ── 5. Merge ───────────────────────────────────────────────────────────────
 
-  return baseRows.map((project): DiscoverProject => {
+  return baseRows.filter((project) => !hiddenProjectIds.has(project.id ?? "")).map((project): DiscoverProject => {
     const id = project.id ?? ""
     const photos = photosByProject.get(id) ?? []
 
