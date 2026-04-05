@@ -114,19 +114,6 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
     notFound()
   }
 
-  // Auto-generate description if missing and company has a domain
-  if (!professional.description && professional.company.domain) {
-    try {
-      const { generateAndSaveCompanyDescription } = await import("@/lib/company-description-generator")
-      const description = await generateAndSaveCompanyDescription(professional.company.id, locale)
-      if (description) {
-        professional = { ...professional, description }
-      }
-    } catch {
-      // Non-fatal — page renders without description
-    }
-  }
-
   // Company icon (logo or initials)
   const companyIcon = professional.company.logoUrl ?? null
   const companyInitials = getInitials(professional.name)
