@@ -582,17 +582,19 @@ export async function syncResendEmailStats() {
     const { data, error } = await resend.emails.list()
     if (error || !data?.data) return { synced: 0 }
 
-    // Group by recipient email: track if any email was opened/clicked
-    const recipientStats = new Map<string, { opened: boolean; clicked: boolean }>()
+    // Count per recipient: how many emails were sent, delivered, opened, clicked
+    const recipientStats = new Map<string, { sent: number; delivered: number; opened: number; clicked: number }>()
     for (const email of data.data as any[]) {
       const event = email.last_event ?? "sent"
       const recipients: string[] = Array.isArray(email.to) ? email.to : [email.to]
       for (const to of recipients) {
         if (!to) continue
         const addr = to.toLowerCase().trim()
-        const existing = recipientStats.get(addr) ?? { opened: false, clicked: false }
-        if (event === "opened" || event === "clicked") existing.opened = true
-        if (event === "clicked") existing.clicked = true
+        const existing = recipientStats.get(addr) ?? { sent: 0, delivered: 0, opened: 0, clicked: 0 }
+        existing.sent++
+        if (event === "delivered" || event === "opened" || event === "clicked") existing.delivered++
+        if (event === "opened" || event === "clicked") existing.opened++
+        if (event === "clicked") existing.clicked++
         recipientStats.set(addr, existing)
       }
     }
@@ -600,29 +602,23 @@ export async function syncResendEmailStats() {
     const supabase = createServiceRoleSupabaseClient()
     let synced = 0
 
-    // Batch update prospects that have opens/clicks in Resend but 0 in DB
-    const emails = Array.from(recipientStats.entries())
-      .filter(([, s]) => s.opened || s.clicked)
-      .map(([email]) => email)
-
-    if (emails.length === 0) return { synced: 0 }
+    const allEmails = Array.from(recipientStats.keys())
+    if (allEmails.length === 0) return { synced: 0 }
 
     const { data: prospects } = await supabase
       .from("prospects")
-      .select("id, email, emails_opened, emails_clicked")
-      .in("email", emails)
+      .select("id, email, emails_sent, emails_delivered, emails_opened, emails_clicked")
+      .in("email", allEmails)
 
     for (const prospect of prospects ?? []) {
       const stats = recipientStats.get(prospect.email.toLowerCase().trim())
       if (!stats) continue
 
       const updates: Record<string, unknown> = {}
-      if (stats.opened && (prospect.emails_opened ?? 0) === 0) {
-        updates.emails_opened = 1
-      }
-      if (stats.clicked && (prospect.emails_clicked ?? 0) === 0) {
-        updates.emails_clicked = 1
-      }
+      if (stats.sent > (prospect.emails_sent ?? 0)) updates.emails_sent = stats.sent
+      if (stats.delivered > (prospect.emails_delivered ?? 0)) updates.emails_delivered = stats.delivered
+      if (stats.opened > (prospect.emails_opened ?? 0)) updates.emails_opened = stats.opened
+      if (stats.clicked > (prospect.emails_clicked ?? 0)) updates.emails_clicked = stats.clicked
 
       if (Object.keys(updates).length > 0) {
         await supabase.from("prospects").update(updates).eq("id", prospect.id)
