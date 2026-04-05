@@ -14,6 +14,12 @@ import {
 
 type UserAudience = "all" | "professional" | "homeowner" | "admin"
 
+type EmailSender = {
+  name: string
+  email: string
+  icon?: string // URL or initials fallback
+}
+
 type EmailTemplate = {
   id: string
   name: string
@@ -27,6 +33,14 @@ type EmailTemplate = {
   active: boolean
   drip?: string  // group key for drip sequences
   dripDay?: number  // day number in the drip
+  from?: EmailSender
+}
+
+const SENDERS: Record<string, EmailSender> = {
+  arco: { name: "Arco", email: "noreply@arcolist.com", icon: "/arco-icon.svg" },
+  niek: { name: "Niek van Leeuwen", email: "niek@arcolist.com" },
+  team: { name: "Arco Team", email: "team@arcolist.com", icon: "/arco-icon.svg" },
+  supabase: { name: "Supabase Auth", email: "noreply@mail.app.supabase.io" },
 }
 
 const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
@@ -37,20 +51,20 @@ const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
 }
 
 const INITIAL_TEMPLATES: EmailTemplate[] = [
-  { id: "magic-link", name: "Sign-in Code", type: "transactional", audience: "all", description: "OTP code for magic link sign-in", trigger: "User signs in with email (OTP)", subject: "[Code] is your Arco sign-in code", sends: 0, deliveryRate: 100, active: true },
-  { id: "signup", name: "Signup Confirmation", type: "transactional", audience: "all", description: "Email confirmation after signup", trigger: "User creates account with email + password", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true },
-  { id: "domain-verification", name: "Domain Verification", type: "transactional", audience: "professional", description: "6-digit code for domain ownership", trigger: "User verifies company domain during creation", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true },
-  { id: "professional-invite", name: "Professional Invite", type: "transactional", audience: "professional", description: "Credited on a project", trigger: "Architect credits professional on published project", subject: "[Company] credited you on [Project]", sends: 0, deliveryRate: 100, active: true },
-  { id: "team-invite", name: "Team Invite", type: "transactional", audience: "professional", description: "Invited to join a company", trigger: "Company admin invites team member", subject: "You're invited to join [Company]", sends: 0, deliveryRate: 100, active: true },
-  { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true },
-  { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true },
-  { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true },
-  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0 },
-  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2 },
-  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5 },
-  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false },
-  { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false },
-  { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "[Company] is now on Arco", sends: 0, deliveryRate: 100, active: true },
+  { id: "magic-link", name: "Sign-in Code", type: "transactional", audience: "all", description: "OTP code for magic link sign-in", trigger: "User signs in with email (OTP)", subject: "[Code] is your Arco sign-in code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.supabase },
+  { id: "signup", name: "Signup Confirmation", type: "transactional", audience: "all", description: "Email confirmation after signup", trigger: "User creates account with email + password", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.supabase },
+  { id: "domain-verification", name: "Domain Verification", type: "transactional", audience: "professional", description: "6-digit code for domain ownership", trigger: "User verifies company domain during creation", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
+  { id: "professional-invite", name: "Professional Invite", type: "transactional", audience: "professional", description: "Credited on a project", trigger: "Architect credits professional on published project", subject: "[Company] credited you on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
+  { id: "team-invite", name: "Team Invite", type: "transactional", audience: "professional", description: "Invited to join a company", trigger: "Company admin invites team member", subject: "You're invited to join [Company]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
+  { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
+  { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
+  { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true, from: SENDERS.supabase },
+  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.niek },
+  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2, from: SENDERS.niek },
+  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5, from: SENDERS.niek },
+  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
+  { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false, from: SENDERS.niek },
+  { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "[Company] is now on Arco", sends: 0, deliveryRate: 100, active: true, from: SENDERS.niek },
 ]
 
 type TabKey = "transactional" | "marketing" | "sent"
@@ -237,6 +251,7 @@ export default function AdminEmailsPage() {
                 <thead>
                   <tr className="border-b border-[#e5e5e4]">
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Email</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">From</th>
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">User</th>
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Subject</th>
                     <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Sends</th>
@@ -286,6 +301,25 @@ export default function AdminEmailsPage() {
                             <div className="text-[11px] text-[#a1a1a0]">{t.trigger}</div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {t.from ? (
+                          <div className="flex items-center gap-2">
+                            {t.from.icon ? (
+                              <img src={t.from.icon} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                            ) : (
+                              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-[9px] font-medium text-[#6b6b68]">
+                                {t.from.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[11px] font-medium text-[#1c1c1a] truncate">{t.from.name}</span>
+                              <span className="text-[10px] text-[#a1a1a0] truncate">{t.from.email}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[#a1a1a0]">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[t.audience].cls}`}>
@@ -355,6 +389,22 @@ export default function AdminEmailsPage() {
                               <div className="text-[11px] text-[#a1a1a0]">{child.trigger}</div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {child.from ? (
+                            <div className="flex items-center gap-2">
+                              {child.from.icon ? (
+                                <img src={child.from.icon} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                              ) : (
+                                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-[9px] font-medium text-[#6b6b68]">
+                                  {child.from.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                                </div>
+                              )}
+                              <span className="text-[11px] font-medium text-[#1c1c1a] truncate">{child.from.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[#a1a1a0]">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5">
                           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[child.audience].cls}`}>
