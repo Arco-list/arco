@@ -101,7 +101,8 @@ export async function GET(request: NextRequest) {
         try {
           const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
           const prospectRef = request.cookies.get('prospect_ref')?.value ?? null;
-          await matchProspectOnSignup(data.user.email, data.user.id, prospectRef);
+          const claimCompanyId = request.cookies.get('prospect_claim_company_id')?.value ?? null;
+          await matchProspectOnSignup(data.user.email, data.user.id, prospectRef, claimCompanyId);
         } catch (err) {
           logger.error("Failed to match prospect on signup callback", { userId: data.user.id }, err as Error);
         }

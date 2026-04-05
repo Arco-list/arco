@@ -384,8 +384,9 @@ export const signUpAction = async (
             const { cookies } = await import('next/headers');
             const cookieStore = await cookies();
             const prospectRef = cookieStore.get('prospect_ref')?.value ?? null;
+            const claimCompanyId = cookieStore.get('prospect_claim_company_id')?.value ?? null;
             const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
-            await matchProspectOnSignup(email, authData.user.id, prospectRef);
+            await matchProspectOnSignup(email, authData.user.id, prospectRef, claimCompanyId);
           } catch (err) {
             logger.error("Failed to match prospect on invited signup", { userId: authData.user.id }, err as Error);
           }
@@ -616,8 +617,9 @@ export const signUpWithOtpAction = async (
         const { cookies: getCookies } = await import('next/headers');
         const cookieStore = await getCookies();
         const prospectRef = cookieStore.get('prospect_ref')?.value ?? null;
+        const claimCompanyId = cookieStore.get('prospect_claim_company_id')?.value ?? null;
         const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
-        await matchProspectOnSignup(email, newUser.user.id, prospectRef);
+        await matchProspectOnSignup(email, newUser.user.id, prospectRef, claimCompanyId);
       } catch (err) {
         logger.error("Failed to match prospect on OTP signup", { userId: newUser.user.id }, err as Error);
       }

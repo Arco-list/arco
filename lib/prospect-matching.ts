@@ -94,7 +94,8 @@ async function syncApolloStage(apolloContactId: string | null, arcoStatus: strin
 export async function matchProspectOnSignup(
   email: string,
   userId: string,
-  prospectRef?: string | null
+  prospectRef?: string | null,
+  claimCompanyId?: string | null
 ): Promise<void> {
   const supabase = createServiceRoleSupabaseClient();
 
@@ -138,8 +139,18 @@ export async function matchProspectOnSignup(
     prospect = bySignupEmail;
   }
 
+  // Fallback: match by company_id from claim URL cookie
+  if (!prospect && claimCompanyId) {
+    const { data: byCompany } = await supabase
+      .from("prospects")
+      .select("id, status, apollo_contact_id, apollo_sequence_id")
+      .eq("company_id", claimCompanyId)
+      .maybeSingle();
+    prospect = byCompany;
+  }
+
   if (!prospect) {
-    logger.debug("No prospect found for signup", { email, prospectRef });
+    logger.debug("No prospect found for signup", { email, prospectRef, claimCompanyId });
     return;
   }
 
