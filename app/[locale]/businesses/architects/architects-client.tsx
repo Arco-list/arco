@@ -35,12 +35,16 @@ export function ArchitectsClient({ projects, preloadedCompany, inviteEmail }: Ar
   const { openCreateCompanyModal } = useCreateCompanyModal()
   const autoOpenedRef = useRef(false)
 
-  // Track prospect landing visit from ref param
+  // Track prospect landing visit from ref param + store companyId cookie
   useEffect(() => {
     trackPageView("/businesses/architects")
     const ref = searchParams.get("ref")
     if (ref) {
       fetch(`/api/prospect-track?ref=${encodeURIComponent(ref)}`).catch(() => {})
+    }
+    const cid = searchParams.get("companyId")
+    if (cid) {
+      document.cookie = `prospect_claim_company_id=${cid};path=/;max-age=86400;samesite=lax`
     }
   }, [searchParams])
   const t = useTranslations("business.architects")

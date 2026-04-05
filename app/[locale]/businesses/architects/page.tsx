@@ -1,5 +1,4 @@
 import { Suspense } from "react"
-import { cookies } from "next/headers"
 import { ArchitectsClient } from "./architects-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
@@ -14,12 +13,6 @@ export default async function ArchitectsPage({ searchParams }: PageProps) {
   const params = await searchParams
   const inviteEmail = params.inviteEmail ?? null
   const companyIdParam = params.companyId ?? null
-
-  // Store companyId in cookie so matchProspectOnSignup can link the prospect
-  if (companyIdParam) {
-    const cookieStore = await cookies()
-    cookieStore.set("prospect_claim_company_id", companyIdParam, { maxAge: 60 * 60 * 24, path: "/", httpOnly: true, sameSite: "lax" })
-  }
 
   let preloadedCompany = null
   if (companyIdParam) {
