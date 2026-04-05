@@ -92,6 +92,9 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
     } catch {}
   }
 
+  // Derive contact email from domain (info@domain is the most common pattern)
+  const contactEmail = input.domain ? `info@${input.domain}` : null
+
   // Insert company without owner (claimable)
   const { data: newCompany, error: insertError } = await serviceSupabase
     .from("companies")
@@ -100,6 +103,7 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
       owner_id: null,
       website: input.website,
       domain: input.domain,
+      email: contactEmail,
       phone: input.phone,
       address: input.formattedAddress,
       city: input.city,
