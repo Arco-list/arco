@@ -140,8 +140,8 @@ export default async function CompanySettingsPage({
     redirect("/create-company")
   }
 
-  // Setup mode is persistent until the company completes setup and publishes
-  const isSetupMode = !company.setup_completed
+  // Setup mode: show complete button when setup not done OR company is still in draft
+  const isSetupMode = !company.setup_completed || company.status === "draft"
 
   const [{ data: socialLinks }, { data: allCategories }, { data: professional }, { data: projectLinks }, { data: pendingProjectLinks }] = await Promise.all([
     supabase
