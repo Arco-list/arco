@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { AlertTriangle, Check, X } from "lucide-react"
 import { LinkInputRow } from "@/components/landing"
 import { scrapeAndCreateProject } from "@/app/new-project/import/actions"
@@ -11,11 +12,8 @@ import { toast } from "sonner"
 type StepStatus = "pending" | "active" | "done" | "error"
 type ModalPhase = "input" | "processing" | "done" | "error"
 
-const STEPS = [
-  "Fetching page",
-  "Extracting content",
-  "Creating your project",
-]
+// Step keys resolved via translations at render time
+const STEP_KEYS = ["step_fetching", "step_extracting", "step_creating"] as const
 
 const STEP_DELAYS_MS = [0, 1200, 2800]
 
@@ -44,6 +42,7 @@ export function ImportProjectModal({
   adminCompanyId,
 }: ImportProjectModalProps) {
   const router = useRouter()
+  const t = useTranslations("import_project")
   const [phase, setPhase] = useState<ModalPhase>("input")
   const [statuses, setStatuses] = useState<StepStatus[]>(["pending", "pending", "pending"])
   const [error, setError] = useState<string | null>(null)
@@ -94,7 +93,7 @@ export function ImportProjectModal({
         // Project already exists — redirect to it
         setStatuses(["done", "done", "done"])
         setPhase("done")
-        toast.info("This project was already imported.")
+        toast.info(t("already_imported"))
         setTimeout(() => {
           onOpenChange(false)
           router.push(`/dashboard/edit/${result.projectId}`)
@@ -124,7 +123,7 @@ export function ImportProjectModal({
     try {
       parsedUrl = new URL(url.startsWith("http") ? url : `https://${url}`)
     } catch {
-      setError("Please enter a valid URL")
+      setError(t("invalid_url"))
       setPhase("error")
       return
     }
@@ -143,13 +142,13 @@ export function ImportProjectModal({
         .replace(/^https?:\/\//i, "").split("/")[0].replace(/^www\./, "").toLowerCase()
 
       if (!companyDomain) {
-        setError("Add your website domain in company settings before importing projects.")
+        setError(t("add_domain_first"))
         setPhase("error")
         return
       }
 
       if (companyDomain && inputDomain !== companyDomain && !inputDomain.endsWith(`.${companyDomain}`) && !companyDomain.endsWith(`.${inputDomain}`)) {
-        setError(`This URL doesn't match your company domain (${companyDomain}). Import a project from your own website.`)
+        setError(t("domain_mismatch", { domain: companyDomain }))
         setPhase("error")
         return
       }
@@ -164,7 +163,7 @@ export function ImportProjectModal({
       .maybeSingle()
 
     if (existingProject) {
-      toast.info("This project was already imported.")
+      toast.info(t("already_imported"))
       onOpenChange(false)
       router.push(`/dashboard/edit/${existingProject.id}`)
       return
@@ -195,7 +194,7 @@ export function ImportProjectModal({
 
   const handleCreateBlankProject = useCallback(async () => {
     if (!userId || !companyId || !professionalId) {
-      toast.error("Please sign in to create a project.")
+      toast.error(t("create_failed"))
       return
     }
 
@@ -226,7 +225,7 @@ export function ImportProjectModal({
       router.push(`/dashboard/edit/${project.id}`)
     } catch (err) {
       console.error("Failed to create project", err)
-      toast.error("Failed to create project. Please try again.")
+      toast.error(t("create_failed"))
     } finally {
       setIsCreatingBlank(false)
     }
@@ -252,13 +251,7 @@ export function ImportProjectModal({
         {/* Header */}
         <div className="popup-header">
           <h3 className="arco-section-title">
-            {phase === "done"
-              ? "Your project is ready"
-              : phase === "error"
-                ? "Import failed"
-                : phase === "processing"
-                  ? "Importing project…"
-                  : "Import from your website"}
+            {t(`title_${phase === "processing" ? "processing" : phase}`)}
           </h3>
           {canClose && (
             <button
@@ -273,13 +266,7 @@ export function ImportProjectModal({
         </div>
 
         <p className="arco-body-text" style={{ marginBottom: 24 }}>
-          {phase === "done"
-            ? "Redirecting to your project…"
-            : phase === "error"
-              ? "Something went wrong while importing your project."
-              : phase === "processing"
-                ? "This usually takes about 10 seconds."
-                : "Paste a link to a project page on your company website. We'll extract the title, photos, and details automatically."}
+          {t(`desc_${phase === "processing" ? "processing" : phase}`)}
         </p>
 
         {/* Body */}
@@ -288,19 +275,19 @@ export function ImportProjectModal({
           {phase === "input" && (
             <>
               <LinkInputRow
-                placeholder="https://yourstudio.com/projects/villa-laren"
-                buttonLabel="Import →"
+                placeholder={t("placeholder")}
+                buttonLabel={t("button")}
                 onSubmit={handleSubmitUrl}
               />
               <div className="import-popup-manual">
                 <span>
-                  No website?{" "}
+                  {t("no_website")}{" "}
                   <button
                     onClick={handleCreateBlankProject}
                     disabled={isCreatingBlank}
                     className="import-popup-manual-link"
                   >
-                    {isCreatingBlank ? "Creating…" : "Fill in manually"}
+                    {isCreatingBlank ? t("creating_blank") : t("fill_manually")}
                   </button>
                 </span>
               </div>
@@ -322,13 +309,13 @@ export function ImportProjectModal({
 
               {/* Steps — only show when scraping was actually started */}
               {scrapeUrl && <div className="scrape-steps">
-                {STEPS.map((label, i) => {
+                {STEP_KEYS.map((key, i) => {
                   const status = statuses[i]
                   return (
-                    <div key={label} className="scrape-step">
+                    <div key={key} className="scrape-step">
                       <StepIcon status={status} />
                       <span className={`scrape-step-label scrape-step-label--${status}`}>
-                        {label}
+                        {t(key)}
                       </span>
                     </div>
                   )
@@ -364,7 +351,7 @@ export function ImportProjectModal({
               {phase === "error" && (
                 <div className="popup-actions" style={{ marginTop: 20 }}>
                   <button type="button" className="btn-tertiary" onClick={handleTryAgain} style={{ flex: 1, justifyContent: "center" }}>
-                    Try another URL
+                    {t("try_another")}
                   </button>
                   <button
                     type="button"
@@ -373,7 +360,7 @@ export function ImportProjectModal({
                     disabled={isCreatingBlank}
                     style={{ flex: 1 }}
                   >
-                    {isCreatingBlank ? "Creating…" : "Fill in manually"}
+                    {isCreatingBlank ? t("creating_blank") : t("fill_manually")}
                   </button>
                 </div>
               )}
