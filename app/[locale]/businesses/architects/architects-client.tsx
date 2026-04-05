@@ -70,8 +70,9 @@ export function ArchitectsClient({ projects, preloadedCompany, inviteEmail }: Ar
     setPendingImportUrl(url)
   }, [])
 
+  const companyIdParam = searchParams.get("companyId")
   const selfUrl = inviteEmail
-    ? `/businesses/architects?inviteEmail=${encodeURIComponent(inviteEmail)}`
+    ? `/businesses/architects?inviteEmail=${encodeURIComponent(inviteEmail)}${companyIdParam ? `&companyId=${companyIdParam}` : ""}`
     : "/businesses/architects"
 
   const handleClaim = useCallback(() => {

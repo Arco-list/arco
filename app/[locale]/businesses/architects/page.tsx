@@ -2,19 +2,46 @@ import { Suspense } from "react"
 import { ArchitectsClient } from "./architects-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { ProjectCard } from "@/components/landing/project-carousel"
 
 interface PageProps {
-  searchParams: Promise<{ inviteEmail?: string; url?: string }>
+  searchParams: Promise<{ inviteEmail?: string; companyId?: string; url?: string }>
 }
 
 export default async function ArchitectsPage({ searchParams }: PageProps) {
   const params = await searchParams
   const inviteEmail = params.inviteEmail ?? null
+  const companyIdParam = params.companyId ?? null
 
   let preloadedCompany = null
-  if (inviteEmail) {
+  if (companyIdParam) {
+    // Direct company ID from prospect email — look up by ID
+    try {
+      const supabaseForLookup = await createServerSupabaseClient()
+      const { data: company } = await supabaseForLookup
+        .from("companies")
+        .select("id, name, city, country, address, domain, website, phone, google_place_id, owner_id")
+        .eq("id", companyIdParam)
+        .maybeSingle()
+      if (company) {
+        preloadedCompany = {
+          name: company.name,
+          placeId: company.google_place_id ?? "",
+          formattedAddress: company.address ?? null,
+          city: company.city ?? null,
+          country: company.country ?? null,
+          stateRegion: null,
+          phone: company.phone ?? null,
+          website: company.website ?? null,
+          domain: company.domain ?? null,
+          editorialSummary: null,
+          googleTypes: null,
+          arcoCompanyId: company.owner_id ? undefined : company.id,
+        }
+      }
+    } catch {}
+  } else if (inviteEmail) {
     try {
       preloadedCompany = await lookupCompanyByEmailDomain(inviteEmail)
     } catch {}

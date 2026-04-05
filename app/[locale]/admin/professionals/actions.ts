@@ -845,7 +845,7 @@ export async function sendProspectEmailAction(input: {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
   const companyPageUrl = `${siteUrl}/professionals/${company.slug}`
-  const claimUrl = `${siteUrl}/businesses/architects?inviteEmail=${encodeURIComponent(emailResult.data)}`
+  const claimUrl = `${siteUrl}/businesses/architects?inviteEmail=${encodeURIComponent(emailResult.data)}&companyId=${company.id}`
   const serviceName = (company.primary_service as any)?.name ?? null
   const locationParts = [serviceName, company.city].filter(Boolean)
 
