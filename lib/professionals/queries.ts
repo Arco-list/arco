@@ -219,7 +219,7 @@ const isPlusPlanActive = (row: ProfessionalRow) => {
     return false
   }
 
-  if (company.status !== "listed" && company.status !== "prospected") {
+  if (company.status !== "listed" && company.status !== "prospected" && company.status !== "added") {
     return false
   }
 
@@ -507,7 +507,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   }
 
   // Only require listed status
-  if (company.status !== "listed" && company.status !== "prospected") {
+  if (company.status !== "listed" && company.status !== "prospected" && company.status !== "added") {
     return null
   }
 

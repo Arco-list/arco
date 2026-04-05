@@ -255,6 +255,7 @@ type CompanyProfessional = {
 }
 
 const STATUS_DOT: Record<string, string> = {
+  added: "bg-[#0ea5e9]",
   draft: "bg-[#2563eb]",
   listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
@@ -264,6 +265,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  added: "Added",
   draft: "Draft",
   listed: "Listed",
   unlisted: "Unlisted",
@@ -273,6 +275,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
+  { value: "added" as any, label: "Added", description: "Added by admin, visible, not yet contacted", dotColor: "bg-[#0ea5e9]" },
   { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
@@ -1231,7 +1234,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["listed", "unlisted", "draft", "prospected", "deactivated", "invited"].map((s) => (
+              {["added", "listed", "unlisted", "draft", "prospected", "deactivated", "invited"].map((s) => (
                 <SelectItem key={s} value={s}>
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
@@ -1258,7 +1261,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
-                  {(["draft", "listed", "unlisted", "prospected", "deactivated"] as const).map((s) => (
+                  {(["added", "draft", "listed", "unlisted", "prospected", "deactivated"] as const).map((s) => (
                     <DropdownMenuItem
                       key={s}
                       className="text-xs cursor-pointer flex items-center gap-1.5"
@@ -1592,7 +1595,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const isSelected = statusChange.selectedStatus === option.value
                 const isClaimed = !!statusChange.company.ownerName
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
-                const needsUnclaimed = (option.value === ("prospected" as any)) && isClaimed
+                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any)) && isClaimed
                 const needsClaimed = (option.value === "listed" || option.value === "unlisted") && !isClaimed
                 const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed
                 return (
