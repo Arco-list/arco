@@ -80,11 +80,16 @@ ${content}
 </td></tr>
 <!-- Footer -->
 <tr><td style="padding:32px 0 0;border-top:1px solid #e8e8e6;">
-<p style="margin:0;font-size:11px;font-weight:300;color:#a1a1a0;line-height:1.4;">
-<img src="${base}/arco-logo-email.png" alt="Arco" width="32" height="9" style="display:inline-block;vertical-align:middle;opacity:0.5;margin-right:4px;" />The professional network architects trust.
-</p>
-<p style="margin:8px 0 0;font-size:10px;color:#c4c4c2;line-height:1.4;">
-Arco Global BV · Amsterdam, Netherlands
+<table cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;padding-right:8px;">
+<img src="${base}/arco-logo-email.png" alt="Arco" width="40" height="11" style="display:block;opacity:0.5;" />
+</td>
+<td style="vertical-align:middle;">
+<p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1;">The professional network architects trust.</p>
+</td>
+</tr></table>
+<p style="margin:10px 0 0;font-size:10px;color:#c4c4c2;line-height:1.4;">
+Arco Global BV · KvK 94568189 · Amsterdam, Netherlands
 </p>
 </td></tr>
 </table>
