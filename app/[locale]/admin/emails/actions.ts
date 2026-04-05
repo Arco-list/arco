@@ -32,6 +32,8 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/Een podium voor/i, "prospect-intro", "Prospect Intro"],
   [/staat op Arco/i, "prospect-intro", "Prospect Intro"],
   [/is now on Arco/i, "prospect-intro", "Prospect Intro"],
+  [/pagina op Arco is klaar/i, "prospect-followup", "Prospect Follow-up"],
+  [/Laatste herinnering.*claim/i, "prospect-final", "Prospect Final"],
 ]
 
 function matchTemplate(subject: string): { id: string; name: string } | null {
@@ -119,6 +121,8 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       [/Een podium voor/i, "prospect-intro"],
       [/staat op Arco/i, "prospect-intro"],
       [/is now on Arco/i, "prospect-intro"],
+      [/pagina op Arco is klaar/i, "prospect-followup"],
+      [/Laatste herinnering.*claim/i, "prospect-final"],
     ]
 
     const stats: Record<string, TemplateStats> = {}

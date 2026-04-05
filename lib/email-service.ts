@@ -23,6 +23,8 @@ export type EmailTemplate =
   | 'find-professionals'
   | 'introduction-request'
   | 'prospect-intro'
+  | 'prospect-followup'
+  | 'prospect-final'
 
 export interface EmailVariables {
   firstname?: string
@@ -334,6 +336,51 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
   }
 }
 
+function renderProspectFollowup(vars: EmailVariables): { subject: string; html: string } {
+  const companyName = vars.company_name || 'Uw bedrijf'
+  const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+
+  return {
+    subject: `Uw pagina op Arco is klaar`,
+    html: baseLayout(`
+      ${heading(`Uw pagina staat klaar`)}
+      ${body(`Beste ${companyName},`)}
+      ${body(`Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of u het gezien heeft.`)}
+      ${body(`Op uw pagina kunnen opdrachtgevers uw werk bekijken en direct contact opnemen. Het enige wat u hoeft te doen is uw pagina claimen — het kost minder dan twee minuten.`)}
+      ${button(`Bekijk uw pagina`, companyPageUrl)}
+      ${body(`Na het claimen kunt u uw profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`)}
+      ${button(`Claim ${companyName}`, claimUrl)}
+      ${body(`Vragen? Reageer op deze email, ik help u graag.`)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">Oprichter, Arco</span>
+      </p>
+    `),
+  }
+}
+
+function renderProspectFinal(vars: EmailVariables): { subject: string; html: string } {
+  const companyName = vars.company_name || 'Uw bedrijf'
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+
+  return {
+    subject: `Laatste herinnering: claim ${companyName} op Arco`,
+    html: baseLayout(`
+      ${heading(`Laatste herinnering`)}
+      ${body(`Beste ${companyName},`)}
+      ${body(`Dit is mijn laatste bericht over uw pagina op Arco. Ik begrijp dat u het druk heeft — daarom maak ik het kort.`)}
+      ${body(`Uw bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna bent u vindbaar voor opdrachtgevers die een professional zoeken.`)}
+      ${button(`Claim ${companyName}`, claimUrl)}
+      ${body(`Geen interesse? Geen probleem — reageer op deze email en ik verwijder uw pagina. Geen verdere berichten.`)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">Oprichter, Arco</span>
+      </p>
+    `),
+  }
+}
+
 const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subject: string; html: string }> = {
   'project-live': renderProjectLive,
   'project-rejected': renderProjectRejected,
@@ -345,6 +392,8 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subj
   'find-professionals': renderFindProfessionals,
   'introduction-request': renderIntroductionRequest,
   'prospect-intro': renderProspectIntro,
+  'prospect-followup': renderProspectFollowup,
+  'prospect-final': renderProspectFinal,
 }
 
 /**
