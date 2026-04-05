@@ -10,7 +10,7 @@ function getResend() {
   return _resend!
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Arco <noreply@arcolist.com>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Arco <automated@arcolist.com>'
 
 export type EmailTemplate =
   | 'project-live'
@@ -435,11 +435,11 @@ export async function sendTransactionalEmail(
 
   try {
     const { data, error } = await getResend().emails.send({
-      from: FROM_EMAIL,
+      from: template.startsWith('prospect-') ? 'Niek van Leeuwen <niek@arcolist.com>' : FROM_EMAIL,
       to: email,
       subject,
       html,
-      ...(template === 'prospect-intro' ? { reply_to: 'niek@arcolist.com' } : {}),
+      ...(template.startsWith('prospect-') ? { reply_to: 'niek@arcolist.com' } : {}),
     })
 
     if (error) {
