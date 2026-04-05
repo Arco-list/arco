@@ -425,6 +425,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [changeOwnerEmail, setChangeOwnerEmail] = useState("")
   const [domainVerifyCompany, setDomainVerifyCompany] = useState<AdminCompanyRow | null>(null)
   const [prospectConfirm, setProspectConfirm] = useState<ProspectConfirmState | null>(null)
+  const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   // Load professionals when editing a company
@@ -1184,6 +1185,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
             </>
           )}
+          {" · "}
+          <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
+            Status guide
+          </button>
         </p>
         </div>
         <button
@@ -1195,6 +1200,43 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           Add company
         </button>
       </div>
+
+      {/* Status Guide Popup */}
+      {showStatusGuide && (
+        <div className="popup-overlay" onClick={() => setShowStatusGuide(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Company statuses</h3>
+              <button type="button" className="popup-close" onClick={() => setShowStatusGuide(false)} aria-label="Close">✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {[
+                { dot: "bg-[#7c3aed]", label: "Listed", desc: "Claimed and visible to homeowners on the platform.", specs: "Owner assigned · Public profile · Discoverable" },
+                { dot: "bg-[#a1a1a0]", label: "Unlisted", desc: "Claimed but hidden from public directories. Only accessible via direct link.", specs: "Owner assigned · Hidden from search" },
+                { dot: "bg-[#2563eb]", label: "Draft", desc: "Company has been claimed. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
+                { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
+                { dot: "bg-[#f59e0b]", label: "Prospected", desc: "Added by admin and contacted via the sales funnel. Visible on the platform while unclaimed.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
+                { dot: "bg-[#0ea5e9]", label: "Added", desc: "Added by admin, visible on the platform but not yet contacted. Ready to be moved to Prospected when outreach begins.", specs: "No owner · Visible · No outreach yet" },
+                { dot: "bg-rose-500", label: "Deactivated", desc: "Suspended and hidden from the platform.", specs: "Hidden · No access" },
+              ].map((s) => (
+                <div key={s.label} style={{ display: "flex", gap: 12 }}>
+                  <span className={`${s.dot} shrink-0`} style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5 }} />
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>{s.label}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b6b68", lineHeight: 1.4 }}>{s.desc}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.3 }}>{s.specs}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
+              <strong>Flow:</strong> Added → Prospected (sales emails) → Draft (claimed) → Listed (live)
+              <br />
+              <strong>Constraints:</strong> Unclaimed companies cannot be set to Listed or Unlisted. Claimed companies cannot be set to Prospected or Added.
+            </div>
+          </div>
+        </div>
+      )}
 
       <AdminAddCompanyModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
 
