@@ -219,6 +219,7 @@ type ProspectConfirmState = {
 
 function validateProspectEligibility(company: AdminCompanyRow): ProspectCandidate {
   const reasons: string[] = []
+  if (company.ownerName) reasons.push("Company already claimed")
   if (!company.name?.trim()) reasons.push("Missing company name")
   if (!company.contactEmail?.trim()) reasons.push("Missing contact email")
   if (!company.logoUrl?.trim()) reasons.push("Missing logo")
@@ -1174,12 +1175,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           {isFiltered ? (
             <>
               {filteredCompanies} of {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
-              {filteredInvites > 0 && ` · ${filteredInvites} unclaimed`}
             </>
           ) : (
             <>
               {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
-              {totalInvites > 0 && ` · ${totalInvites} unclaimed ${totalInvites === 1 ? "invite" : "invites"}`}
             </>
           )}
         </p>
@@ -1592,7 +1591,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               {COMPANY_STATUS_OPTIONS.map((option) => {
                 const isSelected = statusChange.selectedStatus === option.value
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
-                const isDisabled = needsPublishedProject
+                const isClaimed = !!statusChange.company.ownerName
+                const needsUnclaimed = (option.value === ("prospected" as any)) && isClaimed
+                const isDisabled = needsPublishedProject || needsUnclaimed
                 return (
                   <button
                     key={option.value}
@@ -1610,6 +1611,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                           {statusChange.company.canPublishProjects
                             ? "Publish your first project to list this company page"
                             : "Get invited to a published project to list this company page"}
+                        </span>
+                      )}
+                      {needsUnclaimed && (
+                        <span className="status-modal-limit" style={{ color: "#92400e" }}>
+                          Company already claimed by {statusChange.company.ownerName}
                         </span>
                       )}
                     </div>
