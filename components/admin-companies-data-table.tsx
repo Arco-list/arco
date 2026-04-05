@@ -275,11 +275,11 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
-  { value: "added" as any, label: "Added", description: "Added by admin, visible, not yet contacted", dotColor: "bg-[#0ea5e9]" },
-  { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
-  { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
+  { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
+  { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "prospected" as any, label: "Prospected", description: "Contacted by platform, not yet claimed", dotColor: "bg-[#f59e0b]" },
+  { value: "added" as any, label: "Added", description: "Added by admin, visible, not yet contacted", dotColor: "bg-[#0ea5e9]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-rose-500" },
 ]
 
@@ -1234,7 +1234,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["added", "listed", "unlisted", "draft", "prospected", "deactivated", "invited"].map((s) => (
+              {["listed", "unlisted", "draft", "invited", "prospected", "added", "deactivated"].map((s) => (
                 <SelectItem key={s} value={s}>
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
@@ -1261,7 +1261,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
-                  {(["added", "draft", "listed", "unlisted", "prospected", "deactivated"] as const).map((s) => (
+                  {(["listed", "unlisted", "draft", "prospected", "added", "deactivated"] as const).map((s) => (
                     <DropdownMenuItem
                       key={s}
                       className="text-xs cursor-pointer flex items-center gap-1.5"
