@@ -473,7 +473,8 @@ export async function updateProspectEmail(prospectId: string, newEmail: string) 
   const { error: updateError } = await supabase.from("prospects").update({ email: newEmail }).eq("id", prospectId)
 
   if (updateError) {
-    return { success: false, error: "Failed to update email" }
+    console.error("Failed to update prospect email", updateError)
+    return { success: false, error: updateError.message || "Failed to update email" }
   }
 
   // Sync to companies table for Arco source
