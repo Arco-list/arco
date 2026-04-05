@@ -416,6 +416,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | CompanyStatus | "invited" | "prospected">("all")
 
+  const [removeOwnerCompany, setRemoveOwnerCompany] = useState<AdminCompanyRow | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingStatusAction | null>(null)
   const [statusChange, setStatusChange] = useState<StatusChangeState | null>(null)
   const [editingCompany, setEditingCompany] = useState<AdminCompanyRow | null>(null)
@@ -1127,16 +1128,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 {company.ownerName && (
                   <DropdownMenuItem
                     className="text-red-600 focus:text-red-600"
-                    onClick={async () => {
-                      if (!confirm(`Remove ${company.ownerName} as owner of ${company.name}? This will set the company to Added and unpublish owned projects.`)) return
-                      const result = await removeCompanyOwnerAction({ companyId: company.id })
-                      if (result.success) {
-                        toast.success(`Owner removed from ${company.name}`)
-                        router.refresh()
-                      } else {
-                        toast.error(result.error ?? "Failed to remove owner")
-                      }
-                    }}
+                    onClick={() => setRemoveOwnerCompany(company)}
                   >
                     Remove owner
                   </DropdownMenuItem>
@@ -1568,6 +1560,52 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 style={{ flex: 1 }}
               >
                 {isPending ? "Updating…" : domainVerifyCompany.isVerified ? "Remove verification" : "Verify domain"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Owner Confirmation */}
+      {removeOwnerCompany && (
+        <div className="popup-overlay" onClick={() => { if (!isPending) setRemoveOwnerCompany(null) }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Remove owner</h3>
+              <button type="button" className="popup-close" onClick={() => setRemoveOwnerCompany(null)} aria-label="Close">✕</button>
+            </div>
+
+            <div style={{ fontSize: 14, color: "#44403c", lineHeight: 1.5, marginBottom: 20 }}>
+              Remove <strong>{removeOwnerCompany.ownerName}</strong> as owner of <strong>{removeOwnerCompany.name}</strong>?
+            </div>
+
+            <div style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", padding: "10px 14px", borderRadius: 4, lineHeight: 1.5, marginBottom: 20 }}>
+              This will set the company status to <strong>Added</strong> and unpublish all owned projects.
+            </div>
+
+            <div className="popup-actions">
+              <button type="button" className="btn-tertiary" onClick={() => setRemoveOwnerCompany(null)} disabled={isPending} style={{ flex: 1 }}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isPending}
+                onClick={() => {
+                  startTransition(async () => {
+                    const result = await removeCompanyOwnerAction({ companyId: removeOwnerCompany.id })
+                    if (result.success) {
+                      toast.success(`Owner removed from ${removeOwnerCompany.name}`)
+                      setRemoveOwnerCompany(null)
+                      router.refresh()
+                    } else {
+                      toast.error(result.error ?? "Failed to remove owner")
+                    }
+                  })
+                }}
+                style={{ flex: 1, backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
+              >
+                {isPending ? "Removing…" : "Remove owner"}
               </button>
             </div>
           </div>
