@@ -1590,10 +1590,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             <div className="status-modal-options">
               {COMPANY_STATUS_OPTIONS.map((option) => {
                 const isSelected = statusChange.selectedStatus === option.value
-                const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
                 const isClaimed = !!statusChange.company.ownerName
+                const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
                 const needsUnclaimed = (option.value === ("prospected" as any)) && isClaimed
-                const isDisabled = needsPublishedProject || needsUnclaimed
+                const needsClaimed = (option.value === "listed" || option.value === "unlisted") && !isClaimed
+                const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed
                 return (
                   <button
                     key={option.value}
@@ -1616,6 +1617,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                       {needsUnclaimed && (
                         <span className="status-modal-limit" style={{ color: "#92400e" }}>
                           Company already claimed by {statusChange.company.ownerName}
+                        </span>
+                      )}
+                      {needsClaimed && (
+                        <span className="status-modal-limit" style={{ color: "#92400e" }}>
+                          Company must be claimed first — use Prospected to list unclaimed companies
                         </span>
                       )}
                     </div>
