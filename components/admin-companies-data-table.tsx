@@ -43,6 +43,7 @@ import {
   generateCompanyLoginLinkAction,
   updateCompanyDomainVerifiedAction,
   changeCompanyOwnerAction,
+  removeCompanyOwnerAction,
 } from "@/app/admin/professionals/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -1123,6 +1124,23 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 >
                   Change owner
                 </DropdownMenuItem>
+                {company.ownerName && (
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    onClick={async () => {
+                      if (!confirm(`Remove ${company.ownerName} as owner of ${company.name}? This will set the company to Added and unpublish owned projects.`)) return
+                      const result = await removeCompanyOwnerAction({ companyId: company.id })
+                      if (result.success) {
+                        toast.success(`Owner removed from ${company.name}`)
+                        router.refresh()
+                      } else {
+                        toast.error(result.error ?? "Failed to remove owner")
+                      }
+                    }}
+                  >
+                    Remove owner
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-red-600 focus:text-red-600"

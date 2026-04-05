@@ -1010,3 +1010,67 @@ export async function updateCompanyEmailAction(input: {
   revalidatePath("/", "layout")
   return { success: true }
 }
+
+export async function removeCompanyOwnerAction(input: {
+  companyId: string
+}): Promise<{ success: boolean; error?: string }> {
+  const { error } = await assertAdmin()
+  if (error) return { success: false, error: error.message }
+
+  const idResult = uuidSchema.safeParse(input.companyId)
+  if (!idResult.success) return { success: false, error: "Invalid company ID" }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+  const companyId = idResult.data
+
+  // Remove owner and set status to "added"
+  const { error: updateError } = await serviceClient
+    .from("companies")
+    .update({ owner_id: null, status: "added" as any })
+    .eq("id", companyId)
+
+  if (updateError) return { success: false, error: updateError.message }
+
+  // Remove company members
+  await serviceClient.from("company_members").delete().eq("company_id", companyId)
+
+  // Unpublish owned projects (set to draft)
+  const { data: ownedLinks } = await serviceClient
+    .from("project_professionals")
+    .select("project_id")
+    .eq("company_id", companyId)
+    .eq("is_project_owner", true)
+
+  if (ownedLinks && ownedLinks.length > 0) {
+    const projectIds = ownedLinks.map(r => r.project_id).filter(Boolean) as string[]
+    await serviceClient
+      .from("projects")
+      .update({ status: "draft" })
+      .in("id", projectIds)
+      .in("status", ["published", "in_progress"])
+  }
+
+  // Reset prospect status to "prospect" if linked
+  const { data: prospect } = await serviceClient
+    .from("prospects")
+    .select("id")
+    .eq("company_id", companyId)
+    .maybeSingle()
+
+  if (prospect) {
+    await serviceClient.from("prospects").update({
+      status: "prospect",
+      contact_name: null,
+      user_id: null,
+      signed_up_at: null,
+      company_created_at: null,
+      converted_at: null,
+    }).eq("id", prospect.id)
+  }
+
+  // Refresh materialized views
+  await serviceClient.rpc("refresh_all_materialized_views")
+
+  revalidatePath("/admin/professionals")
+  return { success: true }
+}
