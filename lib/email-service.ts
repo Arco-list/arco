@@ -301,7 +301,9 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
     : `<table cellpadding="0" cellspacing="0"><tr><td style="width:36px;height:36px;border-radius:50%;background:#f5f5f4;text-align:center;vertical-align:middle;font-size:14px;font-weight:500;color:#6b6b68;">${companyName.charAt(0)}</td></tr></table>`
 
   const heroBlock = heroImageUrl
-    ? `<img src="${heroImageUrl}" alt="${companyName}" width="520" style="display:block;width:100%;max-width:520px;border-radius:3px;object-fit:cover;" />`
+    ? `<div style="width:100%;max-width:420px;border-radius:6px;overflow:hidden;">
+        <img src="${heroImageUrl}" alt="${companyName}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:6px;" />
+      </div>`
     : ''
 
   const companyCard = `
