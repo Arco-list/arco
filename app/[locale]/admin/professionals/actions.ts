@@ -203,8 +203,37 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     logger.error("admin-professionals", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
   }
 
-  // When status is set to prospected, add to Sales table immediately
+  // When status is set to prospected, publish owned projects and add to Sales table
   if (parsedStatus.data === "prospected") {
+    const serviceClient0 = createServiceRoleSupabaseClient()
+
+    // Set owned projects to published and project_professionals to live_on_page
+    const { data: ownedProjectLinks } = await serviceClient0
+      .from("project_professionals")
+      .select("project_id")
+      .eq("company_id", parsedCompanyId.data)
+      .eq("is_project_owner", true)
+
+    if (ownedProjectLinks && ownedProjectLinks.length > 0) {
+      const projectIds = ownedProjectLinks.map((r) => r.project_id).filter(Boolean) as string[]
+
+      // Publish projects that are in draft/in_progress
+      await serviceClient0
+        .from("projects")
+        .update({ status: "published" })
+        .in("id", projectIds)
+        .in("status", ["draft", "in_progress"])
+
+      // Set project_professionals to live_on_page
+      await serviceClient0
+        .from("project_professionals")
+        .update({ status: "live_on_page" })
+        .eq("company_id", parsedCompanyId.data)
+        .in("project_id", projectIds)
+
+      // Refresh materialized views so projects appear
+      await serviceClient0.rpc("refresh_all_materialized_views")
+    }
     const serviceClient = createServiceRoleSupabaseClient()
     const { data: company } = await serviceClient
       .from("companies")
