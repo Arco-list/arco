@@ -45,16 +45,34 @@ export default async function ArchitectsPage({ searchParams }: PageProps) {
     try {
       preloadedCompany = await lookupCompanyByEmailDomain(inviteEmail)
     } catch {}
+  }
 
-    // Track prospect visit
+  // Track prospect visit — update status to "visitor" when they land on the page
+  if (inviteEmail || companyIdParam) {
     try {
       const serviceClient = createServiceRoleSupabaseClient()
-      const { data: prospect } = await serviceClient
-        .from("prospects")
-        .select("id, status")
-        .eq("email", inviteEmail)
-        .in("status", ["prospect", "contacted"])
-        .maybeSingle()
+
+      // Match prospect by company_id or email
+      let prospect = null
+      if (companyIdParam) {
+        const { data } = await serviceClient
+          .from("prospects")
+          .select("id, status")
+          .eq("company_id", companyIdParam)
+          .in("status", ["prospect", "contacted"])
+          .maybeSingle()
+        prospect = data
+      }
+      if (!prospect && inviteEmail) {
+        const { data } = await serviceClient
+          .from("prospects")
+          .select("id, status")
+          .eq("email", inviteEmail)
+          .in("status", ["prospect", "contacted"])
+          .maybeSingle()
+        prospect = data
+      }
+
       if (prospect) {
         await serviceClient.from("prospects").update({
           status: "visitor",
