@@ -407,6 +407,9 @@ export default function ListingEditorPage() {
   const [photoDeleteConfirmId, setPhotoDeleteConfirmId] = useState<string | null>(null)
   const photoDragItemRef = useRef<string | null>(null)
   const photoDragOverRef = useRef<string | null>(null)
+  const uploadToastIdRef = useRef<string | number | null>(null)
+  const uploadFileCountRef = useRef(0)
+  const prevIsUploadingRef = useRef(false)
   const [showCoverPicker, setShowCoverPicker] = useState(false)
   const [editingSpecBar, setEditingSpecBar] = useState<string | null>(null)
   const [specScope, setSpecScope] = useState("")
@@ -880,6 +883,25 @@ export default function ListingEditorPage() {
       duration: 8000,
     })
   }, [searchParams])
+
+  // Track photo upload completion
+  useEffect(() => {
+    if (prevIsUploadingRef.current && !isUploading && uploadToastIdRef.current != null) {
+      const toastId = uploadToastIdRef.current
+      if (uploadErrors.length > 0) {
+        toast.error(`${uploadErrors.length} ${uploadErrors.length === 1 ? "photo" : "photos"} failed`, {
+          id: toastId,
+          description: uploadErrors[0],
+        })
+      } else {
+        const count = uploadFileCountRef.current
+        toast.success(`${count} ${count === 1 ? "photo" : "photos"} uploaded`, { id: toastId })
+      }
+      uploadToastIdRef.current = null
+      uploadFileCountRef.current = 0
+    }
+    prevIsUploadingRef.current = isUploading
+  }, [isUploading, uploadErrors])
 
   // Keep activeSection as "location" for map initialization in the new layout
   useEffect(() => {
@@ -3642,7 +3664,15 @@ export default function ListingEditorPage() {
               accept="image/jpeg,image/png"
               className="hidden"
               disabled={isUploading}
-              onChange={e => { void handleFileUpload(e.target.files); e.target.value = "" }}
+              onChange={e => {
+                const files = e.target.files
+                if (files && files.length > 0) {
+                  uploadFileCountRef.current = files.length
+                  uploadToastIdRef.current = toast.loading(`Uploading ${files.length} ${files.length === 1 ? "photo" : "photos"}…`)
+                  void handleFileUpload(files)
+                }
+                e.target.value = ""
+              }}
             />
             <Plus size={18} style={{ color: "#c0c0be", marginBottom: 4 }} />
             <span style={{ fontSize: 12, color: "#b8b8b6", letterSpacing: ".03em" }}>
