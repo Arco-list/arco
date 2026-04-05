@@ -300,6 +300,8 @@ function OwnerEmailCell({ company, onRefresh }: { company: AdminCompanyRow; onRe
     if (trimmed === email) return
     const supabase = getBrowserSupabaseClient()
     await supabase.from("companies").update({ email: trimmed || null } as any).eq("id", company.id)
+    // Sync to prospects table so sales emails go to the new address
+    await supabase.from("prospects").update({ email: trimmed || null } as any).eq("company_id", company.id)
     toast.success("Email updated")
     onRefresh()
   }
