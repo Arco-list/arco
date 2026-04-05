@@ -1000,13 +1000,37 @@ async function autoTagPhotosWithSpaces(
 
   if (photosToTag.length === 0) return
 
-  // Build image content blocks — use minimal text between images
+  // Build image content blocks — download to base64 to avoid blocked external URLs
   const imageBlocks: any[] = []
   for (const photo of photosToTag) {
-    imageBlocks.push(
-      { type: "image", source: { type: "url", url: photo.url } },
-      { type: "text", text: `#${photo.order_index}` }
-    )
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10000)
+      const imgRes = await fetch(photo.url, {
+        signal: controller.signal,
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)" },
+      })
+      clearTimeout(timeout)
+      if (!imgRes.ok) {
+        console.log(`[autoTag] Failed to download photo #${photo.order_index}: ${imgRes.status}`)
+        continue
+      }
+      const contentType = imgRes.headers.get("content-type") || "image/jpeg"
+      const mediaType = contentType.split(";")[0].trim()
+      const buffer = await imgRes.arrayBuffer()
+      const base64 = Buffer.from(buffer).toString("base64")
+      imageBlocks.push(
+        { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+        { type: "text", text: `#${photo.order_index}` }
+      )
+    } catch (err) {
+      console.log(`[autoTag] Failed to download photo #${photo.order_index}:`, err)
+    }
+  }
+
+  if (imageBlocks.length === 0) {
+    console.log(`[autoTag] No photos could be downloaded, skipping auto-tag`)
+    return
   }
 
   console.log(`[autoTag] Calling Claude vision...`)
