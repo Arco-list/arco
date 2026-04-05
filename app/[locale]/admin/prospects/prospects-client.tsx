@@ -606,17 +606,29 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   className={`border-b border-[#e5e5e4] hover:bg-[#fafaf9] cursor-pointer transition-colors ${expandedId === p.id ? "bg-[#fafaf9]" : ""}`}
                   onClick={() => handleRowClick(p.id)}
                 >
-                  {/* Contact — name + email (email-only for arco/invites, editable for arco) */}
+                  {/* Contact — avatar/initials + name + email */}
                   <td className="px-4 py-3">
                     {(p.source === "arco" || p.source === "invites") ? (
-                      <ProspectEmailField prospect={p} onRefresh={refreshData} />
+                      p.contact_name ? (
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                            {p.contact_name.split(" ").filter(Boolean).map(t => t[0]?.toUpperCase()).slice(0, 2).join("")}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.contact_name}</span>
+                            <ProspectEmailField prospect={p} onRefresh={refreshData} />
+                          </div>
+                        </div>
+                      ) : (
+                        <ProspectEmailField prospect={p} onRefresh={refreshData} />
+                      )
                     ) : (
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
                           {initials}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-medium text-[#1c1c1a] truncate">{p.contact_name || "—"}</span>
+                          <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.contact_name || "—"}</span>
                           <span className="text-xs text-[#a1a1a0] truncate">{p.email}</span>
                         </div>
                       </div>
