@@ -80,8 +80,9 @@ ${content}
 </td></tr>
 <!-- Footer -->
 <tr><td style="padding:32px 0 0;border-top:1px solid #e8e8e6;">
-<img src="${base}/arco-logo-email.png" alt="Arco" width="48" height="13" style="display:block;margin-bottom:6px;opacity:0.7;" />
-<p style="margin:0;font-size:11px;font-weight:300;color:#a1a1a0;line-height:1.4;">The professional network architects trust.</p>
+<p style="margin:0;font-size:11px;font-weight:300;color:#a1a1a0;line-height:1.4;">
+<img src="${base}/arco-logo-email.png" alt="Arco" width="32" height="9" style="display:inline-block;vertical-align:middle;opacity:0.5;margin-right:4px;" />The professional network architects trust.
+</p>
 <p style="margin:8px 0 0;font-size:10px;color:#c4c4c2;line-height:1.4;">
 Arco Global BV · Amsterdam, Netherlands
 </p>
