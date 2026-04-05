@@ -54,7 +54,7 @@ const ALL_STATUSES: ProspectStatus[] = [
 
 const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
   not_started: { label: "Not started", dot: "bg-[#a1a1a0]" },
-  active: { label: "Active", dot: "bg-blue-400" },
+  active: { label: "Active", dot: "bg-[#2563eb]" },
   paused: { label: "Paused", dot: "bg-amber-400" },
   finished: { label: "Finished", dot: "bg-emerald-500" },
 }
