@@ -154,24 +154,14 @@ export async function matchProspectOnSignup(
     return;
   }
 
-  // Get user profile name for contact column
-  const { data: signupProfile } = await supabase
-    .from("profiles")
-    .select("first_name, last_name")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const signupName = [signupProfile?.first_name, signupProfile?.last_name].filter(Boolean).join(" ").trim() || null;
-
   const oldStatus = (prospect as any).status;
   const updates: Record<string, unknown> = {
     user_id: userId,
     signed_up_at: new Date().toISOString(),
   };
 
-  if (signupName) {
-    updates.contact_name = signupName;
-  }
+  // Don't set contact_name on signup — only set when company is actually claimed
+  // (matchProspectOnCompanyCreated handles that)
 
   if (canAdvanceTo(oldStatus, "signup")) {
     updates.status = "signup";
