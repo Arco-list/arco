@@ -11,31 +11,32 @@ export type ResendEmail = {
   subject: string
   created_at: string
   last_event: string
+  templateId: string | null
   templateName: string | null
 }
 
-const SUBJECT_TO_TEMPLATE: [RegExp, string][] = [
-  [/is your Arco sign-in code/i, "Sign-in Code"],
-  [/is your Arco verification code/i, "Signup Confirmation"],
-  [/Confirm your Arco account/i, "Signup Confirmation"],
-  [/credited you on/i, "Professional Invite"],
-  [/invited to join.*on Arco/i, "Team Invite"],
-  [/is now live on Arco/i, "Project Live"],
-  [/Update on /i, "Project Rejected"],
-  [/Reset your Arco password/i, "Password Reset"],
-  [/Sign in to Arco/i, "Sign-in Code"],
-  [/Verify your domain/i, "Domain Verification"],
-  [/^Welcome to Arco$/i, "Welcome"],
-  [/Discover projects on Arco/i, "Discover Projects"],
-  [/Find the right professional/i, "Find Professionals"],
-  [/Een podium voor/i, "Prospect Intro"],
-  [/staat op Arco/i, "Prospect Intro"],
-  [/is now on Arco/i, "Prospect Intro"],
+const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
+  [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
+  [/is your Arco verification code/i, "signup", "Signup Confirmation"],
+  [/Confirm your Arco account/i, "signup", "Signup Confirmation"],
+  [/credited you on/i, "professional-invite", "Professional Invite"],
+  [/invited to join.*on Arco/i, "team-invite", "Team Invite"],
+  [/is now live on Arco/i, "project-live", "Project Live"],
+  [/Update on /i, "project-rejected", "Project Rejected"],
+  [/Reset your Arco password/i, "password-reset", "Password Reset"],
+  [/Sign in to Arco/i, "magic-link", "Sign-in Code"],
+  [/Verify your domain/i, "domain-verification", "Domain Verification"],
+  [/^Welcome to Arco$/i, "welcome-homeowner", "Welcome"],
+  [/Discover projects on Arco/i, "discover-projects", "Discover Projects"],
+  [/Find the right professional/i, "find-professionals", "Find Professionals"],
+  [/Een podium voor/i, "prospect-intro", "Prospect Intro"],
+  [/staat op Arco/i, "prospect-intro", "Prospect Intro"],
+  [/is now on Arco/i, "prospect-intro", "Prospect Intro"],
 ]
 
-function matchTemplateName(subject: string): string | null {
-  for (const [pattern, name] of SUBJECT_TO_TEMPLATE) {
-    if (pattern.test(subject)) return name
+function matchTemplate(subject: string): { id: string; name: string } | null {
+  for (const [pattern, id, name] of SUBJECT_TO_TEMPLATE) {
+    if (pattern.test(subject)) return { id, name }
   }
   return null
 }
@@ -59,7 +60,8 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
       subject: e.subject,
       created_at: e.created_at,
       last_event: e.last_event ?? 'sent',
-      templateName: matchTemplateName(e.subject ?? ''),
+      templateId: matchTemplate(e.subject ?? '')?.id ?? null,
+      templateName: matchTemplate(e.subject ?? '')?.name ?? null,
     }))
 
     return { emails }

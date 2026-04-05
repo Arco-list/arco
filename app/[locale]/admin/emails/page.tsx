@@ -474,7 +474,19 @@ export default function AdminEmailsPage() {
                       return (
                         <tr key={email.id} className="border-b border-[#e5e5e4] hover:bg-[#fafaf9] transition-colors">
                           <td className="px-4 py-3 text-sm text-[#1c1c1a]">{email.to.join(", ")}</td>
-                          <td className="px-4 py-3 text-xs text-[#6b6b68]">{email.templateName ?? <span className="text-[#c4c4c2] italic">Unknown</span>}</td>
+                          <td className="px-4 py-3 text-xs text-[#6b6b68]">
+                            {email.templateId ? (
+                              <button
+                                type="button"
+                                className="text-[#016D75] hover:underline cursor-pointer"
+                                onClick={() => setPreviewTemplate(email.templateId)}
+                              >
+                                {email.templateName}
+                              </button>
+                            ) : (
+                              <span className="text-[#c4c4c2] italic">Unknown</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm text-[#1c1c1a] max-w-[300px] truncate">{email.subject}</td>
                           <td className="px-4 py-3">
                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>
