@@ -23,11 +23,28 @@ export default async function ProspectsPage() {
   const prospects = (data ?? []) as Prospect[]
   const { funnel } = await fetchFunnel()
 
+  // Fetch company metadata (logo, services, city) for linked prospects
+  const companyIds = [...new Set(prospects.map((p) => p.company_id).filter((id): id is string => Boolean(id)))]
+  let companyMap: Record<string, { logoUrl: string | null; services: string[]; city: string | null }> = {}
+  if (companyIds.length > 0) {
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, logo_url, city, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .in("id", companyIds)
+    for (const c of companies ?? []) {
+      companyMap[c.id] = {
+        logoUrl: c.logo_url ?? null,
+        services: [(c.primary_service as any)?.name].filter(Boolean),
+        city: c.city ?? null,
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="discover-page-title">
         <div className="wrap">
-          <ProspectsClient initialProspects={prospects} initialFunnel={funnel} />
+          <ProspectsClient initialProspects={prospects} initialFunnel={funnel} companyMap={companyMap} />
         </div>
       </div>
     </div>

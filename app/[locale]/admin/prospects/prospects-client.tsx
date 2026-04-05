@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState, useTransition, useCallback } from "react"
+import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { toast } from "sonner"
 import {
   fetchProspects,
@@ -19,6 +19,7 @@ import {
   type ProspectStatus,
   type ProspectEvent,
   type SequenceStatus,
+  syncResendEmailStats,
 } from "./actions"
 import {
   Select,
@@ -186,12 +187,15 @@ function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRef
 
 // -- Component ---------------------------------------------------------------
 
+export type CompanyInfo = { logoUrl: string | null; services: string[]; city: string | null }
+
 type Props = {
   initialProspects: Prospect[]
   initialFunnel: ProspectFunnel
+  companyMap?: Record<string, CompanyInfo>
 }
 
-export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
+export function ProspectsClient({ initialProspects, initialFunnel, companyMap = {} }: Props) {
   const [prospects, setProspects] = useState(initialProspects)
   const [funnel, setFunnel] = useState(initialFunnel)
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">("all")
@@ -224,6 +228,16 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
       setHasMore(prospectsResult.prospects.length >= 50)
     })
   }, [statusFilter, sourceFilter, sequenceFilter, search])
+
+  // Sync Resend email stats on mount (backfills opened/clicked from Resend API)
+  const syncedRef = useRef(false)
+  useEffect(() => {
+    if (syncedRef.current) return
+    syncedRef.current = true
+    syncResendEmailStats().then(({ synced }) => {
+      if (synced > 0) refreshData()
+    })
+  }, [refreshData])
 
   // Filter change
   const handleFilterChange = useCallback((newStatus?: ProspectStatus | "all", newSource?: string, newSequence?: SequenceStatus | "all") => {
@@ -628,16 +642,27 @@ export function ProspectsClient({ initialProspects, initialFunnel }: Props) {
                       )
                     })()}
                   </td>
-                  {/* Company — owner design (initials + name) */}
+                  {/* Company — logo/initials + name + service · city */}
                   <td className="px-4 py-3">
-                    {p.company_name ? (
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
-                          {companyInitials}
+                    {p.company_name ? (() => {
+                      const ci = p.company_id ? companyMap[p.company_id] : null
+                      const subtitle = [ci?.services?.[0], ci?.city].filter(Boolean).join(" · ")
+                      return (
+                        <div className="flex items-center gap-3">
+                          {ci?.logoUrl ? (
+                            <img src={ci.logoUrl} alt={p.company_name} className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                              {companyInitials}
+                            </div>
+                          )}
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.company_name}</span>
+                            {subtitle && <span className="text-[11px] text-[#a1a1a0] truncate">{subtitle}</span>}
+                          </div>
                         </div>
-                        <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.company_name}</span>
-                      </div>
-                    ) : (
+                      )
+                    })() : (
                       <span className="text-xs text-[#a1a1a0]">—</span>
                     )}
                   </td>

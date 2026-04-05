@@ -144,6 +144,8 @@ const CONTRIBUTOR_STATUS_CONFIG: Record<string, { label: string; dotColor: strin
   removed: { label: "Removed", dotColor: "bg-red-500" },
 }
 
+const CONTRIBUTOR_STATUS_KEYS = ["invited", "live_on_page", "listed", "unlisted", "rejected", "removed"] as const
+
 export type AdminLinkedProject = {
   id: string
   ppId: string
@@ -205,6 +207,26 @@ type StatusChangeState = {
   selectedStatus: CompanyStatus
 }
 
+type ProspectCandidate = {
+  company: AdminCompanyRow
+  eligible: boolean
+  reasons: string[]
+}
+
+type ProspectConfirmState = {
+  candidates: ProspectCandidate[]
+}
+
+function validateProspectEligibility(company: AdminCompanyRow): ProspectCandidate {
+  const reasons: string[] = []
+  if (!company.name?.trim()) reasons.push("Missing company name")
+  if (!company.contactEmail?.trim()) reasons.push("Missing contact email")
+  if (!company.logoUrl?.trim()) reasons.push("Missing logo")
+  if (!company.city?.trim() && !company.country?.trim()) reasons.push("Missing location")
+  if (company.projects.length === 0) reasons.push("No projects linked")
+  return { company, eligible: reasons.length === 0, reasons }
+}
+
 type EditFormState = {
   name: string
   slug: string
@@ -260,6 +282,48 @@ const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description
 const planLabels: Record<PlanTier, string> = {
   basic: "Basic",
   plus: "Plus",
+}
+
+function OwnerEmailCell({ company, onRefresh }: { company: AdminCompanyRow; onRefresh: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const email = company.ownerEmail || company.contactEmail || ""
+  const [value, setValue] = useState(email)
+
+  const handleSave = async () => {
+    setEditing(false)
+    const trimmed = value.trim().toLowerCase()
+    if (trimmed === email) return
+    const supabase = getBrowserSupabaseClient()
+    await supabase.from("companies").update({ email: trimmed || null } as any).eq("id", company.id)
+    toast.success("Email updated")
+    onRefresh()
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="email"
+        className="text-xs text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-[180px]"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setValue(email); setEditing(false) } }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="text-[11px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors cursor-pointer truncate"
+      onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+      title="Click to edit email"
+    >
+      {email || <span className="text-[#c4c4c2] italic">Add email...</span>}
+    </button>
+  )
 }
 
 function ensureHttp(url: string | null): string | null {
@@ -356,6 +420,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [changeOwnerCompany, setChangeOwnerCompany] = useState<AdminCompanyRow | null>(null)
   const [changeOwnerEmail, setChangeOwnerEmail] = useState("")
   const [domainVerifyCompany, setDomainVerifyCompany] = useState<AdminCompanyRow | null>(null)
+  const [prospectConfirm, setProspectConfirm] = useState<ProspectConfirmState | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // Load professionals when editing a company
@@ -478,6 +543,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
   const confirmStatusChangeDialog = () => {
     if (!statusChange) return
+    if (statusChange.selectedStatus === ("prospected" as any)) {
+      const candidate = validateProspectEligibility(statusChange.company)
+      setProspectConfirm({ candidates: [candidate] })
+      setStatusChange(null)
+      return
+    }
     startTransition(async () => {
       try {
         const result = await updateCompanyStatusAction({
@@ -488,17 +559,38 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           toast.error(result.error ?? "Failed to update company status")
           return
         }
-        if (statusChange.selectedStatus === ("prospected" as any)) {
-          toast.success(`${statusChange.company.name} set to Prospected — prospect email sent`)
-        } else {
-          toast.success(`${statusChange.company.name} status updated to ${STATUS_LABEL[statusChange.selectedStatus]}`)
-        }
+        toast.success(`${statusChange.company.name} status updated to ${STATUS_LABEL[statusChange.selectedStatus]}`)
         router.refresh()
       } catch (error) {
         console.error("Failed to update company status", error)
         toast.error("Failed to update company status")
       } finally {
         setStatusChange(null)
+      }
+    })
+  }
+
+  const confirmProspect = () => {
+    if (!prospectConfirm) return
+    const eligible = prospectConfirm.candidates.filter((c) => c.eligible)
+    if (eligible.length === 0) return
+    startTransition(async () => {
+      try {
+        let success = 0
+        for (const { company } of eligible) {
+          const result = await updateCompanyStatusAction({ companyId: company.id, status: "prospected" as CompanyStatus })
+          if (result.success) success++
+        }
+        if (success > 0) {
+          toast.success(`${success} ${success === 1 ? "company" : "companies"} set to Prospected — prospect emails sent`)
+          setRowSelection({})
+          router.refresh()
+        }
+      } catch (error) {
+        console.error("Failed to set prospected status", error)
+        toast.error("Failed to update status")
+      } finally {
+        setProspectConfirm(null)
       }
     })
   }
@@ -646,12 +738,13 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 ) : (
                   <span className="text-sm font-medium text-[#1c1c1a] truncate">{company.name}</span>
                 )}
-                {firstService && (
+                {(firstService || company.city) && (
                   <span className="text-xs text-[#a1a1a0] flex items-center gap-0">
-                    <span className="truncate">{firstService}</span>
+                    {firstService && <span className="truncate">{firstService}</span>}
                     {extraCount > 0 && (
                       <ServiceDropdown services={company.services} extraCount={extraCount} />
                     )}
+                    {company.city && <span>{firstService ? " · " : ""}{company.city}</span>}
                   </span>
                 )}
               </div>
@@ -747,11 +840,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             )
           }
 
-          // Not claimed — show email only (no icon)
-          const email = company.ownerEmail || company.contactEmail
-          if (!email) return <span className="text-xs text-[#a1a1a0]">—</span>
-
-          return <span className="text-[11px] text-[#a1a1a0] truncate">{email}</span>
+          // Not claimed — show editable email
+          return <OwnerEmailCell company={company} onRefresh={() => router.refresh()} />
         },
       },
       {
@@ -783,14 +873,15 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <button type="button" className="flex items-center gap-1 hover:text-[#016D75] transition-colors cursor-pointer text-left">
                     <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", projDot)} />
                     <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{project.title}</span>
-                    {project.isProjectOwner ? (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
-                        Owner
-                      </span>
-                    ) : contribConfig && (
+                    {contribConfig && (
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
                         <span className={cn("inline-block h-1 w-1 rounded-full", contribConfig.dotColor)} />
                         {contribConfig.label}
+                      </span>
+                    )}
+                    {project.isProjectOwner && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
+                        Owner
                       </span>
                     )}
                   </button>
@@ -808,18 +899,20 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
-                  {(["invited", "listed", "live_on_page", "unlisted", "rejected", "removed"] as const).map((status) => {
+                  {CONTRIBUTOR_STATUS_KEYS.map((status) => {
                     const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                    if (!config || project.inviteStatus === status) return null
+                    if (!config) return null
+                    const isCurrent = project.inviteStatus === status
                     return (
                       <DropdownMenuItem
                         key={status}
-                        className="text-xs cursor-pointer flex items-center gap-1.5"
+                        className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
                         onClick={async () => {
+                          if (isCurrent) return
                           const result = await updateProjectProfessionalStatusAction({
                             projectId: project.id,
                             companyId,
-                            newStatus: status,
+                            status,
                           })
                           if (result.success) {
                             toast.success(`Status updated to ${config.label}`)
@@ -862,14 +955,15 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                           <DropdownMenuSubTrigger className="flex items-center gap-1 text-xs">
                             <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", pDot)} />
                             <span className="truncate">{project.title}</span>
-                            {project.isProjectOwner ? (
-                              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
-                                Owner
-                              </span>
-                            ) : cConfig && (
+                            {cConfig && (
                               <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
                                 <span className={cn("inline-block h-1 w-1 rounded-full", cConfig.dotColor)} />
                                 {cConfig.label}
+                              </span>
+                            )}
+                            {project.isProjectOwner && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
+                                Owner
                               </span>
                             )}
                           </DropdownMenuSubTrigger>
@@ -886,18 +980,20 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
-                            {(["invited", "listed", "live_on_page", "unlisted", "rejected", "removed"] as const).map((status) => {
+                            {CONTRIBUTOR_STATUS_KEYS.map((status) => {
                               const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                              if (!config || project.inviteStatus === status) return null
+                              if (!config) return null
+                              const isCurrent = project.inviteStatus === status
                               return (
                                 <DropdownMenuItem
                                   key={status}
-                                  className="text-xs cursor-pointer flex items-center gap-1.5"
+                                  className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
                                   onClick={async () => {
+                                    if (isCurrent) return
                                     const result = await updateProjectProfessionalStatusAction({
                                       projectId: project.id,
                                       companyId,
-                                      newStatus: status,
+                                      status,
                                     })
                                     if (result.success) {
                                       toast.success(`Status updated to ${config.label}`)
@@ -1169,6 +1265,17 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                       className="text-xs cursor-pointer flex items-center gap-1.5"
                       onClick={async () => {
                         const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                        if (s === "prospected") {
+                          const candidates = selectedRows
+                            .filter((c) => c.status !== "prospected")
+                            .map(validateProspectEligibility)
+                          if (candidates.length === 0) {
+                            toast.info("All selected companies are already prospected")
+                            return
+                          }
+                          setProspectConfirm({ candidates })
+                          return
+                        }
                         setIsBulkProcessing(true)
                         let success = 0
                         for (const company of selectedRows) {
@@ -1511,12 +1618,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               })}
             </div>
 
-            {statusChange.selectedStatus === ("prospected" as any) && (
-              <p style={{ fontSize: 12, color: "#ea580c", margin: "0 0 12px", padding: "8px 12px", background: "#fff7ed", borderRadius: 4 }}>
-                Setting status to Prospected will send a prospect email to {statusChange.company.contactEmail || "the company email"}.
-              </p>
-            )}
-
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" onClick={() => setStatusChange(null)} disabled={isPending} style={{ flex: 1 }}>
                 Cancel
@@ -1528,12 +1629,84 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 disabled={isPending || statusChange.selectedStatus === (statusChange.company.status === "invited" ? "unlisted" : statusChange.company.status)}
                 style={{ flex: 1 }}
               >
-                {isPending ? "Updating…" : statusChange.selectedStatus === ("prospected" as any) ? "Send & Update" : "Update status"}
+                {isPending ? "Updating…" : statusChange.selectedStatus === ("prospected" as any) ? "Continue" : "Update status"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Prospect Confirmation Dialog */}
+      {prospectConfirm && (() => {
+        const eligible = prospectConfirm.candidates.filter((c) => c.eligible)
+        const ineligible = prospectConfirm.candidates.filter((c) => !c.eligible)
+        return (
+          <div className="popup-overlay" onClick={() => setProspectConfirm(null)}>
+            <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">Set to Prospected</h3>
+                <button type="button" className="popup-close" onClick={() => setProspectConfirm(null)} aria-label="Close">
+                  ✕
+                </button>
+              </div>
+
+              <div style={{ fontSize: 13, color: "#44403c", marginBottom: 16, lineHeight: 1.5 }}>
+                Only companies with completed information and at least one project can be set to Prospected.
+                A prospect email will be sent to each eligible company.
+              </div>
+
+              {eligible.length > 0 && (
+                <div style={{ marginBottom: ineligible.length > 0 ? 16 : 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", backgroundColor: "#22c55e" }} />
+                    {eligible.length} {eligible.length === 1 ? "company" : "companies"} eligible
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {eligible.map(({ company }) => (
+                      <div key={company.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 4, fontSize: 12 }}>
+                        <span style={{ fontWeight: 500, color: "#1c1c1a" }}>{company.name}</span>
+                        <span style={{ color: "#6b6b68" }}>{company.contactEmail}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {ineligible.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#92400e", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", backgroundColor: "#f59e0b" }} />
+                    {ineligible.length} {ineligible.length === 1 ? "company" : "companies"} not eligible
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {ineligible.map(({ company, reasons }) => (
+                      <div key={company.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 4, fontSize: 12 }}>
+                        <span style={{ fontWeight: 500, color: "#1c1c1a" }}>{company.name}</span>
+                        <span style={{ color: "#92400e" }}>{reasons.join(" · ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="popup-actions">
+                <button type="button" className="btn-tertiary" onClick={() => setProspectConfirm(null)} disabled={isPending} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={confirmProspect}
+                  disabled={isPending || eligible.length === 0}
+                  style={{ flex: 1 }}
+                >
+                  {isPending ? "Sending…" : `Send ${eligible.length === 1 ? "email" : `${eligible.length} emails`} & update`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Edit Dialog */}
       <Dialog open={Boolean(editingCompany)} onOpenChange={(open) => !open && setEditingCompany(null)}>

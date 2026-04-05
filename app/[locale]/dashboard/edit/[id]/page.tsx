@@ -3509,7 +3509,7 @@ export default function ListingEditorPage() {
     setCityQuery("")
     setCityResults([])
     setEditingSpecBar(null)
-    void saveFieldDirect({ location: city })
+    void saveFieldDirect({ location: city, address_city: city })
   }, [saveFieldDirect])
 
   // Location input change handler

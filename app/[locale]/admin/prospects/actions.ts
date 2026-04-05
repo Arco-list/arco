@@ -1,5 +1,6 @@
 "use server"
 
+import { Resend } from "resend"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage, updateAccountStage } from "@/lib/apollo-client"
 
@@ -469,18 +470,6 @@ export async function updateProspectEmail(prospectId: string, newEmail: string) 
 
   if (!prospect) return { success: false, error: "Prospect not found" }
 
-  // Check if email is already used by another prospect
-  const { data: existing } = await supabase
-    .from("prospects")
-    .select("id")
-    .eq("email", newEmail)
-    .neq("id", prospectId)
-    .maybeSingle()
-
-  if (existing) {
-    return { success: false, error: `Email ${newEmail} is already used by another prospect` }
-  }
-
   const { error: updateError } = await supabase.from("prospects").update({ email: newEmail }).eq("id", prospectId)
 
   if (updateError) {
@@ -579,4 +568,70 @@ export async function restartProspectSequence(prospectId: string) {
   })
 
   return { success: true }
+}
+
+/**
+ * Sync email open/click stats from Resend API to prospects table.
+ * Called when the Sales page loads to backfill webhook gaps.
+ */
+export async function syncResendEmailStats() {
+  if (!process.env.RESEND_API_KEY) return { synced: 0 }
+
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const { data, error } = await resend.emails.list()
+    if (error || !data?.data) return { synced: 0 }
+
+    // Group by recipient email: track if any email was opened/clicked
+    const recipientStats = new Map<string, { opened: boolean; clicked: boolean }>()
+    for (const email of data.data as any[]) {
+      const event = email.last_event ?? "sent"
+      const recipients: string[] = Array.isArray(email.to) ? email.to : [email.to]
+      for (const to of recipients) {
+        if (!to) continue
+        const addr = to.toLowerCase().trim()
+        const existing = recipientStats.get(addr) ?? { opened: false, clicked: false }
+        if (event === "opened" || event === "clicked") existing.opened = true
+        if (event === "clicked") existing.clicked = true
+        recipientStats.set(addr, existing)
+      }
+    }
+
+    const supabase = createServiceRoleSupabaseClient()
+    let synced = 0
+
+    // Batch update prospects that have opens/clicks in Resend but 0 in DB
+    const emails = Array.from(recipientStats.entries())
+      .filter(([, s]) => s.opened || s.clicked)
+      .map(([email]) => email)
+
+    if (emails.length === 0) return { synced: 0 }
+
+    const { data: prospects } = await supabase
+      .from("prospects")
+      .select("id, email, emails_opened, emails_clicked")
+      .in("email", emails)
+
+    for (const prospect of prospects ?? []) {
+      const stats = recipientStats.get(prospect.email.toLowerCase().trim())
+      if (!stats) continue
+
+      const updates: Record<string, unknown> = {}
+      if (stats.opened && (prospect.emails_opened ?? 0) === 0) {
+        updates.emails_opened = 1
+      }
+      if (stats.clicked && (prospect.emails_clicked ?? 0) === 0) {
+        updates.emails_clicked = 1
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("prospects").update(updates).eq("id", prospect.id)
+        synced++
+      }
+    }
+
+    return { synced }
+  } catch {
+    return { synced: 0 }
+  }
 }
