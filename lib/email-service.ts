@@ -79,9 +79,18 @@ function baseLayout(content: string, logoBaseUrl?: string): string {
 ${content}
 </td></tr>
 <!-- Footer -->
-<tr><td style="padding:24px 0 0;border-top:1px solid #e8e8e6;">
-<p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">
-<img src="${base}/arco-logo-email.png" alt="Arco" width="36" height="10" style="display:inline-block;vertical-align:middle;opacity:0.4;margin-right:6px;" />Arco Global BV · The professional network architects trust.
+<tr><td style="padding:32px 0 0;border-top:1px solid #e8e8e6;">
+<table cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;padding-right:10px;">
+<img src="${base}/arco-logo-square.png" alt="Arco" width="28" height="28" style="display:block;border-radius:6px;" />
+</td>
+<td style="vertical-align:middle;">
+<p style="margin:0;font-size:13px;font-weight:400;color:#1c1c1a;line-height:1.3;">Arco</p>
+<p style="margin:1px 0 0;font-size:11px;font-weight:300;color:#a1a1a0;line-height:1.3;">The professional network architects trust.</p>
+</td>
+</tr></table>
+<p style="margin:12px 0 0;font-size:10px;color:#c4c4c2;line-height:1.4;">
+Arco Global BV · Amsterdam, Netherlands
 </p>
 </td></tr>
 </table>
