@@ -153,6 +153,14 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
         } else {
           companyId = unlistedMatch.id
           logger.info("Claimed enriched unlisted company", { scope: "create-company", userId: user.id, companyId: unlistedMatch.id })
+
+          // Update prospect status to "company" (Draft)
+          try {
+            const { matchProspectOnCompanyCreated } = await import('@/lib/prospect-matching')
+            await matchProspectOnCompanyCreated(user.id, companyId)
+          } catch (err) {
+            logger.error("Failed to match prospect on company claim", { userId: user.id, companyId }, err as Error)
+          }
         }
       }
     }

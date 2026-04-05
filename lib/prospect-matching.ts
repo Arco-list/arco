@@ -221,14 +221,26 @@ export async function matchProspectOnCompanyCreated(
 ): Promise<void> {
   const supabase = createServiceRoleSupabaseClient();
 
-  const { data: prospect, error } = await supabase
+  // Try matching by user_id first, then by company_id
+  let prospect: any = null;
+  const { data: byUser } = await supabase
     .from("prospects")
     .select("id, status, email, apollo_contact_id")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
+  prospect = byUser;
 
-  if (error || !prospect) {
-    logger.debug("No prospect found for user on company creation", { userId });
+  if (!prospect) {
+    const { data: byCompany } = await supabase
+      .from("prospects")
+      .select("id, status, email, apollo_contact_id")
+      .eq("company_id", companyId)
+      .maybeSingle();
+    prospect = byCompany;
+  }
+
+  if (!prospect) {
+    logger.debug("No prospect found for user on company creation", { userId, companyId });
     return;
   }
 
