@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -323,21 +324,22 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         const first = companies[0]
         const others = companies.slice(1)
 
-        const renderBadge = (company: LinkedCompany) => {
-          if (company.isOwner) {
-            return (
-              <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
-                Owner
-              </span>
-            )
-          }
+        const renderBadges = (company: LinkedCompany) => {
           const config = CONTRIBUTOR_STATUS_CONFIG[company.status]
-          if (!config) return null
           return (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
-              <span className={`inline-block w-[5px] h-[5px] rounded-full ${config.dotColor}`} />
-              {config.label}
-            </span>
+            <>
+              {config && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
+                  <span className={`inline-block w-[5px] h-[5px] rounded-full ${config.dotColor}`} />
+                  {config.label}
+                </span>
+              )}
+              {company.isOwner && (
+                <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
+                  Owner
+                </span>
+              )}
+            </>
           )
         }
 
@@ -349,7 +351,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               <button type="button" className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left">
                 <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
                 <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{company.name}</span>
-                {renderBadge(company)}
+                {renderBadges(company)}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[180px]">
@@ -381,14 +383,16 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
-              {(["invited", "listed", "live_on_page", "unlisted", "rejected", "removed"] as const).map((status) => {
+              {(["invited", "live_on_page", "listed", "unlisted", "rejected", "removed"] as const).map((status) => {
                 const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                if (!config || company.status === status) return null
+                if (!config) return null
+                const isCurrent = company.status === status
                 return (
                   <DropdownMenuItem
                     key={status}
-                    className="text-xs cursor-pointer flex items-center gap-1.5"
+                    className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
                     onClick={async () => {
+                      if (isCurrent) return
                       const result = await updateProjectProfessionalStatusAction({
                         projectId,
                         companyId: company.id,
@@ -427,7 +431,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                       <DropdownMenuSubTrigger className="flex items-center gap-1.5 text-xs">
                         <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
                         <span className="truncate">{company.name}</span>
-                        {renderBadge(company)}
+                        {renderBadges(company)}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent className="min-w-[180px]">
                         {company.slug && (
@@ -449,14 +453,16 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
-                        {(["invited", "listed", "live_on_page", "unlisted", "rejected", "removed"] as const).map((status) => {
+                        {(["invited", "live_on_page", "listed", "unlisted", "rejected", "removed"] as const).map((status) => {
                           const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                          if (!config || company.status === status) return null
+                          if (!config) return null
+                          const isCurrent = company.status === status
                           return (
                             <DropdownMenuItem
                               key={status}
-                              className="text-xs cursor-pointer flex items-center gap-1.5"
+                              className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
                               onClick={async () => {
+                                if (isCurrent) return
                                 const result = await updateProjectProfessionalStatusAction({
                                   projectId,
                                   companyId: company.id,
