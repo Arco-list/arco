@@ -11,6 +11,31 @@ export type ResendEmail = {
   subject: string
   created_at: string
   last_event: string
+  templateName: string | null
+}
+
+const SUBJECT_TO_TEMPLATE: [RegExp, string][] = [
+  [/is your Arco sign-in code/i, "Sign-in Code"],
+  [/is your Arco verification code/i, "Signup Confirmation"],
+  [/Confirm your Arco account/i, "Signup Confirmation"],
+  [/credited you on/i, "Professional Invite"],
+  [/invited to join.*on Arco/i, "Team Invite"],
+  [/is now live on Arco/i, "Project Live"],
+  [/Update on /i, "Project Rejected"],
+  [/Reset your Arco password/i, "Password Reset"],
+  [/Sign in to Arco/i, "Sign-in Code"],
+  [/Verify your domain/i, "Domain Verification"],
+  [/^Welcome to Arco$/i, "Welcome"],
+  [/Discover projects on Arco/i, "Discover Projects"],
+  [/Find the right professional/i, "Find Professionals"],
+  [/is now on Arco/i, "Prospect Intro"],
+]
+
+function matchTemplateName(subject: string): string | null {
+  for (const [pattern, name] of SUBJECT_TO_TEMPLATE) {
+    if (pattern.test(subject)) return name
+  }
+  return null
 }
 
 export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; error?: string }> {
@@ -32,6 +57,7 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
       subject: e.subject,
       created_at: e.created_at,
       last_event: e.last_event ?? 'sent',
+      templateName: matchTemplateName(e.subject ?? ''),
     }))
 
     return { emails }
