@@ -1442,6 +1442,32 @@ export async function completeCompanySetupAction(input: {
     }
   }
 
+  // Update prospect status to "active" (Listed) if company was listed
+  try {
+    const serviceRole2 = createServiceRoleSupabaseClient()
+    const { data: prospect } = await serviceRole2
+      .from("prospects")
+      .select("id, status, apollo_contact_id")
+      .or(`company_id.eq.${companyId},user_id.eq.${user.id}`)
+      .maybeSingle()
+
+    if (prospect && prospect.status !== "active") {
+      const newStatus = input.listCompany ? "active" : "company"
+      await serviceRole2.from("prospects").update({
+        status: newStatus,
+        ...(input.listCompany ? { converted_at: new Date().toISOString() } : { company_created_at: new Date().toISOString() }),
+      }).eq("id", prospect.id)
+
+      await serviceRole2.from("prospect_events").insert({
+        prospect_id: prospect.id,
+        event_type: "status_changed",
+        metadata: { new_status: newStatus, old_status: prospect.status, trigger: "complete_company_setup" },
+      } as any)
+    }
+  } catch (err) {
+    logger.error("Failed to update prospect status on company setup", { companyId }, err as Error)
+  }
+
   // Refresh materialized views
   const serviceRole = createServiceRoleSupabaseClient()
   await serviceRole.rpc("refresh_all_materialized_views")
