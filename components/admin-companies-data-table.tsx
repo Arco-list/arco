@@ -1651,23 +1651,20 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <span className={`status-modal-dot ${option.dotColor}`} />
                     <div className="status-modal-option-text">
                       <span className="status-modal-option-label">{option.label}</span>
-                      <span className="status-modal-option-desc">{option.description}</span>
-                      {needsPublishedProject && (
-                        <span className="status-modal-limit" style={{ color: "#92400e" }}>
-                          {statusChange.company.canPublishProjects
-                            ? "Publish your first project to list this company page"
-                            : "Get invited to a published project to list this company page"}
+                      {isDisabled ? (
+                        <span className="status-modal-option-desc" style={{ color: "#92400e" }}>
+                          {needsPublishedProject
+                            ? (statusChange.company.canPublishProjects
+                              ? "Publish your first project to list this company page"
+                              : "Get invited to a published project to list this company page")
+                            : needsUnclaimed
+                              ? `Company already claimed by ${statusChange.company.ownerName}`
+                              : needsClaimed
+                                ? "Company must be claimed first — use Prospected to list unclaimed companies"
+                                : option.description}
                         </span>
-                      )}
-                      {needsUnclaimed && (
-                        <span className="status-modal-limit" style={{ color: "#92400e" }}>
-                          Company already claimed by {statusChange.company.ownerName}
-                        </span>
-                      )}
-                      {needsClaimed && (
-                        <span className="status-modal-limit" style={{ color: "#92400e" }}>
-                          Company must be claimed first — use Prospected to list unclaimed companies
-                        </span>
+                      ) : (
+                        <span className="status-modal-option-desc">{option.description}</span>
                       )}
                     </div>
                   </button>
