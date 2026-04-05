@@ -154,11 +154,24 @@ export async function matchProspectOnSignup(
     return;
   }
 
+  // Get user profile name for contact column
+  const { data: signupProfile } = await supabase
+    .from("profiles")
+    .select("first_name, last_name")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const signupName = [signupProfile?.first_name, signupProfile?.last_name].filter(Boolean).join(" ").trim() || null;
+
   const oldStatus = (prospect as any).status;
   const updates: Record<string, unknown> = {
     user_id: userId,
     signed_up_at: new Date().toISOString(),
   };
+
+  if (signupName) {
+    updates.contact_name = signupName;
+  }
 
   if (canAdvanceTo(oldStatus, "signup")) {
     updates.status = "signup";
@@ -255,34 +268,28 @@ export async function matchProspectOnCompanyCreated(
     return;
   }
 
-  // Get the company's domain (website or email)
-  const { data: company } = await supabase
-    .from("companies")
-    .select("website, email")
-    .eq("id", companyId)
-    .single();
+  // Get owner profile name
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("first_name, last_name")
+    .eq("id", userId)
+    .maybeSingle();
 
-  // Check if the company domain matches the prospect's email domain
-  const prospectDomain = emailDomain((prospect as any).email);
-  const companyWebDomain = company?.website ? urlDomain(company.website) : "";
-  const companyEmailDomain = company?.email ? emailDomain(company.email) : "";
-  const domainMatch = prospectDomain && (
-    prospectDomain === companyWebDomain ||
-    prospectDomain === companyEmailDomain
-  );
+  const ownerName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() || null;
 
   const oldStatus = (prospect as any).status;
   const updates: Record<string, unknown> = {
     company_id: companyId,
+    user_id: userId,
     company_created_at: new Date().toISOString(),
   };
 
-  if (domainMatch && canAdvanceTo(oldStatus, "company")) {
+  if (ownerName) {
+    updates.contact_name = ownerName;
+  }
+
+  if (canAdvanceTo(oldStatus, "company")) {
     updates.status = "company";
-  } else if (!domainMatch) {
-    logger.info("Company domain does not match prospect email domain, not advancing", {
-      prospectDomain, companyWebDomain, companyEmailDomain, prospectId: (prospect as any).id,
-    });
   }
 
   await (supabase.from("prospects") as any)
@@ -296,10 +303,10 @@ export async function matchProspectOnCompanyCreated(
     "app",
     oldStatus,
     (updates.status as string) ?? oldStatus,
-    { userId, companyId, domainMatch }
+    { userId, companyId, ownerName }
   );
 
-  if (domainMatch) {
+  if (updates.status === "company") {
     await syncApolloStage((prospect as any).apollo_contact_id, "company");
   }
 }
