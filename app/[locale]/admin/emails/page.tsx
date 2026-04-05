@@ -37,10 +37,9 @@ type EmailTemplate = {
 }
 
 const SENDERS: Record<string, EmailSender> = {
-  arco: { name: "Arco", email: "noreply@arcolist.com", icon: "/arco-icon.svg" },
+  arco: { name: "Arco", email: "automated@arcolist.com", icon: "/arco-logo-square.png" },
   niek: { name: "Niek van Leeuwen", email: "niek@arcolist.com" },
-  team: { name: "Arco Team", email: "team@arcolist.com", icon: "/arco-icon.svg" },
-  supabase: { name: "Supabase Auth", email: "noreply@mail.app.supabase.io" },
+  team: { name: "Arco Team", email: "team@arcolist.com", icon: "/arco-logo-square.png" },
 }
 
 const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
@@ -51,14 +50,14 @@ const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
 }
 
 const INITIAL_TEMPLATES: EmailTemplate[] = [
-  { id: "magic-link", name: "Sign-in Code", type: "transactional", audience: "all", description: "OTP code for magic link sign-in", trigger: "User signs in with email (OTP)", subject: "[Code] is your Arco sign-in code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.supabase },
-  { id: "signup", name: "Signup Confirmation", type: "transactional", audience: "all", description: "Email confirmation after signup", trigger: "User creates account with email + password", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.supabase },
+  { id: "magic-link", name: "Sign-in Code", type: "transactional", audience: "all", description: "OTP code for magic link sign-in", trigger: "User signs in with email (OTP)", subject: "[Code] is your Arco sign-in code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
+  { id: "signup", name: "Signup Confirmation", type: "transactional", audience: "all", description: "Email confirmation after signup", trigger: "User creates account with email + password", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "domain-verification", name: "Domain Verification", type: "transactional", audience: "professional", description: "6-digit code for domain ownership", trigger: "User verifies company domain during creation", subject: "[Code] is your Arco verification code", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "professional-invite", name: "Professional Invite", type: "transactional", audience: "professional", description: "Credited on a project", trigger: "Architect credits professional on published project", subject: "[Company] credited you on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "team-invite", name: "Team Invite", type: "transactional", audience: "professional", description: "Invited to join a company", trigger: "Company admin invites team member", subject: "You're invited to join [Company]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
-  { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true, from: SENDERS.supabase },
+  { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.niek },
   { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2, from: SENDERS.niek },
   { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5, from: SENDERS.niek },
