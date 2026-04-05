@@ -60,9 +60,11 @@ export function CreateCompanyModal() {
 
   // Verification state
   const [verifyEmail, setVerifyEmail] = useState("")
-  const [verifyCode, setVerifyCode] = useState("")
+  const [verifyOtp, setVerifyOtp] = useState(["", "", "", "", "", ""])
   const [codeSent, setCodeSent] = useState(false)
   const [manualWebsite, setManualWebsite] = useState("")
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
   const [isPending, startTransition] = useTransition()
 
@@ -76,11 +78,33 @@ export function CreateCompanyModal() {
     setIsSearching(false)
     setClaimingCompanyId(null)
     setVerifyEmail("")
-    setVerifyCode("")
+    setVerifyOtp(["", "", "", "", "", ""])
     setCodeSent(false)
     setManualWebsite("")
     googleService.current = null
   }, [])
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (value.length > 1) {
+      const chars = value.replace(/\D/g, "").slice(0, 6).split("")
+      const newOtp = ["", "", "", "", "", ""]
+      chars.forEach((char, i) => { newOtp[i] = char })
+      setVerifyOtp(newOtp)
+      otpRefs.current[Math.min(chars.length, 5)]?.focus()
+      return
+    }
+    const cleaned = value.replace(/\D/g, "")
+    const newOtp = [...verifyOtp]
+    newOtp[index] = cleaned
+    setVerifyOtp(newOtp)
+    if (cleaned && index < 5) otpRefs.current[index + 1]?.focus()
+  }
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !verifyOtp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus()
+    }
+  }
 
   // When opened with preloaded company data, skip straight to verify step
   useEffect(() => {
@@ -253,7 +277,7 @@ export function CreateCompanyModal() {
       setPlaceData(data)
       setError(null)
       setVerifyEmail("")
-      setVerifyCode("")
+      setVerifyOtp(["", "", "", "", "", ""])
       setCodeSent(false)
       setManualWebsite("")
       setStep("verify")
@@ -282,7 +306,7 @@ export function CreateCompanyModal() {
     setClaimingCompanyId(company.id)
     setError(null)
     setVerifyEmail("")
-    setVerifyCode("")
+    setVerifyOtp(["", "", "", "", "", ""])
     setCodeSent(false)
     setManualWebsite("")
     setStep("verify")
@@ -294,7 +318,7 @@ export function CreateCompanyModal() {
     setClaimingCompanyId(null)
     setError(null)
     setVerifyEmail("")
-    setVerifyCode("")
+    setVerifyOtp(["", "", "", "", "", ""])
     setCodeSent(false)
     setManualWebsite("")
   }
@@ -330,7 +354,7 @@ export function CreateCompanyModal() {
     if (!targetDomain) return
 
     startTransition(async () => {
-      const result = await verifyDomainCodeAction({ domain: targetDomain, code: verifyCode })
+      const result = await verifyDomainCodeAction({ domain: targetDomain, code: verifyOtp.join("") })
       if (result.verified) handleCreateCompany(targetDomain)
       else setError(result.error ?? "Invalid code.")
     })
@@ -596,17 +620,33 @@ export function CreateCompanyModal() {
                         <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>
                           {t("code_sent", { email: verifyEmail })}
                         </p>
-                        <input
-                          type="text"
-                          className="form-input"
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={verifyCode}
-                          onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
-                          placeholder="000000"
-                          autoFocus
-                          style={{ marginBottom: 0, textAlign: "center", letterSpacing: "0.3em" }}
-                        />
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          {verifyOtp.map((digit, i) => (
+                            <input
+                              key={i}
+                              ref={(el) => { otpRefs.current[i] = el }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={digit}
+                              onChange={(e) => handleOtpChange(i, e.target.value)}
+                              onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                              autoFocus={i === 0}
+                              style={{
+                                width: "100%", maxWidth: 52, height: 56, textAlign: "center",
+                                fontSize: 22, fontWeight: 500, border: "1px solid var(--arco-rule)",
+                                borderRadius: 3, background: "#fff", color: "var(--arco-black)",
+                                transition: "border-color 0.15s", outline: "none",
+                              }}
+                              onFocus={(e) => { e.currentTarget.style.borderColor = "var(--arco-black)" }}
+                              onBlur={(e) => { e.currentTarget.style.borderColor = "var(--arco-rule)" }}
+                            />
+                          ))}
+                        </div>
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--arco-mid-grey)", cursor: "pointer" }}>
+                          <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#016D75" }} />
+                          <span>I agree to the <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</a> and <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</a></span>
+                        </label>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <button
                             type="button"
@@ -620,7 +660,7 @@ export function CreateCompanyModal() {
                             type="button"
                             className="btn-primary"
                             onClick={handleVerifyCode}
-                            disabled={isPending || verifyCode.length !== 6}
+                            disabled={isPending || verifyOtp.join("").length !== 6 || !termsAccepted}
                             style={{ fontSize: 14, padding: "10px 20px" }}
                           >
                             {isPending ? t("verifying") : tc("submit")}
@@ -677,17 +717,33 @@ export function CreateCompanyModal() {
                             <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>
                               {t("code_sent", { email: verifyEmail })}
                             </p>
-                            <input
-                              type="text"
-                              className="form-input"
-                              inputMode="numeric"
-                              maxLength={6}
-                              value={verifyCode}
-                              onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
-                              placeholder="000000"
-                              autoFocus
-                              style={{ marginBottom: 0, textAlign: "center", letterSpacing: "0.3em" }}
-                            />
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                              {verifyOtp.map((digit, i) => (
+                                <input
+                                  key={i}
+                                  ref={(el) => { otpRefs.current[i] = el }}
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  value={digit}
+                                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                                  autoFocus={i === 0}
+                                  style={{
+                                    width: "100%", maxWidth: 52, height: 56, textAlign: "center",
+                                    fontSize: 22, fontWeight: 500, border: "1px solid var(--arco-rule)",
+                                    borderRadius: 3, background: "#fff", color: "var(--arco-black)",
+                                    transition: "border-color 0.15s", outline: "none",
+                                  }}
+                                  onFocus={(e) => { e.currentTarget.style.borderColor = "var(--arco-black)" }}
+                                  onBlur={(e) => { e.currentTarget.style.borderColor = "var(--arco-rule)" }}
+                                />
+                              ))}
+                            </div>
+                            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--arco-mid-grey)", cursor: "pointer" }}>
+                              <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#016D75" }} />
+                              <span>I agree to the <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</a> and <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</a></span>
+                            </label>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                               <button
                                 type="button"
@@ -701,7 +757,7 @@ export function CreateCompanyModal() {
                                 type="button"
                                 className="btn-primary"
                                 onClick={handleVerifyCode}
-                                disabled={isPending || verifyCode.length !== 6}
+                                disabled={isPending || verifyOtp.join("").length !== 6 || !termsAccepted}
                                 style={{ fontSize: 14, padding: "10px 20px" }}
                               >
                                 {isPending ? t("verifying") : tc("submit")}
