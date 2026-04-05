@@ -438,9 +438,9 @@ export async function startProspectSequence(prospectId: string) {
     return { success: false, error: result.error }
   }
 
-  // Update: sequence finished, increment sent count
+  // Update: sequence active (follow-up emails pending), increment sent count
   await supabase.from("prospects").update({
-    sequence_status: "finished",
+    sequence_status: "active",
     emails_sent: (prospect.emails_sent ?? 0) + 1,
     emails_delivered: (prospect.emails_delivered ?? 0) + 1,
     last_email_sent_at: new Date().toISOString(),
@@ -556,7 +556,7 @@ export async function restartProspectSequence(prospectId: string) {
   }
 
   await supabase.from("prospects").update({
-    sequence_status: "finished",
+    sequence_status: "active",
     emails_sent: (prospect.emails_sent ?? 0) + 1,
     emails_delivered: (prospect.emails_delivered ?? 0) + 1,
     last_email_sent_at: new Date().toISOString(),
