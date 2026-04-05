@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useTranslations, useLocale } from "next-intl"
 import { toast } from "sonner"
 import { AlertTriangle, ImageIcon, MoreHorizontal, ExternalLink } from "lucide-react"
 import { ImportProjectModal } from "@/components/import-project-modal"
@@ -19,12 +19,14 @@ import {
   setCompanyHeroPhotoAction,
   clearCompanyHeroPhotoAction,
   generateCompanyDescriptionAction,
+  saveCompanyTranslatedField,
   checkCompanyDeletionAction,
   deleteCompanyAction,
   completeCompanySetupAction,
   updateCoverPhotoAction,
 } from "@/app/dashboard/company/actions"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
+import { getCompanyTranslation } from "@/lib/company-translations"
 import type { Database } from "@/lib/supabase/types"
 import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
@@ -158,6 +160,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
   const t = useTranslations("company_edit")
+  const locale = useLocale()
 
   // Admin override: set the active company cookie so server actions can access it
   useEffect(() => {
@@ -170,7 +173,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── Profile state ──
   const [name, setName] = useState(company.name)
-  const [description, setDescription] = useState(company.description ?? "")
+  const [description, setDescription] = useState(() => getCompanyTranslation(company as any, "description", locale))
   const [email, setEmail] = useState(company.email ?? "")
   const [phone, setPhone] = useState(company.phone ?? "")
   const [address, setAddress] = useState(company.address ?? "")
@@ -294,8 +297,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       if (result.success && result.description) {
         setDescription(result.description)
         if (descRef.current) descRef.current.textContent = result.description
-        // Save to DB
-        supabaseClient.from("companies").update({ description: result.description }).eq("id", company.id)
       }
       setGeneratingDesc(false)
     }).catch(() => setGeneratingDesc(false))
@@ -881,8 +882,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     if (newDesc !== description) {
       setDescription(newDesc)
       saveProfile({ description: newDesc })
+      void saveCompanyTranslatedField(company.id, "description", newDesc, locale)
     }
-  }, [description, saveProfile])
+  }, [description, saveProfile, company.id, locale])
 
   const handleGenerateDescription = useCallback(async () => {
     setGeneratingDesc(true)
@@ -892,7 +894,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         setDescription(result.description)
         if (descRef.current) descRef.current.textContent = result.description
         setDescCharCount(result.description.length)
-        saveProfile({ description: result.description })
         toast.success(t("description_generated"))
       } else {
         toast.error(result.error ?? t("description_failed"))
@@ -902,7 +903,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     } finally {
       setGeneratingDesc(false)
     }
-  }, [company.id, saveProfile])
+  }, [company.id])
 
   // ── Render ──
 

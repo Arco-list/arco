@@ -16,6 +16,7 @@ import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
 
 type PageParams = {
+  locale: string
   slug: string
 }
 
@@ -57,11 +58,11 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 }
 
 export default async function ProfessionalDetailPage({ params }: { params: Promise<PageParams> }) {
-  const { slug } = await params
+  const { slug, locale } = await params
   const t = await getTranslations("professional_detail")
 
   // First try normal fetch (listed companies)
-  let professional = await fetchProfessionalDetail(slug)
+  let professional = await fetchProfessionalDetail(slug, { locale })
 
   // If not found, check if current user is an owner/member and allow preview
   if (!professional) {
@@ -77,7 +78,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
         .maybeSingle()
 
       if (profile && isAdminUser(profile.user_types, profile.admin_role)) {
-        professional = await fetchProfessionalDetail(slug, { allowUnlisted: true })
+        professional = await fetchProfessionalDetail(slug, { allowUnlisted: true, locale })
       }
 
       // Check if user owns or is a member of this company
@@ -102,7 +103,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           }
 
           if (isOwner || isMember) {
-            professional = await fetchProfessionalDetail(slug, { allowUnlisted: true })
+            professional = await fetchProfessionalDetail(slug, { allowUnlisted: true, locale })
           }
         }
       }

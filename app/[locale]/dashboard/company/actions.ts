@@ -1102,13 +1102,112 @@ ${context}`,
     const text = message.content.find((b) => b.type === "text")?.text?.trim()
     if (!text) return { success: false, error: "AI returned empty response." }
 
-    return { success: true, description: text.slice(0, 750) }
+    const description = text.slice(0, 750)
+
+    // Determine which locale was generated and translate to the other
+    const cookieStore = await cookies()
+    const currentLocale = cookieStore.get("NEXT_LOCALE")?.value ?? "en"
+    const otherLocale = currentLocale === "nl" ? "en" : "nl"
+    const otherLang = currentLocale === "nl" ? "English" : "Dutch"
+
+    // Fetch existing translations
+    const { data: existing } = await supabase
+      .from("companies")
+      .select("translations")
+      .eq("id", companyId)
+      .single()
+
+    const translations = ((existing?.translations as Record<string, any>) ?? {})
+    if (!translations[currentLocale]) translations[currentLocale] = {}
+    translations[currentLocale].description = description
+
+    // Auto-translate to the other language
+    try {
+      const translateMsg = await client.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 400,
+        messages: [{
+          role: "user",
+          content: `Translate the following company description to ${otherLang}. Keep the same tone and style. Return only the translated text, no quotes or labels.\n\n${description}`,
+        }],
+      })
+      const translated = translateMsg.content.find((b) => b.type === "text")?.text?.trim()
+      if (translated) {
+        if (!translations[otherLocale]) translations[otherLocale] = {}
+        translations[otherLocale].description = translated.slice(0, 750)
+      }
+    } catch {
+      // Translation failed — non-fatal
+    }
+
+    // Save description + translations
+    await supabase.from("companies").update({ description, translations }).eq("id", companyId)
+
+    return { success: true, description }
   } catch (e) {
     const errMsg = isError(e) ? e.message : String(e)
     console.error("[ai-description] Failed:", errMsg, e)
     logger.error("Failed to generate description", { companyId, errMsg }, isError(e) ? e : undefined)
     return { success: false, error: `Failed to generate description: ${errMsg}` }
   }
+}
+
+/**
+ * Save a company description for a specific locale,
+ * update the translations JSONB, and auto-translate the other language.
+ */
+export async function saveCompanyTranslatedField(
+  companyId: string,
+  field: "description",
+  value: string,
+  locale: string
+): Promise<ActionResult> {
+  const { supabase, error } = await getCompanyContext()
+  if (error) return { success: false, error }
+
+  const { data: company } = await supabase
+    .from("companies")
+    .select("translations")
+    .eq("id", companyId)
+    .single()
+
+  if (!company) return { success: false, error: "Company not found." }
+
+  const translations = ((company.translations as Record<string, any>) ?? {})
+  if (!translations[locale]) translations[locale] = {}
+  translations[locale][field] = value
+
+  // Update main column + translations
+  await supabase.from("companies").update({ [field]: value, translations }).eq("id", companyId)
+
+  // Auto-translate to the other language
+  const otherLocale = locale === "nl" ? "en" : "nl"
+  const otherLang = locale === "nl" ? "English" : "Dutch"
+
+  if (value && process.env.ANTHROPIC_API_KEY) {
+    try {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default
+      const client = new Anthropic()
+      const msg = await client.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 400,
+        messages: [{
+          role: "user",
+          content: `Translate the following company description to ${otherLang}. Keep the same tone and style. Return only the translated text, no quotes or labels.\n\n${value}`,
+        }],
+      })
+      const translated = msg.content.find((b) => b.type === "text")?.text?.trim()
+      if (translated) {
+        if (!translations[otherLocale]) translations[otherLocale] = {}
+        translations[otherLocale][field] = translated.slice(0, 750)
+        await supabase.from("companies").update({ translations }).eq("id", companyId)
+      }
+    } catch {
+      // Translation failed — non-fatal
+    }
+  }
+
+  return { success: true }
 }
 
 // ── Company Switcher ──

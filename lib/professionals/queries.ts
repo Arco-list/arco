@@ -568,7 +568,7 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
   }
 }
 
-export const fetchProfessionalDetail = async (slugOrId: string, options?: { allowUnlisted?: boolean }): Promise<ProfessionalDetail | null> => {
+export const fetchProfessionalDetail = async (slugOrId: string, options?: { allowUnlisted?: boolean; locale?: string }): Promise<ProfessionalDetail | null> => {
   const supabase = await createServerSupabaseClient()
 
   // Query companies table first (company-centric approach)
@@ -955,7 +955,13 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     slug: company.slug || company.id,
     name,
     title: detailRow?.title ?? "Professional",
-    description: company.description ?? detailRow?.bio ?? null,
+    description: (() => {
+      const locale = options?.locale ?? "en"
+      const translations = company.translations as Record<string, any> | null
+      const localeDesc = translations?.[locale]?.description
+      if (localeDesc && typeof localeDesc === "string" && localeDesc.trim()) return localeDesc
+      return company.description ?? detailRow?.bio ?? null
+    })(),
     bio: detailRow?.bio ?? null,
     location,
     specialties,
@@ -975,7 +981,12 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     company: {
       id: company.id,
       name: company.name ?? name,
-      description: company.description ?? null,
+      description: (() => {
+        const loc = options?.locale ?? "en"
+        const tr = company.translations as Record<string, any> | null
+        const locDesc = tr?.[loc]?.description
+        return (locDesc && typeof locDesc === "string" && locDesc.trim()) ? locDesc : (company.description ?? null)
+      })(),
       logoUrl: company.logo_url ?? null,
       email: company.email ?? null,
       phone: company.phone ?? null,
