@@ -11,7 +11,11 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      { protocol: "https", hostname: "ogvobdcrectqsegqrquz.supabase.co" },
+      { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "**" },
+    ],
   },
 }
 

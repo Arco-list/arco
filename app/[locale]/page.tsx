@@ -17,6 +17,8 @@ import { getTranslations } from "next-intl/server"
 import { getLocalizedName } from "@/lib/locale-name"
 import { TrackPageView } from "@/components/track-view"
 
+export const revalidate = 300
+
 type SearchProjectsRow = Database["public"]["Functions"]["search_projects"]["Returns"][number]
 
 type CategoryRow = Tables<"categories"> & {
