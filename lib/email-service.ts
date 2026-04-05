@@ -317,7 +317,7 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
     </a>`
 
   return {
-    subject: `${companyName} staat op Arco`,
+    subject: `Een podium voor ${companyName}`,
     html: baseLayout(`
       ${heading(`Een podium voor ${companyName}`)}
       ${body(`Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`)}

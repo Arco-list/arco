@@ -28,6 +28,8 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string][] = [
   [/^Welcome to Arco$/i, "Welcome"],
   [/Discover projects on Arco/i, "Discover Projects"],
   [/Find the right professional/i, "Find Professionals"],
+  [/Een podium voor/i, "Prospect Intro"],
+  [/staat op Arco/i, "Prospect Intro"],
   [/is now on Arco/i, "Prospect Intro"],
 ]
 
@@ -112,6 +114,9 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       [/^Welcome to Arco$/i, "welcome-homeowner"],
       [/Discover projects on Arco/i, "discover-projects"],
       [/Find the right professional/i, "find-professionals"],
+      [/Een podium voor/i, "prospect-intro"],
+      [/staat op Arco/i, "prospect-intro"],
+      [/is now on Arco/i, "prospect-intro"],
     ]
 
     const stats: Record<string, TemplateStats> = {}
