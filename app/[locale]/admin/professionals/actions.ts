@@ -277,6 +277,58 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     }
   }
 
+  // Sync prospect status when company status changes
+  const companyStatusToProspectStatus: Record<string, string> = {
+    listed: "active",
+    unlisted: "company",
+    draft: "company",
+  }
+  const mappedProspectStatus = companyStatusToProspectStatus[parsedStatus.data]
+  if (mappedProspectStatus) {
+    try {
+      const syncClient = createServiceRoleSupabaseClient()
+      const { data: prospect } = await syncClient
+        .from("prospects")
+        .select("id, status, contact_name")
+        .eq("company_id", parsedCompanyId.data)
+        .maybeSingle()
+
+      if (prospect) {
+        const updates: Record<string, unknown> = {}
+
+        // Only advance status forward, or allow "active" → "company" when unlisting
+        if (mappedProspectStatus === "active" && prospect.status !== "active") {
+          updates.status = "active"
+          updates.converted_at = new Date().toISOString()
+        } else if (mappedProspectStatus === "company" && (prospect.status === "active" || prospect.status === "company")) {
+          updates.status = "company"
+        }
+
+        // Set contact name from owner if missing
+        if (!prospect.contact_name) {
+          const { data: company } = await syncClient
+            .from("companies")
+            .select("owner_id")
+            .eq("id", parsedCompanyId.data)
+            .maybeSingle()
+          if (company?.owner_id) {
+            const { data: profile } = await syncClient
+              .from("profiles")
+              .select("first_name, last_name")
+              .eq("id", company.owner_id)
+              .maybeSingle()
+            const ownerName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim()
+            if (ownerName) updates.contact_name = ownerName
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await syncClient.from("prospects").update(updates).eq("id", prospect.id)
+        }
+      }
+    } catch {}
+  }
+
   revalidatePath("/admin/professionals")
   return { success: true }
 }
