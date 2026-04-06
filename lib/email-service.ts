@@ -103,6 +103,10 @@ function heading(text: string): string {
   return `<h1 style="margin:0 0 16px;font-size:22px;font-weight:400;color:#1c1c1a;font-family:Georgia,'Times New Roman',serif;">${text}</h1>`
 }
 
+function heading4(text: string): string {
+  return `<h4 style="margin:0 0 6px;font-size:18px;font-weight:400;color:#1c1c1a;font-family:Georgia,'Times New Roman',serif;">${text}</h4>`
+}
+
 function body(text: string): string {
   return `<p style="margin:0 0 16px;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">${text}</p>`
 }
@@ -239,23 +243,25 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
   const left = projects[1]
   const right = projects[2]
 
+  // All three images use the same height (281px) — narrow side images crop horizontally via object-fit
+  const imgHeight = 281
   const projectsBlock = `
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 0;">
       <tr>
         <td style="width:14%;padding-right:8px;font-size:0;line-height:0;vertical-align:top;">
-          ${left ? `<a href="https://www.arcolist.com/projects/${left.slug}" target="_blank"><img src="${left.image}" alt="" width="73" height="98" style="display:block;width:100%;height:98px;object-fit:cover;border-radius:3px;opacity:0.7;" /></a>` : ''}
+          ${left ? `<a href="https://www.arcolist.com/projects/${left.slug}" target="_blank"><img src="${left.image}" alt="" width="73" height="${imgHeight}" style="display:block;width:100%;height:${imgHeight}px;object-fit:cover;border-radius:3px;" /></a>` : ''}
         </td>
-        <td style="width:72%;font-size:0;line-height:0;vertical-align:top;text-align:center;">
+        <td style="width:72%;font-size:0;line-height:0;vertical-align:top;">
           ${center ? `<a href="https://www.arcolist.com/projects/${center.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-            <img src="${center.image}" alt="${center.title}" width="375" height="281" style="display:block;width:100%;max-width:375px;height:auto;max-height:281px;object-fit:cover;border-radius:3px;margin:0 auto;" />
+            <img src="${center.image}" alt="${center.title}" width="375" height="${imgHeight}" style="display:block;width:100%;height:${imgHeight}px;object-fit:cover;border-radius:3px;" />
           </a>` : ''}
         </td>
         <td style="width:14%;padding-left:8px;font-size:0;line-height:0;vertical-align:top;">
-          ${right ? `<a href="https://www.arcolist.com/projects/${right.slug}" target="_blank"><img src="${right.image}" alt="" width="73" height="98" style="display:block;width:100%;height:98px;object-fit:cover;border-radius:3px;opacity:0.7;" /></a>` : ''}
+          ${right ? `<a href="https://www.arcolist.com/projects/${right.slug}" target="_blank"><img src="${right.image}" alt="" width="73" height="${imgHeight}" style="display:block;width:100%;height:${imgHeight}px;object-fit:cover;border-radius:3px;" /></a>` : ''}
         </td>
       </tr>
     </table>
-    ${center ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;"><tr><td style="text-align:center;">
+    ${center ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;"><tr><td style="padding:0 0 0 14.5%;">
       <p style="margin:0 0 2px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${center.title}</p>
       <p style="margin:0;font-size:13px;font-weight:300;color:#a1a1a0;">${center.subtitle}</p>
     </td></tr></table>` : ''}
@@ -263,27 +269,30 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
 
   // Sample professionals (in production from dataVariables)
   const professionals = (vars.professionals as any[] | undefined) ?? [
-    { name: "Wolterinck", service: "Interior Designer", projectCount: 12, slug: "wolterinck", icon: "W" },
-    { name: "Engel Architecten", service: "Architect", projectCount: 8, slug: "engel-architecten", icon: "E" },
-    { name: "BAAS Architecten", service: "Architect", projectCount: 5, slug: "baas-architecten", icon: "B" },
-    { name: "Marco van Veldhuizen", service: "Architect", projectCount: 4, slug: "marco-van-veldhuizen", icon: "M" },
+    { name: "Wolterinck", service: "Interior Designer", projectCount: 12, slug: "wolterinck", logo: null, initial: "W" },
+    { name: "Engel Architecten", service: "Architect", projectCount: 8, slug: "engel-architecten", logo: null, initial: "E" },
+    { name: "Marco van Veldhuizen", service: "Architect", projectCount: 4, slug: "marco-van-veldhuizen", logo: null, initial: "M" },
   ]
 
-  const professionalCard = (p: any, opacity: number = 1) => `
-    <a href="https://www.arcolist.com/professionals/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;text-align:center;opacity:${opacity};">
-      <p style="margin:0 0 10px;font-size:10px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">${p.service}</p>
-      <table cellpadding="0" cellspacing="0" style="margin:0 auto 12px;"><tr><td style="width:64px;height:64px;background:#f5f5f4;border-radius:50%;text-align:center;vertical-align:middle;font-size:22px;font-weight:500;color:#6b6b68;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.icon}</td></tr></table>
+  const professionalCard = (p: any) => {
+    const iconHtml = p.logo
+      ? `<img src="${p.logo}" alt="${p.name}" width="80" height="80" style="display:block;width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0 auto;" />`
+      : `<table cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td style="width:80px;height:80px;background:#f5f5f4;border-radius:50%;text-align:center;vertical-align:middle;font-size:26px;font-weight:500;color:#6b6b68;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.initial}</td></tr></table>`
+    return `
+    <a href="https://www.arcolist.com/professionals/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;text-align:center;">
+      <p style="margin:0 0 12px;font-size:10px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">${p.service}</p>
+      <div style="margin:0 0 14px;">${iconHtml}</div>
       <p style="margin:0 0 4px;font-size:14px;font-weight:500;color:#1c1c1a;line-height:1.3;">${p.name}</p>
       <p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;">${p.projectCount} project${p.projectCount === 1 ? '' : 's'}</p>
     </a>`
+  }
 
   const professionalsBlock = `
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
       <tr>
-        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[0] ? professionalCard(professionals[0]) : ''}</td>
-        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[1] ? professionalCard(professionals[1]) : ''}</td>
-        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[2] ? professionalCard(professionals[2]) : ''}</td>
-        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[3] ? professionalCard(professionals[3], 0.6) : ''}</td>
+        <td style="width:33.33%;padding:0 8px;vertical-align:top;">${professionals[0] ? professionalCard(professionals[0]) : ''}</td>
+        <td style="width:33.33%;padding:0 8px;vertical-align:top;">${professionals[1] ? professionalCard(professionals[1]) : ''}</td>
+        <td style="width:33.33%;padding:0 8px;vertical-align:top;">${professionals[2] ? professionalCard(professionals[2]) : ''}</td>
       </tr>
     </table>
   `
@@ -294,8 +303,10 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
       ${heading('Welcome to Arco')}
       ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Thanks for joining Arco — the curated architecture platform where great projects and the professionals behind them get the recognition they deserve.`)}
 
-      <p style="margin:36px 0 0;font-size:11px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">Browse projects</p>
-      <p style="margin:6px 0 0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Explore completed architecture and interior design projects from across the Netherlands.</p>
+      <div style="margin:36px 0 0;">
+        ${heading4('Browse projects')}
+        <p style="margin:0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Explore completed architecture and interior design projects from across the Netherlands.</p>
+      </div>
       ${projectsBlock}
 
       <div style="margin:24px 0 0;text-align:center;">
@@ -304,8 +315,10 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
 
       <div style="margin:48px 0 0;height:1px;background:#e8e8e6;"></div>
 
-      <p style="margin:36px 0 0;font-size:11px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">Discover professionals</p>
-      <p style="margin:6px 0 0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Find architects, interior designers, and builders credited on real work.</p>
+      <div style="margin:36px 0 0;">
+        ${heading4('Discover professionals')}
+        <p style="margin:0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Find architects, interior designers, and builders credited on real work.</p>
+      </div>
       ${professionalsBlock}
 
       <div style="margin:24px 0 0;text-align:center;">
