@@ -229,18 +229,64 @@ function renderDomainVerification(vars: EmailVariables): { subject: string; html
 // ─── Homeowner Welcome Series ────────────────────────────────────────────────
 
 function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: string } {
-  const featureCard = (icon: string, title: string, desc: string) => `
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+  // Sample projects (in production these come from dataVariables)
+  const projects = (vars.projects as any[] | undefined) ?? [
+    { title: "Villa Oisterwijk", subtitle: "Modern villa · Oisterwijk", image: "https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg", slug: "villa-oisterwijk" },
+    { title: "Penthouse Amsterdam", subtitle: "Penthouse · Amsterdam", image: "https://wolterinck.com/wp-content/uploads/2023/11/Wolterinck_Private_Project_Appartment_Amsterdam-08.jpg", slug: "penthouse-amsterdam" },
+    { title: "Bos Villa", subtitle: "Villa · Hilversum", image: "https://www.engelarchitecten.nl/wp-content/uploads/2023/03/01_Engel_BosVilla.jpg", slug: "bos-villa" },
+  ]
+  const center = projects[0]
+  const left = projects[1]
+  const right = projects[2]
+
+  const projectsBlock = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
       <tr>
-        <td style="width:44px;vertical-align:top;padding-right:14px;">
-          <div style="width:44px;height:44px;background:#f5f5f4;border-radius:6px;text-align:center;line-height:44px;font-size:20px;">${icon}</div>
+        <td style="width:14%;padding-right:8px;font-size:0;line-height:0;vertical-align:top;">
+          ${left ? `<a href="https://www.arcolist.com/projects/${left.slug}" target="_blank"><img src="${left.image}" alt="" width="73" height="98" style="display:block;width:100%;height:98px;object-fit:cover;border-radius:3px;opacity:0.7;" /></a>` : ''}
         </td>
-        <td style="vertical-align:top;">
-          <p style="margin:0 0 4px;font-size:15px;font-weight:500;color:#1c1c1a;line-height:1.3;">${title}</p>
-          <p style="margin:0;font-size:13px;font-weight:300;color:#6b6b68;line-height:1.5;">${desc}</p>
+        <td style="width:72%;font-size:0;line-height:0;vertical-align:top;text-align:center;">
+          ${center ? `<a href="https://www.arcolist.com/projects/${center.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+            <img src="${center.image}" alt="${center.title}" width="375" height="281" style="display:block;width:100%;max-width:375px;height:auto;max-height:281px;object-fit:cover;border-radius:3px;margin:0 auto;" />
+          </a>` : ''}
+        </td>
+        <td style="width:14%;padding-left:8px;font-size:0;line-height:0;vertical-align:top;">
+          ${right ? `<a href="https://www.arcolist.com/projects/${right.slug}" target="_blank"><img src="${right.image}" alt="" width="73" height="98" style="display:block;width:100%;height:98px;object-fit:cover;border-radius:3px;opacity:0.7;" /></a>` : ''}
         </td>
       </tr>
-    </table>`
+    </table>
+    ${center ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;"><tr><td style="text-align:center;">
+      <p style="margin:0 0 2px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${center.title}</p>
+      <p style="margin:0;font-size:13px;font-weight:300;color:#a1a1a0;">${center.subtitle}</p>
+    </td></tr></table>` : ''}
+  `
+
+  // Sample professionals (in production from dataVariables)
+  const professionals = (vars.professionals as any[] | undefined) ?? [
+    { name: "Wolterinck", service: "Interior Designer", projectCount: 12, slug: "wolterinck", icon: "W" },
+    { name: "Engel Architecten", service: "Architect", projectCount: 8, slug: "engel-architecten", icon: "E" },
+    { name: "BAAS Architecten", service: "Architect", projectCount: 5, slug: "baas-architecten", icon: "B" },
+    { name: "Marco van Veldhuizen", service: "Architect", projectCount: 4, slug: "marco-van-veldhuizen", icon: "M" },
+  ]
+
+  const professionalCard = (p: any, opacity: number = 1) => `
+    <a href="https://www.arcolist.com/professionals/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;text-align:center;opacity:${opacity};">
+      <p style="margin:0 0 10px;font-size:10px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">${p.service}</p>
+      <table cellpadding="0" cellspacing="0" style="margin:0 auto 12px;"><tr><td style="width:64px;height:64px;background:#f5f5f4;border-radius:50%;text-align:center;vertical-align:middle;font-size:22px;font-weight:500;color:#6b6b68;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.icon}</td></tr></table>
+      <p style="margin:0 0 4px;font-size:14px;font-weight:500;color:#1c1c1a;line-height:1.3;">${p.name}</p>
+      <p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;">${p.projectCount} project${p.projectCount === 1 ? '' : 's'}</p>
+    </a>`
+
+  const professionalsBlock = `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+      <tr>
+        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[0] ? professionalCard(professionals[0]) : ''}</td>
+        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[1] ? professionalCard(professionals[1]) : ''}</td>
+        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[2] ? professionalCard(professionals[2]) : ''}</td>
+        <td style="width:25%;padding:0 6px;vertical-align:top;">${professionals[3] ? professionalCard(professionals[3], 0.6) : ''}</td>
+      </tr>
+    </table>
+  `
 
   return {
     subject: 'Welcome to Arco',
@@ -248,20 +294,22 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
       ${heading('Welcome to Arco')}
       ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Thanks for joining Arco — the curated architecture platform where great projects and the professionals behind them get the recognition they deserve.`)}
 
-      <table width="100%" cellpadding="0" cellspacing="0" style="margin:32px 0 24px;">
-        <tr><td style="font-size:0;line-height:0;">
-          <img src="https://www.arcolist.com/arco-welcome-hero.jpg" alt="" width="520" style="display:block;width:100%;max-width:520px;height:auto;border-radius:3px;" onerror="this.style.display='none'" />
-        </td></tr>
-      </table>
+      <p style="margin:36px 0 0;font-size:11px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">Browse projects</p>
+      <p style="margin:6px 0 0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Explore completed architecture and interior design projects from across the Netherlands.</p>
+      ${projectsBlock}
 
-      <p style="margin:0 0 20px;font-size:13px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">What you can do</p>
+      <div style="margin:24px 0 0;text-align:center;">
+        ${button('Browse projects', 'https://www.arcolist.com/projects')}
+      </div>
 
-      ${featureCard("🏛", "Browse projects", "Explore completed architecture and interior design projects from across the Netherlands.")}
-      ${featureCard("👥", "Discover professionals", "Find architects, interior designers, and builders credited on real work.")}
-      ${featureCard("★", "Save your favorites", "Bookmark projects and professionals to revisit later.")}
+      <div style="margin:48px 0 0;height:1px;background:#e8e8e6;"></div>
 
-      <div style="margin-top:28px;">
-        ${button('Explore projects', 'https://www.arcolist.com/projects')}
+      <p style="margin:36px 0 0;font-size:11px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">Discover professionals</p>
+      <p style="margin:6px 0 0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Find architects, interior designers, and builders credited on real work.</p>
+      ${professionalsBlock}
+
+      <div style="margin:24px 0 0;text-align:center;">
+        ${button('Discover professionals', 'https://www.arcolist.com/professionals')}
       </div>
     `),
   }
