@@ -213,7 +213,7 @@ function renderTeamInvite(vars: EmailVariables): { subject: string; html: string
 
 function renderDomainVerification(vars: EmailVariables): { subject: string; html: string } {
   return {
-    subject: `${vars.code} is your Arco verification code`,
+    subject: `${vars.code} is your Arco domain verification code`,
     html: lb(vars, `
       ${heading('Verify your domain')}
       ${body(`Use this code to verify ownership of <strong>${vars.businessname || 'your company'}</strong>:`)}

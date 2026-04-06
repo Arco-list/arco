@@ -17,6 +17,7 @@ export type ResendEmail = {
 
 const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
+  [/is your Arco domain verification code/i, "domain-verification", "Domain Verification"],
   [/is your Arco verification code/i, "signup", "Signup Confirmation"],
   [/Confirm your Arco account/i, "signup", "Signup Confirmation"],
   [/credited you on/i, "professional-invite", "Professional Invite"],
@@ -106,6 +107,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
     // Map subject patterns to template IDs
     const subjectToTemplate: [RegExp, string][] = [
       [/is your Arco sign-in code/i, "magic-link"],
+      [/is your Arco domain verification code/i, "domain-verification"],
       [/is your Arco verification code/i, "signup"],
       [/Confirm your Arco account/i, "signup"],
       [/credited you on/i, "professional-invite"],
