@@ -174,8 +174,13 @@ export function ProfessionalsFilterBar() {
 
   // ── Handlers ──
 
-  const toggleDropdown = (name: string) =>
+  const toggleDropdown = (name: string) => {
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      setDrawerOpen(true)
+      return
+    }
     setActiveDropdown((prev) => (prev === name ? null : name))
+  }
 
   const toggleCategorySelection = (categoryId: string) => {
     if (selectedCategories.includes(categoryId)) {

@@ -435,6 +435,16 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const [locationSearch, setLocationSearch] = useState("")
   const barRef = useRef<HTMLDivElement>(null)
 
+  // On mobile, all filter pills open the drawer instead of inline dropdowns
+  // (avoids iOS Safari position:fixed quirks inside sticky parents)
+  const isMobileFilterClick = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      setDrawerOpen(true)
+      return true
+    }
+    return false
+  }, [])
+
   // Sort option label mapping
   const sortLabelMap: Record<SortOption, string> = {
     "Most recent": t("sort_most_recent"),
@@ -511,8 +521,10 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  const toggleDropdown = (name: string) =>
+  const toggleDropdown = (name: string) => {
+    if (isMobileFilterClick()) return
     setActiveDropdown((prev) => (prev === name ? null : name))
+  }
 
   const toggleType = useCallback(
     (id: string) =>
