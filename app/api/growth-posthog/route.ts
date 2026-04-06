@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     days: "day",
     weeks: "week",
     months: "month",
-    years: "month",
+    years: "year",
   }
   // Cache TTL per timeframe — shorter for days, longer for years
   const cacheTtlMinutes: Record<string, number> = {
