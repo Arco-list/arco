@@ -708,6 +708,19 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                           Details
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
+                        {/* Start sequence — not started yet */}
+                        {(p.source === "arco" || p.source === "invites") && p.sequence_status === "not_started" && p.company_id && (
+                          <DropdownMenuItem
+                            className="text-xs cursor-pointer"
+                            onClick={async () => {
+                              const result = await startProspectSequence(p.id)
+                              if (result.success) { toast.success("Sequence started — email sent"); refreshData() }
+                              else toast.error(result.error ?? "Failed to start sequence")
+                            }}
+                          >
+                            Start sequence
+                          </DropdownMenuItem>
+                        )}
                         {/* Pause / Resume */}
                         {(p.source === "arco" || p.source === "invites") && (p.sequence_status === "active" || p.sequence_status === "finished") && (
                           <DropdownMenuItem
