@@ -507,9 +507,42 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
         id: "image",
         header: "Image",
         cell: ({ row }) => {
-          const url = row.original.imageUrl
-          if (!url) return <span className="text-xs text-[#a1a1a0]">—</span>
-          return <img src={url} alt="" className="w-10 h-7 object-cover rounded-[2px]" />
+          const category = row.original
+          const url = category.imageUrl
+          return (
+            <label className="cursor-pointer inline-flex items-center gap-2 group" title={url ? "Click to change image" : "Click to upload image"}>
+              {url ? (
+                <img src={url} alt="" className="w-10 h-7 object-cover rounded-[2px] group-hover:opacity-70 transition-opacity" />
+              ) : (
+                <div className="w-10 h-7 rounded-[2px] bg-[#f5f5f4] group-hover:bg-[#e5e5e4] transition-colors flex items-center justify-center">
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="1.5"><path d="M8 3v10M3 8h10" strokeLinecap="round" /></svg>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hidden
+                onChange={(e) => {
+                  if (!e.target.files?.[0]) return
+                  const file = e.target.files[0]
+                  if (file.size > 10 * 1024 * 1024) {
+                    toast.error("Image must be under 10MB")
+                    return
+                  }
+                  setCropTargetId(category.id)
+                  setCropTargetType("category")
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    setCropImageSrc(reader.result as string)
+                    setCropOffset({ x: 0, y: 0 })
+                    setCropScale(1)
+                  }
+                  reader.readAsDataURL(file)
+                  e.target.value = ""
+                }}
+              />
+            </label>
+          )
         },
         enableSorting: false,
       },
@@ -694,11 +727,34 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                       <Switch checked={space.isActive} onCheckedChange={() => { /* TODO: hook up toggle */ }} />
                     </td>
                     <td className="px-4 py-3 align-middle">
-                      {space.imageUrl ? (
-                        <img src={space.imageUrl} alt="" className="w-10 h-7 object-cover rounded-[2px]" />
-                      ) : (
-                        <span className="text-xs text-[#a1a1a0]">—</span>
-                      )}
+                      <label className="cursor-pointer inline-flex items-center gap-2 group" title={space.imageUrl ? "Click to change image" : "Click to upload image"}>
+                        {space.imageUrl ? (
+                          <img src={space.imageUrl} alt="" className="w-10 h-7 object-cover rounded-[2px] group-hover:opacity-70 transition-opacity" />
+                        ) : (
+                          <div className="w-10 h-7 rounded-[2px] bg-[#f5f5f4] group-hover:bg-[#e5e5e4] transition-colors flex items-center justify-center">
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="1.5"><path d="M8 3v10M3 8h10" strokeLinecap="round" /></svg>
+                          </div>
+                        )}
+                        <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
+                          if (!e.target.files?.[0]) return
+                          const file = e.target.files[0]
+                          if (file.size > 10 * 1024 * 1024) {
+                            toast.error("Image must be under 10MB")
+                            return
+                          }
+                          setEditingSpaceId(space.id)
+                          setCropTargetId(space.id)
+                          setCropTargetType("space")
+                          const reader = new FileReader()
+                          reader.onload = () => {
+                            setCropImageSrc(reader.result as string)
+                            setCropOffset({ x: 0, y: 0 })
+                            setCropScale(1)
+                          }
+                          reader.readAsDataURL(file)
+                          e.target.value = ""
+                        }} />
+                      </label>
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <span className="text-xs text-[#6b6b68]">{space.photoCount}</span>
