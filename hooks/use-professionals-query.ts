@@ -19,6 +19,7 @@ type SearchProfessionalsRow = {
   user_location: string | null
   title: string | null
   company_id: string | null
+  company_id_full: string | null
   company_name: string | null
   company_slug: string | null
   company_logo: string | null
@@ -68,8 +69,8 @@ const parseRating = (value: number | string | null | undefined) => {
 }
 
 const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): ProfessionalCard | null => {
-  // company_id_full is always set; id (professional record) may be null for unclaimed companies
-  if (!row.company_id && !row.company_name) {
+  const companyId = row.company_id || row.company_id_full
+  if (!companyId && !row.company_name) {
     return null
   }
 
@@ -91,9 +92,9 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
   const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
 
   return {
-    id: row.company_id,
-    slug: row.company_slug || row.company_id,
-    companyId: row.company_id,
+    id: companyId,
+    slug: row.company_slug || companyId,
+    companyId: companyId,
     professionalId: row.id,
     name,
     profession,

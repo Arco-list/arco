@@ -306,6 +306,7 @@ type SearchProfessionalsRpcRow = {
   last_name: string | null
   user_location: string | null
   company_id: string | null
+  company_id_full: string | null
   company_name: string | null
   company_slug: string | null
   company_logo: string | null
@@ -329,8 +330,8 @@ type SearchProfessionalsRpcRow = {
 }
 
 const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: string = "en"): ProfessionalCard | null => {
-  // company_id is required; id (professional record) may be null for unclaimed companies
-  if (!row.company_id) return null
+  const companyId = row.company_id || row.company_id_full
+  if (!companyId) return null
 
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
@@ -357,9 +358,9 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
   const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
 
   return {
-    id: row.company_id,
-    slug: row.company_slug || row.company_id,
-    companyId: row.company_id,
+    id: companyId,
+    slug: row.company_slug || companyId,
+    companyId: companyId,
     professionalId: row.id,
     name,
     profession,
