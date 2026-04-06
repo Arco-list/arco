@@ -26,6 +26,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   MoreHorizontal,
+  Star,
 } from "lucide-react"
 import { toast } from "sonner"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
@@ -727,7 +728,27 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           const extraCount = company.services.length - 1
 
           return (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="shrink-0 transition-colors"
+                title={company.isFeatured ? "Remove from homepage" : "Feature on homepage"}
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  const result = await updateCompanyFeaturedAction({ companyId: company.id, isFeatured: !company.isFeatured })
+                  if (result.success) {
+                    toast.success(company.isFeatured ? "Removed from homepage" : "Featured on homepage")
+                    router.refresh()
+                  } else {
+                    toast.error(result.error ?? "Failed to update")
+                  }
+                }}
+              >
+                <Star
+                  size={14}
+                  className={company.isFeatured ? "fill-amber-400 text-amber-400" : "text-[#c4c4c2] hover:text-[#a1a1a0]"}
+                />
+              </button>
               {company.logoUrl ? (
                 <img
                   src={company.logoUrl}
@@ -1356,6 +1377,50 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  for (const company of selectedRows) {
+                    if (company.isFeatured || company.type === "invite") continue
+                    const result = await updateCompanyFeaturedAction({ companyId: company.id, isFeatured: true })
+                    if (result.success) success++
+                  }
+                  if (success > 0) {
+                    toast.success(`${success} ${success === 1 ? "company" : "companies"} featured on homepage`)
+                    setRowSelection({})
+                    router.refresh()
+                  }
+                  setIsBulkProcessing(false)
+                }}
+              >
+                Feature
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  for (const company of selectedRows) {
+                    if (!company.isFeatured || company.type === "invite") continue
+                    const result = await updateCompanyFeaturedAction({ companyId: company.id, isFeatured: false })
+                    if (result.success) success++
+                  }
+                  if (success > 0) {
+                    toast.success(`${success} ${success === 1 ? "company" : "companies"} unfeatured`)
+                    setRowSelection({})
+                    router.refresh()
+                  }
+                  setIsBulkProcessing(false)
+                }}
+              >
+                Unfeature
+              </button>
               <button
                 className="text-xs px-2.5 py-1 rounded-[3px] border border-red-200 bg-white text-red-600 hover:bg-red-50 transition-colors"
                 disabled={isBulkProcessing}
