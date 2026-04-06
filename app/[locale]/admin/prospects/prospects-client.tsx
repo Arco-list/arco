@@ -825,31 +825,6 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               </div>
             )}
 
-            <div className="flex items-center gap-2 mb-5">
-              <Select
-                value={detailProspect.status}
-                onValueChange={(v) => {
-                  handleStatusUpdate(detailProspect.id, v as ProspectStatus)
-                  setDetailProspect((prev) => prev ? { ...prev, status: v as ProspectStatus } : null)
-                }}
-              >
-                <SelectTrigger className="w-[170px] h-8 text-xs border-[#e5e5e4] rounded-[3px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ALL_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                onClick={() => { handleDelete(detailProspect.id); setDetailProspect(null) }}
-                className="h-8 px-3 text-xs font-medium border border-red-200 text-red-600 rounded-[3px] hover:bg-red-50 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-
             {events.length > 0 && (
               <div>
                 <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Event History</span>
