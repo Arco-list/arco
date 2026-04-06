@@ -65,9 +65,13 @@ type LinkedCompany = {
 }
 
 const COMPANY_STATUS_DOT: Record<string, string> = {
-  listed: "bg-emerald-500",
-  unlisted: "bg-muted-foreground",
-  deactivated: "bg-red-500",
+  added: "bg-[#ea580c]",
+  draft: "bg-[#2563eb]",
+  listed: "bg-[#7c3aed]",
+  unlisted: "bg-[#a1a1a0]",
+  invited: "bg-[#f59e0b]",
+  prospected: "bg-[#f59e0b]",
+  deactivated: "bg-[#dc2626]",
 }
 
 const CONTRIBUTOR_STATUS_CONFIG: Record<string, { label: string; dotColor: string }> = {
