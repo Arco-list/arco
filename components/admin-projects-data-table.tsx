@@ -766,6 +766,50 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                 </DropdownMenuContent>
               </DropdownMenu>
               <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  for (const project of selectedRows) {
+                    if (project.isFeatured) continue
+                    const result = await toggleProjectFeaturedAction({ projectId: project.id, isFeatured: true })
+                    if (result.success) success++
+                  }
+                  if (success > 0) {
+                    toast.success(`${success} project${success > 1 ? "s" : ""} featured on homepage`)
+                    setRowSelection({})
+                    router.refresh()
+                  }
+                  setIsBulkProcessing(false)
+                }}
+              >
+                Feature
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  const selectedRows = table.getSelectedRowModel().rows.map(r => r.original)
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  for (const project of selectedRows) {
+                    if (!project.isFeatured) continue
+                    const result = await toggleProjectFeaturedAction({ projectId: project.id, isFeatured: false })
+                    if (result.success) success++
+                  }
+                  if (success > 0) {
+                    toast.success(`${success} project${success > 1 ? "s" : ""} unfeatured`)
+                    setRowSelection({})
+                    router.refresh()
+                  }
+                  setIsBulkProcessing(false)
+                }}
+              >
+                Unfeature
+              </button>
+              <button
                 className="text-xs px-2.5 py-1 rounded-[3px] border border-red-200 bg-white text-red-600 hover:bg-red-50 transition-colors"
                 disabled={isBulkProcessing}
                 onClick={() => setShowBulkDeleteConfirm(true)}
