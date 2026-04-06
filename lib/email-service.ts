@@ -125,7 +125,7 @@ function projectCard(vars: EmailVariables): string {
   const image = vars.project_image
   if (!title) return ''
   return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
-${image ? `<tr><td style="font-size:0;line-height:0;"><img src="${image}" alt="${title}" width="520" style="display:block;width:100%;height:auto;border-radius:8px;" /></td></tr>` : ''}
+${image ? `<tr><td style="font-size:0;line-height:0;"><img src="${image}" alt="${title}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" /></td></tr>` : ''}
 <tr><td style="padding:14px 0 0;">
 <p style="margin:0 0 4px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${title}</p>
 ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${subtitle}</p>` : ''}
@@ -191,7 +191,7 @@ function linkedProjectCard(vars: EmailVariables, projectLink: string): string {
   if (!title) return ''
   return `<a href="${projectLink}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
-${image ? `<tr><td style="font-size:0;line-height:0;"><img src="${image}" alt="${title}" width="520" style="display:block;width:100%;height:auto;border-radius:8px;" /></td></tr>` : ''}
+${image ? `<tr><td style="font-size:0;line-height:0;"><img src="${image}" alt="${title}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" /></td></tr>` : ''}
 <tr><td style="padding:14px 0 0;">
 <p style="margin:0 0 4px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${title}</p>
 ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${subtitle}</p>` : ''}
@@ -248,7 +248,7 @@ function renderDiscoverProjects(vars: EmailVariables): { subject: string; html: 
   ]
   const projectsHtml = previewProjects.map(p =>
     `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
-<tr><td style="font-size:0;line-height:0;"><a href="https://www.arcolist.com/projects/${p.slug}" target="_blank"><img src="${p.image}" alt="${p.title}" width="520" style="display:block;width:100%;height:auto;border-radius:8px;" /></a></td></tr>
+<tr><td style="font-size:0;line-height:0;"><a href="https://www.arcolist.com/projects/${p.slug}" target="_blank"><img src="${p.image}" alt="${p.title}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" /></a></td></tr>
 <tr><td style="padding:10px 0 0;"><a href="https://www.arcolist.com/projects/${p.slug}" target="_blank" style="text-decoration:none;"><p style="margin:0 0 2px;font-size:15px;font-weight:400;color:#1c1c1a;">${p.title}</p><p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${p.location}</p></a></td></tr>
 </table>`
   ).join("")
@@ -309,8 +309,8 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
     : `<table cellpadding="0" cellspacing="0"><tr><td style="width:36px;height:36px;border-radius:50%;background:#f5f5f4;text-align:center;vertical-align:middle;font-size:14px;font-weight:500;color:#6b6b68;">${companyName.charAt(0)}</td></tr></table>`
 
   const heroBlock = heroImageUrl
-    ? `<div style="width:100%;max-width:420px;border-radius:6px;overflow:hidden;">
-        <img src="${heroImageUrl}" alt="${companyName}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:6px;" />
+    ? `<div style="width:100%;max-width:420px;border-radius:3px;overflow:hidden;">
+        <img src="${heroImageUrl}" alt="${companyName}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" />
       </div>`
     : ''
 
