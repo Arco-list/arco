@@ -29,6 +29,7 @@ import {
   toggleCanPublishProjectsAction,
   toggleCategoryStatusAction,
   toggleHomeCarrouselAction,
+  toggleSpaceHomeCarrouselAction,
   updateCategoryAction,
   uploadCategoryImageAction,
 } from "@/app/admin/categories/actions"
@@ -96,6 +97,7 @@ export type AdminSpaceRow = {
   isActive: boolean
   photoCount: number
   imageUrl: string | null
+  inHomeCarrousel: boolean
 }
 
 interface Props {
@@ -703,6 +705,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
               <tr className="border-b border-[#e5e5e4]">
                 <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Space</th>
                 <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Status</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Homepage</th>
                 <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Image</th>
                 <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Photos</th>
                 <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Order</th>
@@ -712,7 +715,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
             <tbody>
               {spaces.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="h-24 text-center text-sm text-[#a1a1a0]">No spaces found.</td>
+                  <td colSpan={7} className="h-24 text-center text-sm text-[#a1a1a0]">No spaces found.</td>
                 </tr>
               ) : (
                 spaces.sort((a, b) => a.sortOrder - b.sortOrder).map((space) => (
@@ -725,6 +728,22 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <Switch checked={space.isActive} onCheckedChange={() => { /* TODO: hook up toggle */ }} />
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <Switch
+                        checked={space.inHomeCarrousel}
+                        onCheckedChange={(checked) => {
+                          startTransition(async () => {
+                            const result = await toggleSpaceHomeCarrouselAction({ spaceId: space.id, enabled: checked })
+                            if (!result.success) {
+                              toast.error("Failed to update", { description: result.error.message })
+                            } else {
+                              toast.success(checked ? "Added to homepage" : "Removed from homepage")
+                              router.refresh()
+                            }
+                          })
+                        }}
+                      />
                     </td>
                     <td className="px-4 py-3 align-middle">
                       <label className="cursor-pointer inline-flex items-center gap-2 group" title={space.imageUrl ? "Click to change image" : "Click to upload image"}>

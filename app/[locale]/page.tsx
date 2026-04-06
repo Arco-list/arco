@@ -266,77 +266,54 @@ async function loadLandingData(locale: string) {
     }
   })
 
-  // BrowseSection data - Spaces (hardcoded for now)
-  // Fetch best photo per space from published projects
+  // BrowseSection data - Spaces flagged for homepage carousel (max 5)
   const ts = await getTranslations("spaces")
   const tc = await getTranslations("common")
 
-  const spaceConfig = [
-    { slug: "kitchen", title: ts("kitchen") },
-    { slug: "living-room", title: ts("living") },
-    { slug: "bedroom", title: ts("bedroom") },
-    { slug: "bathroom", title: ts("bathroom") },
-    { slug: "exterior", title: ts("exterior") },
-  ]
-
-  const { data: spacePhotos } = await supabase
-    .from("project_features")
-    .select("space:spaces!space_id(slug), project_photos!project_photos_feature_id_fkey(url, is_primary, order_index)")
-    .not("space_id", "is", null)
-
-  const spacePhotoMap = new Map<string, string>()
-  for (const feature of (spacePhotos ?? []) as any[]) {
-    const slug = feature.space?.slug
-    if (!slug || spacePhotoMap.has(slug)) continue
-    const photos = (feature.project_photos ?? [])
-      .filter((p: any) => p.url)
-      .sort((a: any, b: any) => {
-        if (a.is_primary && !b.is_primary) return -1
-        if (!a.is_primary && b.is_primary) return 1
-        return (a.order_index ?? 0) - (b.order_index ?? 0)
-      })
-    if (photos[0]?.url) spacePhotoMap.set(slug, photos[0].url)
-  }
-
-  // Also check spaces table for admin-uploaded images
-  const { data: spacesWithImages } = await supabase
+  const { data: homepageSpaces } = await supabase
     .from("spaces")
-    .select("slug, image_url")
-    .not("image_url", "is", null)
+    .select("slug, name, image_url, sort_order")
+    .eq("is_active", true)
+    .eq("in_home_carrousel" as any, true)
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .limit(5)
 
-  for (const space of (spacesWithImages ?? []) as any[]) {
-    if (space.image_url) spacePhotoMap.set(space.slug, space.image_url)
+  const spaceConfig = (homepageSpaces ?? []).map((s: any) => {
+    // Try to get translated name, fall back to DB name
+    const slugKey = s.slug?.replace(/-/g, "_") ?? ""
+    let title = s.name
+    try {
+      const translated = ts(slugKey as any)
+      if (translated && !translated.startsWith("spaces.")) title = translated
+    } catch {}
+    return { slug: s.slug, title, imageUrl: s.image_url as string | null }
+  })
+
+  // Build map: prefer admin-uploaded images, fall back to project photos
+  const spacePhotoMap = new Map<string, string>()
+  for (const s of spaceConfig) {
+    if (s.imageUrl) spacePhotoMap.set(s.slug, s.imageUrl)
   }
 
-  // Check categories table for images (mapped from space slugs to category slugs)
-  const spaceToCategorySlug: Record<string, string[]> = {
-    kitchen: ["kitchen-living"],
-    "living-room": ["kitchen-living"],
-    bedroom: ["bed-bath"],
-    bathroom: ["bathrooms", "bed-bath"],
-    exterior: ["outdoor", "house", "villa"],
-  }
-  const allCategorySlugs = [...new Set(Object.values(spaceToCategorySlug).flat())]
-  const { data: categoryImages } = await supabase
-    .from("categories")
-    .select("slug, image_url")
-    .in("slug", allCategorySlugs)
-    .not("image_url", "is", null)
+  // Fall back to project photos for spaces without admin image
+  const missingSlugs = spaceConfig.filter((s) => !spacePhotoMap.has(s.slug)).map((s) => s.slug)
+  if (missingSlugs.length > 0) {
+    const { data: spacePhotos } = await supabase
+      .from("project_features")
+      .select("space:spaces!space_id(slug), project_photos!project_photos_feature_id_fkey(url, is_primary, order_index)")
+      .not("space_id", "is", null)
 
-  const categoryImageMap = new Map<string, string>()
-  for (const cat of (categoryImages ?? []) as any[]) {
-    if (cat.image_url) categoryImageMap.set(cat.slug, cat.image_url)
-  }
-
-  // Apply category images as fallback (don't override spaces/project photos)
-  for (const [spaceSlug, catSlugs] of Object.entries(spaceToCategorySlug)) {
-    if (spacePhotoMap.has(spaceSlug)) continue
-    for (const catSlug of catSlugs) {
-      const img = categoryImageMap.get(catSlug)
-      if (img) {
-        spacePhotoMap.set(spaceSlug, img)
-        break
-      }
+    for (const feature of (spacePhotos ?? []) as any[]) {
+      const slug = feature.space?.slug
+      if (!slug || spacePhotoMap.has(slug) || !missingSlugs.includes(slug)) continue
+      const photos = (feature.project_photos ?? [])
+        .filter((p: any) => p.url)
+        .sort((a: any, b: any) => {
+          if (a.is_primary && !b.is_primary) return -1
+          if (!a.is_primary && b.is_primary) return 1
+          return (a.order_index ?? 0) - (b.order_index ?? 0)
+        })
+      if (photos[0]?.url) spacePhotoMap.set(slug, photos[0].url)
     }
   }
 

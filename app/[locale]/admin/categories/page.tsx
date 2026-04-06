@@ -36,6 +36,7 @@ export default async function CategoriesPage() {
     isActive: row.is_active ?? true,
     photoCount: 0, // will be populated after counts are fetched
     imageUrl: row.image_url ?? null,
+    inHomeCarrousel: row.in_home_carrousel ?? false,
   }))
 
   // Fetch counts for categories and spaces

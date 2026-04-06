@@ -451,6 +451,49 @@ export async function toggleHomeCarrouselAction(
   })
 }
 
+export async function toggleSpaceHomeCarrouselAction(
+  input: { spaceId: string; enabled: boolean }
+): Promise<ActionResult> {
+  const { error } = await assertAdmin()
+  if (error) {
+    return createErrorResponse('AUTH', error.message, { userId: null }, 'admin-spaces-home-carrousel')
+  }
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+
+  // Enforce max 5 spaces in homepage carousel
+  if (input.enabled) {
+    const { data: currentCount } = await serviceSupabase
+      .from("spaces")
+      .select("id")
+      .eq("in_home_carrousel" as any, true)
+      .eq("is_active", true)
+
+    if (currentCount && currentCount.length >= 5) {
+      return createErrorResponse(
+        'VALIDATION',
+        'Maximum 5 spaces can be shown on the homepage carousel. Please remove one first.',
+        { currentCount: currentCount.length },
+        'admin-spaces-home-carrousel'
+      )
+    }
+  }
+
+  const { error: updateError } = await serviceSupabase
+    .from("spaces")
+    .update({ in_home_carrousel: input.enabled } as any)
+    .eq("id", input.spaceId)
+
+  if (updateError) {
+    return createErrorResponse('DATABASE', updateError.message, { spaceId: input.spaceId }, 'admin-spaces-home-carrousel')
+  }
+
+  revalidatePath("/admin/categories")
+  revalidatePath("/")
+
+  return createSuccessResponse({ spaceId: input.spaceId, inHomeCarrousel: input.enabled })
+}
+
 export async function createCategoryAction(
   input: { name: string; parentId?: string | null; description?: string | null; categoryType?: string | null }
 ): Promise<ActionResult> {
