@@ -5110,10 +5110,15 @@ body.no-scroll {
     min-width: 0;
     max-height: calc(100vh - 140px);
     overflow-y: auto;
+    z-index: 1000;
   }
   .filter-dropdown[data-align="right"] {
     left: 12px;
     right: 12px;
+  }
+  /* Push dropdown below the chip strip when chips are visible */
+  body:has(.discover-chip-strip) .filter-dropdown {
+    top: 172px;
   }
 }
 
