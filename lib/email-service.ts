@@ -229,14 +229,40 @@ function renderDomainVerification(vars: EmailVariables): { subject: string; html
 // ─── Homeowner Welcome Series ────────────────────────────────────────────────
 
 function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: string } {
+  const featureCard = (icon: string, title: string, desc: string) => `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      <tr>
+        <td style="width:44px;vertical-align:top;padding-right:14px;">
+          <div style="width:44px;height:44px;background:#f5f5f4;border-radius:6px;text-align:center;line-height:44px;font-size:20px;">${icon}</div>
+        </td>
+        <td style="vertical-align:top;">
+          <p style="margin:0 0 4px;font-size:15px;font-weight:500;color:#1c1c1a;line-height:1.3;">${title}</p>
+          <p style="margin:0;font-size:13px;font-weight:300;color:#6b6b68;line-height:1.5;">${desc}</p>
+        </td>
+      </tr>
+    </table>`
+
   return {
     subject: 'Welcome to Arco',
     html: lb(vars, `
       ${heading('Welcome to Arco')}
       ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Thanks for joining Arco — the curated architecture platform where great projects and the professionals behind them get the recognition they deserve.`)}
-      ${body('Here\'s what you can do:')}
-      ${body(`<strong>Browse projects</strong> — Explore completed architecture and interior design projects from across the Netherlands.<br><br><strong>Discover professionals</strong> — Find architects, interior designers, and builders credited on real work.<br><br><strong>Save your favorites</strong> — Bookmark projects and professionals to revisit later.`)}
-      ${button('Explore projects', 'https://www.arcolist.com/projects')}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin:32px 0 24px;">
+        <tr><td style="font-size:0;line-height:0;">
+          <img src="https://www.arcolist.com/arco-welcome-hero.jpg" alt="" width="520" style="display:block;width:100%;max-width:520px;height:auto;border-radius:3px;" onerror="this.style.display='none'" />
+        </td></tr>
+      </table>
+
+      <p style="margin:0 0 20px;font-size:13px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">What you can do</p>
+
+      ${featureCard("🏛", "Browse projects", "Explore completed architecture and interior design projects from across the Netherlands.")}
+      ${featureCard("👥", "Discover professionals", "Find architects, interior designers, and builders credited on real work.")}
+      ${featureCard("★", "Save your favorites", "Bookmark projects and professionals to revisit later.")}
+
+      <div style="margin-top:28px;">
+        ${button('Explore projects', 'https://www.arcolist.com/projects')}
+      </div>
     `),
   }
 }
