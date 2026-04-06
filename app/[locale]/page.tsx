@@ -121,8 +121,7 @@ async function loadLandingData(locale: string) {
         primary_service:categories!companies_primary_service_id_fkey(name, name_nl)
       `)
       .eq("is_featured", true)
-      .eq("status", "listed")
-      .limit(3),
+      .in("status", ["listed", "prospected"]),
   ])
 
   if (heroCoversResult.error) logger.error("Failed to load hero covers", { scope: "landing" }, heroCoversResult.error)
@@ -148,7 +147,10 @@ async function loadLandingData(locale: string) {
   const parentCategories = (parentCategoriesResult.data as CategoryRow[] | null) ?? []
   const homeProjectTypes = (homeProjectTypesResult.data as Tables<"categories">[] | null) ?? []
   const homeProfessionalServices = (homeProfessionalServicesResult.data as Tables<"categories">[] | null) ?? []
-  const featuredCompaniesRaw = featuredCompaniesResult.data ?? []
+  // Shuffle featured companies and take 3 for rotation on each request
+  const allFeaturedCompanies = featuredCompaniesResult.data ?? []
+  const shuffled = [...allFeaturedCompanies].sort(() => Math.random() - 0.5)
+  const featuredCompaniesRaw = shuffled.slice(0, 3)
 
   let childCategories: CategoryRow[] = []
 
