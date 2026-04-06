@@ -56,7 +56,7 @@ function loadPostHog() {
       autocapture: false,
       capture_pageview: true,
       capture_pageleave: true,
-      disable_session_recording: true,
+      disable_session_recording: false,
       persistence: 'memory'
     });
   `
