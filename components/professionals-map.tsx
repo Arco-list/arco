@@ -357,9 +357,11 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
       infoWindowRef.current?.close()
     })
 
-    // Re-cluster on every zoom/pan — always calls latest renderMarkers via ref
-    // Re-cluster on every zoom/pan
+    // Re-cluster on every zoom/pan — but skip if an InfoWindow is open
+    // (Google Maps auto-pans on InfoWindow open which triggers idle —
+    // re-rendering markers would destroy the marker the InfoWindow is attached to)
     map.addListener("idle", () => {
+      if (infoWindowRef.current?.getMap()) return
       renderMarkersRef.current()
     })
 
