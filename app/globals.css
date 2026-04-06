@@ -5091,15 +5091,19 @@ body.no-scroll {
 @media (max-width: 768px) {
   .discover-filter-inner {
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: hidden;
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 0;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
   }
   .discover-filter-inner > * {
     flex-shrink: 0;
   }
-  /* Dropdowns: position fixed at bottom of filter bar, full mobile width */
+  /* On iOS Safari, position:fixed inside a sticky parent is buggy.
+     Render the dropdown outside the scroll context using a portal-like approach via z-index,
+     and use absolute positioning relative to the page. */
   .filter-dropdown[data-open="true"] {
     position: fixed !important;
     top: 122px !important;
@@ -5110,7 +5114,10 @@ body.no-scroll {
     min-width: 0 !important;
     max-height: calc(100vh - 140px) !important;
     overflow-y: auto !important;
-    z-index: 1000 !important;
+    z-index: 9999 !important;
+    /* Force a new stacking context to escape parent transforms */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
   .filter-dropdown[data-open="true"][data-align="right"] {
     left: 12px !important;
