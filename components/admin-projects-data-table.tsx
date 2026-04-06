@@ -156,6 +156,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
   // Delete dialog
   const [deleteProject, setDeleteProject] = useState<AdminProjectRow | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [showStatusGuide, setShowStatusGuide] = useState(false)
 
   const handleStatusSubmit = () => {
     if (!statusDialogProject) return
@@ -170,9 +171,20 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           ? [...selectedRejectionReasons, ...(rejectionReason.trim() ? [rejectionReason.trim()] : [])].join(". ")
           : null
 
+        // Enforce constraint: if owner company is Draft/Added, downgrade Listed to Unlisted
+        let finalStatus = statusSelection
+        if (finalStatus === "published") {
+          const ownerCompany = statusDialogProject.companies.find(c => c.isOwner)
+          const ownerStatus = ownerCompany?.companyStatus
+          if (ownerStatus === "draft" || ownerStatus === "added") {
+            finalStatus = "archived"
+            toast.info("Owner company is not listed — project set to Unlisted instead")
+          }
+        }
+
         const result = await setProjectStatusAction({
           projectId: statusDialogProject.id,
-          status: statusSelection,
+          status: finalStatus,
           rejectionReason: combinedReason,
         })
 
@@ -183,7 +195,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         }
 
         toast.success("Status updated", {
-          description: `${statusDialogProject.title} is now ${STATUS_CONFIG[statusSelection].label.toLowerCase()}.`,
+          description: `${statusDialogProject.title} is now ${STATUS_CONFIG[finalStatus].label.toLowerCase()}.`,
         })
         setStatusDialogProject(null)
         setRejectionReason("")
@@ -614,6 +626,10 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           {projects.length} total
           {statusCounts.published ? ` · ${statusCounts.published} published` : ""}
           {statusCounts.in_progress ? ` · ${statusCounts.in_progress} in review` : ""}
+          {" · "}
+          <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
+            Status guide
+          </button>
         </p>
       </div>
 
@@ -843,22 +859,31 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             </div>
 
             <div className="status-modal-options">
-              {STATUS_OPTIONS.map((option) => {
+              {(() => {
+                const ownerCompany = statusDialogProject.companies.find(c => c.isOwner)
+                const ownerStatus = ownerCompany?.companyStatus ?? null
+                const canList = ownerStatus === "listed" || ownerStatus === "unlisted" || ownerStatus === "prospected"
+                return STATUS_OPTIONS.map((option) => {
                 const isSelected = statusSelection === option.value
                 const hasRejectionReason = option.value === "rejected" && statusDialogProject.status === "rejected" && statusDialogProject.rejectionReason
+                const isListBlocked = option.value === "published" && !canList
+                const isDisabled = isListBlocked
                 // For rejected with reason: show the reason as the description instead of default text
-                const descText = hasRejectionReason ? statusDialogProject.rejectionReason! : option.description
+                const descText = isDisabled
+                  ? `Owner company is ${ownerStatus ?? "unknown"} — must be Listed, Unlisted, or Prospected`
+                  : hasRejectionReason ? statusDialogProject.rejectionReason! : option.description
                 return (
                   <button
                     key={option.value}
                     type="button"
                     className={`status-modal-option${isSelected ? " selected" : ""}`}
+                    disabled={isDisabled}
                     onClick={() => { setStatusSelection(option.value); setShowRejectionOptions(false) }}
                   >
                     <span className={`status-modal-dot ${STATUS_CONFIG[option.value].dotColor}`} />
                     <div className="status-modal-option-text">
                       <span className="status-modal-option-label">{option.label}</span>
-                      <span className="status-modal-option-desc">
+                      <span className="status-modal-option-desc" style={isDisabled ? { color: "#92400e" } : undefined}>
                         {descText}
                         {hasRejectionReason && isSelected && !showRejectionOptions && (
                           <>
@@ -878,7 +903,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                     </div>
                   </button>
                 )
-              })}
+              })
+              })()}
             </div>
 
             {/* Rejection options — shown when selecting rejected for the first time, or after clicking "Change reason" */}
@@ -984,6 +1010,41 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               >
                 {isPending ? "Updating…" : "Update status"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Guide Popup */}
+      {showStatusGuide && (
+        <div className="popup-overlay" onClick={() => setShowStatusGuide(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Project statuses</h3>
+              <button type="button" className="popup-close" onClick={() => setShowStatusGuide(false)} aria-label="Close">✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {[
+                { dot: "bg-emerald-500", label: "Listed", desc: "Published and visible to everyone on the platform.", specs: "Public · Searchable · Company must be Listed, Unlisted, or Prospected" },
+                { dot: "bg-muted-foreground", label: "Unlisted", desc: "Hidden from public directories. Only accessible via direct link.", specs: "Hidden · Not searchable" },
+                { dot: "bg-blue-500", label: "In review", desc: "Submitted by company, awaiting admin review before publishing.", specs: "Not visible · Pending approval" },
+                { dot: "bg-amber-500", label: "In progress", desc: "Project is being set up. Not yet submitted for review.", specs: "Not visible · Draft state" },
+                { dot: "bg-red-500", label: "Rejected", desc: "Declined by admin with feedback. Company can revise and resubmit.", specs: "Not visible · Feedback sent" },
+              ].map((s) => (
+                <div key={s.label} style={{ display: "flex", gap: 12 }}>
+                  <span className={`${s.dot} shrink-0`} style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5 }} />
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>{s.label}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b6b68", lineHeight: 1.4 }}>{s.desc}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.3 }}>{s.specs}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
+              <strong>Review flow:</strong> In progress → In review → Listed (or Rejected)
+              <br />
+              <strong>Constraints:</strong> Projects can only be Listed when the owning company is Listed, Unlisted, or Prospected. Projects owned by Added or Draft companies will be set to Unlisted after review.
             </div>
           </div>
         </div>
