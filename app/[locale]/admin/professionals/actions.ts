@@ -203,6 +203,49 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     logger.error("admin-professionals", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
   }
 
+  // Sync owned project visibility based on company status
+  const projectVisibleStatuses = ["listed", "unlisted", "prospected"]
+  const projectHiddenStatuses = ["added", "draft", "deactivated"]
+  const companyId = parsedCompanyId.data
+
+  if (projectHiddenStatuses.includes(parsedStatus.data)) {
+    // Unpublish owned projects when company is hidden
+    const svcHide = createServiceRoleSupabaseClient()
+    const { data: ownedLinks } = await svcHide
+      .from("project_professionals")
+      .select("project_id")
+      .eq("company_id", companyId)
+      .eq("is_project_owner", true)
+
+    if (ownedLinks && ownedLinks.length > 0) {
+      const pIds = ownedLinks.map(r => r.project_id).filter(Boolean) as string[]
+      await svcHide
+        .from("projects")
+        .update({ status: "archived" })
+        .in("id", pIds)
+        .eq("status", "published")
+      await svcHide.rpc("refresh_all_materialized_views")
+    }
+  } else if (parsedStatus.data === "listed" || parsedStatus.data === "unlisted") {
+    // Re-publish owned projects when company becomes visible
+    const svcShow = createServiceRoleSupabaseClient()
+    const { data: ownedLinks } = await svcShow
+      .from("project_professionals")
+      .select("project_id")
+      .eq("company_id", companyId)
+      .eq("is_project_owner", true)
+
+    if (ownedLinks && ownedLinks.length > 0) {
+      const pIds = ownedLinks.map(r => r.project_id).filter(Boolean) as string[]
+      await svcShow
+        .from("projects")
+        .update({ status: "published" })
+        .in("id", pIds)
+        .eq("status", "archived")
+      await svcShow.rpc("refresh_all_materialized_views")
+    }
+  }
+
   // When status is set to prospected, publish owned projects and add to Sales table
   if (parsedStatus.data === "prospected") {
     const serviceClient0 = createServiceRoleSupabaseClient()
