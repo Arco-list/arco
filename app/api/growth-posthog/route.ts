@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const tf = request.nextUrl.searchParams.get("tf") || "months"
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1"
   const dateFromMap: Record<string, string> = {
     days: "-8d",
     weeks: "-56d",
@@ -39,8 +40,34 @@ export async function GET(request: NextRequest) {
     months: "month",
     years: "month",
   }
+  // Cache TTL per timeframe — shorter for days, longer for years
+  const cacheTtlMinutes: Record<string, number> = {
+    days: 30,
+    weeks: 60,
+    months: 360,
+    years: 1440,
+  }
   const dateFrom = dateFromMap[tf] ?? "-8m"
   const posthogInterval = intervalMap[tf] ?? "month"
+  const ttl = cacheTtlMinutes[tf] ?? 360
+
+  // Check cache first
+  if (!forceRefresh) {
+    const { createServiceRoleSupabaseClient } = await import("@/lib/supabase/server")
+    const cacheClient = createServiceRoleSupabaseClient()
+    const { data: cached } = await cacheClient
+      .from("posthog_cache")
+      .select("data, fetched_at")
+      .eq("timeframe", tf)
+      .maybeSingle()
+
+    if (cached) {
+      const age = (Date.now() - new Date(cached.fetched_at).getTime()) / 60000
+      if (age < ttl) {
+        return NextResponse.json({ ...cached.data as object, _cached: true, _age_minutes: Math.round(age) })
+      }
+    }
+  }
 
   const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -149,7 +176,7 @@ export async function GET(request: NextRequest) {
       direct: directProSeries, google: googleProSeries, referral: referralProSeries,
     }
 
-    return NextResponse.json({
+    const responseData = {
       proVisitors,
       clientVisitors,
       clientActives: clientActives ?? 0,
@@ -170,7 +197,20 @@ export async function GET(request: NextRequest) {
       proSources,
       clientSourceSeries,
       proSourceSeries,
-    })
+    }
+
+    // Save to cache
+    try {
+      const { createServiceRoleSupabaseClient } = await import("@/lib/supabase/server")
+      const cacheClient = createServiceRoleSupabaseClient()
+      await cacheClient.from("posthog_cache").upsert({
+        timeframe: tf,
+        data: responseData,
+        fetched_at: new Date().toISOString(),
+      })
+    } catch {}
+
+    return NextResponse.json(responseData)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error("PostHog API error:", msg)
