@@ -327,14 +327,17 @@ async function fetchTimeSeries(
 
   const data = await res.json()
   const values: number[] = data?.results?.[0]?.data ?? []
-  const labels: string[] = data?.results?.[0]?.labels ?? []
+  // PostHog returns ISO dates in `days` array (e.g. "2024-01-01")
+  const days: string[] = data?.results?.[0]?.days ?? []
 
   // Aggregate monthly data into yearly buckets
-  if (aggregateToYears && labels.length > 0) {
+  if (aggregateToYears && days.length > 0) {
     const yearMap = new Map<string, number>()
     for (let i = 0; i < values.length; i++) {
-      const year = labels[i]?.substring(0, 4) ?? ""
-      if (year) yearMap.set(year, (yearMap.get(year) ?? 0) + (values[i] ?? 0))
+      const year = days[i]?.substring(0, 4) ?? ""
+      if (year && /^\d{4}$/.test(year)) {
+        yearMap.set(year, (yearMap.get(year) ?? 0) + (values[i] ?? 0))
+      }
     }
     const sorted = Array.from(yearMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
     const yearValues = sorted.map(([, v]) => v)
