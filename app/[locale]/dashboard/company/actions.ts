@@ -435,6 +435,26 @@ export async function updateCompanyContactAction(
   const payload = parsedContact.data
   const normalizedDomain = payload.domain ? payload.domain.replace(/^https?:\/\//i, "").toLowerCase() : ""
 
+  // Geocode address for map coordinates
+  let latitude: number | null = null
+  let longitude: number | null = null
+  const addressForGeocode = payload.address || payload.city
+  if (addressForGeocode) {
+    try {
+      const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (mapsKey) {
+        const geoRes = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressForGeocode)}&key=${mapsKey}`
+        )
+        const geoData = await geoRes.json()
+        if (geoData?.results?.[0]?.geometry?.location) {
+          latitude = geoData.results[0].geometry.location.lat
+          longitude = geoData.results[0].geometry.location.lng
+        }
+      }
+    } catch {}
+  }
+
   const { error: updateError } = await supabase
     .from("companies")
     .update({
@@ -445,6 +465,7 @@ export async function updateCompanyContactAction(
       address: payload.address ?? null,
       city: payload.city ?? null,
       country: payload.country ?? null,
+      ...(latitude != null && longitude != null ? { latitude, longitude } : {}),
     })
     .eq("id", company!.id)
 
@@ -504,6 +525,14 @@ export async function updateCompanyContactAction(
       )
       return { success: false, error: "Could not update social links." }
     }
+  }
+
+  // Refresh materialized views if coordinates were updated (for map)
+  if (latitude != null && longitude != null) {
+    try {
+      const serviceRole = createServiceRoleSupabaseClient()
+      await serviceRole.rpc("refresh_all_materialized_views")
+    } catch {}
   }
 
   revalidatePath("/dashboard/company")
