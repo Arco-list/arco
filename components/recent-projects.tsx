@@ -29,8 +29,7 @@ function Card({ project, className }: { project: RecentProject; className?: stri
         </div>
       </div>
       <h3 className="discover-card-title">{project.title}</h3>
-      {project.subtitle && <p className="discover-card-sub">{project.subtitle}</p>}
-    </Link>
+          </Link>
   )
 }
 
@@ -64,21 +63,20 @@ export function RecentProjects({ projects }: RecentProjectsProps) {
                 </div>
                 <div className="ed-info">
                   <h3 className="ed-name">{p[0].title}</h3>
-                  {p[0].subtitle && <p className="ed-by">{p[0].subtitle}</p>}
-                </div>
+                                  </div>
               </Link>
             )}
             <div className="ed-stack">
               {p[1] && (
                 <Link href={p[1].href} className="ed-card">
                   <div className="ed-img"><Image src={p[1].imageUrl!} alt={p[1].title} fill className="object-cover" /></div>
-                  <div className="ed-info"><h3 className="ed-name">{p[1].title}</h3>{p[1].subtitle && <p className="ed-by">{p[1].subtitle}</p>}</div>
+                  <div className="ed-info"><h3 className="ed-name">{p[1].title}</h3></div>
                 </Link>
               )}
               {p[2] && (
                 <Link href={p[2].href} className="ed-card">
                   <div className="ed-img"><Image src={p[2].imageUrl!} alt={p[2].title} fill className="object-cover" /></div>
-                  <div className="ed-info"><h3 className="ed-name">{p[2].title}</h3>{p[2].subtitle && <p className="ed-by">{p[2].subtitle}</p>}</div>
+                  <div className="ed-info"><h3 className="ed-name">{p[2].title}</h3></div>
                 </Link>
               )}
             </div>
@@ -87,19 +85,19 @@ export function RecentProjects({ projects }: RecentProjectsProps) {
             {p[3] && (
               <Link href={p[3].href} className="ed-card">
                 <div className="ed-img"><Image src={p[3].imageUrl!} alt={p[3].title} fill className="object-cover" /></div>
-                <div className="ed-info"><h3 className="ed-name">{p[3].title}</h3>{p[3].subtitle && <p className="ed-by">{p[3].subtitle}</p>}</div>
+                <div className="ed-info"><h3 className="ed-name">{p[3].title}</h3></div>
               </Link>
             )}
             {p[4] && (
               <Link href={p[4].href} className="ed-card">
                 <div className="ed-img"><Image src={p[4].imageUrl!} alt={p[4].title} fill className="object-cover" /></div>
-                <div className="ed-info"><h3 className="ed-name">{p[4].title}</h3>{p[4].subtitle && <p className="ed-by">{p[4].subtitle}</p>}</div>
+                <div className="ed-info"><h3 className="ed-name">{p[4].title}</h3></div>
               </Link>
             )}
             {p[5] && (
               <Link href={p[5].href} className="ed-card">
                 <div className="ed-img"><Image src={p[5].imageUrl!} alt={p[5].title} fill className="object-cover" /></div>
-                <div className="ed-info"><h3 className="ed-name">{p[5].title}</h3>{p[5].subtitle && <p className="ed-by">{p[5].subtitle}</p>}</div>
+                <div className="ed-info"><h3 className="ed-name">{p[5].title}</h3></div>
               </Link>
             )}
           </div>
