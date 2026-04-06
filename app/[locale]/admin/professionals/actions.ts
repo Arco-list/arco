@@ -1083,6 +1083,12 @@ export async function removeCompanyOwnerAction(input: {
   // Remove company members
   await serviceClient.from("company_members").delete().eq("company_id", companyId)
 
+  // Unlink professionals from this company so it no longer shows on user profiles
+  await serviceClient
+    .from("professionals")
+    .update({ company_id: null } as any)
+    .eq("company_id", companyId)
+
   // Unpublish owned projects (set to draft)
   const { data: ownedLinks } = await serviceClient
     .from("project_professionals")
