@@ -5088,6 +5088,35 @@ body.no-scroll {
   display: none;
 }
 
+@media (max-width: 768px) {
+  .discover-filter-inner {
+    overflow-x: auto;
+    overflow-y: visible;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0;
+  }
+  .discover-filter-inner > * {
+    flex-shrink: 0;
+  }
+  /* Dropdowns: anchor to the bottom of the sticky filter bar and constrain to viewport */
+  .filter-dropdown {
+    position: fixed;
+    top: 122px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    min-width: 0;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+  }
+  .filter-dropdown[data-align="right"] {
+    left: 12px;
+    right: 12px;
+  }
+}
+
 /* Status pills (dot + label) */
 .status-pill {
   display: inline-flex;
