@@ -202,7 +202,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   const [sourceFilter, setSourceFilter] = useState("all")
   const [sequenceFilter, setSequenceFilter] = useState<SequenceStatus | "all">("all")
   const [search, setSearch] = useState("")
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
   const [events, setEvents] = useState<ProspectEvent[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [showSyncModal, setShowSyncModal] = useState(false)
@@ -281,17 +281,13 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   }, [offset, statusFilter, sourceFilter, sequenceFilter, search])
 
   // Expand row
-  const handleRowClick = useCallback((id: string) => {
-    if (expandedId === id) {
-      setExpandedId(null)
-      return
-    }
-    setExpandedId(id)
+  const openDetails = useCallback((prospect: Prospect) => {
+    setDetailProspect(prospect)
     startTransition(async () => {
-      const result = await fetchProspectEvents(id)
+      const result = await fetchProspectEvents(prospect.id)
       setEvents(result.events)
     })
-  }, [expandedId])
+  }, [])
 
   // Delete
   const handleDelete = useCallback((id: string) => {
@@ -603,8 +599,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               return (
               <Fragment key={p.id}>
                 <tr
-                  className={`border-b border-[#e5e5e4] hover:bg-[#fafaf9] cursor-pointer transition-colors ${expandedId === p.id ? "bg-[#fafaf9]" : ""}`}
-                  onClick={() => handleRowClick(p.id)}
+                  className="border-b border-[#e5e5e4] hover:bg-[#fafaf9] transition-colors"
                 >
                   {/* Contact — avatar/initials + name + email */}
                   <td className="px-4 py-3">
@@ -706,6 +701,13 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-[160px]">
+                        <DropdownMenuItem
+                          className="text-xs cursor-pointer"
+                          onClick={() => openDetails(p)}
+                        >
+                          Details
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         {/* Pause / Resume */}
                         {(p.source === "arco" || p.source === "invites") && (p.sequence_status === "active" || p.sequence_status === "finished") && (
                           <DropdownMenuItem
@@ -760,73 +762,6 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                     </DropdownMenu>
                   </td>
                 </tr>
-                {/* Expanded detail row */}
-                {expandedId === p.id && (
-                  <tr key={`${p.id}-detail`} className="border-b border-[#e5e5e4] bg-[#fafaf9]">
-                    <td colSpan={11} className="px-6 py-4">
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                        <DetailField label="Ref Code" value={p.ref_code} />
-                        <DetailField label="City" value={p.city} />
-                        <DetailField label="Apollo Contact ID" value={p.apollo_contact_id} />
-                        <DetailField label="Last Email Sent" value={formatDateTime(p.last_email_sent_at)} />
-                        <DetailField label="Visited At" value={formatDateTime(p.landing_visited_at)} />
-                        <DetailField label="Signed Up At" value={formatDateTime(p.signed_up_at)} />
-                        <DetailField label="Company Created At" value={formatDateTime(p.company_created_at)} />
-                        <DetailField label="Active At" value={formatDateTime(p.converted_at)} />
-                        <DetailField label="Linked User ID" value={p.user_id} />
-                        <DetailField label="Linked Company ID" value={p.company_id} />
-                        <DetailField label="Linked Project ID" value={p.project_id} />
-                      </div>
-                      {p.notes && (
-                        <div className="mb-4">
-                          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Notes</span>
-                          <p className="text-xs text-[#6b6b68] mt-0.5">{p.notes}</p>
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 mb-4">
-                        <Select
-                          value={p.status}
-                          onValueChange={(v) => handleStatusUpdate(p.id, v as ProspectStatus)}
-                        >
-                          <SelectTrigger className="w-[170px] h-8 text-xs border-[#e5e5e4] rounded-[3px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ALL_STATUSES.map((s) => (
-                              <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(p.id) }}
-                          className="h-8 px-3 text-xs font-medium border border-red-200 text-red-600 rounded-[3px] hover:bg-red-50 transition-colors"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      {/* Event history */}
-                      {events.length > 0 && (
-                        <div>
-                          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Event History</span>
-                          <div className="mt-1 space-y-1">
-                            {events.map((ev) => (
-                              <div key={ev.id} className="flex items-center gap-2 text-xs text-[#6b6b68]">
-                                <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateTime(ev.created_at)}</span>
-                                <span className="font-medium">{ev.event_type}</span>
-                                {Object.keys(ev.metadata).length > 0 && (
-                                  <span className="text-[#a1a1a0]">{JSON.stringify(ev.metadata)}</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
               </Fragment>
               )
             })}
@@ -844,6 +779,81 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
           >
             {isPending ? "Loading..." : "Load more"}
           </button>
+        </div>
+      )}
+
+      {/* Details popup */}
+      {detailProspect && (
+        <div className="popup-overlay" onClick={() => { setDetailProspect(null); setEvents([]) }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">{detailProspect.company_name || detailProspect.email}</h3>
+              <button type="button" className="popup-close" onClick={() => { setDetailProspect(null); setEvents([]) }} aria-label="Close">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
+              <DetailField label="Ref Code" value={detailProspect.ref_code} />
+              <DetailField label="City" value={detailProspect.city} />
+              <DetailField label="Apollo Contact ID" value={detailProspect.apollo_contact_id} />
+              <DetailField label="Last Email Sent" value={formatDateTime(detailProspect.last_email_sent_at)} />
+              <DetailField label="Visited At" value={formatDateTime(detailProspect.landing_visited_at)} />
+              <DetailField label="Signed Up At" value={formatDateTime(detailProspect.signed_up_at)} />
+              <DetailField label="Company Created At" value={formatDateTime(detailProspect.company_created_at)} />
+              <DetailField label="Active At" value={formatDateTime(detailProspect.converted_at)} />
+              <DetailField label="Linked User ID" value={detailProspect.user_id} />
+              <DetailField label="Linked Company ID" value={detailProspect.company_id} />
+              <DetailField label="Linked Project ID" value={detailProspect.project_id} />
+            </div>
+
+            {detailProspect.notes && (
+              <div className="mb-4">
+                <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Notes</span>
+                <p className="text-xs text-[#6b6b68] mt-0.5">{detailProspect.notes}</p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mb-5">
+              <Select
+                value={detailProspect.status}
+                onValueChange={(v) => {
+                  handleStatusUpdate(detailProspect.id, v as ProspectStatus)
+                  setDetailProspect((prev) => prev ? { ...prev, status: v as ProspectStatus } : null)
+                }}
+              >
+                <SelectTrigger className="w-[170px] h-8 text-xs border-[#e5e5e4] rounded-[3px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALL_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                onClick={() => { handleDelete(detailProspect.id); setDetailProspect(null) }}
+                className="h-8 px-3 text-xs font-medium border border-red-200 text-red-600 rounded-[3px] hover:bg-red-50 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+
+            {events.length > 0 && (
+              <div>
+                <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Event History</span>
+                <div className="mt-1 space-y-1" style={{ maxHeight: 200, overflowY: "auto" }}>
+                  {events.map((ev) => (
+                    <div key={ev.id} className="flex items-start gap-2 text-xs text-[#6b6b68]">
+                      <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateTime(ev.created_at)}</span>
+                      <span className="font-medium">{ev.event_type}</span>
+                      {Object.keys(ev.metadata).length > 0 && (
+                        <span className="text-[#a1a1a0] break-all">{JSON.stringify(ev.metadata)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
