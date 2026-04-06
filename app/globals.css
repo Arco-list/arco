@@ -5095,8 +5095,9 @@ body.no-scroll {
     flex-wrap: nowrap;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 0;
-    touch-action: pan-x;
     overscroll-behavior-x: contain;
+    /* Center pills when they fit, scroll when they don't */
+    justify-content: flex-start;
   }
   .discover-filter-inner > * {
     flex-shrink: 0;
