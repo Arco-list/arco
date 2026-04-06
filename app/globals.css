@@ -5099,26 +5099,26 @@ body.no-scroll {
   .discover-filter-inner > * {
     flex-shrink: 0;
   }
-  /* Dropdowns: anchor to the bottom of the sticky filter bar and constrain to viewport */
-  .filter-dropdown {
-    position: fixed;
-    top: 122px;
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-width: calc(100vw - 24px);
-    min-width: 0;
-    max-height: calc(100vh - 140px);
-    overflow-y: auto;
-    z-index: 1000;
+  /* Dropdowns: position fixed at bottom of filter bar, full mobile width */
+  .filter-dropdown[data-open="true"] {
+    position: fixed !important;
+    top: 122px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+    min-width: 0 !important;
+    max-height: calc(100vh - 140px) !important;
+    overflow-y: auto !important;
+    z-index: 1000 !important;
   }
-  .filter-dropdown[data-align="right"] {
-    left: 12px;
-    right: 12px;
+  .filter-dropdown[data-open="true"][data-align="right"] {
+    left: 12px !important;
+    right: 12px !important;
   }
   /* Push dropdown below the chip strip when chips are visible */
-  body:has(.discover-chip-strip) .filter-dropdown {
-    top: 172px;
+  body:has(.discover-chip-strip) .filter-dropdown[data-open="true"] {
+    top: 172px !important;
   }
 }
 
