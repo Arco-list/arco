@@ -63,7 +63,7 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
   const isMountedRef = useRef(true);
 
   const fetchProfile = useCallback(
-    async (userId?: string | null) => {
+    async (userId?: string | null, authEmail?: string | null) => {
       if (!userId) {
         setProfile(null);
         return;
@@ -84,12 +84,12 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
       const p = (data as UserProfile | null) ?? null;
       setProfile(p);
 
-      // Identify user in PostHog
-      if (p && userId && typeof window !== "undefined" && (window as any).posthog) {
+      // Identify user in PostHog with email as a person property
+      if (userId && typeof window !== "undefined" && (window as any).posthog) {
         (window as any).posthog.identify(userId, {
-          email: p.email ?? undefined,
-          name: [p.first_name, p.last_name].filter(Boolean).join(" ") || undefined,
-          user_types: p.user_types ?? undefined,
+          email: authEmail ?? (p as any)?.email ?? undefined,
+          name: [p?.first_name, p?.last_name].filter(Boolean).join(" ") || undefined,
+          user_types: p?.user_types ?? undefined,
         });
       }
     },
@@ -125,7 +125,7 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
 
       setSession(sanitizedSession);
       setUser(userData.user ?? null);
-      await fetchProfile(userData.user?.id ?? null);
+      await fetchProfile(userData.user?.id ?? null, userData.user?.email ?? null);
       if (!isMountedRef.current) return;
       setIsLoading(false);
     };
@@ -161,7 +161,7 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
 
         setSession(sanitizedSession);
         setUser(userData.user ?? null);
-        await fetchProfile(userData.user?.id ?? null);
+        await fetchProfile(userData.user?.id ?? null, userData.user?.email ?? null);
         router.refresh();
       })();
     });
@@ -188,10 +188,10 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
 
         setSession(sanitizedSession);
         setUser(userData.user ?? null);
-        await fetchProfile(userData.user?.id ?? null);
+        await fetchProfile(userData.user?.id ?? null, userData.user?.email ?? null);
       },
       refreshProfile: async () => {
-        await fetchProfile(user?.id ?? null);
+        await fetchProfile(user?.id ?? null, user?.email ?? null);
       },
     }),
     [fetchProfile, isLoading, profile, session, supabase, user]
