@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     days: "day",
     weeks: "week",
     months: "month",
-    years: "year",
+    years: "month",
   }
   // Cache TTL per timeframe — shorter for days, longer for years
   const cacheTtlMinutes: Record<string, number> = {
@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
   }
   const dateFrom = dateFromMap[tf] ?? "-8m"
   const posthogInterval = intervalMap[tf] ?? "month"
+  const aggregateYears = tf === "years"
   const ttl = cacheTtlMinutes[tf] ?? 360
 
   // Check cache first
@@ -92,26 +93,26 @@ export async function GET(request: NextRequest) {
 
     // Batch 2: Time series (6 calls)
     const [sharersSeries, proVisitorsSeries, clientVisitorsSeries, clientActivesSeries, apolloVisitorsSeries, inviteVisitorsSeries] = await Promise.all([
-      fetchTimeSeries(apiKey, dateFrom, [], "project_shared", posthogInterval),
+      fetchTimeSeries(apiKey, dateFrom, [], "project_shared", posthogInterval, aggregateYears),
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
-      ], "$pageview", posthogInterval),
+      ], "$pageview", posthogInterval, aggregateYears),
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
-      ], "$pageview", posthogInterval),
+      ], "$pageview", posthogInterval, aggregateYears),
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
-      ], "$pageview", posthogInterval),
+      ], "$pageview", posthogInterval, aggregateYears),
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "icontains", value: "ref=", type: "event" },
-      ], "$pageview", posthogInterval),
+      ], "$pageview", posthogInterval, aggregateYears),
       fetchTimeSeries(apiKey, dateFrom, [
         { key: "$current_url", operator: "icontains", value: "inviteEmail=", type: "event" },
-      ], "$pageview", posthogInterval),
+      ], "$pageview", posthogInterval, aggregateYears),
     ])
 
     // Derive counts from series to avoid extra API calls
@@ -156,14 +157,14 @@ export async function GET(request: NextRequest) {
     const [directClientSeries, googleClientSeries, socialClientSeries, emailClientSeries, referralClientSeries,
            directProSeries, googleProSeries, referralProSeries] = await Promise.all([
       // Client source series
-      fetchSourceTimeSeries(apiKey, dateFrom, "client", "direct", posthogInterval),
-      fetchSourceTimeSeries(apiKey, dateFrom, "client", "google", posthogInterval),
-      fetchSourceTimeSeries(apiKey, dateFrom, "client", "social", posthogInterval),
-      fetchSourceTimeSeries(apiKey, dateFrom, "client", "email", posthogInterval),
+      fetchSourceTimeSeries(apiKey, dateFrom, "client", "direct", posthogInterval, aggregateYears),
+      fetchSourceTimeSeries(apiKey, dateFrom, "client", "google", posthogInterval, aggregateYears),
+      fetchSourceTimeSeries(apiKey, dateFrom, "client", "social", posthogInterval, aggregateYears),
+      fetchSourceTimeSeries(apiKey, dateFrom, "client", "email", posthogInterval, aggregateYears),
       fetchSourceTimeSeries(apiKey, dateFrom, "client", "referral", posthogInterval),
       // Pro source series
-      fetchSourceTimeSeries(apiKey, dateFrom, "pro", "direct", posthogInterval),
-      fetchSourceTimeSeries(apiKey, dateFrom, "pro", "google", posthogInterval),
+      fetchSourceTimeSeries(apiKey, dateFrom, "pro", "direct", posthogInterval, aggregateYears),
+      fetchSourceTimeSeries(apiKey, dateFrom, "pro", "google", posthogInterval, aggregateYears),
       fetchSourceTimeSeries(apiKey, dateFrom, "pro", "referral", posthogInterval),
     ])
 
@@ -299,6 +300,7 @@ async function fetchTimeSeries(
   properties: Array<{ key: string; operator: string; value: string; type: string }>,
   event: string = "$pageview",
   interval: string = "month",
+  aggregateToYears: boolean = false,
 ): Promise<number[]> {
   const res = await fetch(`${POSTHOG_API_URL}/api/projects/${POSTHOG_PROJECT_ID}/query/`, {
     method: "POST",
@@ -325,6 +327,20 @@ async function fetchTimeSeries(
 
   const data = await res.json()
   const values: number[] = data?.results?.[0]?.data ?? []
+  const labels: string[] = data?.results?.[0]?.labels ?? []
+
+  // Aggregate monthly data into yearly buckets
+  if (aggregateToYears && labels.length > 0) {
+    const yearMap = new Map<string, number>()
+    for (let i = 0; i < values.length; i++) {
+      const year = labels[i]?.substring(0, 4) ?? ""
+      if (year) yearMap.set(year, (yearMap.get(year) ?? 0) + (values[i] ?? 0))
+    }
+    const sorted = Array.from(yearMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    const yearValues = sorted.map(([, v]) => v)
+    if (yearValues.length <= 8) return yearValues
+    return yearValues.slice(-8)
+  }
 
   // Take last 8 values (7 completed + 1 rolling)
   if (values.length <= 8) return values
@@ -412,6 +428,7 @@ async function fetchSourceTimeSeries(
   audience: "client" | "pro",
   source: "direct" | "google" | "social" | "email" | "referral",
   interval: string = "month",
+  aggregateToYears: boolean = false,
 ): Promise<number[]> {
   // Build referring domain filter based on source category
   const sourcePatterns: Record<string, { operator: string; values: string[] }> = {
@@ -439,7 +456,7 @@ async function fetchSourceTimeSeries(
   // For direct, use exact match on $referring_domain
   if (source === "direct") {
     const props = [...audienceProps, { key: "$referring_domain", operator: "exact", value: "$direct", type: "event" }]
-    return fetchTimeSeries(apiKey, dateFrom, props, "$pageview", interval)
+    return fetchTimeSeries(apiKey, dateFrom, props, "$pageview", interval, aggregateToYears)
   }
 
   // For google/social/email — use icontains on referring_domain
@@ -447,7 +464,7 @@ async function fetchSourceTimeSeries(
   const allSeries: number[][] = []
   for (const val of cfg.values) {
     const props = [...audienceProps, { key: "$referring_domain", operator: "icontains", value: val, type: "event" }]
-    allSeries.push(await fetchTimeSeries(apiKey, dateFrom, props, "$pageview", interval))
+    allSeries.push(await fetchTimeSeries(apiKey, dateFrom, props, "$pageview", interval, aggregateToYears))
   }
 
   if (allSeries.length === 0) return []
