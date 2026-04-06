@@ -77,7 +77,7 @@ async function loadLandingData(locale: string) {
       .from("hero_covers")
       .select("slot, project_id, photo_url, projects(id, title, slug, location, project_type)")
       .order("slot", { ascending: true }),
-    supabase.rpc("search_projects", { limit_count: 12 }),
+    supabase.rpc("search_projects", { limit_count: 12, featured_only: true }),
     supabase
       .from("categories")
       .select("id,name,name_nl,slug,parent_id,sort_order,project_category_attributes(is_listable)")

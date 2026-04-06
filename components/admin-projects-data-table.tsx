@@ -24,6 +24,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   MoreHorizontal,
+  Star,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -32,6 +33,7 @@ import {
   setProjectStatusAction,
   deleteProjectAction,
   updateProjectProfessionalStatusAction,
+  toggleProjectFeaturedAction,
 } from "@/app/admin/projects/actions"
 import { generateCompanyLoginLinkAction } from "@/app/admin/professionals/actions"
 import {
@@ -269,25 +271,48 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         )
       },
       cell: ({ row }) => {
-        const { title, slug, projectType, location } = row.original
+        const project = row.original
+        const { title, slug, projectType, location, isFeatured } = project
         const descriptor = [projectType, location].filter(Boolean).join(" · ")
         return (
-          <div className="flex flex-col gap-0.5 min-w-0">
-            {slug ? (
-              <a
-                href={`/projects/${slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-[#1c1c1a] hover:text-[#016D75] transition-colors truncate max-w-[240px]"
-              >
-                {title}
-              </a>
-            ) : (
-              <span className="text-sm font-medium text-[#1c1c1a] truncate max-w-[240px]">{title}</span>
-            )}
-            {descriptor && (
-              <span className="text-[11px] text-[#a1a1a0] truncate max-w-[240px]">{descriptor}</span>
-            )}
+          <div className="flex items-start gap-2 min-w-0">
+            <button
+              type="button"
+              className="shrink-0 mt-0.5 transition-colors"
+              title={isFeatured ? "Remove from homepage" : "Feature on homepage"}
+              onClick={async (e) => {
+                e.stopPropagation()
+                const result = await toggleProjectFeaturedAction({ projectId: project.id, isFeatured: !isFeatured })
+                if (result.success) {
+                  toast.success(isFeatured ? "Removed from homepage" : "Featured on homepage")
+                  router.refresh()
+                } else {
+                  toast.error(result.error ?? "Failed to update")
+                }
+              }}
+            >
+              <Star
+                size={14}
+                className={isFeatured ? "fill-amber-400 text-amber-400" : "text-[#c4c4c2] hover:text-[#a1a1a0]"}
+              />
+            </button>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              {slug ? (
+                <a
+                  href={`/projects/${slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-[#1c1c1a] hover:text-[#016D75] transition-colors truncate max-w-[240px]"
+                >
+                  {title}
+                </a>
+              ) : (
+                <span className="text-sm font-medium text-[#1c1c1a] truncate max-w-[240px]">{title}</span>
+              )}
+              {descriptor && (
+                <span className="text-[11px] text-[#a1a1a0] truncate max-w-[240px]">{descriptor}</span>
+              )}
+            </div>
           </div>
         )
       },
