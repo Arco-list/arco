@@ -662,64 +662,83 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
         </button>
       </div>
 
-      {/* Spaces tab */}
+      {/* Spaces tab — matches Types/Services table styling */}
       {activeTab === "spaces" && (
-        <div className="border border-[#e5e5e4] overflow-hidden mt-4">
+        <div className="border border-[#e5e5e4] overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#e5e5e4]">
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Name</th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Slug</th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Icon</th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Image</th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Order</th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Photos</th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Active</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Space</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Status</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Image</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Photos</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Order</th>
+                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"></th>
               </tr>
             </thead>
             <tbody>
-              {spaces.sort((a, b) => a.sortOrder - b.sortOrder).map((space) => (
-                <tr key={space.id} className="border-b border-[#e5e5e4] last:border-0">
-                  <td className="px-4 py-2 text-xs text-[#1c1c1a]">{space.name}</td>
-                  <td className="px-4 py-2 text-xs text-[#6b6b68] font-mono">{space.slug}</td>
-                  <td className="px-4 py-2 text-xs text-[#6b6b68]">{space.iconKey ?? "—"}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      {space.imageUrl ? (
-                        <img src={space.imageUrl} alt="" className="w-8 h-12 object-cover rounded-[2px]" />
-                      ) : (
-                        <div className="w-8 h-12 bg-[#f5f5f4] rounded-[2px]" />
-                      )}
-                      <label className="text-[10px] text-[#a1a1a0] hover:text-[#1c1c1a] cursor-pointer transition-colors">
-                        {space.imageUrl ? "Change" : "Upload"}
-                        <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
-                          if (!e.target.files?.[0]) return
-                          setEditingSpaceId(space.id)
-                          setCropTargetId(space.id)
-                          setCropTargetType("space")
-                          const reader = new FileReader()
-                          reader.onload = () => {
-                            setCropImageSrc(reader.result as string)
-                            setCropOffset({ x: 0, y: 0 })
-                            setCropScale(1)
-                          }
-                          reader.readAsDataURL(e.target.files[0])
-                          e.target.value = ""
-                        }} />
-                      </label>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-xs text-[#6b6b68]">{space.sortOrder}</td>
-                  <td className="px-4 py-2 text-xs text-[#6b6b68]">{space.photoCount}</td>
-                  <td className="px-4 py-2">
-                    <span className={`inline-block w-2 h-2 rounded-full ${space.isActive ? "bg-emerald-500" : "bg-[#a1a1a0]"}`} />
-                  </td>
-                </tr>
-              ))}
-              {spaces.length === 0 && (
+              {spaces.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-xs text-[#a1a1a0]">No spaces found</td>
+                  <td colSpan={6} className="h-24 text-center text-sm text-[#a1a1a0]">No spaces found.</td>
                 </tr>
+              ) : (
+                spaces.sort((a, b) => a.sortOrder - b.sortOrder).map((space) => (
+                  <tr key={space.id} className="border-b border-[#e5e5e4] last:border-0 transition-colors hover:bg-[#FAFAF9]">
+                    <td className="px-4 py-3 align-middle">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-[#1c1c1a]">{space.name}</span>
+                        <span className="text-[11px] text-[#a1a1a0]">{space.slug}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <Switch checked={space.isActive} onCheckedChange={() => { /* TODO: hook up toggle */ }} />
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      {space.imageUrl ? (
+                        <img src={space.imageUrl} alt="" className="w-10 h-7 object-cover rounded-[2px]" />
+                      ) : (
+                        <span className="text-xs text-[#a1a1a0]">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <span className="text-xs text-[#6b6b68]">{space.photoCount}</span>
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <span className="text-xs text-[#6b6b68]">{space.sortOrder}</span>
+                    </td>
+                    <td className="px-4 py-3 align-middle">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild>
+                            <label className="cursor-pointer">
+                              {space.imageUrl ? "Change image" : "Upload image"}
+                              <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
+                                if (!e.target.files?.[0]) return
+                                setEditingSpaceId(space.id)
+                                setCropTargetId(space.id)
+                                setCropTargetType("space")
+                                const reader = new FileReader()
+                                reader.onload = () => {
+                                  setCropImageSrc(reader.result as string)
+                                  setCropOffset({ x: 0, y: 0 })
+                                  setCropScale(1)
+                                }
+                                reader.readAsDataURL(e.target.files[0])
+                                e.target.value = ""
+                              }} />
+                            </label>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
