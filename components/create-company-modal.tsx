@@ -576,11 +576,22 @@ export function CreateCompanyModal() {
                         {t("email_matches", { email: user?.email, domain: companyDomain })}
                       </p>
                     </div>
+                    {/*
+                      The OTP branches further down also gate Continue on a
+                      terms checkbox. Auto-verified used to skip it because
+                      no extra step was needed, but legally we still need
+                      explicit consent before claiming a company. Same
+                      checkbox shape as the OTP branches for consistency.
+                    */}
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--arco-mid-grey)", cursor: "pointer", marginBottom: 16 }}>
+                      <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#016D75" }} />
+                      <span>I agree to the <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</a> and <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</a></span>
+                    </label>
                     <button
                       type="button"
                       className="btn-primary"
                       onClick={() => handleCreateCompany()}
-                      disabled={isPending}
+                      disabled={isPending || !termsAccepted}
                       style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                     >
                       {isPending ? tc("creating") : tc("continue")}
