@@ -50,7 +50,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
     switch (sortBy) {
       case "Most popular":
         // TODO: Replace with actual project views (last 7 days) when available
-        return next.sort((a, b) => b.reviewCount - a.reviewCount)
+        return next
       case "Most recent":
         return next.sort((a, b) => b.name.localeCompare(a.name))
       case "Best match":

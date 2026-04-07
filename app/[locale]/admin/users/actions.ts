@@ -51,7 +51,6 @@ type DeletionCheckResult = {
   projectsLinkedToCompany?: number
   relatedData: {
     projects?: number
-    reviews?: number
     messages?: number
     savedItems?: number
   }
@@ -511,9 +510,8 @@ export async function checkUserDeletionAction(input: { userId: string }): Promis
 
   // Check for client-related data
   if (isClient) {
-    const [projectsCount, reviewsCount, messagesCount, savedItemsCount] = await Promise.all([
+    const [projectsCount, messagesCount, savedItemsCount] = await Promise.all([
       serviceClient.from("projects").select("id", { count: "exact", head: true }).eq("client_id", parsed.data.userId),
-      serviceClient.from("reviews").select("id", { count: "exact", head: true }).eq("reviewer_id", parsed.data.userId),
       serviceClient.from("messages").select("id", { count: "exact", head: true }).or(`sender_id.eq.${parsed.data.userId},recipient_id.eq.${parsed.data.userId}`),
       Promise.all([
         serviceClient.from("saved_projects").select("user_id", { count: "exact", head: true }).eq("user_id", parsed.data.userId),
@@ -525,15 +523,11 @@ export async function checkUserDeletionAction(input: { userId: string }): Promis
     ])
 
     relatedData.projects = projectsCount.count ?? 0
-    relatedData.reviews = reviewsCount.count ?? 0
     relatedData.messages = messagesCount.count ?? 0
     relatedData.savedItems = savedItemsCount.count ?? 0
 
     if (relatedData.projects > 0) {
       warnings.push(`${relatedData.projects} project${relatedData.projects === 1 ? "" : "s"} will be deleted`)
-    }
-    if (relatedData.reviews > 0) {
-      warnings.push(`${relatedData.reviews} review${relatedData.reviews === 1 ? "" : "s"} will be deleted`)
     }
     if (relatedData.messages > 0) {
       warnings.push(`${relatedData.messages} message${relatedData.messages === 1 ? "" : "s"} will be deleted`)

@@ -10,7 +10,6 @@ import type {
   ProfessionalGalleryImage,
   ProfessionalProjectSummary,
   ProfessionalSocialLink,
-  ProfessionalRatingsBreakdown,
 } from "./types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
@@ -43,10 +42,6 @@ type ProfessionalRow = {
     city: NullableString
     country: NullableString
     domain: NullableString
-  } | null
-  rating: {
-    overall_rating: number | null
-    total_reviews: number | null
   } | null
   specialties: {
     is_primary: boolean | null
@@ -82,12 +77,6 @@ type ProfessionalDetailRow = ProfessionalRow & {
     team_size_min: number | null
     team_size_max: number | null
     founded_year: number | null
-  }) | null
-  rating: (ProfessionalRow["rating"] & {
-    quality_rating: number | null
-    reliability_rating: number | null
-    communication_rating: number | null
-    last_review_at: NullableString
   }) | null
   specialties: {
     is_primary: boolean | null
@@ -239,7 +228,6 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
 
   const company = row.company
   const profile = row.profiles
-  const rating = row.rating
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim()
   const name = company.name || fullName || "Professional"
@@ -256,12 +244,6 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
     ? row.services_offered.filter((value): value is string => typeof value === "string" && value.length > 0)
     : []
 
-  const ratingValue =
-    typeof rating?.overall_rating === "number" && !Number.isNaN(rating.overall_rating) ? rating.overall_rating : 0
-
-  const reviewCount =
-    typeof rating?.total_reviews === "number" && !Number.isNaN(rating.total_reviews) ? rating.total_reviews : 0
-
   const image = company.logo_url || profile?.avatar_url || PLACEHOLDER_IMAGE
 
   return {
@@ -272,8 +254,6 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
     name,
     profession,
     location,
-    rating: Number(ratingValue.toFixed(2)),
-    reviewCount,
     image,
     specialties,
     isVerified: Boolean(row.is_verified),
@@ -285,14 +265,6 @@ const sortProfessionals = (professionals: ProfessionalCard[]) => {
   return professionals.sort((a, b) => {
     if (a.isVerified !== b.isVerified) {
       return a.isVerified ? -1 : 1
-    }
-
-    if (a.rating !== b.rating) {
-      return b.rating - a.rating
-    }
-
-    if (a.reviewCount !== b.reviewCount) {
-      return b.reviewCount - a.reviewCount
     }
 
     return a.name.localeCompare(b.name)
@@ -320,8 +292,6 @@ type SearchProfessionalsRpcRow = {
   primary_service_name: string | null
   primary_service_name_nl: string | null
   services_offered: string[] | null
-  display_rating: number | string | null
-  total_reviews: number | null
   is_verified: boolean | null
   cover_photo_url: string | null
   avatar_url: string | null
@@ -347,16 +317,6 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
     ? row.services_offered.filter((value): value is string => Boolean(value))
     : []
 
-  const displayRating =
-    typeof row.display_rating === "number"
-      ? row.display_rating
-      : typeof row.display_rating === "string"
-        ? Number(row.display_rating)
-        : 0
-
-  const rating = Number.isFinite(displayRating) ? Number(displayRating.toFixed(2)) : 0
-  const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
-
   return {
     id: companyId,
     slug: row.company_slug || companyId,
@@ -365,8 +325,6 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
     name,
     profession,
     location,
-    rating,
-    reviewCount,
     image: row.cover_photo_url ?? row.company_logo ?? row.avatar_url ?? PLACEHOLDER_IMAGE,
     logoUrl: row.company_logo ?? null,
     specialties,
@@ -621,16 +579,6 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         avatar_url,
         location,
         created_at
-      ),
-      companies!professionals_company_id_fkey (
-        company_ratings!company_ratings_company_id_fkey (
-          overall_rating,
-          total_reviews,
-          quality_rating,
-          reliability_rating,
-          communication_rating,
-          last_review_at
-        )
       ),
       specialties:professional_specialties (
         is_primary,
@@ -924,31 +872,6 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   const companyLanguages = toNonEmptyStrings(company.languages)
   const languages = mergeUniqueStrings(company.languages, detailRow?.languages_spoken ?? null)
 
-  const companyRating = detailRow?.companies?.company_ratings
-  const ratings: ProfessionalRatingsBreakdown = {
-    overall:
-      typeof companyRating?.overall_rating === "number" && !Number.isNaN(companyRating.overall_rating)
-        ? companyRating.overall_rating
-        : 0,
-    total:
-      typeof companyRating?.total_reviews === "number" && !Number.isNaN(companyRating.total_reviews)
-        ? companyRating.total_reviews
-        : 0,
-    quality:
-      typeof companyRating?.quality_rating === "number" && !Number.isNaN(companyRating.quality_rating)
-        ? companyRating.quality_rating
-        : 0,
-    reliability:
-      typeof companyRating?.reliability_rating === "number" && !Number.isNaN(companyRating.reliability_rating)
-        ? companyRating.reliability_rating
-        : 0,
-    communication:
-      typeof companyRating?.communication_rating === "number" && !Number.isNaN(companyRating.communication_rating)
-        ? companyRating.communication_rating
-        : 0,
-    lastReviewAt: companyRating?.last_review_at ?? null,
-  }
-
   const primaryServiceName = (company.primary_service as { name: string } | null)?.name ?? null
 
   return {
@@ -1007,7 +930,6 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       planExpiresAt: company.plan_expires_at ?? null,
       status: company.status ?? null,
     },
-    ratings,
     gallery,
     socialLinks,
     projects,

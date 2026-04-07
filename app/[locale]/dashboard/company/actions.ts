@@ -1465,8 +1465,8 @@ export async function deleteCompanyAction(input: { confirmText: string }): Promi
     return { success: false, error: "Failed to delete company social links." }
   }
 
-  // Delete company — CASCADE handles: company_members, company_ratings,
-  // reviews, saved_companies. professionals.company_id is SET NULL.
+  // Delete company — CASCADE handles: company_members, saved_companies.
+  // professionals.company_id is SET NULL.
   const { error: deleteErr } = await supabase
     .from("companies")
     .delete()

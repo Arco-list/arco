@@ -15,8 +15,6 @@ export type ProfessionalCard = {
   name: string
   profession: string
   location: string
-  rating: number
-  reviewCount: number
   image: string
   logoUrl: string | null
   specialties: string[]
@@ -42,15 +40,6 @@ export type ProfessionalGalleryImage = {
 export type ProfessionalSocialLink = {
   platform: string
   url: string
-}
-
-export type ProfessionalRatingsBreakdown = {
-  overall: number
-  total: number
-  quality: number
-  reliability: number
-  communication: number
-  lastReviewAt: string | null
 }
 
 export type ProfessionalProjectSummary = {
@@ -110,7 +99,6 @@ export type ProfessionalDetail = {
     planExpiresAt: string | null
     status: string | null
   }
-  ratings: ProfessionalRatingsBreakdown
   gallery: ProfessionalGalleryImage[]
   socialLinks: ProfessionalSocialLink[]
   projects: ProfessionalProjectSummary[]

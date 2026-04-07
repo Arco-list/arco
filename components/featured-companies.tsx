@@ -9,8 +9,6 @@ export interface FeaturedCompany {
   name: string
   title: string
   location: string
-  rating: number
-  reviews: number
   image: string
   logoUrl?: string | null
   href: string

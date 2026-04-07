@@ -118,7 +118,7 @@ const STATUS_LABEL: Record<AdminUserRow["status"], string> = {
 
 const ROLE_OPTIONS: { value: AdminUserRow["role"]; label: string; description: string; dotColor: string }[] = [
   { value: "client", label: "Client", description: "Standard user account, no admin access", dotColor: "bg-[#a1a1a0]" },
-  { value: "admin", label: "Admin", description: "Manage listings, professionals, and reviews", dotColor: "bg-blue-500" },
+  { value: "admin", label: "Admin", description: "Manage listings and professionals", dotColor: "bg-blue-500" },
   { value: "super_admin", label: "Super Admin", description: "Full access including billing and settings", dotColor: "bg-[#016D75]" },
 ]
 

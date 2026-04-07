@@ -769,7 +769,6 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
   }
 
   await serviceRole.from("saved_companies").delete().eq("company_id", companyId)
-  await serviceRole.from("reviews").delete().eq("company_id", companyId)
   await serviceRole.from("prospects").delete().eq("company_id", companyId)
   await serviceRole.from("company_outreach" as any).delete().eq("company_id", companyId)
 
@@ -780,7 +779,7 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
     .eq("id", companyId)
     .maybeSingle()
 
-  // Delete company — CASCADE handles: company_members, company_ratings, reviews, saved_companies
+  // Delete company — CASCADE handles: company_members, saved_companies
   const { error: deleteErr } = await serviceRole
     .from("companies")
     .delete()

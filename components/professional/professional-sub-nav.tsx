@@ -158,8 +158,6 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
                     name,
                     profession: profession ?? "Professional",
                     location: location ?? "",
-                    rating: 0,
-                    reviewCount: 0,
                     image: imageUrl ?? "/placeholder.svg",
                     logoUrl: null,
                     specialties: [],

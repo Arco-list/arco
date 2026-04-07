@@ -1704,7 +1704,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               <div className="popup-banner popup-banner--warn">
                 <AlertTriangle className="popup-banner-icon" />
                 <div>
-                  <p>This will permanently delete <strong>{deleteCompany.name}</strong> and all associated data (photos, reviews, project links, team members). This action cannot be undone.</p>
+                  <p>This will permanently delete <strong>{deleteCompany.name}</strong> and all associated data (photos, project links, team members). This action cannot be undone.</p>
                 </div>
               </div>
 

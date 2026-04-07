@@ -396,15 +396,10 @@ async function loadLandingData(locale: string) {
   })
 
   const featuredCompanyIds = featuredCompaniesRaw.map((company) => company.id)
-  let companyMetrics: Map<string, { averageRating: number; totalReviews: number }> = new Map()
   let companyCoverPhotos: Map<string, string> = new Map()
 
   if (featuredCompanyIds.length > 0) {
-    const [metricsResult, photosResult, projectPhotosResult] = await Promise.all([
-      supabase
-        .from("company_metrics")
-        .select("company_id, average_rating, total_reviews")
-        .in("company_id", featuredCompanyIds),
+    const [photosResult, projectPhotosResult] = await Promise.all([
       supabase
         .from("company_photos")
         .select("company_id, url, is_cover, order_index")
@@ -418,16 +413,6 @@ async function loadLandingData(locale: string) {
         .in("company_id", featuredCompanyIds)
         .in("status", ["live_on_page", "listed"]),
     ])
-
-    if (!metricsResult.error && metricsResult.data) {
-      metricsResult.data.forEach((metric) => {
-        if (!metric.company_id) return
-        companyMetrics.set(metric.company_id, {
-          averageRating: metric.average_rating || 0,
-          totalReviews: metric.total_reviews || 0,
-        })
-      })
-    }
 
     if (!photosResult.error && photosResult.data) {
       const photosByCompany = new Map<string, string>()
@@ -459,7 +444,6 @@ async function loadLandingData(locale: string) {
   const featuredCompanies: FeaturedCompany[] = featuredCompaniesRaw.map((company) => {
     const location = [company.city, company.country].filter(Boolean).join(", ") || tc("location_unavailable")
     const slug = company.slug ?? company.id ?? ""
-    const metrics = companyMetrics.get(company.id) || { averageRating: 0, totalReviews: 0 }
     const coverPhoto = companyCoverPhotos.get(company.id)
     const svc = company.primary_service as { name: string; name_nl?: string | null } | null
     const title = (locale === "nl" && svc?.name_nl) ? svc.name_nl : (svc?.name || tc("professional_services"))
@@ -469,8 +453,6 @@ async function loadLandingData(locale: string) {
       name: company.name,
       title,
       location,
-      rating: metrics.averageRating,
-      reviews: metrics.totalReviews,
       image: (company as any).hero_photo_url || coverPhoto || PLACEHOLDER_IMAGE,
       logoUrl: company.logo_url ?? null,
       href: `/professionals/${slug}`,

@@ -42,11 +42,6 @@ type SavedProfessionalsContextValue = {
 const SavedProfessionalsContext = createContext<SavedProfessionalsContextValue | undefined>(undefined);
 
 const toProfessionalCard = (row: any): ProfessionalCard => {
-  const ratingValue =
-    typeof row.display_rating === "number" && !Number.isNaN(row.display_rating) ? row.display_rating : 0;
-  const reviewCount =
-    typeof row.total_reviews === "number" && !Number.isNaN(row.total_reviews) ? row.total_reviews : 0;
-
   const specialties = Array.isArray(row.services_offered)
     ? row.services_offered.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
     : [];
@@ -81,8 +76,6 @@ const toProfessionalCard = (row: any): ProfessionalCard => {
     name,
     profession,
     location,
-    rating: Number(ratingValue.toFixed(2)),
-    reviewCount,
     image,
     logoUrl,
     specialties,

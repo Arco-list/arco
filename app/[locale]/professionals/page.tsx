@@ -10,7 +10,7 @@ import { TrackPageView } from "@/components/track-view"
 
 export const metadata: Metadata = {
   title: "Browse Professionals",
-  description: "Discover verified architecture, interior design, and construction professionals in the Netherlands. Filter by specialty, location, and ratings.",
+  description: "Discover verified architecture, interior design, and construction professionals in the Netherlands. Filter by specialty and location.",
 }
 
 export const revalidate = 300

@@ -33,8 +33,6 @@ type SearchProfessionalsRow = {
   primary_service_name: string | null
   primary_service_name_nl: string | null
   services_offered: string[] | null
-  display_rating: number | string | null
-  total_reviews: number | null
   hourly_rate_display: string | null
   is_verified: boolean | null
   cover_photo_url: string | null
@@ -53,19 +51,6 @@ interface UseProfessionalsQueryResult {
   hasMore: boolean
   loadMore: () => Promise<void>
   refetch: () => Promise<void>
-}
-
-const parseRating = (value: number | string | null | undefined) => {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? Number(parsed.toFixed(2)) : 0
-  }
-
-  return 0
 }
 
 const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): ProfessionalCard | null => {
@@ -88,9 +73,6 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
     ? row.services_offered.filter((value): value is string => Boolean(value))
     : []
 
-  const rating = parseRating(row.display_rating)
-  const reviewCount = typeof row.total_reviews === "number" && Number.isFinite(row.total_reviews) ? row.total_reviews : 0
-
   return {
     id: companyId,
     slug: row.company_slug || companyId,
@@ -99,8 +81,6 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
     name,
     profession,
     location,
-    rating,
-    reviewCount,
     image: row.cover_photo_url || row.company_logo || row.avatar_url || PLACEHOLDER_IMAGE,
     logoUrl: row.company_logo ?? null,
     specialties,
