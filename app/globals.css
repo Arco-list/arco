@@ -1,6 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap');
+/*
+ * Cormorant Garamond is loaded via next/font in app/layout.tsx (self-hosted,
+ * with adjustFontFallback enabled so the system fallback is sized to match
+ * the web font and prevents layout shift on swap). DO NOT add a Google Fonts
+ * @import here — it loads a duplicate copy from Google's CDN, defeats
+ * next/font's fallback adjustment, blocks render, and causes catastrophic
+ * CLS on every page.
+ */
 
 @custom-variant dark (&:is(.dark *));
 

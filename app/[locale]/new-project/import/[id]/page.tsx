@@ -716,7 +716,9 @@ export default function ImportReviewPage() {
           margin-bottom: 4px; flex-shrink: 0;
         }
         .credit-icon-initials {
-          font-family: 'Cormorant Garamond', Georgia, serif;
+          /* Use the next/font-managed serif via the CSS variable so we
+             pick up the size-adjusted fallback (no CLS on font swap). */
+          font-family: var(--font-serif);
           font-size: 22px; font-weight: 300; color: #6b6b68;
           letter-spacing: .03em;
         }

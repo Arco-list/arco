@@ -301,11 +301,18 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
   // Header sits above the filter bar (z-[300] > filter bar z-[150])
   // so navigation dropdowns always render on top of the filter bar.
+  //
+  // CLS note: when `transparent` (homepage), the header swaps background
+  // from transparent → white at scrollY > 0. The padding and border MUST
+  // stay identical between states or the header height changes by 1-8px
+  // and pushes the entire page content. We always use `py-3 md:py-4` and
+  // a transparent border that becomes visible — same box model in both
+  // states, only the colours animate.
   const headerClasses = transparent
-    ? `fixed top-0 left-0 right-0 z-[300] transition-all duration-200 ${
+    ? `fixed top-0 left-0 right-0 z-[300] py-3 md:py-4 border-b transition-colors duration-200 ${
         isScrolled
-          ? "bg-white border-b border-[#e5e5e4] py-3 md:py-4"
-          : "py-4"
+          ? "bg-white border-[#e5e5e4]"
+          : "bg-transparent border-transparent"
       }`
     : "fixed top-0 left-0 right-0 z-[300] border-b border-[#e5e5e4] bg-white py-3 md:py-4";
 
