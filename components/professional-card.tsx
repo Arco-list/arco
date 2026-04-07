@@ -81,7 +81,18 @@ export const ProfessionalCard = memo(function ProfessionalCard({
         {/* Image */}
         <div className="discover-card-image-wrap">
           <div className="discover-card-image-layer">
-            <img src={imageSrc} alt={professional.name} />
+            {/* CLS fix: see the matching note in components/projects-grid.tsx.
+                 The wrapper has aspect-ratio 4/3 in CSS but the inner <img>
+                 still needs explicit dimensions to stop the browser from
+                 shifting cells as intrinsic sizes resolve. */}
+            <img
+              src={imageSrc}
+              alt={professional.name}
+              width={600}
+              height={450}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
 
           {/* Save + Share */}
@@ -113,7 +124,15 @@ export const ProfessionalCard = memo(function ProfessionalCard({
         {/* Text — logo spans title + subtitle */}
         <div className="pro-card-info">
           {logoUrl ? (
-            <img src={logoUrl} alt="" className="pro-card-logo" />
+            <img
+              src={logoUrl}
+              alt=""
+              className="pro-card-logo"
+              width={34}
+              height={34}
+              loading="lazy"
+              decoding="async"
+            />
           ) : (
             <div className="pro-card-logo pro-card-logo-placeholder">
               {professional.name.charAt(0).toUpperCase()}

@@ -22,7 +22,15 @@ function Card({ project, className }: { project: RecentProject; className?: stri
       <div className="discover-card-image-wrap">
         <div className="discover-card-image-layer">
           {project.imageUrl ? (
-            <img src={project.imageUrl} alt={project.title} />
+            // CLS fix: explicit dimensions, see projects-grid.tsx note.
+            <img
+              src={project.imageUrl}
+              alt={project.title}
+              width={600}
+              height={450}
+              loading="lazy"
+              decoding="async"
+            />
           ) : (
             <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
           )}

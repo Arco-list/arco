@@ -49,7 +49,15 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
                 <div className="discover-card-image-wrap">
                   <div className="discover-card-image-layer">
                     {company.image ? (
-                      <img src={company.image} alt={company.name} />
+                      // CLS fix: explicit dimensions, see projects-grid.tsx note.
+                      <img
+                        src={company.image}
+                        alt={company.name}
+                        width={600}
+                        height={450}
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
                     )}
@@ -59,7 +67,15 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
                 {/* Text — logo + name + subtitle */}
                 <div className="pro-card-info">
                   {company.logoUrl ? (
-                    <img src={company.logoUrl} alt="" className="pro-card-logo" />
+                    <img
+                      src={company.logoUrl}
+                      alt=""
+                      className="pro-card-logo"
+                      width={34}
+                      height={34}
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     <div className="pro-card-logo pro-card-logo-placeholder">
                       {company.name.charAt(0).toUpperCase()}

@@ -257,7 +257,28 @@ function ProjectCard({
         {/* Image */}
         <div className="discover-card-image-wrap">
           <div className="discover-card-image-layer">
-            <img key={src} src={src} alt={alt} />
+            {/*
+              CLS fix: declare width/height so the browser reserves space
+              before the image loads. The wrapper already has aspect-ratio
+              4/3 in CSS, but the inner <img> without dimensions still
+              shifts a few pixels per card as the browser computes its
+              intrinsic size — and with 12 cards in a 4x3 grid that adds
+              up to a real CLS hit on the listing page (PostHog P75 = 0.6
+              on /nl/projects).
+
+              Removed `key={src}`: it forced a full element remount on
+              every photo navigation, which briefly empties the slot and
+              triggers another shift cycle. The src change is enough to
+              make React swap the underlying URL.
+            */}
+            <img
+              src={src}
+              alt={alt}
+              width={600}
+              height={450}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
 
           {/* Hover nav arrows — hidden when space filter locks to a single photo */}
