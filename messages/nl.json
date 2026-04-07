@@ -343,6 +343,7 @@
     "cta_button": "Plan een project",
     "by_architect": "door",
     "more_from": "Meer van {name}",
+    "similar_projects": "Vergelijkbare projecten",
     "back": "Terug",
     "nav_details": "Details",
     "nav_photos": "Foto's",
@@ -416,6 +417,7 @@
     "office_location": "Kantoorlocatie",
     "website": "Website",
     "featured_projects": "Uitgelichte projecten",
+    "similar_studios": "Vergelijkbare studio's",
     "established": "Opgericht",
     "people_count": "{count} personen",
     "details": "Details"

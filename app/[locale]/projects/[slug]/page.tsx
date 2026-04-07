@@ -12,6 +12,7 @@ import { SpecificationsBar } from "@/components/project/specifications-bar"
 import { PhotoTour } from "@/components/project/photo-tour"
 import { CreditedProfessionals } from "@/components/project/credited-professionals"
 import { RelatedProjects } from "@/components/project/related-projects"
+import { SimilarProjects } from "@/components/project/similar-projects"
 import { ProjectStructuredData } from "@/components/project-structured-data"
 import { TrackProjectView } from "@/components/track-view"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
@@ -395,13 +396,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       roleName: p.serviceCategories[0] ?? null,
     }))
 
-  // Get architect for related projects
-  const architect = formattedProfessionals.find(p =>
-    p.serviceCategory.toLowerCase().includes('architect')
-  )
+  // The "more from this owner" rail uses the actual project owner
+  // (is_project_owner = true), not a string-match for "architect" — earlier
+  // we matched the first credit whose category contained "architect", which
+  // silently broke the rail for any project owned by an interior designer
+  // or contractor. The cross-architect "Similar projects" section below
+  // covers cross-studio discovery.
+  const projectOwner =
+    formattedProfessionals.find((p) => p.isProjectOwner) ?? formattedProfessionals[0]
 
-  // Fetch related projects (only if architect has a company)
-  const { data: relatedProjects } = architect?.companyId
+  // "More from this owner": up to 6 other published projects from the same owning company.
+  const { data: relatedProjects } = projectOwner?.companyId
     ? await supabase
         .from("project_professionals")
         .select(`
@@ -415,26 +420,80 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             project_type_category_id
           )
         `)
-        .eq("company_id", architect.companyId)
+        .eq("company_id", projectOwner.companyId)
         .eq("projects.status", "published")
         .neq("project_id", project.id)
-        .limit(3)
+        .limit(6)
     : { data: [] }
 
-  // Get related project photos
-  const relatedProjectIds = relatedProjects?.map(r => r.project_id).filter(Boolean) ?? []
-  const { data: relatedPhotos } = relatedProjectIds.length > 0
+  // "Similar projects from other studios": same building type when known,
+  // same country, by a *different* owning company. Cap at 6 and dedupe
+  // against relatedProjects so we never show the same project in both rails.
+  const sameOwnerProjectIds = new Set(
+    (relatedProjects ?? []).map((r: any) => r.project_id).filter(Boolean) as string[],
+  )
+  const excludeProjectIds = [project.id, ...sameOwnerProjectIds]
+  const similarBuildingType = project.project_type_category_id
+  const similarCountry = project.address_country
+  let similarProjects: Array<{
+    id: string
+    slug: string | null
+    title: string
+    address_city: string | null
+    project_type_category_id: string | null
+  }> = []
+  if (similarBuildingType || similarCountry) {
+    let q = supabase
+      .from("projects")
+      .select("id, slug, title, address_city, project_type_category_id")
+      .eq("status", "published")
+      .not("slug", "is", null)
+      .not("id", "in", `(${excludeProjectIds.join(",")})`)
+      .limit(12) // overshoot — we'll filter to non-same-owner in JS and slice to 6
+    if (similarBuildingType) q = q.eq("project_type_category_id", similarBuildingType)
+    if (similarCountry) q = q.eq("address_country", similarCountry)
+    const { data } = await q
+    similarProjects = (data ?? []) as typeof similarProjects
+  }
+
+  // Filter out projects belonging to the same owning company (so this rail
+  // is purely cross-studio). We need each candidate's owner company_id.
+  const similarCandidateIds = similarProjects.map((p) => p.id)
+  const ownerByProjectId = new Map<string, string | null>()
+  if (similarCandidateIds.length > 0) {
+    const { data: owners } = await supabase
+      .from("project_professionals")
+      .select("project_id, company_id")
+      .in("project_id", similarCandidateIds)
+      .eq("is_project_owner", true)
+    for (const row of owners ?? []) {
+      if (row.project_id) ownerByProjectId.set(row.project_id, row.company_id ?? null)
+    }
+  }
+  similarProjects = similarProjects
+    .filter((p) => ownerByProjectId.get(p.id) !== projectOwner?.companyId)
+    .slice(0, 6)
+
+  // Get cover photos for both rails in one query
+  const relatedProjectIds = relatedProjects?.map((r) => r.project_id).filter(Boolean) ?? []
+  const similarProjectIds = similarProjects.map((p) => p.id)
+  const allRailIds = Array.from(new Set([...relatedProjectIds, ...similarProjectIds])).filter(Boolean) as string[]
+  const { data: railPhotos } = allRailIds.length > 0
     ? await supabase
         .from("project_photos")
-        .select("project_id, url, is_primary")
-        .in("project_id", relatedProjectIds)
+        .select("project_id, url, is_primary, order_index")
+        .in("project_id", allRailIds)
         .order("is_primary", { ascending: false })
-        .limit(relatedProjectIds.length)
+        .order("order_index", { ascending: true })
     : { data: [] }
 
-  const relatedPhotoMap = new Map(
-    relatedPhotos?.map(p => [p.project_id, p.url]) ?? []
-  )
+  // First photo per project_id wins (already sorted by is_primary desc, order_index asc)
+  const relatedPhotoMap = new Map<string, string>()
+  for (const p of railPhotos ?? []) {
+    if (p.project_id && p.url && !relatedPhotoMap.has(p.project_id)) {
+      relatedPhotoMap.set(p.project_id, p.url)
+    }
+  }
 
   const coverPhoto = photos.find(p => p.is_primary) ?? photos[0]
 
@@ -446,11 +505,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const styleIds = (Array.isArray(project.style_preferences) ? project.style_preferences : []).filter(isUuid)
 
   const relatedCategoryIds = (relatedProjects ?? [])
-    .map(r => r.projects.project_type_category_id)
+    .map((r) => r.projects.project_type_category_id)
+    .filter(isUuid)
+  const similarCategoryIds = similarProjects
+    .map((p) => p.project_type_category_id)
     .filter(isUuid)
 
   const uuidsToResolve = {
-    categories: [...[typeId].filter(isUuid), ...relatedCategoryIds],
+    categories: [...[typeId].filter(isUuid), ...relatedCategoryIds, ...similarCategoryIds],
     taxonomy: styleIds,
   }
 
@@ -473,7 +535,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     return value
   }
 
-  const formattedRelatedProjects = relatedProjects?.map(r => ({
+  const formattedRelatedProjects = relatedProjects?.map((r) => ({
     id: r.projects.id,
     slug: r.projects.slug,
     title: r.projects.title,
@@ -481,6 +543,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     projectType: resolveName(r.projects.project_type_category_id) ?? null,
     imageUrl: relatedPhotoMap.get(r.project_id) ?? null,
   })) ?? []
+
+  const formattedSimilarProjects = similarProjects.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    location: p.address_city,
+    projectType: resolveName(p.project_type_category_id) ?? null,
+    imageUrl: relatedPhotoMap.get(p.id) ?? null,
+  }))
 
   // Type from project_type_category_id, falling back to project_type if it's a UUID
   const resolvedType = resolveName(typeId) ?? resolveName(project.project_type)
@@ -549,8 +620,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         <div id="details" className="wrap" style={{ marginTop: '60px' }}>
           <ProjectHeader
             title={localizedTitle}
-            architectName={architect?.companyName ?? null}
-            architectSlug={architect?.companySlug ?? null}
+            architectName={projectOwner?.companyName ?? null}
+            architectSlug={projectOwner?.companySlug ?? null}
             description={localizedDescription}
           />
 
@@ -577,8 +648,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         {formattedRelatedProjects.length > 0 && (
           <RelatedProjects
             projects={formattedRelatedProjects}
-            architectName={architect?.companyName ?? t("this_architect")}
+            architectName={projectOwner?.companyName ?? t("this_architect")}
           />
+        )}
+
+        {formattedSimilarProjects.length > 0 && (
+          <SimilarProjects projects={formattedSimilarProjects} />
         )}
 
         <Footer />

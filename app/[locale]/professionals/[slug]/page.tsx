@@ -12,6 +12,7 @@ import { ProfessionalContact } from "@/components/professional/professional-cont
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
 import { TrackProfessionalView } from "@/components/track-view"
 import { CompanyStructuredData } from "@/components/company-structured-data"
+import { SimilarStudios } from "@/components/professional/similar-studios"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
@@ -146,6 +147,76 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
     websiteUrl: professional.company.domain ? `https://${professional.company.domain}` : null,
   }
 
+  // ── Similar studios ──────────────────────────────────────────────────────
+  // Peers sharing the same primary_service_id and country, excluding the
+  // current company. Caps at 6. ProfessionalDetail doesn't expose
+  // primary_service_id directly so we re-fetch the two columns we need —
+  // a follow-up could promote them onto the type.
+  const supabaseForSimilar = await createServerSupabaseClient()
+  const { data: currentCompanyMeta } = await supabaseForSimilar
+    .from("companies")
+    .select("primary_service_id")
+    .eq("id", professional.company.id)
+    .maybeSingle()
+
+  const currentPrimaryServiceId = (currentCompanyMeta as { primary_service_id: string | null } | null)?.primary_service_id ?? null
+  const currentCountry = professional.company.country
+
+  let similarStudios: Array<{
+    id: string
+    slug: string
+    name: string
+    city: string | null
+    country: string | null
+    serviceLabel: string | null
+    imageUrl: string | null
+    logoUrl: string | null
+  }> = []
+
+  if (currentPrimaryServiceId) {
+    let q = supabaseForSimilar
+      .from("companies")
+      .select(`
+        id,
+        slug,
+        name,
+        city,
+        country,
+        logo_url,
+        hero_photo_url,
+        primary_service:categories!companies_primary_service_id_fkey(name, name_nl)
+      `)
+      // Cast: generated types are stale and miss 'prospected' / 'added'.
+      .in("status", ["listed", "prospected"] as ("listed" | "prospected")[] as never)
+      .eq("primary_service_id", currentPrimaryServiceId)
+      .neq("id", professional.company.id)
+      .not("slug", "is", null)
+      .limit(12) // overshoot — country filter applied client-side, then slice 6
+
+    if (currentCountry) {
+      q = q.eq("country", currentCountry)
+    }
+    const { data: similarRows } = await q
+
+    similarStudios = (similarRows ?? [])
+      .filter((row: any) => row.slug)
+      .slice(0, 6)
+      .map((row: any) => {
+        const svc = row.primary_service as { name: string; name_nl?: string | null } | null
+        const serviceLabel = (locale === "nl" && svc?.name_nl) ? svc.name_nl : (svc?.name ?? null)
+        return {
+          id: row.id,
+          slug: row.slug as string,
+          name: row.name,
+          city: row.city ?? null,
+          country: row.country ?? null,
+          serviceLabel,
+          imageUrl: row.hero_photo_url ?? null,
+          logoUrl: row.logo_url ?? null,
+        }
+      })
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <CompanyStructuredData professional={professional} locale={locale} />
@@ -185,6 +256,8 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
       {professional.projects.length > 0 && (
         <ProfessionalProjects projects={professional.projects} />
       )}
+
+      <SimilarStudios studios={similarStudios} />
 
       <ProfessionalContact
         companyId={professional.company.id}

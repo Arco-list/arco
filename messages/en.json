@@ -343,6 +343,7 @@
     "cta_button": "Plan a Project",
     "by_architect": "by",
     "more_from": "More from {name}",
+    "similar_projects": "Similar projects",
     "back": "Back",
     "nav_details": "Details",
     "nav_photos": "Photos",
@@ -416,6 +417,7 @@
     "office_location": "Office location",
     "website": "Website",
     "featured_projects": "Featured projects",
+    "similar_studios": "Similar studios",
     "established": "Established",
     "people_count": "{count} People",
     "details": "Details"
