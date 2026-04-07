@@ -5,7 +5,7 @@ import { Redis } from "@upstash/redis"
 let redis: Redis | null = null
 const ratelimiterCache = new Map<string, Ratelimit>()
 
-export type RateLimitOptions = {
+type RateLimitOptions = {
   /**
    * Maximum number of requests allowed within the window.
    * Defaults to 10 if not provided.
@@ -23,7 +23,7 @@ export type RateLimitOptions = {
   prefix?: string
 }
 
-export function getRedis() {
+function getRedis() {
   if (!redis) {
     const url = process.env.UPSTASH_REDIS_REST_URL
     const token = process.env.UPSTASH_REDIS_REST_TOKEN

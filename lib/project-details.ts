@@ -79,7 +79,6 @@ export type ProjectDetailsDescriptionCommand =
   | "bulletList"
   | "orderedList"
 
-export const YEAR_LOWER_BOUND = 1800
 export const CURRENT_YEAR = new Date().getFullYear()
 export const MAX_TITLE_LENGTH = 120
 export const MIN_DESCRIPTION_LENGTH = 50
@@ -303,15 +302,6 @@ export const sortFeatureOptions = (options: ProjectDetailsFeatureOption[]) => {
 
     return a.label.localeCompare(b.label)
   })
-}
-
-export const parseYearValue = (value: string) => {
-  if (!/^[0-9]{4}$/.test(value)) {
-    return null
-  }
-
-  const numeric = Number.parseInt(value, 10)
-  return Number.isNaN(numeric) ? null : numeric
 }
 
 export const generateYearErrorMessages = (

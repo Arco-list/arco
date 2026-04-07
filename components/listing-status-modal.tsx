@@ -160,4 +160,3 @@ export function ListingStatusModal<TStatus extends string>({
   )
 }
 
-export default ListingStatusModal

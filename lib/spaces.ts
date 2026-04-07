@@ -19,7 +19,7 @@ export const SPACE_SLUGS = [
 
 export type SpaceSlug = (typeof SPACE_SLUGS)[number]
 
-export interface Space {
+interface Space {
   slug: SpaceSlug
   name: string
   iconKey: string
@@ -39,6 +39,3 @@ export const SPACES: Space[] = [
   { slug: "other",       name: "Other",       iconKey: "other" },
 ]
 
-export function getSpaceBySlug(slug: string): Space | undefined {
-  return SPACES.find((s) => s.slug === slug)
-}

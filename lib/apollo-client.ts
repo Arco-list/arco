@@ -85,7 +85,7 @@ async function apolloRequest<T = unknown>(
   }
 }
 
-export class ApolloApiError extends Error {
+class ApolloApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode: number,
@@ -98,7 +98,7 @@ export class ApolloApiError extends Error {
 
 // ── Contact endpoints ──────────────────────────────────────────────────
 
-export interface ApolloContact {
+interface ApolloContact {
   id: string;
   email: string;
   first_name?: string;
@@ -115,7 +115,7 @@ export interface ApolloContact {
 /**
  * Get contact details by Apollo contact ID.
  */
-export async function getContact(contactId: string): Promise<ApolloContact> {
+async function getContact(contactId: string): Promise<ApolloContact> {
   const data = await apolloRequest<{ contact: ApolloContact }>({
     method: "GET",
     path: `/api/v1/contacts/${contactId}`,
@@ -126,7 +126,7 @@ export async function getContact(contactId: string): Promise<ApolloContact> {
 /**
  * Update a contact's fields (e.g. stage, status, custom fields).
  */
-export async function updateContact(
+async function updateContact(
   contactId: string,
   updates: Record<string, unknown>
 ): Promise<ApolloContact> {
@@ -140,7 +140,7 @@ export async function updateContact(
 
 // ── Contact stage endpoints ───────────────────────────────────────────
 
-export interface ApolloContactStage {
+interface ApolloContactStage {
   id: string;
   name: string;
   display_order: number;
@@ -149,7 +149,7 @@ export interface ApolloContactStage {
 /**
  * Fetch all contact stages from Apollo.
  */
-export async function getContactStages(): Promise<ApolloContactStage[]> {
+async function getContactStages(): Promise<ApolloContactStage[]> {
   const data = await apolloRequest<{ contact_stages: ApolloContactStage[] }>({
     method: "GET",
     path: "/api/v1/contact_stages",
@@ -192,7 +192,7 @@ export async function updateContactStage(
 
 // ── Account (company) stage endpoints ─────────────────────────────────
 
-export interface ApolloAccountStage {
+interface ApolloAccountStage {
   id: string;
   name: string;
   display_order: number;
@@ -201,7 +201,7 @@ export interface ApolloAccountStage {
 /**
  * Fetch all account stages from Apollo.
  */
-export async function getAccountStages(): Promise<ApolloAccountStage[]> {
+async function getAccountStages(): Promise<ApolloAccountStage[]> {
   const data = await apolloRequest<{ account_stages: ApolloAccountStage[] }>({
     method: "GET",
     path: "/api/v1/account_stages",

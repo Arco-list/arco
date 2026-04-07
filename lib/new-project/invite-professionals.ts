@@ -36,49 +36,6 @@ export interface InviteData {
 }
 
 /**
- * @deprecated Use getAvailableProfessionalsAction from /app/new-project/actions.ts instead
- * 
- * This client-side function cannot access auth.users for real emails without service role.
- * The server action provides proper email resolution for all user types.
- * 
- * Migration guide:
- * ```ts
- * // Old (broken for admins):
- * import { getAvailableProfessionals } from "@/lib/new-project/invite-professionals"
- * const { data } = await getAvailableProfessionals(supabase, userTypes, userId)
- * 
- * // New (works for all user types):
- * import { getAvailableProfessionalsAction } from "@/app/new-project/actions"
- * const { data } = await getAvailableProfessionalsAction(userTypes, userId)
- * ```
- */
-export async function getAvailableProfessionals(
-  supabase: SupabaseClient,
-  userTypes: string[],
-  userId: string
-): Promise<{ data: ProfessionalOption[] | null; error: any }> {
-  throw new Error(
-    'getAvailableProfessionals is deprecated. Use getAvailableProfessionalsAction from /app/new-project/actions.ts instead. ' +
-    'This ensures proper email access via service role for all user types.'
-  )
-}
-
-/**
- * @deprecated Use findProfessionalByEmailAction from /app/new-project/actions.ts instead
- * 
- * This client-side function cannot access auth.users without service role.
- * The server action provides proper email lookup via service role.
- */
-export async function findProfessionalByEmail(
-  supabase: SupabaseClient,
-  email: string
-): Promise<{ data: ProfessionalOption | null; error: any }> {
-  throw new Error(
-    'findProfessionalByEmail is deprecated. Use findProfessionalByEmailAction from /app/new-project/actions.ts instead.'
-  )
-}
-
-/**
  * Create invite with initial 'invited' status
  * Status logic:
  * - Initial status is always 'invited' regardless of whether professional exists
@@ -114,26 +71,3 @@ export async function createInvite(
   }
 }
 
-/**
- * Get invite display info for status cards
- */
-export function getInviteDisplayInfo(
-  invite: Tables<'project_professionals'>,
-  professional?: ProfessionalOption
-) {
-  if (invite.professional_id && professional) {
-    return {
-      title: professional.company.name,
-      subtitle: `${professional.name} (${professional.title})`,
-      status: 'Added to project',
-      statusClass: 'bg-green-100 text-green-800'
-    }
-  } else {
-    return {
-      title: invite.invited_email,
-      subtitle: 'Professional invite',
-      status: 'Invite pending',
-      statusClass: 'bg-amber-100 text-amber-800'
-    }
-  }
-}

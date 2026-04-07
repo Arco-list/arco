@@ -41,7 +41,7 @@ export type RLSValidationError = {
  * @param table - Table name to validate
  * @returns Validation result with policy status
  */
-export async function validateRLSEnabled(
+async function validateRLSEnabled(
   supabase: SupabaseClient<Database>,
   table: keyof Tables
 ): Promise<RLSValidationResult> {
@@ -178,60 +178,6 @@ export async function validateProjectRLS(
  *
  * SECURITY: Tests that RLS policies prevent unauthorized photo uploads
  */
-export async function validatePhotoUploadRLS(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-  projectId: string
-): Promise<RLSValidationResult> {
-  try {
-    // Verify user owns the project before allowing photo upload
-    const { data: project, error: projectError } = await supabase
-      .from("projects")
-      .select("client_id")
-      .eq("id", projectId)
-      .single()
-
-    if (projectError) {
-      return {
-        isValid: false,
-        policy: "project_photos_insert",
-        table: "project_photos",
-        operation: "INSERT",
-        error: `Cannot verify project ownership: ${projectError.message}`,
-        userId,
-      }
-    }
-
-    if (!project || project.client_id !== userId) {
-      return {
-        isValid: false,
-        policy: "project_photos_insert",
-        table: "project_photos",
-        operation: "INSERT",
-        error: "User does not own this project - photo upload should be blocked",
-        userId,
-      }
-    }
-
-    return {
-      isValid: true,
-      policy: "project_photos_insert",
-      table: "project_photos",
-      operation: "INSERT",
-      userId,
-    }
-  } catch (error) {
-    return {
-      isValid: false,
-      policy: "project_photos_insert",
-      table: "project_photos",
-      operation: "INSERT",
-      error: error instanceof Error ? error.message : "Unknown RLS validation error",
-      userId,
-    }
-  }
-}
-
 /**
  * Validate that profile updates are restricted to the profile owner
  *

@@ -30,19 +30,6 @@ function canAdvanceTo(
 }
 
 /**
- * Generate a short unique ref code (8 alphanumeric characters).
- */
-export function generateRefCode(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let code = "";
-  const randomValues = crypto.getRandomValues(new Uint8Array(8));
-  for (let i = 0; i < 8; i++) {
-    code += chars[randomValues[i] % chars.length];
-  }
-  return code;
-}
-
-/**
  * Track when a prospect visits the landing page via their ref param.
  * Supports both ref_code and apollo_contact_id lookups.
  * Updates landing_visited_at (if not already set) and advances status

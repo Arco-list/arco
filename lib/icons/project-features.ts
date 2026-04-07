@@ -22,9 +22,9 @@ import {
   Waves,
 } from "lucide-react"
 
-export const DEFAULT_FEATURE_ICON: LucideIcon = Grid3x3
+const DEFAULT_FEATURE_ICON: LucideIcon = Grid3x3
 
-export const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
+const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
   attic: Home,
   balcony: Home,
   basement: Layers,

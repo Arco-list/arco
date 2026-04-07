@@ -40,7 +40,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import ListingStatusModal from "@/components/listing-status-modal"
+import { ListingStatusModal } from "@/components/listing-status-modal"
 import {
   type ProjectStatus,
   PROJECT_STATUS_LABELS,

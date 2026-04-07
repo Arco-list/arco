@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const emailSchema = z.string().email('Please enter a valid email address.');
 
-export const passwordSchema = z
+const passwordSchema = z
   .string()
   .min(7, 'Password must be at least 7 characters long.')
   .regex(/[0-9]/, 'Password must contain at least one number.')

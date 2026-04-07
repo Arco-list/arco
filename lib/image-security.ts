@@ -27,7 +27,7 @@ const ALLOWED_IMAGE_EXTENSIONS = [
  * @param url - The image URL to validate
  * @returns true if the URL is safe, false otherwise
  */
-export function isValidImageUrl(url: string | null | undefined): boolean {
+function isValidImageUrl(url: string | null | undefined): boolean {
   if (!url || typeof url !== 'string') {
     return false
   }
@@ -86,39 +86,6 @@ export function sanitizeImageUrl(
 }
 
 /**
- * Validates if a URL is from Supabase storage
- * More strict validation for user-uploaded content
- * @param url - The image URL to validate
- * @param projectId - Optional Supabase project ID for stricter validation
- * @returns true if the URL is from Supabase storage
- */
-export function isSupabaseStorageUrl(url: string | null | undefined, projectId?: string): boolean {
-  if (!url || typeof url !== 'string') {
-    return false
-  }
-
-  try {
-    const parsedUrl = new URL(url)
-
-    // Check if it's a Supabase storage URL
-    const isSupabase = parsedUrl.hostname.endsWith('.supabase.co')
-
-    if (!isSupabase) {
-      return false
-    }
-
-    // If project ID is provided, validate it matches
-    if (projectId) {
-      return parsedUrl.hostname.startsWith(projectId)
-    }
-
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
  * Get dimensions for Next.js Image component based on context
  * Helps prevent layout shift and improves performance
  */
@@ -132,5 +99,3 @@ export const IMAGE_SIZES = {
   gallery: { width: 800, height: 600 },
   logo: { width: 200, height: 200 },
 } as const
-
-export type ImageSize = keyof typeof IMAGE_SIZES

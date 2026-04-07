@@ -230,10 +230,3 @@ export const ProjectLikesProvider = ({ children }: { children: ReactNode }) => {
   return <ProjectLikesContext.Provider value={contextValue}>{children}</ProjectLikesContext.Provider>;
 };
 
-export const useProjectLikes = () => {
-  const context = useContext(ProjectLikesContext);
-  if (!context) {
-    throw new Error("useProjectLikes must be used within a ProjectLikesProvider");
-  }
-  return context;
-};

@@ -60,7 +60,7 @@ type UseRLSValidationResult = {
   validate: () => Promise<void>
 }
 
-export function useRLSValidation(
+function useRLSValidation(
   options: UseRLSValidationOptions = {}
 ): UseRLSValidationResult {
   const {

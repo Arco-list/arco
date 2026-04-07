@@ -5,7 +5,7 @@
 /**
  * Generates a URL-friendly slug from a title
  */
-export function generateSlug(title: string, maxLength = 100): string {
+function generateSlug(title: string, maxLength = 100): string {
   const slug = title
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Remove accents
@@ -76,56 +76,3 @@ export async function generateUniqueSlug(
   return `${baseSlug}-${timestamp}`
 }
 
-/**
- * Validates SEO field lengths according to best practices
- */
-export function validateSeoFields(fields: {
-  title?: string | null
-  description?: string | null
-}): { isValid: boolean; errors: string[] } {
-  const errors: string[] = []
-
-  if (fields.title) {
-    if (fields.title.length < 30) {
-      errors.push('SEO title should be at least 30 characters')
-    }
-    if (fields.title.length > 60) {
-      errors.push('SEO title should not exceed 60 characters')
-    }
-  }
-
-  if (fields.description) {
-    if (fields.description.length < 120) {
-      errors.push('SEO description should be at least 120 characters')
-    }
-    if (fields.description.length > 160) {
-      errors.push('SEO description should not exceed 160 characters')
-    }
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors
-  }
-}
-
-/**
- * Generates SEO status based on available fields
- */
-export function calculateSeoStatus(fields: {
-  slug?: string | null
-  seoTitle?: string | null
-  seoDescription?: string | null
-}): 'Ready' | 'Partial' | 'Missing' {
-  const hasSlug = Boolean(fields.slug?.trim())
-  const hasTitle = Boolean(fields.seoTitle?.trim())
-  const hasDescription = Boolean(fields.seoDescription?.trim())
-
-  if (hasSlug && hasTitle && hasDescription) {
-    return 'Ready'
-  } else if (hasSlug || hasTitle || hasDescription) {
-    return 'Partial'
-  } else {
-    return 'Missing'
-  }
-}

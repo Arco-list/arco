@@ -33,7 +33,7 @@ import {
 
 const BuildingOutline = Building
 
-export const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   house: Home,
   "kitchen-living": ChefHat,
   "bed-bath": Bath,
@@ -45,7 +45,7 @@ export const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: strin
   "new-construction": Building2,
 }
 
-export const DEFAULT_CATEGORY_ICON = LayoutGrid
+const DEFAULT_CATEGORY_ICON = LayoutGrid
 
 export const SUBTYPE_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   "house-villa": Castle,
