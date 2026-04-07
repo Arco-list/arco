@@ -529,17 +529,15 @@ function renderProspectFollowup(vars: EmailVariables): { subject: string; html: 
   })
 
   return {
-    subject: `Uw pagina op Arco is klaar`,
+    subject: `${companyName} op Arco`,
     html: baseLayout(`
-      ${heading(`Uw pagina staat klaar`)}
-      ${body(`Beste ${companyName},`)}
-      ${body(`Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of u het gezien heeft.`)}
+      ${heading(`${companyName} op Arco`)}
+      ${body(`Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of je het gezien hebt.`)}
       ${card}
-      ${body(`Op uw pagina kunnen opdrachtgevers uw werk bekijken en direct contact opnemen. Het enige wat u hoeft te doen is uw pagina claimen — het kost minder dan twee minuten.`)}
-      ${button(`Bekijk uw pagina`, companyPageUrl)}
-      ${body(`Na het claimen kunt u uw profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`)}
+      ${body(`Op je pagina kunnen opdrachtgevers je werk bekijken en direct contact opnemen. Het enige wat je hoeft te doen is je pagina claimen — het kost minder dan twee minuten en publiceren is gratis.`)}
+      ${body(`Na het claimen kun je je profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`)}
       ${button(`Claim ${companyName}`, claimUrl)}
-      ${body(`Vragen? Reageer op deze email, ik help u graag.`)}
+      ${body(`Vragen? Reageer op deze email, ik help je graag.`)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">Oprichter, Arco</span>

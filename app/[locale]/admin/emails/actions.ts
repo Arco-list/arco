@@ -33,7 +33,11 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/Een podium voor/i, "prospect-intro", "Prospect Intro"],
   [/staat op Arco/i, "prospect-intro", "Prospect Intro"],
   [/is now on Arco/i, "prospect-intro", "Prospect Intro"],
-  [/pagina op Arco is klaar/i, "prospect-followup", "Prospect Follow-up"],
+  // New followup subject is just "${company} op Arco". The intro patterns
+  // above already returned for `Een podium voor` / `staat op Arco`, and the
+  // final pattern below requires "Laatste herinnering", so this end-anchor
+  // catches the followup without colliding with either.
+  [/op Arco$/i, "prospect-followup", "Prospect Follow-up"],
   [/Laatste herinnering.*claim/i, "prospect-final", "Prospect Final"],
 ]
 
@@ -123,7 +127,8 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       [/Een podium voor/i, "prospect-intro"],
       [/staat op Arco/i, "prospect-intro"],
       [/is now on Arco/i, "prospect-intro"],
-      [/pagina op Arco is klaar/i, "prospect-followup"],
+      // See note on the matching pattern in SUBJECT_TO_TEMPLATE above.
+      [/op Arco$/i, "prospect-followup"],
       [/Laatste herinnering.*claim/i, "prospect-final"],
     ]
 
