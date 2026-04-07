@@ -132,40 +132,76 @@ function divider(): string {
 // the email-client image hacks live in one place.
 
 /**
- * Some email clients (Gmail's image proxy in particular) cache and sometimes
- * mis-handle Supabase storage URLs that lack a query string — they get served
- * once, then a stale or empty proxy hit replaces them. Appending a stable
- * version param defeats that and is harmless when the upstream ignores it.
- * This is the *email-only* equivalent of cache-busting; we don't do this on
- * the website itself.
+ * Rewrite a Supabase storage URL to use the on-the-fly image transform
+ * endpoint, returning a URL that delivers a pre-cropped image at the
+ * requested dimensions. For non-Supabase URLs the original is returned
+ * unchanged (with a cache-busting query param if it has none — see below).
+ *
+ * Why we need this for email: the website's .discover-card-image-wrap uses
+ * `aspect-ratio: 4/3` + `object-fit: cover` to crop. Almost no email client
+ * supports `aspect-ratio`, and Gmail in particular strips
+ * `position: absolute` from inline styles, which kills the standard
+ * padding-bottom:75% workaround as well. The only reliable way to ship a
+ * cropped image to email is to deliver an actually-cropped image.
+ *
+ * Supabase Pro has image transforms enabled at /storage/v1/render/image/...
+ * which accept `width`, `height`, and `resize=cover`. Verified working on
+ * this project (ogvobdcrectqsegqrquz) on 2026-04-07.
+ *
+ * The cache-busting `?e=v1` query param on non-transformed URLs is
+ * unrelated and exists because Gmail's image proxy occasionally serves
+ * stale empty responses for query-less Supabase URLs.
  */
-function emailImageUrl(url: string | null | undefined): string | null {
+function emailImageUrl(
+  url: string | null | undefined,
+  transform?: { width: number; height: number },
+): string | null {
   if (!url) return null
-  if (url.includes('?')) return url // already has a query string, leave it
+
+  const SUPABASE_OBJECT_PREFIX = '/storage/v1/object/public/'
+  if (transform && url.includes(SUPABASE_OBJECT_PREFIX)) {
+    const transformed = url.replace(SUPABASE_OBJECT_PREFIX, '/storage/v1/render/image/public/')
+    const sep = transformed.includes('?') ? '&' : '?'
+    return `${transformed}${sep}width=${transform.width}&height=${transform.height}&resize=cover`
+  }
+
+  if (url.includes('?')) return url
   return `${url}?e=v1`
 }
 
 /**
- * Render a small circular company icon. Falls back to a monogram tile (the
- * first letter on a soft surface background, rounded square to match the
- * Arco favicon style) when the company has no usable raster logo. SVG logos
- * are skipped because most webmail clients refuse to render them inline.
+ * Render a small circular company icon. Falls back to a circular grey
+ * monogram (matching the website's .pro-card-logo-placeholder style) when
+ * the company has no usable raster logo. SVG logos are skipped because
+ * most webmail clients refuse to render them inline.
+ *
+ * For non-SVG Supabase logos we route through the image transform endpoint
+ * to deliver a perfectly cropped square at 2× the display size (retina-ready
+ * for the 36px display).
  */
 function companyIcon(
   companyName: string,
   logoUrl: string | null | undefined,
   size = 36,
 ): string {
-  const safeUrl = logoUrl && !logoUrl.toLowerCase().endsWith('.svg') ? emailImageUrl(logoUrl) : null
+  const isUsable = logoUrl && !logoUrl.toLowerCase().endsWith('.svg')
+  // Request 2× the display size so the icon is sharp on retina mail clients.
+  const safeUrl = isUsable
+    ? emailImageUrl(logoUrl, { width: size * 2, height: size * 2 })
+    : null
   if (safeUrl) {
     return `<img src="${safeUrl}" alt="${companyName}" width="${size}" height="${size}" style="display:block;width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;" />`
   }
-  // Monogram fallback — first letter, soft surface, rounded square (matches the favicon)
+
+  // Fallback: circular grey background with the first letter centred,
+  // matching the website's .pro-card-logo-placeholder. (Earlier version
+  // used a black rounded-square tile to match the favicon, but the visual
+  // language for the *card* fallback should match the *card placeholder*
+  // on the site, which is a circle on the soft surface colour.)
   const initial = companyName.trim().charAt(0).toUpperCase() || 'A'
-  // Heuristic font sizing: ~55% of the tile so the letter feels balanced.
-  const fontSize = Math.round(size * 0.55)
+  const fontSize = Math.round(size * 0.42)
   return `<table cellpadding="0" cellspacing="0" border="0"><tr>
-    <td style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.22)}px;background:#1c1c1a;color:#ffffff;text-align:center;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:${fontSize}px;font-weight:500;line-height:${size}px;">${initial}</td>
+    <td style="width:${size}px;height:${size}px;border-radius:50%;background:#f5f5f4;color:#6b6b68;text-align:center;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:${fontSize}px;font-weight:500;line-height:${size}px;">${initial}</td>
   </tr></table>`
 }
 
@@ -173,6 +209,15 @@ function companyIcon(
  * Render a clickable company "card" — icon + name + optional subtitle, with
  * an optional hero image above. Used by every email that wants to spotlight
  * a specific company. The hero is only included when a URL is supplied.
+ *
+ * Hero rendering strategy:
+ * - Supabase storage URL → routed through the render endpoint with
+ *   `resize=cover` so we get an actually-cropped 4:3 image (matches the
+ *   website's discover card exactly).
+ * - External URL (e.g. a project's own website) → rendered at full
+ *   width with native aspect ratio. Imperfect, but every email client
+ *   shows it cleanly with no grey filler. We fall back gracefully
+ *   instead of trying CSS tricks Gmail strips.
  */
 function companyCard(opts: {
   name: string
@@ -182,21 +227,20 @@ function companyCard(opts: {
   subtitle?: string | null
 }): string {
   const { name, href, logoUrl, heroUrl, subtitle } = opts
-  const heroSafeUrl = emailImageUrl(heroUrl)
-  // Email-safe 4:3 frame matching the website's .discover-card-image-wrap.
-  // The website uses `aspect-ratio: 4/3` + `object-fit: cover`, but most
-  // email clients ignore `aspect-ratio`. The padding-bottom:75% trick is
-  // the cross-client standard: a wrapper with 0 height + 75% bottom-padding
-  // is exactly 4:3 (75% = 3/4) regardless of width, and the image inside
-  // is absolutely positioned to fill it with `object-fit: cover` so it's
-  // cropped, not stretched. Width/height attrs are still set so non-CSS
-  // clients (Outlook 2016) at least know the intrinsic dimensions.
+  // Hero target: 420×315 (4:3) at 2× = 840×630 for retina sharpness.
+  const heroSafeUrl = emailImageUrl(heroUrl, { width: 840, height: 630 })
+  const isSupabaseHero =
+    !!heroUrl && heroUrl.includes('/storage/v1/object/public/')
   const heroBlock = heroSafeUrl
-    ? `<div style="width:100%;max-width:420px;">
-        <div style="position:relative;width:100%;padding-bottom:75%;border-radius:3px;overflow:hidden;background:#f0f0ee;">
-          <img src="${heroSafeUrl}" alt="${name}" width="420" height="315" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;border-radius:3px;" />
-        </div>
-      </div>`
+    ? isSupabaseHero
+      ? // Supabase: pre-cropped 4:3 from the render endpoint, fixed dimensions.
+        `<div style="width:100%;max-width:420px;">
+          <img src="${heroSafeUrl}" alt="${name}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;border-radius:3px;" />
+        </div>`
+      : // External: render at full width with native aspect ratio.
+        `<div style="width:100%;max-width:420px;">
+          <img src="${heroSafeUrl}" alt="${name}" width="420" style="display:block;width:100%;max-width:420px;height:auto;border-radius:3px;" />
+        </div>`
     : ''
 
   return `<a href="${href}" target="_blank" style="display:block;text-decoration:none;margin:24px 0;">
