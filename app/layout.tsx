@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Cormorant_Garamond } from "next/font/google"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css"
 import { getSiteUrl } from "@/lib/utils"
 
@@ -46,7 +47,10 @@ export default function RootLayout({
 }>) {
   return (
     <html suppressHydrationWarning className={cormorant.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   )
 }

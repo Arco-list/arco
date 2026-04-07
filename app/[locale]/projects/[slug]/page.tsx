@@ -18,6 +18,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
+import { locales } from "@/i18n/config"
 
 const PREVIEW_PARAM = "preview"
 
@@ -94,11 +95,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const baseUrl = getSiteUrl()
   const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined
+  const languages = project.slug
+    ? Object.fromEntries(
+        locales.map((l) => [l, `${baseUrl}/${l}/projects/${project.slug}`])
+      )
+    : undefined
 
   return {
     title,
     description,
-    alternates: { canonical },
+    alternates: {
+      canonical,
+      ...(languages
+        ? { languages: { ...languages, "x-default": canonical } }
+        : {}),
+    },
     openGraph: {
       type: 'article',
       title: `${title} | Arco`,
@@ -363,19 +374,26 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         id: p.id,
         companyId: p.company_id,
         companyName: p.companies?.name ?? t("unknown"),
-        companySlug: (p.companies as any)?.slug,
+        companySlug: (p.companies as any)?.slug ?? null,
         serviceCategory: serviceCategories.length > 0 ? serviceCategories.join(" · ") : t("service"),
         serviceCategories,
         logo: p.companies?.logo_url ?? (p.company_id ? companyLogoMap.get(p.company_id) ?? null : null),
         projectsCount: p.company_id ? (companyProjectCounts.get(p.company_id)?.size ?? 0) : 0,
+        isProjectOwner: Boolean(p.is_project_owner),
       }
     })
 
-  // Format for ProjectStructuredData (different format)
-  const structuredDataProfessionals = formattedProfessionals.map(p => ({
-    name: p.companyName,
-    badge: p.serviceCategory,
-  }))
+  // Build structured-data inputs: split owner from contributors. The owner
+  // becomes the JSON-LD `author`; everyone else becomes a `contributor` with
+  // `roleName` from their primary service category.
+  const structuredOwner = formattedProfessionals.find((p) => p.isProjectOwner) ?? null
+  const structuredContributors = formattedProfessionals
+    .filter((p) => !p.isProjectOwner)
+    .map((p) => ({
+      companySlug: p.companySlug,
+      companyName: p.companyName,
+      roleName: p.serviceCategories[0] ?? null,
+    }))
 
   // Get architect for related projects
   const architect = formattedProfessionals.find(p =>
@@ -483,14 +501,35 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           description: localizedDescription,
           slug: project.slug,
           createdAt: project.created_at,
+          updatedAt: project.updated_at,
+          locale,
+          type: resolvedType,
+          scope: resolvedScope,
+          style: resolvedStyle,
           location: {
             city: project.address_city,
             region: project.address_region,
-            summary: project.address_city
-          }
+            country: project.address_country,
+            latitude: project.latitude,
+            longitude: project.longitude,
+            shareExactLocation: project.share_exact_location,
+          },
         }}
-        coverPhotoUrl={coverPhoto?.url}
-        professionals={structuredDataProfessionals}
+        imageUrls={enrichedPhotos.map((p) => p.url).filter(Boolean) as string[]}
+        owner={
+          structuredOwner
+            ? {
+                companySlug: structuredOwner.companySlug,
+                companyName: structuredOwner.companyName,
+                roleName: structuredOwner.serviceCategories[0] ?? null,
+              }
+            : null
+        }
+        contributors={structuredContributors}
+        relatedProjects={formattedRelatedProjects.map((rp) => ({
+          slug: rp.slug,
+          title: rp.title,
+        }))}
       />
 
       <div className="min-h-screen bg-white">

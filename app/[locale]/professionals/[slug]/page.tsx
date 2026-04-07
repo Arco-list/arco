@@ -11,9 +11,11 @@ import { ProfessionalProjects } from "@/components/professional/professional-pro
 import { ProfessionalContact } from "@/components/professional/professional-contact"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
 import { TrackProfessionalView } from "@/components/track-view"
+import { CompanyStructuredData } from "@/components/company-structured-data"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
+import { locales } from "@/i18n/config"
 
 type PageParams = {
   locale: string
@@ -43,11 +45,17 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 
   const baseUrl = getSiteUrl()
   const canonical = `${baseUrl}/professionals/${slug}`
+  const languages = Object.fromEntries(
+    locales.map((l) => [l, `${baseUrl}/${l}/professionals/${slug}`])
+  )
 
   return {
     title: professional.name,
     description,
-    alternates: { canonical },
+    alternates: {
+      canonical,
+      languages: { ...languages, "x-default": canonical },
+    },
     openGraph: {
       title: `${professional.name} | Arco`,
       description,
@@ -140,6 +148,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
   return (
     <div className="min-h-screen bg-white">
+      <CompanyStructuredData professional={professional} locale={locale} />
       <TrackProfessionalView companyId={professional.company.id} slug={slug} />
       <Header />
 
