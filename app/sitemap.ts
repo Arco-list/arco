@@ -1,4 +1,5 @@
-import type { MetadataRoute } from "next"
+
+  import type { MetadataRoute } from "next"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getSiteUrl } from "@/lib/utils"
 import { locales } from "@/i18n/config"
@@ -60,11 +61,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }))
 
-  // Listed companies
+  // Publicly visible companies. Matches the same status set used by
+  // fetchProfessionalDetail and the homepage/listing queries: 'listed'
+  // (claimed + active) and 'prospected' (unclaimed but editorially curated).
   const { data: companies } = await supabase
     .from("companies")
     .select("slug, updated_at")
-    .eq("status", "listed")
+    // Cast: 'prospected' exists in the live DB enum but the generated
+    // types in lib/supabase/types.ts are stale and only include
+    // 'unlisted' | 'listed' | 'deactivated'. Regenerate types to remove.
+    .in("status", ["listed", "prospected"] as ("listed" | "prospected")[] as never)
     .not("slug", "is", null)
     .order("updated_at", { ascending: false })
     .limit(10000)
