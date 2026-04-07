@@ -118,13 +118,14 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
       .eq("is_project_owner", true)
       .maybeSingle()
     const { data: ownerCompany } = ownerPP?.company_id
-      ? await supabase.from("companies").select("name").eq("id", ownerPP.company_id).maybeSingle()
+      ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
       : { data: null }
 
     const { sendProfessionalInviteEmail } = await import("@/lib/email-service")
     await sendProfessionalInviteEmail(invite.invited_email, {
       project_owner: ownerName,
       company_name: ownerCompany?.name ?? undefined,
+      company_logo_url: ownerCompany?.logo_url ?? undefined,
       project_name: project?.title || "Project",
       project_title: project?.title || "Project",
       project_image: photo?.url ?? undefined,

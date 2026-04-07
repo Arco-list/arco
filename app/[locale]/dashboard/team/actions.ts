@@ -33,25 +33,25 @@ type ActionResult = { success: boolean; error?: string }
 async function getCompanyForUser(supabase: ReturnType<typeof createServiceRoleSupabaseClient>, userId: string) {
   const { data: ownedCompany } = await supabase
     .from("companies")
-    .select("id, name")
+    .select("id, name, logo_url")
     .eq("owner_id", userId)
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()
 
-  if (ownedCompany) return { companyId: ownedCompany.id, companyName: ownedCompany.name, isOwner: true, role: "admin" as const }
+  if (ownedCompany) return { companyId: ownedCompany.id, companyName: ownedCompany.name, companyLogoUrl: ownedCompany.logo_url, isOwner: true, role: "admin" as const }
 
   const { data: membership } = await supabase
     .from("company_members")
-    .select("company_id, role, companies(id, name)")
+    .select("company_id, role, companies(id, name, logo_url)")
     .eq("user_id", userId)
     .eq("status", "active")
     .limit(1)
     .maybeSingle()
 
   if (membership?.companies) {
-    const company = membership.companies as unknown as { id: string; name: string }
-    return { companyId: company.id, companyName: company.name, isOwner: false, role: membership.role as "admin" | "member" }
+    const company = membership.companies as unknown as { id: string; name: string; logo_url: string | null }
+    return { companyId: company.id, companyName: company.name, companyLogoUrl: company.logo_url, isOwner: false, role: membership.role as "admin" | "member" }
   }
 
   return null
@@ -143,6 +143,7 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
   try {
     await sendTransactionalEmail(emailLower, "team-invite" as any, {
       company_name: companyInfo.companyName,
+      company_logo_url: companyInfo.companyLogoUrl ?? undefined,
       confirmUrl,
     })
   } catch (e) {
@@ -258,6 +259,7 @@ export async function resendTeamInviteAction(memberId: string): Promise<ActionRe
   try {
     await sendTransactionalEmail(member.email, "team-invite" as any, {
       company_name: companyInfo.companyName,
+      company_logo_url: companyInfo.companyLogoUrl ?? undefined,
       confirmUrl,
     })
   } catch (e) {

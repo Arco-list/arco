@@ -36,6 +36,8 @@ export interface EmailVariables {
   project_image?: string
   project_type?: string
   company_name?: string
+  /** Public URL to the company logo. Rendered via companyIcon() — non-SVG only. */
+  company_logo_url?: string | null
   project_owner?: string
   project_location?: string
   service_category?: string
@@ -123,6 +125,84 @@ function divider(): string {
   return `<hr style="border:none;border-top:1px solid #e8e8e6;margin:24px 0;" />`
 }
 
+// ─── Company icon + card helpers ─────────────────────────────────────────────
+//
+// Used by every email that references a company (prospect-intro/followup/final,
+// professional-invite, team-invite). Centralised here so the fallback logic and
+// the email-client image hacks live in one place.
+
+/**
+ * Some email clients (Gmail's image proxy in particular) cache and sometimes
+ * mis-handle Supabase storage URLs that lack a query string — they get served
+ * once, then a stale or empty proxy hit replaces them. Appending a stable
+ * version param defeats that and is harmless when the upstream ignores it.
+ * This is the *email-only* equivalent of cache-busting; we don't do this on
+ * the website itself.
+ */
+function emailImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  if (url.includes('?')) return url // already has a query string, leave it
+  return `${url}?e=v1`
+}
+
+/**
+ * Render a small circular company icon. Falls back to a monogram tile (the
+ * first letter on a soft surface background, rounded square to match the
+ * Arco favicon style) when the company has no usable raster logo. SVG logos
+ * are skipped because most webmail clients refuse to render them inline.
+ */
+function companyIcon(
+  companyName: string,
+  logoUrl: string | null | undefined,
+  size = 36,
+): string {
+  const safeUrl = logoUrl && !logoUrl.toLowerCase().endsWith('.svg') ? emailImageUrl(logoUrl) : null
+  if (safeUrl) {
+    return `<img src="${safeUrl}" alt="${companyName}" width="${size}" height="${size}" style="display:block;width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;" />`
+  }
+  // Monogram fallback — first letter, soft surface, rounded square (matches the favicon)
+  const initial = companyName.trim().charAt(0).toUpperCase() || 'A'
+  // Heuristic font sizing: ~55% of the tile so the letter feels balanced.
+  const fontSize = Math.round(size * 0.55)
+  return `<table cellpadding="0" cellspacing="0" border="0"><tr>
+    <td style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.22)}px;background:#1c1c1a;color:#ffffff;text-align:center;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:${fontSize}px;font-weight:500;line-height:${size}px;">${initial}</td>
+  </tr></table>`
+}
+
+/**
+ * Render a clickable company "card" — icon + name + optional subtitle, with
+ * an optional hero image above. Used by every email that wants to spotlight
+ * a specific company. The hero is only included when a URL is supplied.
+ */
+function companyCard(opts: {
+  name: string
+  href: string
+  logoUrl?: string | null
+  heroUrl?: string | null
+  subtitle?: string | null
+}): string {
+  const { name, href, logoUrl, heroUrl, subtitle } = opts
+  const heroSafeUrl = emailImageUrl(heroUrl)
+  const heroBlock = heroSafeUrl
+    ? `<div style="width:100%;max-width:420px;border-radius:3px;overflow:hidden;">
+        <img src="${heroSafeUrl}" alt="${name}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" />
+      </div>`
+    : ''
+
+  return `<a href="${href}" target="_blank" style="display:block;text-decoration:none;margin:24px 0;">
+    ${heroBlock}
+    <table cellpadding="0" cellspacing="0" style="${heroBlock ? 'margin-top:12px;' : ''}"><tr>
+      <td style="vertical-align:middle;padding-right:10px;">
+        ${companyIcon(name, logoUrl)}
+      </td>
+      <td style="vertical-align:middle;">
+        <p style="margin:0;font-size:15px;font-weight:400;color:#1c1c1a;line-height:1.3;">${name}</p>
+        ${subtitle ? `<p style="margin:2px 0 0;font-size:13px;font-weight:300;color:#a1a1a0;line-height:1.3;">${subtitle}</p>` : ''}
+      </td>
+    </tr></table>
+  </a>`
+}
+
 function projectCard(vars: EmailVariables): string {
   const title = vars.project_title || vars.project_name || ''
   const subtitle = [vars.project_type, vars.project_location].filter(Boolean).join(' · ')
@@ -176,10 +256,23 @@ function renderProfessionalInvite(vars: EmailVariables): { subject: string; html
   const projectName = vars.project_title || vars.project_name || 'a project'
   const ownerLabel = vars.company_name || vars.project_owner || 'An architect'
   const projectLink = vars.project_link
+  // Inviting-company badge: small icon + name on a single line, above the
+  // project card. Only renders if we know the company name.
+  const inviterBadge = vars.company_name
+    ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>
+        <td style="vertical-align:middle;padding-right:10px;">
+          ${companyIcon(vars.company_name, vars.company_logo_url, 32)}
+        </td>
+        <td style="vertical-align:middle;">
+          <p style="margin:0;font-size:14px;font-weight:400;color:#1c1c1a;line-height:1.3;">${vars.company_name}</p>
+        </td>
+      </tr></table>`
+    : ''
   return {
     subject: `${ownerLabel} credited you on ${projectName}`,
     html: lb(vars, `
       ${heading('You\'ve been credited')}
+      ${inviterBadge}
       ${body(`${ownerLabel} added your company to a project on Arco.`)}
       ${projectLink ? linkedProjectCard(vars, projectLink) : projectCard(vars)}
       ${body('Accept the invitation to showcase this project on your company page.')}
@@ -204,11 +297,24 @@ ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">
 }
 
 function renderTeamInvite(vars: EmailVariables): { subject: string; html: string } {
+  const companyName = vars.company_name || 'a company'
+  // Inviting-company badge — same shape as professional-invite for consistency.
+  const inviterBadge = vars.company_name
+    ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>
+        <td style="vertical-align:middle;padding-right:10px;">
+          ${companyIcon(vars.company_name, vars.company_logo_url, 32)}
+        </td>
+        <td style="vertical-align:middle;">
+          <p style="margin:0;font-size:14px;font-weight:400;color:#1c1c1a;line-height:1.3;">${vars.company_name}</p>
+        </td>
+      </tr></table>`
+    : ''
   return {
-    subject: `You're invited to join ${vars.company_name || 'a company'} on Arco`,
+    subject: `You're invited to join ${companyName} on Arco`,
     html: lb(vars, `
       ${heading('Team invitation')}
-      ${body(`You've been invited to join <strong>${vars.company_name || 'a company'}</strong> on Arco.`)}
+      ${inviterBadge}
+      ${body(`You've been invited to join <strong>${companyName}</strong> on Arco.`)}
       ${body('Accept the invitation to collaborate on your company\'s profile and projects.')}
       ${vars.confirmUrl ? button('Accept invitation', vars.confirmUrl) : ''}
     `),
@@ -384,36 +490,13 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
   const companyName = vars.company_name || 'Uw bedrijf'
   const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
   const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
-  const heroImageUrl = vars.hero_image_url
-  const logoUrl = vars.logo_url
-  const subtitle = vars.company_subtitle || ''
-
-  // Company card — matches professional discover card design
-  // Skip SVG logos (not supported in email clients) and use initial fallback instead
-  const useLogo = logoUrl && !logoUrl.endsWith('.svg')
-  const logoBlock = useLogo
-    ? `<img src="${logoUrl}" alt="${companyName}" width="36" height="36" style="display:block;width:36px;height:36px;border-radius:50%;object-fit:cover;" />`
-    : `<table cellpadding="0" cellspacing="0"><tr><td style="width:36px;height:36px;border-radius:50%;background:#f5f5f4;text-align:center;vertical-align:middle;font-size:14px;font-weight:500;color:#6b6b68;">${companyName.charAt(0)}</td></tr></table>`
-
-  const heroBlock = heroImageUrl
-    ? `<div style="width:100%;max-width:420px;border-radius:3px;overflow:hidden;">
-        <img src="${heroImageUrl}" alt="${companyName}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" />
-      </div>`
-    : ''
-
-  const companyCard = `
-    <a href="${companyPageUrl}" target="_blank" style="display:block;text-decoration:none;margin:24px 0;">
-      ${heroBlock}
-      <table cellpadding="0" cellspacing="0" style="${heroBlock ? 'margin-top:12px;' : ''}"><tr>
-        <td style="vertical-align:middle;padding-right:10px;">
-          ${logoBlock}
-        </td>
-        <td style="vertical-align:middle;">
-          <p style="margin:0;font-size:15px;font-weight:400;color:#1c1c1a;line-height:1.3;">${companyName}</p>
-          ${subtitle ? `<p style="margin:2px 0 0;font-size:13px;font-weight:300;color:#a1a1a0;line-height:1.3;">${subtitle}</p>` : ''}
-        </td>
-      </tr></table>
-    </a>`
+  const card = companyCard({
+    name: companyName,
+    href: companyPageUrl,
+    logoUrl: vars.logo_url,
+    heroUrl: vars.hero_image_url,
+    subtitle: vars.company_subtitle ?? null,
+  })
 
   return {
     subject: `Een podium voor ${companyName}`,
@@ -421,7 +504,7 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
       ${heading(`Een podium voor ${companyName}`)}
       ${body(`Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`)}
       ${body(`We hebben ${companyName} live gezet op Arco met een bedrijfs- en projectpagina om te laten zien hoe het eruitziet:`)}
-      ${companyCard}
+      ${card}
       ${body(`Wil je op Arco? Claim je pagina en krijg volledige controle over je profiel, voeg projecten toe en word zichtbaar voor opdrachtgevers die een professional zoeken om hun project te realiseren.`)}
       ${button(`Claim ${companyName}`, claimUrl)}
       ${body(`Wil je liever dat we de pagina verwijderen? Laat het me weten door op deze email te reageren.`)}
@@ -437,6 +520,13 @@ function renderProspectFollowup(vars: EmailVariables): { subject: string; html: 
   const companyName = vars.company_name || 'Uw bedrijf'
   const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
   const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+  const card = companyCard({
+    name: companyName,
+    href: companyPageUrl,
+    logoUrl: vars.logo_url,
+    heroUrl: vars.hero_image_url,
+    subtitle: vars.company_subtitle ?? null,
+  })
 
   return {
     subject: `Uw pagina op Arco is klaar`,
@@ -444,6 +534,7 @@ function renderProspectFollowup(vars: EmailVariables): { subject: string; html: 
       ${heading(`Uw pagina staat klaar`)}
       ${body(`Beste ${companyName},`)}
       ${body(`Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of u het gezien heeft.`)}
+      ${card}
       ${body(`Op uw pagina kunnen opdrachtgevers uw werk bekijken en direct contact opnemen. Het enige wat u hoeft te doen is uw pagina claimen — het kost minder dan twee minuten.`)}
       ${button(`Bekijk uw pagina`, companyPageUrl)}
       ${body(`Na het claimen kunt u uw profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`)}
@@ -460,6 +551,14 @@ function renderProspectFollowup(vars: EmailVariables): { subject: string; html: 
 function renderProspectFinal(vars: EmailVariables): { subject: string; html: string } {
   const companyName = vars.company_name || 'Uw bedrijf'
   const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+  const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const card = companyCard({
+    name: companyName,
+    href: companyPageUrl,
+    logoUrl: vars.logo_url,
+    heroUrl: vars.hero_image_url,
+    subtitle: vars.company_subtitle ?? null,
+  })
 
   return {
     subject: `Laatste herinnering: claim ${companyName} op Arco`,
@@ -467,6 +566,7 @@ function renderProspectFinal(vars: EmailVariables): { subject: string; html: str
       ${heading(`Laatste herinnering`)}
       ${body(`Beste ${companyName},`)}
       ${body(`Dit is mijn laatste bericht over uw pagina op Arco. Ik begrijp dat u het druk heeft — daarom maak ik het kort.`)}
+      ${card}
       ${body(`Uw bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna bent u vindbaar voor opdrachtgevers die een professional zoeken.`)}
       ${button(`Claim ${companyName}`, claimUrl)}
       ${body(`Geen interesse? Geen probleem — reageer op deze email en ik verwijder uw pagina. Geen verdere berichten.`)}

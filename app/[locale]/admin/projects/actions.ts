@@ -441,11 +441,12 @@ export async function setProjectStatusAction(input: {
           })
         }
 
-        // Get owner company name for invite emails
+        // Get owner company name + logo for invite emails
         const { data: ownerCompanyRow } = ownerPP?.company_id
-          ? await serviceClient.from("companies").select("name").eq("id", ownerPP.company_id).maybeSingle()
+          ? await serviceClient.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
           : { data: null }
         const ownerCompanyName = ownerCompanyRow?.name ?? undefined
+        const ownerCompanyLogoUrl = ownerCompanyRow?.logo_url ?? undefined
 
         // Get ALL professional invites and send emails (both 'invited' and 'listed')
         // Exclude project owner from receiving invite email
@@ -500,6 +501,7 @@ export async function setProjectStatusAction(input: {
               {
                 project_owner: ownerFullName,
                 company_name: ownerCompanyName,
+                company_logo_url: ownerCompanyLogoUrl,
                 project_name: project?.title || 'Project',
                 project_title: project?.title || 'Project',
                 project_image: projectPhoto?.url ?? undefined,

@@ -146,6 +146,17 @@ export async function createUnlistedCompanyAction(
         .select("location, address_city, building_type, project_type, project_type_category_id")
         .eq("id", input.projectId)
         .maybeSingle()
+      // Inviter (project owner) company — used to render the inviting-company
+      // badge in the email so the recipient instantly recognises the studio.
+      const { data: ownerPP } = await supabase
+        .from("project_professionals")
+        .select("company_id")
+        .eq("project_id", input.projectId)
+        .eq("is_project_owner", true)
+        .maybeSingle()
+      const { data: ownerCompany } = ownerPP?.company_id
+        ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
+        : { data: null }
       // Resolve building type label
       let projectType: string | undefined
       const bt = projectData?.building_type
@@ -167,6 +178,8 @@ export async function createUnlistedCompanyAction(
       }
       const result = await sendProfessionalInviteEmail(input.email, {
         project_owner: input.inviterName,
+        company_name: ownerCompany?.name ?? undefined,
+        company_logo_url: ownerCompany?.logo_url ?? undefined,
         project_name: input.projectTitle,
         project_title: input.projectTitle,
         project_image: projectPhoto?.url ?? undefined,
@@ -238,8 +251,20 @@ export async function confirmLinkExistingCompanyAction(
           const { data: cat } = await supabase.from("categories").select("name").eq("id", projectData.project_type_category_id).maybeSingle()
           projectType = cat?.name ?? undefined
         }
+        // Inviter (project owner) company for the badge in the email.
+        const { data: ownerPP } = await supabase
+          .from("project_professionals")
+          .select("company_id")
+          .eq("project_id", input.projectId)
+          .eq("is_project_owner", true)
+          .maybeSingle()
+        const { data: ownerCompany } = ownerPP?.company_id
+          ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
+          : { data: null }
         await sendProfessionalInviteEmail(input.email, {
           project_owner: input.inviterName,
+          company_name: ownerCompany?.name ?? undefined,
+          company_logo_url: ownerCompany?.logo_url ?? undefined,
           project_name: input.projectTitle,
           project_title: input.projectTitle,
           project_image: projectPhoto?.url ?? undefined,
@@ -326,12 +351,13 @@ export async function sendInviteEmailAction(input: {
       .eq("is_project_owner", true)
       .maybeSingle()
     const { data: ownerCompany } = ownerPP?.company_id
-      ? await supabase.from("companies").select("name").eq("id", ownerPP.company_id).maybeSingle()
+      ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
       : { data: null }
 
     const result = await sendProfessionalInviteEmail(input.email, {
       project_owner: input.inviterName,
       company_name: ownerCompany?.name ?? undefined,
+      company_logo_url: ownerCompany?.logo_url ?? undefined,
       project_name: input.projectTitle,
       project_title: input.projectTitle,
       project_image: projectPhoto?.url ?? undefined,
