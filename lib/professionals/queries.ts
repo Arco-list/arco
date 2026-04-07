@@ -549,9 +549,16 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     return null
   }
 
-  // Only require listed status (unless preview mode for owners/members)
-  if (company.status !== "listed" && !options?.allowUnlisted) {
-    logger.info("Company not listed", { slugOrId, companyStatus: company.status })
+  // Public detail page accepts the same status set as the listing/homepage
+  // queries: listed (claimed + active) and prospected (unclaimed but
+  // editorially curated). Owners/members get a preview for any status via
+  // allowUnlisted.
+  const PUBLIC_COMPANY_STATUSES = ["listed", "prospected"] as const
+  if (
+    !PUBLIC_COMPANY_STATUSES.includes(company.status as (typeof PUBLIC_COMPANY_STATUSES)[number]) &&
+    !options?.allowUnlisted
+  ) {
+    logger.info("Company not publicly visible", { slugOrId, companyStatus: company.status })
     return null
   }
 
