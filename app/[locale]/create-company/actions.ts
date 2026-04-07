@@ -428,6 +428,21 @@ export async function claimCompanyAction(input: {
   try { await claimPendingInvitesAction(user.id) } catch {}
   try { await claimPendingTeamInvitesAction(user.id) } catch {}
 
+  // Advance the matching prospect from `signup` → `company` if one exists.
+  // Without this the Sales/Prospects view shows stale "Signup" status for
+  // anyone who claimed a pre-existing company (the create-company flow
+  // already calls this; the claim flow was missing it). matchProspectOn-
+  // CompanyCreated looks up by user_id first then company_id, so it
+  // catches both "prospect already linked to user" and "prospect created
+  // against the company before the user existed". Non-fatal — claim has
+  // already succeeded by this point.
+  try {
+    const { matchProspectOnCompanyCreated } = await import('@/lib/prospect-matching')
+    await matchProspectOnCompanyCreated(user.id, companyId)
+  } catch (err) {
+    logger.warn("create-company", "Failed to advance prospect status after claim", { userId: user.id, companyId, error: err instanceof Error ? err.message : String(err) })
+  }
+
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/company")
   revalidatePath("/dashboard/listings")
