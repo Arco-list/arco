@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 
   if (!professional) {
     return {
-      title: `${t("professional_not_found")} · Arco`,
+      title: t("professional_not_found"),
     }
   }
 
@@ -45,11 +45,11 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
   const canonical = `${baseUrl}/professionals/${slug}`
 
   return {
-    title: `${professional.name} · Arco`,
+    title: professional.name,
     description,
     alternates: { canonical },
     openGraph: {
-      title: `${professional.name} · Arco`,
+      title: `${professional.name} | Arco`,
       description,
       url: canonical,
       images: image ? [{ url: image, alt: professional.name }] : undefined,

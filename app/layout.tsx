@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Cormorant_Garamond } from "next/font/google"
 import "./globals.css"
+import { getSiteUrl } from "@/lib/utils"
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -12,6 +13,7 @@ const cormorant = Cormorant_Garamond({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: {
     default: "Arco - Connect with Architecture & Design Professionals",
     template: "%s | Arco",

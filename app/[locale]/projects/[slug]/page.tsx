@@ -86,7 +86,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const metaLocale = resolvedParams.locale ?? "en"
   const localizedMetaTitle = getProjectTranslation(project, "title", metaLocale) || project.title
   const localizedMetaDesc = getProjectTranslation(project, "description", metaLocale) || project.description
-  const title = project.seo_title?.trim() || `${localizedMetaTitle} · Arco`
+  const title = project.seo_title?.trim() || localizedMetaTitle
   const description = project.seo_description?.trim() ||
     (localizedMetaDesc ?
       localizedMetaDesc.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
@@ -101,7 +101,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical },
     openGraph: {
       type: 'article',
-      title,
+      title: `${title} | Arco`,
       description,
       url: canonical,
       images: primaryPhoto?.url ? [{
