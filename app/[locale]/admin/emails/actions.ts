@@ -33,12 +33,12 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/Een podium voor/i, "prospect-intro", "Prospect Intro"],
   [/staat op Arco/i, "prospect-intro", "Prospect Intro"],
   [/is now on Arco/i, "prospect-intro", "Prospect Intro"],
-  // New followup subject is just "${company} op Arco". The intro patterns
-  // above already returned for `Een podium voor` / `staat op Arco`, and the
-  // final pattern below requires "Laatste herinnering", so this end-anchor
-  // catches the followup without colliding with either.
+  // Both followup and final subjects end in "op Arco". Final has the
+  // distinguishing "Claim …" prefix and MUST be matched first, otherwise
+  // the followup's end-anchored pattern would swallow it. Sequence is
+  // first-match-wins via matchTemplate().
+  [/^Claim .* op Arco$/i, "prospect-final", "Prospect Final"],
   [/op Arco$/i, "prospect-followup", "Prospect Follow-up"],
-  [/Laatste herinnering.*claim/i, "prospect-final", "Prospect Final"],
 ]
 
 function matchTemplate(subject: string): { id: string; name: string } | null {
@@ -128,8 +128,9 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       [/staat op Arco/i, "prospect-intro"],
       [/is now on Arco/i, "prospect-intro"],
       // See note on the matching pattern in SUBJECT_TO_TEMPLATE above.
+      // Final must come before followup since both end in "op Arco".
+      [/^Claim .* op Arco$/i, "prospect-final"],
       [/op Arco$/i, "prospect-followup"],
-      [/Laatste herinnering.*claim/i, "prospect-final"],
     ]
 
     const stats: Record<string, TemplateStats> = {}
@@ -165,6 +166,12 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
 export async function sendTestEmail(template: string, toEmail: string): Promise<{ success: boolean; error?: string }> {
   const { sendTransactionalEmail } = await import('@/lib/email-service')
 
+  // Test vars need to mirror what real production senders pass, otherwise
+  // the rendered preview is misleading (e.g. company card without a hero
+  // image, professional-invite without the inviting-company badge). Real
+  // values borrowed from Marco van Veldhuizen — a prospected company in
+  // production with a real logo + published project photo so the test
+  // send looks like an actual send.
   const testVars: Record<string, any> = {
     firstname: 'Test',
     project_title: 'Sample Villa Project',
@@ -175,9 +182,17 @@ export async function sendTestEmail(template: string, toEmail: string): Promise<
     dashboard_link: 'https://arcolist.com/dashboard',
     confirmUrl: 'https://arcolist.com',
     rejection_reason: 'This is a test rejection reason.',
-    company_name: 'Arco Test Studio',
+    company_name: 'Marco van Veldhuizen',
     code: '123456',
-    businessname: 'Arco Test Studio',
+    businessname: 'Marco van Veldhuizen',
+    // Visual fields used by the prospect series (intro/followup/final)
+    company_page_url: 'https://www.arcolist.com/professionals/marco-van-veldhuizen',
+    claim_url: 'https://www.arcolist.com/businesses/professionals',
+    company_subtitle: 'Architect · Oisterwijk',
+    logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-assets/0b3b44d9-92aa-40e2-94e4-972038f8be50/logo/1774966489783-mvv.jpeg',
+    hero_image_url: 'https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/04-min.jpg',
+    // Visual field used by professional-invite + team-invite
+    company_logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-assets/0b3b44d9-92aa-40e2-94e4-972038f8be50/logo/1774966489783-mvv.jpeg',
   }
 
   const result = await sendTransactionalEmail(toEmail, template as any, testVars)

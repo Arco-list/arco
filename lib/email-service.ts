@@ -183,9 +183,19 @@ function companyCard(opts: {
 }): string {
   const { name, href, logoUrl, heroUrl, subtitle } = opts
   const heroSafeUrl = emailImageUrl(heroUrl)
+  // Email-safe 4:3 frame matching the website's .discover-card-image-wrap.
+  // The website uses `aspect-ratio: 4/3` + `object-fit: cover`, but most
+  // email clients ignore `aspect-ratio`. The padding-bottom:75% trick is
+  // the cross-client standard: a wrapper with 0 height + 75% bottom-padding
+  // is exactly 4:3 (75% = 3/4) regardless of width, and the image inside
+  // is absolutely positioned to fill it with `object-fit: cover` so it's
+  // cropped, not stretched. Width/height attrs are still set so non-CSS
+  // clients (Outlook 2016) at least know the intrinsic dimensions.
   const heroBlock = heroSafeUrl
-    ? `<div style="width:100%;max-width:420px;border-radius:3px;overflow:hidden;">
-        <img src="${heroSafeUrl}" alt="${name}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" />
+    ? `<div style="width:100%;max-width:420px;">
+        <div style="position:relative;width:100%;padding-bottom:75%;border-radius:3px;overflow:hidden;background:#f0f0ee;">
+          <img src="${heroSafeUrl}" alt="${name}" width="420" height="315" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;border-radius:3px;" />
+        </div>
       </div>`
     : ''
 
@@ -559,15 +569,14 @@ function renderProspectFinal(vars: EmailVariables): { subject: string; html: str
   })
 
   return {
-    subject: `Laatste herinnering: claim ${companyName} op Arco`,
+    subject: `Claim ${companyName} op Arco`,
     html: baseLayout(`
-      ${heading(`Laatste herinnering`)}
-      ${body(`Beste ${companyName},`)}
-      ${body(`Dit is mijn laatste bericht over uw pagina op Arco. Ik begrijp dat u het druk heeft — daarom maak ik het kort.`)}
+      ${heading(`Claim ${companyName} op Arco`)}
+      ${body(`Dit is mijn laatste bericht over je pagina op Arco. Ik begrijp dat je het druk hebt — daarom maak ik het kort.`)}
       ${card}
-      ${body(`Uw bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna bent u vindbaar voor opdrachtgevers die een professional zoeken.`)}
+      ${body(`Je bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna ben je vindbaar voor opdrachtgevers die een professional zoeken.`)}
       ${button(`Claim ${companyName}`, claimUrl)}
-      ${body(`Geen interesse? Geen probleem — reageer op deze email en ik verwijder uw pagina. Geen verdere berichten.`)}
+      ${body(`Geen interesse? Geen probleem — reageer op deze email en ik verwijder je pagina. Geen verdere berichten.`)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">Oprichter, Arco</span>

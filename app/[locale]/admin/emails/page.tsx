@@ -65,7 +65,7 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
   { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "Een podium voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 0, from: SENDERS.niek },
   { id: "prospect-followup", name: "Prospect Follow-up", type: "marketing", audience: "professional", description: "Follow-up if no response to intro", trigger: "Drip queue · 3 days after intro", subject: "[Company] op Arco", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 3, from: SENDERS.niek },
-  { id: "prospect-final", name: "Prospect Final", type: "marketing", audience: "professional", description: "Last reminder before sequence ends", trigger: "Drip queue · 7 days after intro", subject: "Laatste herinnering: claim [Company] op Arco", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 7, from: SENDERS.niek },
+  { id: "prospect-final", name: "Prospect Final", type: "marketing", audience: "professional", description: "Last reminder before sequence ends", trigger: "Drip queue · 7 days after intro", subject: "Claim [Company] op Arco", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 7, from: SENDERS.niek },
 ]
 
 type TabKey = "transactional" | "marketing" | "sent"
