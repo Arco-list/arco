@@ -17,16 +17,11 @@ const nextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
-  async redirects() {
-    return [
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "www.arcolist.com" }],
-        destination: "https://arcolist.com/:path*",
-        permanent: true,
-      },
-    ]
-  },
+  // Note: the apex→www redirect is handled by Vercel domain config
+  // (arcolist.com is set to redirect to www.arcolist.com in Vercel
+  // Settings → Domains). We deliberately do NOT add a Next.js redirect
+  // here — adding one in either direction creates a loop with Vercel's
+  // own redirect. The canonical host is www.arcolist.com.
 }
 
 export default withNextIntl(nextConfig)
