@@ -6334,13 +6334,6 @@ body.no-scroll {
   }
 }
 
-/* â”€â”€â”€ Mobile filter bar overrides â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-@media (max-width: 768px) {
-  .filter-pill-group[data-hide-mobile=”true”] {
-    display: none;
-  }
-}
 /* ═══════════════════ SETUP POPUP ═══════════════════ */
 
 .setup-popup-overlay {

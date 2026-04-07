@@ -8,6 +8,7 @@ import {
   useCallback,
   type KeyboardEvent,
 } from "react"
+import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { useTranslations } from "next-intl"
 
@@ -173,6 +174,37 @@ function ChevronDownIcon({ className }: { className?: string }) {
       <path d="M2 3.5l2.5 2.5 2.5-2.5" />
     </svg>
   )
+}
+
+// ─── Mobile-aware dropdown wrapper ────────────────────────────────────────────
+// On mobile (≤768px), portals the dropdown to document.body to escape the
+// scrollable filter bar's clipping context (iOS Safari position:fixed bugs).
+// On desktop, renders inline as a child of the relative-positioned button.
+
+function FilterDropdown({ open, children, minWidth, align }: { open: boolean; children: React.ReactNode; minWidth?: number; align?: "right" }) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
+
+  const dropdown = (
+    <div
+      className="filter-dropdown"
+      data-open={open}
+      data-align={align}
+      style={isMobile ? undefined : { minWidth: minWidth ?? 224 }}
+    >
+      {children}
+    </div>
+  )
+
+  if (isMobile && typeof document !== "undefined") {
+    return open ? createPortal(dropdown, document.body) : null
+  }
+  return dropdown
 }
 
 // ─── DropdownOption ────────────────────────────────────────────────────────────
@@ -435,16 +467,6 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const [locationSearch, setLocationSearch] = useState("")
   const barRef = useRef<HTMLDivElement>(null)
 
-  // On mobile, all filter pills open the drawer instead of inline dropdowns
-  // (avoids iOS Safari position:fixed quirks inside sticky parents)
-  const isMobileFilterClick = useCallback(() => {
-    if (typeof window !== "undefined" && window.innerWidth <= 768) {
-      setDrawerOpen(true)
-      return true
-    }
-    return false
-  }, [])
-
   // Sort option label mapping
   const sortLabelMap: Record<SortOption, string> = {
     "Most recent": t("sort_most_recent"),
@@ -452,12 +474,15 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
     "Alphabetical": t("sort_alphabetical"),
   }
 
-  // Close on outside click
+  // Close on outside click. Portaled dropdowns live outside barRef, so we
+  // also treat clicks inside any .filter-dropdown as "inside".
   useEffect(() => {
     const handler = (e: Event) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setActiveDropdown(null)
-      }
+      const target = e.target as Element | null
+      if (!target) return
+      if (barRef.current?.contains(target)) return
+      if (target.closest?.(".filter-dropdown")) return
+      setActiveDropdown(null)
     }
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
@@ -521,10 +546,8 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  const toggleDropdown = (name: string) => {
-    if (isMobileFilterClick()) return
+  const toggleDropdown = (name: string) =>
     setActiveDropdown((prev) => (prev === name ? null : name))
-  }
 
   const toggleType = useCallback(
     (id: string) =>
@@ -595,11 +618,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 {spaceLabel}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "space"}
-                style={{ minWidth: 224 }}
-              >
+              <FilterDropdown open={activeDropdown === "space"}>
                 {SPACE_OPTIONS.map((opt) => (
                   <DropdownOption
                     key={opt.key}
@@ -609,11 +628,11 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                     onToggle={() => { toggleSpace(opt.key); setActiveDropdown(null) }}
                   />
                 ))}
-              </div>
+              </FilterDropdown>
             </div>
 
             {/* Type */}
-            <div className="filter-pill-group" data-hide-mobile="true" style={{ position: "relative" }}>
+            <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
                 data-active={selectedTypes.length > 0}
@@ -628,11 +647,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 )}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "type"}
-                style={{ minWidth: 224 }}
-              >
+              <FilterDropdown open={activeDropdown === "type"}>
                 {taxonomyLoading && topLevelCategories.length === 0 ? (
                   <div style={{ padding: "16px", fontSize: 13, color: "var(--text-secondary)" }}>
                     {t("loading")}
@@ -647,11 +662,11 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                     />
                   ))
                 )}
-              </div>
+              </FilterDropdown>
             </div>
 
             {/* Location */}
-            <div className="filter-pill-group" data-hide-mobile="true" style={{ position: "relative" }}>
+            <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
                 data-active={selectedLocations.length > 0}
@@ -665,11 +680,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                 )}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "location"}
-                style={{ minWidth: 224 }}
-              >
+              <FilterDropdown open={activeDropdown === "location"}>
                 <div className="filter-dropdown-search">
                   <input
                     type="text"
@@ -702,7 +713,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                     </div>
                   )}
                 </div>
-              </div>
+              </FilterDropdown>
             </div>
 
             {/* Sort moved to results meta row */}
