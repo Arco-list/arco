@@ -1116,6 +1116,28 @@ export async function sendProspectEmailAction(input: {
     .eq("id", company.id)
     .is("owner_id", null)
 
+  // Bump the matching prospects row from `prospect` → `contacted` so the
+  // admin/sales table reflects that the intro was sent. Match by company_id
+  // first, fall back to email so manual prospects (no company link yet) also
+  // transition. Only advance if currently in `prospect` so we don't regress
+  // a row that's already further along the funnel (visitor/signup/etc).
+  const { data: prospectRow } = await serviceClient
+    .from("prospects")
+    .select("id, status, emails_sent")
+    .or(`company_id.eq.${company.id},email.eq.${emailResult.data}`)
+    .maybeSingle()
+
+  if (prospectRow) {
+    const updates: Record<string, unknown> = {
+      emails_sent: (prospectRow.emails_sent ?? 0) + 1,
+      last_email_sent_at: new Date().toISOString(),
+    }
+    if (prospectRow.status === "prospect") {
+      updates.status = "contacted"
+    }
+    await serviceClient.from("prospects").update(updates).eq("id", prospectRow.id)
+  }
+
   logger.info("admin-professionals", "Prospect email sent", {
     companyId: company.id,
     emailTo: emailResult.data,
