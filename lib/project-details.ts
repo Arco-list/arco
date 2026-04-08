@@ -80,6 +80,13 @@ export type ProjectDetailsDescriptionCommand =
   | "orderedList"
 
 export const CURRENT_YEAR = new Date().getFullYear()
+export const YEAR_LOWER_BOUND = 1800
+
+export const parseYearValue = (value: string): number | null => {
+  if (!/^\d{4}$/.test(value)) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
 export const MAX_TITLE_LENGTH = 120
 export const MIN_DESCRIPTION_LENGTH = 50
 
