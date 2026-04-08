@@ -277,8 +277,9 @@ export function GrowthClient({ initialMetrics }: Props) {
     return convMap[key] ?? []
   }
 
-  const fetchPosthog = (tf: Timeframe) => {
-    fetch(`/api/growth-posthog?tf=${tf}`)
+  const fetchPosthog = (tf: Timeframe, force: boolean = false) => {
+    const url = `/api/growth-posthog?tf=${tf}${force ? "&refresh=1" : ""}`
+    fetch(url)
       .then(async (r) => {
         // Distinguish HTTP errors (config / auth / network) from successful
         // empty responses. The route returns 503 when POSTHOG_PERSONAL_API_KEY
@@ -328,7 +329,11 @@ export function GrowthClient({ initialMetrics }: Props) {
   }
 
   useEffect(() => {
-    fetchPosthog(timeframe)
+    // Allow ?refresh=1 in the page URL to bypass the posthog_cache row.
+    const force =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("refresh") === "1"
+    fetchPosthog(timeframe, force)
     // Load table data on mount for lifecycle sparklines
     startTransition(async () => {
       const data = await fetchMetricTable(timeframe)
