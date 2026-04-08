@@ -279,6 +279,7 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   const fetchPosthog = (tf: Timeframe, force: boolean = false) => {
     const url = `/api/growth-posthog?tf=${tf}${force ? "&refresh=1" : ""}`
+    if (force) setPosthogData((prev) => ({ ...prev, loaded: false }))
     fetch(url)
       .then(async (r) => {
         // Distinguish HTTP errors (config / auth / network) from successful
@@ -430,6 +431,20 @@ export function GrowthClient({ initialMetrics }: Props) {
             </button>
           ))}
           </div>
+          {/* Refresh PostHog data — bypasses the posthog_cache row for the
+              currently selected timeframe. */}
+          <button
+            onClick={() => fetchPosthog(timeframe, true)}
+            disabled={!posthogData.loaded}
+            title="Refresh PostHog data (bypasses cache)"
+            aria-label="Refresh PostHog data"
+            className="flex items-center justify-center h-[26px] w-[26px] border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] disabled:opacity-50 transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className={!posthogData.loaded ? "animate-spin" : ""}>
+              <path d="M10.5 2v3h-3" />
+              <path d="M10.5 5A4.5 4.5 0 1 0 9 9.5" />
+            </svg>
+          </button>
         </div>
       </div>
 

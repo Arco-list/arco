@@ -393,66 +393,67 @@ function renderDomainVerification(vars: EmailVariables): { subject: string; html
 // ─── Homeowner Welcome Series ────────────────────────────────────────────────
 
 function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: string } {
-  // Sample projects (in production these come from dataVariables)
+  // Featured projects (cron pre-fetches; fallback for admin preview).
   const projects = (vars.projects as any[] | undefined) ?? [
     { title: "Villa Oisterwijk", subtitle: "Modern villa · Oisterwijk", image: "https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg", slug: "villa-oisterwijk" },
     { title: "Penthouse Amsterdam", subtitle: "Penthouse · Amsterdam", image: "https://wolterinck.com/wp-content/uploads/2023/11/Wolterinck_Private_Project_Appartment_Amsterdam-08.jpg", slug: "penthouse-amsterdam" },
     { title: "Bos Villa", subtitle: "Villa · Hilversum", image: "https://www.engelarchitecten.nl/wp-content/uploads/2023/03/01_Engel_BosVilla.jpg", slug: "bos-villa" },
+    { title: "Family Home Utrecht", subtitle: "Renovation · Utrecht", image: "https://www.engelarchitecten.nl/wp-content/uploads/2023/03/01_Engel_BosVilla.jpg", slug: "family-home-utrecht" },
   ]
-  const center = projects[0]
-  const left = projects[1]
-  const right = projects[2]
 
-  // All three images use the same height (281px) — narrow side images crop horizontally via object-fit
-  const imgHeight = 281
+  // 2×2 grid card. Image keeps a fixed aspect ratio via height, full-width
+  // inside its cell. Title + subtitle stack underneath.
+  const projectCard = (p: any) => p ? `
+    <a href="https://www.arcolist.com/projects/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+      <img src="${p.image}" alt="${p.title ?? ''}" width="220" height="160" style="display:block;width:100%;height:160px;object-fit:cover;border-radius:3px;" />
+      <p style="margin:10px 0 2px;font-size:14px;font-weight:500;color:#1c1c1a;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.title ?? ''}</p>
+      ${p.subtitle ? `<p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1.4;">${p.subtitle}</p>` : ''}
+    </a>` : ''
+
   const projectsBlock = `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 0;">
       <tr>
-        <td style="width:14%;padding-right:8px;font-size:0;line-height:0;vertical-align:top;">
-          ${left ? `<a href="https://www.arcolist.com/projects/${left.slug}" target="_blank"><img src="${left.image}" alt="" width="73" height="${imgHeight}" style="display:block;width:100%;height:${imgHeight}px;object-fit:cover;border-radius:3px;" /></a>` : ''}
-        </td>
-        <td style="width:72%;font-size:0;line-height:0;vertical-align:top;">
-          ${center ? `<a href="https://www.arcolist.com/projects/${center.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-            <img src="${center.image}" alt="${center.title}" width="375" height="${imgHeight}" style="display:block;width:100%;height:${imgHeight}px;object-fit:cover;border-radius:3px;" />
-          </a>` : ''}
-        </td>
-        <td style="width:14%;padding-left:8px;font-size:0;line-height:0;vertical-align:top;">
-          ${right ? `<a href="https://www.arcolist.com/projects/${right.slug}" target="_blank"><img src="${right.image}" alt="" width="73" height="${imgHeight}" style="display:block;width:100%;height:${imgHeight}px;object-fit:cover;border-radius:3px;" /></a>` : ''}
-        </td>
+        <td style="width:50%;padding:0 6px 12px 0;vertical-align:top;">${projectCard(projects[0])}</td>
+        <td style="width:50%;padding:0 0 12px 6px;vertical-align:top;">${projectCard(projects[1])}</td>
+      </tr>
+      <tr>
+        <td style="width:50%;padding:12px 6px 0 0;vertical-align:top;">${projectCard(projects[2])}</td>
+        <td style="width:50%;padding:12px 0 0 6px;vertical-align:top;">${projectCard(projects[3])}</td>
       </tr>
     </table>
-    ${center ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0 0;"><tr><td style="padding:0 0 0 14.5%;">
-      <p style="margin:0 0 2px;font-size:15px;font-weight:400;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${center.title}</p>
-      <p style="margin:0;font-size:13px;font-weight:300;color:#a1a1a0;">${center.subtitle}</p>
-    </td></tr></table>` : ''}
   `
 
-  // Sample professionals (in production from dataVariables)
+  // Featured professionals (cron pre-fetches; fallback for admin preview).
   const professionals = (vars.professionals as any[] | undefined) ?? [
-    { name: "Wolterinck", service: "Interior Designer", projectCount: 12, slug: "wolterinck", logo: null, initial: "W" },
-    { name: "Engel Architecten", service: "Architect", projectCount: 8, slug: "engel-architecten", logo: null, initial: "E" },
-    { name: "Marco van Veldhuizen", service: "Architect", projectCount: 4, slug: "marco-van-veldhuizen", logo: null, initial: "M" },
+    { name: "Wolterinck", service: "Interior Designer", slug: "wolterinck", logo: null },
+    { name: "Engel Architecten", service: "Architect", slug: "engel-architecten", logo: null },
+    { name: "Marco van Veldhuizen", service: "Architect", slug: "marco-van-veldhuizen", logo: null },
+    { name: "Studio Piet Boon", service: "Interior Designer", slug: "studio-piet-boon", logo: null },
   ]
 
   const professionalCard = (p: any) => {
+    if (!p) return ''
+    const initial = (p.name ?? '?').charAt(0).toUpperCase()
     const iconHtml = p.logo
-      ? `<img src="${p.logo}" alt="${p.name}" width="80" height="80" style="display:block;width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0 auto;" />`
-      : `<table cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr><td style="width:80px;height:80px;background:#f5f5f4;border-radius:50%;text-align:center;vertical-align:middle;font-size:26px;font-weight:500;color:#6b6b68;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.initial}</td></tr></table>`
+      ? `<img src="${p.logo}" alt="${p.name}" width="160" height="160" style="display:block;width:100%;height:160px;object-fit:cover;border-radius:3px;background:#f5f5f4;" />`
+      : `<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:160px;background:#f5f5f4;border-radius:3px;text-align:center;vertical-align:middle;font-size:48px;font-weight:500;color:#a1a1a0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${initial}</td></tr></table>`
     return `
-    <a href="https://www.arcolist.com/professionals/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;text-align:center;">
-      <p style="margin:0 0 12px;font-size:10px;font-weight:500;color:#a1a1a0;letter-spacing:0.08em;text-transform:uppercase;">${p.service}</p>
-      <div style="margin:0 0 14px;">${iconHtml}</div>
-      <p style="margin:0 0 4px;font-size:14px;font-weight:500;color:#1c1c1a;line-height:1.3;">${p.name}</p>
-      <p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;">${p.projectCount} project${p.projectCount === 1 ? '' : 's'}</p>
+    <a href="https://www.arcolist.com/professionals/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+      ${iconHtml}
+      <p style="margin:10px 0 2px;font-size:14px;font-weight:500;color:#1c1c1a;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.name}</p>
+      ${p.service ? `<p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1.4;">${p.service}</p>` : ''}
     </a>`
   }
 
   const professionalsBlock = `
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 0;">
       <tr>
-        <td style="width:33.33%;padding:0 8px;vertical-align:top;">${professionals[0] ? professionalCard(professionals[0]) : ''}</td>
-        <td style="width:33.33%;padding:0 8px;vertical-align:top;">${professionals[1] ? professionalCard(professionals[1]) : ''}</td>
-        <td style="width:33.33%;padding:0 8px;vertical-align:top;">${professionals[2] ? professionalCard(professionals[2]) : ''}</td>
+        <td style="width:50%;padding:0 6px 12px 0;vertical-align:top;">${professionalCard(professionals[0])}</td>
+        <td style="width:50%;padding:0 0 12px 6px;vertical-align:top;">${professionalCard(professionals[1])}</td>
+      </tr>
+      <tr>
+        <td style="width:50%;padding:12px 6px 0 0;vertical-align:top;">${professionalCard(professionals[2])}</td>
+        <td style="width:50%;padding:12px 0 0 6px;vertical-align:top;">${professionalCard(professionals[3])}</td>
       </tr>
     </table>
   `

@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-type UserAudience = "all" | "professional" | "homeowner" | "admin"
+type UserAudience = "all" | "professional" | "client" | "admin"
 
 type EmailSender = {
   name: string
@@ -45,7 +45,7 @@ const SENDERS: Record<string, EmailSender> = {
 const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
   all: { label: "All", cls: "bg-[#f5f5f4] text-[#6b6b68]" },
   professional: { label: "Professional", cls: "bg-[#e6f4f5] text-[#016D75]" },
-  homeowner: { label: "Homeowner", cls: "bg-amber-50 text-amber-700" },
+  client: { label: "Client", cls: "bg-amber-50 text-amber-700" },
   admin: { label: "Admin", cls: "bg-violet-50 text-violet-700" },
 }
 
@@ -58,10 +58,10 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
-  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "homeowner", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.arco },
-  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "homeowner", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2, from: SENDERS.niek },
-  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "homeowner", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5, from: SENDERS.niek },
-  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "homeowner", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
+  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "client", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.arco },
+  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "client", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2, from: SENDERS.niek },
+  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "client", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5, from: SENDERS.niek },
+  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "client", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
   { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
   { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "Een podium voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 0, from: SENDERS.niek },
   { id: "prospect-followup", name: "Prospect Follow-up", type: "marketing", audience: "professional", description: "Follow-up if no response to intro", trigger: "Drip queue · 3 days after intro", subject: "[Company] op Arco", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 3, from: SENDERS.niek },
@@ -241,7 +241,7 @@ export default function AdminEmailsPage() {
                     <SelectItem value="all-filter">All audiences</SelectItem>
                     <SelectItem value="all">All users</SelectItem>
                     <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="homeowner">Homeowner</SelectItem>
+                    <SelectItem value="client">Client</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>

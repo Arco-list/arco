@@ -129,19 +129,32 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   }
 
   // ── Pre-fetch data that some templates need ────────────────────────────
-  // discover-projects expects vars.projects with a featured-projects list.
-  // Same pattern welcome-homeowner uses for vars.projects + vars.professionals.
-  // Cron-side concern: keeps the renderer in lib/email-service.ts dumb.
+  // discover-projects + welcome-homeowner both expect vars.projects with a
+  // featured-projects list. welcome-homeowner additionally needs
+  // vars.professionals with featured companies. Cron-side concern: keeps the
+  // renderer in lib/email-service.ts dumb.
   let featuredProjects:
-    | Array<{ title: string; image: string; slug: string; location?: string }>
+    | Array<{ title: string; subtitle?: string; image: string; slug: string; location?: string }>
     | undefined
-  if (rows.some((r) => r.template === "discover-projects")) {
+  let featuredProfessionals:
+    | Array<{ name: string; service?: string; logo?: string | null; slug: string }>
+    | undefined
+
+  const needsFeaturedProjects = rows.some(
+    (r) => r.template === "discover-projects" || r.template === "welcome-homeowner",
+  )
+  const needsFeaturedProfessionals = rows.some((r) => r.template === "welcome-homeowner")
+
+  if (needsFeaturedProjects) {
+    // welcome-homeowner shows 4 cards (2x2); discover-projects shows 3.
+    const limit = rows.some((r) => r.template === "welcome-homeowner") ? 4 : 3
     const { data: projects } = await supabase
       .from("projects")
-      .select("id, title, slug, location, address_city")
+      .select("id, title, slug, location, address_city, project_type")
       .eq("status", "published")
+      .eq("is_featured", true)
       .order("created_at", { ascending: false })
-      .limit(3)
+      .limit(limit)
 
     const collected: NonNullable<typeof featuredProjects> = []
     for (const p of projects ?? []) {
@@ -153,18 +166,39 @@ async function handle(req: NextRequest): Promise<NextResponse> {
         .limit(1)
         .maybeSingle()
       if (photo?.url) {
+        const city =
+          (p as { address_city?: string | null; location?: string | null }).address_city ??
+          (p as { location?: string | null }).location ??
+          undefined
+        const type = (p as { project_type?: string | null }).project_type ?? undefined
+        const subtitle = [type, city].filter(Boolean).join(" · ") || undefined
         collected.push({
           title: p.title ?? "Project",
+          subtitle,
           image: photo.url,
           slug: p.slug ?? "",
-          location:
-            (p as { address_city?: string | null; location?: string | null }).address_city ??
-            (p as { location?: string | null }).location ??
-            undefined,
+          location: city,
         })
       }
     }
     featuredProjects = collected
+  }
+
+  if (needsFeaturedProfessionals) {
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, name, slug, logo_url, primary_service_name")
+      .eq("status", "listed")
+      .eq("is_featured", true)
+      .order("created_at", { ascending: false })
+      .limit(4)
+
+    featuredProfessionals = (companies ?? []).map((c) => ({
+      name: (c as { name?: string }).name ?? "Professional",
+      service: (c as { primary_service_name?: string | null }).primary_service_name ?? undefined,
+      logo: (c as { logo_url?: string | null }).logo_url ?? null,
+      slug: (c as { slug?: string | null }).slug ?? "",
+    }))
   }
 
   // ── Process in concurrent batches ──────────────────────────────────────
@@ -175,7 +209,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
     const batch = rows.slice(i, i + CONCURRENCY)
     const results = await Promise.all(
-      batch.map((row) => sendOne(row, supabase, featuredProjects)),
+      batch.map((row) => sendOne(row, supabase, featuredProjects, featuredProfessionals)),
     )
     for (const r of results) {
       if (r === "sent") sent++
@@ -190,12 +224,17 @@ async function handle(req: NextRequest): Promise<NextResponse> {
 async function sendOne(
   row: QueueRow,
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
-  featuredProjects?: Array<{ title: string; image: string; slug: string; location?: string }>,
+  featuredProjects?: Array<{ title: string; subtitle?: string; image: string; slug: string; location?: string }>,
+  featuredProfessionals?: Array<{ name: string; service?: string; logo?: string | null; slug: string }>,
 ): Promise<SendOutcome> {
   // Inject cron-side data into variables where the template expects it.
   const variables: EmailVariables = { ...((row.variables as EmailVariables | null) ?? {}) }
   if (row.template === "discover-projects" && featuredProjects) {
     variables.projects = featuredProjects
+  }
+  if (row.template === "welcome-homeowner") {
+    if (featuredProjects) variables.projects = featuredProjects
+    if (featuredProfessionals) variables.professionals = featuredProfessionals
   }
 
   let result: { success: boolean; messageId?: string; message?: string }
