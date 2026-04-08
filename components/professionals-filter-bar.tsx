@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { useTranslations } from "next-intl"
 
@@ -39,6 +40,35 @@ function ChevronDownIcon({ className }: { className?: string }) {
       <path d="M2 3.5l2.5 2.5 2.5-2.5" />
     </svg>
   )
+}
+
+// ─── FilterDropdown ─────────────────────────────────────────────────────────
+// On mobile (≤768px), portals the dropdown to document.body so it escapes the
+// scrollable filter bar's clipping context. On desktop, renders inline.
+
+function FilterDropdown({ open, children, minWidth }: { open: boolean; children: React.ReactNode; minWidth?: number }) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
+
+  const dropdown = (
+    <div
+      className="filter-dropdown"
+      data-open={open}
+      style={isMobile ? undefined : { minWidth: minWidth ?? 224 }}
+    >
+      {children}
+    </div>
+  )
+
+  if (isMobile && typeof document !== "undefined") {
+    return open ? createPortal(dropdown, document.body) : null
+  }
+  return dropdown
 }
 
 // ─── DrawerSection ──────────────────────────────────────────────────────────
@@ -115,12 +145,15 @@ export function ProfessionalsFilterBar() {
     "Most recent": t("sort_most_recent"),
   }
 
-  // Close on outside click
+  // Close on outside click. Portaled dropdowns live outside barRef, so we
+  // also treat clicks inside any .filter-dropdown as "inside".
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setActiveDropdown(null)
-      }
+    const handler = (e: Event) => {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      if (barRef.current?.contains(target)) return
+      if (target.closest?.(".filter-dropdown")) return
+      setActiveDropdown(null)
     }
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
@@ -229,8 +262,8 @@ export function ProfessionalsFilterBar() {
 
             <div className="filter-pill-divider" />
 
-            {/* Service — desktop pill */}
-            <div className="filter-pill-group" data-hide-mobile="true" style={{ position: "relative" }}>
+            {/* Service */}
+            <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
                 data-active={serviceFilterCount > 0}
@@ -244,11 +277,7 @@ export function ProfessionalsFilterBar() {
                 )}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "service"}
-                style={{ minWidth: 280 }}
-              >
+              <FilterDropdown open={activeDropdown === "service"} minWidth={280}>
                 <div style={{ maxHeight: 360, overflowY: "auto" }}>
                   {sections.map((section) => {
                     const catId = section.category.id ?? ""
@@ -327,11 +356,11 @@ export function ProfessionalsFilterBar() {
                     )
                   })}
                 </div>
-              </div>
+              </FilterDropdown>
             </div>
 
-            {/* Location — desktop pill */}
-            <div className="filter-pill-group" data-hide-mobile="true" style={{ position: "relative" }}>
+            {/* Location */}
+            <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
                 data-active={selectedCities.length > 0}
@@ -345,11 +374,7 @@ export function ProfessionalsFilterBar() {
                 )}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <div
-                className="filter-dropdown"
-                data-open={activeDropdown === "location"}
-                style={{ minWidth: 224 }}
-              >
+              <FilterDropdown open={activeDropdown === "location"} minWidth={224}>
                 <div className="filter-dropdown-search">
                   <input
                     type="text"
@@ -402,7 +427,7 @@ export function ProfessionalsFilterBar() {
                     </div>
                   )}
                 </div>
-              </div>
+              </FilterDropdown>
             </div>
 
             {/* Sort moved to results meta row */}

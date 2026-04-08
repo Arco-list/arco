@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
-import { Mail } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -176,10 +175,10 @@ export default function CompanyMessagesPage() {
               Loading...
             </div>
           ) : messages.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "80px 0" }}>
-              <Mail style={{ width: 40, height: 40, color: "var(--arco-rule)", margin: "0 auto 16px" }} />
-              <h3 className="arco-section-title" style={{ marginBottom: 8 }}>{t("no_messages")}</h3>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>
+            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
+              <p className="arco-eyebrow" style={{ marginBottom: 16 }}>{t("inbox")}</p>
+              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("no_messages")}</h2>
+              <p className="arco-body-text" style={{ maxWidth: 400, margin: "0 auto" }}>
                 {t("no_messages_company_description")}
               </p>
             </div>

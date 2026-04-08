@@ -52,7 +52,11 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
         // TODO: Replace with actual project views (last 7 days) when available
         return next
       case "Most recent":
-        return next.sort((a, b) => b.name.localeCompare(a.name))
+        return next.sort((a, b) => {
+          const aT = a.profile?.joinedAt ? new Date(a.profile.joinedAt).getTime() : 0
+          const bT = b.profile?.joinedAt ? new Date(b.profile.joinedAt).getTime() : 0
+          return bT - aT
+        })
       case "Best match":
       default:
         return next

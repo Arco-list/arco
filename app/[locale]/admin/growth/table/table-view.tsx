@@ -245,10 +245,13 @@ interface Props {
 }
 
 export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVisitors, proVisitorsSeries, clientVisitorsSeries, clientActives, clientActivesSeries, sharers, sharersSeries, clientSources, proSources, apolloVisitorsSeries, inviteVisitorsSeries, clientSourceSeries, proSourceSeries }: Props) {
+  // Align to 8 buckets where index 7 is the rolling/most-recent period.
+  // PostHog returns chronologically ordered data, so we keep the LAST 8 values
+  // (or pad zeros to the LEFT for sparse series) — never drop the rolling bucket.
   const pad8 = (arr: number[] | undefined): number[] => {
     if (!arr || arr.length === 0) return [0, 0, 0, 0, 0, 0, 0, 0]
-    if (arr.length >= 8) return arr.slice(0, 8)
-    return [...arr, ...Array(8 - arr.length).fill(0)]
+    if (arr.length >= 8) return arr.slice(-8)
+    return [...Array(8 - arr.length).fill(0), ...arr]
   }
 
   // Map source label → sub key for matching
