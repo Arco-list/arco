@@ -770,6 +770,31 @@ export async function deleteUserAction(input: { userId: string }): Promise<Actio
     }
   }
 
+  // PR 4 of the drip pipeline: cancel any pending drip rows for this
+  // user BEFORE we delete them. We cancel by user_id (catches welcome-
+  // series rows linked to the auth user) AND by email (catches prospect
+  // series rows that target the address but have no user_id). Looking
+  // up the email from auth.users while it still exists is the easiest
+  // way to get it; after the deleteUser call below the row is gone.
+  // Non-fatal — a cancellation failure shouldn't block the user delete.
+  try {
+    const { data: authUserData } = await serviceClient.auth.admin.getUserById(parsed.data.userId)
+    const userEmail = authUserData?.user?.email ?? null
+    const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+    await cancelPendingDripRows(serviceClient, {
+      userId: parsed.data.userId,
+      email: userEmail,
+      reason: "user_deleted",
+    })
+  } catch (err) {
+    logger.auth(
+      "admin-delete-user",
+      "Failed to cancel drip rows before user deletion",
+      { userId: parsed.data.userId },
+      err as Error,
+    )
+  }
+
   // Delete profile first (profile has FK to auth.users)
   const { error: profileDeleteError } = await serviceClient
     .from("profiles")

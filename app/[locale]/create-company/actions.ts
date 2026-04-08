@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { createServerActionSupabaseClient } from "@/lib/supabase/server";
+import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { logger, sanitizeForLogging } from "@/lib/logger";
 import { claimPendingInvitesAction } from "@/app/new-project/actions";
 import { claimPendingTeamInvitesAction } from "@/app/dashboard/team/actions";
@@ -441,6 +441,18 @@ export async function claimCompanyAction(input: {
     await matchProspectOnCompanyCreated(user.id, companyId)
   } catch (err) {
     logger.warn("create-company", "Failed to advance prospect status after claim", { userId: user.id, companyId, error: err instanceof Error ? err.message : String(err) })
+  }
+
+  // PR 4 of the drip pipeline: cancel any pending prospect drip rows for
+  // this company. The user just claimed the company, so they no longer
+  // need a "claim your company" reminder series. Non-fatal — the claim
+  // itself already succeeded.
+  try {
+    const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+    const serviceClient = createServiceRoleSupabaseClient()
+    await cancelPendingDripRows(serviceClient, { companyId, reason: "claimed" })
+  } catch (err) {
+    logger.warn("create-company", "Failed to cancel drip rows after claim", { userId: user.id, companyId, error: err instanceof Error ? err.message : String(err) })
   }
 
   revalidatePath("/dashboard")

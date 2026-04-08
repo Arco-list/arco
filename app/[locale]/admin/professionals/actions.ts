@@ -204,6 +204,34 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     logger.error("admin-professionals", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
   }
 
+  // PR 4 of the drip pipeline: cancel any pending prospect drip rows when
+  // the company moves to a non-public state. Valid company_status values
+  // (verified in production): draft | unlisted | listed | deactivated |
+  // prospected | added.
+  //
+  //   - prospected, listed, unlisted: public-ish, drip should keep running
+  //   - draft: post-claim state, claim flow already cancelled the drip
+  //   - deactivated: explicitly hidden, cancel
+  //   - added: pre-prospected (not visible), cancel
+  const cancelOnStatuses = ["deactivated", "added"]
+  if (cancelOnStatuses.includes(parsedStatus.data)) {
+    try {
+      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+      const svc = createServiceRoleSupabaseClient()
+      await cancelPendingDripRows(svc, {
+        companyId: parsedCompanyId.data,
+        reason: "status_change",
+      })
+    } catch (err) {
+      logger.error(
+        "admin-professionals",
+        "Failed to cancel drip rows on status change",
+        { companyId: parsedCompanyId.data, status: parsedStatus.data },
+        err as Error,
+      )
+    }
+  }
+
   // Sync owned project visibility based on company status
   const projectVisibleStatuses = ["listed", "unlisted", "prospected"]
   const projectHiddenStatuses = ["added", "draft", "deactivated"]
@@ -1096,6 +1124,47 @@ export async function sendProspectEmailAction(input: {
 
   revalidatePath("/", "layout")
   return { success: true }
+}
+
+/**
+ * PR 4 of the drip pipeline: admin button to manually cancel a pending
+ * prospect sequence. Used by the "Cancel pending sequence" button in the
+ * admin Companies row dropdown (PR 5 will add the UI). Returns the number
+ * of rows actually cancelled so the UI can show "Cancelled 2 pending
+ * emails" feedback.
+ */
+export async function cancelProspectSequenceAction(input: {
+  companyId: string
+}): Promise<{ success: boolean; cancelled?: number; error?: string }> {
+  const { user, error } = await assertAdmin()
+  if (error) return { success: false, error: error.message }
+
+  const idResult = uuidSchema.safeParse(input.companyId)
+  if (!idResult.success) return { success: false, error: "Invalid company ID" }
+
+  try {
+    const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+    const serviceClient = createServiceRoleSupabaseClient()
+    const cancelled = await cancelPendingDripRows(serviceClient, {
+      companyId: idResult.data,
+      reason: "manual",
+    })
+    logger.info("admin-professionals", "Manually cancelled prospect sequence", {
+      companyId: idResult.data,
+      adminId: user!.id,
+      cancelled,
+    })
+    revalidatePath("/admin/professionals")
+    return { success: true, cancelled }
+  } catch (err) {
+    logger.error(
+      "admin-professionals",
+      "Failed to cancel prospect sequence",
+      { companyId: idResult.data },
+      err as Error,
+    )
+    return { success: false, error: "Failed to cancel sequence" }
+  }
 }
 
 export async function updateCompanyEmailAction(input: {

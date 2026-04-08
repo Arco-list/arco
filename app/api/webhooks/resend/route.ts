@@ -81,6 +81,36 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // PR 4 of the drip pipeline: bounce / complaint cancels the rest of
+  // the prospect sequence for that company.
+  //
+  // We only want to cancel for *prospect* outreach — a bounced welcome
+  // email shouldn't cancel a future prospect intro to the same address
+  // (different sender, different sequence). To check, look up the
+  // company_outreach row by resend_message_id and confirm the template
+  // is one of prospect_*.
+  if ((type === "email.bounced" || type === "email.complained") && messageId) {
+    const { data: outreachRow } = await supabase
+      .from("company_outreach" as any)
+      .select("company_id, template")
+      .eq("resend_message_id", messageId)
+      .maybeSingle()
+
+    const template = (outreachRow as { template?: string } | null)?.template
+    const companyId = (outreachRow as { company_id?: string } | null)?.company_id
+    if (companyId && template?.startsWith("prospect")) {
+      try {
+        const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+        await cancelPendingDripRows(supabase, {
+          companyId,
+          reason: type === "email.bounced" ? "bounced" : "complained",
+        })
+      } catch (err) {
+        console.error("[resend-webhook] Failed to cancel drip rows on bounce/complaint", err)
+      }
+    }
+  }
+
   // Update prospects table based on recipient email
   if (recipientEmail) {
     const { data: prospect } = await supabase
