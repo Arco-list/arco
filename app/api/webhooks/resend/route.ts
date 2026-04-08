@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
   if (recipientEmail) {
     const { data: prospect } = await supabase
       .from("prospects")
-      .select("id, emails_sent, emails_opened, emails_clicked")
+      .select("id, emails_sent, emails_delivered, emails_opened, emails_clicked")
       .eq("email", recipientEmail)
       .maybeSingle()
 
@@ -123,6 +123,9 @@ export async function POST(request: NextRequest) {
       const updates: Record<string, unknown> = {}
 
       switch (type) {
+        case "email.delivered":
+          updates.emails_delivered = (prospect.emails_delivered ?? 0) + 1
+          break
         case "email.opened":
           updates.emails_opened = (prospect.emails_opened ?? 0) + 1
           updates.last_email_opened_at = now

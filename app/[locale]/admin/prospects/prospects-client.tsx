@@ -688,7 +688,16 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_sent || "—"}</td>
                   <td className="px-4 py-3 text-xs text-center font-medium">
                     {p.emails_sent > 0 ? (() => {
-                      const pct = Math.round((p.emails_delivered / p.emails_sent) * 100)
+                      // An open or click implies delivery — clamp so we never
+                      // show a delivered rate lower than opened/clicked, which
+                      // happens when the Resend webhook updates opens but the
+                      // delivered counter hasn't been backfilled yet.
+                      const effectiveDelivered = Math.max(
+                        p.emails_delivered ?? 0,
+                        p.emails_opened ?? 0,
+                        p.emails_clicked ?? 0,
+                      )
+                      const pct = Math.round((effectiveDelivered / p.emails_sent) * 100)
                       const color = pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"
                       return <span className={color}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}

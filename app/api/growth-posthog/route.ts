@@ -245,7 +245,9 @@ async function fetchEventCount(
         series: [{
           kind: "EventsNode",
           event,
-          math,
+          // Same in-flight-bucket undercount as fetchTimeSeries: swap dau for
+          // monthly_active when bucketed monthly.
+          math: math === "dau" ? "monthly_active" : math,
           ...(properties.length > 0 ? { properties } : {}),
         }],
         dateRange: { date_from: dateFrom },
@@ -301,6 +303,18 @@ async function fetchClientActives(apiKey: string, dateFrom: string): Promise<num
   return values.reduce((sum: number, v: number) => sum + v, 0)
 }
 
+// PostHog's `dau` math at non-day intervals undercounts the *current* (partial)
+// bucket — for the in-flight month it can return values like `2` instead of the
+// real ~136 unique users. Use the interval-matching active-users math instead;
+// for completed buckets the result matches `dau` exactly.
+function uniqueUsersMathFor(interval: string): string {
+  switch (interval) {
+    case "week": return "weekly_active"
+    case "month": return "monthly_active"
+    default: return "dau"
+  }
+}
+
 async function fetchTimeSeries(
   apiKey: string,
   dateFrom: string,
@@ -321,7 +335,7 @@ async function fetchTimeSeries(
         series: [{
           kind: "EventsNode",
           event,
-          math: "dau",
+          math: uniqueUsersMathFor(interval),
           ...(properties.length > 0 ? { properties } : {}),
         }],
         dateRange: { date_from: dateFrom },
