@@ -1,5 +1,7 @@
 "use client"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useLocale } from "next-intl"
+import { getProjectTranslation } from "@/lib/project-translations"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables } from "@/lib/supabase/types"
@@ -100,6 +102,8 @@ export function useProjectsQuery({
     taxonomy,
     keyword,
   } = useFilters()
+
+  const locale = useLocale()
 
   const [projects, setProjects] = useState<ProjectSummaryRow[]>(initialProjects)
   const [total, setTotal] = useState(initialProjects.length)
@@ -406,12 +410,28 @@ export function useProjectsQuery({
         }
       }
 
+      // Resolve locale-aware title/description from projects.translations.
+      // Falls back to the base column when no translation exists.
+      const localized = (data ?? []).map((row) => ({
+        ...row,
+        title: getProjectTranslation(
+          { title: row.title, translations: (row as { translations?: Record<string, any> | null }).translations ?? null },
+          "title",
+          locale,
+        ) || row.title,
+        description: getProjectTranslation(
+          { description: row.description, translations: (row as { translations?: Record<string, any> | null }).translations ?? null },
+          "description",
+          locale,
+        ) || row.description,
+      }))
+
       return {
-        data: data ?? [],
+        data: localized,
         total: count ?? 0,
       }
     },
-    [effectivePageSize, filters, selectedSpace],
+    [effectivePageSize, filters, selectedSpace, locale],
   )
 
   const fetchTypePhotoOverrides = useCallback(

@@ -13,8 +13,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { useLocale } from "next-intl";
 import { useAuth } from "@/contexts/auth-context";
 import { useRequireAuth } from "@/hooks/use-require-auth";
+import { getProjectTranslation } from "@/lib/project-translations";
 import type { Tables } from "@/lib/supabase/types";
 
 type ProjectSummaryRow = Tables<"mv_project_summary">;
@@ -48,6 +50,7 @@ const SavedProjectsContext = createContext<SavedProjectsContextValue | undefined
 
 export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => {
   const { supabase, user } = useAuth();
+  const locale = useLocale();
   const { ensureAuth } = useRequireAuth();
   const [savedProjects, setSavedProjects] = useState<SavedProjectEntry[]>([]);
   const [mutatingProjectIds, setMutatingProjectIds] = useState<Set<string>>(new Set());
@@ -93,11 +96,15 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
       }
 
       const projects = (savedProjectsData ?? []).map((row) => {
-        // Map RPC result to ProjectSummaryRow format
+        // Map RPC result to ProjectSummaryRow format.
+        // Title is resolved locale-aware from projects.translations.
+        const translations = (row as { translations?: Record<string, any> | null }).translations ?? null
+        const localizedTitle =
+          getProjectTranslation({ title: row.title, translations }, "title", locale) || row.title
         const summary = {
           id: row.id,
           slug: row.slug,
-          title: row.title,
+          title: localizedTitle,
           primary_photo_url: row.primary_photo_url,
           primary_photo_alt: row.primary_photo_alt,
           location: row.location,
@@ -152,7 +159,7 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
         setIsLoading(false);
       }
     }
-  }, [supabase, user]);
+  }, [supabase, user, locale]);
 
   useEffect(() => {
     isMountedRef.current = true;

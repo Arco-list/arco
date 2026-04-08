@@ -59,11 +59,16 @@ export async function generateMetadata({
 
 export const revalidate = 300
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}) {
+  const { locale } = await params
   let projects: Awaited<ReturnType<typeof fetchDiscoverProjects>> = []
 
   try {
-    projects = await fetchDiscoverProjects()
+    projects = await fetchDiscoverProjects(locale)
   } catch (error) {
     logger.error(
       "Failed to render projects discover page",

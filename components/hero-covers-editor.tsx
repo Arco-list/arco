@@ -10,6 +10,7 @@ import {
   saveHeroCoverAction,
   removeHeroCoverAction,
   type HeroCover,
+  type HeroCoverScope,
 } from "@/app/admin/hero/actions"
 
 type SearchProject = {
@@ -30,9 +31,11 @@ type EditorStep = "slots" | "search" | "photos"
 export function HeroCoversEditor({
   isOpen,
   onClose,
+  scope = "home",
 }: {
   isOpen: boolean
   onClose: () => void
+  scope?: HeroCoverScope
 }) {
   const [covers, setCovers] = useState<HeroCover[]>([])
   const [step, setStep] = useState<EditorStep>("slots")
@@ -50,10 +53,10 @@ export function HeroCoversEditor({
   useEffect(() => {
     if (!isOpen) return
     startTransition(async () => {
-      const result = await getHeroCoversAction()
+      const result = await getHeroCoversAction(scope)
       if (result.success) setCovers(result.covers)
     })
-  }, [isOpen])
+  }, [isOpen, scope])
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query)
@@ -86,11 +89,12 @@ export function HeroCoversEditor({
         slot: activeSlot,
         projectId: selectedProject.id,
         photoUrl,
+        scope,
       })
       if (result.success) {
         toast.success(`Slot ${activeSlot} updated`)
         // Refresh covers
-        const refreshed = await getHeroCoversAction()
+        const refreshed = await getHeroCoversAction(scope)
         if (refreshed.success) setCovers(refreshed.covers)
         setStep("slots")
         setSearchQuery("")
@@ -105,7 +109,7 @@ export function HeroCoversEditor({
 
   const handleRemoveSlot = useCallback((slot: number) => {
     startTransition(async () => {
-      const result = await removeHeroCoverAction(slot)
+      const result = await removeHeroCoverAction(slot, scope)
       if (result.success) {
         toast.success(`Slot ${slot} cleared`)
         setCovers((prev) => prev.filter((c) => c.slot !== slot))
@@ -113,7 +117,7 @@ export function HeroCoversEditor({
         toast.error(result.error ?? "Failed to remove")
       }
     })
-  }, [])
+  }, [scope])
 
   const handleSlotClick = async (slot: number) => {
     setActiveSlot(slot)
@@ -216,7 +220,9 @@ export function HeroCoversEditor({
           {step === "slots" && (
             <div>
               <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
-                Select up to 5 projects for the homepage hero carousel.
+                {scope === "about"
+                  ? "Select up to 5 projects for the /about page hero. One is shown at random on each page load."
+                  : "Select up to 5 projects for the homepage hero carousel."}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[1, 2, 3, 4, 5].map((slot) => {

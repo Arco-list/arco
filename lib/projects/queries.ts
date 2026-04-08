@@ -2,6 +2,7 @@ import "server-only"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import { getProjectTranslation } from "@/lib/project-translations"
 import type { Tables } from "@/lib/supabase/types"
 
 const INITIAL_PAGE_SIZE = 12
@@ -82,7 +83,7 @@ interface ProjectProfessional {
 
 // ─── Query ────────────────────────────────────────────────────────────────────
 
-export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
+export const fetchDiscoverProjects = async (locale: string = "en"): Promise<DiscoverProject[]> => {
   const supabase = await createServerSupabaseClient()
 
   // ── 1. Base project rows ──────────────────────────────────────────────────
@@ -234,8 +235,24 @@ export const fetchDiscoverProjects = async (): Promise<DiscoverProject[]> => {
 
     const professional = professionalByProject.get(id) ?? null
 
+    // Resolve locale-aware title + description at the query boundary so all
+    // downstream cards stay locale-agnostic. Falls back to the base column
+    // when no translation is present for the requested locale.
+    const localizedTitle = getProjectTranslation(
+      { title: project.title, translations: project.translations as Record<string, any> | null },
+      "title",
+      locale,
+    )
+    const localizedDescription = getProjectTranslation(
+      { description: project.description, translations: project.translations as Record<string, any> | null },
+      "description",
+      locale,
+    )
+
     return {
       ...project,
+      title: localizedTitle || project.title,
+      description: localizedDescription || project.description,
       photos,
       spaces,
       professional_name: professional?.name ?? null,

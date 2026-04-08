@@ -4,6 +4,7 @@ import type { PostgrestError } from "@supabase/supabase-js"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import { getProjectTranslation } from "@/lib/project-translations"
 import type {
   ProfessionalCard,
   ProfessionalDetail,
@@ -703,7 +704,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
     const projectSummariesResult = await supabase
       .from("mv_project_summary")
-      .select("id, title, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, primary_category")
+      .select("id, title, translations, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, primary_category")
       .in("id", uniqueProjectIds)
 
     if (projectSummariesResult.error) {
@@ -795,9 +796,16 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         const customCoverUrl = customCoverPhotoId ? coverPhotoUrlMap.get(customCoverPhotoId) : null
         const image = customCoverUrl ?? row.primary_photo_url ?? null
 
+        const localizedTitle =
+          getProjectTranslation(
+            { title: row.title, translations: (row as any).translations ?? null },
+            "title",
+            options?.locale ?? "en",
+          ) || row.title
+
         return {
           id: row.id,
-          title: row.title ?? "Project",
+          title: localizedTitle ?? "Project",
           slug: row.slug ?? null,
           location: row.location ?? null,
           image,

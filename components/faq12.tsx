@@ -106,6 +106,7 @@ const Faq12 = () => {
         { question: t("architects_q2"), answer: t("architects_a2") },
         { question: t("architects_q3"), answer: t("architects_a3") },
         { question: t("architects_q4"), answer: t("architects_a4") },
+        { question: t("architects_q5"), answer: t("architects_a5") },
       ],
     },
     {
@@ -116,6 +117,8 @@ const Faq12 = () => {
         { question: t("professionals_q2"), answer: t("professionals_a2") },
         { question: t("professionals_q3"), answer: t("professionals_a3") },
         { question: t("professionals_q4"), answer: t("professionals_a4") },
+        { question: t("professionals_q5"), answer: t("professionals_a5") },
+        { question: t("professionals_q6"), answer: t("professionals_a6") },
       ],
     },
     {

@@ -415,6 +415,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             id,
             slug,
             title,
+            translations,
             address_city,
             project_year,
             project_type_category_id
@@ -439,13 +440,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     id: string
     slug: string | null
     title: string
+    translations: Record<string, any> | null
     address_city: string | null
     project_type_category_id: string | null
   }> = []
   if (similarBuildingType || similarCountry) {
     let q = supabase
       .from("projects")
-      .select("id, slug, title, address_city, project_type_category_id")
+      .select("id, slug, title, translations, address_city, project_type_category_id")
       .eq("status", "published")
       .not("slug", "is", null)
       .not("id", "in", `(${excludeProjectIds.join(",")})`)
@@ -538,7 +540,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const formattedRelatedProjects = relatedProjects?.map((r) => ({
     id: r.projects.id,
     slug: r.projects.slug,
-    title: r.projects.title,
+    title:
+      getProjectTranslation(
+        { title: r.projects.title, translations: (r.projects as any).translations },
+        "title",
+        locale,
+      ) || r.projects.title,
     location: r.projects.address_city,
     projectType: resolveName(r.projects.project_type_category_id) ?? null,
     imageUrl: relatedPhotoMap.get(r.project_id) ?? null,
@@ -547,7 +554,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const formattedSimilarProjects = similarProjects.map((p) => ({
     id: p.id,
     slug: p.slug,
-    title: p.title,
+    title:
+      getProjectTranslation(
+        { title: p.title, translations: p.translations },
+        "title",
+        locale,
+      ) || p.title,
     location: p.address_city,
     projectType: resolveName(p.project_type_category_id) ?? null,
     imageUrl: relatedPhotoMap.get(p.id) ?? null,

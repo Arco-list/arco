@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser, isSuperAdminUser } from "@/lib/auth-utils"
 
+export type HeroCoverScope = "home" | "about"
+
 export type HeroCover = {
   slot: number
   project_id: string
@@ -12,12 +14,23 @@ export type HeroCover = {
   project_slug?: string
 }
 
-export async function getHeroCoversAction(): Promise<{ success: boolean; covers: HeroCover[]; error?: string }> {
+const SCOPE_REVALIDATE_PATH: Record<HeroCoverScope, string> = {
+  home: "/",
+  about: "/about",
+}
+
+function assertScope(value: unknown): HeroCoverScope {
+  return value === "about" ? "about" : "home"
+}
+
+export async function getHeroCoversAction(scope: HeroCoverScope = "home"): Promise<{ success: boolean; covers: HeroCover[]; error?: string }> {
+  const s = assertScope(scope)
   const supabase = createServiceRoleSupabaseClient()
 
   const { data, error } = await supabase
     .from("hero_covers")
     .select("slot, project_id, photo_url")
+    .eq("scope", s)
     .order("slot", { ascending: true })
 
   if (error) return { success: false, covers: [], error: error.message }
@@ -116,7 +129,9 @@ export async function saveHeroCoverAction(input: {
   slot: number
   projectId: string
   photoUrl: string
+  scope?: HeroCoverScope
 }): Promise<{ success: boolean; error?: string }> {
+  const scope = assertScope(input.scope)
   const supabase = await createServerActionSupabaseClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -137,19 +152,21 @@ export async function saveHeroCoverAction(input: {
   const { error } = await serviceSupabase
     .from("hero_covers")
     .upsert({
+      scope,
       slot: input.slot,
       project_id: input.projectId,
       photo_url: input.photoUrl,
       updated_at: new Date().toISOString(),
-    }, { onConflict: "slot" })
+    }, { onConflict: "scope,slot" })
 
   if (error) return { success: false, error: error.message }
 
-  revalidatePath("/")
+  revalidatePath(SCOPE_REVALIDATE_PATH[scope])
   return { success: true }
 }
 
-export async function removeHeroCoverAction(slot: number): Promise<{ success: boolean; error?: string }> {
+export async function removeHeroCoverAction(slot: number, scope: HeroCoverScope = "home"): Promise<{ success: boolean; error?: string }> {
+  const s = assertScope(scope)
   const supabase = await createServerActionSupabaseClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -170,10 +187,11 @@ export async function removeHeroCoverAction(slot: number): Promise<{ success: bo
   const { error } = await serviceSupabase
     .from("hero_covers")
     .delete()
+    .eq("scope", s)
     .eq("slot", slot)
 
   if (error) return { success: false, error: error.message }
 
-  revalidatePath("/")
+  revalidatePath(SCOPE_REVALIDATE_PATH[s])
   return { success: true }
 }

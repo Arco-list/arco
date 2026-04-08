@@ -6,7 +6,7 @@ import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 import { signOutAction } from "@/app/(auth)/actions";
 import { useAuth } from "@/contexts/auth-context";
@@ -43,6 +43,7 @@ function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClos
   const [results, setResults] = useState<SearchResult>({ projects: [], professionals: [] });
   const [isLoading, setIsLoading] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const locale = useLocale();
 
   const trimmedQuery = searchQuery.trim();
   const hasResults = results.projects.length > 0 || results.professionals.length > 0;
@@ -54,12 +55,12 @@ function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClos
     setIsLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&locale=${encodeURIComponent(locale)}`);
         if (res.ok) setResults(await res.json());
       } catch {}
       setIsLoading(false);
     }, 250);
-  }, []);
+  }, [locale]);
 
   useEffect(() => { fetchResults(trimmedQuery); }, [trimmedQuery, fetchResults]);
 

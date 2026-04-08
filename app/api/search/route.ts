@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getProjectTranslation } from "@/lib/project-translations"
 
 const MAX_RESULTS = 3
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim()
+  const locale = request.nextUrl.searchParams.get("locale")?.trim() || "en"
   if (!q || q.length < 2) {
     return NextResponse.json({ projects: [], professionals: [] })
   }
@@ -16,7 +18,7 @@ export async function GET(request: NextRequest) {
   const [projectsResult, professionalsResult] = await Promise.all([
     supabase
       .from("mv_project_summary")
-      .select("id, title, slug, location, primary_photo_url, primary_category, description, building_type, project_type")
+      .select("id, title, translations, slug, location, primary_photo_url, primary_category, description, building_type, project_type")
       .eq("status", "published")
       .or(`title.ilike.${pattern},location.ilike.${pattern},description.ilike.${pattern},primary_category.ilike.${pattern},building_type.ilike.${pattern},project_type.ilike.${pattern}`)
       .limit(MAX_RESULTS),
@@ -41,7 +43,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     projects: (projectsResult.data ?? []).map((p: any) => ({
       id: p.id,
-      title: p.title,
+      title:
+        getProjectTranslation(
+          { title: p.title, translations: p.translations },
+          "title",
+          locale,
+        ) || p.title,
       slug: p.slug,
       location: p.location,
       photo: p.primary_photo_url,

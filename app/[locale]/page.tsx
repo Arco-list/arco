@@ -15,6 +15,7 @@ import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { getTranslations } from "next-intl/server"
 import { getLocalizedName } from "@/lib/locale-name"
+import { getProjectTranslation } from "@/lib/project-translations"
 import { TrackPageView } from "@/components/track-view"
 
 export const revalidate = 300
@@ -75,7 +76,8 @@ async function loadLandingData(locale: string) {
   ] = await Promise.all([
     supabase
       .from("hero_covers")
-      .select("slot, project_id, photo_url, projects(id, title, slug, location, project_type)")
+      .select("slot, project_id, photo_url, projects(id, title, slug, location, project_type, translations)")
+      .eq("scope", "home")
       .order("slot", { ascending: true }),
     supabase.rpc("search_projects", { limit_count: 12, featured_only: true }),
     supabase
@@ -131,13 +133,20 @@ async function loadLandingData(locale: string) {
   if (homeProfessionalServicesResult.error) logger.error("Failed to load home professional services", { scope: "landing" }, homeProfessionalServicesResult.error)
   if (featuredCompaniesResult.error) logger.error("Failed to load featured companies", { scope: "landing" }, featuredCompaniesResult.error)
 
-  // Build hero projects from hero_covers table
+  // Build hero projects from hero_covers table.
+  // Title is resolved locale-aware from projects.translations with fallback
+  // to the base title column.
   const heroCovers = (heroCoversResult.data ?? []) as any[]
   const heroProjects = heroCovers
     .filter((cover) => cover.projects?.slug)
     .map((cover) => ({
       id: cover.projects.id,
-      title: cover.projects.title ?? "Untitled",
+      title:
+        getProjectTranslation(
+          { title: cover.projects.title, translations: cover.projects.translations },
+          "title",
+          locale,
+        ) || cover.projects.title || "Untitled",
       slug: cover.projects.slug,
       location: cover.projects.location,
       project_type: cover.projects.project_type,
@@ -386,9 +395,16 @@ async function loadLandingData(locale: string) {
     const location = project.location || null
     const subtitle = [typeLabel, location].filter(Boolean).join(" · ")
 
+    const localizedTitle =
+      getProjectTranslation(
+        { title: project.title, translations: projectAny.translations },
+        "title",
+        locale,
+      ) || project.title
+
     return {
       id: project.id,
-      title: project.title || "Untitled",
+      title: localizedTitle || "Untitled",
       href: project.slug ? `/projects/${project.slug}` : "/projects",
       imageUrl: project.primary_photo_url,
       subtitle: subtitle || undefined,

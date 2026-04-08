@@ -6,10 +6,12 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import type { ProjectCard } from "@/components/landing/project-carousel"
 
 interface PageProps {
+  params: Promise<{ locale: string }>
   searchParams: Promise<{ inviteEmail?: string; companyId?: string; url?: string }>
 }
 
-export default async function ArchitectsPage({ searchParams }: PageProps) {
+export default async function ArchitectsPage({ params: paramsPromise, searchParams }: PageProps) {
+  const { locale } = await paramsPromise
   const params = await searchParams
   const inviteEmail = params.inviteEmail ?? null
   const companyIdParam = params.companyId ?? null
@@ -82,7 +84,7 @@ export default async function ArchitectsPage({ searchParams }: PageProps) {
     } catch {}
   }
 
-  const rawProjects = await fetchDiscoverProjects()
+  const rawProjects = await fetchDiscoverProjects(locale)
 
   // Deduplicate by firm (max 1 project per owner), then take 6
   const seen = new Set<string>()

@@ -902,11 +902,13 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           continue
         }
 
+        // Low-resolution photos upload fine — we just log a dev warning.
+        // Previously this pushed a "recommended" note into `errors`, which
+        // made the UI mark the row as Failed even though the insert succeeded.
         if (dimensions.width < MIN_IMAGE_WIDTH) {
-          errors.push(
-            `${file.name}: Image width is ${dimensions.width}px (recommended: ${MIN_IMAGE_WIDTH}px+). This may appear pixelated.`,
+          console.warn(
+            `[photo-upload] ${file.name} is ${dimensions.width}px wide (recommended: ${MIN_IMAGE_WIDTH}px+). Uploading anyway.`,
           )
-          // Don't continue - allow upload with warning
         }
 
         const fileExtension = MIME_TO_EXTENSION[file.type] ?? file.name.split(".").pop()?.toLowerCase()
