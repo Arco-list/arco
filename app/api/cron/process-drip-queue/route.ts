@@ -87,7 +87,13 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   // ── Auth ────────────────────────────────────────────────────────────────
   const expected = process.env.CRON_SECRET
   if (!expected) {
-    logger.error("cron-drip-queue", "CRON_SECRET not set on the server")
+    // NOTE: lib/logger.ts has signature (message, context?) — NOT
+    // (component, message, context) like a lot of other call sites in
+    // this repo. The "component" convention is sitewide tech debt; we
+    // use the actual signature here so the structured data lands in
+    // Vercel logs correctly. To filter for drip-queue logs in Vercel,
+    // search for "cron-drip-queue" — it's in the message string.
+    logger.error("cron-drip-queue: CRON_SECRET not set on the server")
     return NextResponse.json(
       { error: "CRON_SECRET not configured" },
       { status: 500 },
@@ -113,7 +119,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     .limit(BATCH_LIMIT)
 
   if (fetchError) {
-    logger.error("cron-drip-queue", "Failed to fetch queue", { supabaseError: fetchError })
+    logger.error("cron-drip-queue: Failed to fetch queue", { supabaseError: fetchError })
     return NextResponse.json({ error: fetchError.message }, { status: 500 })
   }
 
@@ -216,9 +222,9 @@ async function sendOne(
       })
       .eq("id", row.id)
     if (error) {
-      logger.error("cron-drip-queue", "Failed to mark row sent", { rowId: row.id, supabaseError: error })
+      logger.error("cron-drip-queue: Failed to mark row sent", { rowId: row.id, supabaseError: error })
     }
-    logger.info("cron-drip-queue", "Sent", { template: row.template, email: row.email, messageId: result.messageId })
+    logger.info("cron-drip-queue: Sent", { template: row.template, email: row.email, messageId: result.messageId })
     return "sent"
   }
 
@@ -235,9 +241,9 @@ async function sendOne(
       })
       .eq("id", row.id)
     if (error) {
-      logger.error("cron-drip-queue", "Failed to mark row cancelled", { rowId: row.id, supabaseError: error })
+      logger.error("cron-drip-queue: Failed to mark row cancelled", { rowId: row.id, supabaseError: error })
     }
-    logger.warn("cron-drip-queue", "Cancelled (unknown template)", { template: row.template, email: row.email, error: errorMessage })
+    logger.warn("cron-drip-queue: Cancelled (unknown template)", { template: row.template, email: row.email, error: errorMessage })
     return "cancelled"
   }
 
@@ -257,14 +263,17 @@ async function sendOne(
     .update(update)
     .eq("id", row.id)
   if (error) {
-    logger.error("cron-drip-queue", "Failed to increment attempt", { rowId: row.id, supabaseError: error })
+    logger.error("cron-drip-queue: Failed to increment attempt", { rowId: row.id, supabaseError: error })
   }
-  logger.warn("cron-drip-queue", willCancel ? "Cancelled (max attempts)" : "Failed (will retry)", {
-    template: row.template,
-    email: row.email,
-    attempt: nextAttempt,
-    maxAttempts: MAX_ATTEMPTS,
-    error: errorMessage,
-  })
+  logger.warn(
+    `cron-drip-queue: ${willCancel ? "Cancelled (max attempts)" : "Failed (will retry)"}`,
+    {
+      template: row.template,
+      email: row.email,
+      attempt: nextAttempt,
+      maxAttempts: MAX_ATTEMPTS,
+      error: errorMessage,
+    },
+  )
   return willCancel ? "cancelled" : "failed"
 }
