@@ -31,3 +31,6 @@ next-env.d.ts
 implementation
 package-lock.json
 
+# supabase cli local cache
+supabase/.temp/
+

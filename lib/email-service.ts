@@ -489,11 +489,13 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
 }
 
 function renderDiscoverProjects(vars: EmailVariables): { subject: string; html: string } {
-  // Preview projects (used in admin preview; real sends use dynamic data from Edge Function)
-  const previewProjects = [
+  // Real sends pass `projects` via the drip-queue variables (same shape as
+  // welcome-homeowner). The hardcoded list is the sample-data fallback for
+  // admin preview sends.
+  const projects = (vars.projects as Array<{ title: string; image: string; slug: string; location?: string }> | undefined) ?? [
     { title: "Villa Oisterwijk", image: "https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg", slug: "villa-oisterwijk", location: "Oisterwijk" },
   ]
-  const projectsHtml = previewProjects.map(p =>
+  const projectsHtml = projects.map(p =>
     `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
 <tr><td style="font-size:0;line-height:0;"><a href="https://www.arcolist.com/projects/${p.slug}" target="_blank"><img src="${p.image}" alt="${p.title}" width="420" height="315" style="display:block;width:100%;max-width:420px;height:auto;max-height:315px;object-fit:cover;border-radius:3px;" /></a></td></tr>
 <tr><td style="padding:10px 0 0;"><a href="https://www.arcolist.com/projects/${p.slug}" target="_blank" style="text-decoration:none;"><p style="margin:0 0 2px;font-size:15px;font-weight:400;color:#1c1c1a;">${p.title}</p><p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">${p.location}</p></a></td></tr>
