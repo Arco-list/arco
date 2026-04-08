@@ -147,43 +147,6 @@ export async function fetchFunnel(source?: string) {
   return { funnel }
 }
 
-export async function addProspect(formData: {
-  email: string
-  contact_name?: string
-  company_name?: string
-  city?: string
-  source?: string
-}) {
-  const supabase = createServiceRoleSupabaseClient()
-
-  const { data, error } = await supabase
-    .from("prospects")
-    .insert({
-      email: formData.email,
-      contact_name: formData.contact_name || null,
-      company_name: formData.company_name || null,
-      city: formData.city || null,
-      source: formData.source || "manual",
-      status: "prospect",
-    })
-    .select()
-    .single()
-
-  if (error) {
-    console.error("Failed to add prospect", error)
-    return { success: false, error: error.message }
-  }
-
-  // Log event
-  await supabase.from("prospect_events").insert({
-    prospect_id: data.id,
-    event_type: "created",
-    metadata: { source: formData.source || "manual" },
-  })
-
-  return { success: true, prospect: data as Prospect }
-}
-
 const STATUS_TO_APOLLO_STAGE: Record<string, string> = {
   prospect: "Prospect",
   contacted: "Contacted",

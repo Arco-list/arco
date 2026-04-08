@@ -823,7 +823,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full">
+      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
         <table className="w-full text-sm" style={{ minWidth: 800 }}>
           <thead>
             <tr className="border-b border-[#e5e5e4]">

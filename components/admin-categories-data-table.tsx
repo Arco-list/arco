@@ -699,7 +699,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
 
       {/* Spaces tab — matches Types/Services table styling */}
       {activeTab === "spaces" && (
-        <div className="border border-[#e5e5e4] overflow-hidden">
+        <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#e5e5e4]">
@@ -881,7 +881,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
       </div>
 
       {/* Table */}
-      <div key={activeTab} className="border border-[#e5e5e4] overflow-hidden">
+      <div key={activeTab} className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#e5e5e4]">

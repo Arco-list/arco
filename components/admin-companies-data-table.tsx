@@ -1435,7 +1435,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-x-auto">
+      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
         <table className="w-full text-sm" style={{ minWidth: 1100 }}>
           <thead>
             <tr className="border-b border-[#e5e5e4]">

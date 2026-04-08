@@ -5,7 +5,6 @@ import { toast } from "sonner"
 import {
   fetchProspects,
   fetchProspectEvents,
-  addProspect,
   updateProspectStatus,
   deleteProspect,
   fetchFunnel,
@@ -110,33 +109,6 @@ function conversionRate(from: number, to: number): string {
   return `${Math.round((to / from) * 100)}%`
 }
 
-function exportToCsv(prospects: Prospect[]) {
-  const headers = [
-    "Email", "Contact Name", "Company", "Status", "Sequence", "Source", "City",
-    "Emails Sent", "Emails Delivered", "Created",
-  ]
-  const rows = prospects.map((p) => [
-    p.email,
-    p.contact_name ?? "",
-    p.company_name ?? "",
-    p.status,
-    p.sequence_status ?? "not_started",
-    p.source,
-    p.city ?? "",
-    p.emails_sent,
-    p.emails_delivered,
-    p.created_at,
-  ])
-  const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
-  const blob = new Blob([csv], { type: "text/csv" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = `prospects-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
 // -- Editable email field for arco/invites sources --------------------------
 
 function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRefresh: () => void }) {
@@ -209,7 +181,6 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   // PR 5 of the drip pipeline: load and render the full sequence (intro,
   // followup, final) for the prospect's company in the details panel.
   const [sequenceSteps, setSequenceSteps] = useState<ProspectSequenceStep[]>([])
-  const [showAddModal, setShowAddModal] = useState(false)
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [syncListId, setSyncListId] = useState("")
   const [isSyncing, setIsSyncing] = useState(false)
@@ -379,53 +350,38 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   return (
     <>
       {/* Page header */}
-      <div className="flex flex-col gap-1 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="arco-section-title">Sales</h3>
-            <p className="text-xs text-[#a1a1a0] mt-0.5">
-              {prospects.length} shown · {funnel.total} total
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowEmailsModal(true)}
-              className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-            >
-              Email Templates
-            </button>
-            <button
-              onClick={() => setShowSyncModal(true)}
-              className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-            >
-              Apollo Sync
-            </button>
-            <button
-              onClick={handleSyncActivity}
-              disabled={isSyncing}
-              className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
-            >
-              {isSyncing ? "Syncing…" : "Refresh Activity"}
-            </button>
-            <button
-              onClick={() => exportToCsv(prospects)}
-              className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-            >
-              Export CSV
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="h-8 px-3 text-xs font-medium rounded-[3px] text-white transition-colors"
-              style={{ background: "var(--primary, #016D75)" }}
-            >
-              Add Prospect
-            </button>
-          </div>
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h3 className="arco-section-title">Sales</h3>
+          <p className="text-xs text-[#a1a1a0] mt-0.5">
+            {prospects.length} shown · {funnel.total} total
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowEmailsModal(true)}
+            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+          >
+            Email Templates
+          </button>
+          <button
+            onClick={() => setShowSyncModal(true)}
+            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+          >
+            Apollo Sync
+          </button>
+          <button
+            onClick={handleSyncActivity}
+            disabled={isSyncing}
+            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
+          >
+            {isSyncing ? "Syncing…" : "Refresh Activity"}
+          </button>
         </div>
       </div>
 
       {/* Conversion funnel */}
-      <div className="mb-8">
+      <div className="mb-8 -mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
         {/* Single grid row: connector cells align center, card cells align end */}
         {(() => {
           const cols = FUNNEL_STAGES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
@@ -900,14 +856,6 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
         </div>
       )}
 
-      {/* Add prospect modal */}
-      {showAddModal && (
-        <AddProspectModal
-          onClose={() => setShowAddModal(false)}
-          onAdded={() => { setShowAddModal(false); refreshData() }}
-        />
-      )}
-
       {/* Apollo sync modal */}
       {showSyncModal && (
         <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40" onClick={() => setShowSyncModal(false)}>
@@ -1220,135 +1168,3 @@ function DetailField({ label, value }: { label: string; value: string | null }) 
   )
 }
 
-function AddProspectModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
-  const [email, setEmail] = useState("")
-  const [contactName, setContactName] = useState("")
-  const [companyName, setCompanyName] = useState("")
-  const [city, setCity] = useState("")
-  const [source, setSource] = useState("manual")
-  const [isPending, startTransition] = useTransition()
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email.trim()) {
-      toast.error("Email is required")
-      return
-    }
-    startTransition(async () => {
-      const result = await addProspect({
-        email: email.trim(),
-        contact_name: contactName.trim() || undefined,
-        company_name: companyName.trim() || undefined,
-        city: city.trim() || undefined,
-        source,
-      })
-      if (result.success) {
-        toast.success("Prospect added")
-        onAdded()
-      } else {
-        toast.error(result.error ?? "Failed to add prospect")
-      }
-    })
-  }
-
-  return (
-    <div className="popup-overlay" onClick={onClose}>
-      <div
-        className="popup-card"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 480, padding: 0 }}
-      >
-        <div
-          style={{
-            padding: "16px 24px",
-            background: "var(--arco-off-white, #fafaf9)",
-            borderRadius: "12px 12px 0 0",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span className="text-sm font-medium text-[#1c1c1a]">Add Prospect</span>
-          <button className="popup-close" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-[#6b6b68] block mb-1">
-              Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-              placeholder="name@company.com"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-[#6b6b68] block mb-1">Contact Name</label>
-            <input
-              type="text"
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-              placeholder="John Doe"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-[#6b6b68] block mb-1">Company Name</label>
-            <input
-              type="text"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-              placeholder="Acme Design Studio"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-[#6b6b68] block mb-1">City</label>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-              placeholder="Amsterdam"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-[#6b6b68] block mb-1">Source</label>
-            <Select value={source} onValueChange={setSource}>
-              <SelectTrigger className="w-full h-9 text-sm border-[#e5e5e4] rounded-[3px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="apollo">Apollo</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isPending}
-              className="h-9 px-4 text-xs font-medium rounded-[3px] text-white transition-colors disabled:opacity-50"
-              style={{ background: "var(--primary, #016D75)" }}
-            >
-              {isPending ? "Adding..." : "Add Prospect"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}

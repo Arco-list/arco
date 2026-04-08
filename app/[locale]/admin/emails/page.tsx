@@ -251,7 +251,7 @@ export default function AdminEmailsPage() {
               <table className="w-full text-sm" style={{ minWidth: 600 }}>
                 <thead>
                   <tr className="border-b border-[#e5e5e4]">
-                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Email</th>
+                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]" style={{ minWidth: 220 }}>Email</th>
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">From</th>
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">User</th>
                     <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Subject</th>
@@ -463,7 +463,7 @@ export default function AdminEmailsPage() {
                   <thead>
                     <tr className="border-b border-[#e5e5e4]">
                       <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">To</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Email</th>
+                      <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]" style={{ minWidth: 220 }}>Email</th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Subject</th>
                       <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Status</th>
                       <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Sent</th>

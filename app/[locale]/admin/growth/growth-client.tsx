@@ -174,11 +174,11 @@ function MiniChart({ data, label }: { data: Array<{ week: string; count: number 
   )
 }
 
-const TIMEFRAMES: { value: Timeframe; label: string }[] = [
-  { value: "days", label: "Days" },
-  { value: "weeks", label: "Weeks" },
-  { value: "months", label: "Months" },
-  { value: "years", label: "Years" },
+const TIMEFRAMES: { value: Timeframe; label: string; shortLabel: string }[] = [
+  { value: "days", label: "Days", shortLabel: "D" },
+  { value: "weeks", label: "Weeks", shortLabel: "W" },
+  { value: "months", label: "Months", shortLabel: "M" },
+  { value: "years", label: "Years", shortLabel: "Y" },
 ]
 
 export function GrowthClient({ initialMetrics }: Props) {
@@ -414,13 +414,14 @@ export function GrowthClient({ initialMetrics }: Props) {
             <button
               key={tf.value}
               onClick={() => handleTimeframeChange(tf.value)}
-              className={`px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+              className={`px-2 sm:px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
                 timeframe === tf.value
                   ? "bg-[#1c1c1a] text-white"
                   : "text-[#6b6b68] hover:bg-[#fafaf9]"
               } ${isPending ? "opacity-50" : ""}`}
             >
-              {tf.label}
+              <span className="sm:hidden">{tf.shortLabel}</span>
+              <span className="hidden sm:inline">{tf.label}</span>
             </button>
           ))}
           </div>
