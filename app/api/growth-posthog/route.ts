@@ -348,13 +348,58 @@ async function fetchTimeSeries(
     }
     const sorted = Array.from(yearMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
     const yearValues = sorted.map(([, v]) => v)
-    if (yearValues.length <= 8) return yearValues
-    return yearValues.slice(-8)
+    return alignToCurrent(yearValues, sorted.map(([k]) => `${k}-01-01`), "year")
   }
 
-  // Take last 8 values (7 completed + 1 rolling)
-  if (values.length <= 8) return values
-  return values.slice(-8)
+  // Align values to an 8-element window where index 7 = current period.
+  // PostHog can return 8 or 9 buckets depending on date_from arithmetic; rather
+  // than blindly slicing the tail (which can leave the rolling bucket pointing
+  // at the wrong period if the last bucket isn't actually "now"), we place each
+  // value at its correct offset based on `days[]`.
+  return alignToCurrent(values, days, interval)
+}
+
+/**
+ * Align a chronologically-ordered PostHog series to an 8-bucket window where
+ * index 7 represents the current period (today / this week / this month / this year).
+ * Buckets older than 7 periods ago are dropped; missing periods become 0.
+ */
+function alignToCurrent(values: number[], days: string[], interval: string): number[] {
+  const out = [0, 0, 0, 0, 0, 0, 0, 0]
+  if (values.length === 0 || days.length === 0) return out
+
+  const now = new Date()
+  const todayKey = bucketKey(now, interval)
+
+  for (let i = 0; i < values.length; i++) {
+    const d = days[i]
+    if (!d) continue
+    const date = new Date(d)
+    if (Number.isNaN(date.getTime())) continue
+    const ago = todayKey - bucketKey(date, interval)
+    const idx = 7 - ago
+    if (idx >= 0 && idx < 8) out[idx] = values[i] ?? 0
+  }
+  return out
+}
+
+function bucketKey(date: Date, interval: string): number {
+  switch (interval) {
+    case "day":
+      // Days since unix epoch (UTC) — stable integer per calendar day.
+      return Math.floor(date.getTime() / 86400000)
+    case "week": {
+      // ISO-ish week index: days since epoch / 7. PostHog week boundaries
+      // are consistent within a single response, so relative offsets are correct.
+      return Math.floor(date.getTime() / 86400000 / 7)
+    }
+    case "month":
+      return date.getFullYear() * 12 + date.getMonth()
+    case "year":
+      return date.getFullYear()
+    default:
+      return Math.floor(date.getTime() / 86400000)
+  }
 }
 
 async function fetchChannelBreakdown(
