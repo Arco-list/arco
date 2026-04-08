@@ -23,7 +23,14 @@ export async function GET(request: NextRequest) {
 
   const apiKey = process.env.POSTHOG_PERSONAL_API_KEY
   if (!apiKey) {
-    return NextResponse.json({ error: "POSTHOG_PERSONAL_API_KEY not set" })
+    // Return 503 (not 200) so the client can distinguish "config error"
+    // from "successful empty response". Previously this returned 200 OK
+    // with { error } and the client silently rendered zeros across the
+    // whole growth dashboard.
+    return NextResponse.json(
+      { error: "POSTHOG_PERSONAL_API_KEY not set on the server. Set it in Vercel → Settings → Environment Variables." },
+      { status: 503 },
+    )
   }
 
   const tf = request.nextUrl.searchParams.get("tf") || "months"

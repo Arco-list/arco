@@ -223,6 +223,12 @@ export function GrowthClient({ initialMetrics }: Props) {
     loaded: boolean
   }>({ proVisitors: null, clientVisitors: null, sharers: null, sharesPerClient: 0, projectShares: 0, professionalShares: 0, apolloVisitors: 0, inviteVisitors: 0, clientActives: 0, clientActivesSeries: [], apolloVisitorsSeries: [], inviteVisitorsSeries: [], proVisitorsSeries: [], clientVisitorsSeries: [], sharersSeries: [], clientSources: [], proSources: [], clientSourceSeries: {}, proSourceSeries: {}, loaded: false })
 
+  // Surface PostHog API errors instead of silently rendering zeros across the
+  // dashboard. The most common cause is POSTHOG_PERSONAL_API_KEY missing in
+  // Vercel — without this banner, the only symptom is "all metrics are 0"
+  // which is indistinguishable from "no traffic yet".
+  const [posthogError, setPosthogError] = useState<string | null>(null)
+
   const [detailMetric, setDetailMetric] = useState<string | null>(null)
   const [detailValue, setDetailValue] = useState<number | string | null>(null)
 
@@ -273,8 +279,25 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   const fetchPosthog = (tf: Timeframe) => {
     fetch(`/api/growth-posthog?tf=${tf}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        // Distinguish HTTP errors (config / auth / network) from successful
+        // empty responses. The route returns 503 when POSTHOG_PERSONAL_API_KEY
+        // is missing on the server — surface that to the user instead of
+        // silently rendering zeros across the dashboard.
+        if (!r.ok) {
+          let message = `PostHog API request failed (HTTP ${r.status})`
+          try {
+            const body = await r.json()
+            if (body?.error) message = body.error
+          } catch {
+            // non-JSON error response, keep default message
+          }
+          throw new Error(message)
+        }
+        return r.json()
+      })
       .then((d) => {
+        setPosthogError(null)
         setPosthogData({
           proVisitors: d.proVisitors ?? null,
           clientVisitors: d.clientVisitors ?? null,
@@ -298,7 +321,10 @@ export function GrowthClient({ initialMetrics }: Props) {
           loaded: true,
         })
       })
-      .catch(() => {})
+      .catch((err: Error) => {
+        setPosthogError(err.message ?? "Unknown error fetching PostHog data")
+        setPosthogData((prev) => ({ ...prev, loaded: true }))
+      })
   }
 
   useEffect(() => {
@@ -350,6 +376,15 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   return (
     <>
+      {posthogError && (
+        <div
+          role="alert"
+          className="mb-6 rounded-[3px] border border-[#fecaca] bg-[#fef2f2] p-4 text-sm text-[#991b1b]"
+        >
+          <p className="font-medium">PostHog data unavailable</p>
+          <p className="mt-1 text-xs text-[#991b1b]/80">{posthogError}</p>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h3 className="arco-section-title">Growth</h3>
