@@ -32,9 +32,10 @@ type ProjectFeatureRow = Tables<"project_features">
 type ProjectPhotoRow = Tables<"project_photos">
 
 export const MIN_PHOTOS_REQUIRED = 5
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
+const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024 // 15 MB
 const MIN_IMAGE_WIDTH = 1200
-const MAX_FILES_PER_UPLOAD = 30
+const MAX_FILES_PER_UPLOAD = 100
+const MAX_PHOTOS_PER_PROJECT = 80
 export const BUILDING_FEATURE_ID = "building-default"
 export const ADDITIONAL_FEATURE_ID = "additional-photos"
 export const OVERLAY_CLASSES = "modal-overlay fixed inset-0 flex items-center justify-center z-50 p-4"
@@ -865,16 +866,67 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       files: FileList | null,
       options: { addToModalSelection?: boolean; selectorFeatureId?: string | null } = {},
     ) => {
-      if (!files || files.length === 0 || !resolvedProjectId) {
+      if (!files || files.length === 0) {
+        return
+      }
+
+      // Always flip isUploading so the tracker-flip effect in the page runs
+      // even on pure error paths. Without this, pre-populated "uploading"
+      // tracker entries would spin forever when we early-return below.
+      setIsUploading(true)
+
+      if (!resolvedProjectId) {
+        const msg = "Project not ready yet. Please wait a moment and try again."
+        const errs = Array.from(files).map((f) => `${f.name}: ${msg}`)
+        if (options.addToModalSelection) {
+          setModalUploadErrors(errs)
+        } else {
+          setUploadErrors(errs)
+        }
+        setIsUploading(false)
         return
       }
 
       if (files.length > MAX_FILES_PER_UPLOAD) {
-        setUploadErrors([`You can upload up to ${MAX_FILES_PER_UPLOAD} photos at once.`])
+        // Emit one error line per file so the page-level tracker can flip
+        // each tile to the "failed" state with a clear reason.
+        const msg = `Too many files at once. Upload up to ${MAX_FILES_PER_UPLOAD} photos per batch.`
+        const errs = Array.from(files).map((f) => `${f.name}: ${msg}`)
+        if (options.addToModalSelection) {
+          setModalUploadErrors(errs)
+        } else {
+          setUploadErrors(errs)
+        }
+        setIsUploading(false)
         return
       }
 
-      setIsUploading(true)
+      // Per-project cap: prevent the project from growing past the hard limit
+      // so the photo tour stays performant and storage costs stay sane.
+      const existingCount = uploadedPhotos.length
+      const remaining = MAX_PHOTOS_PER_PROJECT - existingCount
+      if (remaining <= 0) {
+        const msg = `This project already has ${MAX_PHOTOS_PER_PROJECT} photos, which is the maximum. Remove some photos before adding more.`
+        const errs = Array.from(files).map((f) => `${f.name}: ${msg}`)
+        if (options.addToModalSelection) {
+          setModalUploadErrors(errs)
+        } else {
+          setUploadErrors(errs)
+        }
+        setIsUploading(false)
+        return
+      }
+      if (files.length > remaining) {
+        const msg = `Only ${remaining} more photo${remaining === 1 ? "" : "s"} allowed (projects are capped at ${MAX_PHOTOS_PER_PROJECT}). Upload a smaller batch or remove some photos first.`
+        const errs = Array.from(files).map((f) => `${f.name}: ${msg}`)
+        if (options.addToModalSelection) {
+          setModalUploadErrors(errs)
+        } else {
+          setUploadErrors(errs)
+        }
+        setIsUploading(false)
+        return
+      }
 
       const errors: string[] = []
       const uploaded: UploadedPhoto[] = []

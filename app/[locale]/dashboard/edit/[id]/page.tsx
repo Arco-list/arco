@@ -883,7 +883,9 @@ export default function ListingEditorPage() {
     })
   }, [searchParams])
 
-  // Mark upload tracker entries as done/error when upload finishes
+  // Mark upload tracker entries as done/error when upload finishes, and
+  // surface a toast with the first distinct error reason so users see
+  // what went wrong without inspecting individual tiles.
   const prevIsUploadingRef = useRef(false)
   useEffect(() => {
     if (prevIsUploadingRef.current && !isUploading && showUploadPopup) {
@@ -900,6 +902,24 @@ export default function ListingEditorPage() {
           ? { ...f, status: "error", error: uploadErrors.find(e => e.startsWith(f.name + ":")) ?? "Upload failed" }
           : { ...f, status: "done" }
       }))
+
+      if (uploadErrors.length > 0) {
+        // Pick the first distinct human-readable reason to show in the toast.
+        // Reasons look like "filename.jpg: reason text" — strip the prefix.
+        const reasons = new Set<string>()
+        for (const err of uploadErrors) {
+          const reason = err.includes(":") ? err.slice(err.indexOf(":") + 1).trim() : err
+          if (reason) reasons.add(reason)
+        }
+        const firstReason = reasons.values().next().value ?? "Upload failed"
+        const failedCount = Array.from(errorFileNames).length
+        toast.error(
+          failedCount === 1
+            ? `Could not upload 1 photo`
+            : `Could not upload ${failedCount} photos`,
+          { description: firstReason },
+        )
+      }
     }
     prevIsUploadingRef.current = isUploading
   }, [isUploading, uploadErrors, showUploadPopup])
