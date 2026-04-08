@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react"
+import { AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 
 import { useTranslations } from "next-intl"
@@ -495,26 +496,31 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         </div>
       )}
 
-      {/* ══════ Delete Account Modal ══════ */}
+      {/* ══════ Delete Account Modal — matches Delete Project design ══════ */}
       {deleteModalOpen && (
-        <div className="popup-overlay" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div className="popup-overlay" onClick={() => { if (!isDeletingAccount) { setDeleteModalOpen(false); setDeleteConfirmText("") } }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
               <h3 className="arco-section-title">{t("settings_delete_account")}</h3>
-              <button className="popup-close" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }} aria-label="Close">✕</button>
+              <button type="button" className="popup-close" onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }} aria-label="Close">
+                ✕
+              </button>
             </div>
-            <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 20 }}>
+            <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
               {t("settings_delete_description")}
             </p>
 
-            <div className="popup-banner popup-banner--danger" style={{ marginBottom: 16 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
+            <div className="popup-banner popup-banner--danger">
+              <AlertTriangle className="popup-banner-icon" />
               <span>{t("settings_delete_warning")}</span>
             </div>
 
-            <p className="arco-body-text" style={{ marginBottom: 12 }}>
+            <div className="popup-banner popup-banner--warn">
+              <AlertTriangle className="popup-banner-icon" />
+              <span>{t("settings_delete_warning_secondary")}</span>
+            </div>
+
+            <p className="body-small text-text-secondary mb-3">
               {t.rich("settings_delete_confirm", { strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
             <input
@@ -522,19 +528,21 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="form-input"
-              style={{ marginBottom: 16 }}
+              className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
             />
 
             <div className="popup-actions">
               <button
+                type="button"
                 className="btn-tertiary"
                 onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText("") }}
+                disabled={isDeletingAccount}
                 style={{ flex: 1 }}
               >
                 {t("cancel")}
               </button>
               <button
+                type="button"
                 disabled={deleteConfirmText !== "DELETE" || isDeletingAccount}
                 onClick={async () => {
                   setIsDeletingAccount(true)
@@ -546,8 +554,8 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
                   deleteConfirmText === "DELETE"
                     ? "bg-red-600 text-white"
                     : "bg-surface text-text-secondary"
-                }`}
-                style={{ fontSize: 14 }}
+                } ${isDeletingAccount ? "opacity-60" : ""}`}
+                style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
               >
                 {isDeletingAccount ? t("settings_deleting") : t("settings_delete_account")}
               </button>

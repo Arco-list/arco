@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, useCallback, type Chang
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Camera, ChevronLeft, ChevronRight } from "lucide-react"
+import { AlertTriangle, Camera, ChevronLeft, ChevronRight } from "lucide-react"
 import { ShareModal } from "@/components/share-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
@@ -17,10 +17,6 @@ import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { checkSelfDeletionAction, deleteSelfAccountAction, type DeletionCheckResult } from "@/app/homeowner/actions"
 import { ClientMessagesTab } from "@/components/client-messages-tab"
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 type HomeownerTab = "saved-projects" | "saved-professionals" | "messages" | "account"
 
@@ -786,91 +782,137 @@ function HomeownerContent() {
             {t("delete_account")}
           </button>
 
-          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t("delete_confirm_title")}</AlertDialogTitle>
-                <AlertDialogDescription>
+          {/* ── Delete Account popup — matches Delete Project design ── */}
+          {deleteDialogOpen && (
+            <div className="popup-overlay" onClick={() => { if (!isDeletingAccount) { setDeleteDialogOpen(false); setDeletionCheck(null); setDeleteConfirmText(""); setDeletePassword("") } }}>
+              <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+                <div className="popup-header">
+                  <h3 className="arco-section-title">{t("delete_account")}</h3>
+                  <button type="button" className="popup-close" onClick={() => { setDeleteDialogOpen(false); setDeletionCheck(null); setDeleteConfirmText(""); setDeletePassword("") }} aria-label="Close">
+                    ✕
+                  </button>
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
                   {t("delete_confirm_description")}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+                </p>
 
-              {isCheckingDeletion ? (
-                <p style={{ fontSize: 14, color: "var(--arco-mid-grey)" }}>{t("checking_account")}</p>
-              ) : deletionCheck ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {deletionCheck.warnings.length > 0 && (
-                    <div style={{ background: "#fef3c7", padding: 12, borderRadius: 4, fontSize: 13 }}>
-                      <strong>{t("data_deleted_warning")}</strong>
-                      <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-                        {deletionCheck.warnings.map((w, i) => <li key={i}>{w}</li>)}
-                      </ul>
+                {isCheckingDeletion ? (
+                  <p style={{ fontSize: 13, color: "var(--arco-mid-grey)", margin: "0 0 16px" }}>{t("checking_account")}</p>
+                ) : deletionCheck ? (
+                  <>
+                    {deletionCheck.showGdprNotice && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 10,
+                          padding: "12px 14px",
+                          marginBottom: 12,
+                          background: "var(--arco-off-white, #fafaf9)",
+                          border: "1px solid var(--arco-rule, #e5e5e4)",
+                          borderRadius: 3,
+                          fontSize: 12,
+                          lineHeight: 1.55,
+                          color: "var(--arco-mid-grey, #6b6b68)",
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="16" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                        <span dangerouslySetInnerHTML={{ __html: t("delete_gdpr_notice") }} />
+                      </div>
+                    )}
+
+                    <div className="popup-banner popup-banner--danger">
+                      <AlertTriangle className="popup-banner-icon" />
+                      <span>{t("delete_confirm_description")}</span>
                     </div>
-                  )}
 
-                  {deletionCheck.blockers.length > 0 && (
-                    <div style={{ background: "#fee2e2", padding: 12, borderRadius: 4, fontSize: 13 }}>
-                      <strong>{t("cannot_delete")}</strong>
-                      <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-                        {deletionCheck.blockers.map((b, i) => <li key={i}>{b}</li>)}
-                      </ul>
-                    </div>
-                  )}
-
-                  {deletionCheck.canDelete && (
-                    <>
-                      {isEmailAuthUser && (
+                    {deletionCheck.warnings.length > 0 && (
+                      <div className="popup-banner popup-banner--warn">
+                        <AlertTriangle className="popup-banner-icon" />
                         <div>
-                          <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
-                            {t("enter_password")}
-                          </label>
-                          <input
-                            type="password"
-                            value={deletePassword}
-                            onChange={e => setDeletePassword(e.target.value)}
-                            placeholder={t("your_current_password")}
-                            style={{ width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid var(--arco-light-grey)", borderRadius: 3, fontFamily: "inherit", outline: "none" }}
-                          />
+                          <div style={{ fontWeight: 500, marginBottom: 4 }}>{t("data_deleted_warning")}</div>
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {deletionCheck.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                          </ul>
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      <div>
-                        <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }} dangerouslySetInnerHTML={{ __html: t("type_delete_confirm") }} />
+                    {deletionCheck.blockers.length > 0 && (
+                      <div className="popup-banner popup-banner--danger">
+                        <AlertTriangle className="popup-banner-icon" />
+                        <div>
+                          <div style={{ fontWeight: 500, marginBottom: 4 }}>{t("cannot_delete")}</div>
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {deletionCheck.blockers.map((b, i) => <li key={i}>{b}</li>)}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {deletionCheck.canDelete && (
+                      <>
+                        {isEmailAuthUser && (
+                          <>
+                            <p className="body-small text-text-secondary mb-3">{t("enter_password")}</p>
+                            <input
+                              type="password"
+                              value={deletePassword}
+                              onChange={e => setDeletePassword(e.target.value)}
+                              placeholder={t("your_current_password")}
+                              autoComplete="current-password"
+                              className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
+                            />
+                          </>
+                        )}
+
+                        <p className="body-small text-text-secondary mb-3" dangerouslySetInnerHTML={{ __html: t("type_delete_confirm") }} />
                         <input
                           type="text"
                           value={deleteConfirmText}
                           onChange={e => setDeleteConfirmText(e.target.value)}
                           placeholder="DELETE"
                           autoComplete="off"
-                          style={{ width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid var(--arco-light-grey)", borderRadius: 3, fontFamily: "inherit", outline: "none" }}
+                          className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
                         />
-                      </div>
-                    </>
+                      </>
+                    )}
+                  </>
+                ) : null}
+
+                <div className="popup-actions">
+                  <button
+                    type="button"
+                    className="btn-tertiary"
+                    onClick={() => { setDeleteDialogOpen(false); setDeletionCheck(null); setDeleteConfirmText(""); setDeletePassword("") }}
+                    disabled={isDeletingAccount}
+                    style={{ flex: 1 }}
+                  >
+                    {t("cancel")}
+                  </button>
+                  {deletionCheck?.canDelete && (
+                    <button
+                      type="button"
+                      disabled={isDeletingAccount || deleteConfirmText !== "DELETE" || (isEmailAuthUser && !deletePassword)}
+                      onClick={handleDeleteAccount}
+                      className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
+                        deleteConfirmText === "DELETE" && (!isEmailAuthUser || deletePassword)
+                          ? "bg-red-600 text-white"
+                          : "bg-surface text-text-secondary"
+                      } ${isDeletingAccount ? "opacity-60" : ""}`}
+                      style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
+                    >
+                      {isDeletingAccount ? t("deleting") : t("delete_my_account")}
+                    </button>
                   )}
                 </div>
-              ) : null}
-
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => { setDeleteDialogOpen(false); setDeletionCheck(null) }}>
-                  {t("cancel")}
-                </AlertDialogCancel>
-                {deletionCheck?.canDelete && (
-                  <button
-                    onClick={handleDeleteAccount}
-                    disabled={isDeletingAccount || deleteConfirmText !== "DELETE" || (isEmailAuthUser && !deletePassword)}
-                    style={{
-                      background: "#b91c1c", color: "#fff", border: "none",
-                      padding: "10px 20px", borderRadius: 3, fontSize: 14, cursor: "pointer",
-                      fontFamily: "inherit", fontWeight: 500,
-                      opacity: (isDeletingAccount || deleteConfirmText !== "DELETE" || (isEmailAuthUser && !deletePassword)) ? 0.5 : 1,
-                    }}
-                  >
-                    {isDeletingAccount ? t("deleting") : t("delete_my_account")}
-                  </button>
-                )}
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       )}

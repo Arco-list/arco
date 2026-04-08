@@ -14,6 +14,9 @@ export type DeletionCheckResult = {
   companyName?: string
   warnings: string[]
   blockers: string[]
+  /** True when the user owns a company that will be orphaned, so the UI can
+   *  show the GDPR notice explaining how to request permanent removal. */
+  showGdprNotice: boolean
 }
 
 export async function checkSelfDeletionAction(): Promise<ActionResult<DeletionCheckResult>> {
@@ -43,14 +46,19 @@ export async function checkSelfDeletionAction(): Promise<ActionResult<DeletionCh
   let companyId: string | undefined
   let companyName: string | undefined
 
-  // Check projects
+  // Check projects — these are no longer deleted on self-delete. Projects
+  // owned by the user's orphaned company are archived (hidden from discover
+  // but still intact), and any project with client_id = userId has its
+  // client_id nulled out via the FK ON DELETE SET NULL.
   const { count: projectCount } = await serviceClient
     .from("projects")
     .select("id", { count: "exact", head: true })
     .eq("client_id", userId)
 
   if ((projectCount ?? 0) > 0) {
-    warnings.push(`${projectCount} project${projectCount === 1 ? "" : "s"} will be deleted`)
+    warnings.push(
+      `${projectCount} project${projectCount === 1 ? "" : "s"} will be archived (hidden from the site but not deleted)`,
+    )
   }
 
   // Check company ownership
@@ -75,14 +83,24 @@ export async function checkSelfDeletionAction(): Promise<ActionResult<DeletionCh
       if ((otherMembers ?? 0) > 0) {
         blockers.push(`You own "${companyName}" with ${otherMembers} other team member(s). Transfer ownership first.`)
       } else {
-        warnings.push(`Company "${companyName}" will be deleted`)
+        warnings.push(
+          `Company "${companyName}" will be unlisted and can be re-claimed by the next verified domain holder`,
+        )
       }
     }
   }
 
   return {
     success: true,
-    data: { canDelete: blockers.length === 0, ownsCompany, companyId, companyName, warnings, blockers },
+    data: {
+      canDelete: blockers.length === 0,
+      ownsCompany,
+      companyId,
+      companyName,
+      warnings,
+      blockers,
+      showGdprNotice: ownsCompany && blockers.length === 0,
+    },
   }
 }
 
@@ -142,30 +160,76 @@ export async function deleteSelfAccountAction(input: {
   const serviceClient = createServiceRoleSupabaseClient()
   const userId = user.id
 
-  // Delete owned company if applicable (same cascade as admin deleteUserAction)
+  // Orphan the owned company instead of deleting it. Companies are the
+  // primary marketplace entity on Arco — their photos, description, and
+  // credited projects have commercial value that outlives any individual
+  // owner. Setting owner_id = null + status = 'unlisted' hides the page from
+  // discover but leaves it on file so the next verified domain holder can
+  // claim it. Team members (if any) stay on the company because they live
+  // in separate tables keyed on company_id.
+  //
+  // Projects owned by the orphaned company are archived so they stop
+  // appearing in discover while remaining linked to the company via
+  // project_professionals. When the company is re-claimed, the new owner
+  // sees them in their dashboard and can un-archive.
   if (checkResult.data.ownsCompany && checkResult.data.companyId) {
-    await serviceClient
-      .from("company_photos")
-      .delete()
-      .eq("company_id", checkResult.data.companyId)
-
-    await serviceClient
-      .from("company_social_links")
-      .delete()
-      .eq("company_id", checkResult.data.companyId)
-
-    const { error: companyError } = await serviceClient
+    const { error: orphanCompanyError } = await serviceClient
       .from("companies")
-      .delete()
+      .update({
+        owner_id: null,
+        status: "unlisted",
+        updated_at: new Date().toISOString(),
+      } as any)
       .eq("id", checkResult.data.companyId)
 
-    if (companyError) {
-      logger.db("delete", "companies", "Self-service company deletion failed", { userId, companyId: checkResult.data.companyId }, companyError)
-      return { success: false, error: "Failed to delete associated company." }
+    if (orphanCompanyError) {
+      logger.db(
+        "update",
+        "companies",
+        "Self-service company orphan failed",
+        { userId, companyId: checkResult.data.companyId },
+        orphanCompanyError,
+      )
+      return { success: false, error: "Failed to update associated company." }
+    }
+
+    // Archive the projects owned by this company (is_project_owner = true).
+    // Fetch the project ids first; the update is simpler than a subquery.
+    const { data: ownedLinks } = await serviceClient
+      .from("project_professionals")
+      .select("project_id")
+      .eq("company_id", checkResult.data.companyId)
+      .eq("is_project_owner", true)
+
+    const ownedProjectIds = (ownedLinks ?? [])
+      .map((r) => r.project_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
+
+    if (ownedProjectIds.length > 0) {
+      const { error: archiveError } = await serviceClient
+        .from("projects")
+        .update({ status: "archived", updated_at: new Date().toISOString() } as any)
+        .in("id", ownedProjectIds)
+
+      if (archiveError) {
+        logger.db(
+          "update",
+          "projects",
+          "Self-service project archive failed",
+          { userId, companyId: checkResult.data.companyId, projectIds: ownedProjectIds },
+          archiveError,
+        )
+        // Non-fatal: the company is already orphaned, projects staying
+        // published temporarily is a small cosmetic issue compared to
+        // failing the whole deletion.
+      }
     }
   }
 
-  // Delete profile
+  // Delete profile. With migration 126 the projects.client_id FK is
+  // ON DELETE SET NULL, so any projects the user authored stay intact
+  // with their client_id nulled out. Saved projects / companies / etc.
+  // still cascade as before.
   const { error: profileDeleteError } = await serviceClient
     .from("profiles")
     .delete()
