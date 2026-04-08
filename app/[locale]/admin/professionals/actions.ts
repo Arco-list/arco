@@ -1012,6 +1012,75 @@ export async function sendProspectEmailAction(input: {
     resend_message_id: sendResult.messageId ?? null,
   })
 
+  // ── Schedule the followup + final drip rows ────────────────────────────
+  // PR 3 of the drip pipeline. The intro just went out via direct Resend
+  // call; the followup and final get queued in email_drip_queue and the
+  // Vercel Cron at /api/cron/process-drip-queue picks them up when their
+  // send_at is reached.
+  //
+  // Variables payload mirrors what we passed to sendTransactionalEmail
+  // above so the cron-side render produces visually identical card content.
+  // company_id is the column from PR 1 — used by PR 4's cancellation
+  // triggers to find pending rows when a company is claimed, status
+  // changes, etc.
+  //
+  // Dedup: PR 1 added a partial unique index on (company_id, template)
+  // WHERE pending. A second click on "Send prospect email" for the same
+  // company will hit a 23505 unique violation on these inserts; we catch
+  // it and continue silently so a duplicate intro click doesn't fail the
+  // whole action. The intro itself was already sent via Resend at this
+  // point — the duplicate followup just no-ops.
+  const { nextBusinessSlot } = await import("@/lib/date-utils")
+  const dripVariables = {
+    company_name: company.name,
+    company_page_url: companyPageUrl,
+    claim_url: claimUrl,
+    company_subtitle: locationParts.join(" · ") || undefined,
+    logo_url: company.logo_url ?? undefined,
+    hero_image_url: heroImageUrl ?? undefined,
+  }
+  const followupSendAt = nextBusinessSlot(3).toISOString()
+  const finalSendAt = nextBusinessSlot(7).toISOString()
+  const { error: dripInsertError } = await serviceClient
+    .from("email_drip_queue")
+    .insert([
+      {
+        company_id: company.id,
+        email: emailResult.data,
+        template: "prospect-followup",
+        sequence: "prospect-outreach",
+        step: 1,
+        variables: dripVariables,
+        send_at: followupSendAt,
+      },
+      {
+        company_id: company.id,
+        email: emailResult.data,
+        template: "prospect-final",
+        sequence: "prospect-outreach",
+        step: 2,
+        variables: dripVariables,
+        send_at: finalSendAt,
+      },
+    ] as never)
+  if (dripInsertError) {
+    // 23505 = unique_violation: hit our partial index, meaning a pending
+    // row already exists for this (company_id, template). Treat as no-op.
+    // Anything else is unexpected — log it but DON'T fail the action,
+    // since the intro itself was already sent successfully.
+    if ((dripInsertError as { code?: string }).code === "23505") {
+      logger.info("admin-professionals", "Drip rows already enqueued for company", {
+        companyId: company.id,
+      })
+    } else {
+      logger.error(
+        "admin-professionals",
+        "Failed to enqueue prospect drip rows (intro was sent successfully)",
+        { companyId: company.id, supabaseError: dripInsertError },
+      )
+    }
+  }
+
   // Update company status to prospected (only if no owner)
   await serviceClient
     .from("companies")
