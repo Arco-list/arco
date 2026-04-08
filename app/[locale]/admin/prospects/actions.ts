@@ -486,13 +486,21 @@ export async function updateProspectEmail(prospectId: string, newEmail: string) 
 }
 
 /**
- * Pause a prospect sequence
+ * Pause a prospect sequence.
+ *
+ * PR 5 of the drip pipeline: this used to only flip prospects.sequence_status
+ * to 'paused' without touching email_drip_queue, which meant pausing in the
+ * UI didn't actually stop the next drip from going out. Now also cancels
+ * any pending drip rows for the prospect's company so a paused sequence
+ * is actually paused. Cancellation is non-fatal — pausing the prospect
+ * row succeeds even if no drip rows match (e.g. for prospects whose
+ * intro went out before PR 3 enqueued any followups).
  */
 export async function pauseProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, sequence_status")
+    .select("id, company_id, sequence_status")
     .eq("id", prospectId)
     .single()
 
@@ -502,7 +510,139 @@ export async function pauseProspectSequence(prospectId: string) {
   }
 
   await supabase.from("prospects").update({ sequence_status: "paused" }).eq("id", prospectId)
+
+  if (prospect.company_id) {
+    try {
+      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+      await cancelPendingDripRows(supabase, {
+        companyId: prospect.company_id,
+        reason: "manual",
+      })
+    } catch (err) {
+      console.error("[pauseProspectSequence] Failed to cancel pending drip rows", err)
+    }
+  }
+
   return { success: true }
+}
+
+/**
+ * PR 5 of the drip pipeline: load the full sequence status for a prospect
+ * for the admin Sales view's details panel. Returns the intro send (if any)
+ * from company_outreach plus the followup + final rows from email_drip_queue.
+ *
+ * Returned shape is intentionally flat and UI-friendly — the caller renders
+ * each step as a row with timestamp + status badge.
+ */
+export type ProspectSequenceStep = {
+  template: "prospect-intro" | "prospect-followup" | "prospect-final"
+  label: string
+  status: "sent" | "scheduled" | "cancelled" | "failed" | "missing"
+  timestamp: string | null
+  cancelledReason: string | null
+  attemptCount: number
+  lastError: string | null
+}
+
+export async function getProspectSequence(prospectId: string): Promise<{
+  success: boolean
+  steps?: ProspectSequenceStep[]
+  error?: string
+}> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, company_id, email")
+    .eq("id", prospectId)
+    .maybeSingle()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (!prospect.company_id) {
+    // Can't have a sequence without a linked company. Return an empty
+    // result so the UI can show "no sequence" gracefully.
+    return { success: true, steps: [] }
+  }
+
+  // Intro: read from company_outreach (intro is sent direct via Resend, not
+  // via email_drip_queue, so it's the only template that ever lands here).
+  const { data: outreachRows } = await supabase
+    .from("company_outreach" as never)
+    .select("template, sent_at, opened_at, clicked_at")
+    .eq("company_id", prospect.company_id)
+    .eq("template", "prospect_intro")
+    .order("sent_at", { ascending: false })
+    .limit(1)
+
+  // Followup + Final: read from email_drip_queue. Most recent matching row wins.
+  const { data: queueRows } = await supabase
+    .from("email_drip_queue")
+    .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error")
+    .eq("company_id", prospect.company_id)
+    .in("template", ["prospect-followup", "prospect-final"])
+    .order("created_at", { ascending: false })
+
+  // Build a map: template → most recent row (we sorted desc above)
+  const queueByTemplate = new Map<string, NonNullable<typeof queueRows>[number]>()
+  for (const row of queueRows ?? []) {
+    if (!queueByTemplate.has(row.template)) {
+      queueByTemplate.set(row.template, row)
+    }
+  }
+
+  const introRow = (outreachRows ?? [])[0] as
+    | { template: string; sent_at: string | null; opened_at: string | null; clicked_at: string | null }
+    | undefined
+  const followupRow = queueByTemplate.get("prospect-followup")
+  const finalRow = queueByTemplate.get("prospect-final")
+
+  const queueRowToStep = (
+    template: "prospect-followup" | "prospect-final",
+    label: string,
+    row: NonNullable<typeof queueRows>[number] | undefined,
+  ): ProspectSequenceStep => {
+    if (!row) {
+      return {
+        template,
+        label,
+        status: "missing",
+        timestamp: null,
+        cancelledReason: null,
+        attemptCount: 0,
+        lastError: null,
+      }
+    }
+    let status: ProspectSequenceStep["status"]
+    if (row.sent_at) status = "sent"
+    else if (row.cancelled_at) status = "cancelled"
+    else if (row.last_error && row.attempt_count >= 1) status = "failed"
+    else status = "scheduled"
+    return {
+      template,
+      label,
+      status,
+      timestamp: row.sent_at ?? row.cancelled_at ?? row.send_at ?? null,
+      cancelledReason: row.cancelled_reason ?? null,
+      attemptCount: row.attempt_count ?? 0,
+      lastError: row.last_error ?? null,
+    }
+  }
+
+  const steps: ProspectSequenceStep[] = [
+    {
+      template: "prospect-intro",
+      label: "Intro",
+      status: introRow?.sent_at ? "sent" : "missing",
+      timestamp: introRow?.sent_at ?? null,
+      cancelledReason: null,
+      attemptCount: 0,
+      lastError: null,
+    },
+    queueRowToStep("prospect-followup", "Follow-up", followupRow),
+    queueRowToStep("prospect-final", "Final", finalRow),
+  ]
+
+  return { success: true, steps }
 }
 
 /**

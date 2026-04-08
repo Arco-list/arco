@@ -14,10 +14,12 @@ import {
   pauseProspectSequence,
   resumeProspectSequence,
   restartProspectSequence,
+  getProspectSequence,
   type Prospect,
   type ProspectFunnel,
   type ProspectStatus,
   type ProspectEvent,
+  type ProspectSequenceStep,
   type SequenceStatus,
   syncResendEmailStats,
 } from "./actions"
@@ -204,6 +206,9 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   const [search, setSearch] = useState("")
   const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
   const [events, setEvents] = useState<ProspectEvent[]>([])
+  // PR 5 of the drip pipeline: load and render the full sequence (intro,
+  // followup, final) for the prospect's company in the details panel.
+  const [sequenceSteps, setSequenceSteps] = useState<ProspectSequenceStep[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [syncListId, setSyncListId] = useState("")
@@ -283,9 +288,16 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   // Expand row
   const openDetails = useCallback((prospect: Prospect) => {
     setDetailProspect(prospect)
+    setSequenceSteps([])
     startTransition(async () => {
-      const result = await fetchProspectEvents(prospect.id)
-      setEvents(result.events)
+      const [eventsResult, sequenceResult] = await Promise.all([
+        fetchProspectEvents(prospect.id),
+        getProspectSequence(prospect.id),
+      ])
+      setEvents(eventsResult.events)
+      if (sequenceResult.success && sequenceResult.steps) {
+        setSequenceSteps(sequenceResult.steps)
+      }
     })
   }, [])
 
@@ -797,11 +809,11 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
 
       {/* Details popup */}
       {detailProspect && (
-        <div className="popup-overlay" onClick={() => { setDetailProspect(null); setEvents([]) }}>
+        <div className="popup-overlay" onClick={() => { setDetailProspect(null); setEvents([]); setSequenceSteps([]) }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="popup-header">
               <h3 className="arco-section-title">{detailProspect.company_name || detailProspect.email}</h3>
-              <button type="button" className="popup-close" onClick={() => { setDetailProspect(null); setEvents([]) }} aria-label="Close">✕</button>
+              <button type="button" className="popup-close" onClick={() => { setDetailProspect(null); setEvents([]); setSequenceSteps([]) }} aria-label="Close">✕</button>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
@@ -822,6 +834,40 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               <div className="mb-4">
                 <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Notes</span>
                 <p className="text-xs text-[#6b6b68] mt-0.5">{detailProspect.notes}</p>
+              </div>
+            )}
+
+            {/* PR 5 of the drip pipeline: prospect outreach sequence status. */}
+            {sequenceSteps.length > 0 && (
+              <div className="mb-4">
+                <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Outreach Sequence</span>
+                <div className="mt-1 space-y-1.5">
+                  {sequenceSteps.map((step) => {
+                    const statusColours: Record<ProspectSequenceStep["status"], { bg: string; text: string; label: string }> = {
+                      sent:      { bg: "bg-emerald-50",  text: "text-emerald-700", label: "Sent" },
+                      scheduled: { bg: "bg-blue-50",     text: "text-blue-700",    label: "Scheduled" },
+                      cancelled: { bg: "bg-[#f5f5f4]",   text: "text-[#6b6b68]",   label: "Cancelled" },
+                      failed:    { bg: "bg-amber-50",    text: "text-amber-700",   label: "Retrying" },
+                      missing:   { bg: "bg-[#f5f5f4]",   text: "text-[#a1a1a0]",   label: "Not yet enqueued" },
+                    }
+                    const sc = statusColours[step.status]
+                    return (
+                      <div key={step.template} className="flex items-start gap-2 text-xs">
+                        <span className="font-medium text-[#1c1c1a] w-20 shrink-0">{step.label}</span>
+                        <span className={`px-1.5 py-0.5 rounded-[3px] ${sc.bg} ${sc.text} font-medium shrink-0`}>{sc.label}</span>
+                        {step.timestamp && (
+                          <span className="text-[#6b6b68]">{formatDateTime(step.timestamp)}</span>
+                        )}
+                        {step.cancelledReason && (
+                          <span className="text-[#a1a1a0]">· {step.cancelledReason}</span>
+                        )}
+                        {step.lastError && step.status === "failed" && (
+                          <span className="text-amber-600 break-all">· {step.lastError}</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
