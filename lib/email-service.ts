@@ -106,7 +106,8 @@ function heading(text: string): string {
 }
 
 function heading4(text: string): string {
-  return `<h4 style="margin:0 0 6px;font-size:18px;font-weight:400;color:#1c1c1a;font-family:Georgia,'Times New Roman',serif;">${text}</h4>`
+  // Matches .arco-h4 in globals.css: 15px / Sans / 500 / line-height 1.3.
+  return `<h4 style="margin:0 0 6px;font-size:15px;font-weight:500;line-height:1.3;color:#1c1c1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${text}</h4>`
 }
 
 function body(text: string): string {
@@ -425,23 +426,53 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
 
   // Featured professionals (cron pre-fetches; fallback for admin preview).
   const professionals = (vars.professionals as any[] | undefined) ?? [
-    { name: "Wolterinck", service: "Interior Designer", slug: "wolterinck", logo: null },
-    { name: "Engel Architecten", service: "Architect", slug: "engel-architecten", logo: null },
-    { name: "Marco van Veldhuizen", service: "Architect", slug: "marco-van-veldhuizen", logo: null },
-    { name: "Studio Piet Boon", service: "Interior Designer", slug: "studio-piet-boon", logo: null },
+    { name: "Wolterinck", service: "Interior Designer", city: "Laren", slug: "wolterinck", logo: null, image: "https://wolterinck.com/wp-content/uploads/2023/11/Wolterinck_Private_Project_Appartment_Amsterdam-08.jpg" },
+    { name: "Engel Architecten", service: "Architect", city: "Hilversum", slug: "engel-architecten", logo: null, image: "https://www.engelarchitecten.nl/wp-content/uploads/2023/03/01_Engel_BosVilla.jpg" },
+    { name: "Marco van Veldhuizen", service: "Architect", city: "Oisterwijk", slug: "marco-van-veldhuizen", logo: null, image: "https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg" },
+    { name: "Studio Piet Boon", service: "Interior Designer", city: "Oostzaan", slug: "studio-piet-boon", logo: null, image: null },
   ]
 
+  // Card layout mirrors the /professionals discover card:
+  //   1. 4:3 hero image (cover/hero photo), full card width
+  //   2. Info row: 34×34 round logo on the left, stacked title + subtitle
+  //   3. .discover-card-title: 15px sans 400 #1c1c1a
+  //   4. .discover-card-sub:   13px sans #a1a1a0 — "Service · City"
+  //
+  // The info row is laid out with a 2-cell table so Gmail honours the
+  // logo-left / text-right layout (flex is stripped).
   const professionalCard = (p: any) => {
     if (!p) return ''
     const initial = (p.name ?? '?').charAt(0).toUpperCase()
-    const iconHtml = p.logo
-      ? `<img src="${p.logo}" alt="${p.name}" width="160" height="160" style="display:block;width:100%;height:160px;object-fit:cover;border-radius:3px;background:#f5f5f4;" />`
-      : `<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:160px;background:#f5f5f4;border-radius:3px;text-align:center;vertical-align:middle;font-size:48px;font-weight:500;color:#a1a1a0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${initial}</td></tr></table>`
+
+    // 4:3 image block. Width will be ~220px after the 2-column 50% grid
+    // inside the 440px email body; height = 220 × (3/4) ≈ 165.
+    const imageHtml = p.image
+      ? `<img src="${p.image}" alt="${p.name ?? ''}" width="220" height="165" style="display:block;width:100%;height:165px;object-fit:cover;border-radius:3px;background:#f5f5f4;" />`
+      : `<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:165px;background:#f5f5f4;border-radius:3px;"></td></tr></table>`
+
+    // Logo (34×34 round). Gmail respects border-radius:50% on <img>.
+    const logoHtml = p.logo
+      ? `<img src="${p.logo}" alt="" width="34" height="34" style="display:block;width:34px;height:34px;border-radius:50%;object-fit:cover;background:#f5f5f4;" />`
+      : `<table cellpadding="0" cellspacing="0"><tr><td style="width:34px;height:34px;background:#f5f5f4;border-radius:50%;text-align:center;vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;font-weight:500;color:#6b6b68;">${initial}</td></tr></table>`
+
+    // Subtitle: "Service · City" — matches the discover card format.
+    const parts: string[] = []
+    if (p.service) parts.push(p.service)
+    if (p.city) parts.push(p.city)
+    const subtitle = parts.join(' · ')
+
     return `
     <a href="https://www.arcolist.com/professionals/${p.slug}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-      ${iconHtml}
-      <p style="margin:10px 0 2px;font-size:14px;font-weight:500;color:#1c1c1a;line-height:1.3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${p.name}</p>
-      ${p.service ? `<p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1.4;">${p.service}</p>` : ''}
+      ${imageHtml}
+      <table cellpadding="0" cellspacing="0" style="margin:12px 0 0;width:100%;">
+        <tr>
+          <td style="width:34px;padding-right:10px;vertical-align:middle;">${logoHtml}</td>
+          <td style="vertical-align:middle;">
+            <p style="margin:0 0 2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;font-weight:400;line-height:1.3;color:#1c1c1a;">${p.name}</p>
+            ${subtitle ? `<p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;font-weight:400;line-height:1.4;color:#a1a1a0;">${subtitle}</p>` : ''}
+          </td>
+        </tr>
+      </table>
     </a>`
   }
 

@@ -377,6 +377,34 @@ export async function sendTestEmail(template: string, toEmail: string): Promise<
     company_logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-assets/0b3b44d9-92aa-40e2-94e4-972038f8be50/logo/1774966489783-mvv.jpeg',
   }
 
+  // For templates that render live featured projects/professionals, pull
+  // the same data the cron will use for the real send so the preview
+  // matches reality. Admin test sends previously fell back to the static
+  // hardcoded arrays in lib/email-service.ts, which could diverge from
+  // what an actual welcome email would show.
+  if (template === 'welcome-homeowner' || template === 'discover-projects') {
+    try {
+      const { fetchFeaturedProjectsForEmail, fetchFeaturedProfessionalsForEmail } = await import(
+        '@/lib/email-featured-data'
+      )
+      const projectLimit = template === 'welcome-homeowner' ? 4 : 3
+      const [projects, professionals] = await Promise.all([
+        fetchFeaturedProjectsForEmail(projectLimit),
+        template === 'welcome-homeowner'
+          ? fetchFeaturedProfessionalsForEmail()
+          : Promise.resolve([] as Awaited<ReturnType<typeof fetchFeaturedProfessionalsForEmail>>),
+      ])
+      if (projects.length > 0) testVars.projects = projects
+      if (template === 'welcome-homeowner' && professionals.length > 0) {
+        testVars.professionals = professionals
+      }
+    } catch (err) {
+      // Non-fatal: if the featured-data lookup fails, the renderer falls
+      // back to the hardcoded sample arrays so the preview still renders.
+      console.error('[sendTestEmail] Failed to load featured data:', err)
+    }
+  }
+
   const result = await sendTransactionalEmail(toEmail, template as any, testVars)
   return { success: result.success, error: result.message }
 }

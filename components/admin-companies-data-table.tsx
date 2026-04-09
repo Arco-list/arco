@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import { format } from "date-fns"
 import { useRouter } from "next/navigation"
@@ -1205,6 +1205,54 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
   const isFiltered = columnFilters.length > 0 || table.getState().globalFilter
 
+  // Status funnel: Added → Prospected → Draft → Listed → Unlisted, with
+  // Deactivated as the off-path leak (analogous to Rejected on the projects
+  // funnel). Invited is excluded — invited companies come in via project
+  // credits, not the sales funnel, so mixing them in would muddy the
+  // conversion math. Mirrors the visual pattern from /admin/projects.
+  const companyStatusCounts: Record<string, number> = {}
+  for (const c of data) {
+    companyStatusCounts[c.status] = (companyStatusCounts[c.status] ?? 0) + 1
+  }
+  const COMPANY_FUNNEL: { status: CompanyStatus; dotColor: string }[] = [
+    { status: "added" as CompanyStatus, dotColor: "#ea580c" },
+    { status: "prospected" as CompanyStatus, dotColor: "#f59e0b" },
+    { status: "draft", dotColor: "#2563eb" },
+    { status: "deactivated", dotColor: "#dc2626" },
+    { status: "listed", dotColor: "#7c3aed" },
+    { status: "unlisted", dotColor: "#a1a1a0" },
+  ]
+  const companyCountAt = (status: string) => companyStatusCounts[status] ?? 0
+  // Each cohort represents "everything currently in or past this stage on
+  // the linear flow". Deactivated is a terminal leak so it doesn't
+  // accumulate forward.
+  const companyCohortFor = (status: string): number => {
+    switch (status) {
+      case "added":
+        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("deactivated") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "prospected":
+        return companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("deactivated") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "draft":
+        return companyCountAt("draft") + companyCountAt("deactivated") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "deactivated":
+        return companyCountAt("deactivated")
+      case "listed":
+        return companyCountAt("listed") + companyCountAt("unlisted")
+      case "unlisted":
+        return companyCountAt("unlisted")
+      default:
+        return 0
+    }
+  }
+  const companyConversionRate = (from: number, to: number): string => {
+    if (from === 0) return "0%"
+    return `${Math.round((to / from) * 100)}%`
+  }
+  const companyStatusLabel = (status: string): string => {
+    const opt = COMPANY_STATUS_OPTIONS.find((o) => o.value === status)
+    return opt?.label ?? status
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -1275,6 +1323,147 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       )}
 
       <AdminAddCompanyModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+
+      {/* Status funnel — same visual pattern as /admin/projects, plus a
+          bypass line from Draft → Listed (survival rate, skipping the
+          Deactivated leak). */}
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
+        {(() => {
+          const cols = COMPANY_FUNNEL.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
+          const CARD_WIDTH = 132
+
+          // Bypass rate: Draft → Listed, skipping the Deactivated leak.
+          const bypassRate = companyConversionRate(
+            companyCohortFor("draft"),
+            companyCohortFor("listed"),
+          )
+
+          // Draft sits in column 5 (2 * index 2 + 1) and Listed sits in
+          // column 9 (2 * index 4 + 1). The bypass arc spans 5 → 10 so it
+          // covers the entire range from Draft through the Listed card.
+          return (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: cols,
+                gridTemplateRows: "auto auto",
+                gap: 0,
+                alignItems: "start",
+              }}
+            >
+              {/* Bypass arc — row 1, centered from Draft → Listed */}
+              <div
+                style={{
+                  gridRow: 1,
+                  gridColumn: "5 / 10",
+                  position: "relative",
+                  height: 32,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: CARD_WIDTH / 2,
+                    right: CARD_WIDTH / 2,
+                    top: "50%",
+                    borderTop: "1px solid #d4d4d3",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: CARD_WIDTH / 2,
+                    top: "50%",
+                    bottom: 0,
+                    borderLeft: "1px solid #d4d4d3",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    right: CARD_WIDTH / 2,
+                    top: "50%",
+                    bottom: 0,
+                    borderLeft: "1px solid #d4d4d3",
+                  }}
+                />
+                {bypassRate && (
+                  <span
+                    className="absolute text-[10px] font-medium text-[#6b6b68]"
+                    style={{
+                      top: 0,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      whiteSpace: "nowrap",
+                      background: "#fff",
+                      padding: "0 6px",
+                    }}
+                  >
+                    {bypassRate}
+                  </span>
+                )}
+              </div>
+
+              {/* Cards + inline connectors — row 2 */}
+              {COMPANY_FUNNEL.map((stage, i) => {
+                const count = companyCountAt(stage.status)
+                const label = companyStatusLabel(stage.status)
+
+                // Compute the rate label that sits on the connector BEFORE this card.
+                // The "Deactivated → Listed" connector is left blank — the bypass
+                // arc above shows the meaningful Draft → Listed rate.
+                let rate = ""
+                if (i > 0) {
+                  const prev = COMPANY_FUNNEL[i - 1].status
+                  if (prev !== "deactivated") {
+                    rate = companyConversionRate(companyCohortFor(prev), companyCohortFor(stage.status))
+                  }
+                }
+
+                const isActive = statusFilter === stage.status
+                return (
+                  <Fragment key={stage.status}>
+                    {i > 0 && (
+                      <div
+                        className="relative px-1 self-center"
+                        style={{ gridRow: 2, minWidth: 32 }}
+                      >
+                        <div className="w-full border-t border-[#d4d4d3]" />
+                        {rate && (
+                          <span
+                            className="absolute text-[10px] font-medium text-[#6b6b68]"
+                            style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
+                          >
+                            {rate}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ gridRow: 2 }} className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = isActive ? "all" : (stage.status as any)
+                          setStatusFilter(next)
+                          table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
+                        }}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#c4c4c2] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        style={{ width: CARD_WIDTH }}
+                      >
+                        <div className="flex items-center gap-[6px] mb-1.5">
+                          <span className="status-pill-dot shrink-0" style={{ background: stage.dotColor }} />
+                          <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>{label}</span>
+                        </div>
+                        <p className="arco-card-title text-left">{count}</p>
+                      </button>
+                    </div>
+                  </Fragment>
+                )
+              })}
+            </div>
+          )
+        })()}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

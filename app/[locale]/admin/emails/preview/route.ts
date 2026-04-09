@@ -124,7 +124,35 @@ export async function GET(request: NextRequest) {
   }
 
   // Then check app transactional templates
-  const result = await renderEmailTemplate(template as EmailTemplate, TEST_VARS, origin)
+  const vars: Record<string, any> = { ...TEST_VARS }
+
+  // For templates that render live featured projects/professionals, pull
+  // the same data the cron uses for real sends so the preview matches
+  // what a real recipient would see. Without this the renderer falls back
+  // to its hardcoded sample arrays and the preview looks wrong
+  // (e.g. grey initials instead of actual company logos).
+  if (template === 'welcome-homeowner' || template === 'discover-projects') {
+    try {
+      const { fetchFeaturedProjectsForEmail, fetchFeaturedProfessionalsForEmail } = await import(
+        '@/lib/email-featured-data'
+      )
+      const projectLimit = template === 'welcome-homeowner' ? 4 : 3
+      const [projects, professionals] = await Promise.all([
+        fetchFeaturedProjectsForEmail(projectLimit),
+        template === 'welcome-homeowner'
+          ? fetchFeaturedProfessionalsForEmail()
+          : Promise.resolve([] as Awaited<ReturnType<typeof fetchFeaturedProfessionalsForEmail>>),
+      ])
+      if (projects.length > 0) vars.projects = projects
+      if (template === 'welcome-homeowner' && professionals.length > 0) {
+        vars.professionals = professionals
+      }
+    } catch (err) {
+      console.error('[emails/preview] Failed to load featured data:', err)
+    }
+  }
+
+  const result = await renderEmailTemplate(template as EmailTemplate, vars, origin)
   if (!result) return new NextResponse('Template not found', { status: 404 })
 
   return new NextResponse(result.html, {

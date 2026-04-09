@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
       .limit(MAX_RESULTS),
     supabase
       .from("mv_professional_summary")
-      .select("company_id_full, company_name, company_slug, company_logo, company_city, company_state_region, primary_service_name, primary_service_name_nl, bio")
-      .eq("company_status", "listed")
+      .select("company_id_full, company_name, company_slug, company_logo, company_city, company_state_region, primary_service_name, primary_service_name_nl, bio, company_status")
+      .in("company_status", ["listed", "prospected"])
       .or(`company_name.ilike.${pattern},company_city.ilike.${pattern},company_state_region.ilike.${pattern},primary_service_name.ilike.${pattern},primary_service_name_nl.ilike.${pattern},bio.ilike.${pattern}`)
       .limit(MAX_RESULTS * 2), // fetch extra to account for dedup
   ])

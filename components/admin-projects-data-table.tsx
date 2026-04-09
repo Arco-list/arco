@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { Fragment, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -642,6 +642,39 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
     return counts
   }, [projects])
 
+  // Funnel buckets, mirroring the visual pattern of /admin/sales prospects.
+  // Order: in progress → in review → rejected → listed → unlisted.
+  // Rejected sits between In review and Listed because that's where the
+  // off-path leak actually happens (admin rejects during review). The
+  // conversion rate shown on the connector AFTER Rejected uses In review
+  // as the denominator, not Rejected — so it represents "what fraction of
+  // submitted projects actually got listed", bypassing the rejected leak.
+  const FUNNEL_STATUSES: { status: ProjectStatus; driver: "draft" | "review" | "rejected" | "live" | "unlisted" }[] = [
+    { status: "draft", driver: "draft" },
+    { status: "in_progress", driver: "review" },
+    { status: "rejected", driver: "rejected" },
+    { status: "published", driver: "live" },
+    { status: "archived", driver: "unlisted" },
+  ]
+  const DRIVER_COLORS_PROJECTS: Record<string, string> = {
+    draft: "#f59e0b",
+    review: "#2563eb",
+    rejected: "#dc2626",
+    live: "#7c3aed",
+    unlisted: "#a1a1a0",
+  }
+  const DRIVER_LABEL_AT_PROJECTS: Record<string, ProjectStatus> = {
+    draft: "draft",
+    review: "in_progress",
+    rejected: "rejected",
+    live: "published",
+    unlisted: "archived",
+  }
+  const conversionRate = (from: number, to: number): string => {
+    if (from === 0) return "0%"
+    return `${Math.round((to / from) * 100)}%`
+  }
+
   return (
     <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Header */}
@@ -649,13 +682,172 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         <h3 className="arco-section-title">Projects</h3>
         <p className="text-xs text-[#a1a1a0] mt-0.5">
           {projects.length} total
-          {statusCounts.published ? ` · ${statusCounts.published} published` : ""}
-          {statusCounts.in_progress ? ` · ${statusCounts.in_progress} in review` : ""}
           {" · "}
           <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
             Status guide
           </button>
         </p>
+      </div>
+
+      {/* Status funnel — same visual pattern as /admin/sales, plus a bypass
+          line above the cards from In review → Listed showing the survival
+          rate (submitted projects that actually reached Listed, ignoring the
+          rejected leak). */}
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
+        {(() => {
+          const cols = FUNNEL_STATUSES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
+          const CARD_WIDTH = 132
+
+          const countAt = (status: ProjectStatus) => statusCounts[status] ?? 0
+
+          // Cohort that "reaches" each stage. Each cohort represents
+          // everything currently in or past this stage on the linear flow.
+          const cohortFor = (status: ProjectStatus): number => {
+            switch (status) {
+              case "draft":
+                return countAt("draft") + countAt("in_progress") + countAt("rejected") + countAt("published") + countAt("archived")
+              case "in_progress":
+                return countAt("in_progress") + countAt("rejected") + countAt("published") + countAt("archived")
+              case "rejected":
+                return countAt("rejected")
+              case "published":
+                return countAt("published") + countAt("archived")
+              case "archived":
+                return countAt("archived")
+              default:
+                return 0
+            }
+          }
+
+          // Bypass rate: In review → Listed, skipping the Rejected leak.
+          const bypassRate = conversionRate(cohortFor("in_progress"), cohortFor("published"))
+
+          return (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: cols,
+                gridTemplateRows: "auto auto",
+                gap: 0,
+                alignItems: "start",
+              }}
+            >
+              {/* Bypass arc — row 1, spans cols 3 through 7 (In review → Listed).
+                  Inset by half a card width on each side so the line starts and
+                  ends at the centers of the In review and Listed cards. */}
+              <div
+                style={{
+                  gridRow: 1,
+                  gridColumn: "3 / 8",
+                  position: "relative",
+                  height: 32,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: CARD_WIDTH / 2,
+                    right: CARD_WIDTH / 2,
+                    top: "50%",
+                    borderTop: "1px solid #d4d4d3",
+                  }}
+                />
+                {/* Drop-down ticks on each end so it visually anchors to the cards */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: CARD_WIDTH / 2,
+                    top: "50%",
+                    bottom: 0,
+                    borderLeft: "1px solid #d4d4d3",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    right: CARD_WIDTH / 2,
+                    top: "50%",
+                    bottom: 0,
+                    borderLeft: "1px solid #d4d4d3",
+                  }}
+                />
+                {bypassRate && (
+                  <span
+                    className="absolute text-[10px] font-medium text-[#6b6b68]"
+                    style={{
+                      top: 0,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      whiteSpace: "nowrap",
+                      background: "#fff",
+                      padding: "0 6px",
+                    }}
+                  >
+                    {bypassRate}
+                  </span>
+                )}
+              </div>
+
+              {/* Cards + inline connectors — row 2 */}
+              {FUNNEL_STATUSES.map((stage, i) => {
+                const count = statusCounts[stage.status] ?? 0
+                const config = STATUS_CONFIG[stage.status]
+
+                // Compute the rate label that sits on the connector BEFORE this card.
+                // The "Rejected → Listed" connector is left blank because rejected
+                // projects don't actually progress to listed — the bypass arc above
+                // shows the meaningful In review → Listed rate.
+                let rate = ""
+                if (i > 0) {
+                  const prev = FUNNEL_STATUSES[i - 1].status
+                  if (prev !== "rejected") {
+                    rate = conversionRate(cohortFor(prev), cohortFor(stage.status))
+                  }
+                }
+
+                const isActive = statusFilter === stage.status
+                return (
+                  <Fragment key={stage.status}>
+                    {i > 0 && (
+                      <div
+                        className="relative px-1 self-center"
+                        style={{ gridRow: 2, minWidth: 32 }}
+                      >
+                        <div className="w-full border-t border-[#d4d4d3]" />
+                        {rate && (
+                          <span
+                            className="absolute text-[10px] font-medium text-[#6b6b68]"
+                            style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
+                          >
+                            {rate}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ gridRow: 2 }} className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = isActive ? "all" : stage.status
+                          setStatusFilter(next)
+                          table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
+                        }}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#c4c4c2] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        style={{ width: CARD_WIDTH }}
+                      >
+                        <div className="flex items-center gap-[6px] mb-1.5">
+                          <span className="status-pill-dot shrink-0" style={{ background: DRIVER_COLORS_PROJECTS[stage.driver] }} />
+                          <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>{config.label}</span>
+                        </div>
+                        <p className="arco-card-title text-left">{count}</p>
+                      </button>
+                    </div>
+                  </Fragment>
+                )
+              })}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Filters */}

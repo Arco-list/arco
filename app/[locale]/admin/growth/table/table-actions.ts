@@ -32,12 +32,27 @@ function getRange(tf: Timeframe): Date {
   }
 }
 
+/** Snap a date to the Monday of its ISO 8601 week (00:00 local). */
+function startOfIsoWeek(d: Date): Date {
+  const out = new Date(d)
+  out.setHours(0, 0, 0, 0)
+  // getDay(): Sun=0, Mon=1, ..., Sat=6. Map so Mon=0, Sun=6.
+  const dow = (out.getDay() + 6) % 7
+  out.setDate(out.getDate() - dow)
+  return out
+}
+
 /** Get 8 bucket boundaries: 7 completed periods + 1 rolling (current) period */
 function getBuckets(tf: Timeframe): { starts: Date[]; ends: Date[]; labels: string[] } {
   const now = new Date()
   const starts: Date[] = []
   const ends: Date[] = []
   const labels: string[] = []
+
+  // For weeks, anchor every bucket to the Monday of the current ISO week
+  // so the 8 buckets line up with calendar weeks instead of "now − 7×N days"
+  // (which would shift labels to whatever day-of-week `now` happens to be).
+  const currentMonday = tf === "weeks" ? startOfIsoWeek(now) : null
 
   for (let i = 0; i < 8; i++) {
     let start: Date, end: Date
@@ -49,8 +64,7 @@ function getBuckets(tf: Timeframe): { starts: Date[]; ends: Date[]; labels: stri
         labels.push(start.toLocaleDateString("en-US", { month: "short", day: "numeric" }))
         break
       case "weeks":
-        start = new Date(now.getTime() - (7 - i) * WEEK_MS)
-        start.setHours(0, 0, 0, 0)
+        start = new Date(currentMonday!.getTime() - (7 - i) * WEEK_MS)
         end = new Date(start.getTime() + WEEK_MS)
         labels.push(start.toLocaleDateString("en-US", { month: "short", day: "numeric" }))
         break
@@ -143,10 +157,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const allCompanyDates = makeDates(companies)
   const allCompanies = bucket8(allCompanyDates, buckets)
 
-  // Published = ALL projects that have been published (status published — they stay counted even if archived later)
-  const publishedDates = makeDates(projects, (p) => p.status === "published")
-  const publishers = bucket8(publishedDates, buckets)
-
   const allProjectDates = makeDates(projects)
   const allProjects = bucket8(allProjectDates, buckets)
 
@@ -161,17 +171,75 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const totalDraftProjects = projects.filter((p: any) => p.status === "draft").length
   const totalPublished = projects.filter((p: any) => p.status === "published").length
 
-  // Unique publishers (companies with published projects) in the time range
-  const publishedInRange = projects.filter((p: any) => p.status === "published" && p.client_id && p.created_at && new Date(p.created_at) >= from)
-  const publisherClientIds = new Set(publishedInRange.map((p: any) => p.client_id))
-  const projectsPerPublisher = publisherClientIds.size > 0 ? Math.round((publishedInRange.length / publisherClientIds.size) * 10) / 10 : 0
+  // ── Publishers: unique COMPANIES that own at least one published project in the period.
+  //
+  // The previous implementation used projects.client_id (the user who uploaded
+  // the project) as the publisher key, which was wrong on two counts:
+  //   1. It counted unique users, not unique companies — two team members
+  //      from the same studio uploading one project each looked like 2 publishers.
+  //   2. The "Publishers" bucket was actually counting individual published
+  //      projects, not unique publishing companies.
+  //
+  // The owning company lives in project_professionals where is_project_owner = true.
+  const projectIdToOwnerCompany = new Map<string, string>()
+  for (const link of invites) {
+    if (!link.is_project_owner || !link.project_id || !link.company_id) continue
+    if (!projectIdToOwnerCompany.has(link.project_id)) {
+      projectIdToOwnerCompany.set(link.project_id, link.company_id)
+    }
+  }
 
-  // Projects/publisher per bucket
-  function bucketProjectsPerPublisher(): number[] {
-    const published = projects.filter((p: any) => p.status === "published" && p.client_id && p.created_at)
+  // For each published project, derive (companyId, publishedAt) — falling back
+  // to created_at when updated_at is missing.
+  type PublishedRow = { companyId: string; publishedAt: Date }
+  const publishedRows: PublishedRow[] = []
+  for (const p of projects) {
+    if (p.status !== "published") continue
+    const companyId = projectIdToOwnerCompany.get(p.id)
+    if (!companyId) continue
+    const ts = p.updated_at ?? p.created_at
+    if (!ts) continue
+    publishedRows.push({ companyId, publishedAt: new Date(ts) })
+  }
+
+  // Publishers per bucket: count distinct company_ids whose published date
+  // falls inside the bucket window.
+  function bucketUniquePublishers(): number[] {
     return buckets.starts.map((_, i) => {
-      const inBucket = published.filter((p: any) => { const d = new Date(p.created_at); return d >= buckets.starts[i] && d < buckets.ends[i] })
-      const uniq = new Set(inBucket.map((p: any) => p.client_id))
+      const seen = new Set<string>()
+      for (const row of publishedRows) {
+        if (row.publishedAt >= buckets.starts[i] && row.publishedAt < buckets.ends[i]) {
+          seen.add(row.companyId)
+        }
+      }
+      return seen.size
+    })
+  }
+  const publishersBucketed = bucketUniquePublishers()
+  // Use the bucket8-shaped object so the existing rendering keeps working.
+  const publishers = { datapoints: publishersBucketed, labels: [] as string[] }
+
+  // Total unique publishers in the whole window
+  const allPublisherCompanyIds = new Set(
+    publishedRows
+      .filter((r) => r.publishedAt >= from)
+      .map((r) => r.companyId),
+  )
+  const totalPublishersInWindow = allPublisherCompanyIds.size
+  const publishedInRangeCount = publishedRows.filter((r) => r.publishedAt >= from).length
+  const projectsPerPublisher =
+    totalPublishersInWindow > 0
+      ? Math.round((publishedInRangeCount / totalPublishersInWindow) * 10) / 10
+      : 0
+
+  // Projects/publisher per bucket: avg published projects per unique
+  // publishing company *in that bucket*.
+  function bucketProjectsPerPublisher(): number[] {
+    return buckets.starts.map((_, i) => {
+      const inBucket = publishedRows.filter(
+        (r) => r.publishedAt >= buckets.starts[i] && r.publishedAt < buckets.ends[i],
+      )
+      const uniq = new Set(inBucket.map((r) => r.companyId))
       return uniq.size > 0 ? Math.round((inBucket.length / uniq.size) * 10) / 10 : 0
     })
   }
@@ -272,18 +340,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     {
       key: "actives", label: "Listed", definition: "Unique first time listed companies", source: "supabase" as MetricSource, driver: "retention",
       total: activeDates.length, ...actives,
-      subs: [
-        { key: "total_listed", label: "Total Listed", definition: "Total listed companies", total: totalListed, datapoints: actives.datapoints },
-        { key: "total_unlisted", label: "Total Unlisted", definition: "Total unlisted companies", total: totalUnlisted, datapoints: unlisted.datapoints },
-      ],
+      subs: [],
     },
     {
-      key: "publishers", label: "Publishers", definition: "Unique companies that published one or more projects", source: "supabase" as MetricSource, driver: "retention",
-      total: publishedDates.length, ...publishers,
+      key: "publishers", label: "Publishers", definition: "Unique companies that published at least one project in the period", source: "supabase" as MetricSource, driver: "retention",
+      total: totalPublishersInWindow, ...publishers,
       subs: [
         { key: "projects_per_publisher", label: "Projects/publisher", definition: "Avg. published projects per publishing company", total: projectsPerPublisher, datapoints: projectsPerPublisherSeries },
-        { key: "total_in_progress", label: "Total in progress", definition: "Total projects with status draft (being edited)", total: totalDraftProjects, datapoints: draftProjects.datapoints },
-        { key: "total_in_review", label: "Total in review", definition: "Total projects submitted for review", total: totalInProgress, datapoints: inProgress.datapoints },
       ],
     },
     {
@@ -344,7 +407,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     },
     // ── Clients ────────────────────────────────────────────────────────
     {
-      key: "client_visitors", label: "Visitors", definition: "Unique visitors browsing projects and professionals pages", source: "posthog" as MetricSource, driver: "acquisition",
+      key: "client_visitors", label: "Visitors", definition: "Unique visitors across the entire site (matches PostHog Web Analytics)", source: "posthog" as MetricSource, driver: "acquisition",
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer", total: 0, datapoints: empty8 },

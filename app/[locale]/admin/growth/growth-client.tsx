@@ -62,10 +62,10 @@ function CardSparkline({ datapoints, color }: { datapoints: number[]; color: str
             <svg width="7" height="7" viewBox="0 0 7 7" style={{ display: "block", position: "absolute", left: "50%", top: "50%", marginLeft: "-3.5px", marginTop: "-3.5px" }}>
               <circle cx="3.5" cy="3.5" r="2.5" fill="white" stroke={color} strokeWidth="1.5" opacity={p.isRolling ? 0.6 : 1} />
             </svg>
-            {/* Number label above dot */}
+            {/* Number label sitting directly above the dot, centered horizontally */}
             <span
               className={`absolute whitespace-nowrap ${p.isRolling ? "" : "opacity-0 group-hover/dot:opacity-100 transition-opacity"}`}
-              style={{ left: 0, top: 0, transform: "translate(-50%, -100%)", marginTop: -5, fontSize: 11, fontWeight: 500, color: "#1c1c1a", pointerEvents: p.isRolling ? undefined : "none" }}
+              style={{ left: "50%", top: 0, transform: "translate(-50%, calc(-100% - 2px))", fontSize: 11, fontWeight: 500, color: "#1c1c1a", pointerEvents: p.isRolling ? undefined : "none" }}
             >
               {p.v}
             </span>
@@ -216,18 +216,40 @@ export function GrowthClient({ initialMetrics }: Props) {
     proVisitorsSeries: number[]
     clientVisitorsSeries: number[]
     sharersSeries: number[]
+    projectSharesSeries: number[]
+    professionalSharesSeries: number[]
+    sharesPerClientSeries: number[]
     clientSources: Array<{ label: string; pct: number; count: number }>
     proSources: Array<{ label: string; pct: number; count: number }>
     clientSourceSeries: Record<string, number[]>
     proSourceSeries: Record<string, number[]>
     loaded: boolean
-  }>({ proVisitors: null, clientVisitors: null, sharers: null, sharesPerClient: 0, projectShares: 0, professionalShares: 0, apolloVisitors: 0, inviteVisitors: 0, clientActives: 0, clientActivesSeries: [], apolloVisitorsSeries: [], inviteVisitorsSeries: [], proVisitorsSeries: [], clientVisitorsSeries: [], sharersSeries: [], clientSources: [], proSources: [], clientSourceSeries: {}, proSourceSeries: {}, loaded: false })
+  }>({ proVisitors: null, clientVisitors: null, sharers: null, sharesPerClient: 0, projectShares: 0, professionalShares: 0, apolloVisitors: 0, inviteVisitors: 0, clientActives: 0, clientActivesSeries: [], apolloVisitorsSeries: [], inviteVisitorsSeries: [], proVisitorsSeries: [], clientVisitorsSeries: [], sharersSeries: [], projectSharesSeries: [], professionalSharesSeries: [], sharesPerClientSeries: [], clientSources: [], proSources: [], clientSourceSeries: {}, proSourceSeries: {}, loaded: false })
 
   // Surface PostHog API errors instead of silently rendering zeros across the
   // dashboard. The most common cause is POSTHOG_PERSONAL_API_KEY missing in
   // Vercel — without this banner, the only symptom is "all metrics are 0"
   // which is indistinguishable from "no traffic yet".
   const [posthogError, setPosthogError] = useState<string | null>(null)
+
+  // Age in minutes of the cached PostHog data per timeframe. Used to disable
+  // the refresh button when every timeframe is < 30 minutes old and to
+  // guarantee that "Refresh all" work reflects the real cache state.
+  const [cacheAgeByTimeframe, setCacheAgeByTimeframe] = useState<Record<Timeframe, number | null>>({
+    days: null,
+    weeks: null,
+    months: null,
+    years: null,
+  })
+
+  // True while a manual "refresh all" is running — keeps the button disabled
+  // and the spinner visible for the entire parallel fetch sequence.
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false)
+
+  // Minutes threshold below which the refresh button is hidden as disabled.
+  // Matches the shortest cache TTL (days = 30min) so we never give the user
+  // a button that wouldn't actually fetch new data.
+  const REFRESH_DEBOUNCE_MINUTES = 30
 
   const [detailMetric, setDetailMetric] = useState<string | null>(null)
   const [detailValue, setDetailValue] = useState<number | string | null>(null)
@@ -277,27 +299,32 @@ export function GrowthClient({ initialMetrics }: Props) {
     return convMap[key] ?? []
   }
 
-  const fetchPosthog = (tf: Timeframe, force: boolean = false) => {
+  // Low-level fetch: hits the API, records the cache age for the given
+  // timeframe, and returns the parsed payload. Does NOT update `posthogData`
+  // — use fetchPosthog() for that. The separation lets the refresh-all
+  // handler warm other timeframes' cache rows without overwriting the
+  // currently-rendered data.
+  const fetchPosthogRaw = async (tf: Timeframe, force: boolean = false): Promise<any> => {
     const url = `/api/growth-posthog?tf=${tf}${force ? "&refresh=1" : ""}`
+    const r = await fetch(url)
+    if (!r.ok) {
+      let message = `PostHog API request failed (HTTP ${r.status})`
+      try {
+        const body = await r.json()
+        if (body?.error) message = body.error
+      } catch { /* non-JSON error response */ }
+      throw new Error(message)
+    }
+    const data = await r.json()
+    if (typeof data?._age_minutes === "number") {
+      setCacheAgeByTimeframe((prev) => ({ ...prev, [tf]: data._age_minutes }))
+    }
+    return data
+  }
+
+  const fetchPosthog = (tf: Timeframe, force: boolean = false) => {
     if (force) setPosthogData((prev) => ({ ...prev, loaded: false }))
-    fetch(url)
-      .then(async (r) => {
-        // Distinguish HTTP errors (config / auth / network) from successful
-        // empty responses. The route returns 503 when POSTHOG_PERSONAL_API_KEY
-        // is missing on the server — surface that to the user instead of
-        // silently rendering zeros across the dashboard.
-        if (!r.ok) {
-          let message = `PostHog API request failed (HTTP ${r.status})`
-          try {
-            const body = await r.json()
-            if (body?.error) message = body.error
-          } catch {
-            // non-JSON error response, keep default message
-          }
-          throw new Error(message)
-        }
-        return r.json()
-      })
+    fetchPosthogRaw(tf, force)
       .then((d) => {
         setPosthogError(null)
         setPosthogData({
@@ -316,6 +343,9 @@ export function GrowthClient({ initialMetrics }: Props) {
           proVisitorsSeries: d.proVisitorsSeries ?? [],
           clientVisitorsSeries: d.clientVisitorsSeries ?? [],
           sharersSeries: d.sharersSeries ?? [],
+          projectSharesSeries: d.projectSharesSeries ?? [],
+          professionalSharesSeries: d.professionalSharesSeries ?? [],
+          sharesPerClientSeries: d.sharesPerClientSeries ?? [],
           clientSources: d.clientSources ?? [],
           proSources: d.proSources ?? [],
           clientSourceSeries: d.clientSourceSeries ?? {},
@@ -327,6 +357,75 @@ export function GrowthClient({ initialMetrics }: Props) {
         setPosthogError(err.message ?? "Unknown error fetching PostHog data")
         setPosthogData((prev) => ({ ...prev, loaded: true }))
       })
+  }
+
+  /**
+   * Refresh all four timeframes sequentially and overwrite their cache
+   * rows. Runs one at a time so the parallel PostHog API calls per
+   * timeframe (~22 calls each) don't collide with each other's rate
+   * limits. Only the currently-rendered timeframe updates `posthogData`;
+   * the others just warm their cache row so the next tab switch is fast.
+   */
+  const refreshAllTimeframes = async () => {
+    if (isRefreshingAll) return
+    setIsRefreshingAll(true)
+    setPosthogData((prev) => ({ ...prev, loaded: false }))
+
+    // Fetch the active timeframe first so the visible chart updates as
+    // soon as possible. Then warm the other three in the background.
+    const activeTf = timeframe
+    const otherTfs: Timeframe[] = (["days", "weeks", "months", "years"] as Timeframe[]).filter(
+      (tf) => tf !== activeTf,
+    )
+
+    try {
+      // Active tab first: fetch + hydrate posthogData so the chart
+      // updates as soon as the first fetch finishes.
+      const activeData = await fetchPosthogRaw(activeTf, true)
+      setPosthogError(null)
+      setPosthogData({
+        proVisitors: activeData.proVisitors ?? null,
+        clientVisitors: activeData.clientVisitors ?? null,
+        sharers: activeData.sharers ?? null,
+        sharesPerClient: activeData.sharesPerClient ?? 0,
+        projectShares: activeData.projectShares ?? 0,
+        professionalShares: activeData.professionalShares ?? 0,
+        apolloVisitors: activeData.apolloVisitors ?? 0,
+        inviteVisitors: activeData.inviteVisitors ?? 0,
+        clientActives: activeData.clientActives ?? 0,
+        clientActivesSeries: activeData.clientActivesSeries ?? [],
+        apolloVisitorsSeries: activeData.apolloVisitorsSeries ?? [],
+        inviteVisitorsSeries: activeData.inviteVisitorsSeries ?? [],
+        proVisitorsSeries: activeData.proVisitorsSeries ?? [],
+        clientVisitorsSeries: activeData.clientVisitorsSeries ?? [],
+        sharersSeries: activeData.sharersSeries ?? [],
+        projectSharesSeries: activeData.projectSharesSeries ?? [],
+        professionalSharesSeries: activeData.professionalSharesSeries ?? [],
+        sharesPerClientSeries: activeData.sharesPerClientSeries ?? [],
+        clientSources: activeData.clientSources ?? [],
+        proSources: activeData.proSources ?? [],
+        clientSourceSeries: activeData.clientSourceSeries ?? {},
+        proSourceSeries: activeData.proSourceSeries ?? {},
+        loaded: true,
+      })
+
+      // Other tabs: warm their cache rows sequentially so we don't
+      // overlap PostHog's rate limits. Errors on secondary fetches are
+      // non-fatal — the active tab already rendered.
+      for (const tf of otherTfs) {
+        try {
+          await fetchPosthogRaw(tf, true)
+        } catch (err) {
+          console.warn(`[refreshAll] Failed to refresh ${tf}:`, err)
+        }
+      }
+    } catch (err) {
+      const e = err as Error
+      setPosthogError(e.message ?? "Unknown error refreshing PostHog data")
+      setPosthogData((prev) => ({ ...prev, loaded: true }))
+    } finally {
+      setIsRefreshingAll(false)
+    }
   }
 
   useEffect(() => {
@@ -431,20 +530,41 @@ export function GrowthClient({ initialMetrics }: Props) {
             </button>
           ))}
           </div>
-          {/* Refresh PostHog data — bypasses the posthog_cache row for the
-              currently selected timeframe. */}
-          <button
-            onClick={() => fetchPosthog(timeframe, true)}
-            disabled={!posthogData.loaded}
-            title="Refresh PostHog data (bypasses cache)"
-            aria-label="Refresh PostHog data"
-            className="flex items-center justify-center h-[26px] w-[26px] border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] disabled:opacity-50 transition-colors"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className={!posthogData.loaded ? "animate-spin" : ""}>
-              <path d="M10.5 2v3h-3" />
-              <path d="M10.5 5A4.5 4.5 0 1 0 9 9.5" />
-            </svg>
-          </button>
+          {/* Refresh PostHog data — busts the posthog_cache row for every
+              timeframe (days/weeks/months/years) sequentially. Disabled
+              while a refresh is in flight and when every known timeframe
+              is < REFRESH_DEBOUNCE_MINUTES old. */}
+          {(() => {
+            const ages = (["days", "weeks", "months", "years"] as Timeframe[])
+              .map((tf) => cacheAgeByTimeframe[tf])
+              .filter((a): a is number => typeof a === "number")
+            const allKnownAndFresh =
+              ages.length > 0 && ages.every((a) => a < REFRESH_DEBOUNCE_MINUTES)
+            const maxKnownAge = ages.length > 0 ? Math.max(...ages) : null
+            const disabled = isRefreshingAll || !posthogData.loaded || allKnownAndFresh
+            const title = isRefreshingAll
+              ? "Refreshing all timeframes…"
+              : allKnownAndFresh
+                ? `All timeframes refreshed in the last ${REFRESH_DEBOUNCE_MINUTES} minutes`
+                : maxKnownAge !== null
+                  ? `Refresh all timeframes (oldest cache: ${maxKnownAge} min)`
+                  : "Refresh all timeframes"
+            const spinning = isRefreshingAll || !posthogData.loaded
+            return (
+              <button
+                onClick={() => void refreshAllTimeframes()}
+                disabled={disabled}
+                title={title}
+                aria-label={title}
+                className="flex items-center justify-center h-[26px] w-[26px] border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className={spinning ? "animate-spin" : ""}>
+                  <path d="M10.5 2v3h-3" />
+                  <path d="M10.5 5A4.5 4.5 0 1 0 9 9.5" />
+                </svg>
+              </button>
+            )
+          })()}
         </div>
       </div>
 
@@ -455,6 +575,11 @@ export function GrowthClient({ initialMetrics }: Props) {
           proVisitorsSeries={posthogData.proVisitorsSeries} clientVisitorsSeries={posthogData.clientVisitorsSeries}
           clientActives={posthogData.clientActives} clientActivesSeries={posthogData.clientActivesSeries}
           sharers={posthogData.sharers} sharersSeries={posthogData.sharersSeries}
+          projectShares={posthogData.projectShares} professionalShares={posthogData.professionalShares}
+          sharesPerClient={posthogData.sharesPerClient}
+          projectSharesSeries={posthogData.projectSharesSeries}
+          professionalSharesSeries={posthogData.professionalSharesSeries}
+          sharesPerClientSeries={posthogData.sharesPerClientSeries}
           clientSources={posthogData.clientSources} proSources={posthogData.proSources}
           apolloVisitorsSeries={posthogData.apolloVisitorsSeries} inviteVisitorsSeries={posthogData.inviteVisitorsSeries}
           clientSourceSeries={posthogData.clientSourceSeries} proSourceSeries={posthogData.proSourceSeries}

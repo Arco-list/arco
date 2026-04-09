@@ -59,7 +59,7 @@ function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; la
             </svg>
             <span
               className="absolute text-[11px] font-medium whitespace-nowrap"
-              style={{ bottom: 4, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
+              style={{ bottom: 0, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : "·"}
             </span>
@@ -118,7 +118,7 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
             </svg>
             <span
               className="absolute text-[10px] font-medium whitespace-nowrap"
-              style={{ bottom: 3, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
+              style={{ bottom: 0, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : ""}
             </span>
@@ -236,6 +236,12 @@ interface Props {
   clientActivesSeries?: number[]
   sharers?: number | null
   sharersSeries?: number[]
+  projectShares?: number
+  professionalShares?: number
+  sharesPerClient?: number
+  projectSharesSeries?: number[]
+  professionalSharesSeries?: number[]
+  sharesPerClientSeries?: number[]
   clientSources?: Array<{ label: string; pct: number; count: number }>
   proSources?: Array<{ label: string; pct: number; count: number }>
   apolloVisitorsSeries?: number[]
@@ -244,7 +250,17 @@ interface Props {
   proSourceSeries?: Record<string, number[]>
 }
 
-export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVisitors, proVisitorsSeries, clientVisitorsSeries, clientActives, clientActivesSeries, sharers, sharersSeries, clientSources, proSources, apolloVisitorsSeries, inviteVisitorsSeries, clientSourceSeries, proSourceSeries }: Props) {
+export function GrowthTableView({
+  rows, labels, isPending,
+  proVisitors, clientVisitors, proVisitorsSeries, clientVisitorsSeries,
+  clientActives, clientActivesSeries,
+  sharers, sharersSeries,
+  projectShares, professionalShares, sharesPerClient,
+  projectSharesSeries, professionalSharesSeries, sharesPerClientSeries,
+  clientSources, proSources,
+  apolloVisitorsSeries, inviteVisitorsSeries,
+  clientSourceSeries, proSourceSeries,
+}: Props) {
   // Align to 8 buckets where index 7 is the rolling/most-recent period.
   // PostHog returns chronologically ordered data, so we keep the LAST 8 values
   // (or pad zeros to the LEFT for sparse series) — never drop the rolling bucket.
@@ -302,7 +318,30 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
       datapoints: pad8(clientVisitorsSeries),
       subs: overrideSubs(r.subs, clientSources, clientSourceSeries),
     }
-    if (r.key === "sharers") return { ...r, total: sharers ?? 0, datapoints: pad8(sharersSeries) }
+    if (r.key === "sharers") {
+      const sharesSubSeriesByKey: Record<string, number[]> = {
+        shares_per_client: pad8(sharesPerClientSeries),
+        projects_shared: pad8(projectSharesSeries),
+        professionals_shared: pad8(professionalSharesSeries),
+      }
+      const sharesSubTotalByKey: Record<string, number> = {
+        shares_per_client: sharesPerClient ?? 0,
+        projects_shared: projectShares ?? 0,
+        professionals_shared: professionalShares ?? 0,
+      }
+      return {
+        ...r,
+        total: sharers ?? 0,
+        datapoints: pad8(sharersSeries),
+        subs: r.subs.map((sub) => {
+          const series = sharesSubSeriesByKey[sub.key]
+          const total = sharesSubTotalByKey[sub.key]
+          return series
+            ? { ...sub, total: total ?? sub.total, datapoints: series }
+            : sub
+        }),
+      }
+    }
     return r
   })
 
@@ -319,7 +358,7 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
             const n = arr.length
             const leftPct = (6 + (i / (n - 1)) * (100 - 12))
             return (
-              <span key={i} className="absolute text-[9px] font-medium uppercase tracking-wider" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
+              <span key={i} className="absolute text-[9px] font-medium uppercase tracking-wider whitespace-nowrap" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
             )
           })}
         </div>
@@ -340,7 +379,7 @@ export function GrowthTableView({ rows, labels, isPending, proVisitors, clientVi
                   const n = arr.length
                   const leftPct = (6 + (i / (n - 1)) * (100 - 12))
                   return (
-                    <span key={i} className="absolute arco-eyebrow" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
+                    <span key={i} className="absolute arco-eyebrow whitespace-nowrap" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
                   )
                 })}
               </div>

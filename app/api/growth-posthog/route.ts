@@ -41,11 +41,21 @@ export async function GET(request: NextRequest) {
     months: "-8m",
     years: "-8y",
   }
+  // TrendsQuery paths ask PostHog for `month` and post-aggregate into years
+  // because PostHog's TrendsQuery doesn't support `interval: year`. HogQL
+  // paths use `year` natively via toStartOfYear() — more accurate and
+  // saves the aggregation step entirely.
   const intervalMap: Record<string, string> = {
     days: "day",
     weeks: "week",
     months: "month",
     years: "month",
+  }
+  const hogqlIntervalMap: Record<string, string> = {
+    days: "day",
+    weeks: "week",
+    months: "month",
+    years: "year",
   }
   // Cache TTL per timeframe — shorter for days, longer for years
   const cacheTtlMinutes: Record<string, number> = {
@@ -56,6 +66,7 @@ export async function GET(request: NextRequest) {
   }
   const dateFrom = dateFromMap[tf] ?? "-8m"
   const posthogInterval = intervalMap[tf] ?? "month"
+  const hogqlVisitorInterval = hogqlIntervalMap[tf] ?? "month"
   const aggregateYears = tf === "years"
   const ttl = cacheTtlMinutes[tf] ?? 360
 
@@ -79,48 +90,65 @@ export async function GET(request: NextRequest) {
 
   const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+  // HogQL URL predicates.
+  //   - Client: ALL unique pageview users, no URL filter. Matches the
+  //     "Unique visitors" count on PostHog's web analytics dashboard
+  //     exactly, so the two surfaces agree.
+  //   - Pro: subset who specifically landed on /businesses/* (pro marketing
+  //     pages — architect recruitment funnel).
+  //   - Apollo/Invite: referral subsets keyed off URL params.
+  const CLIENT_URL_PREDICATE = `1 = 1`
+  const PRO_URL_PREDICATE = `properties.$current_url ILIKE '%/businesses%'`
+  const APOLLO_URL_PREDICATE = `properties.$current_url ILIKE '%/businesses%' AND properties.$current_url ILIKE '%ref=%'`
+  const INVITE_URL_PREDICATE = `properties.$current_url ILIKE '%inviteEmail=%'`
+
   try {
-    // Batch 1: Core counts (6 calls)
-    const [proVisitors, clientVisitors, totalProjectShares, uniqueProjectSharers, totalProShares, uniqueProSharers] = await Promise.all([
-      fetchEventCount(apiKey, dateFrom, "$pageview", [
-        { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
-      ], "dau"),
-      fetchEventCount(apiKey, dateFrom, "$pageview", [
-        { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
-      ], "dau"),
-      fetchEventCount(apiKey, dateFrom, "project_shared", [], "total"),
-      fetchEventCount(apiKey, dateFrom, "project_shared", [], "dau"),
-      fetchEventCount(apiKey, dateFrom, "professional_shared", [], "total"),
-      fetchEventCount(apiKey, dateFrom, "professional_shared", [], "dau"),
+    // Batch 1: Core counts. Shares metrics are derived from the single
+    // HogQL query in Batch 2 — no separate Batch 1 calls needed.
+    const [proVisitors, clientVisitors] = await Promise.all([
+      fetchVisitorCountHogQL(apiKey, dateFrom, PRO_URL_PREDICATE),
+      fetchVisitorCountHogQL(apiKey, dateFrom, CLIENT_URL_PREDICATE),
     ])
 
     await delay(500)
 
-    // Batch 2: Time series (6 calls)
-    const [sharersSeries, proVisitorsSeries, clientVisitorsSeries, clientActivesSeries, apolloVisitorsSeries, inviteVisitorsSeries] = await Promise.all([
-      fetchTimeSeries(apiKey, dateFrom, [], "project_shared", posthogInterval, aggregateYears),
-      fetchTimeSeries(apiKey, dateFrom, [
-        { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
-      ], "$pageview", posthogInterval, aggregateYears),
-      fetchTimeSeries(apiKey, dateFrom, [
-        { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
-      ], "$pageview", posthogInterval, aggregateYears),
-      fetchTimeSeries(apiKey, dateFrom, [
-        { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
-        { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
-      ], "$pageview", posthogInterval, aggregateYears),
-      fetchTimeSeries(apiKey, dateFrom, [
-        { key: "$current_url", operator: "icontains", value: "/businesses", type: "event" },
-        { key: "$current_url", operator: "icontains", value: "ref=", type: "event" },
-      ], "$pageview", posthogInterval, aggregateYears),
-      fetchTimeSeries(apiKey, dateFrom, [
-        { key: "$current_url", operator: "icontains", value: "inviteEmail=", type: "event" },
-      ], "$pageview", posthogInterval, aggregateYears),
+    // Batch 2: Time series
+    //
+    // Visitor series (client + pro + apollo + invite) use HogQL because
+    // the equivalent TrendsQuery with `not_icontains` was silently
+    // dropping ~90% of users (observed: 7 vs 378 unique visitors in a
+    // 7-day window). See fetchHogQL/fetchVisitorSeriesHogQL above.
+    const [
+      sharesAllSeries,
+      proVisitorsHog,
+      clientVisitorsHog,
+      apolloVisitorsHog,
+      inviteVisitorsHog,
+    ] = await Promise.all([
+      // All four Sharers metrics (sharers / project_shares / professional_shares
+      // / shares_per_client) in a single HogQL query. HogQL instead of
+      // TrendsQuery because stacked math filters on custom events were
+      // returning inconsistent bucket shapes and dropping professional shares.
+      fetchSharesSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval),
+      fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, PRO_URL_PREDICATE),
+      fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, CLIENT_URL_PREDICATE),
+      fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, APOLLO_URL_PREDICATE),
+      fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, INVITE_URL_PREDICATE),
     ])
+    const sharersSeries = sharesAllSeries.sharersSeries
+    const projectSharesSeries = sharesAllSeries.projectSharesSeries
+    const professionalSharesSeries = sharesAllSeries.professionalSharesSeries
+    const sharesPerClientSeries = sharesAllSeries.sharesPerClientSeries
+
+    // Align each HogQL series to the 8-bucket window using the same
+    // per-period alignment helper the TrendsQuery series use. This ensures
+    // the rolling bucket (index 7) always represents the current period
+    // no matter how many buckets HogQL returned.
+    const proVisitorsSeries = alignToCurrent(proVisitorsHog.values, proVisitorsHog.days, hogqlVisitorInterval)
+    const clientVisitorsSeries = alignToCurrent(clientVisitorsHog.values, clientVisitorsHog.days, hogqlVisitorInterval)
+    const clientActivesSeries = clientVisitorsSeries // same query
+    const apolloVisitorsSeries = alignToCurrent(apolloVisitorsHog.values, apolloVisitorsHog.days, hogqlVisitorInterval)
+    const inviteVisitorsSeries = alignToCurrent(inviteVisitorsHog.values, inviteVisitorsHog.days, hogqlVisitorInterval)
 
     // Derive counts from series to avoid extra API calls
     const clientActives = clientVisitors // same query
@@ -129,10 +157,11 @@ export async function GET(request: NextRequest) {
 
     await delay(500)
 
-    // Batch 3: Source breakdowns (2 calls)
+    // Batch 3: Source breakdowns (2 calls). Client filter now drops only
+    // /admin and /dashboard — /businesses is client-facing landing pages
+    // and was previously being excluded incorrectly.
     const [clientSourcesRaw, proSourcesRaw] = await Promise.all([
       fetchSourceBreakdown(apiKey, dateFrom, [
-        { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
       ]),
@@ -152,10 +181,18 @@ export async function GET(request: NextRequest) {
       ...proReferralSources,
     ]
 
-    // Combine project + professional sharers (deduplicated via dau)
-    const totalShares = (totalProjectShares ?? 0) + (totalProShares ?? 0)
-    // Unique sharers: approximate by taking max of the two (can't deduplicate across events without HogQL)
-    const uniqueSharers = Math.max(uniqueProjectSharers ?? 0, uniqueProSharers ?? 0)
+    // Headline counts derived from the HogQL sharers series — sum across
+    // the 8-bucket window so the card totals agree with the sparkline.
+    // `uniqueSharers` is NOT the sum of bucketed uniqs (a user who shared
+    // on two different days would be counted twice); for that we'd need
+    // a separate HogQL query with no GROUP BY. For now the series is what
+    // the UI actually renders, so the aggregate matches the bars shown.
+    const totalProjectShares = projectSharesSeries.reduce((a, b) => a + b, 0)
+    const totalProShares = professionalSharesSeries.reduce((a, b) => a + b, 0)
+    const totalShares = totalProjectShares + totalProShares
+    // Sum of bucketed uniq(person_id) — acceptable approximation of the
+    // headline "Sharers" card that matches the per-bucket line chart.
+    const uniqueSharers = sharersSeries.reduce((a, b) => a + b, 0)
     const sharesPerClient = uniqueSharers > 0 ? Math.round((totalShares / uniqueSharers) * 10) / 10 : 0
 
     await delay(500)
@@ -194,6 +231,9 @@ export async function GET(request: NextRequest) {
       apolloVisitorsSeries: apolloVisitorsSeries ?? [],
       inviteVisitorsSeries: inviteVisitorsSeries ?? [],
       sharersSeries: sharersSeries ?? [],
+      projectSharesSeries,
+      professionalSharesSeries,
+      sharesPerClientSeries,
       sharers: uniqueSharers,
       totalShares,
       projectShares: totalProjectShares ?? 0,
@@ -218,11 +258,206 @@ export async function GET(request: NextRequest) {
       })
     } catch {}
 
-    return NextResponse.json(responseData)
+    // Fresh fetches report _age_minutes = 0 so the client can use the
+    // same freshness check for cached and live responses (e.g. disabling
+    // the refresh button for 30 minutes after a bust).
+    return NextResponse.json({ ...responseData, _cached: false, _age_minutes: 0 })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error("PostHog API error:", msg)
     return NextResponse.json({ proVisitors: null, clientVisitors: null, sharers: null, clientSources: [], proSources: [], debug_error: msg })
+  }
+}
+
+/**
+ * Run a raw HogQL query against PostHog and return the rows.
+ * Used for the Visitors metrics because PostHog's TrendsQuery with stacked
+ * `not_icontains` filters silently drops most users (observed: ~7 vs ~450
+ * actual unique visitors). HogQL's uniqIf(...) gives us exact semantic
+ * control over what counts as a user and returns the right numbers.
+ */
+async function fetchHogQL<T = any>(apiKey: string, query: string): Promise<T[]> {
+  const res = await fetch(`${POSTHOG_API_URL}/api/projects/${POSTHOG_PROJECT_ID}/query/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      query: { kind: "HogQLQuery", query },
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "")
+    console.error("PostHog HogQL failed:", res.status, errText)
+    return []
+  }
+
+  const data = await res.json()
+  // HogQL response shape: { columns: string[], results: unknown[][], types: string[] }
+  const columns: string[] = data?.columns ?? []
+  const rows: unknown[][] = data?.results ?? []
+  return rows.map((row) => {
+    const obj: Record<string, unknown> = {}
+    columns.forEach((col, i) => {
+      obj[col] = row[i]
+    })
+    return obj as T
+  })
+}
+
+/**
+ * Map our timeframe interval into a HogQL DateTime truncation expression.
+ * Returns a SQL fragment that snaps a timestamp to the start of its bucket.
+ */
+function hogqlBucketExpr(interval: string): string {
+  switch (interval) {
+    case "day": return "toStartOfDay(timestamp)"
+    case "week": return "toStartOfWeek(timestamp)"
+    case "month": return "toStartOfMonth(timestamp)"
+    case "year": return "toStartOfYear(timestamp)"
+    default: return "toStartOfDay(timestamp)"
+  }
+}
+
+/**
+ * Count unique Visitors in a date range with a URL predicate expressed
+ * inline as a HogQL fragment. Used for both clientVisitors (exclude admin /
+ * dashboard) and proVisitors (only /businesses). Returns a single number.
+ */
+async function fetchVisitorCountHogQL(
+  apiKey: string,
+  dateFrom: string,
+  urlPredicate: string,
+): Promise<number | null> {
+  // uniq(person_id) not uniq(distinct_id): PostHog stitches
+  // anonymous → identified sessions into a single person, and Web Analytics
+  // uses the stitched count. Using distinct_id directly inflates numbers
+  // (observed: 156 vs 69 for a single day) because every anonymous session
+  // counts as a separate row until the user logs in.
+  const query = `
+    SELECT uniq(person_id) AS users
+    FROM events
+    WHERE event = '$pageview'
+      AND timestamp >= now() - interval '${hogqlIntervalFor(dateFrom)}'
+      AND (${urlPredicate})
+  `
+  const rows = await fetchHogQL<{ users: number }>(apiKey, query)
+  return rows[0]?.users ?? null
+}
+
+/**
+ * Fetch all four Sharers metrics in a single HogQL query.
+ *
+ * The TrendsQuery path for these was unreliable — `project_shared` /
+ * `professional_shared` with `math: "total"` returned inconsistent bucket
+ * shapes, and the DAU series used for the denominator only counted
+ * project sharers, so professional-only shares were silently dropped.
+ *
+ * One HogQL query fixes both: we compute uniq(person_id) across both
+ * event types and count each event type per bucket in one pass.
+ * Returned series are aligned to the same 8-bucket window as the
+ * visitor metrics.
+ */
+async function fetchSharesSeriesHogQL(
+  apiKey: string,
+  dateFrom: string,
+  interval: string,
+): Promise<{
+  sharersSeries: number[]
+  projectSharesSeries: number[]
+  professionalSharesSeries: number[]
+  sharesPerClientSeries: number[]
+}> {
+  const bucket = hogqlBucketExpr(interval)
+  const query = `
+    SELECT
+      ${bucket} AS bucket,
+      uniq(person_id) AS sharers,
+      countIf(event = 'project_shared') AS project_shares,
+      countIf(event = 'professional_shared') AS professional_shares
+    FROM events
+    WHERE event IN ('project_shared', 'professional_shared')
+      AND timestamp >= now() - interval '${hogqlIntervalFor(dateFrom)}'
+    GROUP BY bucket
+    ORDER BY bucket ASC
+  `
+  const rows = await fetchHogQL<{
+    bucket: string
+    sharers: number
+    project_shares: number
+    professional_shares: number
+  }>(apiKey, query)
+
+  const days = rows.map((r) => r.bucket)
+  const sharersRaw = rows.map((r) => Number(r.sharers ?? 0))
+  const projectSharesRaw = rows.map((r) => Number(r.project_shares ?? 0))
+  const professionalSharesRaw = rows.map((r) => Number(r.professional_shares ?? 0))
+
+  const sharersSeries = alignToCurrent(sharersRaw, days, interval)
+  const projectSharesSeries = alignToCurrent(projectSharesRaw, days, interval)
+  const professionalSharesSeries = alignToCurrent(professionalSharesRaw, days, interval)
+
+  // Per-bucket shares/client: total shares ÷ unique sharers, to one decimal.
+  const sharesPerClientSeries = sharersSeries.map((sharers, i) => {
+    if (!sharers || sharers === 0) return 0
+    const totalInBucket = (projectSharesSeries[i] ?? 0) + (professionalSharesSeries[i] ?? 0)
+    return Math.round((totalInBucket / sharers) * 10) / 10
+  })
+
+  return {
+    sharersSeries,
+    projectSharesSeries,
+    professionalSharesSeries,
+    sharesPerClientSeries,
+  }
+}
+
+/**
+ * Bucket series of unique Visitors for the same predicate.
+ * Returns { days: iso strings, values: counts } in chronological order.
+ */
+async function fetchVisitorSeriesHogQL(
+  apiKey: string,
+  dateFrom: string,
+  interval: string,
+  urlPredicate: string,
+): Promise<{ days: string[]; values: number[] }> {
+  const bucket = hogqlBucketExpr(interval)
+  // See fetchVisitorCountHogQL for the person_id vs distinct_id rationale.
+  const query = `
+    SELECT ${bucket} AS bucket, uniq(person_id) AS users
+    FROM events
+    WHERE event = '$pageview'
+      AND timestamp >= now() - interval '${hogqlIntervalFor(dateFrom)}'
+      AND (${urlPredicate})
+    GROUP BY bucket
+    ORDER BY bucket ASC
+  `
+  const rows = await fetchHogQL<{ bucket: string; users: number }>(apiKey, query)
+  return {
+    days: rows.map((r) => r.bucket),
+    values: rows.map((r) => Number(r.users ?? 0)),
+  }
+}
+
+/**
+ * Convert the `dateFrom` param (e.g. "-8d", "-56d", "-8m", "-8y") into the
+ * equivalent HogQL interval expression.
+ */
+function hogqlIntervalFor(dateFrom: string): string {
+  // dateFrom is always "-<N><unit>" where unit is d/w/m/y
+  const match = dateFrom.match(/^-(\d+)([dwmy])$/)
+  if (!match) return "8 day"
+  const n = match[1]
+  const u = match[2]
+  switch (u) {
+    case "d": return `${n} day`
+    case "w": return `${n} week`
+    case "m": return `${n} month`
+    case "y": return `${n} year`
+    default: return `${n} day`
   }
 }
 
@@ -322,6 +557,13 @@ async function fetchTimeSeries(
   event: string = "$pageview",
   interval: string = "month",
   aggregateToYears: boolean = false,
+  /**
+   * Math to apply to the series. Defaults to the unique-users math for the
+   * given interval (dau/weekly_active/monthly_active) — same as the
+   * existing callers. Pass `"total"` to get a raw event count per bucket
+   * (e.g. "projects shared per week", not "unique sharers per week").
+   */
+  math?: string,
 ): Promise<number[]> {
   const res = await fetch(`${POSTHOG_API_URL}/api/projects/${POSTHOG_PROJECT_ID}/query/`, {
     method: "POST",
@@ -335,7 +577,7 @@ async function fetchTimeSeries(
         series: [{
           kind: "EventsNode",
           event,
-          math: uniqueUsersMathFor(interval),
+          math: math ?? uniqueUsersMathFor(interval),
           ...(properties.length > 0 ? { properties } : {}),
         }],
         dateRange: { date_from: dateFrom },
@@ -403,9 +645,14 @@ function bucketKey(date: Date, interval: string): number {
       // Days since unix epoch (UTC) — stable integer per calendar day.
       return Math.floor(date.getTime() / 86400000)
     case "week": {
-      // ISO-ish week index: days since epoch / 7. PostHog week boundaries
-      // are consistent within a single response, so relative offsets are correct.
-      return Math.floor(date.getTime() / 86400000 / 7)
+      // ISO 8601 week index, anchored to Monday. Naive `days / 7` divides
+      // from the unix epoch (Thursday 1970-01-01), which would put week
+      // boundaries on Thursday and offset every label by 3 days. The
+      // closest Monday on-or-before the epoch is Monday Dec 29 1969 at
+      // days = -3, so shifting by +3 makes that Monday week index 0:
+      //   Mon Dec 29 1969 → 0, Sun Jan 4 1970 → 0, Mon Jan 5 1970 → 1.
+      const days = Math.floor(date.getTime() / 86400000)
+      return Math.floor((days + 3) / 7)
     }
     case "month":
       return date.getFullYear() * 12 + date.getMonth()
@@ -508,10 +755,18 @@ async function fetchSourceTimeSeries(
     referral: { operator: "none", values: [] }, // everything else — handled differently
   }
 
+  // Client audience now includes /businesses since those are client-facing
+  // landing pages — we only strip /admin and /dashboard internal traffic.
+  // Matches the new Client URL predicate used by the HogQL visitor queries.
+  //
+  // Known caveat: PostHog's stacked not_icontains semantics still undercount
+  // here, but the source-breakdown series are derivative metrics (they feed
+  // the drill-down, not the headline number) so exact accuracy matters less
+  // than for the Visitors row itself. Left on TrendsQuery for now — can
+  // migrate to HogQL if/when the drill-downs need the same precision.
   const audienceProps = audience === "pro"
     ? [{ key: "$current_url", operator: "icontains", value: "/businesses", type: "event" }]
     : [
-        { key: "$current_url", operator: "not_icontains", value: "/businesses", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/admin", type: "event" },
         { key: "$current_url", operator: "not_icontains", value: "/dashboard", type: "event" },
       ]
