@@ -15,7 +15,7 @@ export function BenefitsGrid({ benefits }: BenefitsGridProps) {
         <div className="benefits-grid">
           {benefits.map((benefit) => (
             <div key={benefit.title} className="benefit-card">
-              <h3 className="benefit-title">{benefit.title}</h3>
+              <h3 className="arco-section-title">{benefit.title}</h3>
               <p className="benefit-body">{benefit.body}</p>
               <ul className="benefit-features">
                 {benefit.features.map((feature) => (
