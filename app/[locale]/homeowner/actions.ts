@@ -84,7 +84,7 @@ export async function checkSelfDeletionAction(): Promise<ActionResult<DeletionCh
         blockers.push(`You own "${companyName}" with ${otherMembers} other team member(s). Transfer ownership first.`)
       } else {
         warnings.push(
-          `Company "${companyName}" will be unlisted and can be re-claimed by the next verified domain holder`,
+          `Company "${companyName}" will be marked as Unclaimed so the next verified domain holder can re-claim it`,
         )
       }
     }
@@ -163,9 +163,9 @@ export async function deleteSelfAccountAction(input: {
   // Orphan the owned company instead of deleting it. Companies are the
   // primary marketplace entity on Arco — their photos, description, and
   // credited projects have commercial value that outlives any individual
-  // owner. Setting owner_id = null + status = 'unlisted' hides the page from
-  // discover but leaves it on file so the next verified domain holder can
-  // claim it. Team members (if any) stay on the company because they live
+  // owner. Setting owner_id = null + status = 'unclaimed' hides the page
+  // from discover and marks it as claimable by the next verified domain
+  // holder. Team members (if any) stay on the company because they live
   // in separate tables keyed on company_id.
   //
   // Projects owned by the orphaned company are archived so they stop
@@ -177,7 +177,7 @@ export async function deleteSelfAccountAction(input: {
       .from("companies")
       .update({
         owner_id: null,
-        status: "unlisted",
+        status: "unclaimed",
         updated_at: new Date().toISOString(),
       } as any)
       .eq("id", checkResult.data.companyId)

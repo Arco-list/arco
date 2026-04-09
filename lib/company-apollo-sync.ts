@@ -4,8 +4,20 @@ import { logger } from "@/lib/logger";
 
 /**
  * Map Arco company status → Apollo account stage name.
+ *
+ * Every status the admin can set via /admin/companies must be present
+ * here, otherwise the sync silently no-ops for that transition (the
+ * `stageName` lookup falls through and we return before touching Apollo).
+ *
+ * "Invited" is included even though it's currently rendered as a virtual
+ * status derived from project_professionals links — if a future change
+ * promotes it to a real company_status enum value the sync will pick it
+ * up automatically.
  */
 const COMPANY_STATUS_TO_APOLLO_STAGE: Record<string, string> = {
+  unclaimed: "Unclaimed",
+  prospected: "Prospected",
+  invited: "Invited",
   draft: "Draft",
   listed: "Listed",
   unlisted: "Unlisted",

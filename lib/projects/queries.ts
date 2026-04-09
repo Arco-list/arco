@@ -208,8 +208,8 @@ export const fetchDiscoverProjects = async (locale: string = "en"): Promise<Disc
   const hiddenProjectIds = new Set<string>()
   for (const row of (professionalsResult.data ?? []) as unknown as ProjectProfessional[]) {
     if (!row.project_id || !row.company) continue
-    // Hide projects owned by "added" companies (not yet visible)
-    if (row.company.status === "added") {
+    // Hide projects owned by "unclaimed" companies (not yet visible)
+    if (row.company.status === "unclaimed") {
       hiddenProjectIds.add(row.project_id)
       continue
     }

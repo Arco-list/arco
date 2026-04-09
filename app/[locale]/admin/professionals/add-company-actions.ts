@@ -113,7 +113,7 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
       latitude,
       longitude,
       is_verified: false,
-      status: "added" as any,
+      status: "unclaimed" as any,
       slug,
     })
     .select("id")

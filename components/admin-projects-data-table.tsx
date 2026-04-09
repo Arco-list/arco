@@ -178,7 +178,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         if (finalStatus === "published") {
           const ownerCompany = statusDialogProject.companies.find(c => c.isOwner)
           const ownerStatus = ownerCompany?.companyStatus
-          if (ownerStatus === "draft" || ownerStatus === "added") {
+          if (ownerStatus === "draft" || ownerStatus === "unclaimed") {
             finalStatus = "archived"
             toast.info("Owner company is not listed — project set to Unlisted instead")
           }

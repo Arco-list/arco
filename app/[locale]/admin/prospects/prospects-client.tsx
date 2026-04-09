@@ -168,9 +168,10 @@ type Props = {
   initialProspects: Prospect[]
   initialFunnel: ProspectFunnel
   companyMap?: Record<string, CompanyInfo>
+  currentApolloListId?: string | null
 }
 
-export function ProspectsClient({ initialProspects, initialFunnel, companyMap = {} }: Props) {
+export function ProspectsClient({ initialProspects, initialFunnel, companyMap = {}, currentApolloListId = null }: Props) {
   const [prospects, setProspects] = useState(initialProspects)
   const [funnel, setFunnel] = useState(initialFunnel)
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">("all")
@@ -182,8 +183,9 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   // PR 5 of the drip pipeline: load and render the full sequence (intro,
   // followup, final) for the prospect's company in the details panel.
   const [sequenceSteps, setSequenceSteps] = useState<ProspectSequenceStep[]>([])
-  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [syncListId, setSyncListId] = useState("")
+  const [editingListId, setEditingListId] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
   const [showEmailsModal, setShowEmailsModal] = useState(false)
@@ -356,6 +358,10 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
           <h3 className="arco-section-title">Sales</h3>
           <p className="text-xs text-[#a1a1a0] mt-0.5">
             {prospects.length} shown · {funnel.total} total
+            {" · "}
+            <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
+              Status guide
+            </button>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -364,12 +370,6 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
             className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
           >
             Email Templates
-          </button>
-          <button
-            onClick={() => setShowSyncModal(true)}
-            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-          >
-            Apollo Sync
           </button>
           <button
             onClick={handleSyncActivity}
@@ -858,39 +858,140 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
         </div>
       )}
 
-      {/* Apollo sync modal */}
-      {showSyncModal && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40" onClick={() => setShowSyncModal(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium text-[#1c1c1a]">Sync from Apollo</span>
-              <button className="text-[#a1a1a0] hover:text-[#1c1c1a]" onClick={() => setShowSyncModal(false)}>✕</button>
+      {/* Status Guide Popup */}
+      {showStatusGuide && (
+        <div className="popup-overlay" onClick={() => setShowStatusGuide(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, maxHeight: "85vh", overflowY: "auto" }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Sales statuses</h3>
+              <button type="button" className="popup-close" onClick={() => setShowStatusGuide(false)} aria-label="Close">✕</button>
             </div>
 
-            <div className="space-y-4">
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {[
+                { dot: "bg-[#7c3aed]", label: "Listed", desc: "Owns a Listed company — fully converted.", specs: "Live on platform · Conversion complete" },
+                { dot: "bg-[#2563eb]", label: "Draft", desc: "Owns a company in Draft status — onboarding in progress.", specs: "Company claimed · Profile setup" },
+                { dot: "bg-[#2563eb]", label: "Signup", desc: "Created an Arco account but has not claimed or created a company yet.", specs: "Account created · No company" },
+                { dot: "bg-[#2563eb]", label: "Visitor", desc: "Clicked a link in an outreach email and visited the site.", specs: "Email engagement · No account yet" },
+                { dot: "bg-[#f59e0b]", label: "Contacted", desc: "At least one intro email has been sent. Advances automatically on send.", specs: "Intro sent · Drip sequence active" },
+                { dot: "bg-[#f59e0b]", label: "Prospect", desc: "Imported from Apollo. No outreach sent yet.", specs: "In sales funnel · Awaiting first email" },
+              ].map((s) => (
+                <div key={s.label} style={{ display: "flex", gap: 12 }}>
+                  <span className={`${s.dot} shrink-0`} style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5 }} />
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>{s.label}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b6b68", lineHeight: 1.4 }}>{s.desc}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.3 }}>{s.specs}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
+              <strong>Flow:</strong> Prospect → Contacted → Visitor → Signup → Draft → Listed
+              <br />
+              <strong>Automation:</strong> Statuses advance automatically from events (email sent, link click, signup). They are rarely edited manually.
+            </div>
+
+            {/* Apollo sync */}
+            <div style={{ marginTop: 24 }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Apollo sync</h4>
+              <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
+                Arco pushes status changes to Apollo so contact and account stages stay in sync. Syncs fire <strong>on change only</strong> — direct SQL updates bypass them.
+              </p>
+
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: "#1c1c1a" }}>Prospect → Apollo contact stage</p>
+                <div style={{ border: "1px solid #e5e5e4", borderRadius: 3, overflow: "hidden" }}>
+                  {[
+                    { arco: "Listed", apollo: "Listed", dot: "#7c3aed" },
+                    { arco: "Draft", apollo: "Draft", dot: "#2563eb" },
+                    { arco: "Signup", apollo: "Signup", dot: "#2563eb" },
+                    { arco: "Visitor", apollo: "Visitor", dot: "#2563eb" },
+                    { arco: "Contacted", apollo: "Contacted", dot: "#f59e0b" },
+                    { arco: "Prospect", apollo: "Prospect", dot: "#f59e0b" },
+                  ].map(({ arco, apollo, dot }, i) => (
+                    <div key={arco} style={{ display: "flex", fontSize: 11, borderTop: i > 0 ? "1px solid #e5e5e4" : undefined }}>
+                      <div style={{ flex: 1, padding: "6px 12px", color: "#1c1c1a", background: "#fafaf9", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+                        {arco}
+                      </div>
+                      <div style={{ flex: 1, padding: "6px 12px", color: "#6b6b68" }}>{apollo}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div>
-                <label className="text-xs font-medium text-[#6b6b68] block mb-1">Apollo List ID</label>
-                <p className="text-[11px] text-[#a1a1a0] mb-2">
-                  Find this in Apollo → Lists → click a list → the ID is in the URL
-                </p>
+                <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: "#1c1c1a" }}>Company → Apollo account stage</p>
+                <div style={{ border: "1px solid #e5e5e4", borderRadius: 3, overflow: "hidden" }}>
+                  {[
+                    { arco: "Deactivated", apollo: "Deactivated", dot: "#dc2626" },
+                    { arco: "Unlisted", apollo: "Unlisted", dot: "#a1a1a0" },
+                    { arco: "Listed", apollo: "Listed", dot: "#7c3aed" },
+                    { arco: "Draft", apollo: "Draft", dot: "#2563eb" },
+                    { arco: "Invited", apollo: "Invited", dot: "#f59e0b" },
+                    { arco: "Prospected", apollo: "Prospected", dot: "#f59e0b" },
+                    { arco: "Unclaimed", apollo: "Unclaimed", dot: "#ea580c" },
+                  ].map(({ arco, apollo, dot }, i) => (
+                    <div key={arco} style={{ display: "flex", fontSize: 11, borderTop: i > 0 ? "1px solid #e5e5e4" : undefined }}>
+                      <div style={{ flex: 1, padding: "6px 12px", color: "#1c1c1a", background: "#fafaf9", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+                        {arco}
+                      </div>
+                      <div style={{ flex: 1, padding: "6px 12px", color: "#6b6b68" }}>{apollo}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <p style={{ margin: "10px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
+                If a row looks stale in Apollo, call <code style={{ fontSize: 10, background: "#fafaf9", padding: "1px 4px", borderRadius: 2 }}>/api/admin/sync-all-apollo</code> to reconcile every company in one pass.
+              </p>
+            </div>
+
+            {/* Apollo import */}
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #e5e5e4" }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Import from Apollo</h4>
+              <p style={{ margin: "0 0 10px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
+                The list ID feeds prospects into the sales funnel. Find it in Apollo → Lists → click a list → the ID is in the URL.
+              </p>
+
+              <label className="text-xs font-medium text-[#6b6b68] block mb-1">Current list ID</label>
+              {editingListId || !currentApolloListId ? (
                 <input
                   type="text"
                   value={syncListId}
                   onChange={(e) => setSyncListId(e.target.value)}
                   className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-                  placeholder="e.g. 6501a2b3c4d5e6f7..."
+                  placeholder={currentApolloListId ?? "e.g. 6501a2b3c4d5e6f7..."}
+                  autoFocus={editingListId}
                 />
-              </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2 h-9 px-3 border border-[#e5e5e4] rounded-[3px] bg-[#fafaf9]">
+                  <code className="text-xs text-[#1c1c1a] truncate">{currentApolloListId}</code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSyncListId(currentApolloListId)
+                      setEditingListId(true)
+                    }}
+                    className="text-xs font-medium text-[#016D75] hover:underline shrink-0"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
 
               {syncResult && (
-                <p className={`text-xs ${syncResult.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>
+                <p className={`text-xs mt-3 ${syncResult.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>
                   {syncResult}
                 </p>
               )}
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 mt-4">
                 <button
-                  onClick={() => setShowSyncModal(false)}
+                  onClick={() => setShowStatusGuide(false)}
                   className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
                 >
                   Close

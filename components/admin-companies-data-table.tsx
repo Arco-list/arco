@@ -258,7 +258,7 @@ type CompanyProfessional = {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  added: "bg-[#ea580c]",
+  unclaimed: "bg-[#ea580c]",
   draft: "bg-[#2563eb]",
   listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
@@ -268,7 +268,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  added: "Added",
+  unclaimed: "Unclaimed",
   draft: "Draft",
   listed: "Listed",
   unlisted: "Unlisted",
@@ -282,7 +282,7 @@ const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "prospected" as any, label: "Prospected", description: "Contacted by platform, not yet claimed", dotColor: "bg-[#f59e0b]" },
-  { value: "added" as any, label: "Added", description: "Added by admin, not yet visible or contacted", dotColor: "bg-[#ea580c]" },
+  { value: "unclaimed" as any, label: "Unclaimed", description: "No owner — added by admin or orphaned after account deletion. Waiting to be claimed.", dotColor: "bg-[#ea580c]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-[#dc2626]" },
 ]
 
@@ -1214,13 +1214,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   for (const c of data) {
     companyStatusCounts[c.status] = (companyStatusCounts[c.status] ?? 0) + 1
   }
-  const COMPANY_FUNNEL: { status: CompanyStatus; dotColor: string }[] = [
-    { status: "added" as CompanyStatus, dotColor: "#ea580c" },
+  const COMPANY_FUNNEL: { status: CompanyStatus | "invited"; dotColor: string }[] = [
+    { status: "unclaimed" as CompanyStatus, dotColor: "#ea580c" },
     { status: "prospected" as CompanyStatus, dotColor: "#f59e0b" },
+    { status: "invited", dotColor: "#f59e0b" },
     { status: "draft", dotColor: "#2563eb" },
-    { status: "deactivated", dotColor: "#dc2626" },
     { status: "listed", dotColor: "#7c3aed" },
     { status: "unlisted", dotColor: "#a1a1a0" },
+    { status: "deactivated", dotColor: "#dc2626" },
   ]
   const companyCountAt = (status: string) => companyStatusCounts[status] ?? 0
   // Each cohort represents "everything currently in or past this stage on
@@ -1228,18 +1229,20 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // accumulate forward.
   const companyCohortFor = (status: string): number => {
     switch (status) {
-      case "added":
-        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("deactivated") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "unclaimed":
+        return companyCountAt("unclaimed") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
       case "prospected":
-        return companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("deactivated") + companyCountAt("listed") + companyCountAt("unlisted")
+        return companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "invited":
+        return companyCountAt("invited") + companyCountAt("listed") + companyCountAt("unlisted")
       case "draft":
-        return companyCountAt("draft") + companyCountAt("deactivated") + companyCountAt("listed") + companyCountAt("unlisted")
-      case "deactivated":
-        return companyCountAt("deactivated")
+        return companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
       case "listed":
         return companyCountAt("listed") + companyCountAt("unlisted")
       case "unlisted":
         return companyCountAt("unlisted")
+      case "deactivated":
+        return companyCountAt("deactivated")
       default:
         return 0
     }
@@ -1300,7 +1303,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 { dot: "bg-[#2563eb]", label: "Draft", desc: "Company has been claimed. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
                 { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
                 { dot: "bg-[#f59e0b]", label: "Prospected", desc: "Added by admin and contacted via the sales funnel. Visible on the platform while unclaimed.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
-                { dot: "bg-[#ea580c]", label: "Added", desc: "Added by admin, not yet visible. Ready to be moved to Prospected when outreach begins.", specs: "No owner · Not visible · No outreach yet" },
+                { dot: "bg-[#ea580c]", label: "Unclaimed", desc: "No owner. Either added by admin (awaiting outreach) or orphaned when the previous owner deleted their account. Can be claimed by the next verified domain holder.", specs: "No owner · Not visible · Waiting to be claimed" },
                 { dot: "bg-[#dc2626]", label: "Deactivated", desc: "Suspended and hidden from the platform.", specs: "Hidden · No access" },
               ].map((s) => (
                 <div key={s.label} style={{ display: "flex", gap: 12 }}>
@@ -1314,9 +1317,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               ))}
             </div>
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-              <strong>Flow:</strong> Added → Prospected (sales emails) → Draft (claimed) → Listed (live)
+              <strong>Flow:</strong> Unclaimed → Prospected (sales emails) → Draft (claimed) → Listed (live)
               <br />
-              <strong>Constraints:</strong> Unclaimed companies cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Prospected or Added.
+              <strong>Constraints:</strong> Companies without an owner cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Prospected or Unclaimed.
             </div>
           </div>
         </div>
@@ -1332,90 +1335,68 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           const cols = COMPANY_FUNNEL.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
           const CARD_WIDTH = 132
 
-          // Bypass rate: Draft → Listed, skipping the Deactivated leak.
-          const bypassRate = companyConversionRate(
+          // Bypass rate: Prospected → Draft, skipping the Invited column
+          // since Invited is a parallel entry point (credit path) rather
+          // than a sequential stop in the sales funnel.
+          const prospectedToDraft = companyConversionRate(
+            companyCohortFor("prospected"),
             companyCohortFor("draft"),
-            companyCohortFor("listed"),
           )
 
-          // Draft sits in column 5 (2 * index 2 + 1) and Listed sits in
-          // column 9 (2 * index 4 + 1). The bypass arc spans 5 → 10 so it
-          // covers the entire range from Draft through the Listed card.
+          // Grid columns (1-indexed, odd = card, even = connector):
+          //   1 unclaimed · 3 prospected · 5 invited · 7 draft · 9 listed ·
+          //   11 unlisted · 13 deactivated
           return (
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: cols,
-                gridTemplateRows: "auto auto",
+                gridTemplateRows: "auto auto auto",
                 gap: 0,
                 alignItems: "start",
               }}
             >
-              {/* Bypass arc — row 1, centered from Draft → Listed */}
+              {/* Bypass arc — Prospected → Draft (row 1), spans cols 3 → 8 */}
               <div
                 style={{
                   gridRow: 1,
-                  gridColumn: "5 / 10",
+                  gridColumn: "3 / 8",
                   position: "relative",
                   height: 32,
                 }}
               >
-                <div
-                  style={{
-                    position: "absolute",
-                    left: CARD_WIDTH / 2,
-                    right: CARD_WIDTH / 2,
-                    top: "50%",
-                    borderTop: "1px solid #d4d4d3",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    left: CARD_WIDTH / 2,
-                    top: "50%",
-                    bottom: 0,
-                    borderLeft: "1px solid #d4d4d3",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    right: CARD_WIDTH / 2,
-                    top: "50%",
-                    bottom: 0,
-                    borderLeft: "1px solid #d4d4d3",
-                  }}
-                />
-                {bypassRate && (
+                <div style={{ position: "absolute", left: CARD_WIDTH / 2, right: CARD_WIDTH / 2, top: "50%", borderTop: "1px solid #d4d4d3" }} />
+                <div style={{ position: "absolute", left: CARD_WIDTH / 2, top: "50%", bottom: 0, borderLeft: "1px solid #d4d4d3" }} />
+                <div style={{ position: "absolute", right: CARD_WIDTH / 2, top: "50%", bottom: 0, borderLeft: "1px solid #d4d4d3" }} />
+                {prospectedToDraft && (
                   <span
                     className="absolute text-[10px] font-medium text-[#6b6b68]"
-                    style={{
-                      top: 0,
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      whiteSpace: "nowrap",
-                      background: "#fff",
-                      padding: "0 6px",
-                    }}
+                    style={{ top: 0, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "#fff", padding: "0 6px" }}
                   >
-                    {bypassRate}
+                    {prospectedToDraft}
                   </span>
                 )}
               </div>
 
-              {/* Cards + inline connectors — row 2 */}
+              {/* Cards + inline connectors — row 3 */}
               {COMPANY_FUNNEL.map((stage, i) => {
                 const count = companyCountAt(stage.status)
-                const label = companyStatusLabel(stage.status)
+                const label = stage.status === "invited" ? "Invited" : companyStatusLabel(stage.status)
 
-                // Compute the rate label that sits on the connector BEFORE this card.
-                // The "Deactivated → Listed" connector is left blank — the bypass
-                // arc above shows the meaningful Draft → Listed rate.
+                // Inline connector rate before this card. Only shown for
+                // the meaningful sequential hops: Unclaimed→Prospected,
+                // Invited→Draft, and Draft→Listed. Prospected→Invited is
+                // a parallel-entry hop (bypass arc above covers
+                // Prospected→Draft); Listed→Unlisted and Unlisted→
+                // Deactivated are leaks, not conversions.
                 let rate = ""
                 if (i > 0) {
                   const prev = COMPANY_FUNNEL[i - 1].status
-                  if (prev !== "deactivated") {
+                  const show =
+                    (prev === "unclaimed" && stage.status === "prospected") ||
+                    (prev === "invited" && stage.status === "draft") ||
+                    (prev === "draft" && stage.status === "listed")
+                  if (show) {
                     rate = companyConversionRate(companyCohortFor(prev), companyCohortFor(stage.status))
                   }
                 }
@@ -1426,7 +1407,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     {i > 0 && (
                       <div
                         className="relative px-1 self-center"
-                        style={{ gridRow: 2, minWidth: 32 }}
+                        style={{ gridRow: 3, minWidth: 32 }}
                       >
                         <div className="w-full border-t border-[#d4d4d3]" />
                         {rate && (
@@ -1439,7 +1420,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                         )}
                       </div>
                     )}
-                    <div style={{ gridRow: 2 }} className="flex flex-col">
+                    <div style={{ gridRow: 3 }} className="flex flex-col">
                       <button
                         type="button"
                         onClick={() => {
@@ -1501,7 +1482,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {["listed", "unlisted", "draft", "invited", "prospected", "added", "deactivated"].map((s) => (
+              {["listed", "unlisted", "draft", "invited", "prospected", "unclaimed", "deactivated"].map((s) => (
                 <SelectItem key={s} value={s}>
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
@@ -1528,7 +1509,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
-                  {(["listed", "unlisted", "draft", "prospected", "added", "deactivated"] as const).map((s) => (
+                  {(["listed", "unlisted", "draft", "prospected", "unclaimed", "deactivated"] as const).map((s) => (
                     <DropdownMenuItem
                       key={s}
                       className="text-xs cursor-pointer flex items-center gap-1.5"
@@ -1952,7 +1933,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const isSelected = statusChange.selectedStatus === option.value
                 const isClaimed = !!statusChange.company.ownerName
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
-                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any) || option.value === ("invited" as any)) && isClaimed
+                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("unclaimed" as any) || option.value === ("invited" as any)) && isClaimed
                 const needsClaimed = (option.value === "listed" || option.value === "unlisted") && !isClaimed
                 const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed
                 return (

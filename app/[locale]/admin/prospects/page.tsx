@@ -23,6 +23,17 @@ export default async function ProspectsPage() {
   const prospects = (data ?? []) as Prospect[]
   const { funnel } = await fetchFunnel()
 
+  // Most recently used Apollo list ID — surfaced in the Status Guide
+  // popup so the admin can see at a glance which list feeds sales.
+  const { data: lastListRow } = await supabase
+    .from("prospects")
+    .select("apollo_list_id")
+    .not("apollo_list_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const currentApolloListId = (lastListRow as any)?.apollo_list_id ?? null
+
   // Fetch company metadata (logo, services, city) for linked prospects
   const companyIds = [...new Set(prospects.map((p) => p.company_id).filter((id): id is string => Boolean(id)))]
   let companyMap: Record<string, { logoUrl: string | null; services: string[]; city: string | null }> = {}
@@ -44,7 +55,7 @@ export default async function ProspectsPage() {
     <div className="min-h-screen bg-white">
       <div className="discover-page-title">
         <div className="wrap">
-          <ProspectsClient initialProspects={prospects} initialFunnel={funnel} companyMap={companyMap} />
+          <ProspectsClient initialProspects={prospects} initialFunnel={funnel} companyMap={companyMap} currentApolloListId={currentApolloListId} />
         </div>
       </div>
     </div>

@@ -48,7 +48,7 @@ async function assertAdmin() {
   return { supabase, user, error: null }
 }
 
-const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "draft", "prospected", "added"])
+const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "draft", "prospected", "unclaimed"])
 const companyPlanTierSchema = z.enum(["basic", "plus"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
@@ -212,8 +212,8 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   //   - prospected, listed, unlisted: public-ish, drip should keep running
   //   - draft: post-claim state, claim flow already cancelled the drip
   //   - deactivated: explicitly hidden, cancel
-  //   - added: pre-prospected (not visible), cancel
-  const cancelOnStatuses = ["deactivated", "added"]
+  //   - unclaimed: pre-prospected (not visible, no outreach yet), cancel
+  const cancelOnStatuses = ["deactivated", "unclaimed"]
   if (cancelOnStatuses.includes(parsedStatus.data)) {
     try {
       const { cancelPendingDripRows } = await import("@/lib/drip-queue")
@@ -234,7 +234,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
 
   // Sync owned project visibility based on company status
   const projectVisibleStatuses = ["listed", "unlisted", "prospected"]
-  const projectHiddenStatuses = ["added", "draft", "deactivated"]
+  const projectHiddenStatuses = ["unclaimed", "draft", "deactivated"]
   const companyId = parsedCompanyId.data
 
   if (projectHiddenStatuses.includes(parsedStatus.data)) {
@@ -1232,10 +1232,10 @@ export async function removeCompanyOwnerAction(input: {
   const serviceClient = createServiceRoleSupabaseClient()
   const companyId = idResult.data
 
-  // Remove owner and set status to "added"
+  // Remove owner and set status to "unclaimed" — no owner, waiting to be claimed
   const { error: updateError } = await serviceClient
     .from("companies")
-    .update({ owner_id: null, status: "added" as any })
+    .update({ owner_id: null, status: "unclaimed" as any })
     .eq("id", companyId)
 
   if (updateError) return { success: false, error: updateError.message }
