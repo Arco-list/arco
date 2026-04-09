@@ -22,7 +22,7 @@ interface ProjectsGridProps {
 
 export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: ProjectsGridProps) {
   const t = useTranslations("projects")
-  const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap } = useFilters()
+  const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap, clearAllFilters } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const { projects, total, isLoading, error, hasMore, loadMore, spacePhotoOverrides } = useProjectsQuery({
     pageSize: 12,
@@ -164,10 +164,12 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
         </div>
 
         {!isLoading && sortedProjects.length === 0 && !error && (
-          <div style={{ textAlign: "center", padding: "64px 0" }}>
-            <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>
-              {t("no_results_filters")}
-            </p>
+          <div className="empty-state">
+            <h2 className="arco-section-title empty-state__title">{t("no_results")}</h2>
+            <p className="arco-body-text empty-state__description">{t("no_results_description")}</p>
+            <button type="button" onClick={clearAllFilters} className="btn-primary empty-state__action">
+              {t("clear_filters")}
+            </button>
           </div>
         )}
 

@@ -1231,12 +1231,10 @@ function SavedProjectsTab() {
               ))}
             </div>
           ) : (
-            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
-              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("no_saved_projects")}</h2>
-              <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
-                {t("no_saved_projects_description")}
-              </p>
-              <Link href="/projects" className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
+            <div className="empty-state">
+              <h2 className="arco-section-title empty-state__title">{t("no_saved_projects")}</h2>
+              <p className="arco-body-text empty-state__description">{t("no_saved_projects_description")}</p>
+              <Link href="/projects" className="btn-primary empty-state__action">
                 {t("discover_projects")}
               </Link>
             </div>
@@ -1310,12 +1308,10 @@ function SavedProfessionalsTab() {
               ))}
             </div>
           ) : (
-            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
-              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("no_saved_professionals")}</h2>
-              <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 360, margin: "0 auto 32px" }}>
-                {t("no_saved_professionals_description")}
-              </p>
-              <Link href="/professionals" className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
+            <div className="empty-state">
+              <h2 className="arco-section-title empty-state__title">{t("no_saved_professionals")}</h2>
+              <p className="arco-body-text empty-state__description">{t("no_saved_professionals_description")}</p>
+              <Link href="/professionals" className="btn-primary empty-state__action">
                 {t("discover_professionals")}
               </Link>
             </div>

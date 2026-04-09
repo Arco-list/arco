@@ -618,28 +618,6 @@ export function useProjectsQuery({
     [],
   )
 
-  // Fetch space-specific cover photos whenever the space filter or project list changes
-  useEffect(() => {
-    if (!selectedSpace || projects.length === 0) {
-      setSpacePhotoOverrides({})
-      return
-    }
-
-    let cancelled = false
-
-    fetchSpacePhotoOverrides(projects, selectedSpace)
-      .then((overrides) => {
-        if (!cancelled) setSpacePhotoOverrides(overrides)
-      })
-      .catch((err) => {
-        console.error("Failed to load space photos", err)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedSpace, projects, fetchSpacePhotoOverrides])
-
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -675,25 +653,37 @@ export function useProjectsQuery({
       setError(null)
       setProjects([])
       setTypePhotoOverrides({})
+      setSpacePhotoOverrides({})
       setPage(0)
 
       try {
         const result = await fetchProjects(0)
         if (cancelled) return
 
-        let overrides: Record<string, { url: string; alt?: string | null }> = {}
-        if (imageCategorySearchOrder.length > 0) {
-          try {
-            overrides = await fetchTypePhotoOverrides(result.data)
-          } catch (overrideError) {
-            console.error("Failed to load type-specific photos", overrideError)
-          }
-        }
+        // Fetch type and space photo overrides in parallel so they land
+        // in the same render as the projects themselves — without this,
+        // the grid shows the default cover photo for a frame before
+        // swapping to the space-specific image.
+        const [typeOverrides, spaceOverrides] = await Promise.all([
+          imageCategorySearchOrder.length > 0
+            ? fetchTypePhotoOverrides(result.data).catch((e) => {
+                console.error("Failed to load type-specific photos", e)
+                return {} as Record<string, { url: string; alt?: string | null }>
+              })
+            : Promise.resolve({} as Record<string, { url: string; alt?: string | null }>),
+          selectedSpace
+            ? fetchSpacePhotoOverrides(result.data, selectedSpace).catch((e) => {
+                console.error("Failed to load space photos", e)
+                return {} as Record<string, { url: string; alt?: string | null }>
+              })
+            : Promise.resolve({} as Record<string, { url: string; alt?: string | null }>),
+        ])
 
         if (cancelled) return
 
         setProjects(result.data)
-        setTypePhotoOverrides(overrides)
+        setTypePhotoOverrides(typeOverrides)
+        setSpacePhotoOverrides(spaceOverrides)
         setTotal(result.total)
         setHasMore(result.total > result.data.length)
       } catch (err) {
@@ -715,6 +705,7 @@ export function useProjectsQuery({
   }, [
     fetchProjects,
     fetchTypePhotoOverrides,
+    fetchSpacePhotoOverrides,
     imageCategorySearchOrder,
     typeFilterValues.length,
     selectedStyles.length,
@@ -742,17 +733,24 @@ export function useProjectsQuery({
       const nextPage = page + 1
       const result = await fetchProjects(nextPage)
 
-      let overrides: Record<string, { url: string; alt?: string | null }> = {}
-      if (imageCategorySearchOrder.length > 0) {
-        try {
-          overrides = await fetchTypePhotoOverrides(result.data)
-        } catch (overrideError) {
-          console.error("Failed to load type-specific photos for additional results", overrideError)
-        }
-      }
+      const [typeOverrides, spaceOverrides] = await Promise.all([
+        imageCategorySearchOrder.length > 0
+          ? fetchTypePhotoOverrides(result.data).catch((e) => {
+              console.error("Failed to load type-specific photos for additional results", e)
+              return {} as Record<string, { url: string; alt?: string | null }>
+            })
+          : Promise.resolve({} as Record<string, { url: string; alt?: string | null }>),
+        selectedSpace
+          ? fetchSpacePhotoOverrides(result.data, selectedSpace).catch((e) => {
+              console.error("Failed to load space photos for additional results", e)
+              return {} as Record<string, { url: string; alt?: string | null }>
+            })
+          : Promise.resolve({} as Record<string, { url: string; alt?: string | null }>),
+      ])
 
       setProjects((prev) => [...prev, ...result.data])
-      setTypePhotoOverrides((prev) => ({ ...prev, ...overrides }))
+      setTypePhotoOverrides((prev) => ({ ...prev, ...typeOverrides }))
+      setSpacePhotoOverrides((prev) => ({ ...prev, ...spaceOverrides }))
       setPage(nextPage)
       setTotal(result.total)
       setHasMore((nextPage + 1) * effectivePageSize < result.total)
@@ -762,7 +760,7 @@ export function useProjectsQuery({
     } finally {
       setIsLoading(false)
     }
-  }, [effectivePageSize, fetchProjects, fetchTypePhotoOverrides, hasMore, imageCategorySearchOrder, isLoading, page])
+  }, [effectivePageSize, fetchProjects, fetchTypePhotoOverrides, fetchSpacePhotoOverrides, hasMore, imageCategorySearchOrder, isLoading, page, selectedSpace])
 
   const refetch = useCallback(async () => {
     setIsLoading(true)

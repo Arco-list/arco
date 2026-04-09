@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!--
+    Branded Open Graph card mockup — 1200x630 (Twitter/Facebook/LinkedIn standard)
+    Generated for the SEO strategy doc. Shows what next/og ImageResponse would
+    produce at runtime for a project page (example: Villa Mel).
+
+    Layout (left-to-right, top-to-bottom):
+      - Full-bleed hero photo with subtle dark gradient overlay
+      - Top-left: Arco wordmark + favicon mark (small, restrained)
+      - Bottom-left: project title (large serif), location/year subtitle,
+        company attribution
+      - Bottom-right: small "View on arcolist.com" affordance
+
+    All sizes/colours match Arco's design tokens so the same generator can
+    produce real cards via app/[locale]/projects/[slug]/opengraph-image.tsx.
+  -->
+
+  <defs>
+    <!-- Stand-in for the project hero photo. In production this is the
+         project's primary photo from Supabase, fetched at request time. -->
+    <linearGradient id="photoStub" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#a8a59e"/>
+      <stop offset="50%"  stop-color="#7a766d"/>
+      <stop offset="100%" stop-color="#3d3a33"/>
+    </linearGradient>
+
+    <!-- Bottom-up dark gradient so title text stays legible over any photo. -->
+    <linearGradient id="readability" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%"   stop-color="#000000" stop-opacity="0.78"/>
+      <stop offset="50%"  stop-color="#000000" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background photo placeholder -->
+  <rect width="1200" height="630" fill="url(#photoStub)"/>
+
+  <!-- Faux architectural geometry to suggest a real photo (purely cosmetic for the mockup) -->
+  <g opacity="0.18" stroke="#ffffff" stroke-width="1.2" fill="none">
+    <line x1="0"   y1="220" x2="1200" y2="180"/>
+    <line x1="0"   y1="380" x2="1200" y2="420"/>
+    <line x1="300" y1="0"   x2="340"  y2="630"/>
+    <line x1="640" y1="0"   x2="680"  y2="630"/>
+    <line x1="900" y1="0"   x2="940"  y2="630"/>
+  </g>
+
+  <!-- Readability gradient over the photo -->
+  <rect width="1200" height="630" fill="url(#readability)"/>
+
+  <!-- ─── Top-left: Arco brand mark ─── -->
+  <g transform="translate(64, 56)">
+    <!-- Black rounded square favicon mark, scaled down from public/icon.svg -->
+    <rect width="56" height="56" rx="13" ry="13" fill="#000000"/>
+    <!-- Stylised "arco" inside the mark, minimal -->
+    <text x="28" y="38" font-family="Inter, system-ui, sans-serif"
+          font-size="22" font-weight="600" fill="#ffffff" text-anchor="middle"
+          letter-spacing="-0.5">a</text>
+    <!-- Wordmark beside the mark -->
+    <text x="76" y="38" font-family="'Cormorant Garamond', Georgia, serif"
+          font-size="32" font-weight="500" fill="#ffffff" letter-spacing="0.5">
+      Arco
+    </text>
+  </g>
+
+  <!-- ─── Bottom-left: project metadata ─── -->
+  <g transform="translate(64, 380)">
+    <!-- Eyebrow: category / tag, optional -->
+    <text font-family="Inter, system-ui, sans-serif"
+          font-size="18" font-weight="500" fill="#ffffff"
+          letter-spacing="2.4" opacity="0.78">
+      VILLA · ARCHITECTURE
+    </text>
+
+    <!-- Main title — huge serif, 1–2 lines max, ellipsised in production -->
+    <text y="64" font-family="'Cormorant Garamond', Georgia, serif"
+          font-size="78" font-weight="500" fill="#ffffff" letter-spacing="-0.5">
+      Villa Mel
+    </text>
+
+    <!-- Subtitle: location + year -->
+    <text y="118" font-family="Inter, system-ui, sans-serif"
+          font-size="26" font-weight="400" fill="#ffffff" opacity="0.92">
+      Knokke, Belgium · 2024
+    </text>
+
+    <!-- Attribution line: company name, small caps style -->
+    <text y="160" font-family="Inter, system-ui, sans-serif"
+          font-size="18" font-weight="500" fill="#ffffff" opacity="0.72"
+          letter-spacing="1.2">
+      BY GOVAERT &amp; VANHOUTTE ARCHITECTS
+    </text>
+  </g>
+
+  <!-- ─── Bottom-right: URL affordance ─── -->
+  <g transform="translate(1136, 568)">
+    <text font-family="Inter, system-ui, sans-serif"
+          font-size="16" font-weight="400" fill="#ffffff" opacity="0.78"
+          text-anchor="end">
+      arcolist.com/projects/villa-mel
+    </text>
+  </g>
+
+  <!-- Subtle 1px inner border for crispness in chat previews -->
+  <rect x="0.5" y="0.5" width="1199" height="629" fill="none"
+        stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+</svg>

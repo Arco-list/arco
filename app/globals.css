@@ -5778,6 +5778,30 @@ body.no-scroll {
   padding-bottom: 80px;
 }
 
+/* Shared empty-state card used by discover grids and saved tabs.
+   Matches the "Nog geen opgeslagen professionals" design: dashed
+   border card, centered title + description, primary action button. */
+.empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.empty-state__title {
+  margin: 0 0 12px;
+}
+
+.empty-state__description {
+  max-width: 360px;
+  margin: 0 auto 32px;
+}
+
+.empty-state__action {
+  font-size: 14px;
+  padding: 10px 20px;
+}
+
 .discover-results-meta {
   display: flex;
   align-items: center;

@@ -28,6 +28,7 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
     taxonomyLabelMap,
     sortBy,
     setSortBy,
+    clearAllFilters,
   } = useProfessionalFilters()
 
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
@@ -264,10 +265,12 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
           </div>
 
           {!isLoading && sortedProfessionals.length === 0 && !error && (
-            <div style={{ textAlign: "center", padding: "64px 0" }}>
-              <p style={{ fontSize: 15, color: "var(--text-secondary)" }}>
-                {t("no_results_filters")}
-              </p>
+            <div className="empty-state">
+              <h2 className="arco-section-title empty-state__title">{t("no_results")}</h2>
+              <p className="arco-body-text empty-state__description">{t("no_results_description")}</p>
+              <button type="button" onClick={clearAllFilters} className="btn-primary empty-state__action">
+                {t("clear_filters")}
+              </button>
             </div>
           )}
 
