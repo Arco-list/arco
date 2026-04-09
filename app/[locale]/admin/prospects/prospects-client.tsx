@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal } from "lucide-react"
+import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
 
 // -- Status config -----------------------------------------------------------
 
@@ -654,19 +655,20 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                         p.emails_clicked ?? 0,
                       )
                       const pct = Math.round((effectiveDelivered / p.emails_sent) * 100)
-                      const color = pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"
-                      return <span className={color}>{pct}%</span>
+                      return <span className={deliveredRateColor(pct, p.emails_sent)}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-center font-medium">
-                    {p.emails_sent > 0 && p.emails_opened > 0 ? (
-                      <span className="text-emerald-600">{Math.round((p.emails_opened / p.emails_sent) * 100)}%</span>
-                    ) : <span className="text-[#a1a1a0] font-normal">—</span>}
+                    {p.emails_sent > 0 ? (() => {
+                      const pct = Math.round(((p.emails_opened ?? 0) / p.emails_sent) * 100)
+                      return <span className={openedRateColor(pct, p.emails_sent)}>{pct}%</span>
+                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-center font-medium">
-                    {p.emails_sent > 0 && p.emails_clicked > 0 ? (
-                      <span className="text-emerald-600">{Math.round((p.emails_clicked / p.emails_sent) * 100)}%</span>
-                    ) : <span className="text-[#a1a1a0] font-normal">—</span>}
+                    {p.emails_sent > 0 ? (() => {
+                      const pct = Math.round(((p.emails_clicked ?? 0) / p.emails_sent) * 100)
+                      return <span className={clickedRateColor(pct, p.emails_sent)}>{pct}%</span>
+                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] capitalize">{p.source}</td>
                   <td className="px-4 py-3 text-xs text-[#a1a1a0] text-right whitespace-nowrap">{formatDate(p.created_at)}</td>

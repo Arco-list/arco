@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { fetchRecentEmails, fetchTemplateStats, sendTestEmail, type ResendEmail, type TemplateStats } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
+import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
 import {
   Select,
   SelectContent,
@@ -337,21 +338,21 @@ export default function AdminEmailsPage() {
                         const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
                         const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
                         return <>
-                      <td className="px-4 py-3 text-xs text-[#6b6b68] text-right">
+                      <td className="px-4 py-3 text-xs text-[#6b6b68] text-right font-medium">
                         {sends > 0 ? sends.toLocaleString() : "—"}
                       </td>
-                      <td className="px-4 py-3 text-xs text-right">
-                        <span className={deliveryRate >= 95 ? "text-emerald-600" : deliveryRate > 0 ? "text-amber-600" : "text-[#a1a1a0]"}>
+                      <td className="px-4 py-3 text-xs text-right font-medium">
+                        <span className={deliveredRateColor(deliveryRate, sends)}>
                           {sends > 0 ? `${deliveryRate}%` : "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-right">
-                        <span className={openRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>
+                      <td className="px-4 py-3 text-xs text-right font-medium">
+                        <span className={openedRateColor(openRate, sends)}>
                           {sends > 0 ? `${openRate}%` : "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-right">
-                        <span className={clickRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>
+                      <td className="px-4 py-3 text-xs text-right font-medium">
+                        <span className={clickedRateColor(clickRate, sends)}>
                           {sends > 0 ? `${clickRate}%` : "—"}
                         </span>
                       </td>
@@ -420,10 +421,10 @@ export default function AdminEmailsPage() {
                           const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
                           const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
                           return <>
-                            <td className="px-4 py-2.5 text-xs text-[#6b6b68] text-right">{sends > 0 ? sends.toLocaleString() : "—"}</td>
-                            <td className="px-4 py-2.5 text-xs text-right"><span className={deliveryRate >= 95 ? "text-emerald-600" : deliveryRate > 0 ? "text-amber-600" : "text-[#a1a1a0]"}>{sends > 0 ? `${deliveryRate}%` : "—"}</span></td>
-                            <td className="px-4 py-2.5 text-xs text-right"><span className={openRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
-                            <td className="px-4 py-2.5 text-xs text-right"><span className={clickRate > 0 ? "text-[#1c1c1a]" : "text-[#a1a1a0]"}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
+                            <td className="px-4 py-2.5 text-xs text-[#6b6b68] text-right font-medium">{sends > 0 ? sends.toLocaleString() : "—"}</td>
+                            <td className="px-4 py-2.5 text-xs text-right font-medium"><span className={deliveredRateColor(deliveryRate, sends)}>{sends > 0 ? `${deliveryRate}%` : "—"}</span></td>
+                            <td className="px-4 py-2.5 text-xs text-right font-medium"><span className={openedRateColor(openRate, sends)}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
+                            <td className="px-4 py-2.5 text-xs text-right font-medium"><span className={clickedRateColor(clickRate, sends)}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
                           </>
                         })()}
                         <td className="px-4 py-2.5 text-center" onClick={e => e.stopPropagation()}>

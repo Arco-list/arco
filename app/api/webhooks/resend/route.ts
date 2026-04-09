@@ -57,6 +57,26 @@ export async function POST(request: NextRequest) {
   if (messageId) {
     const updateData: Record<string, string> = {}
 
+    // Map Resend event names → Resend's `last_event` enum so the cached
+    // value is identical to what `resend.emails.get()` would return for
+    // the same message. The dashboard reads from this cache to avoid
+    // re-fetching terminal-state rows on every page load.
+    const lastEventMap: Record<string, string> = {
+      "email.sent": "sent",
+      "email.delivered": "delivered",
+      "email.opened": "opened",
+      "email.clicked": "clicked",
+      "email.bounced": "bounced",
+      "email.complained": "complained",
+      "email.delivery_delayed": "delivery_delayed",
+      "email.failed": "failed",
+    }
+    const cachedEvent = lastEventMap[type]
+    if (cachedEvent) {
+      updateData.last_event_cached = cachedEvent
+      updateData.last_event_cached_at = now
+    }
+
     switch (type) {
       case "email.delivered":
         // No specific field — delivery is implicit
