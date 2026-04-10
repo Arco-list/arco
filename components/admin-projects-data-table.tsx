@@ -370,15 +370,13 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           return (
             <>
               {config && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
-                  <span className={`inline-block w-[5px] h-[5px] rounded-full ${config.dotColor}`} />
+                <span className="status-pill">
+                  <span className={`status-pill-dot ${config.dotColor}`} />
                   {config.label}
                 </span>
               )}
               {company.isOwner && (
-                <span className="inline-flex items-center rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68]">
-                  Owner
-                </span>
+                <span className="status-pill">Owner</span>
               )}
             </>
           )

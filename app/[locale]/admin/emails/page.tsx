@@ -152,13 +152,13 @@ export default function AdminEmailsPage() {
     return result
   })()
 
-  const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
-    sent: { label: "Sent", cls: "bg-[#e6f4f5] text-[#016D75]" },
-    delivered: { label: "Delivered", cls: "bg-emerald-50 text-emerald-700" },
-    opened: { label: "Opened", cls: "bg-blue-50 text-blue-700" },
-    clicked: { label: "Clicked", cls: "bg-violet-50 text-violet-700" },
-    bounced: { label: "Bounced", cls: "bg-red-50 text-red-700" },
-    complained: { label: "Spam", cls: "bg-red-50 text-red-700" },
+  const STATUS_CONFIG: Record<string, { label: string; dot: string }> = {
+    sent: { label: "Sent", dot: "#016D75" },
+    delivered: { label: "Delivered", dot: "#059669" },
+    opened: { label: "Opened", dot: "#2563eb" },
+    clicked: { label: "Clicked", dot: "#7c3aed" },
+    bounced: { label: "Bounced", dot: "#dc2626" },
+    complained: { label: "Spam", dot: "#dc2626" },
   }
 
   return (
@@ -326,7 +326,7 @@ export default function AdminEmailsPage() {
                         )}
                       </td>
                       <td>
-                        <span className="status-pill">{AUDIENCE_CONFIG[t.audience].label}</span>
+                        {AUDIENCE_CONFIG[t.audience].label}
                       </td>
                       <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">
                         {t.subject}
@@ -411,7 +411,7 @@ export default function AdminEmailsPage() {
                           )}
                         </td>
                         <td>
-                          <span className="status-pill">{AUDIENCE_CONFIG[child.audience].label}</span>
+                          {AUDIENCE_CONFIG[child.audience].label}
                         </td>
                         <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{child.subject}</td>
                         {(() => {
@@ -472,7 +472,7 @@ export default function AdminEmailsPage() {
                   </thead>
                   <tbody>
                     {emails.map((email) => {
-                      const status = STATUS_CONFIG[email.last_event] ?? { label: email.last_event, cls: "bg-[#f5f5f4] text-[#a1a1a0]" }
+                      const status = STATUS_CONFIG[email.last_event] ?? { label: email.last_event, dot: "#a1a1a0" }
                       return (
                         <tr key={email.id}>
                           <td className="text-sm text-[#1c1c1a]">{email.to.join(", ")}</td>
@@ -491,7 +491,8 @@ export default function AdminEmailsPage() {
                           </td>
                           <td style={{ maxWidth: 300 }} className="text-sm text-[#1c1c1a] truncate">{email.subject}</td>
                           <td>
-                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>
+                            <span className="arco-table-status">
+                              <span className="arco-table-status-dot" style={{ background: status.dot }} />
                               {status.label}
                             </span>
                           </td>

@@ -598,6 +598,31 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
         }
       }
 
+      // If Firecrawl still returned very few images, fall back to a
+      // direct fetch + JSDOM parse which often picks up images that
+      // Firecrawl's renderer missed (e.g. custom CSS-grid layouts).
+      if (imageUrls.length < 4) {
+        try {
+          console.log(`[scrape] Firecrawl found only ${imageUrls.length} images — trying direct fetch fallback`)
+          const directRes = await fetch(url.toString(), {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)" },
+            signal: AbortSignal.timeout(15000),
+          })
+          if (directRes.ok) {
+            const directHtml = await directRes.text()
+            const directImages = extractImagesFromRawHtml(directHtml, url.toString())
+            for (const img of directImages) {
+              if (!imageUrls.includes(img)) imageUrls.push(img)
+            }
+            if (directImages.length > 0) {
+              console.log(`[scrape] Direct fetch fallback found ${directImages.length} additional images`)
+            }
+          }
+        } catch (err) {
+          console.log("[scrape] Direct fetch fallback failed:", err)
+        }
+      }
+
       imageUrls = imageUrls.slice(0, 30)
       console.log(`[scrape] Found ${imageUrls.length} images from ${url.toString()}`)
 

@@ -157,7 +157,7 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
         <td>
           <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
           {row.source && (
-            <span className={`ml-1.5 text-[9px] font-medium px-1.5 py-0.5 rounded ${row.source === "posthog" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>
+            <span className="status-pill" style={{ marginLeft: 6 }}>
               {row.source === "posthog" ? "PostHog" : "Supabase"}
             </span>
           )}
