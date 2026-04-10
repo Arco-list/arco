@@ -170,7 +170,7 @@ export function MetricDetailModal({ metricKey, currentValue, conversions, source
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="status-pill-dot" style={{ background: color }} />
-              <span className="arco-h4">{def.title}</span>
+              <span className="arco-label">{def.title}</span>
             </div>
             <button onClick={onClose} className="text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors text-lg">✕</button>
           </div>

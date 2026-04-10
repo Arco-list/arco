@@ -4854,7 +4854,7 @@ export default function ListingEditorPage() {
                   {/* Company name — non-editable for owner, search input for others */}
                   <div style={{ position: "relative", width: "100%", marginBottom: 6 }}>
                     <h3
-                      className="arco-h4"
+                      className="arco-label"
                       style={{ cursor: inv.isOwner ? undefined : "text", color: !inv.isOwner && !inv.companyName && !isEditingCompany ? "#b0b0ae" : undefined }}
                       onClick={inv.isOwner ? undefined : (e => {
                         e.stopPropagation()
@@ -5260,7 +5260,7 @@ export default function ListingEditorPage() {
                 {/* Company name — search */}
                 <div style={{ position: "relative", width: "100%", marginBottom: 6 }}>
                   <h3
-                    className="arco-h4"
+                    className="arco-label"
                     style={{ cursor: "text", color: draftCard.companyName && !(editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "company") ? undefined : "#b0b0ae" }}
                     onClick={e => {
                       e.stopPropagation()

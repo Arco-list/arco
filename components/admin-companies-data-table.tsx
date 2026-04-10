@@ -315,7 +315,8 @@ function OwnerEmailCell({ company, onRefresh }: { company: AdminCompanyRow; onRe
       <input
         autoFocus
         type="email"
-        className="text-xs text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-[180px]"
+        className="arco-table-primary border-b border-[#016D75] bg-transparent outline-none w-[180px]"
+        style={{ fontWeight: 400 }}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleSave}
@@ -328,7 +329,8 @@ function OwnerEmailCell({ company, onRefresh }: { company: AdminCompanyRow; onRe
   return (
     <button
       type="button"
-      className="text-[11px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors cursor-pointer truncate"
+      className="arco-table-primary hover:opacity-70 transition-opacity cursor-pointer truncate"
+      style={{ fontWeight: 400 }}
       onClick={(e) => { e.stopPropagation(); setEditing(true) }}
       title="Click to edit email"
     >
@@ -363,7 +365,8 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
     return (
       <input
         autoFocus
-        className="text-xs text-[#1c1c1a] border-b border-[#016D75] bg-transparent outline-none w-[120px]"
+        className="arco-table-primary border-b border-[#016D75] bg-transparent outline-none w-[120px]"
+        style={{ fontWeight: 400 }}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleSave}
@@ -377,7 +380,8 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
     <div className="inline-flex items-center gap-1.5">
       <button
         type="button"
-        className="text-xs text-[#6b6b68] hover:text-[#1c1c1a] transition-colors cursor-pointer"
+        className="arco-table-primary hover:opacity-70 transition-opacity cursor-pointer"
+        style={{ fontWeight: 400 }}
         onClick={(e) => { e.stopPropagation(); setEditing(true) }}
         title="Click to edit domain"
       >
@@ -750,13 +754,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 />
               </button>
               {company.logoUrl ? (
-                <img
-                  src={company.logoUrl}
-                  alt={company.name}
-                  className="h-8 w-8 shrink-0 rounded-full object-cover"
-                />
+                <div className="arco-table-avatar">
+                  <img src={company.logoUrl} alt={company.name} />
+                </div>
               ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
                   {initials}
                 </div>
               )}
@@ -764,15 +766,15 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 {company.slug && company.type === "company" ? (
                   <Link
                     href={`/professionals/${company.slug}`}
-                    className="text-sm font-medium text-[#1c1c1a] hover:text-[#016D75] transition-colors truncate"
+                    className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors"
                   >
                     {company.name}
                   </Link>
                 ) : (
-                  <span className="text-sm font-medium text-[#1c1c1a] truncate">{company.name}</span>
+                  <span className="arco-table-primary arco-table-primary--wrap">{company.name}</span>
                 )}
                 {(firstService || company.city) && (
-                  <span className="text-xs text-[#a1a1a0] flex items-center gap-0">
+                  <span className="arco-table-secondary" style={{ display: "flex", alignItems: "center", gap: 0 }}>
                     {firstService && <span className="truncate">{firstService}</span>}
                     {extraCount > 0 && (
                       <ServiceDropdown services={company.services} extraCount={extraCount} />
@@ -819,14 +821,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           return (
             <button
               type="button"
-              className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
+              className="arco-table-status hover:opacity-70 transition-opacity cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation()
                 setStatusChange({ company, selectedStatus: (status === "invited" ? "unlisted" : status === "prospected" ? "prospected" : status) as CompanyStatus })
               }}
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[status] ?? "bg-gray-400")} />
-              <span className="text-xs font-medium text-[#1c1c1a]">{STATUS_LABEL[status] ?? status}</span>
+              <span className={cn("arco-table-status-dot", STATUS_DOT[status] ?? "bg-gray-400")} />
+              <span style={{ fontWeight: 500 }}>{STATUS_LABEL[status] ?? status}</span>
             </button>
           )
         },
@@ -853,20 +855,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             return (
               <div className="flex items-center gap-3">
                 {company.ownerAvatarUrl ? (
-                  <img
-                    src={company.ownerAvatarUrl}
-                    alt={company.ownerName}
-                    className="h-8 w-8 shrink-0 rounded-full object-cover"
-                  />
+                  <div className="arco-table-avatar">
+                    <img src={company.ownerAvatarUrl} alt={company.ownerName} />
+                  </div>
                 ) : (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                  <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
                     {initials}
                   </div>
                 )}
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-medium text-[#1c1c1a] truncate">{company.ownerName}</span>
+                  <span className="arco-table-primary">{company.ownerName}</span>
                   {company.ownerEmail && (
-                    <span className="text-[11px] text-[#a1a1a0] truncate">{company.ownerEmail}</span>
+                    <span className="arco-table-secondary">{company.ownerEmail}</span>
                   )}
                 </div>
               </div>
@@ -890,7 +890,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         cell: ({ row }) => {
           const { projects: rawProjects } = row.original
           if (!rawProjects.length) {
-            return <span className="text-xs text-[#a1a1a0]">—</span>
+            return <span className="arco-table-secondary">—</span>
           }
           // Owner projects first
           const projects = [...rawProjects].sort((a, b) => Number(b.isProjectOwner) - Number(a.isProjectOwner))
@@ -903,19 +903,19 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             return (
               <DropdownMenu key={project.id}>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="flex items-center gap-1 hover:text-[#016D75] transition-colors cursor-pointer text-left">
-                    <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", projDot)} />
-                    <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{project.title}</span>
+                  <button type="button" className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left">
+                    <span className="arco-table-status">
+                      <span className={cn("arco-table-status-dot", projDot)} />
+                      <span className="truncate max-w-[150px]">{project.title}</span>
+                    </span>
                     {contribConfig && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
-                        <span className={cn("inline-block h-1 w-1 rounded-full", contribConfig.dotColor)} />
+                      <span className="status-pill">
+                        <span className={cn("status-pill-dot", contribConfig.dotColor)} />
                         {contribConfig.label}
                       </span>
                     )}
                     {project.isProjectOwner && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
-                        Owner
-                      </span>
+                      <span className="status-pill">Owner</span>
                     )}
                   </button>
                 </DropdownMenuTrigger>
@@ -973,7 +973,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="text-[11px] text-[#a1a1a0] hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit"
+                      className="arco-table-secondary hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit"
+                    style={{ marginTop: 0 }}
                     >
                       +{overflow} more
                     </button>
@@ -985,19 +986,17 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                       const companyId = row.original.id
                       return (
                         <DropdownMenuSub key={project.id}>
-                          <DropdownMenuSubTrigger className="flex items-center gap-1 text-xs">
-                            <span className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", pDot)} />
+                          <DropdownMenuSubTrigger className="flex items-center gap-1.5 text-xs">
+                            <span className={cn("arco-table-status-dot", pDot)} />
                             <span className="truncate">{project.title}</span>
                             {cConfig && (
-                              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
-                                <span className={cn("inline-block h-1 w-1 rounded-full", cConfig.dotColor)} />
+                              <span className="status-pill">
+                                <span className={cn("status-pill-dot", cConfig.dotColor)} />
                                 {cConfig.label}
                               </span>
                             )}
                             {project.isProjectOwner && (
-                              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#f5f5f4] px-1.5 py-0.5 text-[10px] font-medium text-[#6b6b68] shrink-0">
-                                Owner
-                              </span>
+                              <span className="status-pill">Owner</span>
                             )}
                           </DropdownMenuSubTrigger>
                           <DropdownMenuSubContent className="min-w-[180px]">
@@ -1092,8 +1091,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         enableSorting: true,
         cell: ({ row }) => {
           const date = row.original.createdAt
-          if (!date) return <span className="text-xs text-[#a1a1a0]">—</span>
-          return <span className="text-xs text-[#6b6b68] whitespace-nowrap">{format(new Date(date), "dd MMM yyyy")}</span>
+          if (!date) return <span className="arco-table-secondary">—</span>
+          return <span className="arco-table-nowrap">{format(new Date(date), "dd MMM yyyy")}</span>
         },
       },
       {
@@ -1109,7 +1108,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
+                <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Open menu</span>
                 </button>
@@ -1605,10 +1604,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
-        <table className="w-full text-sm" style={{ minWidth: 1100 }}>
+      <div className="arco-table-wrap">
+        <table className="arco-table" style={{ minWidth: 1100 }}>
           <thead>
-            <tr className="border-b border-[#e5e5e4]">
+            <tr>
               {table.getHeaderGroups().map((headerGroup) =>
                 headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort()
@@ -1617,12 +1616,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <th
                       key={header.id}
                       colSpan={header.colSpan}
-                      className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
                       style={header.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
-                          className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors select-none"
+                          className="arco-table-sort"
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -1646,9 +1644,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           <tbody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
+                <tr key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle" style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
+                    <td key={cell.id} style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -1656,7 +1654,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={columns.length} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found. Adjust your filters.
                 </td>
               </tr>
@@ -1666,30 +1664,28 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between text-xs text-[#a1a1a0]">
-        <span>
+      <div className="arco-table-pagination">
+        <span className="arco-table-pagination-count">
           {table.getFilteredRowModel().rows.length} {table.getFilteredRowModel().rows.length === 1 ? "result" : "results"}
         </span>
-        <div className="flex items-center gap-3">
-          <span>
+        <div className="arco-table-pagination-nav">
+          <span className="arco-table-pagination-info">
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
           </span>
-          <div className="flex items-center gap-1">
-            <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              ‹
-            </button>
-            <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              ›
-            </button>
-          </div>
+          <button
+            className="arco-table-pagination-btn"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            ‹
+          </button>
+          <button
+            className="arco-table-pagination-btn"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            ›
+          </button>
         </div>
       </div>
 

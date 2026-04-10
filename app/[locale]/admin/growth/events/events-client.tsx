@@ -57,7 +57,7 @@ export function EventsOverview() {
     <>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="arco-h4">Tracking Events</h3>
+          <h3 className="arco-label">Tracking Events</h3>
           <p className="text-xs text-[#a1a1a0] mt-0.5">
             {wiredCount} of {totalCount} events wired · PostHog autocapture is disabled
           </p>

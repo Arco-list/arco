@@ -14,7 +14,7 @@
 //
 // ── DEPENDENCIES ─────────────────────────────────────────────────────────────
 //   Classes used from globals.css:
-//     .wrap  .arco-eyebrow  .arco-section-title  .arco-h4  .arco-body-text
+//     .wrap  .arco-eyebrow  .arco-section-title  .arco-label  .arco-body-text
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useTranslations } from "next-intl"
@@ -156,7 +156,7 @@ function WhoItsFor() {
                   <img src={a.img} alt={a.alt} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.05)", transition: "transform 7s ease" }} onMouseEnter={e => (e.currentTarget.style.transform = "scale(1)")} onMouseLeave={e => (e.currentTarget.style.transform = "scale(1.05)")} />
                 </div>
                 <span className="arco-eyebrow" style={{ display: "block", marginBottom: 10 }}>{a.eyebrow}</span>
-                <h3 className="arco-h4" style={{ marginBottom: 12 }}>{a.title}</h3>
+                <h3 className="arco-label" style={{ marginBottom: 12 }}>{a.title}</h3>
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 300, lineHeight: 1.78, color: C.mid }}>{a.body}</p>
               </div>
             </Reveal>
@@ -208,7 +208,7 @@ function OurValues() {
           {VALUES.map((v, i) => (
             <Reveal key={v.n} delay={(i % 3) * 80}>
               <span style={NUM_STYLE}>{v.n}</span>
-              <h3 className="arco-h4">{v.name}</h3>
+              <h3 className="arco-label">{v.name}</h3>
               <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 300, lineHeight: 1.78, color: C.mid, marginTop: 8 }}>{v.body}</p>
             </Reveal>
           ))}
@@ -232,7 +232,7 @@ function Careers() {
                 {t("careers_body")}
               </p>
               <div style={{ background: C.white, border: `1px solid ${C.rule}`, padding: "32px 36px 28px", transition: "border-color 0.2s" }} onMouseEnter={e => (e.currentTarget.style.borderColor = C.mid)} onMouseLeave={e => (e.currentTarget.style.borderColor = C.rule)}>
-                <h3 className="arco-h4">{t("careers_role_title")}</h3>
+                <h3 className="arco-label">{t("careers_role_title")}</h3>
                 <span className="arco-eyebrow" style={{ display: "block", marginTop: 8, marginBottom: 16 }}>{t("careers_role_location")}</span>
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 300, lineHeight: 1.75, color: C.mid, marginBottom: 20 }}>
                   {t("careers_role_body")}

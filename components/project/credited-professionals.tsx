@@ -123,7 +123,7 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
                   )}
                 </div>
 
-                <h3 className="arco-h4">{professional.companyName}</h3>
+                <h3 className="arco-label">{professional.companyName}</h3>
                 <p className="arco-card-subtitle">
                   {t("projects_count", { count: professional.projectsCount })}
                 </p>

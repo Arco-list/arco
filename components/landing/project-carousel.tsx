@@ -223,18 +223,18 @@ export function ProjectCarousel({
               key={`${project.id}-${i}`}
               className="shrink-0 min-w-0 carousel-project-card"
             >
-              <Image
-                className="w-full object-cover block"
-                style={{ aspectRatio: "3/2" }}
-                src={project.image}
-                alt={project.title}
-                width={960}
-                height={640}
-              />
-              <div className="pt-3">
-                <div className="arco-card-title">{project.title}</div>
-                <div className="arco-card-subtitle">{t("by_firm", { firm: project.firm })}</div>
+              <div className="discover-card-image-wrap" style={{ aspectRatio: "3/2" }}>
+                <div className="discover-card-image-layer">
+                  <Image
+                    src={project.image}
+                    alt={project.title}
+                    width={960}
+                    height={640}
+                  />
+                </div>
               </div>
+              <div className="discover-card-title">{project.title}</div>
+              <div className="discover-card-sub">{t("by_firm", { firm: project.firm })}</div>
             </div>
           ))}
         </div>

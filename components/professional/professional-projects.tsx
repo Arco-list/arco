@@ -84,7 +84,7 @@ export async function ProfessionalProjects({ projects }: ProfessionalProjectsPro
                   href={href}
                   className="project-list-item"
                 >
-                  <h3 className="arco-h4">{project.title}</h3>
+                  <h3 className="arco-label">{project.title}</h3>
                   {subtitle && <p className="arco-card-subtitle">{subtitle}</p>}
                 </Link>
               )

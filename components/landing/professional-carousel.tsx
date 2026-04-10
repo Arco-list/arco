@@ -191,7 +191,7 @@ export function ProfessionalCarousel({
                 )}
               </div>
 
-              <h3 className="arco-h4">{pro.name}</h3>
+              <h3 className="arco-label">{pro.name}</h3>
               <p className="arco-card-subtitle">{pro.city ?? ""}</p>
             </Link>
           ))}

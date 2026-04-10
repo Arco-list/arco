@@ -474,7 +474,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
   similarProjects = similarProjects
     .filter((p) => ownerByProjectId.get(p.id) !== projectOwner?.companyId)
-    .slice(0, 6)
+    .slice(0, 3)
 
   // Get cover photos for both rails in one query
   const relatedProjectIds = relatedProjects?.map((r) => r.project_id).filter(Boolean) ?? []

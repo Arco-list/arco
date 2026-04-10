@@ -361,7 +361,7 @@
   font-size: clamp(42px, 5.5vw, 72px);
   font-weight: 400;
   line-height: 1.05;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
   color: var(--text-primary);
 }
 
@@ -383,6 +383,18 @@
   color: var(--text-primary);
 }
 
+.arco-subsection-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+/* .arco-h4 kept as legacy alias — use .arco-label for new code. */
+.arco-label,
 .arco-h4 {
   font-family: var(--font-sans);
   font-size: 15px;
@@ -424,20 +436,25 @@ p a:hover {
   text-decoration-color: var(--primary);
 }
 
+/* .arco-nav-text is aliased to .arco-small-text during migration.
+   The only difference was color (--text-primary vs --text-secondary)
+   and line-height (1.2 vs 1.5). Call sites that need primary color
+   keep it via inline style or utility class. */
 .arco-nav-text {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.5;
   color: var(--text-primary);
 }
 
-/* Header & menu link — consistent across nav bar and dropdown */
+/* Header & menu link — consistent across nav bar and dropdown.
+   Both use Small typography (14px, Sans, 400). */
 .arco-header-link {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 1.5;
   color: var(--text-primary);
   text-decoration: none;
   transition: color 0.15s ease;
@@ -579,6 +596,22 @@ a.arco-nav-text.nav-transparent:hover {
   color: var(--text-secondary);
 }
 
+.arco-xs-text {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.arco-micro-text {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+
 .arco-eyebrow {
   font-family: var(--font-sans);
   font-size: 11px;
@@ -591,21 +624,29 @@ a.arco-nav-text.nav-transparent:hover {
 
 @media (max-width: 768px) {
   .arco-page-title {
-    font-size: 32px;
+    font-size: 36px;
   }
 
   .arco-section-title {
     font-size: 28px;
   }
+
+  .arco-subsection-title {
+    font-size: 22px;
+  }
 }
 
 @media (max-width: 480px) {
   .arco-page-title {
-    font-size: 26px;
+    font-size: 32px;
   }
 
   .arco-section-title {
-    font-size: 26px;
+    font-size: 24px;
+  }
+
+  .arco-subsection-title {
+    font-size: 20px;
   }
 }
 
@@ -1185,9 +1226,9 @@ a.arco-nav-text.nav-transparent:hover {
 
 .view-all-link {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 1.4;
+  line-height: 1.5;
   letter-spacing: 0.01em;
   color: var(--arco-light);
   text-decoration: none;
@@ -1927,7 +1968,7 @@ a.arco-nav-text.nav-transparent:hover {
   object-fit: cover;
 }
 
-.credit-card .arco-h4 {
+.credit-card .arco-label {
   margin-bottom: 6px;
 }
 
@@ -2482,7 +2523,7 @@ a.arco-nav-text.nav-transparent:hover {
   opacity: 0.6;
 }
 
-.project-list-item .arco-h4 {
+.project-list-item .arco-label {
   margin-bottom: 4px;
 }
 
@@ -3273,15 +3314,7 @@ body.no-scroll {
   gap: 60px;
 }
 
-.benefit-title {
-  font-family: var(--font-serif);
-  font-size: 28px;
-  font-weight: 400;
-  line-height: 1.3;
-  letter-spacing: -0.2px;
-  color: var(--arco-black);
-  margin-bottom: 12px;
-}
+/* .benefit-title removed — benefit cards now use .arco-subsection-title */
 
 .benefit-body {
   font-family: var(--font-sans);
@@ -5800,6 +5833,261 @@ body.no-scroll {
 .empty-state__action {
   font-size: 14px;
   padding: 10px 20px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATA TABLE
+   ═══════════════════════════════════════════════════════ */
+
+.arco-table-wrap {
+  border: 1px solid var(--arco-rule);
+  overflow-x: auto;
+}
+
+.arco-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+
+.arco-table thead tr {
+  border-bottom: 1px solid var(--arco-rule);
+}
+
+.arco-table th {
+  height: 40px;
+  padding: 0 16px;
+  text-align: left;
+  vertical-align: middle;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.arco-table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.arco-table tbody tr {
+  border-bottom: 1px solid var(--arco-rule);
+  transition: background 0.1s;
+}
+
+.arco-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.arco-table tbody tr:hover {
+  background: var(--arco-white);
+}
+
+.arco-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.arco-table-sort:hover {
+  color: var(--text-primary);
+}
+
+.arco-table-sort svg {
+  opacity: 0.4;
+}
+
+.arco-table-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--arco-rule);
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.arco-table-checkbox:checked {
+  background: var(--arco-black);
+  border-color: var(--arco-black);
+}
+
+.arco-table-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 1px;
+  width: 5px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.arco-table-primary {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arco-table-secondary {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-disabled);
+  line-height: 1.3;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Company column: allow name to wrap to 2 lines max */
+.arco-table-primary--wrap {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.arco-table-nowrap {
+  white-space: nowrap;
+}
+
+.arco-table-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.arco-table-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.arco-table .status-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  gap: 4px;
+}
+
+.arco-table .status-pill-dot {
+  width: 5px;
+  height: 5px;
+}
+
+.arco-table-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.arco-table-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.arco-table-action {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.arco-table-action:hover {
+  background: var(--arco-surface);
+  color: var(--text-primary);
+}
+
+/* Pagination */
+.arco-table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.arco-table-pagination-count {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.arco-table-pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arco-table-pagination-info {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.arco-table-pagination-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--arco-rule);
+  border-radius: 3px;
+  background: none;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.1s;
+}
+
+.arco-table-pagination-btn:hover:not(:disabled) {
+  border-color: var(--arco-black);
+}
+
+.arco-table-pagination-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .discover-results-meta {
