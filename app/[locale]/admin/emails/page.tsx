@@ -290,17 +290,17 @@ export default function AdminEmailsPage() {
                               </svg>
                             </button>
                           )}
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-[#1c1c1a]">{t.name}</span>
+                              <span className="arco-table-primary">{t.name}</span>
                               {isDripHeader && (
-                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-[#f5f5f4] text-[#6b6b68]">{dripCount} emails</span>
+                                <span className="status-pill">{dripCount} emails</span>
                               )}
                               {t.dripDay !== undefined && (
-                                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Day {t.dripDay}</span>
+                                <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day {t.dripDay}</span>
                               )}
                             </div>
-                            <div className="text-[11px] text-[#a1a1a0]">{t.trigger}</div>
+                            <div className="arco-table-secondary" style={{ marginTop: 2 }}>{t.trigger}</div>
                           </div>
                         </div>
                       </td>
@@ -308,25 +308,25 @@ export default function AdminEmailsPage() {
                         {t.from ? (
                           <div className="flex items-center gap-2">
                             {t.from.icon ? (
-                              <img src={t.from.icon} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                              <div className="arco-table-avatar" style={{ width: 20, height: 20 }}>
+                                <img src={t.from.icon} alt="" />
+                              </div>
                             ) : (
-                              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-[9px] font-medium text-[#6b6b68]">
+                              <div className="arco-table-avatar" style={{ width: 20, height: 20, background: "#f5f5f4", color: "#6b6b68", fontSize: 9 }}>
                                 {t.from.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                               </div>
                             )}
                             <div className="flex flex-col min-w-0">
-                              <span className="text-[11px] font-medium text-[#1c1c1a] truncate">{t.from.name}</span>
-                              <span className="text-[10px] text-[#a1a1a0] truncate">{t.from.email}</span>
+                              <span className="arco-table-primary">{t.from.name}</span>
+                              <span className="arco-table-secondary" style={{ marginTop: 1 }}>{t.from.email}</span>
                             </div>
                           </div>
                         ) : (
-                          <span className="text-xs text-[#a1a1a0]">—</span>
+                          <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
                         )}
                       </td>
                       <td>
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[t.audience].cls}`}>
-                          {AUDIENCE_CONFIG[t.audience].label}
-                        </span>
+                        <span className="status-pill">{AUDIENCE_CONFIG[t.audience].label}</span>
                       </td>
                       <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">
                         {t.subject}
@@ -383,12 +383,12 @@ export default function AdminEmailsPage() {
                           <div className="flex items-center gap-2">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-[#1c1c1a]">{child.name}</span>
+                                <span className="arco-table-primary">{child.name}</span>
                                 {child.dripDay !== undefined && (
-                                  <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Day {child.dripDay}</span>
+                                  <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day {child.dripDay}</span>
                                 )}
                               </div>
-                              <div className="text-[11px] text-[#a1a1a0]">{child.trigger}</div>
+                              <div className="arco-table-secondary" style={{ marginTop: 2 }}>{child.trigger}</div>
                             </div>
                           </div>
                         </td>
@@ -396,22 +396,22 @@ export default function AdminEmailsPage() {
                           {child.from ? (
                             <div className="flex items-center gap-2">
                               {child.from.icon ? (
-                                <img src={child.from.icon} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                                <div className="arco-table-avatar" style={{ width: 20, height: 20 }}>
+                                  <img src={child.from.icon} alt="" />
+                                </div>
                               ) : (
-                                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-[9px] font-medium text-[#6b6b68]">
+                                <div className="arco-table-avatar" style={{ width: 20, height: 20, background: "#f5f5f4", color: "#6b6b68", fontSize: 9 }}>
                                   {child.from.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                                 </div>
                               )}
-                              <span className="text-[11px] font-medium text-[#1c1c1a] truncate">{child.from.name}</span>
+                              <span className="arco-table-primary">{child.from.name}</span>
                             </div>
                           ) : (
-                            <span className="text-xs text-[#a1a1a0]">—</span>
+                            <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
                           )}
                         </td>
                         <td>
-                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[child.audience].cls}`}>
-                            {AUDIENCE_CONFIG[child.audience].label}
-                          </span>
+                          <span className="status-pill">{AUDIENCE_CONFIG[child.audience].label}</span>
                         </td>
                         <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{child.subject}</td>
                         {(() => {

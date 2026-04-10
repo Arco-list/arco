@@ -5997,6 +5997,8 @@ body.no-scroll {
   padding: 2px 8px;
   border-radius: 12px;
   gap: 4px;
+  background: transparent;
+  border-color: var(--arco-rule);
 }
 
 .arco-table .status-pill-dot {
