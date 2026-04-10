@@ -525,27 +525,27 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
       </div>
 
       {/* Prospects table */}
-      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full">
-        <table className="w-full text-sm" style={{ minWidth: 1050 }}>
+      <div className="arco-table-wrap">
+        <table className="arco-table" style={{ minWidth: 1050 }}>
           <thead>
-            <tr className="border-b border-[#e5e5e4]">
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Contact</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Status</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Sequence</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Company</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Sent</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivered</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Opened</th>
-              <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Clicked</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Source</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Created</th>
+            <tr>
+              <th>Contact</th>
+              <th>Status</th>
+              <th>Sequence</th>
+              <th>Company</th>
+              <th style={{ textAlign: "center" }}>Sent</th>
+              <th style={{ textAlign: "center" }}>Delivered</th>
+              <th style={{ textAlign: "center" }}>Opened</th>
+              <th style={{ textAlign: "center" }}>Clicked</th>
+              <th>Source</th>
+              <th style={{ textAlign: "right" }}>Created</th>
               <th className="w-[40px]"></th>
             </tr>
           </thead>
           <tbody>
             {prospects.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={11} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No prospects found.
                 </td>
               </tr>
@@ -567,19 +567,17 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
 
               return (
               <Fragment key={p.id}>
-                <tr
-                  className="border-b border-[#e5e5e4] hover:bg-[#fafaf9] transition-colors"
-                >
+                <tr>
                   {/* Contact — avatar/initials + name + email */}
-                  <td className="px-4 py-3">
+                  <td>
                     {(p.source === "arco" || p.source === "invites") ? (
                       p.contact_name ? (
                         <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                          <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
                             {p.contact_name.split(" ").filter(Boolean).map(t => t[0]?.toUpperCase()).slice(0, 2).join("")}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.contact_name}</span>
+                            <span className="arco-table-primary">{p.contact_name}</span>
                             <ProspectEmailField prospect={p} onRefresh={refreshData} />
                           </div>
                         </div>
@@ -588,62 +586,62 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                       )
                     ) : (
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                        <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
                           {initials}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.contact_name || "—"}</span>
-                          <span className="text-xs text-[#a1a1a0] truncate">{p.email}</span>
+                          <span className="arco-table-primary">{p.contact_name || "—"}</span>
+                          <span className="arco-table-secondary">{p.email}</span>
                         </div>
                       </div>
                     )}
                   </td>
                   {/* Status — dot + label */}
-                  <td className="px-4 py-3">
+                  <td>
                     <div className="flex items-center gap-1.5">
                       <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[p.status].dot}`} />
-                      <span className="text-xs font-medium text-[#1c1c1a] whitespace-nowrap">{STATUS_CONFIG[p.status].label}</span>
+                      <span className="arco-table-primary" style={{ whiteSpace: "nowrap" }}>{STATUS_CONFIG[p.status].label}</span>
                     </div>
                   </td>
                   {/* Sequence — dot + label */}
-                  <td className="px-4 py-3">
+                  <td>
                     {(() => {
                       const seq = (p.sequence_status ?? "not_started") as SequenceStatus
                       const cfg = SEQUENCE_CONFIG[seq] ?? SEQUENCE_CONFIG.not_started
                       return (
                         <div className="flex items-center gap-1.5">
                           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-                          <span className="text-xs text-[#1c1c1a] whitespace-nowrap">{cfg.label}</span>
+                          <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>{cfg.label}</span>
                         </div>
                       )
                     })()}
                   </td>
                   {/* Company — logo/initials + name + service · city */}
-                  <td className="px-4 py-3">
+                  <td>
                     {p.company_name ? (() => {
                       const ci = p.company_id ? companyMap[p.company_id] : null
                       const subtitle = [ci?.services?.[0], ci?.city].filter(Boolean).join(" · ")
                       return (
                         <div className="flex items-center gap-3">
                           {ci?.logoUrl ? (
-                            <img src={ci.logoUrl} alt={p.company_name} className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                            <div className="arco-table-avatar"><img src={ci.logoUrl} alt={p.company_name} /></div>
                           ) : (
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                            <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
                               {companyInitials}
                             </div>
                           )}
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-medium text-[#1c1c1a] truncate">{p.company_name}</span>
-                            {subtitle && <span className="text-[11px] text-[#a1a1a0] truncate">{subtitle}</span>}
+                            <span className="arco-table-primary">{p.company_name}</span>
+                            {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
                           </div>
                         </div>
                       )
                     })() : (
-                      <span className="text-xs text-[#a1a1a0]">—</span>
+                      <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-[#6b6b68] text-center">{p.emails_sent || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-center font-medium">
+                  <td style={{ textAlign: "center" }}>{p.emails_sent || "—"}</td>
+                  <td style={{ textAlign: "center" }}>
                     {p.emails_sent > 0 ? (() => {
                       // An open or click implies delivery — clamp so we never
                       // show a delivered rate lower than opened/clicked, which
@@ -658,24 +656,24 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                       return <span className={deliveredRateColor(pct, p.emails_sent)}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-center font-medium">
+                  <td style={{ textAlign: "center" }}>
                     {p.emails_sent > 0 ? (() => {
                       const pct = Math.round(((p.emails_opened ?? 0) / p.emails_sent) * 100)
                       return <span className={openedRateColor(pct, p.emails_sent)}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-center font-medium">
+                  <td style={{ textAlign: "center" }}>
                     {p.emails_sent > 0 ? (() => {
                       const pct = Math.round(((p.emails_clicked ?? 0) / p.emails_sent) * 100)
                       return <span className={clickedRateColor(pct, p.emails_sent)}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-[#a1a1a0] capitalize">{p.source}</td>
-                  <td className="px-4 py-3 text-xs text-[#a1a1a0] text-right whitespace-nowrap">{formatDate(p.created_at)}</td>
-                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td style={{ textTransform: "capitalize" }}>{p.source}</td>
+                  <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>{formatDate(p.created_at)}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="p-1 rounded hover:bg-[#f5f5f4] transition-colors">
+                        <button className="arco-table-action">
                           <MoreHorizontal size={14} className="text-[#a1a1a0]" />
                         </button>
                       </DropdownMenuTrigger>

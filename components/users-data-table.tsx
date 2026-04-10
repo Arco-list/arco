@@ -409,19 +409,17 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           return (
             <div className="flex items-center gap-3">
               {row.original.avatarUrl ? (
-                <img
-                  src={row.original.avatarUrl}
-                  alt={row.original.displayName}
-                  className="h-8 w-8 shrink-0 rounded-full object-cover"
-                />
+                <div className="arco-table-avatar">
+                  <img src={row.original.avatarUrl} alt={row.original.displayName} />
+                </div>
               ) : (
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f5f5f4] text-xs font-medium text-[#6b6b68]">
+                <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
                   {initials}
                 </div>
               )}
               <div className="flex flex-col min-w-0">
-                <span className="text-sm font-medium text-[#1c1c1a] truncate">{row.original.displayName}</span>
-                <span className="text-xs text-[#a1a1a0] truncate">{row.original.email}</span>
+                <span className="arco-table-primary">{row.original.displayName}</span>
+                <span className="arco-table-secondary">{row.original.email}</span>
               </div>
             </div>
           )
@@ -594,7 +592,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
+                <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Open menu</span>
                 </button>
@@ -812,10 +810,10 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
-        <table className="w-full text-sm" style={{ minWidth: 800 }}>
+      <div className="arco-table-wrap">
+        <table className="arco-table" style={{ minWidth: 800 }}>
           <thead>
-            <tr className="border-b border-[#e5e5e4]">
+            <tr>
               {table.getHeaderGroups().map((headerGroup) =>
                 headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort()
@@ -824,12 +822,11 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                     <th
                       key={header.id}
                       colSpan={header.colSpan}
-                      className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
                       style={header.id === "select" ? { width: 32, paddingRight: 0 } : header.column.columnDef.size ? { minWidth: header.column.columnDef.size } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
-                          className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors select-none"
+                          className="arco-table-sort"
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -853,9 +850,9 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           <tbody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
+                <tr key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle" style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
+                    <td key={cell.id} style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -863,7 +860,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={columns.length} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No users found. Adjust your filters or invite a new teammate.
                 </td>
               </tr>
@@ -873,24 +870,24 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between text-xs text-[#a1a1a0]">
-        <span>
+      <div className="arco-table-pagination">
+        <span className="arco-table-pagination-count">
           {table.getFilteredRowModel().rows.length} user{table.getFilteredRowModel().rows.length === 1 ? "" : "s"}
         </span>
-        <div className="flex items-center gap-3">
-          <span>
+        <div className="arco-table-pagination-nav">
+          <span className="arco-table-pagination-info">
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
           </span>
-          <div className="flex items-center gap-1">
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="arco-table-pagination-btn"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
               ‹
             </button>
             <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="arco-table-pagination-btn"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >

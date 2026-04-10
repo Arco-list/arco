@@ -248,29 +248,29 @@ export default function AdminEmailsPage() {
                 </Select>
               </div>
             </div>
-            <div className="border border-[#e5e5e4] overflow-x-auto max-w-full mt-4">
-              <table className="w-full text-sm" style={{ minWidth: 600 }}>
+            <div className="arco-table-wrap" style={{ maxWidth: "100%", marginTop: 16 }}>
+              <table className="arco-table" style={{ minWidth: 600 }}>
                 <thead>
-                  <tr className="border-b border-[#e5e5e4]">
-                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]" style={{ minWidth: 220 }}>Email</th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">From</th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">User</th>
-                    <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Subject</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Sends</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Delivered</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]" title="Enable tracking in Resend dashboard">Opened</th>
-                    <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]" title="Enable tracking in Resend dashboard">Clicked</th>
-                    <th className="text-center px-4 py-2 text-xs font-medium text-[#6b6b68]">Active</th>
+                  <tr>
+                    <th style={{ minWidth: 220 }}>Email</th>
+                    <th>From</th>
+                    <th>User</th>
+                    <th>Subject</th>
+                    <th style={{ textAlign: "right" }}>Sends</th>
+                    <th style={{ textAlign: "right" }}>Delivered</th>
+                    <th style={{ textAlign: "right" }} title="Enable tracking in Resend dashboard">Opened</th>
+                    <th style={{ textAlign: "right" }} title="Enable tracking in Resend dashboard">Clicked</th>
+                    <th style={{ textAlign: "center" }}>Active</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groupedTemplates.map(({ template: t, isDripHeader, dripCount, dripChildren }) => (
                     <Fragment key={t.id}>
                     <tr
-                      className="border-b border-[#e5e5e4] hover:bg-[#fafaf9] cursor-pointer transition-colors"
+                      style={{ cursor: "pointer" }}
                       onClick={() => setPreviewTemplate(t.id)}
                     >
-                      <td className="px-4 py-3">
+                      <td>
                         <div className="flex items-center gap-2">
                           {isDripHeader && (
                             <button
@@ -304,7 +304,7 @@ export default function AdminEmailsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
                         {t.from ? (
                           <div className="flex items-center gap-2">
                             {t.from.icon ? (
@@ -323,12 +323,12 @@ export default function AdminEmailsPage() {
                           <span className="text-xs text-[#a1a1a0]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td>
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[t.audience].cls}`}>
                           {AUDIENCE_CONFIG[t.audience].label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-[#6b6b68] max-w-[250px] truncate">
+                      <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">
                         {t.subject}
                       </td>
                       {(() => {
@@ -338,27 +338,27 @@ export default function AdminEmailsPage() {
                         const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
                         const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
                         return <>
-                      <td className="px-4 py-3 text-xs text-[#6b6b68] text-right font-medium">
+                      <td style={{ textAlign: "right" }} className="text-xs text-[#6b6b68] font-medium">
                         {sends > 0 ? sends.toLocaleString() : "—"}
                       </td>
-                      <td className="px-4 py-3 text-xs text-right font-medium">
+                      <td style={{ textAlign: "right" }} className="text-xs font-medium">
                         <span className={deliveredRateColor(deliveryRate, sends)}>
                           {sends > 0 ? `${deliveryRate}%` : "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-right font-medium">
+                      <td style={{ textAlign: "right" }} className="text-xs font-medium">
                         <span className={openedRateColor(openRate, sends)}>
                           {sends > 0 ? `${openRate}%` : "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-right font-medium">
+                      <td style={{ textAlign: "right" }} className="text-xs font-medium">
                         <span className={clickedRateColor(clickRate, sends)}>
                           {sends > 0 ? `${clickRate}%` : "—"}
                         </span>
                       </td>
                         </>
                       })()}
-                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                      <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
                         <button
                           onClick={(e) => toggleActive(t.id, e)}
                           className="relative inline-block"
@@ -376,10 +376,10 @@ export default function AdminEmailsPage() {
                     {isDripHeader && expandedDrips.has(t.drip!) && dripChildren.map((child) => (
                       <tr
                         key={child.id}
-                        className="border-b border-[#e5e5e4] bg-[#fafaf9] hover:bg-[#f0f0ee] cursor-pointer transition-colors"
+                        style={{ cursor: "pointer", background: "var(--arco-white)" }}
                         onClick={() => setPreviewTemplate(child.id)}
                       >
-                        <td className="px-4 py-3 pl-10">
+                        <td style={{ paddingLeft: 40 }}>
                           <div className="flex items-center gap-2">
                             <div>
                               <div className="flex items-center gap-2">
@@ -392,7 +392,7 @@ export default function AdminEmailsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td>
                           {child.from ? (
                             <div className="flex items-center gap-2">
                               {child.from.icon ? (
@@ -408,12 +408,12 @@ export default function AdminEmailsPage() {
                             <span className="text-xs text-[#a1a1a0]">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td>
                           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AUDIENCE_CONFIG[child.audience].cls}`}>
                             {AUDIENCE_CONFIG[child.audience].label}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-xs text-[#6b6b68] max-w-[250px] truncate">{child.subject}</td>
+                        <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{child.subject}</td>
                         {(() => {
                           const s = templateStats[child.id]
                           const sends = s?.sends ?? 0
@@ -421,13 +421,13 @@ export default function AdminEmailsPage() {
                           const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
                           const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
                           return <>
-                            <td className="px-4 py-2.5 text-xs text-[#6b6b68] text-right font-medium">{sends > 0 ? sends.toLocaleString() : "—"}</td>
-                            <td className="px-4 py-2.5 text-xs text-right font-medium"><span className={deliveredRateColor(deliveryRate, sends)}>{sends > 0 ? `${deliveryRate}%` : "—"}</span></td>
-                            <td className="px-4 py-2.5 text-xs text-right font-medium"><span className={openedRateColor(openRate, sends)}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
-                            <td className="px-4 py-2.5 text-xs text-right font-medium"><span className={clickedRateColor(clickRate, sends)}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
+                            <td style={{ textAlign: "right" }} className="text-xs text-[#6b6b68] font-medium">{sends > 0 ? sends.toLocaleString() : "—"}</td>
+                            <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={deliveredRateColor(deliveryRate, sends)}>{sends > 0 ? `${deliveryRate}%` : "—"}</span></td>
+                            <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={openedRateColor(openRate, sends)}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
+                            <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={clickedRateColor(clickRate, sends)}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
                           </>
                         })()}
-                        <td className="px-4 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                        <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
                           <button
                             onClick={(e) => toggleActive(child.id, e)}
                             className="relative inline-block"
@@ -452,7 +452,7 @@ export default function AdminEmailsPage() {
 
           {/* Sent emails table */}
           {activeTab === "sent" && (
-            <div className="border border-[#e5e5e4] overflow-x-auto max-w-full mt-4">
+            <div className="arco-table-wrap" style={{ maxWidth: "100%", marginTop: 16 }}>
               {isLoading ? (
                 <p className="text-sm text-[#a1a1a0] text-center py-10">Loading sent emails...</p>
               ) : error ? (
@@ -460,23 +460,23 @@ export default function AdminEmailsPage() {
               ) : emails.length === 0 ? (
                 <p className="text-sm text-[#a1a1a0] text-center py-10">No emails sent yet.</p>
               ) : (
-                <table className="w-full text-sm" style={{ minWidth: 600 }}>
+                <table className="arco-table" style={{ minWidth: 600 }}>
                   <thead>
-                    <tr className="border-b border-[#e5e5e4]">
-                      <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">To</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]" style={{ minWidth: 220 }}>Email</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Subject</th>
-                      <th className="text-left px-4 py-2 text-xs font-medium text-[#6b6b68]">Status</th>
-                      <th className="text-right px-4 py-2 text-xs font-medium text-[#6b6b68]">Sent</th>
+                    <tr>
+                      <th>To</th>
+                      <th style={{ minWidth: 220 }}>Email</th>
+                      <th>Subject</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: "right" }}>Sent</th>
                     </tr>
                   </thead>
                   <tbody>
                     {emails.map((email) => {
                       const status = STATUS_CONFIG[email.last_event] ?? { label: email.last_event, cls: "bg-[#f5f5f4] text-[#a1a1a0]" }
                       return (
-                        <tr key={email.id} className="border-b border-[#e5e5e4] hover:bg-[#fafaf9] transition-colors">
-                          <td className="px-4 py-3 text-sm text-[#1c1c1a]">{email.to.join(", ")}</td>
-                          <td className="px-4 py-3 text-xs text-[#6b6b68]">
+                        <tr key={email.id}>
+                          <td className="text-sm text-[#1c1c1a]">{email.to.join(", ")}</td>
+                          <td className="text-xs text-[#6b6b68]">
                             {email.templateId ? (
                               <button
                                 type="button"
@@ -489,13 +489,13 @@ export default function AdminEmailsPage() {
                               <span className="text-[#c4c4c2] italic">Unknown</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-[#1c1c1a] max-w-[300px] truncate">{email.subject}</td>
-                          <td className="px-4 py-3">
+                          <td style={{ maxWidth: 300 }} className="text-sm text-[#1c1c1a] truncate">{email.subject}</td>
+                          <td>
                             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.cls}`}>
                               {status.label}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-xs text-[#a1a1a0] text-right whitespace-nowrap">{formatDate(email.created_at)}</td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }} className="text-xs text-[#a1a1a0]">{formatDate(email.created_at)}</td>
                         </tr>
                       )
                     })}

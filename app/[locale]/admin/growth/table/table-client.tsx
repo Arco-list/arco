@@ -64,11 +64,11 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
   return (
     <>
       <tr
-        className={`border-b border-[#f0f0ee] hover:bg-[#fafaf9] transition-colors ${hasSubs ? "cursor-pointer" : ""}`}
+        className={hasSubs ? "cursor-pointer" : ""}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
         {/* Metric name */}
-        <td className="px-4 py-3">
+        <td>
           <div className="flex items-center gap-2">
             {hasSubs && (
               <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
@@ -82,46 +82,46 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
         </td>
 
         {/* Definition */}
-        <td className="px-3 py-3">
+        <td>
           <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
         </td>
 
         {/* Total */}
-        <td className="px-3 py-3 text-right">
+        <td style={{ textAlign: "right" }}>
           <span className="arco-card-title">{row.total}</span>
         </td>
 
         {/* 6 data points */}
         {row.datapoints.map((v, i) => (
-          <td key={i} className="px-2 py-3 text-center">
+          <td key={i} style={{ textAlign: "center" }}>
             <span className="text-[11px] text-[#6b6b68]">{v || "·"}</span>
           </td>
         ))}
 
         {/* Sparkline */}
-        <td className="px-3 py-3">
+        <td>
           <InlineSparkline datapoints={row.datapoints} color={color} />
         </td>
       </tr>
 
       {/* Expanded sub-metrics */}
       {expanded && row.subs.map((sub) => (
-        <tr key={sub.key} className="border-b border-[#f5f5f4] bg-[#fafaf9]">
-          <td className="px-4 py-2">
+        <tr key={sub.key} style={{ background: "var(--arco-white)" }}>
+          <td>
             <div className="flex items-center gap-2 pl-7">
               <span className="text-[11px] text-[#6b6b68]">{sub.label}</span>
             </div>
           </td>
-          <td className="px-3 py-2" />
-          <td className="px-3 py-2 text-right">
+          <td />
+          <td style={{ textAlign: "right" }}>
             <span className="text-[11px] text-[#6b6b68]">{sub.total}</span>
           </td>
           {sub.datapoints.map((v, i) => (
-            <td key={i} className="px-2 py-2 text-center">
+            <td key={i} style={{ textAlign: "center" }}>
               <span className="text-[10px] text-[#a1a1a0]">{v || "·"}</span>
             </td>
           ))}
-          <td className="px-3 py-2">
+          <td>
             <InlineSparkline datapoints={sub.datapoints} color="#a1a1a0" />
           </td>
         </tr>
@@ -185,28 +185,28 @@ export function GrowthTableClient({ initialMetrics }: Props) {
         </div>
       </div>
 
-      <div className="border border-[#e5e5e4] rounded-[3px] overflow-hidden">
-        <table className="w-full">
+      <div className="arco-table-wrap rounded-[3px]">
+        <table className="arco-table" style={{ minWidth: 0 }}>
           <thead>
-            <tr className="bg-[#fafaf9] border-b border-[#e5e5e4]">
-              <th className="px-4 py-2 text-left text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "16%" }}>Metric</th>
-              <th className="px-3 py-2 text-left text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "22%" }}>Definition</th>
-              <th className="px-3 py-2 text-right text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "7%" }}>Total</th>
+            <tr>
+              <th style={{ width: "16%", textAlign: "left" }}>Metric</th>
+              <th style={{ width: "22%", textAlign: "left" }}>Definition</th>
+              <th style={{ width: "7%", textAlign: "right" }}>Total</th>
               {labels.map((l, i) => (
-                <th key={i} className="px-2 py-2 text-center text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "8%" }}>{l}</th>
+                <th key={i} style={{ width: "8%", textAlign: "center" }}>{l}</th>
               ))}
               {/* Fill remaining labels if not loaded yet */}
               {labels.length === 0 && [0, 1, 2, 3, 4, 5].map((i) => (
-                <th key={i} className="px-2 py-2 text-center text-[10px] font-medium text-[#a1a1a0]" style={{ width: "8%" }}>—</th>
+                <th key={i} style={{ width: "8%", textAlign: "center" }}>—</th>
               ))}
-              <th className="px-3 py-2 text-left text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider" style={{ width: "15%" }}>Trend</th>
+              <th style={{ width: "15%", textAlign: "left" }}>Trend</th>
             </tr>
           </thead>
 
           <tbody>
             {/* Professional section */}
-            <tr className="border-b border-[#e5e5e4]">
-              <td colSpan={10} className="px-4 py-2 bg-white">
+            <tr>
+              <td colSpan={10} style={{ background: "white" }}>
                 <p className="arco-eyebrow text-[#a1a1a0]">Professionals</p>
               </td>
             </tr>
@@ -215,8 +215,8 @@ export function GrowthTableClient({ initialMetrics }: Props) {
             ))}
 
             {/* Client section */}
-            <tr className="border-b border-[#e5e5e4]">
-              <td colSpan={10} className="px-4 py-2 bg-white">
+            <tr>
+              <td colSpan={10} style={{ background: "white" }}>
                 <p className="arco-eyebrow text-[#a1a1a0]">Clients</p>
               </td>
             </tr>

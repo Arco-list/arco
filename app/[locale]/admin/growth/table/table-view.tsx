@@ -140,10 +140,10 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
     <>
       {/* Desktop row */}
       <tr
-        className={`border-b border-[#f0f0ee] hover:bg-[#fafaf9] transition-colors hidden md:table-row ${hasSubs ? "cursor-pointer" : ""}`}
+        className={`hidden md:table-row ${hasSubs ? "cursor-pointer" : ""}`}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
-        <td className="px-4 py-2">
+        <td>
           <div className="flex items-center gap-2">
             {hasSubs ? (
               <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
@@ -154,7 +154,7 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
             <span className="text-[12px] font-medium text-[#1c1c1a]">{row.label}</span>
           </div>
         </td>
-        <td className="px-3 py-2">
+        <td>
           <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
           {row.source && (
             <span className={`ml-1.5 text-[9px] font-medium px-1.5 py-0.5 rounded ${row.source === "posthog" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>
@@ -162,16 +162,16 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
             </span>
           )}
         </td>
-        <td className="px-4 py-2">
+        <td>
           <TrendlineCell datapoints={row.datapoints} labels={labels} color={color} />
         </td>
       </tr>
       {/* Mobile row — single cell spanning full width */}
       <tr
-        className={`border-b border-[#f0f0ee] md:hidden ${hasSubs ? "cursor-pointer" : ""}`}
+        className={`md:hidden ${hasSubs ? "cursor-pointer" : ""}`}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
-        <td className="px-3 py-2" colSpan={3}>
+        <td colSpan={3}>
           <div className="flex items-center gap-1.5 mb-1">
             {hasSubs ? (
               <svg width="8" height="8" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
@@ -189,13 +189,13 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
       {expanded && row.subs.map((sub) => (
         <Fragment key={sub.key}>
           {/* Desktop sub-row */}
-          <tr className="border-b border-[#f0f0ee] hidden md:table-row">
-            <td className="px-4 py-1.5">
+          <tr className="hidden md:table-row">
+            <td>
               <div className="flex items-center gap-2 pl-7">
                 <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
               </div>
             </td>
-            <td className="px-3 py-1.5">
+            <td>
               <span className="text-[10px] text-[#c4c4c2]">{sub.definition ?? ""}</span>
               {sub.source && (
                 <span className={`ml-1 text-[8px] font-medium px-1 py-0.5 rounded ${sub.source === "posthog" ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"}`}>
@@ -203,13 +203,13 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
                 </span>
               )}
             </td>
-            <td className="px-4 py-1.5">
+            <td>
               <SubTrendlineCell datapoints={sub.datapoints} />
             </td>
           </tr>
           {/* Mobile sub-row */}
-          <tr className="border-b border-[#f0f0ee] md:hidden">
-            <td className="px-3 py-1.5" colSpan={3}>
+          <tr className="md:hidden">
+            <td colSpan={3}>
               <div className="flex items-center gap-1.5 mb-0.5 pl-3">
                 <span className="text-[10px] text-[#6b6b68]">{sub.label}</span>
               </div>
@@ -350,7 +350,7 @@ export function GrowthTableView({
   }
 
   return (
-    <div className="border border-[#e5e5e4] rounded-[3px] overflow-hidden">
+    <div className="arco-table-wrap rounded-[3px]">
       {/* Date labels — full width on mobile, positioned to match SVG dot coordinates */}
       <div className="bg-[#fafaf9] border-b border-[#e5e5e4] md:hidden py-2 px-3">
         <div className="relative" style={{ height: 16 }}>
@@ -363,17 +363,17 @@ export function GrowthTableView({
           })}
         </div>
       </div>
-      <table className="w-full md:table-fixed">
+      <table className="arco-table md:table-fixed" style={{ minWidth: 0 }}>
         <colgroup className="hidden md:table-column-group">
           <col style={{ width: "16%" }} />
           <col style={{ width: "24%" }} />
           <col />
         </colgroup>
         <thead className="hidden md:table-header-group">
-          <tr className="bg-[#fafaf9] border-b border-[#e5e5e4]">
-            <th className="px-4 py-2 text-left"><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
-            <th className="px-3 py-2 text-left"><span className="arco-eyebrow text-[#a1a1a0]">Definition</span></th>
-            <th className="px-4 py-2">
+          <tr>
+            <th style={{ textAlign: "left" }}><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
+            <th style={{ textAlign: "left" }}><span className="arco-eyebrow text-[#a1a1a0]">Definition</span></th>
+            <th>
               <div className="relative" style={{ height: 16 }}>
                 {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => {
                   const n = arr.length
@@ -388,16 +388,16 @@ export function GrowthTableView({
         </thead>
         <tbody>
           {/* Clients */}
-          <tr className="border-b border-[#e5e5e4]">
-            <td colSpan={3} className="px-4 py-2 bg-white">
+          <tr>
+            <td colSpan={3} style={{ background: "white" }}>
               <p className="arco-eyebrow text-[#a1a1a0]">Clients</p>
             </td>
           </tr>
           {clientRows.map((row) => <MetricRowComponent key={row.key} row={row} labels={labels} />)}
 
           {/* Professionals */}
-          <tr className="border-b border-[#e5e5e4]">
-            <td colSpan={3} className="px-4 py-2 bg-white">
+          <tr>
+            <td colSpan={3} style={{ background: "white" }}>
               <p className="arco-eyebrow text-[#a1a1a0]">Professionals</p>
             </td>
           </tr>

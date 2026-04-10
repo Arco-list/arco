@@ -302,15 +302,15 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                   href={`/projects/${slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-medium text-[#1c1c1a] hover:text-[#016D75] transition-colors truncate max-w-[240px]"
+                  className="arco-table-primary hover:text-[#016D75] transition-colors truncate max-w-[240px]"
                 >
                   {title}
                 </a>
               ) : (
-                <span className="text-sm font-medium text-[#1c1c1a] truncate max-w-[240px]">{title}</span>
+                <span className="arco-table-primary truncate max-w-[240px]">{title}</span>
               )}
               {descriptor && (
-                <span className="text-[11px] text-[#a1a1a0] truncate max-w-[240px]">{descriptor}</span>
+                <span className="arco-table-secondary truncate max-w-[240px]">{descriptor}</span>
               )}
             </div>
           </div>
@@ -331,18 +331,18 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           <div className="flex flex-col gap-0.5">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 text-xs text-[#1c1c1a] whitespace-nowrap hover:opacity-70 transition-opacity cursor-pointer"
+              className="arco-table-status hover:opacity-70 transition-opacity cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation()
                 setStatusDialogProject(project)
                 setStatusSelection(project.status)
               }}
             >
-              <span className={`inline-block w-[7px] h-[7px] rounded-full ${config.dotColor}`} />
+              <span className={`arco-table-status-dot ${config.dotColor}`} />
               {config.label}
             </button>
             {project.status === "rejected" && project.rejectionReason && (
-              <span className="text-[11px] text-[#a1a1a0] max-w-[180px] truncate" title={project.rejectionReason}>
+              <span className="arco-table-secondary max-w-[180px] truncate" title={project.rejectionReason}>
                 {project.rejectionReason}
               </span>
             )}
@@ -359,7 +359,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         const { companies } = row.original
 
         if (companies.length === 0) {
-          return <span className="text-xs text-[#a1a1a0]">—</span>
+          return <span className="arco-table-secondary">—</span>
         }
 
         const first = companies[0]
@@ -462,7 +462,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             {others.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" className="text-[11px] text-[#a1a1a0] hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit">
+                  <button type="button" className="arco-table-secondary hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit">
                     +{others.length} more
                   </button>
                 </DropdownMenuTrigger>
@@ -538,8 +538,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       cell: ({ row }) => {
         const count = row.original.imageCount
         return count > 0
-          ? <span className="text-xs text-[#1c1c1a]">{count}</span>
-          : <span className="text-xs text-[#a1a1a0]">—</span>
+          ? <span className="arco-table-primary">{count}</span>
+          : <span className="arco-table-secondary">—</span>
       },
     },
     {
@@ -552,11 +552,11 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       },
       cell: ({ row }) => {
         const createdAt = row.original.createdAt
-        if (!createdAt) return <span className="text-xs text-[#a1a1a0]">—</span>
+        if (!createdAt) return <span className="arco-table-secondary">—</span>
         try {
-          return <span className="text-xs text-[#6b6b68] whitespace-nowrap">{format(new Date(createdAt), "PP")}</span>
+          return <span className="arco-table-nowrap">{format(new Date(createdAt), "PP")}</span>
         } catch {
-          return <span className="text-xs text-[#a1a1a0]">—</span>
+          return <span className="arco-table-secondary">—</span>
         }
       },
     },
@@ -571,7 +571,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
+              <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <MoreHorizontal className="h-4 w-4" />
                 <span className="sr-only">Open menu</span>
               </button>
@@ -1015,10 +1015,10 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       })()}
 
       {/* Table */}
-      <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
-        <table className="w-full text-sm" style={{ minWidth: 800 }}>
+      <div className="arco-table-wrap">
+        <table className="arco-table" style={{ minWidth: 800 }}>
           <thead>
-            <tr className="border-b border-[#e5e5e4]">
+            <tr>
               {table.getHeaderGroups().map((headerGroup) =>
                 headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort()
@@ -1027,12 +1027,11 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                     <th
                       key={header.id}
                       colSpan={header.colSpan}
-                      className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
                       style={header.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
-                          className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors select-none"
+                          className="arco-table-sort"
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -1056,9 +1055,9 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           <tbody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b border-[#e5e5e4] last:border-0 hover:bg-[#FAFAF9] transition-colors">
+                <tr key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 align-middle" style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
+                    <td key={cell.id} style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -1066,7 +1065,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={columns.length} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No projects found. Adjust your filters.
                 </td>
               </tr>
@@ -1076,24 +1075,24 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between text-xs text-[#a1a1a0]">
-        <span>
+      <div className="arco-table-pagination">
+        <span className="arco-table-pagination-count">
           {table.getFilteredRowModel().rows.length} {table.getFilteredRowModel().rows.length === 1 ? "result" : "results"}
         </span>
-        <div className="flex items-center gap-3">
-          <span>
+        <div className="arco-table-pagination-nav">
+          <span className="arco-table-pagination-info">
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
           </span>
           <div className="flex items-center gap-1">
             <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="arco-table-pagination-btn"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
             >
               ‹
             </button>
             <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="arco-table-pagination-btn"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >

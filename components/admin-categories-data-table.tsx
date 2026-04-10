@@ -699,37 +699,37 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
 
       {/* Spaces tab — matches Types/Services table styling */}
       {activeTab === "spaces" && (
-        <div className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
-          <table className="w-full text-sm">
+        <div className="arco-table-wrap max-w-full min-w-0">
+          <table className="arco-table">
             <thead>
-              <tr className="border-b border-[#e5e5e4]">
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Space</th>
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Status</th>
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Homepage</th>
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Image</th>
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Photos</th>
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]">Order</th>
-                <th className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"></th>
+              <tr>
+                <th>Space</th>
+                <th>Status</th>
+                <th>Homepage</th>
+                <th>Image</th>
+                <th>Photos</th>
+                <th>Order</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {spaces.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="h-24 text-center text-sm text-[#a1a1a0]">No spaces found.</td>
+                  <td colSpan={7} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No spaces found.</td>
                 </tr>
               ) : (
                 spaces.sort((a, b) => a.sortOrder - b.sortOrder).map((space) => (
-                  <tr key={space.id} className="border-b border-[#e5e5e4] last:border-0 transition-colors hover:bg-[#FAFAF9]">
-                    <td className="px-4 py-3 align-middle">
+                  <tr key={space.id}>
+                    <td>
                       <div className="flex flex-col gap-0.5">
                         <span className="text-sm font-medium text-[#1c1c1a]">{space.name}</span>
                         <span className="text-[11px] text-[#a1a1a0]">{space.slug}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td>
                       <Switch checked={space.isActive} onCheckedChange={() => { /* TODO: hook up toggle */ }} />
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td>
                       <Switch
                         checked={space.inHomeCarrousel}
                         onCheckedChange={(checked) => {
@@ -745,7 +745,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                         }}
                       />
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td>
                       <label className="cursor-pointer inline-flex items-center gap-2 group" title={space.imageUrl ? "Click to change image" : "Click to upload image"}>
                         {space.imageUrl ? (
                           <img src={space.imageUrl} alt="" className="w-10 h-7 object-cover rounded-[2px] group-hover:opacity-70 transition-opacity" />
@@ -775,13 +775,13 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                         }} />
                       </label>
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td>
                       <span className="text-xs text-[#6b6b68]">{space.photoCount}</span>
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td>
                       <span className="text-xs text-[#6b6b68]">{space.sortOrder}</span>
                     </td>
-                    <td className="px-4 py-3 align-middle">
+                    <td>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
@@ -881,10 +881,10 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
       </div>
 
       {/* Table */}
-      <div key={activeTab} className="border border-[#e5e5e4] overflow-x-auto max-w-full min-w-0">
-        <table className="w-full text-sm">
+      <div key={activeTab} className="arco-table-wrap max-w-full min-w-0">
+        <table className="arco-table">
           <thead>
-            <tr className="border-b border-[#e5e5e4]">
+            <tr>
               {table.getHeaderGroups().map((headerGroup) =>
                 headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort()
@@ -893,11 +893,10 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                     <th
                       key={header.id}
                       colSpan={header.colSpan}
-                      className="h-10 px-4 text-left align-middle text-xs font-medium text-[#6b6b68]"
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
-                          className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors select-none"
+                          className="arco-table-sort"
                           onClick={header.column.getToggleSortingHandler()}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -925,12 +924,10 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
                 return (
                   <tr
                     key={row.id}
-                    className={`border-b border-[#e5e5e4] last:border-0 transition-colors ${
-                      isGroupRow ? "bg-[#FAFAF9]" : "hover:bg-[#FAFAF9]"
-                    }`}
+                    className={isGroupRow ? "bg-[#FAFAF9]" : undefined}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 align-middle">
+                      <td key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
@@ -939,7 +936,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
               })
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-sm text-[#a1a1a0]">
+                <td colSpan={columns.length} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No categories found.
                 </td>
               </tr>
