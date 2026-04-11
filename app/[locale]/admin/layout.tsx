@@ -17,6 +17,8 @@ const ADMIN_NAV_LINKS = [
   { href: "/admin/emails", label: "Emails" },
   { href: "/admin/growth", label: "Growth" },
   { href: "/admin/prospects", label: "Sales" },
+  { href: "/admin/brands", label: "Brands" },
+  { href: "/admin/products", label: "Products" },
   { href: "/admin/design", label: "Design" },
 ]
 
