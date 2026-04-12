@@ -264,8 +264,19 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
                         <div className="discover-card-image-layer" style={{ background: "var(--arco-surface)" }} />
                       )}
                     </div>
-                    <h3 className="discover-card-title">{product.name}</h3>
-                    <p className="discover-card-sub">{product.brandName}</p>
+                    <div className="pro-card-info">
+                      {product.brandLogoUrl ? (
+                        <img src={product.brandLogoUrl} alt="" className="pro-card-logo" width={34} height={34} loading="lazy" />
+                      ) : (
+                        <div className="pro-card-logo pro-card-logo-placeholder">
+                          {product.brandName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="discover-card-title">{product.name}</h3>
+                        <p className="discover-card-sub">{[product.brandName, product.categoryName].filter(Boolean).join(" · ")}</p>
+                      </div>
+                    </div>
                   </Link>
                 ))}
               </div>

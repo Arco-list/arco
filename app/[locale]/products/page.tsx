@@ -13,6 +13,7 @@ export type DiscoverProduct = {
   brandId: string
   brandName: string
   brandSlug: string
+  brandLogoUrl: string | null
   categoryName: string | null
   imageUrl: string | null
 }
@@ -43,7 +44,7 @@ export default async function ProductsDiscoverPage() {
       .from("products")
       .select(`
         id, slug, name, brand_id,
-        brand:brands!inner(id, name, slug),
+        brand:brands!inner(id, name, slug, logo_url),
         category:product_categories(id, name, slug),
         product_photos(url, is_primary, order_index)
       `)
@@ -70,6 +71,7 @@ export default async function ProductsDiscoverPage() {
       brandId: p.brand?.id ?? p.brand_id,
       brandName: p.brand?.name ?? "",
       brandSlug: p.brand?.slug ?? "",
+      brandLogoUrl: p.brand?.logo_url ?? null,
       categoryName: p.category?.name ?? null,
       imageUrl: primary?.url ?? null,
     }
