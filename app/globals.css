@@ -5840,11 +5840,13 @@ body.no-scroll {
 .product-hero-image {
   border-radius: 4px;
   overflow: hidden;
+  aspect-ratio: 4 / 3;
 }
 
 .product-hero-image img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
