@@ -251,7 +251,15 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
     return { error: "Scraping requires FIRECRAWL_API_KEY and ANTHROPIC_API_KEY." }
   }
 
-  let productData: { name: string; description: string | null; specs: Record<string, any> | null; variants: Array<Record<string, any>> | null }
+  // Fetch all leaf categories for the Claude prompt so it can classify
+  const { data: allCategories } = await supabase
+    .from("product_categories")
+    .select("id, slug, name, parent_id")
+    .order("order_index")
+  const leafCategories = (allCategories ?? []).filter((c: any) => c.parent_id !== null)
+  const categoryList = leafCategories.map((c: any) => `${c.slug}: ${c.name}`).join(", ")
+
+  let productData: { name: string; description: string | null; specs: Record<string, any> | null; variants: Array<Record<string, any>> | null; category_slug: string | null }
   let imageUrls: string[] = []
 
   try {
@@ -338,9 +346,14 @@ Return ONLY a JSON object:
 {
   "name": "Product name (cleaned, no brand prefix unless part of the name)",
   "description": "1-2 sentence editorial description in your own words. Max 280 characters. Don't copy verbatim.",
+  "category_slug": "slug from the list below, or null if unclear",
   "specs": { "key": "value" },
   "variants": [{"color": "color name", "hex": "#hexcode or null"}, ...]
 }
+
+category_slug: pick the MOST SPECIFIC matching category from this list:
+${categoryList}
+If none match well, return null.
 
 specs is a flexible map of attributes (dimensions, material, finish, wattage, etc.) — only include attributes that are actually stated on the page.
 
@@ -351,7 +364,7 @@ variants should list all color/finish/material options shown on the page. For ea
 
 Only include variants that are explicitly listed on the page. If no variants are shown, return "variants": [].
 
-If the page is not a product page, return: {"name": "", "description": null, "specs": null, "variants": []}`,
+If the page is not a product page, return: {"name": "", "description": null, "category_slug": null, "specs": null, "variants": []}`,
       }],
     })
 
@@ -381,6 +394,7 @@ If the page is not a product page, return: {"name": "", "description": null, "sp
       description: parsed.description ?? null,
       specs: parsed.specs ?? null,
       variants: variants.length > 0 ? variants : null,
+      category_slug: parsed.category_slug ?? null,
     }
   } catch (err) {
     logger.error("Product scrape failed", { url: url.toString() }, err as Error)
@@ -389,6 +403,13 @@ If the page is not a product page, return: {"name": "", "description": null, "sp
 
   if (!productData.name) {
     return { error: "Could not identify a product on this page." }
+  }
+
+  // Resolve category slug to ID
+  let categoryId: string | null = null
+  if (productData.category_slug) {
+    const match = leafCategories.find((c: any) => c.slug === productData.category_slug)
+    if (match) categoryId = match.id
   }
 
   const slug = `${slugify(brand.name)}-${slugify(productData.name)}`
@@ -402,6 +423,7 @@ If the page is not a product page, return: {"name": "", "description": null, "sp
       .insert({
         slug: finalSlug,
         brand_id: brand.id,
+        category_id: categoryId,
         name: productData.name,
         description: productData.description,
         specs: productData.specs,
