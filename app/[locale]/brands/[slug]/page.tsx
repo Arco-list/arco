@@ -23,14 +23,13 @@ export default async function BrandDetailPage({ params }: { params: Promise<{ sl
   if (!brand) notFound()
   const b = brand as any
   // Hide unlisted from non-admin in the future. For now, admin-gated already.
-  if (b.status === "deactivated") notFound()
+  // Phase 1: admin-only, show all statuses. Phase 4: gate by status.
 
   // Brand's products
   const { data: products } = await supabase
     .from("products")
     .select("id, slug, name, description, status, product_photos(url, is_primary, order_index)")
     .eq("brand_id", b.id)
-    .eq("status", "listed")
     .order("created_at", { ascending: false })
 
   const items = (products ?? []).map((p: any) => {

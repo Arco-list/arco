@@ -19,14 +19,11 @@ export default async function ProductsDiscoverPage() {
       brand:brands!inner(id, name, slug, status),
       product_photos(url, is_primary, order_index)
     `)
-    .eq("status", "listed")
     .order("created_at", { ascending: false })
     .limit(60)
 
-  // Filter on the joined brand status in JS (Supabase REST doesn't support
-  // .in() against joined columns reliably).
+  // Phase 1: admin-only, show all statuses. Phase 4: filter by status.
   const items = (products ?? [])
-    .filter((p: any) => p.brand && ["listed", "unlisted"].includes(p.brand.status))
     .map((p: any) => {
     const photos = (p.product_photos ?? []) as { url: string; is_primary: boolean; order_index: number }[]
     const primary = photos.find((ph) => ph.is_primary) ?? photos.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))[0]

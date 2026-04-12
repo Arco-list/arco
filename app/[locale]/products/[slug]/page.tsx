@@ -28,8 +28,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   if (!product) notFound()
   const p = product as any
-  if (p.status === "unlisted") notFound()
-  if (p.brand?.status === "unclaimed" || p.brand?.status === "deactivated") notFound()
+  // Phase 1: admin-only, show all statuses. Phase 4: gate by status.
 
   const photos = (p.product_photos ?? []).sort((a: any, b: any) => {
     if (a.is_primary && !b.is_primary) return -1
