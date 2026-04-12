@@ -1,13 +1,12 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { requireProductsAdmin } from "@/lib/products-gate"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ProductGallery } from "@/components/product/product-gallery"
 import { ProductSubNav } from "@/components/product/product-sub-nav"
-import { ProductColors } from "@/components/product/product-colors"
+import { ProductHero } from "@/components/product/product-hero"
 
 export const dynamic = "force-dynamic"
 
@@ -81,11 +80,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     })
   }
 
-  // Extract color variants for the swatch section
   const variants = (p.variants ?? []) as Array<Record<string, any>>
-  const colorVariants = variants.filter((v: any) => v.color)
-  const sizeVariants = [...new Set(variants.map((v: any) => v.size).filter(Boolean))] as string[]
-  const materialVariants = variants.filter((v: any) => v.material)
 
   // Collect ALL variant image URLs so we can exclude them from the main gallery
   const variantImageUrls = new Set(
@@ -112,7 +107,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         imageUrl={heroPhoto?.url ?? null}
         slug={slug}
         hasGallery={galleryPhotos.length > 0}
-        hasColors={colorVariants.length > 0 || materialVariants.length > 0 || sizeVariants.length > 0}
+        hasColors={false}
         hasSpecs={!!specs && Object.keys(specs).length > 0}
       />
 
@@ -137,50 +132,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         </nav>
       </div>
 
-      {/* Hero: primary image left + product info right */}
+      {/* Hero: primary image left + product info + variant selectors right */}
       <div id="details" className="wrap" style={{ marginBottom: 40 }}>
-        <div className="product-hero">
-          {/* Primary image */}
-          <div className="product-hero-image">
-            {heroPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={heroPhoto.url} alt={p.name} />
-            ) : (
-              <div style={{ width: "100%", aspectRatio: "4/3", background: "var(--arco-surface)", borderRadius: 4 }} />
-            )}
-          </div>
-
-          {/* Product info */}
-          <div className="product-hero-info">
-            {/* Brand icon */}
-            {p.brand && (
-              <Link href={`/brands/${p.brand.slug}`} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, textDecoration: "none", color: "inherit" }}>
-                {p.brand.logo_url ? (
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                    <Image src={p.brand.logo_url} alt={p.brand.name} width={40} height={40} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </div>
-                ) : (
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--text-secondary)", flexShrink: 0 }}>
-                    {p.brand.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span className="arco-small-text" style={{ color: "var(--text-secondary)" }}>{p.brand.name}</span>
-              </Link>
-            )}
-
-            {/* Product name */}
-            <h1 className="arco-page-title" style={{ marginBottom: 0 }}>{p.name}</h1>
-
-            {/* Description */}
-            {p.description && (
-              <div style={{ marginTop: 20 }}>
-                {p.description.split("\n\n").map((para: string, i: number) => (
-                  <p key={i} className="arco-body-text">{para}</p>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <ProductHero
+          name={p.name}
+          description={p.description}
+          brand={p.brand ? { name: p.brand.name, slug: p.brand.slug, logo_url: p.brand.logo_url } : null}
+          heroImageUrl={heroPhoto?.url ?? null}
+          variants={variants}
+        />
 
         {/* Details bar — below the hero split */}
         {detailsBar.length > 0 && (
@@ -199,34 +159,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       {galleryPhotos.length > 0 && (
         <div id="gallery" className="wrap" style={{ marginBottom: 60 }}>
           <ProductGallery photos={galleryPhotos} productName={p.name} />
-        </div>
-      )}
-
-      {/* Colors section */}
-      {colorVariants.length > 0 && (
-        <div id="colors" className="wrap" style={{ marginBottom: 60 }}>
-          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Colors</h2>
-          <ProductColors variants={colorVariants} productName={p.name} />
-        </div>
-      )}
-
-      {/* Materials section */}
-      {materialVariants.length > 0 && (
-        <div className="wrap" style={{ marginBottom: 60 }}>
-          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Materials</h2>
-          <ProductColors variants={materialVariants.map((v: any) => ({ ...v, color: v.material }))} productName={p.name} />
-        </div>
-      )}
-
-      {/* Sizes section */}
-      {sizeVariants.length > 0 && (
-        <div className="wrap" style={{ marginBottom: 60 }}>
-          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Sizes</h2>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {sizeVariants.map((size, i) => (
-              <span key={i} className="status-pill">{size}</span>
-            ))}
-          </div>
         </div>
       )}
 
