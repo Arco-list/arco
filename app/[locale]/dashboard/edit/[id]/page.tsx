@@ -3496,6 +3496,22 @@ export default function ListingEditorPage() {
     if (!projectId || !userId) return
     setEditSaveStatus("saving")
     await supabase.from("projects").update(patch).eq("id", projectId)
+
+    // When project_type_category_id is set via the inline dropdown,
+    // also upsert into project_categories so the project shows up in
+    // discover filters and admin/categories counts.
+    if (patch.project_type_category_id && typeof patch.project_type_category_id === "string") {
+      // Remove any existing primary category, then insert the new one
+      await supabase
+        .from("project_categories")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("is_primary", true)
+      await supabase
+        .from("project_categories")
+        .insert({ project_id: projectId, category_id: patch.project_type_category_id as string, is_primary: true })
+    }
+
     flashEditSaved()
   }, [projectId, userId, supabase, flashEditSaved])
 
