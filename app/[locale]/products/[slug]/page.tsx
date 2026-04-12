@@ -159,28 +159,20 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         )}
       </div>
 
-      {/* Photo gallery — all photos in constrained grid */}
+      {/* Photo gallery — masonry columns, full wrap width, preserves orientation */}
       {photos.length > 0 && (
-        <div className="wrap" style={{ maxWidth: 1000, marginBottom: 60 }}>
-          <div style={{ display: "grid", gridTemplateColumns: photos.length === 1 ? "1fr" : "repeat(2, 1fr)", gap: 8 }}>
+        <div className="wrap" style={{ marginBottom: 60 }}>
+          <div className="product-gallery">
             {photos.map((photo: any, i: number) => (
-              <div
-                key={photo.id}
-                style={{
-                  position: "relative",
-                  aspectRatio: i === 0 && photos.length > 1 ? "16/10" : "4/3",
-                  overflow: "hidden",
-                  borderRadius: 3,
-                  gridColumn: i === 0 && photos.length > 1 ? "1 / -1" : undefined,
-                }}
-              >
+              <div key={photo.id} className="product-gallery-item">
                 <Image
                   src={photo.url}
                   alt={photo.alt_text ?? p.name}
-                  fill
-                  className="object-cover"
-                  sizes={i === 0 ? "(max-width: 768px) 100vw, 1000px" : "(max-width: 768px) 100vw, 500px"}
+                  width={800}
+                  height={600}
+                  className="product-gallery-img"
                   priority={i === 0}
+                  sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 33vw"
                 />
               </div>
             ))}
