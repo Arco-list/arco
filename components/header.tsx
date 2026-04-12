@@ -225,6 +225,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const hasProfessionalRole = userTypes?.includes("professional") ?? false;
   const hasAdminRole = userTypes?.includes("admin") ?? false;
 
+  // Products nav link — visible to admins only (Phase 1).
+  // Only add to defaultNavLinks (not admin layout's custom navLinks).
+  if (hasAdminRole && !navLinks && !resolvedNavLinks.some(l => l.href === "/products")) {
+    resolvedNavLinks.push({ href: "/products", label: "Products" })
+  }
+
   const toggleMenu = () => setIsMenuOpen((open) => !open);
   
   const toggleSearch = () => {
