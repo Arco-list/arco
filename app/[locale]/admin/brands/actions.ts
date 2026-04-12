@@ -420,3 +420,318 @@ export async function deleteBrand(brandId: string): Promise<{ ok: true } | { err
   revalidatePath("/admin/brands")
   return { ok: true }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Catalog discovery — scrape a products/collection page and extract
+// all product links for selective batch-scraping.
+// ═══════════════════════════════════════════════════════════════════════
+
+export type DiscoveredProduct = {
+  url: string
+  name: string
+  imageUrl: string | null
+}
+
+export type DiscoverCatalogResult =
+  | { products: DiscoveredProduct[] }
+  | { error: string }
+
+/**
+ * Discover product URLs from a brand's collection/products page.
+ *
+ * Flow:
+ * 1. Try sitemap.xml first (cheapest, most complete)
+ * 2. Fall back to scraping the provided collection page
+ * 3. Claude filters discovered URLs to actual product pages
+ * 4. Returns candidates for the admin to select
+ */
+export async function discoverCatalog(collectionUrl: string, brandId: string): Promise<DiscoverCatalogResult> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  let url: URL
+  try {
+    url = new URL(collectionUrl)
+  } catch {
+    return { error: "Please enter a valid URL." }
+  }
+
+  const supabase = createServiceRoleSupabaseClient()
+
+  // Verify brand exists
+  const { data: brand } = await supabase
+    .from("brands")
+    .select("id, name, domain")
+    .eq("id", brandId)
+    .maybeSingle()
+
+  if (!brand) return { error: "Brand not found." }
+
+  const brandDomain = brand.domain ?? stripWww(url.hostname)
+
+  // Check which products are already scraped for this brand (skip duplicates)
+  const { data: existingProducts } = await supabase
+    .from("products")
+    .select("source_url")
+    .eq("brand_id", brandId)
+
+  const existingUrls = new Set(
+    (existingProducts ?? [])
+      .map((p: any) => p.source_url?.replace(/\/+$/, "").toLowerCase())
+      .filter(Boolean)
+  )
+
+  // ── Strategy 1: Try sitemap.xml ──────────────────────────────────────
+  let candidateUrls: { url: string; name: string }[] = []
+
+  try {
+    const sitemapUrls = [
+      `https://${brandDomain}/sitemap.xml`,
+      `https://www.${brandDomain}/sitemap.xml`,
+      `https://${brandDomain}/sitemap_index.xml`,
+    ]
+
+    let sitemapXml: string | null = null
+    for (const sUrl of sitemapUrls) {
+      try {
+        const res = await fetch(sUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)" },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (res.ok) {
+          sitemapXml = await res.text()
+          console.log(`[catalog] Found sitemap at ${sUrl}`)
+          break
+        }
+      } catch {}
+    }
+
+    if (sitemapXml) {
+      // Extract all <loc> URLs from sitemap(s)
+      const locRegex = /<loc>([^<]+)<\/loc>/gi
+      let match
+      const allLocs: string[] = []
+      while ((match = locRegex.exec(sitemapXml)) !== null) {
+        allLocs.push(match[1].trim())
+      }
+
+      // If this is a sitemap index, fetch child sitemaps
+      if (sitemapXml.includes("<sitemapindex")) {
+        for (const childUrl of allLocs.slice(0, 10)) {
+          try {
+            const childRes = await fetch(childUrl, {
+              headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)" },
+              signal: AbortSignal.timeout(8000),
+            })
+            if (childRes.ok) {
+              const childXml = await childRes.text()
+              let childMatch
+              while ((childMatch = locRegex.exec(childXml)) !== null) {
+                allLocs.push(childMatch[1].trim())
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // Filter to URLs that look like product pages
+      const productLike = allLocs.filter((u) => {
+        const lower = u.toLowerCase()
+        // Must be on the brand's domain
+        try {
+          const parsed = new URL(u)
+          if (stripWww(parsed.hostname) !== stripWww(brandDomain)) return false
+        } catch { return false }
+        // Exclude obvious non-product patterns
+        if (/\/(press|news|blog|about|contact|career|legal|privacy|terms|cookie|sitemap|feed|tag|category|author|page\/\d|wp-content|wp-admin)/i.test(lower)) return false
+        // Must have some path depth (not just the homepage)
+        const path = lower.replace(/^https?:\/\/[^/]+/, "").replace(/\/+$/, "")
+        if (path.length < 3) return false
+        return true
+      })
+
+      console.log(`[catalog] Sitemap: ${allLocs.length} total URLs, ${productLike.length} product-like`)
+
+      if (productLike.length > 0 && productLike.length < 500) {
+        candidateUrls = productLike.map((u) => ({
+          url: u,
+          name: decodeURIComponent(u.split("/").filter(Boolean).pop() ?? "")
+            .replace(/[-_]/g, " ")
+            .replace(/\.\w+$/, ""),
+        }))
+      }
+    }
+  } catch (err) {
+    console.log("[catalog] Sitemap discovery failed:", err)
+  }
+
+  // ── Strategy 2: Scrape the collection page ───────────────────────────
+  if (candidateUrls.length === 0) {
+    if (!process.env.FIRECRAWL_API_KEY) {
+      return { error: "FIRECRAWL_API_KEY is not configured." }
+    }
+
+    try {
+      const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
+      const result = await firecrawl.scrape(url.toString(), {
+        formats: ["markdown", "html"],
+        timeout: 45000,
+        waitFor: 10000,
+      }) as any
+
+      if (!result?.markdown && !result?.html) {
+        return { error: "Could not fetch the collection page." }
+      }
+
+      // Extract all links from the page
+      const html = result.html ?? result.rawHtml ?? ""
+      const markdown = result.markdown ?? ""
+
+      // Extract from HTML <a href="...">
+      const hrefRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)</gi
+      let hMatch
+      const rawLinks: { url: string; text: string }[] = []
+      while ((hMatch = hrefRegex.exec(html)) !== null) {
+        try {
+          const abs = new URL(hMatch[1], url.toString()).toString()
+          if (stripWww(new URL(abs).hostname) === stripWww(brandDomain)) {
+            rawLinks.push({ url: abs, text: hMatch[2].trim() })
+          }
+        } catch {}
+      }
+
+      // Extract from markdown [text](url)
+      const mdLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g
+      let mMatch
+      while ((mMatch = mdLinkRegex.exec(markdown)) !== null) {
+        try {
+          const abs = new URL(mMatch[2], url.toString()).toString()
+          if (stripWww(new URL(abs).hostname) === stripWww(brandDomain)) {
+            rawLinks.push({ url: abs, text: mMatch[1].trim() })
+          }
+        } catch {}
+      }
+
+      // Deduplicate
+      const seen = new Map<string, string>()
+      for (const link of rawLinks) {
+        const normalized = link.url.replace(/\/+$/, "").toLowerCase()
+        if (!seen.has(normalized) && link.text.length > 0) {
+          seen.set(normalized, link.text)
+        }
+      }
+
+      candidateUrls = Array.from(seen.entries()).map(([u, name]) => ({ url: u, name }))
+      console.log(`[catalog] Collection page: extracted ${candidateUrls.length} links`)
+    } catch (err) {
+      logger.error("Catalog collection scrape failed", { url: url.toString() }, err as Error)
+      return { error: "Could not scrape the collection page." }
+    }
+  }
+
+  if (candidateUrls.length === 0) {
+    return { error: "No product links found on this page or in the sitemap." }
+  }
+
+  // ── Claude filtering ─────────────────────────────────────────────────
+  // Ask Claude to identify which URLs are actual product pages
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { error: "ANTHROPIC_API_KEY is not configured." }
+  }
+
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+    // Truncate to 200 candidates max to fit in context
+    const batch = candidateUrls.slice(0, 200)
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: `You are filtering URLs from the brand "${brand.name}" (${brandDomain}) to find actual product pages.
+
+Here are ${batch.length} URLs discovered from the brand's website. For each URL, decide if it's an individual product page (yes) or not (no). Product pages show a single product with images, description, and/or specifications. Collection overview pages, category pages, homepage, about pages, contact pages, press pages, configurators, and blog posts are NOT product pages.
+
+URLs:
+${batch.map((c, i) => `${i + 1}. ${c.url} — "${c.name}"`).join("\n")}
+
+Return ONLY a JSON array of objects for the URLs that ARE product pages:
+[{"index": 1, "name": "Clean product name"}, ...]
+
+The "name" should be the cleaned product name (remove brand prefix if redundant, capitalize properly, no URL artifacts). If none are product pages, return [].`,
+      }],
+    })
+
+    const text = message.content[0]?.type === "text" ? message.content[0].text : ""
+    const jsonMatch = text.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) {
+      console.log("[catalog] Claude returned no JSON, returning all candidates")
+      // Fall back: return all candidates and let admin filter manually
+      const filtered = candidateUrls
+        .filter((c) => !existingUrls.has(c.url.replace(/\/+$/, "").toLowerCase()))
+        .slice(0, 100)
+      return { products: filtered.map((c) => ({ ...c, imageUrl: null })) }
+    }
+
+    const selected: { index: number; name: string }[] = JSON.parse(jsonMatch[0])
+
+    const products: DiscoveredProduct[] = selected
+      .filter((s) => s.index >= 1 && s.index <= batch.length)
+      .map((s) => {
+        const candidate = batch[s.index - 1]
+        return {
+          url: candidate.url,
+          name: s.name || candidate.name,
+          imageUrl: null,
+        }
+      })
+      .filter((p) => !existingUrls.has(p.url.replace(/\/+$/, "").toLowerCase()))
+
+    console.log(`[catalog] Claude identified ${selected.length} products, ${products.length} after dedup`)
+    return { products }
+  } catch (err) {
+    logger.error("Catalog Claude filtering failed", {}, err as Error)
+    // Fall back: return raw candidates
+    const filtered = candidateUrls
+      .filter((c) => !existingUrls.has(c.url.replace(/\/+$/, "").toLowerCase()))
+      .slice(0, 100)
+    return { products: filtered.map((c) => ({ ...c, imageUrl: null })) }
+  }
+}
+
+/**
+ * Batch-scrape multiple product URLs for a brand.
+ * Processes sequentially to avoid rate-limiting Firecrawl.
+ */
+export async function batchScrapeProducts(
+  urls: string[],
+  brandId: string
+): Promise<{ results: Array<{ url: string; name: string; productId: string } | { url: string; error: string }> }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return { results: urls.map((url) => ({ url, error: guard.error })) }
+
+  const results: Array<{ url: string; name: string; productId: string } | { url: string; error: string }> = []
+
+  for (const url of urls) {
+    try {
+      const result = await scrapeProduct(url, brandId)
+      if ("error" in result) {
+        results.push({ url, error: result.error })
+      } else {
+        results.push({ url, name: result.name, productId: result.productId })
+      }
+      // Small delay between scrapes to avoid rate limiting
+      if (urls.indexOf(url) < urls.length - 1) {
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+    } catch (err) {
+      results.push({ url, error: "Unexpected error" })
+    }
+  }
+
+  revalidatePath(`/admin/brands/${brandId}`)
+  revalidatePath("/admin/products")
+  return { results }
+}
