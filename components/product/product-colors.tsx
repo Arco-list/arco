@@ -58,9 +58,9 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
   const activeVariant = hasImages ? clickableVariants[activeIndex] : null
 
   return (
-    <div>
-      {/* Color dots — horizontal row */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: hasImages ? 20 : 0 }}>
+    <div style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>
+      {/* Color dots — left, horizontal with wrapping */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, maxWidth: hasImages ? 200 : undefined, flexShrink: 0 }}>
         {clickableVariants.map((v, i) => {
           const colorHex = v.hex ?? v.color_hex ?? null
           const isActive = activeIndex === i
@@ -96,9 +96,9 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
         })}
       </div>
 
-      {/* Active variant image — constrained width */}
+      {/* Active variant image — right */}
       {activeVariant?.image_url && (
-        <div style={{ borderRadius: 4, overflow: "hidden", maxWidth: 360 }}>
+        <div style={{ flex: 1, borderRadius: 4, overflow: "hidden", minWidth: 0, maxWidth: 400 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={activeVariant.image_url}
