@@ -19,7 +19,7 @@ export type AdminProductRow = {
 }
 
 export default async function AdminProductsPage() {
-  const supabase = createServiceRoleSupabaseClient() as any
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: products } = await supabase
     .from("products")

@@ -19,8 +19,7 @@ export type AdminBrandRow = {
 }
 
 export default async function AdminBrandsPage() {
-  // Cast: brands/products schema not yet in generated types
-  const supabase = createServiceRoleSupabaseClient() as any
+  const supabase = createServiceRoleSupabaseClient()
 
   // Fetch brands with product counts in one query
   const { data: brands } = await supabase

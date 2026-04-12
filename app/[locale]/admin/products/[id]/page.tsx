@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"
 
 export default async function AdminProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createServiceRoleSupabaseClient() as any
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: product } = await supabase
     .from("products")

@@ -111,10 +111,7 @@ export async function scrapeBrand(rawUrl: string): Promise<ScrapeBrandResult> {
   }
 
   const domain = stripWww(url.hostname)
-  // Cast: brands/products tables exist via migration 129 but Supabase
-  // types haven't been regenerated yet. Remove cast after running
-  // `supabase gen types typescript`.
-  const supabase = createServiceRoleSupabaseClient() as any
+  const supabase = createServiceRoleSupabaseClient()
 
   // Check if brand already exists for this domain
   const { data: existing } = await supabase

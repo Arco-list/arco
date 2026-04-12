@@ -193,50 +193,70 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
   const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   if (mapsKey) {
     try {
-      // Try multiple search queries: company name, then domain, then domain URL
+      // Order from most specific to least. The cleaned-up name ("E V A"
+      // for e-v-a.net) is the last resort because it hits lots of
+      // unrelated businesses; the URL/domain queries bias Google toward
+      // places that actually carry this website in their listing.
       const searchQueries = [
-        companyName,
-        domain,
         `https://${domain}`,
+        domain,
+        companyName,
       ]
 
-      let placeId: string | null = null
+      // We iterate over all candidates from all queries and only accept
+      // a place whose `website` field genuinely points at `domain`. This
+      // is the critical guardrail: without it, a Text Search for "E V A"
+      // will happily return any unrelated business also called "Eva".
+      let verifiedPlaceId: string | null = null
+      let verifiedResult: any = null
 
-      for (const query of searchQueries) {
+      outer: for (const query of searchQueries) {
         const res = await fetch(
           `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query)}&inputtype=textquery&fields=name,place_id,formatted_address&key=${mapsKey}`
         )
         const data = await res.json()
-        console.log(`[autoCreateCompany] Places search for "${query}":`, JSON.stringify(data?.candidates?.length ?? 0), "candidates")
+        const candidates = data?.candidates ?? []
+        console.log(`[autoCreateCompany] Places search for "${query}":`, candidates.length, "candidates")
 
-        if (data?.candidates?.[0]?.place_id) {
-          placeId = data.candidates[0].place_id
-          break
+        for (const candidate of candidates) {
+          if (!candidate.place_id) continue
+          const detailRes = await fetch(
+            `https://maps.googleapis.com/maps/api/place/details/json?place_id=${candidate.place_id}&fields=name,formatted_address,formatted_phone_number,address_components,website&key=${mapsKey}`
+          )
+          const detailData = await detailRes.json()
+          const result = detailData?.result
+          if (!result?.website) continue
+
+          let placeHost: string
+          try {
+            placeHost = stripWww(new URL(result.website).hostname)
+          } catch {
+            continue
+          }
+
+          if (placeHost === domain) {
+            verifiedPlaceId = candidate.place_id
+            verifiedResult = result
+            console.log(`[autoCreateCompany] Verified match:`, result.name, "—", result.website)
+            break outer
+          }
         }
       }
 
-      // Get detailed info from Place Details API
-      if (placeId) {
-        const detailRes = await fetch(
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,address_components,website&key=${mapsKey}`
-        )
-        const detailData = await detailRes.json()
-        const result = detailData?.result
+      if (verifiedResult) {
+        if (verifiedResult.name) companyName = verifiedResult.name
+        if (verifiedResult.formatted_phone_number) companyPhone = verifiedResult.formatted_phone_number
+        companyAddress = verifiedResult.formatted_address ?? null
+        googlePlaceId = verifiedPlaceId
 
-        if (result) {
-          console.log(`[autoCreateCompany] Place details found:`, result.name, result.formatted_address)
-          if (result.name) companyName = result.name
-          if (result.formatted_phone_number) companyPhone = result.formatted_phone_number
-          companyAddress = result.formatted_address ?? null
-          googlePlaceId = placeId
-
-          const components = result.address_components ?? []
-          for (const comp of components) {
-            const types: string[] = comp.types ?? []
-            if (types.includes("locality")) companyCity = comp.long_name
-            if (types.includes("country")) companyCountry = comp.long_name
-          }
+        const components = verifiedResult.address_components ?? []
+        for (const comp of components) {
+          const types: string[] = comp.types ?? []
+          if (types.includes("locality")) companyCity = comp.long_name
+          if (types.includes("country")) companyCountry = comp.long_name
         }
+      } else {
+        console.log(`[autoCreateCompany] No verified Google Places match for ${domain} — using domain-derived name only`)
       }
     } catch (e) {
       console.error("[autoCreateCompany] Google Places lookup failed:", e)

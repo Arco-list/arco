@@ -14,8 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_retailers: {
+        Row: {
+          brand_id: string
+          created_at: string
+          is_official_dealer: boolean
+          retailer_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          is_official_dealer?: boolean
+          retailer_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          is_official_dealer?: boolean
+          retailer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_retailers_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_retailers_retailer_id_fkey"
+            columns: ["retailer_id"]
+            isOneToOne: false
+            referencedRelation: "retailers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brands: {
+        Row: {
+          auto_approve_product_links: boolean
+          country: string | null
+          created_at: string
+          description: string | null
+          domain: string | null
+          founded_year: number | null
+          id: string
+          is_featured: boolean
+          is_verified: boolean
+          logo_url: string | null
+          name: string
+          owner_user_id: string | null
+          slug: string
+          status: Database["public"]["Enums"]["brand_status"]
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          auto_approve_product_links?: boolean
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          domain?: string | null
+          founded_year?: number | null
+          id?: string
+          is_featured?: boolean
+          is_verified?: boolean
+          logo_url?: string | null
+          name: string
+          owner_user_id?: string | null
+          slug: string
+          status?: Database["public"]["Enums"]["brand_status"]
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          auto_approve_product_links?: boolean
+          country?: string | null
+          created_at?: string
+          description?: string | null
+          domain?: string | null
+          founded_year?: number | null
+          id?: string
+          is_featured?: boolean
+          is_verified?: boolean
+          logo_url?: string | null
+          name?: string
+          owner_user_id?: string | null
+          slug?: string
+          status?: Database["public"]["Enums"]["brand_status"]
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
+          can_publish_projects: boolean
           category_hierarchy: number | null
           category_type: string | null
           color: string | null
@@ -28,12 +122,14 @@ export type Database = {
           is_active: boolean | null
           is_listing_type: boolean
           name: string
+          name_nl: string | null
           parent_id: string | null
           slug: string
           sort_order: number | null
           updated_at: string | null
         }
         Insert: {
+          can_publish_projects?: boolean
           category_hierarchy?: number | null
           category_type?: string | null
           color?: string | null
@@ -46,12 +142,14 @@ export type Database = {
           is_active?: boolean | null
           is_listing_type?: boolean
           name: string
+          name_nl?: string | null
           parent_id?: string | null
           slug: string
           sort_order?: number | null
           updated_at?: string | null
         }
         Update: {
+          can_publish_projects?: boolean
           category_hierarchy?: number | null
           category_type?: string | null
           color?: string | null
@@ -64,6 +162,7 @@ export type Database = {
           is_active?: boolean | null
           is_listing_type?: boolean
           name?: string
+          name_nl?: string | null
           parent_id?: string | null
           slug?: string
           sort_order?: number | null
@@ -82,6 +181,8 @@ export type Database = {
       companies: {
         Row: {
           address: string | null
+          apollo_account_id: string | null
+          auto_approve_projects: boolean
           certificates: string[] | null
           city: string | null
           country: string | null
@@ -97,25 +198,31 @@ export type Database = {
           is_featured: boolean
           is_verified: boolean | null
           languages: string[] | null
+          latitude: number | null
           logo_url: string | null
+          longitude: number | null
           name: string
-          owner_id: string
+          owner_id: string | null
           phone: string | null
           plan_expires_at: string | null
           plan_tier: Database["public"]["Enums"]["company_plan_tier"]
           primary_service_id: string | null
           services_offered: string[] | null
+          setup_completed: boolean
           slug: string | null
           state_region: string | null
           status: Database["public"]["Enums"]["company_status"]
           team_size_max: number | null
           team_size_min: number | null
+          translations: Json | null
           updated_at: string | null
           upgrade_eligible: boolean
           website: string | null
         }
         Insert: {
           address?: string | null
+          apollo_account_id?: string | null
+          auto_approve_projects?: boolean
           certificates?: string[] | null
           city?: string | null
           country?: string | null
@@ -131,25 +238,31 @@ export type Database = {
           is_featured?: boolean
           is_verified?: boolean | null
           languages?: string[] | null
+          latitude?: number | null
           logo_url?: string | null
+          longitude?: number | null
           name: string
-          owner_id: string
+          owner_id?: string | null
           phone?: string | null
           plan_expires_at?: string | null
           plan_tier?: Database["public"]["Enums"]["company_plan_tier"]
           primary_service_id?: string | null
           services_offered?: string[] | null
+          setup_completed?: boolean
           slug?: string | null
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
           team_size_max?: number | null
           team_size_min?: number | null
+          translations?: Json | null
           updated_at?: string | null
           upgrade_eligible?: boolean
           website?: string | null
         }
         Update: {
           address?: string | null
+          apollo_account_id?: string | null
+          auto_approve_projects?: boolean
           certificates?: string[] | null
           city?: string | null
           country?: string | null
@@ -165,19 +278,23 @@ export type Database = {
           is_featured?: boolean
           is_verified?: boolean | null
           languages?: string[] | null
+          latitude?: number | null
           logo_url?: string | null
+          longitude?: number | null
           name?: string
-          owner_id?: string
+          owner_id?: string | null
           phone?: string | null
           plan_expires_at?: string | null
           plan_tier?: Database["public"]["Enums"]["company_plan_tier"]
           primary_service_id?: string | null
           services_offered?: string[] | null
+          setup_completed?: boolean
           slug?: string | null
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
           team_size_max?: number | null
           team_size_min?: number | null
+          translations?: Json | null
           updated_at?: string | null
           upgrade_eligible?: boolean
           website?: string | null
@@ -309,6 +426,87 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_outreach: {
+        Row: {
+          claimed_at: string | null
+          clicked_at: string | null
+          company_id: string
+          created_at: string
+          email_to: string
+          id: string
+          last_event_cached: string | null
+          last_event_cached_at: string | null
+          opened_at: string | null
+          resend_message_id: string | null
+          sent_at: string
+          template: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          clicked_at?: string | null
+          company_id: string
+          created_at?: string
+          email_to: string
+          id?: string
+          last_event_cached?: string | null
+          last_event_cached_at?: string | null
+          opened_at?: string | null
+          resend_message_id?: string | null
+          sent_at?: string
+          template?: string
+        }
+        Update: {
+          claimed_at?: string | null
+          clicked_at?: string | null
+          company_id?: string
+          created_at?: string
+          email_to?: string
+          id?: string
+          last_event_cached?: string | null
+          last_event_cached_at?: string | null
+          opened_at?: string | null
+          resend_message_id?: string | null
+          sent_at?: string
+          template?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_outreach_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_outreach_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_outreach_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_company_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_outreach_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "company_outreach_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
           },
         ]
       }
@@ -558,20 +756,165 @@ export type Database = {
         }
         Relationships: []
       }
+      email_drip_queue: {
+        Row: {
+          attempt_count: number
+          cancelled_at: string | null
+          cancelled_reason: string | null
+          company_id: string | null
+          created_at: string | null
+          email: string
+          id: string
+          last_error: string | null
+          send_at: string
+          sent_at: string | null
+          sequence: string
+          step: number
+          template: string
+          user_id: string
+          variables: Json | null
+        }
+        Insert: {
+          attempt_count?: number
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          last_error?: string | null
+          send_at: string
+          sent_at?: string | null
+          sequence: string
+          step?: number
+          template: string
+          user_id: string
+          variables?: Json | null
+        }
+        Update: {
+          attempt_count?: number
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          last_error?: string | null
+          send_at?: string
+          sent_at?: string | null
+          sequence?: string
+          step?: number
+          template?: string
+          user_id?: string
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_drip_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drip_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "email_drip_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_company_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_drip_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "email_drip_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+        ]
+      }
+      hero_covers: {
+        Row: {
+          created_at: string | null
+          id: string
+          photo_url: string
+          project_id: string
+          scope: string
+          slot: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          photo_url: string
+          project_id: string
+          scope?: string
+          slot: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          photo_url?: string
+          project_id?: string
+          scope?: string
+          slot?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hero_covers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hero_covers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hero_covers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           application_id: string | null
           attachments: string[] | null
+          company_id: string | null
           content: string
           created_at: string | null
           id: string
           is_archived: boolean | null
           is_read: boolean | null
           message_type: string | null
-          project_id: string
+          project_id: string | null
           read_at: string | null
           recipient_id: string
+          sender_email: string | null
           sender_id: string
+          sender_phone: string | null
           sent_at: string | null
           subject: string | null
           updated_at: string | null
@@ -579,16 +922,19 @@ export type Database = {
         Insert: {
           application_id?: string | null
           attachments?: string[] | null
+          company_id?: string | null
           content: string
           created_at?: string | null
           id?: string
           is_archived?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
-          project_id: string
+          project_id?: string | null
           read_at?: string | null
           recipient_id: string
+          sender_email?: string | null
           sender_id: string
+          sender_phone?: string | null
           sent_at?: string | null
           subject?: string | null
           updated_at?: string | null
@@ -596,21 +942,59 @@ export type Database = {
         Update: {
           application_id?: string | null
           attachments?: string[] | null
+          company_id?: string | null
           content?: string
           created_at?: string | null
           id?: string
           is_archived?: boolean | null
           is_read?: boolean | null
           message_type?: string | null
-          project_id?: string
+          project_id?: string | null
           read_at?: string | null
           recipient_id?: string
+          sender_email?: string | null
           sender_id?: string
+          sender_phone?: string | null
           sent_at?: string | null
           subject?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_company_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
           {
             foreignKeyName: "messages_project_id_fkey"
             columns: ["project_id"]
@@ -644,6 +1028,223 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posthog_cache: {
+        Row: {
+          data: Json
+          fetched_at: string
+          timeframe: string
+        }
+        Insert: {
+          data: Json
+          fetched_at?: string
+          timeframe: string
+        }
+        Update: {
+          data?: Json
+          fetched_at?: string
+          timeframe?: string
+        }
+        Relationships: []
+      }
+      product_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          parent_id: string | null
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          parent_id?: string | null
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          parent_id?: string | null
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_families: {
+        Row: {
+          brand_id: string
+          created_at: string
+          description: string | null
+          hero_image_url: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          description?: string | null
+          hero_image_url?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          description?: string | null
+          hero_image_url?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_families_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_photos: {
+        Row: {
+          alt_text: string | null
+          attribution: string | null
+          created_at: string
+          height: number | null
+          id: string
+          is_primary: boolean
+          order_index: number
+          product_id: string
+          url: string
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          attribution?: string | null
+          created_at?: string
+          height?: number | null
+          id?: string
+          is_primary?: boolean
+          order_index?: number
+          product_id: string
+          url: string
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          attribution?: string | null
+          created_at?: string
+          height?: number | null
+          id?: string
+          is_primary?: boolean
+          order_index?: number
+          product_id?: string
+          url?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_photos_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          brand_id: string
+          category_id: string | null
+          created_at: string
+          description: string | null
+          family_id: string | null
+          id: string
+          is_featured: boolean
+          name: string
+          scraped_at: string | null
+          slug: string
+          source_url: string | null
+          specs: Json | null
+          status: Database["public"]["Enums"]["product_status"]
+          updated_at: string
+          variants: Json | null
+        }
+        Insert: {
+          brand_id: string
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          family_id?: string | null
+          id?: string
+          is_featured?: boolean
+          name: string
+          scraped_at?: string | null
+          slug: string
+          source_url?: string | null
+          specs?: Json | null
+          status?: Database["public"]["Enums"]["product_status"]
+          updated_at?: string
+          variants?: Json | null
+        }
+        Update: {
+          brand_id?: string
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          family_id?: string | null
+          id?: string
+          is_featured?: boolean
+          name?: string
+          scraped_at?: string | null
+          slug?: string
+          source_url?: string | null
+          specs?: Json | null
+          status?: Database["public"]["Enums"]["product_status"]
+          updated_at?: string
+          variants?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "product_families"
             referencedColumns: ["id"]
           },
         ]
@@ -955,6 +1556,7 @@ export type Database = {
           name: string
           order_index: number
           project_id: string
+          space_id: string | null
           tagline: string | null
           updated_at: string
         }
@@ -969,6 +1571,7 @@ export type Database = {
           name: string
           order_index?: number
           project_id: string
+          space_id?: string | null
           tagline?: string | null
           updated_at?: string
         }
@@ -983,6 +1586,7 @@ export type Database = {
           name?: string
           order_index?: number
           project_id?: string
+          space_id?: string | null
           tagline?: string | null
           updated_at?: string
         }
@@ -1020,6 +1624,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_features_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
             referencedColumns: ["id"]
           },
         ]
@@ -1144,6 +1755,93 @@ export type Database = {
           },
           {
             foreignKeyName: "project_photos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_products: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          id: string
+          photo_id: string
+          pin_x: number | null
+          pin_y: number | null
+          product_id: string
+          project_id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          source: Database["public"]["Enums"]["product_link_source"]
+          status: Database["public"]["Enums"]["product_link_status"]
+          suggested_by_user_id: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          photo_id: string
+          pin_x?: number | null
+          pin_y?: number | null
+          product_id: string
+          project_id: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          source: Database["public"]["Enums"]["product_link_source"]
+          status?: Database["public"]["Enums"]["product_link_status"]
+          suggested_by_user_id?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          photo_id?: string
+          pin_x?: number | null
+          pin_y?: number | null
+          product_id?: string
+          project_id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          source?: Database["public"]["Enums"]["product_link_source"]
+          status?: Database["public"]["Enums"]["product_link_status"]
+          suggested_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_products_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "project_photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_products_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_products_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_products_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1395,6 +2093,7 @@ export type Database = {
           is_active: boolean | null
           metadata: Json | null
           name: string
+          name_nl: string | null
           size_max_sqm: number | null
           size_min_sqm: number | null
           slug: string
@@ -1413,6 +2112,7 @@ export type Database = {
           is_active?: boolean | null
           metadata?: Json | null
           name: string
+          name_nl?: string | null
           size_max_sqm?: number | null
           size_min_sqm?: number | null
           slug: string
@@ -1431,6 +2131,7 @@ export type Database = {
           is_active?: boolean | null
           metadata?: Json | null
           name?: string
+          name_nl?: string | null
           size_max_sqm?: number | null
           size_min_sqm?: number | null
           slug?: string
@@ -1511,7 +2212,7 @@ export type Database = {
           budget_min: number | null
           building_type: string | null
           building_year: number | null
-          client_id: string
+          client_id: string | null
           completion_date: string | null
           created_at: string | null
           description: string | null
@@ -1531,12 +2232,14 @@ export type Database = {
           seo_title: string | null
           share_exact_location: boolean
           slug: string | null
+          source_url: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           status_updated_at: string | null
           status_updated_by: string | null
           style_preferences: string[] | null
           title: string
+          translations: Json | null
           updated_at: string | null
           views_count: number | null
         }
@@ -1554,7 +2257,7 @@ export type Database = {
           budget_min?: number | null
           building_type?: string | null
           building_year?: number | null
-          client_id: string
+          client_id?: string | null
           completion_date?: string | null
           created_at?: string | null
           description?: string | null
@@ -1574,12 +2277,14 @@ export type Database = {
           seo_title?: string | null
           share_exact_location?: boolean
           slug?: string | null
+          source_url?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           status_updated_at?: string | null
           status_updated_by?: string | null
           style_preferences?: string[] | null
           title: string
+          translations?: Json | null
           updated_at?: string | null
           views_count?: number | null
         }
@@ -1597,7 +2302,7 @@ export type Database = {
           budget_min?: number | null
           building_type?: string | null
           building_year?: number | null
-          client_id?: string
+          client_id?: string | null
           completion_date?: string | null
           created_at?: string | null
           description?: string | null
@@ -1617,12 +2322,14 @@ export type Database = {
           seo_title?: string | null
           share_exact_location?: boolean
           slug?: string | null
+          source_url?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           status_updated_at?: string | null
           status_updated_by?: string | null
           style_preferences?: string[] | null
           title?: string
+          translations?: Json | null
           updated_at?: string | null
           views_count?: number | null
         }
@@ -1649,6 +2356,278 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      prospect_events: {
+        Row: {
+          created_at: string | null
+          event_source: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          new_status: Database["public"]["Enums"]["prospect_status"] | null
+          old_status: Database["public"]["Enums"]["prospect_status"] | null
+          prospect_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_source?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          new_status?: Database["public"]["Enums"]["prospect_status"] | null
+          old_status?: Database["public"]["Enums"]["prospect_status"] | null
+          prospect_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_source?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          new_status?: Database["public"]["Enums"]["prospect_status"] | null
+          old_status?: Database["public"]["Enums"]["prospect_status"] | null
+          prospect_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_events_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prospects: {
+        Row: {
+          apollo_contact_id: string | null
+          apollo_list_id: string | null
+          apollo_sequence_id: string | null
+          city: string | null
+          company_created_at: string | null
+          company_id: string | null
+          company_name: string | null
+          contact_name: string | null
+          converted_at: string | null
+          country: string | null
+          created_at: string | null
+          email: string
+          email_status: string | null
+          emails_clicked: number | null
+          emails_delivered: number | null
+          emails_opened: number | null
+          emails_sent: number | null
+          id: string
+          landing_visited_at: string | null
+          last_email_clicked_at: string | null
+          last_email_opened_at: string | null
+          last_email_sent_at: string | null
+          metadata: Json | null
+          notes: string | null
+          phone: string | null
+          project_id: string | null
+          project_published_at: string | null
+          project_started_at: string | null
+          ref_code: string | null
+          sequence_status: string | null
+          signed_up_at: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["prospect_status"]
+          tags: string[] | null
+          unsubscribed_at: string | null
+          updated_at: string | null
+          user_id: string | null
+          website: string | null
+        }
+        Insert: {
+          apollo_contact_id?: string | null
+          apollo_list_id?: string | null
+          apollo_sequence_id?: string | null
+          city?: string | null
+          company_created_at?: string | null
+          company_id?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          converted_at?: string | null
+          country?: string | null
+          created_at?: string | null
+          email: string
+          email_status?: string | null
+          emails_clicked?: number | null
+          emails_delivered?: number | null
+          emails_opened?: number | null
+          emails_sent?: number | null
+          id?: string
+          landing_visited_at?: string | null
+          last_email_clicked_at?: string | null
+          last_email_opened_at?: string | null
+          last_email_sent_at?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          phone?: string | null
+          project_id?: string | null
+          project_published_at?: string | null
+          project_started_at?: string | null
+          ref_code?: string | null
+          sequence_status?: string | null
+          signed_up_at?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["prospect_status"]
+          tags?: string[] | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          website?: string | null
+        }
+        Update: {
+          apollo_contact_id?: string | null
+          apollo_list_id?: string | null
+          apollo_sequence_id?: string | null
+          city?: string | null
+          company_created_at?: string | null
+          company_id?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          converted_at?: string | null
+          country?: string | null
+          created_at?: string | null
+          email?: string
+          email_status?: string | null
+          emails_clicked?: number | null
+          emails_delivered?: number | null
+          emails_opened?: number | null
+          emails_sent?: number | null
+          id?: string
+          landing_visited_at?: string | null
+          last_email_clicked_at?: string | null
+          last_email_opened_at?: string | null
+          last_email_sent_at?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          phone?: string | null
+          project_id?: string | null
+          project_published_at?: string | null
+          project_started_at?: string | null
+          ref_code?: string | null
+          sequence_status?: string | null
+          signed_up_at?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["prospect_status"]
+          tags?: string[] | null
+          unsubscribed_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_company_listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "professional_search_documents"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "prospects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retailers: {
+        Row: {
+          address: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          id: string
+          is_featured: boolean
+          latitude: number | null
+          longitude: number | null
+          name: string
+          phone: string | null
+          slug: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_featured?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          phone?: string | null
+          slug: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_featured?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          phone?: string | null
+          slug?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
       }
       reviews: {
         Row: {
@@ -1860,6 +2839,32 @@ export type Database = {
           },
         ]
       }
+      saved_products: {
+        Row: {
+          created_at: string
+          product_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          product_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          product_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_projects: {
         Row: {
           created_at: string | null
@@ -1909,6 +2914,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      spaces: {
+        Row: {
+          created_at: string
+          icon_key: string | null
+          id: string
+          image_url: string | null
+          in_home_carrousel: boolean
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          icon_key?: string | null
+          id?: string
+          image_url?: string | null
+          in_home_carrousel?: boolean
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          icon_key?: string | null
+          id?: string
+          image_url?: string | null
+          in_home_carrousel?: boolean
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -1987,7 +3028,9 @@ export type Database = {
           company_id: string | null
           company_id_full: string | null
           company_is_featured: boolean | null
+          company_latitude: number | null
           company_logo: string | null
+          company_longitude: number | null
           company_name: string | null
           company_plan_expires_at: string | null
           company_plan_tier:
@@ -2011,6 +3054,7 @@ export type Database = {
           last_review_at: string | null
           portfolio_url: string | null
           primary_service_name: string | null
+          primary_service_name_nl: string | null
           primary_specialty: string | null
           primary_specialty_slug: string | null
           quality_rating: number | null
@@ -2107,6 +3151,7 @@ export type Database = {
           status: Database["public"]["Enums"]["project_status"] | null
           style_preferences: string[] | null
           title: string | null
+          translations: Json | null
           updated_at: string | null
           views_count: number | null
         }
@@ -2123,7 +3168,9 @@ export type Database = {
           company_id: string | null
           company_id_full: string | null
           company_is_featured: boolean | null
+          company_latitude: number | null
           company_logo: string | null
+          company_longitude: number | null
           company_name: string | null
           company_plan_expires_at: string | null
           company_plan_tier:
@@ -2147,6 +3194,7 @@ export type Database = {
           last_review_at: string | null
           portfolio_url: string | null
           primary_service_name: string | null
+          primary_service_name_nl: string | null
           primary_specialty: string | null
           primary_specialty_slug: string | null
           quality_rating: number | null
@@ -2245,6 +3293,7 @@ export type Database = {
           status: Database["public"]["Enums"]["project_status"] | null
           style_preferences: string[] | null
           title: string | null
+          translations: Json | null
           updated_at: string | null
           views_count: number | null
         }
@@ -2283,6 +3332,20 @@ export type Database = {
         Args: { p_company_id: string }
         Returns: undefined
       }
+      count_professionals: {
+        Args: {
+          category_filters?: string[]
+          city_filters?: string[]
+          country_filter?: string
+          max_hourly_rate?: number
+          min_rating?: number
+          search_query?: string
+          service_filters?: string[]
+          state_filter?: string
+          verified_only?: boolean
+        }
+        Returns: number
+      }
       get_platform_stats: {
         Args: never
         Returns: {
@@ -2307,6 +3370,13 @@ export type Database = {
         Args: never
         Returns: {
           city: string
+        }[]
+      }
+      get_prospect_funnel: {
+        Args: never
+        Returns: {
+          count: number
+          status: string
         }[]
       }
       get_public_company_photos: {
@@ -2382,6 +3452,7 @@ export type Database = {
               slug: string
               style_preferences: string[]
               title: string
+              translations: Json
               updated_at: string
             }[]
           }
@@ -2418,6 +3489,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_user: { Args: never; Returns: boolean }
       is_own_profile_avatar_path: { Args: { _path: string }; Returns: boolean }
       is_professional: { Args: never; Returns: boolean }
       is_project_photo_owner: {
@@ -2439,7 +3511,7 @@ export type Database = {
       search_professionals: {
         Args: {
           category_filters?: string[]
-          city_filter?: string
+          city_filters?: string[]
           country_filter?: string
           limit_count?: number
           max_hourly_rate?: number
@@ -2451,32 +3523,65 @@ export type Database = {
           verified_only?: boolean
         }
         Returns: {
-          avatar_url: string
-          company_city: string
-          company_country: string
-          company_domain: string
-          company_id: string
-          company_logo: string
-          company_name: string
-          company_slug: string
-          company_state_region: string
-          cover_photo_url: string
-          display_rating: number
-          first_name: string
-          hourly_rate_display: string
-          id: string
-          is_verified: boolean
-          last_name: string
-          primary_service_name: string
-          primary_specialty: string
-          services_offered: string[]
-          specialty_ids: string[]
-          specialty_parent_ids: string[]
-          title: string
-          total_reviews: number
-          user_id: string
-          user_location: string
+          avatar_url: string | null
+          bio: string | null
+          communication_rating: number | null
+          company_city: string | null
+          company_country: string | null
+          company_domain: string | null
+          company_id: string | null
+          company_id_full: string | null
+          company_is_featured: boolean | null
+          company_latitude: number | null
+          company_logo: string | null
+          company_longitude: number | null
+          company_name: string | null
+          company_plan_expires_at: string | null
+          company_plan_tier:
+            | Database["public"]["Enums"]["company_plan_tier"]
+            | null
+          company_slug: string | null
+          company_state_region: string | null
+          company_status: Database["public"]["Enums"]["company_status"] | null
+          cover_photo_url: string | null
+          created_at: string | null
+          display_rating: number | null
+          first_name: string | null
+          hourly_rate_display: string | null
+          hourly_rate_max: number | null
+          hourly_rate_min: number | null
+          id: string | null
+          is_available: boolean | null
+          is_verified: boolean | null
+          languages_spoken: string[] | null
+          last_name: string | null
+          last_review_at: string | null
+          portfolio_url: string | null
+          primary_service_name: string | null
+          primary_service_name_nl: string | null
+          primary_specialty: string | null
+          primary_specialty_slug: string | null
+          quality_rating: number | null
+          reliability_rating: number | null
+          searchable_city: string | null
+          searchable_country: string | null
+          searchable_state_region: string | null
+          services_offered: string[] | null
+          specialty_ids: string[] | null
+          specialty_parent_ids: string[] | null
+          title: string | null
+          total_reviews: number | null
+          updated_at: string | null
+          user_id: string | null
+          user_location: string | null
+          years_experience: number | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "mv_professional_summary"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       search_professionals_optimized: {
         Args: {
@@ -2541,6 +3646,7 @@ export type Database = {
           project_type: string
           slug: string
           title: string
+          translations: Json
         }[]
       }
       set_company_hero_photo: {
@@ -2579,13 +3685,33 @@ export type Database = {
     Enums: {
       admin_role: "super_admin" | "admin"
       application_status: "pending" | "accepted" | "rejected"
+      brand_status:
+        | "unclaimed"
+        | "prospected"
+        | "unlisted"
+        | "listed"
+        | "deactivated"
       company_plan_tier: "basic" | "plus"
       company_social_platform:
         | "facebook"
         | "instagram"
         | "linkedin"
         | "pinterest"
-      company_status: "unlisted" | "listed" | "deactivated"
+      company_status:
+        | "draft"
+        | "unlisted"
+        | "listed"
+        | "deactivated"
+        | "prospected"
+        | "added"
+        | "unclaimed"
+      product_link_source:
+        | "ai"
+        | "brand_suggest"
+        | "pro_suggest"
+        | "admin_manual"
+      product_link_status: "pending" | "live" | "rejected"
+      product_status: "listed" | "unlisted"
       professional_project_status:
         | "invited"
         | "listed"
@@ -2608,6 +3734,13 @@ export type Database = {
         | "material_feature"
         | "size_range"
         | "budget_tier"
+      prospect_status:
+        | "prospect"
+        | "contacted"
+        | "visitor"
+        | "signup"
+        | "company"
+        | "active"
       review_moderation_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -2738,6 +3871,13 @@ export const Constants = {
     Enums: {
       admin_role: ["super_admin", "admin"],
       application_status: ["pending", "accepted", "rejected"],
+      brand_status: [
+        "unclaimed",
+        "prospected",
+        "unlisted",
+        "listed",
+        "deactivated",
+      ],
       company_plan_tier: ["basic", "plus"],
       company_social_platform: [
         "facebook",
@@ -2745,7 +3885,23 @@ export const Constants = {
         "linkedin",
         "pinterest",
       ],
-      company_status: ["unlisted", "listed", "deactivated"],
+      company_status: [
+        "draft",
+        "unlisted",
+        "listed",
+        "deactivated",
+        "prospected",
+        "added",
+        "unclaimed",
+      ],
+      product_link_source: [
+        "ai",
+        "brand_suggest",
+        "pro_suggest",
+        "admin_manual",
+      ],
+      product_link_status: ["pending", "live", "rejected"],
+      product_status: ["listed", "unlisted"],
       professional_project_status: [
         "invited",
         "listed",
@@ -2771,8 +3927,15 @@ export const Constants = {
         "size_range",
         "budget_tier",
       ],
+      prospect_status: [
+        "prospect",
+        "contacted",
+        "visitor",
+        "signup",
+        "company",
+        "active",
+      ],
       review_moderation_status: ["pending", "approved", "rejected"],
     },
   },
 } as const
-

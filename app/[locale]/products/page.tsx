@@ -10,7 +10,7 @@ export default async function ProductsDiscoverPage() {
   // Phase 1: admin-only. Remove this when Phase 4 ships.
   await requireProductsAdmin()
 
-  const supabase = createServiceRoleSupabaseClient() as any
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: products } = await supabase
     .from("products")

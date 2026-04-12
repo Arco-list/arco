@@ -12,7 +12,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   await requireProductsAdmin()
 
   const { slug } = await params
-  const supabase = createServiceRoleSupabaseClient() as any
+  const supabase = createServiceRoleSupabaseClient()
 
   const { data: product } = await supabase
     .from("products")
