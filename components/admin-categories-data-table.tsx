@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
+import { Fragment, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
@@ -844,63 +844,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
       {/* Filters */}
       {/* Product Categories tab */}
       {activeTab === "products" && (
-        <div className="arco-table-wrap max-w-full min-w-0">
-          <table className="arco-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Parent</th>
-                <th style={{ textAlign: "right" }}>Products</th>
-                <th>Order</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productCategories.length === 0 ? (
-                <tr>
-                  <td colSpan={4} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
-                </tr>
-              ) : (
-                (() => {
-                  // Build hierarchy: parents first, children indented below
-                  const parents = productCategories.filter((c) => !c.parentId).sort((a, b) => a.orderIndex - b.orderIndex)
-                  const childrenMap = new Map<string, AdminProductCategoryRow[]>()
-                  for (const child of productCategories.filter((c) => c.parentId)) {
-                    const arr = childrenMap.get(child.parentId!) ?? []
-                    arr.push(child)
-                    childrenMap.set(child.parentId!, arr)
-                  }
-                  for (const [, arr] of childrenMap) arr.sort((a, b) => a.orderIndex - b.orderIndex)
-
-                  const rows: { item: AdminProductCategoryRow; isChild: boolean }[] = []
-                  for (const parent of parents) {
-                    rows.push({ item: parent, isChild: false })
-                    for (const child of childrenMap.get(parent.id) ?? []) {
-                      rows.push({ item: child, isChild: true })
-                      // Grandchildren
-                      for (const grandchild of childrenMap.get(child.id) ?? []) {
-                        rows.push({ item: grandchild, isChild: true })
-                      }
-                    }
-                  }
-
-                  return rows.map(({ item, isChild }) => (
-                    <tr key={item.id}>
-                      <td>
-                        <div style={{ paddingLeft: isChild ? 24 : 0 }}>
-                          <div className="arco-table-primary" style={{ fontWeight: isChild ? 400 : 500 }}>{item.name}</div>
-                          <div className="arco-table-secondary">{item.slug}</div>
-                        </div>
-                      </td>
-                      <td>{item.parentName ?? <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>}</td>
-                      <td style={{ textAlign: "right" }}>{item.productCount > 0 ? item.productCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
-                      <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{item.orderIndex}</span></td>
-                    </tr>
-                  ))
-                })()
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ProductCategoriesTab productCategories={productCategories} />
       )}
 
       {activeTab !== "spaces" && activeTab !== "products" && <><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1364,6 +1308,158 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Product Categories sub-component with expandable parents ──────── */
+
+function ProductCategoriesTab({ productCategories }: { productCategories: AdminProductCategoryRow[] }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const parents = useMemo(
+    () => productCategories.filter((c) => !c.parentId).sort((a, b) => a.orderIndex - b.orderIndex),
+    [productCategories]
+  )
+
+  const childrenMap = useMemo(() => {
+    const map = new Map<string, AdminProductCategoryRow[]>()
+    for (const child of productCategories.filter((c) => c.parentId)) {
+      const arr = map.get(child.parentId!) ?? []
+      arr.push(child)
+      map.set(child.parentId!, arr)
+    }
+    for (const [, arr] of map) arr.sort((a, b) => a.orderIndex - b.orderIndex)
+    return map
+  }, [productCategories])
+
+  const toggleExpand = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const hasChildren = (id: string) => (childrenMap.get(id)?.length ?? 0) > 0
+
+  // Sum product counts from children into parent for display
+  const totalCount = (id: string): number => {
+    const own = productCategories.find((c) => c.id === id)?.productCount ?? 0
+    const children = childrenMap.get(id) ?? []
+    return own + children.reduce((sum, c) => sum + totalCount(c.id), 0)
+  }
+
+  return (
+    <div className="arco-table-wrap max-w-full min-w-0">
+      <table className="arco-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th style={{ textAlign: "right" }}>Products</th>
+            <th>Order</th>
+          </tr>
+        </thead>
+        <tbody>
+          {parents.length === 0 ? (
+            <tr>
+              <td colSpan={3} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
+            </tr>
+          ) : (
+            parents.map((parent) => {
+              const isExpanded = expanded.has(parent.id)
+              const children = childrenMap.get(parent.id) ?? []
+              const hasSubs = children.length > 0
+              const count = totalCount(parent.id)
+
+              return (
+                <Fragment key={parent.id}>
+                  <tr>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {hasSubs ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(parent.id)}
+                            style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0 }}
+                          >
+                            <svg
+                              width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#a1a1a0" strokeWidth="1.2" strokeLinecap="round"
+                              style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.15s" }}
+                            >
+                              <path d="M3 2L7 5L3 8" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <div style={{ width: 14 }} />
+                        )}
+                        <div>
+                          <div className="arco-table-primary" style={{ fontWeight: 500 }}>{parent.name}</div>
+                          <div className="arco-table-secondary">{parent.slug}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "right" }}>{count > 0 ? count : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
+                    <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{parent.orderIndex}</span></td>
+                  </tr>
+                  {isExpanded && children.map((child) => {
+                    const grandchildren = childrenMap.get(child.id) ?? []
+                    const hasGrand = grandchildren.length > 0
+                    const isChildExpanded = expanded.has(child.id)
+                    const childCount = totalCount(child.id)
+
+                    return (
+                      <Fragment key={child.id}>
+                        <tr>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 24 }}>
+                              {hasGrand ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(child.id)}
+                                  style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0 }}
+                                >
+                                  <svg
+                                    width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#a1a1a0" strokeWidth="1.2" strokeLinecap="round"
+                                    style={{ transform: isChildExpanded ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.15s" }}
+                                  >
+                                    <path d="M3 2L7 5L3 8" />
+                                  </svg>
+                                </button>
+                              ) : (
+                                <div style={{ width: 14 }} />
+                              )}
+                              <div>
+                                <div className="arco-table-primary">{child.name}</div>
+                                <div className="arco-table-secondary">{child.slug}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: "right" }}>{childCount > 0 ? childCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
+                          <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{child.orderIndex}</span></td>
+                        </tr>
+                        {isChildExpanded && grandchildren.map((gc) => (
+                          <tr key={gc.id}>
+                            <td>
+                              <div style={{ paddingLeft: 52 }}>
+                                <div className="arco-table-primary">{gc.name}</div>
+                                <div className="arco-table-secondary">{gc.slug}</div>
+                              </div>
+                            </td>
+                            <td style={{ textAlign: "right" }}>{gc.productCount > 0 ? gc.productCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
+                            <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{gc.orderIndex}</span></td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    )
+                  })}
+                </Fragment>
+              )
+            })
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }
