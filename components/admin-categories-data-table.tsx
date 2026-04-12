@@ -1352,7 +1352,7 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
 
   const handleSwap = (a: AdminProductCategoryRow, b: AdminProductCategoryRow) => {
     startTransition(async () => {
-      const { swapProductCategoryOrderAction } = await import("@/app/[locale]/admin/categories/actions")
+      const { swapProductCategoryOrderAction } = await import("@/app/admin/categories/actions")
       const result = await swapProductCategoryOrderAction(a.id, a.orderIndex, b.id, b.orderIndex)
       if (!result.success) {
         toast.error("Failed to reorder")
