@@ -78,30 +78,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     })
   }
 
-  const heroPhoto = photos[0]
-  const galleryPhotos = photos.slice(1)
+  // Extract color variants for the swatch section
+  const variants = (p.variants ?? []) as Array<Record<string, any>>
+  const colorVariants = variants.filter((v: any) => v.color)
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
 
-      {/* Hero — full width but not full viewport height like projects */}
-      {heroPhoto && (
-        <section className="relative w-full overflow-hidden bg-black" style={{ height: "60vh", minHeight: 400, maxHeight: 600 }}>
-          <Image
-            src={heroPhoto.url}
-            alt={p.name}
-            fill
-            className="object-contain"
-            priority
-            sizes="100vw"
-            style={{ background: "#f5f5f4" }}
-          />
-        </section>
-      )}
-
       {/* Header — mirrors professional-header pattern */}
-      <div id="details" className="wrap" style={{ marginTop: heroPhoto ? 60 : 120, marginBottom: 60 }}>
+      <div id="details" className="wrap" style={{ marginTop: 120, marginBottom: 60 }}>
         <section className="professional-header">
           {/* Brand icon */}
           <div className="company-icon">
@@ -155,21 +141,71 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         )}
       </div>
 
-      {/* Photo gallery — constrained width, not full bleed */}
-      {galleryPhotos.length > 0 && (
+      {/* Photo gallery — all photos in constrained grid */}
+      {photos.length > 0 && (
         <div className="wrap" style={{ maxWidth: 1000, marginBottom: 60 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-            {galleryPhotos.map((photo: any) => (
-              <div key={photo.id} style={{ position: "relative", aspectRatio: "4/3", overflow: "hidden", borderRadius: 3 }}>
+          <div style={{ display: "grid", gridTemplateColumns: photos.length === 1 ? "1fr" : "repeat(2, 1fr)", gap: 8 }}>
+            {photos.map((photo: any, i: number) => (
+              <div
+                key={photo.id}
+                style={{
+                  position: "relative",
+                  aspectRatio: i === 0 && photos.length > 1 ? "16/10" : "4/3",
+                  overflow: "hidden",
+                  borderRadius: 3,
+                  gridColumn: i === 0 && photos.length > 1 ? "1 / -1" : undefined,
+                }}
+              >
                 <Image
                   src={photo.url}
                   alt={photo.alt_text ?? p.name}
                   fill
                   className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 500px"
+                  sizes={i === 0 ? "(max-width: 768px) 100vw, 1000px" : "(max-width: 768px) 100vw, 500px"}
+                  priority={i === 0}
                 />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Color variants — dots with names, hover/click for variant image */}
+      {colorVariants.length > 0 && (
+        <div className="wrap" style={{ maxWidth: 1000, marginBottom: 60 }}>
+          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Colors</h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+            {colorVariants.map((v: any, i: number) => {
+              const colorHex = v.hex ?? v.color_hex ?? null
+              const variantImageUrl = v.image_url ?? null
+              return (
+                <div
+                  key={i}
+                  className="product-color-swatch"
+                  style={{ position: "relative" }}
+                >
+                  <div
+                    className="product-color-dot"
+                    style={{
+                      background: colorHex ?? "var(--arco-surface)",
+                      border: colorHex ? "none" : "1px solid var(--rule)",
+                    }}
+                  />
+                  <span className="product-color-label">{v.color}</span>
+                  {variantImageUrl && (
+                    <div className="product-color-preview">
+                      <Image
+                        src={variantImageUrl}
+                        alt={`${p.name} — ${v.color}`}
+                        width={200}
+                        height={200}
+                        className="product-color-preview-img"
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -197,20 +233,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   {String(value)}
                 </span>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Variants */}
-      {p.variants && Array.isArray(p.variants) && p.variants.length > 0 && (
-        <div className="wrap" style={{ maxWidth: 800, marginBottom: 60 }}>
-          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Variants</h2>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {p.variants.map((v: any, i: number) => (
-              <span key={i} className="status-pill">
-                {Object.values(v).join(" · ")}
-              </span>
             ))}
           </div>
         </div>
