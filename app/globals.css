@@ -5829,6 +5829,36 @@ body.no-scroll {
    PRODUCT GALLERY (masonry columns)
    ═══════════════════════════════════════════════════════ */
 
+/* Product hero — primary image left, info right */
+.product-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+.product-hero-image {
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.product-hero-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.product-hero-info {
+  padding-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .product-hero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
 /* CSS columns masonry — images render at natural proportions,
    flow into columns without forced aspect ratios or black bars. */
 .product-gallery {

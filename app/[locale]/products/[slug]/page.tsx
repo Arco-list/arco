@@ -79,6 +79,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     })
   }
 
+  const heroPhoto = photos[0] ?? null
+  const galleryPhotos = photos.slice(1)
+
   // Extract color variants for the swatch section
   const variants = (p.variants ?? []) as Array<Record<string, any>>
   const colorVariants = variants.filter((v: any) => v.color)
@@ -87,9 +90,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     <div className="min-h-screen bg-white">
       <Header />
 
-      {/* Breadcrumb + Header */}
-      <div id="details" className="wrap" style={{ marginTop: 120, marginBottom: 60 }}>
-        <nav aria-label="Breadcrumb" className="discover-breadcrumb" style={{ justifyContent: "center", marginBottom: 24 }}>
+      {/* Breadcrumb */}
+      <div className="wrap" style={{ marginTop: 100 }}>
+        <nav aria-label="Breadcrumb" className="discover-breadcrumb" style={{ marginBottom: 24 }}>
           <Link href="/products" className="discover-breadcrumb-item">Products</Link>
           {p.brand && (
             <>
@@ -106,48 +109,52 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
           <span className="discover-breadcrumb-item discover-breadcrumb-current">{p.name}</span>
         </nav>
+      </div>
 
-        <section className="professional-header">
-          {/* Brand icon */}
-          <div className="company-icon">
-            {p.brand?.logo_url ? (
-              <Link href={`/brands/${p.brand.slug}`}>
-                <Image
-                  src={p.brand.logo_url}
-                  alt={p.brand.name}
-                  width={100}
-                  height={100}
-                  className="company-icon-image"
-                />
-              </Link>
+      {/* Hero: primary image left + product info right */}
+      <div id="details" className="wrap" style={{ marginBottom: 40 }}>
+        <div className="product-hero">
+          {/* Primary image */}
+          <div className="product-hero-image">
+            {heroPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={heroPhoto.url} alt={p.name} />
             ) : (
-              <div className="company-icon-initials">
-                {(p.brand?.name ?? p.name).charAt(0).toUpperCase()}
-              </div>
+              <div style={{ width: "100%", aspectRatio: "4/3", background: "var(--arco-surface)", borderRadius: 4 }} />
             )}
           </div>
 
-          {/* Brand name eyebrow */}
-          {p.brand && (
-            <Link href={`/brands/${p.brand.slug}`} className="professional-badge" style={{ display: "block", marginBottom: 16 }}>
-              {p.brand.name}
-            </Link>
-          )}
+          {/* Product info */}
+          <div className="product-hero-info">
+            {/* Brand icon */}
+            {p.brand && (
+              <Link href={`/brands/${p.brand.slug}`} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, textDecoration: "none", color: "inherit" }}>
+                {p.brand.logo_url ? (
+                  <Image src={p.brand.logo_url} alt={p.brand.name} width={48} height={48} style={{ borderRadius: "50%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "var(--text-secondary)" }}>
+                    {p.brand.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="arco-small-text" style={{ color: "var(--text-secondary)" }}>{p.brand.name}</span>
+              </Link>
+            )}
 
-          {/* Product name */}
-          <h1 className="arco-page-title">{p.name}</h1>
+            {/* Product name */}
+            <h1 className="arco-page-title" style={{ marginBottom: 0 }}>{p.name}</h1>
 
-          {/* Description */}
-          {p.description && (
-            <div className="professional-description" style={{ marginTop: 24 }}>
-              {p.description.split("\n\n").map((para: string, i: number) => (
-                <p key={i} className="arco-body-text">{para}</p>
-              ))}
-            </div>
-          )}
-        </section>
+            {/* Description */}
+            {p.description && (
+              <div style={{ marginTop: 20 }}>
+                {p.description.split("\n\n").map((para: string, i: number) => (
+                  <p key={i} className="arco-body-text">{para}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
-        {/* Details bar — mirrors specifications-bar */}
+        {/* Details bar — below the hero split */}
         {detailsBar.length > 0 && (
           <section className="specifications-bar">
             {detailsBar.map((d) => (
@@ -160,10 +167,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         )}
       </div>
 
-      {/* Photo gallery — grid with consistent aspect ratios per orientation */}
-      {photos.length > 0 && (
+      {/* Remaining photos gallery */}
+      {galleryPhotos.length > 0 && (
         <div className="wrap" style={{ marginBottom: 60 }}>
-          <ProductGallery photos={photos} productName={p.name} />
+          <ProductGallery photos={galleryPhotos} productName={p.name} />
         </div>
       )}
 
