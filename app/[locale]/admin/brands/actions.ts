@@ -329,6 +329,62 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
       }
     }
 
+    // Pattern 3: image URLs with color names in the path (e.g. color_picker/Product-matt-black-mobile.png)
+    const colorPathRegex = /["']((?:https?:\/\/[^"']*|\/[^"']*?)(?:color[_-]?picker|variants?|finishes?|materials?)[^"']*\/([^"'/]+)\.(png|jpe?g|webp))["']/gi
+    let colorPathMatch
+    while ((colorPathMatch = colorPathRegex.exec(html)) !== null) {
+      const fullUrl = colorPathMatch[1]
+      const filename = colorPathMatch[2]
+      // Extract color name from filename: "Product-matt-black-mobile" → "matt black"
+      const colorFromFile = filename
+        .replace(/[-_]mobile$/i, "")
+        .replace(/^.*?-(?=[a-z])/i, "") // strip product name prefix up to first lowercase segment
+        .replace(/[-_]/g, " ")
+        .trim()
+      if (colorFromFile.length > 1 && colorFromFile.length < 40) {
+        try {
+          const abs = new URL(fullUrl, url.toString()).toString()
+          if (!colorImageUrls.some((c) => c.url === abs)) {
+            colorImageUrls.push({ color: colorFromFile, url: abs })
+          }
+        } catch {}
+      }
+    }
+
+    // Pattern 4: JSON-like structures pairing color names with image URLs
+    // Matches: {"name":"matt black","image":"url"} or {color: "phantom", src: "/path/img.jpg"}
+    const jsonColorRegex = /["'](?:name|color|finish|material)["']\s*[:=]\s*["']([^"']{2,30})["'][^}]{0,200}?["'](?:image|src|url|thumbnail|preview|swatch)["']\s*[:=]\s*["']([^"']+\.(?:png|jpe?g|webp)(?:\?[^"']*)?)["']/gi
+    let jsonMatch
+    while ((jsonMatch = jsonColorRegex.exec(html)) !== null) {
+      const color = jsonMatch[1].trim()
+      const imgUrl = jsonMatch[2]
+      if (color && imgUrl && !imgUrl.includes("data:")) {
+        try {
+          const abs = new URL(imgUrl, url.toString()).toString()
+          if (!colorImageUrls.some((c) => c.color.toLowerCase() === color.toLowerCase())) {
+            colorImageUrls.push({ color, url: abs })
+          }
+        } catch {}
+      }
+    }
+
+    // Pattern 4b: reverse order — image first, then color name
+    const jsonColorRegex2 = /["'](?:image|src|url|thumbnail|preview|swatch)["']\s*[:=]\s*["']([^"']+\.(?:png|jpe?g|webp)(?:\?[^"']*)?)["'][^}]{0,200}?["'](?:name|color|finish|material)["']\s*[:=]\s*["']([^"']{2,30})["']/gi
+    while ((jsonMatch = jsonColorRegex2.exec(html)) !== null) {
+      const imgUrl = jsonMatch[1]
+      const color = jsonMatch[2].trim()
+      if (color && imgUrl && !imgUrl.includes("data:")) {
+        try {
+          const abs = new URL(imgUrl, url.toString()).toString()
+          if (!colorImageUrls.some((c) => c.color.toLowerCase() === color.toLowerCase())) {
+            colorImageUrls.push({ color, url: abs })
+          }
+        } catch {}
+      }
+    }
+
+    console.log(`[scrape] Found ${colorImageUrls.length} color variant images from HTML patterns`)
+
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 2048,
