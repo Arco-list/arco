@@ -23,12 +23,12 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
   // Build hierarchical category sections: parent → children
   const categorySections = useMemo(() => {
     const topLevel = categories.filter((c) => !c.parentId)
+    // Phase 1: show all categories regardless of product count.
+    // Phase 4: filter to categories with products.
     return topLevel.map((parent) => ({
       parent,
       children: categories.filter((c) => c.parentId === parent.id),
-    })
-    // Phase 1: show all categories regardless of product count.
-    // Phase 4: filter to categories with products.
+    }))
   }, [categories])
 
   // All category IDs under a parent (parent + children)
