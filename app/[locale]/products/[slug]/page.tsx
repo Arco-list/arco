@@ -81,12 +81,25 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     })
   }
 
-  const heroPhoto = photos[0] ?? null
-  const galleryPhotos = photos.slice(1)
-
   // Extract color variants for the swatch section
   const variants = (p.variants ?? []) as Array<Record<string, any>>
   const colorVariants = variants.filter((v: any) => v.color)
+
+  // Collect variant image URLs so we can exclude them from the main gallery
+  const variantImageUrls = new Set(
+    colorVariants
+      .map((v: any) => v.image_url)
+      .filter(Boolean)
+      .map((url: string) => url.toLowerCase().replace(/\/+$/, ""))
+  )
+
+  // Filter gallery: remove photos whose URL matches a variant image
+  const nonVariantPhotos = photos.filter(
+    (photo: any) => !variantImageUrls.has(photo.url.toLowerCase().replace(/\/+$/, ""))
+  )
+
+  const heroPhoto = nonVariantPhotos[0] ?? null
+  const galleryPhotos = nonVariantPhotos.slice(1)
 
   return (
     <div className="min-h-screen bg-white">
