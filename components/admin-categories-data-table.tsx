@@ -85,7 +85,7 @@ export type AdminCategoryRow = {
   count: number
 }
 
-type TabKey = "project" | "professional" | "spaces"
+type TabKey = "project" | "professional" | "spaces" | "products"
 type CreateMode = "type" | "service" | "group"
 
 export type AdminSpaceRow = {
@@ -100,12 +100,23 @@ export type AdminSpaceRow = {
   inHomeCarrousel: boolean
 }
 
+export type AdminProductCategoryRow = {
+  id: string
+  slug: string
+  name: string
+  parentId: string | null
+  parentName: string | null
+  orderIndex: number
+  productCount: number
+}
+
 interface Props {
   categories: AdminCategoryRow[]
   spaces?: AdminSpaceRow[]
+  productCategories?: AdminProductCategoryRow[]
 }
 
-export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
+export function AdminCategoriesDataTable({ categories, spaces = [], productCategories = [] }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [activeTab, setActiveTab] = useState<TabKey>("project")
@@ -695,6 +706,16 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
         >
           Spaces
         </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === "products"
+              ? "border-[#1c1c1a] text-[#1c1c1a]"
+              : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
+          }`}
+          onClick={() => handleTabChange("products")}
+        >
+          Product Categories
+        </button>
       </div>
 
       {/* Spaces tab — matches Types/Services table styling */}
@@ -821,7 +842,68 @@ export function AdminCategoriesDataTable({ categories, spaces = [] }: Props) {
       )}
 
       {/* Filters */}
-      {activeTab !== "spaces" && <><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {/* Product Categories tab */}
+      {activeTab === "products" && (
+        <div className="arco-table-wrap max-w-full min-w-0">
+          <table className="arco-table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Parent</th>
+                <th style={{ textAlign: "right" }}>Products</th>
+                <th>Order</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productCategories.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
+                </tr>
+              ) : (
+                (() => {
+                  // Build hierarchy: parents first, children indented below
+                  const parents = productCategories.filter((c) => !c.parentId).sort((a, b) => a.orderIndex - b.orderIndex)
+                  const childrenMap = new Map<string, AdminProductCategoryRow[]>()
+                  for (const child of productCategories.filter((c) => c.parentId)) {
+                    const arr = childrenMap.get(child.parentId!) ?? []
+                    arr.push(child)
+                    childrenMap.set(child.parentId!, arr)
+                  }
+                  for (const [, arr] of childrenMap) arr.sort((a, b) => a.orderIndex - b.orderIndex)
+
+                  const rows: { item: AdminProductCategoryRow; isChild: boolean }[] = []
+                  for (const parent of parents) {
+                    rows.push({ item: parent, isChild: false })
+                    for (const child of childrenMap.get(parent.id) ?? []) {
+                      rows.push({ item: child, isChild: true })
+                      // Grandchildren
+                      for (const grandchild of childrenMap.get(child.id) ?? []) {
+                        rows.push({ item: grandchild, isChild: true })
+                      }
+                    }
+                  }
+
+                  return rows.map(({ item, isChild }) => (
+                    <tr key={item.id}>
+                      <td>
+                        <div style={{ paddingLeft: isChild ? 24 : 0 }}>
+                          <div className="arco-table-primary" style={{ fontWeight: isChild ? 400 : 500 }}>{item.name}</div>
+                          <div className="arco-table-secondary">{item.slug}</div>
+                        </div>
+                      </td>
+                      <td>{item.parentName ?? <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>}</td>
+                      <td style={{ textAlign: "right" }}>{item.productCount > 0 ? item.productCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
+                      <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{item.orderIndex}</span></td>
+                    </tr>
+                  ))
+                })()
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab !== "spaces" && activeTab !== "products" && <><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-1 items-center">
           <input
             type="text"
