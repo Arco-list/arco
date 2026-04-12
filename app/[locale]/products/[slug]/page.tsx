@@ -86,8 +86,26 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     <div className="min-h-screen bg-white">
       <Header />
 
-      {/* Header — mirrors professional-header pattern */}
+      {/* Breadcrumb + Header */}
       <div id="details" className="wrap" style={{ marginTop: 120, marginBottom: 60 }}>
+        <nav aria-label="Breadcrumb" className="discover-breadcrumb" style={{ justifyContent: "center", marginBottom: 24 }}>
+          <Link href="/products" className="discover-breadcrumb-item">Products</Link>
+          {p.brand && (
+            <>
+              <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
+              <Link href={`/brands/${p.brand.slug}`} className="discover-breadcrumb-item">{p.brand.name}</Link>
+            </>
+          )}
+          {p.family && (
+            <>
+              <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
+              <span className="discover-breadcrumb-item">{p.family.name}</span>
+            </>
+          )}
+          <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
+          <span className="discover-breadcrumb-item discover-breadcrumb-current">{p.name}</span>
+        </nav>
+
         <section className="professional-header">
           {/* Brand icon */}
           <div className="company-icon">

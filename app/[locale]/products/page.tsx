@@ -1,91 +1,121 @@
-import Link from "next/link"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { requireProductsAdmin } from "@/lib/products-gate"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { ProductsDiscoverClient } from "./products-discover-client"
 
 export const dynamic = "force-dynamic"
 
+export type DiscoverProduct = {
+  id: string
+  slug: string
+  name: string
+  brandId: string
+  brandName: string
+  brandSlug: string
+  categoryName: string | null
+  imageUrl: string | null
+}
+
+export type DiscoverBrand = {
+  id: string
+  slug: string
+  name: string
+  logoUrl: string | null
+  productCount: number
+}
+
+export type DiscoverCategory = {
+  id: string
+  slug: string
+  name: string
+  parentId: string | null
+  productCount: number
+}
+
 export default async function ProductsDiscoverPage() {
-  // Phase 1: admin-only. Remove this when Phase 4 ships.
   await requireProductsAdmin()
 
   const supabase = createServiceRoleSupabaseClient()
 
-  const { data: products } = await supabase
-    .from("products")
-    .select(`
-      id, slug, name, description,
-      brand:brands!inner(id, name, slug, status),
-      product_photos(url, is_primary, order_index)
-    `)
-    .order("created_at", { ascending: false })
-    .limit(60)
+  const [productsResult, brandsResult, categoriesResult] = await Promise.all([
+    supabase
+      .from("products")
+      .select(`
+        id, slug, name, brand_id,
+        brand:brands!inner(id, name, slug),
+        category:product_categories(id, name, slug),
+        product_photos(url, is_primary, order_index)
+      `)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("brands")
+      .select("id, slug, name, logo_url")
+      .order("name"),
+    supabase
+      .from("product_categories")
+      .select("id, slug, name, parent_id")
+      .order("order_index"),
+  ])
 
-  // Phase 1: admin-only, show all statuses. Phase 4: filter by status.
-  const items = (products ?? [])
-    .map((p: any) => {
+  // Map products
+  const products: DiscoverProduct[] = (productsResult.data ?? []).map((p: any) => {
     const photos = (p.product_photos ?? []) as { url: string; is_primary: boolean; order_index: number }[]
     const primary = photos.find((ph) => ph.is_primary) ?? photos.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))[0]
     return {
       id: p.id,
       slug: p.slug,
       name: p.name,
-      description: p.description,
-      brand: p.brand,
+      brandId: p.brand?.id ?? p.brand_id,
+      brandName: p.brand?.name ?? "",
+      brandSlug: p.brand?.slug ?? "",
+      categoryName: p.category?.name ?? null,
       imageUrl: primary?.url ?? null,
     }
   })
 
+  // Count products per brand
+  const brandProductCounts = new Map<string, number>()
+  for (const p of products) {
+    brandProductCounts.set(p.brandId, (brandProductCounts.get(p.brandId) ?? 0) + 1)
+  }
+
+  const brands: DiscoverBrand[] = (brandsResult.data ?? [])
+    .map((b: any) => ({
+      id: b.id,
+      slug: b.slug,
+      name: b.name,
+      logoUrl: b.logo_url,
+      productCount: brandProductCounts.get(b.id) ?? 0,
+    }))
+    .filter((b: DiscoverBrand) => b.productCount > 0)
+
+  // Count products per category
+  const categoryProductCounts = new Map<string, number>()
+  for (const p of products) {
+    if (p.categoryName) {
+      const cat = (categoriesResult.data ?? []).find((c: any) => c.name === p.categoryName)
+      if (cat) categoryProductCounts.set(cat.id, (categoryProductCounts.get(cat.id) ?? 0) + 1)
+    }
+  }
+
+  const categories: DiscoverCategory[] = (categoriesResult.data ?? []).map((c: any) => ({
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    parentId: c.parent_id,
+    productCount: categoryProductCounts.get(c.id) ?? 0,
+  }))
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      <div className="discover-page-title">
-        <div className="wrap">
-          <p className="arco-eyebrow">Products · Nederland</p>
-          <h1 className="arco-page-title" style={{ marginTop: 8 }}>Discover products</h1>
-          <p className="arco-body-text" style={{ marginTop: 12, maxWidth: 600 }}>
-            High-end interior products from curated brands. See how architects apply them in real projects, and find where to buy them.
-          </p>
-        </div>
-      </div>
-
-      <div className="discover-results">
-        <div className="wrap">
-          {items.length === 0 ? (
-            <div className="empty-state">
-              <h2 className="arco-section-title empty-state__title">No products yet</h2>
-              <p className="arco-body-text empty-state__description">Scrape brands and products in /admin/brands to populate the catalog.</p>
-            </div>
-          ) : (
-            <>
-              <div className="discover-results-meta">
-                <p className="discover-results-count">
-                  <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{items.length}</strong> products
-                </p>
-              </div>
-              <div className="discover-grid">
-                {items.map((product: any) => (
-                  <Link key={product.id} href={`/products/${product.slug}`} className="discover-card">
-                    <div className="discover-card-image-wrap">
-                      {product.imageUrl ? (
-                        <div className="discover-card-image-layer">
-                          <img src={product.imageUrl} alt={product.name} />
-                        </div>
-                      ) : (
-                        <div className="discover-card-image-layer" style={{ background: "var(--arco-surface)" }} />
-                      )}
-                    </div>
-                    <h3 className="discover-card-title">{product.name}</h3>
-                    <p className="discover-card-sub">{product.brand?.name ?? ""}</p>
-                  </Link>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
+      <ProductsDiscoverClient
+        initialProducts={products}
+        brands={brands}
+        categories={categories}
+      />
       <Footer />
     </div>
   )
