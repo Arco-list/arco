@@ -7,6 +7,7 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ProductGallery } from "@/components/product/product-gallery"
 import { ProductSubNav } from "@/components/product/product-sub-nav"
+import { ProductColors } from "@/components/product/product-colors"
 
 export const dynamic = "force-dynamic"
 
@@ -190,45 +191,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       {colorVariants.length > 0 && (
         <div id="colors" className="wrap" style={{ marginBottom: 60 }}>
           <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Colors</h2>
-
-          {/* Color dots row */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 20, marginBottom: 24 }}>
-            {colorVariants.map((v: any, i: number) => {
-              const colorHex = v.hex ?? v.color_hex ?? null
-              return (
-                <div key={i} className="product-color-swatch">
-                  <div
-                    className="product-color-dot"
-                    style={{
-                      background: colorHex ?? "var(--arco-surface)",
-                      border: colorHex ? "none" : "1px solid var(--rule)",
-                    }}
-                  />
-                  <span className="product-color-label">{v.color}</span>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Variant images grid (if any have images) */}
-          {colorVariants.some((v: any) => v.image_url) && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 }}>
-              {colorVariants.filter((v: any) => v.image_url).map((v: any, i: number) => (
-                <div key={i} style={{ borderRadius: 4, overflow: "hidden", position: "relative" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={v.image_url}
-                    alt={`${p.name} — ${v.color}`}
-                    style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }}
-                    loading="lazy"
-                  />
-                  <div style={{ padding: "8px 0 0", textAlign: "center" }}>
-                    <span className="arco-xs-text" style={{ color: "var(--text-primary)" }}>{v.color}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <ProductColors variants={colorVariants} productName={p.name} />
         </div>
       )}
 
