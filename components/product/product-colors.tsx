@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 interface ColorVariant {
   color: string
@@ -15,38 +15,48 @@ interface ProductColorsProps {
 }
 
 export function ProductColors({ variants, productName }: ProductColorsProps) {
-  const hasImages = variants.some((v) => v.image_url)
-  const [activeIndex, setActiveIndex] = useState(hasImages ? 0 : -1)
-  const activeVariant = activeIndex >= 0 ? variants[activeIndex] : null
+  // Deduplicate by color name, prefer variants with images
+  const uniqueVariants = useMemo(() => {
+    const seen = new Map<string, ColorVariant>()
+    for (const v of variants) {
+      const key = v.color.toLowerCase()
+      const existing = seen.get(key)
+      if (!existing || (!existing.image_url && v.image_url)) {
+        seen.set(key, v)
+      }
+    }
+    return [...seen.values()]
+  }, [variants])
+
+  // Only show clickable variants (ones with images)
+  const clickableVariants = uniqueVariants.filter((v) => v.image_url)
+  const hasImages = clickableVariants.length > 0
+
+  const [activeIndex, setActiveIndex] = useState(0)
+  const activeVariant = hasImages ? clickableVariants[activeIndex] : null
 
   return (
-    <div>
-      {/* Active variant image */}
-      {activeVariant?.image_url && (
-        <div style={{ marginBottom: 24, borderRadius: 4, overflow: "hidden", maxWidth: 480 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={activeVariant.image_url}
-            alt={`${productName} — ${activeVariant.color}`}
-            style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
-          />
-        </div>
-      )}
-
-      {/* Color dots row */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-        {variants.map((v, i) => {
+    <div style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>
+      {/* Color dots — left column */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+        {clickableVariants.map((v, i) => {
           const colorHex = v.hex ?? v.color_hex ?? null
           const isActive = activeIndex === i
-          const hasImage = !!v.image_url
 
           return (
             <button
               key={i}
               type="button"
-              className="product-color-swatch"
-              onClick={hasImage ? () => setActiveIndex(i) : undefined}
-              style={{ cursor: hasImage ? "pointer" : "default" }}
+              onClick={() => setActiveIndex(i)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "4px 0",
+              }}
             >
               <div
                 className="product-color-dot"
@@ -62,7 +72,10 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
               />
               <span
                 className="product-color-label"
-                style={{ color: isActive ? "var(--text-primary)" : undefined }}
+                style={{
+                  color: isActive ? "var(--text-primary)" : undefined,
+                  whiteSpace: "nowrap",
+                }}
               >
                 {v.color}
               </span>
@@ -70,6 +83,18 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
           )
         })}
       </div>
+
+      {/* Active variant image — right */}
+      {activeVariant?.image_url && (
+        <div style={{ flex: 1, borderRadius: 4, overflow: "hidden", minWidth: 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={activeVariant.image_url}
+            alt={`${productName} — ${activeVariant.color}`}
+            style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
+          />
+        </div>
+      )}
     </div>
   )
 }
