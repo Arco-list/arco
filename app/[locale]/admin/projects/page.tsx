@@ -147,8 +147,7 @@ async function loadAdminProjectsData() {
   // Build project rows
   const projects: AdminProjectRow[] = (projectsResult.data ?? []).map((project: any) => {
     const id = project.id ?? ""
-    const locationParts = [project.address_city, project.address_region].filter(Boolean)
-    const location = locationParts.length > 0 ? locationParts.join(", ") : (project.location ?? null)
+    const location = project.address_city ?? project.location ?? null
 
     const rawPhotoCount = project.project_photos?.[0]?.count ?? 0
     const imageCount = typeof rawPhotoCount === "number" ? rawPhotoCount : Number(rawPhotoCount ?? 0)
