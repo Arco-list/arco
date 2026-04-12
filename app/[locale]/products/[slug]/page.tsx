@@ -84,10 +84,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   // Extract color variants for the swatch section
   const variants = (p.variants ?? []) as Array<Record<string, any>>
   const colorVariants = variants.filter((v: any) => v.color)
+  const sizeVariants = [...new Set(variants.map((v: any) => v.size).filter(Boolean))] as string[]
+  const materialVariants = variants.filter((v: any) => v.material)
 
-  // Collect variant image URLs so we can exclude them from the main gallery
+  // Collect ALL variant image URLs so we can exclude them from the main gallery
   const variantImageUrls = new Set(
-    colorVariants
+    variants
       .map((v: any) => v.image_url)
       .filter(Boolean)
       .map((url: string) => url.toLowerCase().replace(/\/+$/, ""))
@@ -110,7 +112,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         imageUrl={heroPhoto?.url ?? null}
         slug={slug}
         hasGallery={galleryPhotos.length > 0}
-        hasColors={colorVariants.length > 0}
+        hasColors={colorVariants.length > 0 || materialVariants.length > 0 || sizeVariants.length > 0}
         hasSpecs={!!specs && Object.keys(specs).length > 0}
       />
 
@@ -205,6 +207,26 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <div id="colors" className="wrap" style={{ marginBottom: 60 }}>
           <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Colors</h2>
           <ProductColors variants={colorVariants} productName={p.name} />
+        </div>
+      )}
+
+      {/* Materials section */}
+      {materialVariants.length > 0 && (
+        <div className="wrap" style={{ marginBottom: 60 }}>
+          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Materials</h2>
+          <ProductColors variants={materialVariants.map((v: any) => ({ ...v, color: v.material }))} productName={p.name} />
+        </div>
+      )}
+
+      {/* Sizes section */}
+      {sizeVariants.length > 0 && (
+        <div className="wrap" style={{ marginBottom: 60 }}>
+          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Sizes</h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {sizeVariants.map((size, i) => (
+              <span key={i} className="status-pill">{size}</span>
+            ))}
+          </div>
         </div>
       )}
 

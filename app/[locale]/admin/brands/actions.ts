@@ -413,10 +413,13 @@ If none match well, return null.
 
 specs is a flexible map of attributes (dimensions, material, finish, wattage, etc.) — only include attributes that are actually stated on the page.
 
-variants should list all color/finish/material options shown on the page. For each variant:
-- "color": the name of the color or finish (e.g. "Phantom", "Brushed Brass", "Walnut")
-- "hex": the hex color code if visible or inferrable from the name, otherwise null
-- If sizes are listed as separate options (not dimensions of one product), include them: {"color": "name", "size": "40cm"}
+variants should list all options shown on the page. Each variant can have any combination of:
+- "color": color or finish name (e.g. "Phantom", "Brushed Brass") — for finish/color options
+- "hex": hex color code if visible or inferrable, otherwise null
+- "material": material name (e.g. "Walnut", "Leather", "Marble") — for material options
+- "size": size label (e.g. "40cm", "2-seater", "Large") — for size options
+
+Use "color" for surface finishes and paint colors. Use "material" for wood, stone, fabric, metal types. Use "size" for dimensional variants.
 
 Only include variants that are explicitly listed on the page. If no variants are shown, return "variants": [].
 
