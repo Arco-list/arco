@@ -59,8 +59,8 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
 
   return (
     <div style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>
-      {/* Color dots — left, horizontal with wrapping */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, maxWidth: hasImages ? 200 : undefined, flexShrink: 0 }}>
+      {/* Color dots — left half */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, flex: 1, alignContent: "flex-start" }}>
         {clickableVariants.map((v, i) => {
           const colorHex = v.hex ?? v.color_hex ?? null
           const isActive = activeIndex === i
@@ -98,7 +98,7 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
 
       {/* Active variant image — right */}
       {activeVariant?.image_url && (
-        <div style={{ flex: 1, borderRadius: 4, overflow: "hidden", minWidth: 0, maxWidth: 400 }}>
+        <div style={{ flex: 1, borderRadius: 4, overflow: "hidden", minWidth: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={activeVariant.image_url}
