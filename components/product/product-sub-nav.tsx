@@ -10,17 +10,18 @@ type ProductSubNavProps = {
   imageUrl: string | null
   slug: string
   hasGallery: boolean
+  hasColors: boolean
   hasSpecs: boolean
 }
 
-export function ProductSubNav({ productName, brandName, imageUrl, slug, hasGallery, hasSpecs }: ProductSubNavProps) {
+export function ProductSubNav({ productName, brandName, imageUrl, slug, hasGallery, hasColors, hasSpecs }: ProductSubNavProps) {
   const [shareOpen, setShareOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down")
   const lastScrollY = useRef(0)
 
   useEffect(() => {
-    const sectionIds = ["details", "gallery", "specs", "related"]
+    const sectionIds = ["details", "gallery", "colors", "specs", "related"]
 
     const updateActiveSection = () => {
       const currentScroll = window.scrollY
@@ -94,6 +95,11 @@ export function ProductSubNav({ productName, brandName, imageUrl, slug, hasGalle
                 {hasGallery && (
                   <a href="#gallery" onClick={(e) => handleClick(e, "gallery")} className={getLinkClass("gallery")}>
                     Photos
+                  </a>
+                )}
+                {hasColors && (
+                  <a href="#colors" onClick={(e) => handleClick(e, "colors")} className={getLinkClass("colors")}>
+                    Colors
                   </a>
                 )}
                 {hasSpecs && (
