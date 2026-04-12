@@ -199,36 +199,36 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
       {/* Brand icons row */}
       {brands.length > 0 && !selectedBrand && (
         <div className="wrap" style={{ paddingBottom: 8 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "flex-start" }}>
             {visibleBrands.map((brand) => (
               <button
                 key={brand.id}
                 type="button"
                 onClick={() => setSelectedBrand(brand.id)}
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: 4, minWidth: 64, transition: "opacity 0.15s" }}
-                className="hover:opacity-70"
+                className="credit-card"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100 }}
               >
-                {brand.logoUrl ? (
-                  <img src={brand.logoUrl} alt={brand.name} style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "var(--text-secondary)" }}>
-                    {brand.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span className="arco-xs-text" style={{ color: "var(--text-primary)", textAlign: "center", maxWidth: 72, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{brand.name}</span>
+                <div className="credit-icon">
+                  {brand.logoUrl ? (
+                    <img src={brand.logoUrl} alt={brand.name} />
+                  ) : (
+                    <span className="credit-icon-initials">{brand.name.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <h3 className="arco-label">{brand.name}</h3>
               </button>
             ))}
             {!showAllBrands && brands.length > BRAND_INITIAL_SHOW && (
               <button
                 type="button"
                 onClick={() => setShowAllBrands(true)}
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: 4, minWidth: 64 }}
-                className="hover:opacity-70"
+                className="credit-card"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100 }}
               >
-                <div style={{ width: 48, height: 48, borderRadius: "50%", border: "1px solid var(--rule)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span className="arco-small-text" style={{ color: "var(--text-secondary)" }}>+{brands.length - BRAND_INITIAL_SHOW}</span>
+                <div className="credit-icon" style={{ background: "transparent", border: "1px solid var(--rule)" }}>
+                  <span className="credit-icon-initials" style={{ fontSize: 14 }}>+{brands.length - BRAND_INITIAL_SHOW}</span>
                 </div>
-                <span className="arco-xs-text" style={{ color: "var(--text-secondary)" }}>Show all</span>
+                <h3 className="arco-label" style={{ color: "var(--text-secondary)" }}>Show all</h3>
               </button>
             )}
           </div>
