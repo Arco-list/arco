@@ -50,11 +50,17 @@ export default async function AdminProductsPage() {
     }
   })
 
+  // Unique brands and categories for filter dropdowns
+  const brandOptions = [...new Map(rows.filter((r) => r.brand).map((r) => [r.brand!.id, r.brand!])).values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+  const categoryOptions = [...new Map(rows.filter((r) => r.category).map((r) => [r.category!.name, r.category!])).values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   return (
     <div className="min-h-screen bg-white">
       <div className="discover-page-title">
         <div className="wrap">
-          <ProductsClient initialProducts={rows} />
+          <ProductsClient initialProducts={rows} brandOptions={brandOptions} categoryOptions={categoryOptions} />
         </div>
       </div>
     </div>
