@@ -26,10 +26,9 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
     return topLevel.map((parent) => ({
       parent,
       children: categories.filter((c) => c.parentId === parent.id),
-    })).filter((s) => {
-      // Show section if parent or any child has products
-      return s.parent.productCount > 0 || s.children.some((c) => c.productCount > 0)
     })
+    // Phase 1: show all categories regardless of product count.
+    // Phase 4: filter to categories with products.
   }, [categories])
 
   // All category IDs under a parent (parent + children)
