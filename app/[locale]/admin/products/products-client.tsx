@@ -43,6 +43,7 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
   const [brandFilter, setBrandFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const filtered = useMemo(() => {
     return initialProducts.filter((p) => {
@@ -62,6 +63,27 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
   }, [initialProducts, search, brandFilter, categoryFilter, statusFilter])
 
   const isFiltered = search.trim() || brandFilter !== "all" || categoryFilter !== "all" || statusFilter !== "all"
+
+  const allFilteredIds = useMemo(() => new Set(filtered.map((p) => p.id)), [filtered])
+  const allSelected = selected.size > 0 && filtered.every((p) => selected.has(p.id))
+  const someSelected = selected.size > 0
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map((p) => p.id)))
+    }
+  }
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <div style={{ paddingBottom: 80 }}>
@@ -133,10 +155,37 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
         </div>
       </div>
 
+      {/* Selection bar */}
+      {someSelected && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", marginBottom: 8, background: "var(--arco-surface)", borderRadius: 4 }}>
+          <span className="arco-small-text">
+            <strong style={{ color: "var(--text-primary)" }}>{selected.size}</strong> selected
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn-tertiary"
+              style={{ fontSize: 12, padding: "4px 12px" }}
+              onClick={() => setSelected(new Set())}
+            >
+              Deselect all
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="arco-table-wrap">
         <table className="arco-table" style={{ minWidth: 1000 }}>
           <thead>
             <tr>
+              <th style={{ width: 32, paddingRight: 0 }}>
+                <input
+                  type="checkbox"
+                  className="arco-table-checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                />
+              </th>
               <th>Product</th>
               <th>Brand</th>
               <th>Category</th>
@@ -149,7 +198,7 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={8} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   {isFiltered ? "No products match your filters." : "No products yet. Scrape products from a brand page in /admin/brands."}
                 </td>
               </tr>
@@ -158,6 +207,14 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
                 const subtitle = [product.brand?.name, product.category?.name].filter(Boolean).join(" · ")
                 return (
                   <tr key={product.id}>
+                    <td style={{ paddingRight: 0 }}>
+                      <input
+                        type="checkbox"
+                        className="arco-table-checkbox"
+                        checked={selected.has(product.id)}
+                        onChange={() => toggleOne(product.id)}
+                      />
+                    </td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         {product.primary_photo ? (
