@@ -14,16 +14,29 @@ interface Props {
 
 export function ProductsDiscoverClient({ initialProducts, brands, categories }: Props) {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [showAllBrands, setShowAllBrands] = useState(false)
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false)
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
 
-  // Top-level categories only for the filter bar
-  const topCategories = useMemo(
-    () => categories.filter((c) => !c.parentId && c.productCount > 0),
-    [categories]
-  )
+  // Build hierarchical category sections: parent → children
+  const categorySections = useMemo(() => {
+    const topLevel = categories.filter((c) => !c.parentId)
+    return topLevel.map((parent) => ({
+      parent,
+      children: categories.filter((c) => c.parentId === parent.id),
+    })).filter((s) => {
+      // Show section if parent or any child has products
+      return s.parent.productCount > 0 || s.children.some((c) => c.productCount > 0)
+    })
+  }, [categories])
+
+  // All category IDs under a parent (parent + children)
+  const childIdsOf = (parentId: string) => {
+    const children = categories.filter((c) => c.parentId === parentId)
+    return [parentId, ...children.map((c) => c.id)]
+  }
 
   // Filter products
   const filtered = useMemo(() => {
@@ -31,24 +44,36 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
     if (selectedBrand) {
       result = result.filter((p) => p.brandId === selectedBrand)
     }
-    if (selectedCategory) {
-      const catName = categories.find((c) => c.id === selectedCategory)?.name
-      if (catName) {
-        result = result.filter((p) => p.categoryName === catName)
+    if (selectedCategories.size > 0) {
+      // Build the full set of IDs to match: selected IDs + their children
+      const matchIds = new Set<string>()
+      for (const id of selectedCategories) {
+        for (const childId of childIdsOf(id)) matchIds.add(childId)
       }
+      result = result.filter((p) => p.categoryId && matchIds.has(p.categoryId))
     }
     return result
-  }, [initialProducts, selectedBrand, selectedCategory, categories])
+  }, [initialProducts, selectedBrand, selectedCategories, categories])
 
-  const activeFilterCount = (selectedBrand ? 1 : 0) + (selectedCategory ? 1 : 0)
+  const toggleCategory = (id: string) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const categoryFilterCount = selectedCategories.size
+  const activeFilterCount = (selectedBrand ? 1 : 0) + categoryFilterCount
   const selectedBrandName = brands.find((b) => b.id === selectedBrand)?.name
-  const selectedCategoryName = categories.find((c) => c.id === selectedCategory)?.name
+  const selectedCategoryNames = [...selectedCategories].map((id) => categories.find((c) => c.id === id)?.name).filter(Boolean)
 
   const visibleBrands = showAllBrands ? brands : brands.slice(0, BRAND_INITIAL_SHOW)
 
   const clearAll = () => {
     setSelectedBrand(null)
-    setSelectedCategory(null)
+    setSelectedCategories(new Set())
   }
 
   return (
@@ -70,47 +95,78 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
 
             <div className="filter-pill-divider" />
 
-            {/* Category dropdown */}
+            {/* Category dropdown — hierarchical with expandable sub-categories */}
             <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
-                data-active={!!selectedCategory}
+                data-active={categoryFilterCount > 0}
                 data-open={categoryDropdownOpen}
                 onClick={() => { setCategoryDropdownOpen(!categoryDropdownOpen); setBrandDropdownOpen(false) }}
               >
-                {selectedCategoryName ?? "Category"}
-                {selectedCategory && <span className="filter-pill-badge">1</span>}
+                Category
+                {categoryFilterCount > 0 && <span className="filter-pill-badge">{categoryFilterCount}</span>}
                 <svg className="filter-pill-chevron" width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M2 3.5l2.5 2.5 2.5-2.5" />
                 </svg>
               </button>
               {categoryDropdownOpen && (
-                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "var(--background)", border: "1px solid var(--arco-rule)", borderRadius: 4, boxShadow: "0 8px 32px rgba(0,0,0,0.09)", minWidth: 220, padding: "8px 0", zIndex: 200 }}>
-                  <div
-                    className="filter-dropdown-option"
-                    data-checked={!selectedCategory ? "true" : "false"}
-                    style={{ cursor: "pointer" }}
-                    onClick={() => { setSelectedCategory(null); setCategoryDropdownOpen(false) }}
-                  >
-                    <div className="filter-dropdown-option-left">
-                      <div className="filter-checkbox">{!selectedCategory && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}</div>
-                      <span className="filter-dropdown-label">All categories</span>
-                    </div>
-                  </div>
-                  {topCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className="filter-dropdown-option"
-                      data-checked={selectedCategory === cat.id ? "true" : "false"}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => { setSelectedCategory(selectedCategory === cat.id ? null : cat.id); setCategoryDropdownOpen(false) }}
-                    >
-                      <div className="filter-dropdown-option-left">
-                        <div className="filter-checkbox">{selectedCategory === cat.id && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}</div>
-                        <span className="filter-dropdown-label">{cat.name}</span>
+                <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "var(--background)", border: "1px solid var(--arco-rule)", borderRadius: 4, boxShadow: "0 8px 32px rgba(0,0,0,0.09)", minWidth: 280, padding: "8px 0", zIndex: 200, maxHeight: 400, overflowY: "auto" }}>
+                  {categorySections.map((section) => {
+                    const parentChecked = selectedCategories.has(section.parent.id)
+                    const isExpanded = !!expandedCategories[section.parent.id]
+                    const hasChildren = section.children.length > 0
+                    return (
+                      <div key={section.parent.id}>
+                        <div
+                          className="filter-dropdown-option"
+                          data-checked={parentChecked ? "true" : "false"}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => toggleCategory(section.parent.id)}
+                        >
+                          <div className="filter-dropdown-option-left">
+                            <div className="filter-checkbox">
+                              {parentChecked && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            </div>
+                            <span className="filter-dropdown-label" style={{ fontWeight: 500 }}>{section.parent.name}</span>
+                          </div>
+                          {hasChildren && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExpandedCategories((prev) => ({ ...prev, [section.parent.id]: !prev[section.parent.id] }))
+                              }}
+                              style={{ fontSize: 11, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", padding: "0 4px", flexShrink: 0, display: "flex", alignItems: "center", gap: 3 }}
+                            >
+                              {isExpanded ? "Hide" : "Show all"}
+                              <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>
+                                <path d="M2 4l3 3 3-3" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                        {isExpanded && section.children.map((child) => {
+                          const childChecked = selectedCategories.has(child.id)
+                          return (
+                            <div
+                              key={child.id}
+                              className="filter-dropdown-option"
+                              data-checked={childChecked ? "true" : "false"}
+                              style={{ cursor: "pointer", paddingLeft: 36 }}
+                              onClick={() => toggleCategory(child.id)}
+                            >
+                              <div className="filter-dropdown-option-left">
+                                <div className="filter-checkbox">
+                                  {childChecked && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                </div>
+                                <span className="filter-dropdown-label">{child.name}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -173,11 +229,14 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
                   {selectedBrandName} <span className="filter-chip-close" aria-hidden="true">✕</span>
                 </button>
               )}
-              {selectedCategoryName && (
-                <button className="filter-chip" onClick={() => setSelectedCategory(null)}>
-                  {selectedCategoryName} <span className="filter-chip-close" aria-hidden="true">✕</span>
-                </button>
-              )}
+              {selectedCategoryNames.map((name) => {
+                const cat = categories.find((c) => c.name === name)
+                return cat ? (
+                  <button key={cat.id} className="filter-chip" onClick={() => toggleCategory(cat.id)}>
+                    {name} <span className="filter-chip-close" aria-hidden="true">✕</span>
+                  </button>
+                ) : null
+              })}
               <button className="filter-chip-clear-all" onClick={clearAll}>Clear all</button>
             </div>
           </div>

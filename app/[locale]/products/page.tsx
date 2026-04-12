@@ -14,6 +14,7 @@ export type DiscoverProduct = {
   brandName: string
   brandSlug: string
   brandLogoUrl: string | null
+  categoryId: string | null
   categoryName: string | null
   imageUrl: string | null
 }
@@ -72,6 +73,7 @@ export default async function ProductsDiscoverPage() {
       brandName: p.brand?.name ?? "",
       brandSlug: p.brand?.slug ?? "",
       brandLogoUrl: p.brand?.logo_url ?? null,
+      categoryId: p.category?.id ?? null,
       categoryName: p.category?.name ?? null,
       imageUrl: primary?.url ?? null,
     }
