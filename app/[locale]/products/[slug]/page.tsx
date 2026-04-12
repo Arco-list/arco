@@ -139,9 +139,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             {p.brand && (
               <Link href={`/brands/${p.brand.slug}`} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, textDecoration: "none", color: "inherit" }}>
                 {p.brand.logo_url ? (
-                  <Image src={p.brand.logo_url} alt={p.brand.name} width={48} height={48} style={{ borderRadius: "50%", objectFit: "cover" }} />
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                    <Image src={p.brand.logo_url} alt={p.brand.name} width={40} height={40} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
                 ) : (
-                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, color: "var(--text-secondary)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--text-secondary)", flexShrink: 0 }}>
                     {p.brand.name.charAt(0).toUpperCase()}
                   </div>
                 )}

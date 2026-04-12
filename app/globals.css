@@ -5832,9 +5832,10 @@ body.no-scroll {
 /* Product hero — primary image left, info right */
 .product-hero {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 48px;
   align-items: start;
+  margin-bottom: 40px;
 }
 
 .product-hero-image {
