@@ -152,7 +152,12 @@ async function loadAdminProjectsData() {
     const rawPhotoCount = project.project_photos?.[0]?.count ?? 0
     const imageCount = typeof rawPhotoCount === "number" ? rawPhotoCount : Number(rawPhotoCount ?? 0)
 
-    const projectType = resolveLabel(project.project_type) ?? slugToLabel(project.project_type)
+    // Resolve the building type from project_categories (primary = true),
+    // NOT from project_type which stores the scope (Renovation, New Build, etc.)
+    const primaryCategory = (project.project_categories ?? []).find((pc: any) => pc.is_primary)
+    const projectType = primaryCategory?.category_id
+      ? categoryIdToName.get(normalizeKey(primaryCategory.category_id) ?? "") ?? null
+      : null
 
     // Owner
     const ownerProfile = project.client_id ? ownerProfileMap.get(project.client_id) : null
