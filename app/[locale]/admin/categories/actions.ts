@@ -696,3 +696,33 @@ export async function updateSpaceImageAction(
   revalidatePath("/admin/categories")
   return createSuccessResponse({ spaceId: parseResult.data })
 }
+
+/**
+ * Swap order_index of two product categories (for up/down reordering).
+ */
+export async function swapProductCategoryOrderAction(
+  idA: string,
+  orderA: number,
+  idB: string,
+  orderB: number,
+): Promise<ActionResult<{ success: true }>> {
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse("AUTH", error.message, {}, "admin-product-cat-reorder")
+
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { error: errA } = await supabase
+    .from("product_categories")
+    .update({ order_index: orderB } as any)
+    .eq("id", idA)
+  if (errA) return createErrorResponse("DATABASE", errA.message, {}, "admin-product-cat-reorder")
+
+  const { error: errB } = await supabase
+    .from("product_categories")
+    .update({ order_index: orderA } as any)
+    .eq("id", idB)
+  if (errB) return createErrorResponse("DATABASE", errB.message, {}, "admin-product-cat-reorder")
+
+  revalidatePath("/admin/categories")
+  return createSuccessResponse({ success: true as const })
+}

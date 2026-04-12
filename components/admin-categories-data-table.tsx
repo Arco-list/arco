@@ -1315,7 +1315,9 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
 /* ── Product Categories sub-component with expandable parents ──────── */
 
 function ProductCategoriesTab({ productCategories }: { productCategories: AdminProductCategoryRow[] }) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [, startTransition] = useTransition()
 
   const parents = useMemo(
     () => productCategories.filter((c) => !c.parentId).sort((a, b) => a.orderIndex - b.orderIndex),
@@ -1342,13 +1344,50 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
     })
   }
 
-  const hasChildren = (id: string) => (childrenMap.get(id)?.length ?? 0) > 0
-
-  // Sum product counts from children into parent for display
   const totalCount = (id: string): number => {
     const own = productCategories.find((c) => c.id === id)?.productCount ?? 0
     const children = childrenMap.get(id) ?? []
     return own + children.reduce((sum, c) => sum + totalCount(c.id), 0)
+  }
+
+  const handleSwap = (a: AdminProductCategoryRow, b: AdminProductCategoryRow) => {
+    startTransition(async () => {
+      const { swapProductCategoryOrderAction } = await import("@/app/[locale]/admin/categories/actions")
+      const result = await swapProductCategoryOrderAction(a.id, a.orderIndex, b.id, b.orderIndex)
+      if (!result.success) {
+        toast.error("Failed to reorder")
+      } else {
+        router.refresh()
+      }
+    })
+  }
+
+  const ArrowButtons = ({ item, siblings }: { item: AdminProductCategoryRow; siblings: AdminProductCategoryRow[] }) => {
+    const idx = siblings.findIndex((s) => s.id === item.id)
+    const isFirst = idx === 0
+    const isLast = idx === siblings.length - 1
+    return (
+      <div style={{ display: "flex", gap: 2 }}>
+        <button
+          type="button"
+          disabled={isFirst}
+          onClick={() => handleSwap(item, siblings[idx - 1])}
+          style={{ background: "none", border: "none", cursor: isFirst ? "default" : "pointer", padding: 2, opacity: isFirst ? 0.2 : 0.5, transition: "opacity 0.1s" }}
+          title="Move up"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 15l-6-6-6 6" /></svg>
+        </button>
+        <button
+          type="button"
+          disabled={isLast}
+          onClick={() => handleSwap(item, siblings[idx + 1])}
+          style={{ background: "none", border: "none", cursor: isLast ? "default" : "pointer", padding: 2, opacity: isLast ? 0.2 : 0.5, transition: "opacity 0.1s" }}
+          title="Move down"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -1358,7 +1397,7 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
           <tr>
             <th>Category</th>
             <th style={{ textAlign: "right" }}>Products</th>
-            <th>Order</th>
+            <th style={{ width: 60 }}>Order</th>
           </tr>
         </thead>
         <tbody>
@@ -1401,7 +1440,7 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                       </div>
                     </td>
                     <td style={{ textAlign: "right" }}>{count > 0 ? count : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
-                    <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{parent.orderIndex}</span></td>
+                    <td><ArrowButtons item={parent} siblings={parents} /></td>
                   </tr>
                   {isExpanded && children.map((child) => {
                     const grandchildren = childrenMap.get(child.id) ?? []
@@ -1437,7 +1476,7 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                             </div>
                           </td>
                           <td style={{ textAlign: "right" }}>{childCount > 0 ? childCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
-                          <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{child.orderIndex}</span></td>
+                          <td><ArrowButtons item={child} siblings={children} /></td>
                         </tr>
                         {isChildExpanded && grandchildren.map((gc) => (
                           <tr key={gc.id}>
@@ -1448,7 +1487,7 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                               </div>
                             </td>
                             <td style={{ textAlign: "right" }}>{gc.productCount > 0 ? gc.productCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
-                            <td><span className="arco-table-secondary" style={{ marginTop: 0 }}>{gc.orderIndex}</span></td>
+                            <td><ArrowButtons item={gc} siblings={grandchildren} /></td>
                           </tr>
                         ))}
                       </Fragment>
