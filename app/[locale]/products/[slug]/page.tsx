@@ -6,6 +6,7 @@ import { requireProductsAdmin } from "@/lib/products-gate"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ProductGallery } from "@/components/product/product-gallery"
+import { ProductSubNav } from "@/components/product/product-sub-nav"
 
 export const dynamic = "force-dynamic"
 
@@ -89,6 +90,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="min-h-screen bg-white">
       <Header />
+      <ProductSubNav
+        productName={p.name}
+        brandName={p.brand?.name ?? ""}
+        imageUrl={heroPhoto?.url ?? null}
+        slug={slug}
+        hasGallery={galleryPhotos.length > 0}
+        hasSpecs={!!specs && Object.keys(specs).length > 0}
+      />
 
       {/* Breadcrumb */}
       <div className="wrap" style={{ marginTop: 100 }}>
@@ -169,7 +178,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {/* Remaining photos gallery */}
       {galleryPhotos.length > 0 && (
-        <div className="wrap" style={{ marginBottom: 60 }}>
+        <div id="gallery" className="wrap" style={{ marginBottom: 60 }}>
           <ProductGallery photos={galleryPhotos} productName={p.name} />
         </div>
       )}
@@ -216,7 +225,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {/* Specifications section */}
       {specs && Object.keys(specs).length > 0 && (
-        <div className="wrap" style={{ maxWidth: 800, marginBottom: 60 }}>
+        <div id="specs" className="wrap" style={{ maxWidth: 800, marginBottom: 60 }}>
           <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Details</h2>
           <div style={{ borderTop: "1px solid var(--rule)" }}>
             {Object.entries(specs).map(([key, value]) => (
@@ -244,7 +253,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {/* Family siblings */}
       {familySiblings.length > 0 && (
-        <div className="wrap" style={{ marginBottom: 60 }}>
+        <div id="related" className="wrap" style={{ marginBottom: 60 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 24 }}>
             <h2 className="arco-section-title">
               {p.family ? `More from ${p.family.name}` : "Related products"}
@@ -271,7 +280,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {/* Brand siblings */}
       {brandSiblings.length > 0 && (
-        <div className="wrap" style={{ marginBottom: 80 }}>
+        <div id={familySiblings.length === 0 ? "related" : undefined} className="wrap" style={{ marginBottom: 80 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 24 }}>
             <h2 className="arco-section-title">More by {p.brand?.name}</h2>
             <Link href={`/brands/${p.brand?.slug}`} className="view-all-link">View all →</Link>
