@@ -425,10 +425,10 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
     })
 
     const text = message.content[0]?.type === "text" ? message.content[0].text : ""
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error("No JSON in Claude response")
+    const claudeJson = text.match(/\{[\s\S]*\}/)
+    if (!claudeJson) throw new Error("No JSON in Claude response")
 
-    const parsed = JSON.parse(jsonMatch[0])
+    const parsed = JSON.parse(claudeJson[0])
 
     // Merge Claude-extracted variants with any swatch images found in HTML
     let variants = (parsed.variants ?? []) as Array<Record<string, any>>
