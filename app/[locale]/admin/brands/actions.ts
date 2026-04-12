@@ -251,7 +251,7 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
     return { error: "Scraping requires FIRECRAWL_API_KEY and ANTHROPIC_API_KEY." }
   }
 
-  let productData: { name: string; description: string | null; specs: Record<string, any> | null }
+  let productData: { name: string; description: string | null; specs: Record<string, any> | null; variants: Array<Record<string, any>> | null }
   let imageUrls: string[] = []
 
   try {
@@ -285,9 +285,45 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const pageText = (result.markdown ?? "").slice(0, 5000)
 
+    // Also extract color swatch images from the page
+    const colorImageUrls: { color: string; url: string }[] = []
+
+    // Look for common swatch patterns in the HTML
+    const html = result.html ?? result.rawHtml ?? ""
+
+    // Pattern: elements with color-related attributes near small images
+    // Many brand sites use data-color, data-finish, aria-label with color names
+    const swatchRegex = /(?:data-(?:color|finish|variant|option)|aria-label|title)=["']([^"']{2,30})["'][^>]*(?:background(?:-image)?:\s*url\(["']?([^"')]+)["']?\)|src=["']([^"']+)["'])/gi
+    let swatchMatch
+    while ((swatchMatch = swatchRegex.exec(html)) !== null) {
+      const color = swatchMatch[1]?.trim()
+      const imgUrl = swatchMatch[2] || swatchMatch[3]
+      if (color && imgUrl && !imgUrl.includes("data:")) {
+        try {
+          const abs = new URL(imgUrl, url.toString()).toString()
+          colorImageUrls.push({ color, url: abs })
+        } catch {}
+      }
+    }
+
+    // Reverse pattern: small images near color text
+    const swatchRegex2 = /src=["']([^"']+)["'][^>]*(?:data-(?:color|finish|variant)|aria-label|title)=["']([^"']{2,30})["']/gi
+    while ((swatchMatch = swatchRegex2.exec(html)) !== null) {
+      const imgUrl = swatchMatch[1]?.trim()
+      const color = swatchMatch[2]?.trim()
+      if (color && imgUrl && !imgUrl.includes("data:")) {
+        try {
+          const abs = new URL(imgUrl, url.toString()).toString()
+          if (!colorImageUrls.some((c) => c.color === color)) {
+            colorImageUrls.push({ color, url: abs })
+          }
+        } catch {}
+      }
+    }
+
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{
         role: "user",
         content: `Extract product info from this brand product page for an editorial directory.
@@ -302,12 +338,20 @@ Return ONLY a JSON object:
 {
   "name": "Product name (cleaned, no brand prefix unless part of the name)",
   "description": "1-2 sentence editorial description in your own words. Max 280 characters. Don't copy verbatim.",
-  "specs": { "key": "value" }
+  "specs": { "key": "value" },
+  "variants": [{"color": "color name", "hex": "#hexcode or null"}, ...]
 }
 
 specs is a flexible map of attributes (dimensions, material, finish, wattage, etc.) — only include attributes that are actually stated on the page.
 
-If the page is not a product page, return: {"name": "", "description": null, "specs": null}`,
+variants should list all color/finish/material options shown on the page. For each variant:
+- "color": the name of the color or finish (e.g. "Phantom", "Brushed Brass", "Walnut")
+- "hex": the hex color code if visible or inferrable from the name, otherwise null
+- If sizes are listed as separate options (not dimensions of one product), include them: {"color": "name", "size": "40cm"}
+
+Only include variants that are explicitly listed on the page. If no variants are shown, return "variants": [].
+
+If the page is not a product page, return: {"name": "", "description": null, "specs": null, "variants": []}`,
       }],
     })
 
@@ -316,10 +360,27 @@ If the page is not a product page, return: {"name": "", "description": null, "sp
     if (!jsonMatch) throw new Error("No JSON in Claude response")
 
     const parsed = JSON.parse(jsonMatch[0])
+
+    // Merge Claude-extracted variants with any swatch images found in HTML
+    let variants = (parsed.variants ?? []) as Array<Record<string, any>>
+    if (colorImageUrls.length > 0) {
+      for (const swatch of colorImageUrls) {
+        const existing = variants.find(
+          (v) => v.color?.toLowerCase() === swatch.color.toLowerCase()
+        )
+        if (existing) {
+          existing.image_url = swatch.url
+        } else {
+          variants.push({ color: swatch.color, hex: null, image_url: swatch.url })
+        }
+      }
+    }
+
     productData = {
       name: parsed.name ?? "",
       description: parsed.description ?? null,
       specs: parsed.specs ?? null,
+      variants: variants.length > 0 ? variants : null,
     }
   } catch (err) {
     logger.error("Product scrape failed", { url: url.toString() }, err as Error)
@@ -344,6 +405,7 @@ If the page is not a product page, return: {"name": "", "description": null, "sp
         name: productData.name,
         description: productData.description,
         specs: productData.specs,
+        variants: productData.variants,
         source_url: url.toString(),
         status: "listed",
         scraped_at: new Date().toISOString(),
