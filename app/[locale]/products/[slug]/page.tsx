@@ -234,7 +234,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
       {/* Specifications section */}
       {specs && Object.keys(specs).length > 0 && (
-        <div id="specs" className="wrap" style={{ maxWidth: 800, marginBottom: 60 }}>
+        <div id="specs" className="wrap" style={{ marginBottom: 60 }}>
           <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Details</h2>
           <div style={{ borderTop: "1px solid var(--rule)" }}>
             {Object.entries(specs).map(([key, value]) => (
