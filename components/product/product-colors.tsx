@@ -14,21 +14,43 @@ interface ProductColorsProps {
   productName: string
 }
 
+/** Strip product name prefix from color label: "Taglio tavolo dark chrome" → "dark chrome" */
+function cleanColorName(color: string, productName: string): string {
+  const lower = color.toLowerCase()
+  const productLower = productName.toLowerCase()
+  // Try removing full product name prefix
+  if (lower.startsWith(productLower)) {
+    const cleaned = color.slice(productName.length).replace(/^[\s\-–—·]+/, "").trim()
+    if (cleaned.length > 0) return cleaned
+  }
+  // Try removing each word of the product name from the start
+  const productWords = productLower.split(/\s+/)
+  let result = lower
+  for (const word of productWords) {
+    if (result.startsWith(word)) {
+      result = result.slice(word.length).replace(/^[\s\-–—·]+/, "")
+    } else {
+      break
+    }
+  }
+  return result.trim() || color
+}
+
 export function ProductColors({ variants, productName }: ProductColorsProps) {
   // Deduplicate by color name, prefer variants with images
   const uniqueVariants = useMemo(() => {
-    const seen = new Map<string, ColorVariant>()
+    const seen = new Map<string, ColorVariant & { cleanName: string }>()
     for (const v of variants) {
-      const key = v.color.toLowerCase()
+      const cleanName = cleanColorName(v.color, productName)
+      const key = cleanName.toLowerCase()
       const existing = seen.get(key)
       if (!existing || (!existing.image_url && v.image_url)) {
-        seen.set(key, v)
+        seen.set(key, { ...v, cleanName })
       }
     }
     return [...seen.values()]
-  }, [variants])
+  }, [variants, productName])
 
-  // Only show clickable variants (ones with images)
   const clickableVariants = uniqueVariants.filter((v) => v.image_url)
   const hasImages = clickableVariants.length > 0
 
@@ -36,9 +58,9 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
   const activeVariant = hasImages ? clickableVariants[activeIndex] : null
 
   return (
-    <div style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>
-      {/* Color dots — left column */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+    <div>
+      {/* Color dots — horizontal row */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: hasImages ? 20 : 0 }}>
         {clickableVariants.map((v, i) => {
           const colorHex = v.hex ?? v.color_hex ?? null
           const isActive = activeIndex === i
@@ -47,16 +69,9 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
             <button
               key={i}
               type="button"
+              className="product-color-swatch"
               onClick={() => setActiveIndex(i)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "4px 0",
-              }}
+              style={{ cursor: "pointer" }}
             >
               <div
                 className="product-color-dot"
@@ -72,25 +87,22 @@ export function ProductColors({ variants, productName }: ProductColorsProps) {
               />
               <span
                 className="product-color-label"
-                style={{
-                  color: isActive ? "var(--text-primary)" : undefined,
-                  whiteSpace: "nowrap",
-                }}
+                style={{ color: isActive ? "var(--text-primary)" : undefined }}
               >
-                {v.color}
+                {v.cleanName}
               </span>
             </button>
           )
         })}
       </div>
 
-      {/* Active variant image — right */}
+      {/* Active variant image — constrained width */}
       {activeVariant?.image_url && (
-        <div style={{ flex: 1, borderRadius: 4, overflow: "hidden", minWidth: 0 }}>
+        <div style={{ borderRadius: 4, overflow: "hidden", maxWidth: 360 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={activeVariant.image_url}
-            alt={`${productName} — ${activeVariant.color}`}
+            alt={`${productName} — ${activeVariant.cleanName}`}
             style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", display: "block" }}
           />
         </div>
