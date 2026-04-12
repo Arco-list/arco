@@ -13,13 +13,24 @@ interface ProductGalleryProps {
   productName: string
 }
 
+type Orientation = "landscape" | "portrait" | "square"
+
+function detectOrientation(w: number, h: number): Orientation {
+  const ratio = w / h
+  if (ratio > 1.15) return "landscape"
+  if (ratio < 0.85) return "portrait"
+  return "square"
+}
+
 export function ProductGallery({ photos, productName }: ProductGalleryProps) {
-  const [orientations, setOrientations] = useState<Record<string, "landscape" | "portrait">>({})
+  const [orientations, setOrientations] = useState<Record<string, Orientation>>({})
 
   const handleLoad = useCallback((id: string, e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget
-    const orientation = img.naturalHeight > img.naturalWidth ? "portrait" : "landscape"
-    setOrientations((prev) => ({ ...prev, [id]: orientation }))
+    setOrientations((prev) => ({
+      ...prev,
+      [id]: detectOrientation(img.naturalWidth, img.naturalHeight),
+    }))
   }, [])
 
   return (
@@ -29,6 +40,7 @@ export function ProductGallery({ photos, productName }: ProductGalleryProps) {
           key={photo.id}
           className="product-gallery-item"
           data-orientation={orientations[photo.id] ?? "landscape"}
+          data-featured={i === 0 ? "true" : undefined}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
