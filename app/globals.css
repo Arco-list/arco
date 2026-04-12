@@ -5830,20 +5830,32 @@ body.no-scroll {
    ═══════════════════════════════════════════════════════ */
 
 .product-gallery {
-  columns: 3;
-  column-gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .product-gallery-item {
-  break-inside: avoid;
-  margin-bottom: 8px;
   border-radius: 3px;
   overflow: hidden;
+  position: relative;
+}
+
+/* Default: landscape 4:3 */
+.product-gallery-item {
+  aspect-ratio: 4 / 3;
+}
+
+/* Portrait: 3:4 — detected via data attribute set by the component */
+.product-gallery-item[data-orientation="portrait"] {
+  aspect-ratio: 3 / 4;
+  grid-row: span 2;
 }
 
 .product-gallery-img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 

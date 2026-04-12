@@ -5,6 +5,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { requireProductsAdmin } from "@/lib/products-gate"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { ProductGallery } from "@/components/product/product-gallery"
 
 export const dynamic = "force-dynamic"
 
@@ -159,24 +160,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         )}
       </div>
 
-      {/* Photo gallery — masonry columns, full wrap width, preserves orientation */}
+      {/* Photo gallery — grid with consistent aspect ratios per orientation */}
       {photos.length > 0 && (
         <div className="wrap" style={{ marginBottom: 60 }}>
-          <div className="product-gallery">
-            {photos.map((photo: any, i: number) => (
-              <div key={photo.id} className="product-gallery-item">
-                <Image
-                  src={photo.url}
-                  alt={photo.alt_text ?? p.name}
-                  width={800}
-                  height={600}
-                  className="product-gallery-img"
-                  priority={i === 0}
-                  sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 33vw"
-                />
-              </div>
-            ))}
-          </div>
+          <ProductGallery photos={photos} productName={p.name} />
         </div>
       )}
 
