@@ -27,21 +27,17 @@ interface ProductHeroProps {
   variants: Variant[]
 }
 
-/** Strip product name prefix from variant label */
+/** Strip product name words from variant label (order-independent) */
 function cleanLabel(label: string, productName: string): string {
-  const lower = label.toLowerCase()
-  const productLower = productName.toLowerCase()
-  if (lower.startsWith(productLower)) {
-    const cleaned = label.slice(productName.length).replace(/^[\s\-–—·]+/, "").trim()
-    if (cleaned.length > 0) return cleaned
+  const productWords = new Set(productName.toLowerCase().split(/\s+/))
+  // Remove any leading words that appear in the product name
+  const labelWords = label.split(/[\s\-–—]+/)
+  let startIdx = 0
+  while (startIdx < labelWords.length && productWords.has(labelWords[startIdx].toLowerCase())) {
+    startIdx++
   }
-  const words = productLower.split(/\s+/)
-  let result = lower
-  for (const word of words) {
-    if (result.startsWith(word)) result = result.slice(word.length).replace(/^[\s\-–—·]+/, "")
-    else break
-  }
-  return result.trim() || label
+  const cleaned = labelWords.slice(startIdx).join(" ").trim()
+  return cleaned.length > 0 ? cleaned : label
 }
 
 export function ProductHero({ name, description, brand, heroImageUrl, variants }: ProductHeroProps) {
@@ -50,9 +46,20 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
     const seen = new Map<string, Variant>()
     for (const v of variants.filter((v) => v.color)) {
       const key = cleanLabel(v.color!, name).toLowerCase()
-      if (!seen.has(key) || (!seen.get(key)!.image_url && v.image_url)) seen.set(key, v)
+      const existing = seen.get(key)
+      if (!existing) {
+        seen.set(key, v)
+      } else {
+        // Merge: keep image_url and hex from whichever has them
+        seen.set(key, {
+          ...existing,
+          image_url: existing.image_url || v.image_url,
+          hex: existing.hex || v.hex,
+          color_hex: existing.color_hex || v.color_hex,
+        })
+      }
     }
-    return [...seen.entries()].map(([key, v]) => ({ ...v, label: cleanLabel(v.color!, name) }))
+    return [...seen.entries()].map(([, v]) => ({ ...v, label: cleanLabel(v.color!, name) }))
   }, [variants, name])
 
   const materials = useMemo(() => {
