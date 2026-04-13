@@ -155,8 +155,8 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
                         <Link href={`/admin/brands/${brand.id}`} className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors">
                           {brand.name}
                         </Link>
-                        {brand.description && (
-                          <div className="arco-table-secondary">{brand.description}</div>
+                        {brand.country && (
+                          <div className="arco-table-secondary">{brand.country}</div>
                         )}
                       </div>
                     </div>
