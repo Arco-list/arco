@@ -179,13 +179,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
         // Group definitions with keyword matching
         const groups: { label: string; keys: Set<string> }[] = [
-          { label: "Dimensions", keys: new Set(["width", "height", "depth", "diameter", "length", "weight", "seat_height", "sizes", "dimensions", "size"]) },
-          { label: "Specifications", keys: new Set(["wattage", "lumens", "voltage", "led", "light_direction", "color_temperature", "flow_rate", "power", "ip_rating", "type", "product_type"]) },
-          { label: "Features", keys: new Set(["control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable", "custom_colors", "available_colors", "color_options"]) },
-          { label: "Materials", keys: new Set(["frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base", "finish_process"]) },
+          { label: "Dimensions", keys: ["width", "height", "depth", "diameter", "length", "weight", "seat_height", "sizes", "dimensions", "size", "canopy", "suspension_length"] },
+          { label: "Specifications", keys: ["wattage", "lumens", "luminous_flux", "voltage", "led", "light_direction", "color_temperature", "flow_rate", "power", "ip_rating", "type", "product_type", "cri", "energy_class"] },
+          { label: "Features", keys: ["control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable", "custom_colors", "available_colors", "color_options", "mounting"] },
+          { label: "Materials", keys: ["frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base", "finish_process"] },
         ]
 
         const specEntries = Object.entries(specs).filter(([k]) => !barKeys.has(k.toLowerCase()))
+
+        // Match by prefix: "diameter_40" matches "diameter", "power_60" matches "power"
+        const matchesGroup = (key: string, groupKeys: string[]) => {
+          const lower = key.toLowerCase()
+          return groupKeys.some((gk) => lower === gk || lower.startsWith(gk + "_"))
+        }
 
         const grouped: { label: string; entries: [string, any][] }[] = []
         const used = new Set<string>()
@@ -193,7 +199,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         for (const group of groups) {
           const entries = specEntries.filter(([k]) => {
             const lower = k.toLowerCase()
-            return group.keys.has(lower) && !used.has(lower)
+            return matchesGroup(lower, group.keys) && !used.has(lower)
           })
           if (entries.length > 0) {
             entries.forEach(([k]) => used.add(k.toLowerCase()))

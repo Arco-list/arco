@@ -274,7 +274,29 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
       return { error: "Could not fetch product page." }
     }
 
-    // Extract images from markdown
+    // Try to also fetch a specifications/technical details sub-page
+    let specsPageText = ""
+    const specsUrls = [
+      url.toString().replace(/\/?$/, "/specifications"),
+      url.toString().replace(/\/?$/, "/technical"),
+      url.toString().replace(/\/?$/, "/specs"),
+    ]
+    for (const specsUrl of specsUrls) {
+      try {
+        const specsResult = await firecrawl.scrape(specsUrl, {
+          formats: ["markdown"],
+          timeout: 20000,
+          waitFor: 5000,
+        }) as any
+        if (specsResult?.markdown && specsResult.markdown.length > 200) {
+          specsPageText = specsResult.markdown.slice(0, 4000)
+          console.log(`[scrape] Found specs sub-page at ${specsUrl} (${specsPageText.length} chars)`)
+          break
+        }
+      } catch {}
+    }
+
+    // Extract images from markdown — exclude color_picker images
     const imgRegex = /!\[[^\]]*\]\(([^)]+)\)/g
     let match
     const seen = new Set<string>()
@@ -284,6 +306,8 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
         if (seen.has(abs)) continue
         if (/\.(svg|ico|gif)(\?|$)/i.test(abs)) continue
         if (/logo|icon|favicon|sprite/i.test(abs)) continue
+        // Skip color picker images — these belong in variants, not gallery
+        if (/color[_-]?picker|swatch|surface/i.test(abs)) continue
         seen.add(abs)
         imageUrls.push(abs)
       } catch {}
@@ -291,7 +315,10 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
     imageUrls = imageUrls.slice(0, 15)
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const pageText = (result.markdown ?? "").slice(0, 5000)
+    const mainPageText = (result.markdown ?? "").slice(0, 5000)
+    const pageText = specsPageText
+      ? `${mainPageText}\n\n--- SPECIFICATIONS TAB ---\n${specsPageText}`
+      : mainPageText
 
     // Also extract color swatch images from the page
     const colorImageUrls: { color: string; url: string }[] = []
@@ -412,32 +439,28 @@ category_slug: pick the MOST SPECIFIC matching category from this list:
 ${categoryList}
 If none match well, return null.
 
-specs is a structured map with these groups. Only include keys where data is on the page:
+specs should capture ALL technical details from the page, including any specifications tab/section. Use lowercase snake_case keys. Group by:
 
-"designer": designer name (e.g. "Marcel Wanders")
-"year": year designed or launched (e.g. "2006")
+"designer": designer name
+"year": year designed or launched
 
-Dimensions (use these exact keys):
-"width", "height", "depth", "diameter", "length", "weight", "seat_height"
+Dimensions: "width", "height", "depth", "diameter", "length", "weight", "seat_height", "canopy_diameter", "suspension_length"
 
-Specifications (technical/performance):
-"wattage", "lumens", "voltage", "led", "light_direction", "color_temperature", "flow_rate", "power", "ip_rating"
+Specifications: "wattage", "power", "lumens", "luminous_flux", "voltage", "color_temperature", "cri", "energy_class", "ip_rating", "led"
 
-Features (capabilities):
-"control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable"
+Features: "control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable", "mounting_types"
 
-Materials (construction):
-"frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base"
+Materials: "frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base"
 
-Use lowercase snake_case keys. Include any other relevant attributes not listed above.
+Include ALL measurements for ALL available sizes. If there are multiple sizes (e.g. 40cm and 60cm), include specs for each like: "diameter_40": "ø 400 mm", "diameter_60": "ø 600 mm", "power_40": "40W", "power_60": "60W".
 
-variants should list all options shown on the page. Each variant can have any combination of:
+variants should list ALL options shown on the page. Each variant can have:
 - "color": color or finish name (e.g. "Phantom", "Brushed Brass") — for finish/color options
 - "hex": hex color code if visible or inferrable, otherwise null
 - "material": material name (e.g. "Walnut", "Leather", "Marble") — for material options
-- "size": size label (e.g. "40cm", "2-seater", "Large") — for size options
+- "size": size label (e.g. "40cm", "60cm", "2-seater") — for size/model options
 
-Use "color" for surface finishes and paint colors. Use "material" for wood, stone, fabric, metal types. Use "size" for dimensional variants.
+IMPORTANT: Include ALL available sizes as separate size variants. If a product comes in 40cm and 60cm, include BOTH: {"size": "40cm"}, {"size": "60cm"}. List every color AND every size separately.
 
 Only include variants that are explicitly listed on the page. If no variants are shown, return "variants": [].
 
