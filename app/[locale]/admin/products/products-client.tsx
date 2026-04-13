@@ -188,6 +188,7 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
               </th>
               <th>Product</th>
               <th>Brand</th>
+              <th>Family</th>
               <th>Category</th>
               <th>Status</th>
               <th style={{ textAlign: "right" }}>Photos</th>
@@ -198,7 +199,7 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={9} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   {isFiltered ? "No products match your filters." : "No products yet. Scrape products from a brand page in /admin/brands."}
                 </td>
               </tr>
@@ -245,6 +246,7 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
                         <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
                       )}
                     </td>
+                    <td>{product.family?.name ?? <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>}</td>
                     <td>{product.category?.name ?? <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>}</td>
                     <td>
                       <span className="arco-table-status">

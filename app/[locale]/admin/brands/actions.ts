@@ -259,7 +259,7 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
   const leafCategories = (allCategories ?? []).filter((c: any) => c.parent_id !== null)
   const categoryList = leafCategories.map((c: any) => `${c.slug}: ${c.name}`).join(", ")
 
-  let productData: { name: string; description: string | null; specs: Record<string, any> | null; variants: Array<Record<string, any>> | null; category_slug: string | null }
+  let productData: { name: string; description: string | null; specs: Record<string, any> | null; variants: Array<Record<string, any>> | null; category_slug: string | null; family: string | null }
   let imageUrls: string[] = []
 
   try {
@@ -401,6 +401,7 @@ ${pageText}
 Return ONLY a JSON object:
 {
   "name": "Product name (cleaned, no brand prefix unless part of the name)",
+  "family": "Product family/collection name or null. E.g. for 'Più R alto v' the family is 'Più'. For 'Mito sospeso' the family is 'Mito'. Extract the shared series name that groups related products.",
   "description": "1-2 sentence editorial description in your own words. Max 280 characters. Don't copy verbatim.",
   "category_slug": "slug from the list below, or null if unclear",
   "specs": { "key": "value" },
@@ -454,6 +455,7 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
       specs: parsed.specs ?? null,
       variants: variants.length > 0 ? variants : null,
       category_slug: parsed.category_slug ?? null,
+      family: parsed.family ?? null,
     }
   } catch (err) {
     logger.error("Product scrape failed", { url: url.toString() }, err as Error)
@@ -471,6 +473,34 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
     if (match) categoryId = match.id
   }
 
+  // Resolve or create product family
+  let familyId: string | null = null
+  if (productData.family) {
+    const familySlug = slugify(productData.family)
+    // Try to find existing family for this brand
+    const { data: existingFamily } = await supabase
+      .from("product_families")
+      .select("id")
+      .eq("brand_id", brand.id)
+      .eq("slug", familySlug)
+      .maybeSingle()
+
+    if (existingFamily) {
+      familyId = existingFamily.id
+    } else {
+      const { data: newFamily } = await supabase
+        .from("product_families")
+        .insert({
+          brand_id: brand.id,
+          slug: familySlug,
+          name: productData.family,
+        })
+        .select("id")
+        .single()
+      if (newFamily) familyId = newFamily.id
+    }
+  }
+
   const slug = `${slugify(brand.name)}-${slugify(productData.name)}`
   let finalSlug = slug
   let attempts = 0
@@ -482,6 +512,7 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
       .insert({
         slug: finalSlug,
         brand_id: brand.id,
+        family_id: familyId,
         category_id: categoryId,
         name: productData.name,
         description: productData.description,
