@@ -1,9 +1,12 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
+import { toast } from "sonner"
 import { MoreHorizontal } from "lucide-react"
+import { deleteProduct, deleteProducts } from "@/app/admin/brands/actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,11 +42,40 @@ interface Props {
 }
 
 export function ProductsClient({ initialProducts, brandOptions, categoryOptions }: Props) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState("")
   const [brandFilter, setBrandFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  const handleDeleteOne = (id: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+    startTransition(async () => {
+      const result = await deleteProduct(id)
+      if ("error" in result) {
+        toast.error(result.error)
+      } else {
+        toast.success("Product deleted")
+        router.refresh()
+      }
+    })
+  }
+
+  const handleDeleteSelected = () => {
+    if (!confirm(`Delete ${selected.size} products? This cannot be undone.`)) return
+    startTransition(async () => {
+      const result = await deleteProducts([...selected])
+      if ("error" in result) {
+        toast.error(result.error)
+      } else {
+        toast.success(`Deleted ${result.deleted} products`)
+        setSelected(new Set())
+        router.refresh()
+      }
+    })
+  }
 
   const filtered = useMemo(() => {
     return initialProducts.filter((p) => {
@@ -170,6 +202,15 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
             >
               Deselect all
             </button>
+            <button
+              type="button"
+              className="btn-tertiary"
+              style={{ fontSize: 12, padding: "4px 12px", color: "var(--destructive)" }}
+              onClick={handleDeleteSelected}
+              disabled={isPending}
+            >
+              {isPending ? "Deleting…" : `Delete ${selected.size}`}
+            </button>
           </div>
         </div>
       )}
@@ -275,6 +316,12 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
                               <a href={product.source_url} target="_blank" rel="noopener noreferrer">View source URL</a>
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteOne(product.id, product.name)}
+                            className="text-red-600"
+                          >
+                            Delete product
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>

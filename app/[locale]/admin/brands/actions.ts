@@ -595,6 +595,38 @@ export async function deleteBrand(brandId: string): Promise<{ ok: true } | { err
   return { ok: true }
 }
 
+/**
+ * Delete a single product and its photos (cascade).
+ */
+export async function deleteProduct(productId: string): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error } = await supabase.from("products").delete().eq("id", productId)
+  if (error) return { error: error.message }
+
+  revalidatePath("/admin/products")
+  return { ok: true }
+}
+
+/**
+ * Delete multiple products and their photos (cascade).
+ */
+export async function deleteProducts(productIds: string[]): Promise<{ ok: true; deleted: number } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  if (productIds.length === 0) return { ok: true, deleted: 0 }
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error } = await supabase.from("products").delete().in("id", productIds)
+  if (error) return { error: error.message }
+
+  revalidatePath("/admin/products")
+  return { ok: true, deleted: productIds.length }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Catalog discovery — scrape a products/collection page and extract
 // all product links for selective batch-scraping.
