@@ -412,10 +412,24 @@ category_slug: pick the MOST SPECIFIC matching category from this list:
 ${categoryList}
 If none match well, return null.
 
-specs is a flexible map of attributes. Always include these keys if the information is on the page:
-- "designer": name of the designer (e.g. "Marcel Wanders", "Patricia Urquiola")
-- "year": year the product was designed or launched (e.g. "2006")
-Also include other attributes like dimensions, material, finish, wattage, etc.
+specs is a structured map with these groups. Only include keys where data is on the page:
+
+"designer": designer name (e.g. "Marcel Wanders")
+"year": year designed or launched (e.g. "2006")
+
+Dimensions (use these exact keys):
+"width", "height", "depth", "diameter", "length", "weight", "seat_height"
+
+Specifications (technical/performance):
+"wattage", "lumens", "voltage", "led", "light_direction", "color_temperature", "flow_rate", "power", "ip_rating"
+
+Features (capabilities):
+"control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable"
+
+Materials (construction):
+"frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base"
+
+Use lowercase snake_case keys. Include any other relevant attributes not listed above.
 
 variants should list all options shown on the page. Each variant can have any combination of:
 - "color": color or finish name (e.g. "Phantom", "Brushed Brass") — for finish/color options

@@ -172,33 +172,79 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      {/* Specifications section */}
-      {specs && Object.keys(specs).length > 0 && (
-        <div id="specs" className="wrap" style={{ marginBottom: 60 }}>
-          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Details</h2>
-          <div style={{ borderTop: "1px solid var(--rule)" }}>
-            {Object.entries(specs).map(([key, value]) => (
-              <div
-                key={key}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                  padding: "14px 0",
-                  borderBottom: "1px solid var(--rule)",
-                }}
-              >
-                <span className="arco-small-text" style={{ color: "var(--text-disabled)", textTransform: "capitalize" }}>
-                  {key.replace(/_/g, " ")}
-                </span>
-                <span className="arco-small-text" style={{ color: "var(--text-primary)", textAlign: "right" }}>
-                  {String(value)}
-                </span>
-              </div>
-            ))}
+      {/* Specifications section — auto-grouped */}
+      {specs && Object.keys(specs).length > 0 && (() => {
+        // Keys already shown in the details bar
+        const barKeys = new Set(["designer", "year"])
+
+        // Group definitions with keyword matching
+        const groups: { label: string; keys: Set<string> }[] = [
+          { label: "Dimensions", keys: new Set(["width", "height", "depth", "diameter", "length", "weight", "seat_height", "sizes", "dimensions", "size"]) },
+          { label: "Specifications", keys: new Set(["wattage", "lumens", "voltage", "led", "light_direction", "color_temperature", "flow_rate", "power", "ip_rating", "type", "product_type"]) },
+          { label: "Features", keys: new Set(["control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable", "custom_colors", "available_colors", "color_options"]) },
+          { label: "Materials", keys: new Set(["frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base", "finish_process"]) },
+        ]
+
+        const specEntries = Object.entries(specs).filter(([k]) => !barKeys.has(k.toLowerCase()))
+
+        const grouped: { label: string; entries: [string, any][] }[] = []
+        const used = new Set<string>()
+
+        for (const group of groups) {
+          const entries = specEntries.filter(([k]) => {
+            const lower = k.toLowerCase()
+            return group.keys.has(lower) && !used.has(lower)
+          })
+          if (entries.length > 0) {
+            entries.forEach(([k]) => used.add(k.toLowerCase()))
+            grouped.push({ label: group.label, entries })
+          }
+        }
+
+        // Remaining ungrouped specs
+        const remaining = specEntries.filter(([k]) => !used.has(k.toLowerCase()))
+        if (remaining.length > 0) {
+          grouped.push({ label: "Other", entries: remaining })
+        }
+
+        if (grouped.length === 0) return null
+
+        const renderRow = ([key, value]: [string, any]) => (
+          <div
+            key={key}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              padding: "12px 0",
+              borderBottom: "1px solid var(--rule)",
+            }}
+          >
+            <span className="arco-small-text" style={{ color: "var(--text-disabled)", textTransform: "capitalize" }}>
+              {key.replace(/_/g, " ")}
+            </span>
+            <span className="arco-small-text" style={{ color: "var(--text-primary)", textAlign: "right", maxWidth: "60%" }}>
+              {String(value)}
+            </span>
           </div>
-        </div>
-      )}
+        )
+
+        return (
+          <div id="specs" className="wrap" style={{ marginBottom: 60 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 32 }}>Details</h2>
+            <div style={{ display: "grid", gridTemplateColumns: grouped.length > 1 ? "1fr 1fr" : "1fr", gap: "40px 48px" }}>
+              {grouped.map((group) => (
+                <div key={group.label}>
+                  <h4 className="arco-label" style={{ marginBottom: 12 }}>{group.label}</h4>
+                  <div style={{ borderTop: "1px solid var(--rule)" }}>
+                    {group.entries.map(renderRow)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Family siblings */}
       {familySiblings.length > 0 && (
