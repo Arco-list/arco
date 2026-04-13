@@ -134,7 +134,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           {p.family && (
             <>
               <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
-              <span className="discover-breadcrumb-item">{p.family.name}</span>
+              <Link href={`/products/${p.brand?.slug ?? brandSlug}`} className="discover-breadcrumb-item">{p.family.name}</Link>
             </>
           )}
           <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
