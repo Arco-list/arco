@@ -412,7 +412,10 @@ category_slug: pick the MOST SPECIFIC matching category from this list:
 ${categoryList}
 If none match well, return null.
 
-specs is a flexible map of attributes (dimensions, material, finish, wattage, etc.) — only include attributes that are actually stated on the page.
+specs is a flexible map of attributes. Always include these keys if the information is on the page:
+- "designer": name of the designer (e.g. "Marcel Wanders", "Patricia Urquiola")
+- "year": year the product was designed or launched (e.g. "2006")
+Also include other attributes like dimensions, material, finish, wattage, etc.
 
 variants should list all options shown on the page. Each variant can have any combination of:
 - "color": color or finish name (e.g. "Phantom", "Brushed Brass") — for finish/color options

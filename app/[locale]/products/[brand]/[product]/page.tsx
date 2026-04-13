@@ -39,10 +39,22 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const specs = p.specs as Record<string, any> | null
 
+  // Extract designer and year from specs (case-insensitive key lookup)
+  const specVal = (key: string) => {
+    if (!specs) return null
+    const lower = key.toLowerCase()
+    for (const [k, v] of Object.entries(specs)) {
+      if (k.toLowerCase() === lower && v) return String(v)
+    }
+    return null
+  }
+
   // Details bar items
   const detailsBar = [
-    { label: "Collection", value: p.family?.name ?? null },
     { label: "Category", value: (p.category as any)?.name ?? null },
+    { label: "Collection", value: p.family?.name ?? null },
+    { label: "Designer", value: specVal("designer") },
+    { label: "Year", value: specVal("year") },
     { label: "Brand", value: p.brand?.name ?? null },
     { label: "Country", value: p.brand?.country ?? null },
   ].filter((d) => d.value)
