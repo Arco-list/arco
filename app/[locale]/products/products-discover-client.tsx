@@ -17,6 +17,7 @@ interface Props {
 export function ProductsDiscoverClient({ initialProducts, brands, categories, initialBrandSlug }: Props) {
   const initialBrandId = initialBrandSlug ? brands.find((b) => b.slug === initialBrandSlug)?.id : undefined
   const [selectedBrands, setSelectedBrands] = useState<Set<string>>(initialBrandId ? new Set([initialBrandId]) : new Set())
+  const [selectedFamily, setSelectedFamily] = useState<string | null>(null)
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
   const [showAllBrands, setShowAllBrands] = useState(false)
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false)
@@ -44,6 +45,9 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
     if (selectedBrands.size > 0) {
       result = result.filter((p) => selectedBrands.has(p.brandId))
     }
+    if (selectedFamily) {
+      result = result.filter((p) => p.familyId === selectedFamily)
+    }
     if (selectedCategories.size > 0) {
       const matchIds = new Set<string>()
       for (const id of selectedCategories) {
@@ -52,7 +56,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
       result = result.filter((p) => p.categoryId && matchIds.has(p.categoryId))
     }
     return result
-  }, [initialProducts, selectedBrands, selectedCategories, categories])
+  }, [initialProducts, selectedBrands, selectedFamily, selectedCategories, categories])
 
   const toggleBrand = (id: string) => {
     setSelectedBrands((prev) => {
@@ -61,6 +65,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
       else next.add(id)
       return next
     })
+    setSelectedFamily(null) // reset family when brand changes
   }
 
   const toggleCategory = (id: string) => {
@@ -82,6 +87,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
 
   const clearAll = () => {
     setSelectedBrands(new Set())
+    setSelectedFamily(null)
     setSelectedCategories(new Set())
   }
 
@@ -273,19 +279,28 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
         <div className="wrap" style={{ paddingBottom: 8 }}>
           <h4 className="arco-label" style={{ marginBottom: 16 }}>Collections</h4>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 32 }}>
-            {brandFamilies.map((f) => (
-              <div key={f.id} className="credit-card" style={{ width: 100, padding: 0 }}>
-                <div className="credit-icon">
-                  {f.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={f.imageUrl} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <span className="credit-icon-initials">{f.name.charAt(0).toUpperCase()}</span>
-                  )}
-                </div>
-                <h3 className="arco-label">{f.name}</h3>
-              </div>
-            ))}
+            {brandFamilies.map((f) => {
+              const isActive = selectedFamily === f.id
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setSelectedFamily(isActive ? null : f.id)}
+                  className="credit-card"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100, opacity: selectedFamily && !isActive ? 0.4 : 1, transition: "opacity 0.15s" }}
+                >
+                  <div className="credit-icon" style={{ border: isActive ? "2px solid var(--arco-black)" : "2px solid transparent" }}>
+                    {f.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.imageUrl} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <span className="credit-icon-initials">{f.name.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <h3 className="arco-label">{f.name}</h3>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
