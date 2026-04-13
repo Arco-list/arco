@@ -124,7 +124,7 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
         {/* Brand */}
         {brand && (
           <Link href={`/products/${brand.slug}`} style={{ display: "block", marginBottom: 24, textDecoration: "none", color: "inherit" }}>
-            <div className="company-icon">
+            <div className="company-icon" style={{ justifyContent: "flex-start" }}>
               {brand.logo_url ? (
                 <Image src={brand.logo_url} alt={brand.name} width={100} height={100} className="company-icon-image" />
               ) : (
