@@ -1779,6 +1779,9 @@ export default function ListingEditorPage() {
     }
   }
 
+  const [showLowResWarning, setShowLowResWarning] = useState(false)
+  const [lowResCount, setLowResCount] = useState(0)
+
   const handleShowSubmitReview = () => {
     if (!projectId || isSubmittingForReview) return
 
@@ -1787,10 +1790,9 @@ export default function ListingEditorPage() {
       (p) => p.width != null && p.height != null && (p.width < 1600 || p.height < 800)
     )
     if (lowResPhotos.length > 0) {
-      const proceed = confirm(
-        `${lowResPhotos.length} photo${lowResPhotos.length > 1 ? "s are" : " is"} below the recommended resolution (1600 × 800px). Low-resolution images may be rejected during review.\n\nSubmit anyway?`
-      )
-      if (!proceed) return
+      setLowResCount(lowResPhotos.length)
+      setShowLowResWarning(true)
+      return
     }
 
     setHighlightMissingFields(false)
@@ -5695,6 +5697,46 @@ export default function ListingEditorPage() {
       )}
 
       {/* ── Submit for review popup ──────────────────────────── */}
+      {/* Low resolution warning popup */}
+      {showLowResWarning && (
+        <div className="popup-overlay" onClick={() => setShowLowResWarning(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Low resolution photos</h3>
+              <button type="button" className="popup-close" onClick={() => setShowLowResWarning(false)} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ marginBottom: 8 }}>
+              {lowResCount} photo{lowResCount > 1 ? "s are" : " is"} below the recommended resolution (1600 × 800px).
+            </p>
+            <p className="arco-small-text" style={{ marginBottom: 24 }}>
+              Low-resolution images may be rejected during review. Photos marked with a &quot;Low res&quot; badge should be replaced with higher quality versions.
+            </p>
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                style={{ flex: 1 }}
+                onClick={() => setShowLowResWarning(false)}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  setShowLowResWarning(false)
+                  setHighlightMissingFields(false)
+                  setShowSubmitReviewPopup(true)
+                }}
+              >
+                Submit anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSubmitReviewPopup && (() => {
         const title = detailsForm.projectTitle?.trim()
         const desc = descriptionPlainText?.trim()
