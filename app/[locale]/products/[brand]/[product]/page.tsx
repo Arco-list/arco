@@ -55,8 +55,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     { label: "Collection", value: p.family?.name ?? null },
     { label: "Designer", value: specVal("designer") },
     { label: "Year", value: specVal("year") },
-    { label: "Brand", value: p.brand?.name ?? null },
-    { label: "Country", value: p.brand?.country ?? null },
   ].filter((d) => d.value)
 
   // Sibling products in the same family
