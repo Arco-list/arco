@@ -123,7 +123,7 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
       <div className="product-hero-info">
         {/* Brand */}
         {brand && (
-          <Link href={`/brands/${brand.slug}`} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, textDecoration: "none", color: "inherit" }}>
+          <Link href={`/products/${brand.slug}`} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, textDecoration: "none", color: "inherit" }}>
             {brand.logo_url ? (
               <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
                 <Image src={brand.logo_url} alt={brand.name} width={40} height={40} style={{ width: "100%", height: "100%", objectFit: "cover" }} />

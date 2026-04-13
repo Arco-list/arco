@@ -268,7 +268,7 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
                             <Link href={`/admin/products/${product.id}`}>View product</Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
-                            <Link href={`/products/${product.slug}`} target="_blank">Open public page</Link>
+                            <Link href={`/products/${product.brand?.slug ?? "_"}/${product.slug}`} target="_blank">Open public page</Link>
                           </DropdownMenuItem>
                           {product.source_url && (
                             <DropdownMenuItem asChild>

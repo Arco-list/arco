@@ -12,7 +12,7 @@ export type AdminProductRow = {
   source_url: string | null
   scraped_at: string | null
   created_at: string
-  brand: { id: string; name: string; logo_url: string | null } | null
+  brand: { id: string; slug: string; name: string; logo_url: string | null } | null
   family: { name: string } | null
   category: { name: string } | null
   primary_photo: string | null
@@ -26,7 +26,7 @@ export default async function AdminProductsPage() {
     .from("products")
     .select(`
       id, slug, name, description, status, source_url, scraped_at, created_at,
-      brand:brands(id, name, logo_url),
+      brand:brands(id, slug, name, logo_url),
       family:product_families(name),
       category:product_categories(name),
       product_photos(url, is_primary)

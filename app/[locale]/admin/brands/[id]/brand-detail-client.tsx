@@ -281,7 +281,7 @@ export function BrandDetailClient({ brand, products }: { brand: Brand; products:
           {products.map((product) => {
             const primary = product.product_photos.find((p) => p.is_primary) ?? product.product_photos[0]
             return (
-              <Link key={product.id} href={`/products/${product.slug}`} className="discover-card">
+              <Link key={product.id} href={`/products/${brand.slug}/${product.slug}`} className="discover-card">
                 <div className="discover-card-image-wrap">
                   {primary ? (
                     <div className="discover-card-image-layer">

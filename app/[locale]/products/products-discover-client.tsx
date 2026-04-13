@@ -259,12 +259,11 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
         <div className="wrap" style={{ paddingBottom: 8 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "flex-start" }}>
             {visibleBrands.map((brand) => (
-              <button
+              <Link
                 key={brand.id}
-                type="button"
-                onClick={() => setSelectedBrand(brand.id)}
+                href={`/products/${brand.slug}`}
                 className="credit-card"
-                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100 }}
+                style={{ padding: 0, width: 100 }}
               >
                 <div className="credit-icon">
                   {brand.logoUrl ? (
@@ -274,7 +273,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
                   )}
                 </div>
                 <h3 className="arco-label">{brand.name}</h3>
-              </button>
+              </Link>
             ))}
             {!showAllBrands && brands.length > BRAND_INITIAL_SHOW && (
               <button
@@ -312,7 +311,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories }: 
               </div>
               <div className="discover-grid">
                 {filtered.map((product) => (
-                  <Link key={product.id} href={`/products/${product.slug}`} className="discover-card">
+                  <Link key={product.id} href={`/products/${product.brandSlug}/${product.slug}`} className="discover-card">
                     <div className="discover-card-image-wrap">
                       {product.imageUrl ? (
                         <div className="discover-card-image-layer">
