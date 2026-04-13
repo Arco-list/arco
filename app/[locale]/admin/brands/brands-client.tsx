@@ -1,14 +1,13 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import { scrapeBrand, updateBrand, updateBrandStatus, deleteBrand } from "./actions"
+import { scrapeBrand, updateBrand, updateBrandStatus, deleteBrand, uploadBrandLogo } from "./actions"
 import type { AdminBrandRow } from "./page"
 import {
   DropdownMenu,
@@ -41,7 +40,6 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   const [isScraping, setIsScraping] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const logoInputRef = useRef<HTMLInputElement>(null)
 
   // Edit popup state
@@ -85,16 +83,17 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !editBrand) return
-    if (file.size > 5 * 1024 * 1024) { toast.error("Logo must be under 5MB"); return }
 
     setIsUploadingLogo(true)
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "png"
-      const path = `brands/${editBrand.id}/logo.${ext}`
-      const { error: uploadError } = await supabase.storage.from("company-assets").upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type })
-      if (uploadError) { toast.error(uploadError.message); return }
-      const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path)
-      if (urlData?.publicUrl) setEditLogoUrl(urlData.publicUrl)
+      const formData = new FormData()
+      formData.append("file", file)
+      const result = await uploadBrandLogo(editBrand.id, formData)
+      if ("error" in result) {
+        toast.error(result.error)
+      } else {
+        setEditLogoUrl(result.url)
+      }
     } catch { toast.error("Upload failed") } finally { setIsUploadingLogo(false) }
     e.target.value = ""
   }

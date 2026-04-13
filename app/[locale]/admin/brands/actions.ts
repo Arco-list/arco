@@ -584,6 +584,37 @@ export async function updateBrand(brandId: string, fields: { name?: string; desc
 }
 
 /**
+ * Upload a brand logo. Admin only. Uses service role to bypass storage RLS.
+ */
+export async function uploadBrandLogo(brandId: string, formData: FormData): Promise<{ url: string } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const file = formData.get("file") as File | null
+  if (!file) return { error: "No file provided." }
+  if (file.size > 5 * 1024 * 1024) return { error: "Logo must be under 5MB." }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "png"
+  const path = `brands/${brandId}/logo.${ext}`
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error: uploadError } = await supabase.storage
+    .from("company-assets")
+    .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type })
+
+  if (uploadError) return { error: uploadError.message }
+
+  const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path)
+  if (!urlData?.publicUrl) return { error: "Could not get public URL." }
+
+  // Also update the brand row
+  await supabase.from("brands").update({ logo_url: urlData.publicUrl }).eq("id", brandId)
+
+  revalidatePath("/admin/brands")
+  return { url: urlData.publicUrl }
+}
+
+/**
  * Update a brand's status. Admin only.
  */
 export async function updateBrandStatus(brandId: string, status: string): Promise<{ ok: true } | { error: string }> {
