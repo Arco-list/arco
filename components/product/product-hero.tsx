@@ -80,28 +80,23 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
     return [...seen.entries()].map(([, v]) => ({ ...v, label: v.size! }))
   }, [variants])
 
-  const [activeColor, setActiveColor] = useState(0)
-  const [activeMaterial, setActiveMaterial] = useState(0)
-  const [activeModel, setActiveModel] = useState(0)
+  const [activeColor, setActiveColor] = useState<number | null>(null)
+  const [activeMaterial, setActiveMaterial] = useState<number | null>(null)
+  const [activeModel, setActiveModel] = useState<number | null>(null)
 
-  // Determine which image to show: last-selected variant with an image, or hero
-  const activeColorImg = colors[activeColor]?.image_url
-  const activeMaterialImg = materials[activeMaterial]?.image_url
-  const activeModelImg = models[activeModel]?.image_url
+  // Determine which image to show
+  const activeColorImg = activeColor !== null ? colors[activeColor]?.image_url : null
+  const activeMaterialImg = activeMaterial !== null ? materials[activeMaterial]?.image_url : null
+  const activeModelImg = activeModel !== null ? models[activeModel]?.image_url : null
 
   // Priority: most recently interacted wins. Track which was last changed.
-  const [lastChanged, setLastChanged] = useState<"color" | "material" | "model" | null>(
-    colors.some((c) => c.image_url) ? "color" : materials.some((m) => m.image_url) ? "material" : null
-  )
+  const [lastChanged, setLastChanged] = useState<"color" | "material" | "model" | null>(null)
 
   const displayImage = (() => {
     if (lastChanged === "color" && activeColorImg) return activeColorImg
     if (lastChanged === "material" && activeMaterialImg) return activeMaterialImg
     if (lastChanged === "model" && activeModelImg) return activeModelImg
-    // Fallback chain
-    if (activeColorImg) return activeColorImg
-    if (activeMaterialImg) return activeMaterialImg
-    if (activeModelImg) return activeModelImg
+    // Fallback: hero image (primary product image)
     return heroImageUrl
   })()
 
@@ -161,7 +156,10 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
                       <button
                         key={i}
                         type="button"
-                        onClick={() => { setActiveColor(i); setLastChanged("color") }}
+                        onClick={() => {
+                          if (isActive) { setActiveColor(null); setLastChanged(null) }
+                          else { setActiveColor(i); setLastChanged("color") }
+                        }}
                         title={c.label}
                         style={{
                           width: 28, height: 28, borderRadius: "50%",
@@ -175,9 +173,11 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
                     )
                   })}
                 </div>
-                <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
-                  {colors[activeColor]?.label}
-                </span>
+                {activeColor !== null && (
+                  <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
+                    {colors[activeColor]?.label}
+                  </span>
+                )}
               </div>
             )}
 
@@ -192,7 +192,10 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
                       <button
                         key={i}
                         type="button"
-                        onClick={() => { setActiveMaterial(i); setLastChanged("material") }}
+                        onClick={() => {
+                          if (isActive) { setActiveMaterial(null); setLastChanged(null) }
+                          else { setActiveMaterial(i); setLastChanged("material") }
+                        }}
                         title={m.label}
                         style={{
                           width: 28, height: 28, borderRadius: "50%",
@@ -210,9 +213,11 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
                     )
                   })}
                 </div>
-                <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
-                  {materials[activeMaterial]?.label}
-                </span>
+                {activeMaterial !== null && (
+                  <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
+                    {materials[activeMaterial]?.label}
+                  </span>
+                )}
               </div>
             )}
 
@@ -227,7 +232,10 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
                       <button
                         key={i}
                         type="button"
-                        onClick={() => { setActiveModel(i); setLastChanged("model") }}
+                        onClick={() => {
+                          if (isActive) { setActiveModel(null); setLastChanged(null) }
+                          else { setActiveModel(i); setLastChanged("model") }
+                        }}
                         className="status-pill"
                         style={{
                           cursor: "pointer",
