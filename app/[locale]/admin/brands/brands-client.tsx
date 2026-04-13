@@ -6,12 +6,13 @@ import Link from "next/link"
 import { MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
-import { scrapeBrand, updateBrandStatus, deleteBrand } from "./actions"
+import { scrapeBrand, updateBrand, updateBrandStatus, deleteBrand } from "./actions"
 import type { AdminBrandRow } from "./page"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -36,7 +37,20 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   const [brands, setBrands] = useState(initialBrands)
   const [scrapeUrl, setScrapeUrl] = useState("")
   const [isScraping, setIsScraping] = useState(false)
-  const [, startTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
+
+  // Edit popup state
+  const [editBrand, setEditBrand] = useState<AdminBrandRow | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editLogoUrl, setEditLogoUrl] = useState("")
+
+  // Status popup state
+  const [statusBrand, setStatusBrand] = useState<AdminBrandRow | null>(null)
+  const [statusValue, setStatusValue] = useState("")
+
+  // Delete popup state
+  const [deleteBrandTarget, setDeleteBrandTarget] = useState<AdminBrandRow | null>(null)
 
   const handleScrape = async () => {
     if (!scrapeUrl.trim()) return
@@ -55,27 +69,60 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
     }
   }
 
-  const handleStatusChange = (brandId: string, status: string) => {
+  const openEdit = (brand: AdminBrandRow) => {
+    setEditBrand(brand)
+    setEditName(brand.name)
+    setEditDescription(brand.description ?? "")
+    setEditLogoUrl(brand.logo_url ?? "")
+  }
+
+  const handleSaveEdit = () => {
+    if (!editBrand) return
     startTransition(async () => {
-      const result = await updateBrandStatus(brandId, status)
+      const result = await updateBrand(editBrand.id, {
+        name: editName.trim(),
+        description: editDescription.trim() || undefined,
+        logo_url: editLogoUrl.trim() || undefined,
+      })
       if ("error" in result) {
         toast.error(result.error)
       } else {
-        toast.success("Status updated")
-        setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, status } : b)))
+        toast.success("Brand updated")
+        setEditBrand(null)
+        router.refresh()
       }
     })
   }
 
-  const handleDelete = (brandId: string) => {
-    if (!confirm("Delete this brand and all its products? This cannot be undone.")) return
+  const openStatus = (brand: AdminBrandRow) => {
+    setStatusBrand(brand)
+    setStatusValue(brand.status)
+  }
+
+  const handleSaveStatus = () => {
+    if (!statusBrand) return
     startTransition(async () => {
-      const result = await deleteBrand(brandId)
+      const result = await updateBrandStatus(statusBrand.id, statusValue)
+      if ("error" in result) {
+        toast.error(result.error)
+      } else {
+        toast.success("Status updated")
+        setStatusBrand(null)
+        router.refresh()
+      }
+    })
+  }
+
+  const handleConfirmDelete = () => {
+    if (!deleteBrandTarget) return
+    startTransition(async () => {
+      const result = await deleteBrand(deleteBrandTarget.id)
       if ("error" in result) {
         toast.error(result.error)
       } else {
         toast.success("Brand deleted")
-        setBrands((prev) => prev.filter((b) => b.id !== brandId))
+        setDeleteBrandTarget(null)
+        router.refresh()
       }
     })
   }
@@ -188,17 +235,16 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
                         <DropdownMenuItem asChild>
-                          <Link href={`/admin/brands/${brand.id}`}>View brand</Link>
+                          <Link href={`/products/${brand.slug}`} target="_blank">View brand</Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/brands/${brand.slug}`} target="_blank">Open public page</Link>
+                        <DropdownMenuItem onClick={() => openEdit(brand)}>
+                          Edit brand
                         </DropdownMenuItem>
-                        {Object.entries(STATUS_LABEL).map(([key, label]) => (
-                          <DropdownMenuItem key={key} onClick={() => handleStatusChange(brand.id, key)} disabled={brand.status === key}>
-                            Set status: {label}
-                          </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuItem onClick={() => handleDelete(brand.id)} className="text-red-600">
+                        <DropdownMenuItem onClick={() => openStatus(brand)}>
+                          Update status
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setDeleteBrandTarget(brand)} className="text-red-600">
                           Delete brand
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -210,6 +256,117 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
           </tbody>
         </table>
       </div>
+
+      {/* Edit brand popup */}
+      {editBrand && (
+        <div className="popup-overlay" onClick={() => setEditBrand(null)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Edit brand</h3>
+              <button type="button" className="popup-close" onClick={() => setEditBrand(null)} aria-label="Close">✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label className="arco-eyebrow" style={{ display: "block", marginBottom: 6 }}>Logo URL</label>
+                <input
+                  type="url"
+                  value={editLogoUrl}
+                  onChange={(e) => setEditLogoUrl(e.target.value)}
+                  className="input-base input-default"
+                  style={{ width: "100%" }}
+                  placeholder="https://..."
+                />
+              </div>
+              <div>
+                <label className="arco-eyebrow" style={{ display: "block", marginBottom: 6 }}>Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="input-base input-default"
+                  style={{ width: "100%" }}
+                />
+              </div>
+              <div>
+                <label className="arco-eyebrow" style={{ display: "block", marginBottom: 6 }}>Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="input-base input-default"
+                  style={{ width: "100%", resize: "vertical" }}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="popup-actions" style={{ marginTop: 20 }}>
+              <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setEditBrand(null)}>Cancel</button>
+              <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={handleSaveEdit} disabled={isPending || !editName.trim()}>
+                {isPending ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status popup */}
+      {statusBrand && (
+        <div className="popup-overlay" onClick={() => setStatusBrand(null)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Update status</h3>
+              <button type="button" className="popup-close" onClick={() => setStatusBrand(null)} aria-label="Close">✕</button>
+            </div>
+            <div className="status-modal-options">
+              {Object.entries(STATUS_LABEL).map(([key, label]) => {
+                const isSelected = statusValue === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`status-modal-option${isSelected ? " selected" : ""}`}
+                    onClick={() => setStatusValue(key)}
+                  >
+                    <span className="status-modal-dot" style={{ background: STATUS_DOT[key] }} />
+                    <div className="status-modal-option-text">
+                      <span className="status-modal-option-label">{label}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="popup-actions" style={{ marginTop: 20 }}>
+              <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setStatusBrand(null)}>Cancel</button>
+              <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={handleSaveStatus} disabled={isPending || statusValue === statusBrand.status}>
+                {isPending ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete popup */}
+      {deleteBrandTarget && (
+        <div className="popup-overlay" onClick={() => setDeleteBrandTarget(null)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Delete brand</h3>
+              <button type="button" className="popup-close" onClick={() => setDeleteBrandTarget(null)} aria-label="Close">✕</button>
+            </div>
+            <p className="arco-body-text" style={{ marginBottom: 8 }}>
+              Are you sure you want to delete <strong>{deleteBrandTarget.name}</strong>?
+            </p>
+            <p className="arco-small-text" style={{ marginBottom: 20 }}>
+              This will permanently delete the brand and all {deleteBrandTarget.product_count} products. This cannot be undone.
+            </p>
+            <div className="popup-actions">
+              <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setDeleteBrandTarget(null)}>Cancel</button>
+              <button type="button" className="btn-primary" style={{ flex: 1, background: "var(--destructive)" }} onClick={handleConfirmDelete} disabled={isPending}>
+                {isPending ? "Deleting…" : "Delete brand"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

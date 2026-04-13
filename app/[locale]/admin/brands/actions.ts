@@ -562,6 +562,28 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
 }
 
 /**
+ * Update a brand's name, description, and/or logo. Admin only.
+ */
+export async function updateBrand(brandId: string, fields: { name?: string; description?: string; logo_url?: string }): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient()
+  const patch: Record<string, any> = {}
+  if (fields.name !== undefined) patch.name = fields.name
+  if (fields.description !== undefined) patch.description = fields.description
+  if (fields.logo_url !== undefined) patch.logo_url = fields.logo_url
+
+  if (Object.keys(patch).length === 0) return { ok: true }
+
+  const { error } = await supabase.from("brands").update(patch).eq("id", brandId)
+  if (error) return { error: error.message }
+
+  revalidatePath("/admin/brands")
+  return { ok: true }
+}
+
+/**
  * Update a brand's status. Admin only.
  */
 export async function updateBrandStatus(brandId: string, status: string): Promise<{ ok: true } | { error: string }> {
