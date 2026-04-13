@@ -278,7 +278,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
       {singleBrand && brandFamilies.length > 0 && (
         <div className="wrap" style={{ paddingBottom: 8 }}>
           <h4 className="arco-label" style={{ marginBottom: 16 }}>Collections</h4>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 32 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 12 }}>
             {brandFamilies.map((f) => {
               const isActive = selectedFamily === f.id
               return (
@@ -286,18 +286,29 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
                   key={f.id}
                   type="button"
                   onClick={() => setSelectedFamily(isActive ? null : f.id)}
-                  className="credit-card"
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100, opacity: selectedFamily && !isActive ? 0.4 : 1, transition: "opacity 0.15s" }}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer", padding: 0,
+                    opacity: selectedFamily && !isActive ? 0.4 : 1, transition: "opacity 0.15s",
+                    textAlign: "left",
+                  }}
                 >
-                  <div className="credit-icon" style={{ border: isActive ? "2px solid var(--arco-black)" : "2px solid transparent" }}>
+                  <div style={{
+                    aspectRatio: "1", borderRadius: 4, overflow: "hidden",
+                    background: "var(--arco-surface)",
+                    border: isActive ? "2px solid var(--arco-black)" : "2px solid transparent",
+                    boxSizing: "border-box",
+                    marginBottom: 8,
+                  }}>
                     {f.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={f.imageUrl} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img src={f.imageUrl} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     ) : (
-                      <span className="credit-icon-initials">{f.name.charAt(0).toUpperCase()}</span>
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "var(--text-secondary)" }}>
+                        {f.name.charAt(0).toUpperCase()}
+                      </div>
                     )}
                   </div>
-                  <h3 className="arco-label">{f.name}</h3>
+                  <span className="arco-xs-text" style={{ color: isActive ? "var(--text-primary)" : "var(--text-secondary)" }}>{f.name}</span>
                 </button>
               )
             })}
