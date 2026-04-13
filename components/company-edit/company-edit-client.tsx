@@ -2192,8 +2192,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </div>
 
             {!hasPublishedProjects && (
-              <div className="popup-banner popup-banner--info">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--info">
+                <AlertTriangle className="arco-alert-icon" />
                 <div>
                   <p style={{ fontWeight: 500 }}>No live projects</p>
                   <p>
@@ -2263,14 +2263,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               <p className="body-small text-text-secondary">Checking…</p>
             ) : deletionCheck ? (
               <>
-                <div className="popup-banner popup-banner--danger">
-                  <AlertTriangle className="popup-banner-icon" />
+                <div className="arco-alert arco-alert--danger">
+                  <AlertTriangle className="arco-alert-icon" />
                   <span>Your company will be permanently deleted. This cannot be undone.</span>
                 </div>
 
                 {deletionCheck.warnings.length > 0 && (
-                  <div className="popup-banner popup-banner--warn">
-                    <AlertTriangle className="popup-banner-icon" />
+                  <div className="arco-alert arco-alert--warn">
+                    <AlertTriangle className="arco-alert-icon" />
                     <ul className="m-0 p-0 list-none space-y-0.5">
                       {deletionCheck.warnings.map((w, i) => <li key={i}>{w}</li>)}
                     </ul>
@@ -2278,8 +2278,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 )}
 
                 {deletionCheck.blockers.length > 0 && (
-                  <div className="popup-banner popup-banner--danger">
-                    <AlertTriangle className="popup-banner-icon" />
+                  <div className="arco-alert arco-alert--danger">
+                    <AlertTriangle className="arco-alert-icon" />
                     <ul className="m-0 p-0 list-none space-y-0.5">
                       {deletionCheck.blockers.map((b, i) => <li key={i}>{b}</li>)}
                     </ul>
@@ -2462,8 +2462,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </p>
 
             {verifyError && (
-              <div className="popup-banner popup-banner--danger">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--danger">
+                <AlertTriangle className="arco-alert-icon" />
                 <span>{verifyError}</span>
               </div>
             )}

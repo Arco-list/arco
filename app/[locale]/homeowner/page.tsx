@@ -825,14 +825,14 @@ function HomeownerContent() {
                       </div>
                     )}
 
-                    <div className="popup-banner popup-banner--danger">
-                      <AlertTriangle className="popup-banner-icon" />
+                    <div className="arco-alert arco-alert--danger">
+                      <AlertTriangle className="arco-alert-icon" />
                       <span>{t("delete_confirm_description")}</span>
                     </div>
 
                     {deletionCheck.warnings.length > 0 && (
-                      <div className="popup-banner popup-banner--warn">
-                        <AlertTriangle className="popup-banner-icon" />
+                      <div className="arco-alert arco-alert--warn">
+                        <AlertTriangle className="arco-alert-icon" />
                         <div>
                           <div style={{ fontWeight: 500, marginBottom: 4 }}>{t("data_deleted_warning")}</div>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>
@@ -843,8 +843,8 @@ function HomeownerContent() {
                     )}
 
                     {deletionCheck.blockers.length > 0 && (
-                      <div className="popup-banner popup-banner--danger">
-                        <AlertTriangle className="popup-banner-icon" />
+                      <div className="arco-alert arco-alert--danger">
+                        <AlertTriangle className="arco-alert-icon" />
                         <div>
                           <div style={{ fontWeight: 500, marginBottom: 4 }}>{t("cannot_delete")}</div>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>

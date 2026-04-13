@@ -130,7 +130,7 @@ export function ScrapeModal({ url, onClose }: ScrapeModalProps) {
 
         {/* Error state */}
         {isFailed && (
-          <div className="popup-banner popup-banner--danger">
+          <div className="arco-alert arco-alert--danger">
             {error}
           </div>
         )}

@@ -1867,8 +1867,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             <div className="px-4 pb-3">
               <p className="text-sm font-medium text-[#1c1c1a] mb-0.5">{deleteCompany.name}</p>
 
-              <div className="popup-banner popup-banner--warn">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
                 <div>
                   <p>This will permanently delete <strong>{deleteCompany.name}</strong> and all associated data (photos, project links, team members). This action cannot be undone.</p>
                 </div>
@@ -2371,8 +2371,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 <h3 className="arco-section-title">Delete {count} {count === 1 ? "company" : "companies"}</h3>
                 <button type="button" className="popup-close" onClick={() => setShowBulkDeleteConfirm(false)} aria-label="Close" disabled={isBulkProcessing}>✕</button>
               </div>
-              <div className="popup-banner popup-banner--warn">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
                 <div><p>This will permanently delete {count} {count === 1 ? "company" : "companies"} and all associated data. This action cannot be undone.</p></div>
               </div>
               <div style={{ maxHeight: 160, overflowY: "auto", margin: "12px 0" }}>

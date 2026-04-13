@@ -1058,8 +1058,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 </div>
               </div>
 
-              <div className="popup-banner popup-banner--warn">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
                 <div>
                   <p>This action cannot be undone. All data associated with this user will be permanently deleted.</p>
                 </div>
@@ -1074,8 +1074,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             ) : deleteCheckResult ? (
               <div className="px-4 pb-2 space-y-2">
                 {deleteCheckResult.blockers.length > 0 && (
-                  <div className="popup-banner popup-banner--danger">
-                    <AlertTriangle className="popup-banner-icon" />
+                  <div className="arco-alert arco-alert--danger">
+                    <AlertTriangle className="arco-alert-icon" />
                     <div>
                       <p style={{ fontWeight: 500 }}>Cannot delete user</p>
                       {deleteCheckResult.blockers.map((blocker, idx) => (
@@ -1086,8 +1086,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 )}
 
                 {deleteCheckResult.canDelete && deleteCheckResult.warnings.length > 0 && (
-                  <div className="popup-banner popup-banner--warn">
-                    <AlertTriangle className="popup-banner-icon" />
+                  <div className="arco-alert arco-alert--warn">
+                    <AlertTriangle className="arco-alert-icon" />
                     <div>
                       <p style={{ fontWeight: 500 }}>The following data will be deleted:</p>
                       {deleteCheckResult.warnings.map((warning, idx) => (
@@ -1098,8 +1098,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 )}
 
                 {deleteCheckResult.canDelete && deleteCheckResult.warnings.length === 0 && (
-                  <div className="popup-banner popup-banner--info">
-                    <AlertTriangle className="popup-banner-icon" />
+                  <div className="arco-alert arco-alert--info">
+                    <AlertTriangle className="arco-alert-icon" />
                     <div>
                       <p>This user has no related data. The account will be permanently deleted.</p>
                     </div>
@@ -1159,8 +1159,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 <h3 className="arco-section-title">Delete {count} user{count > 1 ? "s" : ""}</h3>
                 <button type="button" className="popup-close" onClick={() => setShowBulkDeleteConfirm(false)} aria-label="Close" disabled={isBulkProcessing}>✕</button>
               </div>
-              <div className="popup-banner popup-banner--warn">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
                 <div><p>This will permanently delete {count} user{count > 1 ? "s" : ""} and all associated data. This action cannot be undone.</p></div>
               </div>
               <div style={{ maxHeight: 160, overflowY: "auto", margin: "12px 0" }}>

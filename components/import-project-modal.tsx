@@ -341,8 +341,8 @@ export function ImportProjectModal({
 
               {/* Error message */}
               {phase === "error" && error && (
-                <div className="popup-banner popup-banner--danger" style={{ marginTop: 20 }}>
-                  <AlertTriangle className="popup-banner-icon" />
+                <div className="arco-alert arco-alert--danger" style={{ marginTop: 20 }}>
+                  <AlertTriangle className="arco-alert-icon" />
                   <span>{error}</span>
                 </div>
               )}

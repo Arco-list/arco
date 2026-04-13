@@ -70,8 +70,8 @@ export function ListingStatusModal<TStatus extends string>({
         </div>
 
         {isDraft && !isPendingAdminReview && (
-          <div className="popup-banner popup-banner--info">
-            <AlertTriangle className="popup-banner-icon" />
+          <div className="arco-alert arco-alert--info">
+            <AlertTriangle className="arco-alert-icon" />
             <div>
               <p style={{ fontWeight: 500 }}>{t("status_modal_draft")}</p>
               <p>
@@ -82,8 +82,8 @@ export function ListingStatusModal<TStatus extends string>({
         )}
 
         {isPendingAdminReview && (
-          <div className="popup-banner popup-banner--info">
-            <AlertTriangle className="popup-banner-icon" />
+          <div className="arco-alert arco-alert--info">
+            <AlertTriangle className="arco-alert-icon" />
             <div>
               <p style={{ fontWeight: 500 }}>{t("status_modal_under_review")}</p>
               <p>
@@ -94,8 +94,8 @@ export function ListingStatusModal<TStatus extends string>({
         )}
 
         {isRejected && (
-          <div className="popup-banner popup-banner--danger">
-            <AlertTriangle className="popup-banner-icon" />
+          <div className="arco-alert arco-alert--danger">
+            <AlertTriangle className="arco-alert-icon" />
             <div>
               <p style={{ fontWeight: 500 }}>{t("status_modal_rejected")}</p>
               {rejectionReason && (

@@ -510,13 +510,13 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
               {t("settings_delete_description")}
             </p>
 
-            <div className="popup-banner popup-banner--danger">
-              <AlertTriangle className="popup-banner-icon" />
+            <div className="arco-alert arco-alert--danger">
+              <AlertTriangle className="arco-alert-icon" />
               <span>{t("settings_delete_warning")}</span>
             </div>
 
-            <div className="popup-banner popup-banner--warn">
-              <AlertTriangle className="popup-banner-icon" />
+            <div className="arco-alert arco-alert--warn">
+              <AlertTriangle className="arco-alert-icon" />
               <span>{t("settings_delete_warning_secondary")}</span>
             </div>
 

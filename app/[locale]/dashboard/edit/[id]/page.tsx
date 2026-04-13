@@ -6040,13 +6040,13 @@ export default function ListingEditorPage() {
               Permanently delete this project and all associated data. This action cannot be undone.
             </p>
 
-            <div className="popup-banner popup-banner--danger">
-              <AlertTriangle className="popup-banner-icon" />
+            <div className="arco-alert arco-alert--danger">
+              <AlertTriangle className="arco-alert-icon" />
               <span>This project will be permanently deleted. This cannot be undone.</span>
             </div>
 
-            <div className="popup-banner popup-banner--warn">
-              <AlertTriangle className="popup-banner-icon" />
+            <div className="arco-alert arco-alert--warn">
+              <AlertTriangle className="arco-alert-icon" />
               <span>This project will disappear from the portfolio of all credited professionals.</span>
             </div>
 

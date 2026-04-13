@@ -1329,8 +1329,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                 </button>
               </div>
 
-              <div className="popup-banner popup-banner--warn">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
                 <div>
                   <p>This will permanently delete {count} project{count > 1 ? "s" : ""} and all associated data (photos, contributors, taxonomy). This action cannot be undone.</p>
                 </div>
@@ -1402,8 +1402,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             <div className="px-4 pb-3">
               <p className="text-sm font-medium text-[#1c1c1a] mb-0.5">{deleteProject.title}</p>
 
-              <div className="popup-banner popup-banner--warn">
-                <AlertTriangle className="popup-banner-icon" />
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
                 <div>
                   <p>This will permanently delete &ldquo;{deleteProject.title}&rdquo; and all associated data (photos, contributors, taxonomy). This action cannot be undone.</p>
                 </div>

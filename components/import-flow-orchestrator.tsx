@@ -312,8 +312,8 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
           </p>
 
           {verifyError && (
-            <div className="popup-banner popup-banner--danger" style={{ marginBottom: 16 }}>
-              <AlertTriangle className="popup-banner-icon" />
+            <div className="arco-alert arco-alert--danger" style={{ marginBottom: 16 }}>
+              <AlertTriangle className="arco-alert-icon" />
               <span>{verifyError}</span>
             </div>
           )}
