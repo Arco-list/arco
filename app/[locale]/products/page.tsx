@@ -16,6 +16,8 @@ export type DiscoverProduct = {
   brandLogoUrl: string | null
   categoryId: string | null
   categoryName: string | null
+  familyId: string | null
+  familyName: string | null
   imageUrl: string | null
 }
 
@@ -24,6 +26,7 @@ export type DiscoverBrand = {
   slug: string
   name: string
   logoUrl: string | null
+  description: string | null
   productCount: number
 }
 
@@ -45,15 +48,16 @@ export default async function ProductsDiscoverPage() {
       .from("products")
       .select(`
         id, slug, name, brand_id,
-        brand:brands!inner(id, name, slug, logo_url),
+        brand:brands!inner(id, name, slug, logo_url, description),
         category:product_categories(id, name, slug),
+        family:product_families(id, name),
         product_photos(url, is_primary, order_index)
       `)
       .order("created_at", { ascending: false })
       .limit(200),
     supabase
       .from("brands")
-      .select("id, slug, name, logo_url")
+      .select("id, slug, name, logo_url, description")
       .order("name"),
     supabase
       .from("product_categories")
@@ -75,6 +79,8 @@ export default async function ProductsDiscoverPage() {
       brandLogoUrl: p.brand?.logo_url ?? null,
       categoryId: p.category?.id ?? null,
       categoryName: p.category?.name ?? null,
+      familyId: p.family?.id ?? null,
+      familyName: p.family?.name ?? null,
       imageUrl: primary?.url ?? null,
     }
   })
@@ -91,6 +97,7 @@ export default async function ProductsDiscoverPage() {
       slug: b.slug,
       name: b.name,
       logoUrl: b.logo_url,
+      description: b.description ?? null,
       productCount: brandProductCounts.get(b.id) ?? 0,
     }))
     .filter((b: DiscoverBrand) => b.productCount > 0)

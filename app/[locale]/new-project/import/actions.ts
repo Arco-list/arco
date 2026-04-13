@@ -875,6 +875,27 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       logger.error("Scrape photo insert failed", { projectId: project.id }, photoError as Error)
     }
 
+    // 9b. Probe image dimensions (best-effort, non-blocking)
+    if (insertedPhotos && insertedPhotos.length > 0) {
+      try {
+        const { probeMultipleImageDimensions } = await import("@/lib/image-dimensions")
+        const urls = insertedPhotos.map((p) => p.url)
+        const dims = await probeMultipleImageDimensions(urls)
+        for (const photo of insertedPhotos) {
+          const d = dims.get(photo.url)
+          if (d) {
+            await supabase
+              .from("project_photos")
+              .update({ width: d.width, height: d.height })
+              .eq("id", photo.id)
+          }
+        }
+        console.log(`[scrape] Probed dimensions for ${dims.size}/${insertedPhotos.length} photos`)
+      } catch (err) {
+        console.error("[scrape] Dimension probing failed:", err)
+      }
+    }
+
     // 10. Auto-tag photos with spaces using Claude vision (best-effort)
     if (insertedPhotos && insertedPhotos.length > 0 && process.env.ANTHROPIC_API_KEY) {
       try {

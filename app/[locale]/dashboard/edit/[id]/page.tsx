@@ -1781,6 +1781,18 @@ export default function ListingEditorPage() {
 
   const handleShowSubmitReview = () => {
     if (!projectId || isSubmittingForReview) return
+
+    // Check for low-resolution photos
+    const lowResPhotos = uploadedPhotos.filter(
+      (p) => p.width != null && p.height != null && (p.width < 1600 || p.height < 800)
+    )
+    if (lowResPhotos.length > 0) {
+      const proceed = confirm(
+        `${lowResPhotos.length} photo${lowResPhotos.length > 1 ? "s are" : " is"} below the recommended resolution (1600 × 800px). Low-resolution images may be rejected during review.\n\nSubmit anyway?`
+      )
+      if (!proceed) return
+    }
+
     setHighlightMissingFields(false)
     setShowSubmitReviewPopup(true)
   }
@@ -3757,12 +3769,24 @@ export default function ListingEditorPage() {
               void reorderFeaturePhotos(activeEditFeature, reordered)
             }
 
+            const isLowRes = photo.width != null && photo.height != null && (photo.width < 1600 || photo.height < 800)
+
             return (
               <div key={photo.id} className="photo-edit-thumb">
                 <img src={photo.url} alt="" />
                 {isSpaceCover && (
                   <div style={{ position: "absolute", left: 6, top: 6, background: "#016D75", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2 }}>
                     Cover
+                  </div>
+                )}
+
+                {/* Low resolution warning badge */}
+                {isLowRes && (
+                  <div
+                    title={`${photo.width} × ${photo.height}px — minimum recommended 1600 × 800`}
+                    style={{ position: "absolute", right: 6, top: 6, background: "#f59e0b", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2, cursor: "help" }}
+                  >
+                    Low res
                   </div>
                 )}
 

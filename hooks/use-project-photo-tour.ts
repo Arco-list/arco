@@ -24,6 +24,8 @@ export type UploadedPhoto = {
   url: string
   isCover: boolean
   storagePath: string | null
+  width: number | null
+  height: number | null
 }
 
 type SpaceRecord = { id: string; name: string; slug: string; sort_order: number | null }
@@ -594,7 +596,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             .order("order_index", { ascending: true, nullsFirst: false }),
           supabase
             .from("project_photos")
-            .select("id, url, is_primary, order_index, feature_id, storage_path")
+            .select("id, url, is_primary, order_index, feature_id, storage_path, width, height")
             .eq("project_id", projectIdValue)
             .order("order_index", { ascending: true, nullsFirst: false }),
         ])
@@ -710,6 +712,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           url: photo.url,
           isCover: photo.is_primary ?? false,
           storagePath: photo.storage_path ?? null,
+          width: photo.width ?? null,
+          height: photo.height ?? null,
         }))
 
         const nextFeaturePhotos: Record<string, string[]> = {}
@@ -1030,6 +1034,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             url: insertedPhoto.url,
             isCover: insertedPhoto.is_primary ?? false,
             storagePath: insertedPhoto.storage_path ?? storagePath,
+            width,
+            height,
           })
 
           if (options.addToModalSelection) {
