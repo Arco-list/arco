@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { scrapeBrand, updateBrand, updateBrandStatus, deleteBrand } from "./actions"
 import type { AdminBrandRow } from "./page"
 import {
@@ -39,11 +41,15 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   const [isScraping, setIsScraping] = useState(false)
   const [isPending, startTransition] = useTransition()
 
+  const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
   // Edit popup state
   const [editBrand, setEditBrand] = useState<AdminBrandRow | null>(null)
   const [editName, setEditName] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [editLogoUrl, setEditLogoUrl] = useState("")
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
   // Status popup state
   const [statusBrand, setStatusBrand] = useState<AdminBrandRow | null>(null)
@@ -74,6 +80,23 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
     setEditName(brand.name)
     setEditDescription(brand.description ?? "")
     setEditLogoUrl(brand.logo_url ?? "")
+  }
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !editBrand) return
+    if (file.size > 5 * 1024 * 1024) { toast.error("Logo must be under 5MB"); return }
+
+    setIsUploadingLogo(true)
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "png"
+      const path = `brands/${editBrand.id}/logo.${ext}`
+      const { error: uploadError } = await supabase.storage.from("company-assets").upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type })
+      if (uploadError) { toast.error(uploadError.message); return }
+      const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path)
+      if (urlData?.publicUrl) setEditLogoUrl(urlData.publicUrl)
+    } catch { toast.error("Upload failed") } finally { setIsUploadingLogo(false) }
+    e.target.value = ""
   }
 
   const handleSaveEdit = () => {
@@ -266,16 +289,25 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
               <button type="button" className="popup-close" onClick={() => setEditBrand(null)} aria-label="Close">✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label className="arco-eyebrow" style={{ display: "block", marginBottom: 6 }}>Logo URL</label>
-                <input
-                  type="url"
-                  value={editLogoUrl}
-                  onChange={(e) => setEditLogoUrl(e.target.value)}
-                  className="input-base input-default"
-                  style={{ width: "100%" }}
-                  placeholder="https://..."
-                />
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <div
+                  className="company-icon"
+                  onClick={() => logoInputRef.current?.click()}
+                  style={{ cursor: "pointer", position: "relative" }}
+                  title="Click to upload logo"
+                >
+                  {editLogoUrl ? (
+                    <Image src={editLogoUrl} alt={editName} width={100} height={100} className="company-icon-image" unoptimized />
+                  ) : (
+                    <div className="company-icon-initials">{editName.charAt(0).toUpperCase()}</div>
+                  )}
+                  {isUploadingLogo && (
+                    <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11 }}>
+                      Uploading…
+                    </div>
+                  )}
+                  <input ref={logoInputRef} type="file" hidden accept="image/jpeg,image/png,image/svg+xml,image/webp" onChange={handleLogoUpload} />
+                </div>
               </div>
               <div>
                 <label className="arco-eyebrow" style={{ display: "block", marginBottom: 6 }}>Name</label>
