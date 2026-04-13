@@ -429,6 +429,48 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* ALERTS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Alerts</h2>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+              <div className="arco-alert arco-alert--info">
+                <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="8" cy="8" r="7" /><path d="M8 7v4" /><circle cx="8" cy="4.5" r="0.5" fill="currentColor" stroke="none" />
+                </svg>
+                <div><strong>Info:</strong> Your project is under review by the Arco team. We'll email you once the review is complete.</div>
+              </div>
+
+              <div className="arco-alert arco-alert--warn">
+                <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 1L1 14h14L8 1z" /><path d="M8 6v3" /><circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
+                </svg>
+                <div><strong>23 photos are below the recommended resolution</strong> (1600 × 800px). Low-resolution images may be rejected during review.</div>
+              </div>
+
+              <div className="arco-alert arco-alert--danger">
+                <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="8" cy="8" r="7" /><path d="M10 6L6 10" /><path d="M6 6l4 4" />
+                </svg>
+                <div><strong>This action cannot be undone.</strong> Deleting this brand will permanently remove all products and photos.</div>
+              </div>
+
+              <div className="arco-alert arco-alert--success">
+                <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="8" cy="8" r="7" /><path d="M5 8l2 2 4-4" />
+                </svg>
+                <div><strong>Project published.</strong> Your project is now live and visible to homeowners across the Netherlands.</div>
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Uses <strong>XS</strong> typography. 4 variants: .arco-alert--info (blue), .arco-alert--warn (amber), .arco-alert--danger (red), .arco-alert--success (green).<br />
+                16px icon + text content. 12px 16px padding, 6px radius, 1px colored border.
+              </p>
+            </div>
+          </div>
+
           {/* DATA TABLE */}
           <div style={{ marginBottom: 80 }}>
             <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Data Table</h2>

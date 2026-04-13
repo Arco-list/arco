@@ -4343,35 +4343,59 @@ body.no-scroll {
 }
 
 /* Alert banners inside popups */
-.popup-banner {
+/* ═══════════════════════════════════════════════════════
+   ALERTS / BANNERS
+   ═══════════════════════════════════════════════════════ */
+
+.arco-alert {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 0;
-  margin-bottom: 16px;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 300;
-  line-height: 1.45;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
-.popup-banner--info {
-  color: #1e40af;
-}
-
-.popup-banner--warn {
-  color: #92400e;
-}
-
-.popup-banner--danger {
-  color: #dc2626;
-}
-
-.popup-banner-icon {
+.arco-alert-icon {
   width: 16px;
   height: 16px;
   margin-top: 1px;
   flex-shrink: 0;
 }
+
+.arco-alert--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.arco-alert--warn {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.arco-alert--danger {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.arco-alert--success {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+/* Legacy aliases */
+.popup-banner { display: flex; align-items: flex-start; gap: 8px; padding: 0; margin-bottom: 16px; font-size: 13px; font-weight: 300; line-height: 1.45; }
+.popup-banner--info { color: #1e40af; }
+.popup-banner--warn { color: #92400e; }
+.popup-banner--danger { color: #dc2626; }
+.popup-banner-icon { width: 16px; height: 16px; margin-top: 1px; flex-shrink: 0; }
 
 /* ─── Legal Pages (Privacy, Terms) ──────────────────── */
 

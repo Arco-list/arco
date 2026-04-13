@@ -5705,12 +5705,14 @@ export default function ListingEditorPage() {
               <h3 className="arco-section-title">Low resolution photos</h3>
               <button type="button" className="popup-close" onClick={() => setShowLowResWarning(false)} aria-label="Close">✕</button>
             </div>
-            <p className="arco-body-text" style={{ marginBottom: 8 }}>
-              {lowResCount} photo{lowResCount > 1 ? "s are" : " is"} below the recommended resolution (1600 × 800px).
-            </p>
-            <p className="arco-small-text" style={{ marginBottom: 24 }}>
-              Low-resolution images may be rejected during review. Photos marked with a &quot;Low res&quot; badge should be replaced with higher quality versions.
-            </p>
+            <div className="arco-alert arco-alert--warn" style={{ marginBottom: 24 }}>
+              <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 1L1 14h14L8 1z" /><path d="M8 6v3" /><circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
+              </svg>
+              <div>
+                <strong>{lowResCount} photo{lowResCount > 1 ? "s are" : " is"} below the recommended resolution</strong> (1600 × 800px). Low-resolution images may be rejected during review. Replace photos marked with a &quot;Low res&quot; badge with higher quality versions.
+              </div>
+            </div>
             <div className="popup-actions">
               <button
                 type="button"
