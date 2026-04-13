@@ -451,20 +451,80 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
 
     const parsed = JSON.parse(claudeJson[0])
 
-    // Merge Claude-extracted variants with any swatch images found in HTML
+    // Known color name → hex lookup for common finishes
+    const COLOR_HEX: Record<string, string> = {
+      "dark chrome": "#3a3a3a", "chrome": "#c0c0c0", "matt silver": "#b8b8b8", "silver": "#c0c0c0",
+      "matt black": "#1a1a1a", "black": "#000000", "black phantom": "#2a2a2a", "phantom": "#4a4a4a",
+      "matt white": "#f5f5f5", "white": "#ffffff",
+      "bronze": "#cd7f32", "rose gold": "#b76e79", "gold": "#d4af37",
+      "matt gold": "#c9a96e", "brass": "#b5a642", "brushed brass": "#c9a96e",
+      "copper": "#b87333", "nickel": "#8e8e8e", "brushed nickel": "#a0a0a0",
+      "anthracite": "#383838", "graphite": "#4b4b4b", "champagne": "#d4c5a9",
+      "walnut": "#5c4033", "oak": "#c8a96e", "teak": "#b8860b",
+    }
+
+    // Clean a color name: strip product-name words from the front
+    const productWords = new Set((parsed.name ?? "").toLowerCase().split(/\s+/).filter(Boolean))
+    const cleanColor = (raw: string): string => {
+      const words = raw.split(/[\s\-–—]+/)
+      let start = 0
+      while (start < words.length && productWords.has(words[start].toLowerCase())) start++
+      const cleaned = words.slice(start).join(" ").trim()
+      return cleaned.length > 0 ? cleaned : raw
+    }
+
+    // Merge Claude-extracted variants with HTML-extracted swatch images
     let variants = (parsed.variants ?? []) as Array<Record<string, any>>
-    if (colorImageUrls.length > 0) {
-      for (const swatch of colorImageUrls) {
-        const existing = variants.find(
-          (v) => v.color?.toLowerCase() === swatch.color.toLowerCase()
-        )
-        if (existing) {
-          existing.image_url = swatch.url
-        } else {
-          variants.push({ color: swatch.color, hex: null, image_url: swatch.url })
+
+    // First: clean Claude variant names and fill missing hex from lookup
+    for (const v of variants) {
+      if (v.color) {
+        v.color = cleanColor(v.color)
+        if (!v.hex) {
+          v.hex = COLOR_HEX[v.color.toLowerCase()] ?? null
         }
       }
     }
+
+    // Then: merge HTML swatch images
+    if (colorImageUrls.length > 0) {
+      for (const swatch of colorImageUrls) {
+        const cleanedSwatchName = cleanColor(swatch.color)
+        const existing = variants.find(
+          (v) => v.color && cleanColor(v.color).toLowerCase() === cleanedSwatchName.toLowerCase()
+        )
+        if (existing) {
+          existing.image_url = existing.image_url || swatch.url
+        } else {
+          // Only add if it's not a duplicate after cleaning
+          const alreadyExists = variants.some(
+            (v) => v.color && v.color.toLowerCase() === cleanedSwatchName.toLowerCase()
+          )
+          if (!alreadyExists) {
+            variants.push({
+              color: cleanedSwatchName,
+              hex: COLOR_HEX[cleanedSwatchName.toLowerCase()] ?? null,
+              image_url: swatch.url,
+            })
+          }
+        }
+      }
+    }
+
+    // Deduplicate: merge entries with same cleaned color name
+    const deduped = new Map<string, Record<string, any>>()
+    for (const v of variants) {
+      if (!v.color) { deduped.set(Math.random().toString(), v); continue }
+      const key = v.color.toLowerCase()
+      const existing = deduped.get(key)
+      if (existing) {
+        existing.hex = existing.hex || v.hex
+        existing.image_url = existing.image_url || v.image_url
+      } else {
+        deduped.set(key, { ...v })
+      }
+    }
+    variants = [...deduped.values()]
 
     productData = {
       name: parsed.name ?? "",
