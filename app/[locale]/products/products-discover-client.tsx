@@ -278,7 +278,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
       {singleBrand && brandFamilies.length > 0 && (
         <div className="wrap" style={{ paddingBottom: 8 }}>
           <h4 className="arco-label" style={{ marginBottom: 16 }}>Collections</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
             {brandFamilies.map((f) => {
               const isActive = selectedFamily === f.id
               return (
