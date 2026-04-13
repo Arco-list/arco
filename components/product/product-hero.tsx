@@ -123,17 +123,14 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
       <div className="product-hero-info">
         {/* Brand */}
         {brand && (
-          <Link href={`/products/${brand.slug}`} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, textDecoration: "none", color: "inherit" }}>
-            {brand.logo_url ? (
-              <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                <Image src={brand.logo_url} alt={brand.name} width={40} height={40} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              </div>
-            ) : (
-              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--text-secondary)", flexShrink: 0 }}>
-                {brand.name.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <span className="arco-small-text" style={{ color: "var(--text-secondary)" }}>{brand.name}</span>
+          <Link href={`/products/${brand.slug}`} style={{ display: "block", marginBottom: 24, textDecoration: "none", color: "inherit" }}>
+            <div className="company-icon">
+              {brand.logo_url ? (
+                <Image src={brand.logo_url} alt={brand.name} width={100} height={100} className="company-icon-image" />
+              ) : (
+                <div className="company-icon-initials">{brand.name.charAt(0).toUpperCase()}</div>
+              )}
+            </div>
           </Link>
         )}
 
