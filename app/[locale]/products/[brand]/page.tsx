@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -14,13 +14,28 @@ export default async function BrandProductsPage({ params }: { params: Promise<{ 
   const { brand: brandSlug } = await params
   const supabase = createServiceRoleSupabaseClient()
 
+  // First try to find a brand with this slug
   const { data: brand } = await supabase
     .from("brands")
     .select("*")
     .eq("slug", brandSlug)
     .maybeSingle()
 
-  if (!brand) notFound()
+  // If no brand found, check if it's a legacy product slug and redirect
+  if (!brand) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("slug, brand:brands(slug)")
+      .eq("slug", brandSlug)
+      .maybeSingle()
+
+    if (product && (product as any).brand?.slug) {
+      redirect(`/products/${(product as any).brand.slug}/${(product as any).slug}`)
+    }
+
+    notFound()
+  }
+
   const b = brand as any
 
   // Brand's products with photos
@@ -60,7 +75,7 @@ export default async function BrandProductsPage({ params }: { params: Promise<{ 
     <div className="min-h-screen bg-white">
       <Header />
 
-      {/* Filter bar placeholder — keeps the sticky bar consistent */}
+      {/* Filter bar with back link */}
       <div className="discover-filter-bar">
         <div className="wrap">
           <div className="discover-filter-inner">
@@ -140,7 +155,7 @@ export default async function BrandProductsPage({ params }: { params: Promise<{ 
           {items.length === 0 ? (
             <div className="empty-state">
               <h2 className="arco-section-title empty-state__title">No products yet</h2>
-              <p className="arco-body-text empty-state__description">This brand doesn't have any products yet.</p>
+              <p className="arco-body-text empty-state__description">This brand doesn&apos;t have any products yet.</p>
             </div>
           ) : (
             <div className="discover-grid">
