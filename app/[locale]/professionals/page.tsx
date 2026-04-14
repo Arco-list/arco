@@ -58,10 +58,13 @@ export const revalidate = 300
 
 export default async function ProfessionalsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
-  let professionals = []
+  let professionals: Awaited<ReturnType<typeof fetchDiscoverProfessionals>>["professionals"] = []
+  let total = 0
 
   try {
-    professionals = await fetchDiscoverProfessionals(locale)
+    const result = await fetchDiscoverProfessionals(locale)
+    professionals = result.professionals
+    total = result.total
   } catch (error) {
     logger.error("Failed to render professionals discover page", { component: "ProfessionalsPage" }, error as Error)
   }
@@ -75,7 +78,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
           <ProfessionalsFilterBar />
 
           <main>
-            <ProfessionalsGrid professionals={professionals} />
+            <ProfessionalsGrid professionals={professionals} initialTotal={total} />
           </main>
         </ProfessionalFilterProvider>
       </FilterErrorBoundary>

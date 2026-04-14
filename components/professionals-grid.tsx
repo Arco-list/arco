@@ -16,7 +16,13 @@ import { SortLinks } from "@/components/sort-links"
 
 // Map preview card: positioned via CSS order (3rd on desktop, 2nd on iPad, hidden on mobile)
 
-export function ProfessionalsGrid({ professionals = [] }: { professionals?: ProfessionalCard[] }) {
+export function ProfessionalsGrid({
+  professionals = [],
+  initialTotal,
+}: {
+  professionals?: ProfessionalCard[]
+  initialTotal?: number
+}) {
   const [showMap, setShowMap] = useState(false)
   const t = useTranslations("professionals")
 
@@ -44,25 +50,11 @@ export function ProfessionalsGrid({ professionals = [] }: { professionals?: Prof
     refetch,
     hasMore,
     loadMore,
-  } = useProfessionalsQuery(professionals)
+  } = useProfessionalsQuery(professionals, initialTotal)
 
-  const sortedProfessionals = useMemo(() => {
-    const next = [...queryProfessionals]
-    switch (sortBy) {
-      case "Most popular":
-        // TODO: Replace with actual project views (last 7 days) when available
-        return next
-      case "Most recent":
-        return next.sort((a, b) => {
-          const aT = a.profile?.joinedAt ? new Date(a.profile.joinedAt).getTime() : 0
-          const bT = b.profile?.joinedAt ? new Date(b.profile.joinedAt).getTime() : 0
-          return bT - aT
-        })
-      case "Best match":
-      default:
-        return next
-    }
-  }, [queryProfessionals, sortBy])
+  // Sort is applied server-side in the search_professionals RPC so it stays
+  // stable across "Load more". The grid just consumes the ordered list.
+  const sortedProfessionals = queryProfessionals
 
   const headingText = useMemo(() => {
     const locationLabel =

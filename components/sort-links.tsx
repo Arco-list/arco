@@ -4,6 +4,12 @@ import { useRef, useState, useEffect } from "react"
 import { useTranslations } from "next-intl"
 
 const SORT_LABEL_KEYS: Record<string, string> = {
+  // Project sort keys (lib/projects/sort.ts)
+  most_relevant: "sort_most_relevant",
+  featured: "sort_featured",
+  popular: "sort_most_popular",
+  most_recent: "sort_most_recent",
+  // Legacy/other-namespace labels still used by companies/professionals sort
   "Most recent": "sort_most_recent",
   "Most liked": "sort_most_liked",
   "Most popular": "sort_most_popular",

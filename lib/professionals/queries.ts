@@ -12,9 +12,12 @@ import type {
   ProfessionalProjectSummary,
   ProfessionalSocialLink,
 } from "./types"
+import { DEFAULT_PROFESSIONAL_SORT, type ProfessionalSort } from "./sort"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
-const INITIAL_PAGE_SIZE = 20
+// First-page fetch for the discover grid leaves a slot for the inline map
+// card: 14 pros + 1 map card = 15 = 5 full rows on desktop (3 cols).
+const INITIAL_PAGE_SIZE = 14
 
 type NullableString = string | null
 
@@ -279,7 +282,6 @@ type SearchProfessionalsRpcRow = {
   last_name: string | null
   user_location: string | null
   company_id: string | null
-  company_id_full: string | null
   company_name: string | null
   company_slug: string | null
   company_logo: string | null
@@ -291,24 +293,28 @@ type SearchProfessionalsRpcRow = {
   company_longitude: number | null
   primary_specialty: string | null
   primary_service_name: string | null
-  primary_service_name_nl: string | null
   services_offered: string[] | null
   is_verified: boolean | null
   cover_photo_url: string | null
   avatar_url: string | null
   specialty_ids: string[] | null
   specialty_parent_ids: string[] | null
+  credited_sum?: number
+  views_count?: number
+  is_featured?: boolean
 }
 
 const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: string = "en"): ProfessionalCard | null => {
-  const companyId = row.company_id || row.company_id_full
+  const companyId = row.company_id
   if (!companyId) return null
 
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
 
-  // Use primary service from company's primary_service_id (company-level data only)
-  const profession = (locale === "nl" && row.primary_service_name_nl) ? row.primary_service_name_nl : (row.primary_service_name || "Professional services")
+  // The RPC doesn't return a locale-specific service name — the old
+  // Dutch-specific fallback was reading a field that never existed.
+  void locale
+  const profession = row.primary_service_name || "Professional services"
 
   // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
@@ -339,10 +345,21 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
   }
 }
 
-export const fetchDiscoverProfessionals = async (locale: string = "en"): Promise<ProfessionalCard[]> => {
+export interface DiscoverProfessionalsResult {
+  professionals: ProfessionalCard[]
+  /** Total matching professionals (all pages), not just the initial slice. */
+  total: number
+}
+
+export const fetchDiscoverProfessionals = async (
+  locale: string = "en",
+  sort: ProfessionalSort = DEFAULT_PROFESSIONAL_SORT,
+): Promise<DiscoverProfessionalsResult> => {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase.rpc("search_professionals", {
+  // Keep the "no filter" shape identical for both RPCs so the count matches
+  // exactly what the client would compute once filters are applied.
+  const filterParams = {
     search_query: null,
     country_filter: null,
     state_filter: null,
@@ -352,22 +369,36 @@ export const fetchDiscoverProfessionals = async (locale: string = "en"): Promise
     min_rating: null,
     max_hourly_rate: null,
     verified_only: false,
-    limit_count: INITIAL_PAGE_SIZE,
-    offset_count: 0,
-  })
-
-  if (error) {
-    logger.error("Failed to load professionals for discover", { function: "search_professionals", error })
-    return []
   }
 
-  const rows = Array.isArray(data) ? (data as SearchProfessionalsRpcRow[]) : []
+  const [searchResult, countResult] = await Promise.all([
+    supabase.rpc("search_professionals", {
+      ...filterParams,
+      limit_count: INITIAL_PAGE_SIZE,
+      offset_count: 0,
+      sort_by: sort,
+    }),
+    supabase.rpc("count_professionals", filterParams),
+  ])
+
+  if (searchResult.error) {
+    logger.error("Failed to load professionals for discover", { function: "search_professionals", error: searchResult.error })
+    return { professionals: [], total: 0 }
+  }
+  if (countResult.error) {
+    logger.warn("Failed to count professionals for discover", { function: "count_professionals", error: countResult.error })
+  }
+
+  const rows = Array.isArray(searchResult.data) ? (searchResult.data as SearchProfessionalsRpcRow[]) : []
 
   const cards = rows
     .map((row) => mapRpcRowToProfessionalCard(row, locale))
     .filter((card): card is ProfessionalCard => card !== null)
 
-  return sortProfessionals(cards)
+  const professionals = sortProfessionals(cards)
+  const total = countResult.data != null ? Number(countResult.data) : professionals.length
+
+  return { professionals, total }
 }
 
 export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{

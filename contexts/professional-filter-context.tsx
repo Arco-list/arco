@@ -16,8 +16,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 import { useProfessionalTaxonomy, type LocationOptions } from "@/hooks/use-professional-taxonomy"
 
-export const PROFESSIONAL_SORT_OPTIONS = ["Best match", "Most popular", "Most recent"] as const
-export type ProfessionalSortOption = (typeof PROFESSIONAL_SORT_OPTIONS)[number]
+// Sort keys are defined in lib/professionals/sort.ts and applied
+// server-side via the search_professionals RPC (see migration 131).
+import {
+  PROFESSIONAL_SORT_OPTIONS as SORT_KEYS,
+  DEFAULT_PROFESSIONAL_SORT,
+  type ProfessionalSort,
+} from "@/lib/professionals/sort"
+
+export const PROFESSIONAL_SORT_OPTIONS = SORT_KEYS
+export type ProfessionalSortOption = ProfessionalSort
+export { DEFAULT_PROFESSIONAL_SORT }
 
 const normalizeToken = (value: string) => value.trim().toLowerCase()
 
@@ -139,7 +148,7 @@ const INITIAL_STATE: ProfessionalFilterState = {
   selectedServices: [],
   selectedCities: [],
   keyword: "",
-  sortBy: "Best match",
+  sortBy: DEFAULT_PROFESSIONAL_SORT,
 }
 
 type ProfessionalFilterAction =

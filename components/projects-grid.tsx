@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -25,31 +25,16 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
   const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap, clearAllFilters } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const { projects, total, isLoading, error, hasMore, loadMore, spacePhotoOverrides } = useProjectsQuery({
-    pageSize: 12,
+    pageSize: 15,
     initialProjects,
+    sort: sortBy,
   })
 
   const [currentPhotoIndexes, setCurrentPhotoIndexes] = useState<Record<string, number>>({})
 
-  // ── sort ────────────────────────────────────────────────────────────────────
-
-  const sortedProjects = useMemo<DiscoverProject[]>(() => {
-    let next = [...projects] as DiscoverProject[]
-
-    // Note: space filtering is handled server-side in useProjectsQuery
-
-    switch (sortBy) {
-      case "Most liked":
-        return next.sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0))
-      case "Alphabetical":
-        return next.sort((a, b) => (a.title ?? "").localeCompare(b.title ?? ""))
-      default:
-        return next.sort(
-          (a, b) =>
-            new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
-        )
-    }
-  }, [projects, sortBy, selectedSpace, spacePhotoOverrides])
+  // Sort is applied server-side via useProjectsQuery so it stays stable
+  // across pagination; the UI just consumes the already-ordered list.
+  const sortedProjects = projects as DiscoverProject[]
 
   // ── heading ─────────────────────────────────────────────────────────────────
 

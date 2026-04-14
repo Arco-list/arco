@@ -217,6 +217,7 @@ export type Database = {
           translations: Json | null
           updated_at: string | null
           upgrade_eligible: boolean
+          views_count: number
           website: string | null
         }
         Insert: {
@@ -257,6 +258,7 @@ export type Database = {
           translations?: Json | null
           updated_at?: string | null
           upgrade_eligible?: boolean
+          views_count?: number
           website?: string | null
         }
         Update: {
@@ -297,6 +299,7 @@ export type Database = {
           translations?: Json | null
           updated_at?: string | null
           upgrade_eligible?: boolean
+          views_count?: number
           website?: string | null
         }
         Relationships: [
@@ -3272,6 +3275,7 @@ export type Database = {
           client_first_name: string | null
           client_last_name: string | null
           created_at: string | null
+          credited_count: number | null
           description: string | null
           features: string[] | null
           id: string | null
@@ -3488,6 +3492,14 @@ export type Database = {
         Args: { prof_id: string }
         Returns: boolean
       }
+      increment_company_views: {
+        Args: { p_company_id: string }
+        Returns: undefined
+      }
+      increment_project_views: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
       is_admin_user: { Args: never; Returns: boolean }
       is_own_profile_avatar_path: { Args: { _path: string }; Returns: boolean }
@@ -3519,69 +3531,42 @@ export type Database = {
           offset_count?: number
           search_query?: string
           service_filters?: string[]
+          sort_by?: string
           state_filter?: string
           verified_only?: boolean
         }
         Returns: {
-          avatar_url: string | null
-          bio: string | null
-          communication_rating: number | null
-          company_city: string | null
-          company_country: string | null
-          company_domain: string | null
-          company_id: string | null
-          company_id_full: string | null
-          company_is_featured: boolean | null
-          company_latitude: number | null
-          company_logo: string | null
-          company_longitude: number | null
-          company_name: string | null
-          company_plan_expires_at: string | null
-          company_plan_tier:
-            | Database["public"]["Enums"]["company_plan_tier"]
-            | null
-          company_slug: string | null
-          company_state_region: string | null
-          company_status: Database["public"]["Enums"]["company_status"] | null
-          cover_photo_url: string | null
-          created_at: string | null
-          display_rating: number | null
-          first_name: string | null
-          hourly_rate_display: string | null
-          hourly_rate_max: number | null
-          hourly_rate_min: number | null
-          id: string | null
-          is_available: boolean | null
-          is_verified: boolean | null
-          languages_spoken: string[] | null
-          last_name: string | null
-          last_review_at: string | null
-          portfolio_url: string | null
-          primary_service_name: string | null
-          primary_service_name_nl: string | null
-          primary_specialty: string | null
-          primary_specialty_slug: string | null
-          quality_rating: number | null
-          reliability_rating: number | null
-          searchable_city: string | null
-          searchable_country: string | null
-          searchable_state_region: string | null
-          services_offered: string[] | null
-          specialty_ids: string[] | null
-          specialty_parent_ids: string[] | null
-          title: string | null
-          total_reviews: number | null
-          updated_at: string | null
-          user_id: string | null
-          user_location: string | null
-          years_experience: number | null
+          avatar_url: string
+          company_city: string
+          company_country: string
+          company_domain: string
+          company_id: string
+          company_latitude: number
+          company_logo: string
+          company_longitude: number
+          company_name: string
+          company_slug: string
+          company_state_region: string
+          cover_photo_url: string
+          credited_sum: number
+          display_rating: number
+          first_name: string
+          hourly_rate_display: string
+          id: string
+          is_featured: boolean
+          is_verified: boolean
+          last_name: string
+          primary_service_name: string
+          primary_specialty: string
+          services_offered: string[]
+          specialty_ids: string[]
+          specialty_parent_ids: string[]
+          title: string
+          total_reviews: number
+          user_id: string
+          user_location: string
+          views_count: number
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "mv_professional_summary"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       search_professionals_optimized: {
         Args: {

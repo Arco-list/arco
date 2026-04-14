@@ -8,7 +8,12 @@ import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
-const PAGE_SIZE = 20
+// First page leaves a slot for the inline map card so the grid shows
+// exactly 5 full rows on desktop (14 pros + 1 map card = 15 = 5×3).
+// Subsequent pages add full rows (multiples of 3) so the alignment is
+// preserved as the user loads more.
+const FIRST_PAGE_SIZE = 14
+const PAGE_SIZE = 15
 
 type SearchProfessionalsRow = {
   id: string
@@ -19,7 +24,6 @@ type SearchProfessionalsRow = {
   user_location: string | null
   title: string | null
   company_id: string | null
-  company_id_full: string | null
   company_name: string | null
   company_slug: string | null
   company_logo: string | null
@@ -31,13 +35,15 @@ type SearchProfessionalsRow = {
   company_longitude: number | null
   primary_specialty: string | null
   primary_service_name: string | null
-  primary_service_name_nl: string | null
   services_offered: string[] | null
   hourly_rate_display: string | null
   is_verified: boolean | null
   cover_photo_url: string | null
   specialty_ids: string[] | null
   specialty_parent_ids: string[] | null
+  credited_sum?: number
+  views_count?: number
+  is_featured?: boolean
 }
 
 interface UseProfessionalsQueryResult {
@@ -54,7 +60,7 @@ interface UseProfessionalsQueryResult {
 }
 
 const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): ProfessionalCard | null => {
-  const companyId = row.company_id || row.company_id_full
+  const companyId = row.company_id
   if (!companyId && !row.company_name) {
     return null
   }
@@ -63,7 +69,11 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
   const name = row.company_name || fullName || "Professional"
 
   // Use primary service from company's primary_service_id (company-level data only)
-  const profession = (locale === "nl" && row.primary_service_name_nl) ? row.primary_service_name_nl : (row.primary_service_name || "Professional services")
+  // Locale-specific service name isn't returned by the RPC — the Dutch
+  // fallback was reading a field that never existed at runtime. Keep the
+  // locale param for future use but just use primary_service_name for now.
+  void locale
+  const profession = row.primary_service_name || "Professional services"
 
   // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
@@ -94,7 +104,10 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
   }
 }
 
-export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] = []): UseProfessionalsQueryResult {
+export function useProfessionalsQuery(
+  initialProfessionals: ProfessionalCard[] = [],
+  initialTotal?: number,
+): UseProfessionalsQueryResult {
   const locale = useLocale()
   const {
     selectedCategories,
@@ -102,19 +115,26 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     selectedCities,
     keyword,
     taxonomy,
+    sortBy,
   } = useProfessionalFilters()
 
   const [professionals, setProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
   const [allProfessionals, setAllProfessionals] = useState<ProfessionalCard[]>(initialProfessionals)
-  const [hasMore, setHasMore] = useState(initialProfessionals.length === PAGE_SIZE)
+  const [hasMore, setHasMore] = useState(initialProfessionals.length === FIRST_PAGE_SIZE)
   const [currentOffset, setCurrentOffset] = useState(initialProfessionals.length)
-  const [total, setTotal] = useState(initialProfessionals.length)
+  // Seeded from SSR — `fetchDiscoverProfessionals` returns the real total so
+  // the result count is correct on first paint. Falls back to the loaded
+  // length only if the caller didn't pass a total.
+  const [total, setTotal] = useState(initialTotal ?? initialProfessionals.length)
   const [isLoading, setIsLoading] = useState(false) // Start with SSR data
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasInitialDataRef = useRef(initialProfessionals.length > 0)
+  // Capture the sort the SSR data was fetched with so we know to refetch if
+  // the user changes the sort before triggering any other filter.
+  const initialSortRef = useRef(sortBy)
 
   const fetchPage = useCallback(
     async (offset: number, replace: boolean) => {
@@ -162,9 +182,10 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
           verified_only: false,
         }
 
+        const size = offset === 0 ? FIRST_PAGE_SIZE : PAGE_SIZE
         const dataPromise = supabase.rpc(
           "search_professionals",
-          { ...filterParams, limit_count: PAGE_SIZE, offset_count: offset },
+          { ...filterParams, limit_count: size, offset_count: offset, sort_by: sortBy },
           { signal: controller.signal },
         )
 
@@ -198,7 +219,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
           mapped.forEach((p) => existing.set(p.companyId, p))
           return Array.from(existing.values())
         })
-        setHasMore(mapped.length === PAGE_SIZE)
+        setHasMore(mapped.length === size)
         setCurrentOffset(offset + mapped.length)
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
@@ -222,7 +243,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
         }
       }
     },
-    [keyword, selectedCategories, selectedCities, selectedServices],
+    [keyword, selectedCategories, selectedCities, selectedServices, sortBy],
   )
 
   useEffect(() => {
@@ -238,8 +259,9 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
       selectedCities.length > 0 ||
       keyword.trim().length > 0
 
-    // If we have initial SSR data and no filters, don't fetch
-    if (hasInitialDataRef.current && !hasFilters) {
+    // If we have initial SSR data, no filters, and the sort hasn't changed
+    // from the one the SSR fetch used, the initial data is still valid.
+    if (hasInitialDataRef.current && !hasFilters && sortBy === initialSortRef.current) {
       hasInitialDataRef.current = false
       return
     }
@@ -251,7 +273,7 @@ export function useProfessionalsQuery(initialProfessionals: ProfessionalCard[] =
     setHasMore(true)
     setCurrentOffset(0)
     void fetchPage(0, true)
-  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCities, keyword])
+  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCities, keyword, sortBy])
 
   const loadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) {

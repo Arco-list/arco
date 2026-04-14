@@ -4,8 +4,9 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { getProjectTranslation } from "@/lib/project-translations"
 import type { Tables } from "@/lib/supabase/types"
+import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "./sort"
 
-const INITIAL_PAGE_SIZE = 12
+const INITIAL_PAGE_SIZE = 15
 
 // ─── Base row from the view ────────────────────────────────────────────────────
 
@@ -83,16 +84,19 @@ interface ProjectProfessional {
 
 // ─── Query ────────────────────────────────────────────────────────────────────
 
-export const fetchDiscoverProjects = async (locale: string = "en"): Promise<DiscoverProject[]> => {
+export const fetchDiscoverProjects = async (
+  locale: string = "en",
+  sort: ProjectSort = DEFAULT_PROJECT_SORT,
+): Promise<DiscoverProject[]> => {
   const supabase = await createServerSupabaseClient()
 
   // ── 1. Base project rows ──────────────────────────────────────────────────
-  const { data: baseRows, error: baseError } = await supabase
+  let baseQuery = supabase
     .from("project_search_documents")
     .select("*")
     .eq("status", "published")
-    .order("created_at", { ascending: false, nullsFirst: false })
-    .limit(INITIAL_PAGE_SIZE)
+  baseQuery = applyProjectSort(baseQuery, sort)
+  const { data: baseRows, error: baseError } = await baseQuery.limit(INITIAL_PAGE_SIZE)
 
   if (baseError) {
     logger.error("Failed to load projects for discover", {

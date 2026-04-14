@@ -3,16 +3,17 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
-import { FilterBar, type SortOption } from "@/components/filter-bar"
+import { FilterBar, type SortOption, DEFAULT_PROJECT_SORT } from "@/components/filter-bar"
 import { ProjectsGrid } from "@/components/projects-grid"
 import type { DiscoverProject } from "@/lib/projects/queries"
 
 interface DiscoverClientProps {
   initialProjects: DiscoverProject[]
+  initialSort?: SortOption
 }
 
-export function DiscoverClient({ initialProjects }: DiscoverClientProps) {
-  const [sortBy, setSortBy] = useState<SortOption>("Most recent")
+export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_SORT }: DiscoverClientProps) {
+  const [sortBy, setSortBy] = useState<SortOption>(initialSort)
   const t = useTranslations("projects")
 
   return (

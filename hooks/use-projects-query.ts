@@ -6,6 +6,7 @@ import { getProjectTranslation } from "@/lib/project-translations"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables } from "@/lib/supabase/types"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
+import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "@/lib/projects/sort"
 
 import { useFilters } from "@/contexts/filter-context"
 
@@ -46,9 +47,10 @@ const applyTypeFilters = (query: any, selectedTypes: string[], categoriesById: M
 interface UseProjectsQueryOptions {
   pageSize?: number
   initialProjects?: ProjectSummaryRow[]
+  sort?: ProjectSort
 }
 
-const DEFAULT_PAGE_SIZE = 12
+const DEFAULT_PAGE_SIZE = 15
 const MAX_PAGE_SIZE = 100
 type ProjectBudgetLevel = Enums<"project_budget_level">
 const ALLOWED_BUDGET_LEVELS = new Set<ProjectBudgetLevel>([
@@ -83,7 +85,8 @@ interface UseProjectsQueryResult {
 
 export function useProjectsQuery({
   pageSize = DEFAULT_PAGE_SIZE,
-  initialProjects = []
+  initialProjects = [],
+  sort = DEFAULT_PROJECT_SORT,
 }: UseProjectsQueryOptions = {}): UseProjectsQueryResult {
   const {
     selectedTypes,
@@ -115,6 +118,9 @@ export function useProjectsQuery({
   const [spacePhotoOverrides, setSpacePhotoOverrides] = useState<Record<string, { url: string; alt?: string | null }>>({})
 
   const hasInitialDataRef = useRef(initialProjects.length > 0)
+  // Capture the sort the SSR data was fetched with so we know to refetch
+  // if the user changes the sort before triggering any other filter.
+  const initialSortRef = useRef<ProjectSort>(sort)
 
   const categories = taxonomy.categories as CategoryRow[]
 
@@ -289,11 +295,11 @@ export function useProjectsQuery({
       const from = pageIndex * effectivePageSize
       const to = from + effectivePageSize - 1
 
-      let query = supabase
+      let query: any = supabase
         .from("project_search_documents")
         .select("*", { count: "exact" })
-        .order("created_at", { ascending: false, nullsFirst: false })
-        .range(from, to)
+      query = applyProjectSort(query, sort)
+      query = query.range(from, to)
 
       // Space filter: find project IDs that have photos tagged with the selected space
       if (selectedSpace) {
@@ -378,7 +384,7 @@ export function useProjectsQuery({
       }
 
       // Fetch preview photos for card carousel (max 5 per project)
-      const projectIds = (data ?? []).map((p) => p.id).filter(Boolean) as string[]
+      const projectIds = (data ?? []).map((p: ProjectSummaryRow) => p.id).filter(Boolean) as string[]
       if (projectIds.length > 0) {
         const { data: photos } = await supabase
           .from("project_photos")
@@ -412,7 +418,7 @@ export function useProjectsQuery({
 
       // Resolve locale-aware title/description from projects.translations.
       // Falls back to the base column when no translation exists.
-      const localized = (data ?? []).map((row) => ({
+      const localized = (data ?? []).map((row: ProjectSummaryRow) => ({
         ...row,
         title: getProjectTranslation(
           { title: row.title, translations: (row as { translations?: Record<string, any> | null }).translations ?? null },
@@ -431,7 +437,7 @@ export function useProjectsQuery({
         total: count ?? 0,
       }
     },
-    [effectivePageSize, filters, selectedSpace, locale],
+    [effectivePageSize, filters, selectedSpace, locale, sort],
   )
 
   const fetchTypePhotoOverrides = useCallback(
@@ -640,8 +646,10 @@ export function useProjectsQuery({
         keyword.trim().length > 0 ||
         !!selectedSpace
 
-      // If we have initial SSR data and no filters, don't fetch
-      if (hasInitialDataRef.current && !hasFilters) {
+      // If we have initial SSR data, no filters, and the sort hasn't
+      // changed from the one used for SSR, the initial data is still
+      // valid — skip the fetch.
+      if (hasInitialDataRef.current && !hasFilters && sort === initialSortRef.current) {
         hasInitialDataRef.current = false
         return
       }

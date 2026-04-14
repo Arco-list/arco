@@ -141,8 +141,12 @@ const SPACE_OPTIONS: SpaceOption[] = [
   },
 ]
 
-export const SORT_OPTIONS = ["Most recent", "Most liked", "Alphabetical"] as const
-export type SortOption = (typeof SORT_OPTIONS)[number]
+// Project sort options are defined in lib/projects/sort.ts — re-exported
+// here so existing FilterBar/Grid consumers keep their import path.
+import { PROJECT_SORT_OPTIONS, DEFAULT_PROJECT_SORT, type ProjectSort } from "@/lib/projects/sort"
+export const SORT_OPTIONS = PROJECT_SORT_OPTIONS
+export { DEFAULT_PROJECT_SORT }
+export type SortOption = ProjectSort
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -466,13 +470,6 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [locationSearch, setLocationSearch] = useState("")
   const barRef = useRef<HTMLDivElement>(null)
-
-  // Sort option label mapping
-  const sortLabelMap: Record<SortOption, string> = {
-    "Most recent": t("sort_most_recent"),
-    "Most liked": t("sort_most_liked"),
-    "Alphabetical": t("sort_alphabetical"),
-  }
 
   // Close on outside click. Portaled dropdowns live outside barRef, so we
   // also treat clicks inside any .filter-dropdown as "inside".
