@@ -140,6 +140,32 @@ function cleanImageSrc(src: string): string {
 /** Try to upgrade an image URL to its full-resolution variant */
 function upgradeToFullRes(url: string): string {
   let upgraded = url
+
+  // Next.js / Vercel image proxies: /_next/image?url=<encoded>&w=3840&q=100
+  // Unwrap to the inner URL, which is the original source and typically full-res.
+  try {
+    const parsed = new URL(upgraded)
+    const isProxy = /\/_next\/image\b|\/_vercel\/image\b/i.test(parsed.pathname)
+    if (isProxy) {
+      const inner = parsed.searchParams.get("url")
+      if (inner) {
+        // `inner` is already decoded by URLSearchParams; recurse to strip any
+        // WxH suffix the original may still carry.
+        return upgradeToFullRes(inner)
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Path-segment size markers. Firecrawl's markdown output only carries
+  // the `src` attribute (never the srcset largest), so when a CMS puts
+  // the low-res variant in src we need to upgrade here at intake — the
+  // downstream dedup only helps when the high-res URL *also* exists in
+  // the extracted list, which isn't guaranteed.
+  //
+  //   i29.nl — /_headerSmall|Medium|Large/ → /_headerExtraLarge/
+  //   generic — /thumbs?|small|medium|large/ → /large/
+  upgraded = upgraded.replace(/\/_header(?:Small|Medium|Large)\//, "/_headerExtraLarge/")
+
   // WordPress: remove -WxH suffix before extension (e.g. image-1024x768.jpg → image.jpg)
   upgraded = upgraded.replace(/-\d+x\d+(\.\w+)(?:\?|$)/, "$1")
   // Query-based resizing: remove w, width, h, height, resize, fit params
@@ -151,6 +177,51 @@ function upgradeToFullRes(url: string): string {
     upgraded = parsed.toString()
   } catch { /* keep original */ }
   return upgraded
+}
+
+/**
+ * Extract a normalization key + size rank from a URL so we can collapse
+ * multiple resolutions of the same image down to the largest variant.
+ * Handles common CMS patterns: i29-style `/_headerSmall|Medium|Large|ExtraLarge/`
+ * path segments, WordPress `-scaled`, and generic `/thumb|small|medium|large/`
+ * segments. Unknown URLs get a neutral rank so they pass through unchanged.
+ */
+function imageSizeKey(url: string): { key: string; rank: number } {
+  let rank = 50
+  const markers: Array<[RegExp, number]> = [
+    [/_headerExtraLarge\b/i, 100],
+    [/_headerLarge\b/i, 80],
+    [/_headerMedium\b/i, 60],
+    [/_headerSmall\b/i, 40],
+    [/-scaled(?=\.\w+)/i, 95],
+    [/\/(?:original|full|source)\//i, 95],
+    [/\/large\//i, 80],
+    [/\/medium\//i, 60],
+    [/\/small\//i, 40],
+    [/\/thumbs?\//i, 20],
+  ]
+  for (const [re, r] of markers) {
+    if (re.test(url)) { rank = r; break }
+  }
+  const key = url
+    .replace(/_header(?:Small|Medium|Large|ExtraLarge)/gi, "")
+    .replace(/\/(?:thumbs?|small|medium|large|original|full|source)\//gi, "/")
+    .replace(/-scaled(\.\w+)/gi, "$1")
+    .replace(/-\d+x\d+(\.\w+)/gi, "$1")
+    .toLowerCase()
+  return { key, rank }
+}
+
+/** Collapse multi-resolution variants of the same image, keeping the largest. */
+function dedupKeepLargest(urls: string[]): string[] {
+  const best = new Map<string, { url: string; rank: number }>()
+  for (const url of urls) {
+    const { key, rank } = imageSizeKey(url)
+    const existing = best.get(key)
+    if (!existing || rank > existing.rank) best.set(key, { url, rank })
+  }
+  const kept = new Set([...best.values()].map((v) => v.url))
+  return urls.filter((u) => kept.has(u))
 }
 
 function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: string): string[] {
@@ -167,6 +238,16 @@ function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: 
       if (seen.has(key)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(key)) return
       if (/logo|icon|avatar|favicon|sprite|placeholder/i.test(key)) return
+      // Elementor caches hashed low-res thumbnails under elementor/thumbs/
+      // — always a dupe of an uploads/<file>.jpg that we can't reconstruct.
+      if (/\/elementor\/thumbs\//i.test(key)) return
+      // Site-wide og:image defaults (shared across every page on a site).
+      // We'd otherwise store the site's generic social-share image as the
+      // project's primary photo. Two common signatures:
+      //   • assets live under a theme directory (WordPress convention)
+      //   • filename matches the facebook-og / default-og pattern
+      if (/\/(?:themes|theme|assets\/img)\/.*\b(?:facebook-og|default-og|share-og|og-image|og-default|social-share)\b/i.test(key)) return
+      if (/\/(?:facebook-og|default-og|share-og|og-default|social-share)[\w-]*\.(?:jpe?g|png|webp)(?:\?|$)/i.test(key)) return
       seen.add(key)
       results.push(key)
     } catch { /* ignore invalid URLs */ }
@@ -202,6 +283,7 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
       if (seen.has(key)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(key)) return
       if (/logo|icon|avatar|favicon|sprite|placeholder|gravatar/i.test(key)) return
+      if (/\/elementor\/thumbs\//i.test(key)) return
       if (/data:image/i.test(key)) return
       seen.add(key)
       results.push(key)
@@ -220,26 +302,37 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
     if (widthMatch && parseInt(widthMatch[1]) < 200) continue
     if (heightMatch && parseInt(heightMatch[1]) < 200) continue
 
-    // Extract from various attributes
-    for (const attr of ["data-src", "data-lazy-src", "data-original", "data-full", "src"]) {
-      const attrMatch = tag.match(new RegExp(`${attr}=["']([^"']+)["']`, "i"))
-      if (attrMatch?.[1] && !attrMatch[1].startsWith("data:")) {
-        add(attrMatch[1])
+    // Pick ONE best URL per tag. srcset's largest wins when present —
+    // otherwise many sites put the low-res thumbnail in `src` and only
+    // expose the full-res variant via srcset (e.g. i29.nl /_headerSmall/
+    // in src, /_headerExtraLarge/ in srcset at 1600w).
+    let bestSrc: string | null = null
+
+    const srcsetMatch = tag.match(/srcset=["']([^"']+)["']/i)
+    if (srcsetMatch?.[1]) {
+      const candidates = srcsetMatch[1]
+        .split(",")
+        .map((s) => s.trim().split(/\s+/))
+        .filter((c) => c[0])
+      candidates.sort((a, b) => {
+        const aW = parseInt(a[1]?.replace(/[wx]$/, "") ?? "0")
+        const bW = parseInt(b[1]?.replace(/[wx]$/, "") ?? "0")
+        return bW - aW
+      })
+      if (candidates[0]?.[0]) bestSrc = candidates[0][0]
+    }
+
+    if (!bestSrc) {
+      for (const attr of ["data-full", "data-original", "data-lazy-src", "data-src", "src"]) {
+        const attrMatch = tag.match(new RegExp(`${attr}=["']([^"']+)["']`, "i"))
+        if (attrMatch?.[1] && !attrMatch[1].startsWith("data:")) {
+          bestSrc = attrMatch[1]
+          break
+        }
       }
     }
 
-    // Extract from srcset (take the largest)
-    const srcsetMatch = tag.match(/srcset=["']([^"']+)["']/i)
-    if (srcsetMatch?.[1]) {
-      const candidates = srcsetMatch[1].split(",").map((s) => s.trim().split(/\s+/))
-      // Sort by width descriptor (e.g. "1024w") descending
-      candidates.sort((a, b) => {
-        const aW = parseInt(a[1]?.replace("w", "") ?? "0")
-        const bW = parseInt(b[1]?.replace("w", "") ?? "0")
-        return bW - aW
-      })
-      if (candidates[0]?.[0]) add(candidates[0][0])
-    }
+    if (bestSrc) add(bestSrc)
   }
 
   // Match WordPress gallery links: <a href="...jpg">
@@ -314,6 +407,7 @@ function extractImagesFromDom(doc: Document, baseUrl: string): string[] {
       if (seen.has(abs)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(abs)) return
       if (/logo|icon|avatar|favicon|sprite|placeholder/i.test(abs)) return
+      if (/\/elementor\/thumbs\//i.test(abs)) return
       seen.add(abs)
       results.push(abs)
     } catch { /* ignore invalid URLs */ }
@@ -623,7 +717,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
         }
       }
 
-      imageUrls = imageUrls.slice(0, 30)
+      imageUrls = dedupKeepLargest(imageUrls).slice(0, 30)
       console.log(`[scrape] Found ${imageUrls.length} images from ${url.toString()}`)
 
       // Extract structured data with Claude (or basic fallback)
@@ -694,8 +788,8 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
           if (!imageUrls.includes(img)) imageUrls.push(img)
         }
       } catch {}
-      imageUrls = imageUrls.slice(0, 30)
     }
+    imageUrls = dedupKeepLargest(imageUrls).slice(0, 30)
 
     if (process.env.ANTHROPIC_API_KEY) {
       try {
