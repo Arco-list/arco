@@ -3,15 +3,9 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-
-interface Variant {
-  color?: string
-  hex?: string | null
-  color_hex?: string | null
-  material?: string
-  size?: string
-  image_url?: string | null
-}
+import type { RawVariant } from "@/lib/scraper/types"
+import type { Axis, AxisName, AxisValue, NormalizedVariants } from "@/lib/products/variants"
+import { availableValues, findCombination, normalizeVariants } from "@/lib/products/variants"
 
 interface Brand {
   name: string
@@ -24,83 +18,69 @@ interface ProductHeroProps {
   description: string | null
   brand: Brand | null
   heroImageUrl: string | null
-  variants: Variant[]
+  variants: RawVariant[]
 }
 
-/** Strip product name words from variant label (order-independent) */
-function cleanLabel(label: string, productName: string): string {
-  const productWords = new Set(productName.toLowerCase().split(/\s+/))
-  // Remove any leading words that appear in the product name
-  const labelWords = label.split(/[\s\-–—]+/)
-  let startIdx = 0
-  while (startIdx < labelWords.length && productWords.has(labelWords[startIdx].toLowerCase())) {
-    startIdx++
-  }
-  const cleaned = labelWords.slice(startIdx).join(" ").trim()
-  return cleaned.length > 0 ? cleaned : label
+const AXIS_LABELS: Record<string, string> = {
+  color: "Colors",
+  material: "Materials",
+  size: "Sizes",
+  model: "Models",
+}
+
+function axisLabel(name: AxisName): string {
+  return AXIS_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1) + "s"
+}
+
+/**
+ * Decide how to render an axis's values based on what they carry:
+ *   hex  → circular colour swatches
+ *   img  → circular image thumbnails (material finishes)
+ *   pill → text pills (sizes, models)
+ */
+function axisStyle(axis: Axis): "hex" | "thumb" | "pill" {
+  if (axis.values.some((v) => v.hex)) return "hex"
+  if (axis.values.some((v) => v.image_url)) return "thumb"
+  return "pill"
 }
 
 export function ProductHero({ name, description, brand, heroImageUrl, variants }: ProductHeroProps) {
-  // Extract and deduplicate variant types
-  const colors = useMemo(() => {
-    const seen = new Map<string, Variant>()
-    for (const v of variants.filter((v) => v.color)) {
-      const key = cleanLabel(v.color!, name).toLowerCase()
-      const existing = seen.get(key)
-      if (!existing) {
-        seen.set(key, v)
-      } else {
-        // Merge: keep image_url and hex from whichever has them
-        seen.set(key, {
-          ...existing,
-          image_url: existing.image_url || v.image_url,
-          hex: existing.hex || v.hex,
-          color_hex: existing.color_hex || v.color_hex,
-        })
-      }
-    }
-    return [...seen.entries()].map(([, v]) => ({ ...v, label: cleanLabel(v.color!, name) }))
-  }, [variants, name])
+  const norm = useMemo(() => normalizeVariants(variants, name), [variants, name])
 
-  const materials = useMemo(() => {
-    const seen = new Map<string, Variant>()
-    for (const v of variants.filter((v) => v.material)) {
-      const key = v.material!.toLowerCase()
-      if (!seen.has(key) || (!seen.get(key)!.image_url && v.image_url)) seen.set(key, v)
-    }
-    return [...seen.entries()].map(([, v]) => ({ ...v, label: v.material! }))
-  }, [variants])
+  const [selection, setSelection] = useState<Record<AxisName, string | null>>({})
+  const [lastChanged, setLastChanged] = useState<AxisName | null>(null)
 
-  const models = useMemo(() => {
-    const seen = new Map<string, Variant>()
-    for (const v of variants.filter((v) => v.size)) {
-      const key = v.size!.toLowerCase()
-      if (!seen.has(key)) seen.set(key, v)
-    }
-    return [...seen.entries()].map(([, v]) => ({ ...v, label: v.size! }))
-  }, [variants])
-
-  const [activeColor, setActiveColor] = useState<number | null>(null)
-  const [activeMaterial, setActiveMaterial] = useState<number | null>(null)
-  const [activeModel, setActiveModel] = useState<number | null>(null)
-
-  // Determine which image to show
-  const activeColorImg = activeColor !== null ? colors[activeColor]?.image_url : null
-  const activeMaterialImg = activeMaterial !== null ? materials[activeMaterial]?.image_url : null
-  const activeModelImg = activeModel !== null ? models[activeModel]?.image_url : null
-
-  // Priority: most recently interacted wins. Track which was last changed.
-  const [lastChanged, setLastChanged] = useState<"color" | "material" | "model" | null>(null)
+  // In combination mode, find the matching row once all axes are picked
+  const combo = useMemo(() => findCombination(norm, selection), [norm, selection])
 
   const displayImage = (() => {
-    if (lastChanged === "color" && activeColorImg) return activeColorImg
-    if (lastChanged === "material" && activeMaterialImg) return activeMaterialImg
-    if (lastChanged === "model" && activeModelImg) return activeModelImg
-    // Fallback: hero image (primary product image)
+    if (norm.mode === "combination") {
+      return combo?.image_url ?? heroImageUrl
+    }
+    // Independent: the most recently clicked axis wins the image swap
+    if (lastChanged) {
+      const axis = norm.axes.find((a) => a.name === lastChanged)
+      const picked = axis?.values.find((v) => v.value === selection[lastChanged])
+      if (picked?.image_url) return picked.image_url
+    }
     return heroImageUrl
   })()
 
-  const hasVariants = colors.length > 0 || materials.length > 0 || models.length > 0
+  const hasVariants = norm.axes.length > 0
+
+  const toggleValue = (axisName: AxisName, value: string) => {
+    setSelection((prev) => {
+      const next = { ...prev }
+      if (prev[axisName] === value) {
+        next[axisName] = null
+        setLastChanged(null)
+      } else {
+        next[axisName] = value
+        setLastChanged(axisName)
+      }
+      return next
+    })
+  }
 
   return (
     <div className="product-hero">
@@ -116,7 +96,6 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
 
       {/* Product info + variant selectors */}
       <div className="product-hero-info">
-        {/* Brand */}
         {brand && (
           <Link href={`/products/${brand.slug}`} style={{ display: "block", marginBottom: 24, textDecoration: "none", color: "inherit" }}>
             <div className="company-icon" style={{ justifyContent: "flex-start" }}>
@@ -129,10 +108,8 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
           </Link>
         )}
 
-        {/* Product name */}
         <h1 className="arco-page-title" style={{ marginBottom: 0 }}>{name}</h1>
 
-        {/* Description */}
         {description && (
           <div style={{ marginTop: 20 }}>
             {description.split("\n\n").map((para, i) => (
@@ -141,119 +118,135 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
           </div>
         )}
 
-        {/* Variant selectors */}
         {hasVariants && (
           <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* Colors */}
-            {colors.length > 0 && (
-              <div>
-                <span className="arco-eyebrow" style={{ display: "block", marginBottom: 10 }}>Colors</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {colors.map((c, i) => {
-                    const hex = c.hex ?? c.color_hex ?? null
-                    const isActive = activeColor === i
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          if (isActive) { setActiveColor(null); setLastChanged(null) }
-                          else { setActiveColor(i); setLastChanged("color") }
-                        }}
-                        title={c.label}
-                        style={{
-                          width: 28, height: 28, borderRadius: "50%",
-                          background: hex ?? "var(--arco-surface)",
-                          border: isActive ? "2px solid var(--arco-black)" : hex ? "2px solid transparent" : "1px solid var(--rule)",
-                          boxSizing: "border-box", cursor: "pointer", padding: 0,
-                          outline: isActive ? "2px solid var(--arco-white)" : "none",
-                          outlineOffset: -4,
-                        }}
-                      />
-                    )
-                  })}
-                </div>
-                {activeColor !== null && (
-                  <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
-                    {colors[activeColor]?.label}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Materials */}
-            {materials.length > 0 && (
-              <div>
-                <span className="arco-eyebrow" style={{ display: "block", marginBottom: 10 }}>Materials</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {materials.map((m, i) => {
-                    const isActive = activeMaterial === i
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          if (isActive) { setActiveMaterial(null); setLastChanged(null) }
-                          else { setActiveMaterial(i); setLastChanged("material") }
-                        }}
-                        title={m.label}
-                        style={{
-                          width: 28, height: 28, borderRadius: "50%",
-                          background: "var(--arco-surface)",
-                          border: isActive ? "2px solid var(--arco-black)" : "1px solid var(--rule)",
-                          boxSizing: "border-box", cursor: "pointer", padding: 0,
-                          overflow: "hidden",
-                        }}
-                      >
-                        {m.image_url && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.image_url} alt={m.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-                {activeMaterial !== null && (
-                  <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
-                    {materials[activeMaterial]?.label}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Models */}
-            {models.length > 0 && (
-              <div>
-                <span className="arco-eyebrow" style={{ display: "block", marginBottom: 10 }}>Models</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {models.map((m, i) => {
-                    const isActive = activeModel === i
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          if (isActive) { setActiveModel(null); setLastChanged(null) }
-                          else { setActiveModel(i); setLastChanged("model") }
-                        }}
-                        className="status-pill"
-                        style={{
-                          cursor: "pointer",
-                          background: isActive ? "var(--arco-black)" : "transparent",
-                          color: isActive ? "var(--arco-white)" : "var(--arco-black)",
-                          borderColor: isActive ? "var(--arco-black)" : undefined,
-                        }}
-                      >
-                        {m.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+            {norm.axes.map((axis) => (
+              <AxisBlock
+                key={axis.name}
+                axis={axis}
+                selected={selection[axis.name] ?? null}
+                available={availableValues(norm, axis.name, selection)}
+                onToggle={(value) => toggleValue(axis.name, value)}
+                mode={norm.mode}
+              />
+            ))}
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+interface AxisBlockProps {
+  axis: Axis
+  selected: string | null
+  available: Set<string>
+  onToggle: (value: string) => void
+  mode: NormalizedVariants["mode"]
+}
+
+function AxisBlock({ axis, selected, available, onToggle, mode }: AxisBlockProps) {
+  const style = axisStyle(axis)
+  const activeValue = axis.values.find((v) => v.value === selected) ?? null
+
+  return (
+    <div>
+      <span className="arco-eyebrow" style={{ display: "block", marginBottom: 10 }}>{axisLabel(axis.name)}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: style === "pill" ? 6 : 8 }}>
+        {axis.values.map((v) => {
+          const isActive = selected === v.value
+          // In combination mode, fade values with no matching combination
+          // given the current selection of the *other* axes.
+          const isAvailable = mode !== "combination" || available.has(v.value)
+          return (
+            <AxisButton
+              key={v.value}
+              value={v}
+              style={style}
+              isActive={isActive}
+              isAvailable={isAvailable}
+              onClick={() => isAvailable && onToggle(v.value)}
+            />
+          )
+        })}
+      </div>
+      {activeValue && style !== "pill" && (
+        <span className="arco-xs-text" style={{ display: "block", marginTop: 6, color: "var(--text-secondary)" }}>
+          {activeValue.label}
+        </span>
+      )}
+    </div>
+  )
+}
+
+interface AxisButtonProps {
+  value: AxisValue
+  style: "hex" | "thumb" | "pill"
+  isActive: boolean
+  isAvailable: boolean
+  onClick: () => void
+}
+
+function AxisButton({ value, style, isActive, isAvailable, onClick }: AxisButtonProps) {
+  const common = {
+    onClick,
+    title: value.label,
+    type: "button" as const,
+    disabled: !isAvailable,
+    style: { opacity: isAvailable ? 1 : 0.35 },
+  }
+
+  if (style === "hex") {
+    return (
+      <button
+        {...common}
+        style={{
+          ...common.style,
+          width: 28, height: 28, borderRadius: "50%",
+          background: value.hex ?? "var(--arco-surface)",
+          border: isActive ? "2px solid var(--arco-black)" : value.hex ? "2px solid transparent" : "1px solid var(--rule)",
+          boxSizing: "border-box", cursor: isAvailable ? "pointer" : "not-allowed", padding: 0,
+          outline: isActive ? "2px solid var(--arco-white)" : "none",
+          outlineOffset: -4,
+        }}
+      />
+    )
+  }
+
+  if (style === "thumb") {
+    return (
+      <button
+        {...common}
+        style={{
+          ...common.style,
+          width: 28, height: 28, borderRadius: "50%",
+          background: "var(--arco-surface)",
+          border: isActive ? "2px solid var(--arco-black)" : "1px solid var(--rule)",
+          boxSizing: "border-box", cursor: isAvailable ? "pointer" : "not-allowed", padding: 0,
+          overflow: "hidden",
+        }}
+      >
+        {value.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value.image_url} alt={value.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        )}
+      </button>
+    )
+  }
+
+  return (
+    <button
+      {...common}
+      className="status-pill"
+      style={{
+        ...common.style,
+        cursor: isAvailable ? "pointer" : "not-allowed",
+        background: isActive ? "var(--arco-black)" : "transparent",
+        color: isActive ? "var(--arco-white)" : "var(--arco-black)",
+        borderColor: isActive ? "var(--arco-black)" : undefined,
+      }}
+    >
+      {value.label}
+    </button>
   )
 }
