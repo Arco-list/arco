@@ -1,6 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProspectsClient } from "./prospects-client"
-import { fetchFunnel, syncPlatformProspects, type Prospect } from "./actions"
+import { fetchFunnel, fetchProspects, syncPlatformProspects } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -10,17 +10,10 @@ export default async function ProspectsPage() {
 
   const supabase = createServiceRoleSupabaseClient()
 
-  const { data, error } = await supabase
-    .from("prospects")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50)
-
-  if (error) {
-    console.error("Failed to load prospects", error)
-  }
-
-  const prospects = (data ?? []) as Prospect[]
+  // fetchProspects handles the resolvedContact join (profiles + auth email
+  // + company owner) so the Contact cell matches the admin/companies Owner
+  // cell once a prospect advances to Signup / Draft / Listed.
+  const { prospects } = await fetchProspects({ limit: 50 })
   const { funnel } = await fetchFunnel()
 
   // Most recently used Apollo list ID — surfaced in the Status Guide

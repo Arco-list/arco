@@ -551,12 +551,22 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               </tr>
             )}
             {prospects.map((p) => {
-              const initials = (p.contact_name ?? "")
+              const rc = p.resolvedContact
+              // resolvedContact is computed server-side to match the funnel
+              // stage — outreach email for Prospect/Contacted/Visitor, the
+              // signed-up user for Signup, the company owner for Draft/Listed
+              // (which overrides the signup when a different user claimed the
+              // company). See lib/admin/prospects/actions.ts.
+              const contactInitials = (rc.name ?? "")
                 .split(" ")
                 .filter(Boolean)
                 .map((t) => t[0]?.toUpperCase())
                 .slice(0, 2)
-                .join("") || (p.email?.charAt(0).toUpperCase() ?? "?")
+                .join("") || (rc.email?.charAt(0).toUpperCase() ?? "?")
+
+              // Only outreach rows have an editable email — signup/owner
+              // pull from auth, which the admin can't edit inline.
+              const outreachEditable = rc.source === "outreach" && (p.source === "arco" || p.source === "invites")
 
               const companyInitials = (p.company_name ?? "")
                 .split(" ")
@@ -568,33 +578,32 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               return (
               <Fragment key={p.id}>
                 <tr>
-                  {/* Contact — avatar/initials + name + email */}
+                  {/* Contact — avatar/initials + name + email (resolved per stage) */}
                   <td>
-                    {(p.source === "arco" || p.source === "invites") ? (
-                      p.contact_name ? (
-                        <div className="flex items-center gap-3">
-                          <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
-                            {p.contact_name.split(" ").filter(Boolean).map(t => t[0]?.toUpperCase()).slice(0, 2).join("")}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="arco-table-primary">{p.contact_name}</span>
-                            <ProspectEmailField prospect={p} onRefresh={refreshData} />
-                          </div>
-                        </div>
-                      ) : (
-                        <ProspectEmailField prospect={p} onRefresh={refreshData} />
-                      )
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
-                          {initials}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="arco-table-primary">{p.contact_name || "—"}</span>
-                          <span className="arco-table-secondary">{p.email}</span>
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68", overflow: "hidden" }}>
+                        {rc.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={rc.avatarUrl}
+                            alt={rc.name ?? ""}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          contactInitials
+                        )}
                       </div>
-                    )}
+                      <div className="flex flex-col min-w-0">
+                        {rc.name && <span className="arco-table-primary">{rc.name}</span>}
+                        {outreachEditable ? (
+                          <ProspectEmailField prospect={p} onRefresh={refreshData} />
+                        ) : (
+                          <span className={rc.name ? "arco-table-secondary" : "arco-table-primary"}>
+                            {rc.email ?? "—"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   {/* Status — dot + label */}
                   <td>

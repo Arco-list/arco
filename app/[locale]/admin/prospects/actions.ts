@@ -14,6 +14,24 @@ export type ProspectStatus =
 
 export type SequenceStatus = "not_started" | "active" | "paused" | "finished"
 
+/**
+ * Resolved "contact" for the Sales table row — the person we're actually
+ * talking to at this funnel stage. Mirrors the Owner cell on admin/companies
+ * once the prospect has progressed to Draft/Listed.
+ *
+ *   source = "outreach"  → prospects.email / contact_name (Prospect, Contacted, Visitor)
+ *   source = "signup"    → prospects.user_id → profiles + auth email (Signup)
+ *   source = "owner"     → companies.owner_id → profiles + auth email (Draft, Listed;
+ *                           overrides signup when a different user claimed the company)
+ */
+export type ProspectResolvedContact = {
+  source: "outreach" | "signup" | "owner"
+  name: string | null
+  email: string | null
+  avatarUrl: string | null
+  userId: string | null
+}
+
 export type Prospect = {
   id: string
   email: string
@@ -43,6 +61,7 @@ export type Prospect = {
   notes: string | null
   created_at: string
   updated_at: string
+  resolvedContact: ProspectResolvedContact
 }
 
 export type ProspectEvent = {
@@ -107,7 +126,104 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
     return { prospects: [] as Prospect[], error: error.message }
   }
 
-  return { prospects: (data ?? []) as Prospect[] }
+  const rows = (data ?? []) as Omit<Prospect, "resolvedContact">[]
+  const prospects = await attachResolvedContacts(supabase, rows)
+  return { prospects }
+}
+
+/**
+ * Resolve the Contact cell per prospect based on its funnel stage.
+ * Batches profile + auth-email lookups so one admin/sales page render
+ * costs O(unique users + unique company owners), not O(rows × 2).
+ */
+async function attachResolvedContacts(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  rows: Omit<Prospect, "resolvedContact">[],
+): Promise<Prospect[]> {
+  if (rows.length === 0) return []
+
+  // Stage 1: fetch companies so we know each prospect's company.owner_id
+  const companyIds = Array.from(new Set(rows.map((r) => r.company_id).filter((id): id is string => Boolean(id))))
+  const companyOwnerById = new Map<string, string | null>()
+  if (companyIds.length > 0) {
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, owner_id")
+      .in("id", companyIds)
+    for (const c of companies ?? []) companyOwnerById.set(c.id, c.owner_id ?? null)
+  }
+
+  // Stage 2: collect every user id we need a profile for — signup users
+  // and company owners.
+  const userIds = new Set<string>()
+  for (const r of rows) {
+    if (r.user_id) userIds.add(r.user_id)
+    const ownerId = r.company_id ? companyOwnerById.get(r.company_id) : null
+    if (ownerId) userIds.add(ownerId)
+  }
+
+  // Stage 3: one batched profile query
+  const profileById = new Map<string, { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null }>()
+  if (userIds.size > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name, avatar_url")
+      .in("id", Array.from(userIds))
+    for (const p of profiles ?? []) profileById.set(p.id, p)
+  }
+
+  // Stage 4: auth emails (one call per unique id; mirrors admin/companies)
+  const emailByUserId = new Map<string, string>()
+  for (const uid of userIds) {
+    const { data } = await supabase.auth.admin.getUserById(uid)
+    if (data?.user?.email) emailByUserId.set(uid, data.user.email)
+  }
+
+  const nameFromProfile = (
+    p: { first_name: string | null; last_name: string | null } | undefined | null,
+  ): string | null => {
+    if (!p) return null
+    return [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null
+  }
+
+  return rows.map((r): Prospect => {
+    const ownerId = r.company_id ? companyOwnerById.get(r.company_id) ?? null : null
+    const ownerProfile = ownerId ? profileById.get(ownerId) : null
+    const signupProfile = r.user_id ? profileById.get(r.user_id) : null
+
+    let resolved: ProspectResolvedContact
+
+    if ((r.status === "company" || r.status === "active") && ownerProfile) {
+      resolved = {
+        source: "owner",
+        name: nameFromProfile(ownerProfile),
+        email: (ownerId && emailByUserId.get(ownerId)) ?? null,
+        avatarUrl: ownerProfile.avatar_url ?? null,
+        userId: ownerId,
+      }
+    } else if (r.status === "signup" && signupProfile) {
+      resolved = {
+        source: "signup",
+        name: nameFromProfile(signupProfile),
+        email: (r.user_id && emailByUserId.get(r.user_id)) ?? null,
+        avatarUrl: signupProfile.avatar_url ?? null,
+        userId: r.user_id,
+      }
+    } else {
+      // Prospect, Contacted, Visitor — or a stage where the preferred
+      // profile is missing. Fall back to the outreach contact fields,
+      // matching what's stored on the linked companies row.
+      resolved = {
+        source: "outreach",
+        name: r.contact_name,
+        email: r.email,
+        avatarUrl: null,
+        userId: null,
+      }
+    }
+
+    return { ...r, resolvedContact: resolved }
+  })
 }
 
 const EMPTY_FUNNEL: ProspectFunnel = {
