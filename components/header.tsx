@@ -19,12 +19,24 @@ import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
 export interface NavLink {
   href: string;
   label: string;
+  icon?: React.ReactNode;
+}
+
+export interface NavGroup {
+  label: string;
+  children: NavLink[];
+}
+
+export type NavItem = NavLink | NavGroup;
+
+function isNavGroup(item: NavItem): item is NavGroup {
+  return "children" in item;
 }
 
 export interface HeaderProps {
   transparent?: boolean;
   maxWidth?: string;
-  navLinks?: NavLink[];
+  navLinks?: NavItem[];
 }
 
 type SearchResult = {
@@ -166,7 +178,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const { openLoginModal } = useLoginModal();
   const { openCreateCompanyModal } = useCreateCompanyModal();
 
-  const defaultNavLinks: NavLink[] = [
+  const defaultNavLinks: NavItem[] = [
     { href: "/projects", label: t("projects") },
     { href: "/professionals", label: t("professionals") },
   ];
@@ -227,9 +239,21 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
   // Products nav link — visible to admins only (Phase 1).
   // Only add to defaultNavLinks (not admin layout's custom navLinks).
-  if (hasAdminRole && !navLinks && !resolvedNavLinks.some(l => l.href === "/products")) {
+  if (hasAdminRole && !navLinks && !resolvedNavLinks.some(l => !isNavGroup(l) && l.href === "/products")) {
     resolvedNavLinks.push({ href: "/products", label: "Products" })
   }
+
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openGroup) return;
+    const onClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-nav-group]")) {
+        setOpenGroup(null);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [openGroup]);
 
   const toggleMenu = () => setIsMenuOpen((open) => !open);
   
@@ -347,19 +371,42 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
               {/* Mobile nav dropdown */}
               {isMobileMenuOpen && (
-                <div className="absolute left-0 top-full z-50 w-48 border border-border bg-white shadow-lg mt-2 md:hidden" ref={menuRef}>
+                <div className="absolute left-0 top-full z-50 w-56 border border-border bg-white shadow-lg mt-2 md:hidden" ref={menuRef}>
                   <div className="py-2">
-                    {resolvedNavLinks.map((link) => {
-                      const linkPath = link.href.split("?")[0]
+                    {resolvedNavLinks.map((item) => {
+                      if (isNavGroup(item)) {
+                        return (
+                          <div key={item.label} className="py-1">
+                            <div className="px-5 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-[#8c8c8a]">
+                              {item.label}
+                            </div>
+                            {item.children.map((child) => {
+                              const childPath = child.href.split("?")[0]
+                              return (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  className={`flex items-center gap-2.5 px-5 py-2 text-sm font-normal transition-colors ${pathname === childPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
+                                  onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                  {child.icon && <span className="flex h-4 w-4 items-center justify-center shrink-0">{child.icon}</span>}
+                                  {child.label}
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )
+                      }
+                      const linkPath = item.href.split("?")[0]
                       return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        className={`block px-5 py-2 text-sm font-normal transition-colors ${pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        {link.label}
-                      </Link>
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`block px-5 py-2 text-sm font-normal transition-colors ${pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          {item.label}
+                        </Link>
                       )
                     })}
                   </div>
@@ -381,21 +428,64 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 />
               </Link>
               <div className="hidden items-center gap-6 md:flex">
-                {resolvedNavLinks.map((link) => {
-                  const linkPath = link.href.split("?")[0]
+                {resolvedNavLinks.map((item) => {
+                  if (isNavGroup(item)) {
+                    const isActive = item.children.some((c) => pathname === c.href.split("?")[0])
+                    const isOpen = openGroup === item.label
+                    return (
+                      <div key={item.label} data-nav-group className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setOpenGroup(isOpen ? null : item.label)}
+                          className={`flex items-center gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
+                            isActive || isOpen
+                              ? "text-primary"
+                              : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                          }`}
+                        >
+                          {item.label}
+                          <svg width="8" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`transition-transform ${isOpen ? "rotate-180" : ""}`}>
+                            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                        {isOpen && (
+                          <div className="absolute left-0 top-full z-50 w-52 border border-border bg-white shadow-lg mt-2">
+                            <div className="py-2">
+                              {item.children.map((child) => {
+                                const childPath = child.href.split("?")[0]
+                                const childActive = pathname === childPath
+                                return (
+                                  <Link
+                                    key={child.href}
+                                    href={child.href}
+                                    onClick={() => setOpenGroup(null)}
+                                    className={`flex items-center gap-2.5 px-5 py-2 text-sm font-normal transition-colors ${childActive ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
+                                  >
+                                    {child.icon && <span className="flex h-4 w-4 items-center justify-center shrink-0">{child.icon}</span>}
+                                    {child.label}
+                                  </Link>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
+                  const linkPath = item.href.split("?")[0]
                   const isActive = pathname === linkPath
                   return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`text-sm font-normal whitespace-nowrap transition-colors ${
-                      isActive
-                        ? "text-primary"
-                        : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`text-sm font-normal whitespace-nowrap transition-colors ${
+                        isActive
+                          ? "text-primary"
+                          : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
                   )
                 })}
               </div>
@@ -609,29 +699,41 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>
                                   {t("admin_users")}
                                 </Link>
-                                <Link href="/admin/projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/projects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
-                                  {t("admin_projects")}
-                                </Link>
                                 <Link href="/admin/professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
                                   {t("admin_companies")}
                                 </Link>
-                                <Link href="/admin/categories" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/categories" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
-                                  {t("admin_categories")}
+                                <Link href="/admin/projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/projects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
+                                  {t("admin_projects")}
                                 </Link>
-                                <Link href="/admin/emails" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/emails" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-                                  {t("admin_emails")}
+                                <Link href="/admin/brands" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/brands" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
+                                  {t("admin_brands")}
+                                </Link>
+                                <Link href="/admin/products" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/products" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
+                                  {t("admin_products")}
+                                </Link>
+                                <Link href="/admin/prospects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/prospects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
+                                  {t("admin_sales")}
                                 </Link>
                                 <Link href="/admin/growth" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/growth" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
                                   {t("admin_growth")}
                                 </Link>
-                                <Link href="/admin/prospects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/prospects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
-                                  {t("admin_sales")}
+                                <Link href="/admin/emails" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/emails" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                                  {t("admin_emails")}
+                                </Link>
+                                <Link href="/admin/categories" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/categories" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+                                  {t("admin_categories")}
+                                </Link>
+                                <Link href="/admin/design" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/design" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>
+                                  {t("admin_design")}
                                 </Link>
                               </>
                             )}

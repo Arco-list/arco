@@ -26,6 +26,9 @@
     "admin_prospects": "Prospects",
     "admin_growth": "Growth",
     "admin_sales": "Sales",
+    "admin_brands": "Merken",
+    "admin_products": "Producten",
+    "admin_design": "Design",
     "search_arco": "Zoek op Arco",
     "search_all_projects": "Zoek alle projecten →",
     "search_all_professionals": "Zoek alle professionals →"
@@ -67,6 +70,7 @@
     "learn_more": "Meer informatie"
   },
   "spaces": {
+    "all": "Alles",
     "kitchen": "Keuken",
     "living": "Woonkamer",
     "bedroom": "Slaapkamer",
@@ -76,7 +80,8 @@
     "hallway": "Gang",
     "garden": "Tuin",
     "pool": "Zwembad",
-    "terrace": "Terras"
+    "terrace": "Terras",
+    "other": "Anders"
   },
   "projects": {
     "title": "Projecten",
@@ -106,6 +111,7 @@
       "size": "Grootte",
       "space": "Ruimte",
       "scope": "Scope",
+      "building_type": "Type woning",
       "year": "Jaar",
       "clear_all": "Alles wissen",
       "show_results": "Resultaten tonen",
@@ -124,9 +130,7 @@
       "building_types": "Gebouwtypen",
       "style": "Stijl",
       "city": "Stad",
-      "location_feature": "Locatiekenmerk",
       "building_feature": "Gebouwkenmerk",
-      "material_feature": "Materiaalkenmerk",
       "building_type": "Gebouwtype",
       "size": "Grootte",
       "budget": "Budget",
@@ -1095,6 +1099,9 @@
     "phone": "Telefoon",
     "add_phone": "Telefoon toevoegen",
     "member_since": "Lid sinds",
+    "preferred_language": "Taal",
+    "language_dutch": "Nederlands",
+    "language_english": "Engels",
     "companies": "Bedrijven",
     "company_count": "{count, plural, one {# bedrijf} other {# bedrijven}}",
     "none": "Geen",

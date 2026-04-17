@@ -5,6 +5,7 @@
 // the blob heuristically to find variant arrays and product metadata.
 
 import type { Sniffer, SniffedVariant, SniffResult } from "./types"
+import { dedupePhotos, type PhotoCandidate } from "../dedupe-photos"
 
 const NEXT_DATA_RE = /<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i
 
@@ -144,7 +145,7 @@ function findProductNode(root: any): Record<string, any> | null {
 }
 
 function extractGallery(product: any, baseUrl: URL): string[] {
-  const photos: string[] = []
+  const candidates: PhotoCandidate[] = []
   const seen = new Set<string>()
   for (const k of GALLERY_KEYS) {
     const arr = product?.[k]
@@ -155,15 +156,15 @@ function extractGallery(product: any, baseUrl: URL): string[] {
       try {
         const abs = new URL(src, baseUrl).toString()
         if (seen.has(abs)) continue
-        if (/\.(svg|ico|gif)(\?|$)/i.test(abs)) continue
-        if (/logo|icon|favicon|sprite/i.test(abs)) continue
         seen.add(abs)
-        photos.push(abs)
+        const width = typeof item?.width === "number" ? item.width : null
+        const height = typeof item?.height === "number" ? item.height : null
+        candidates.push({ url: abs, width, height })
       } catch {}
     }
-    if (photos.length > 0) break  // use first populated gallery key
+    if (candidates.length > 0) break
   }
-  return photos.slice(0, 20)
+  return dedupePhotos(candidates, 20)
 }
 
 function toSniffedVariant(obj: any, baseUrl: URL): SniffedVariant | null {
@@ -176,6 +177,31 @@ function toSniffedVariant(obj: any, baseUrl: URL): SniffedVariant | null {
     try { image_url = new URL(rawImg, baseUrl).toString() } catch {}
   }
 
+  // Moooi (and most Next.js commerce sites) embed a pre-structured
+  // { model, color, finish, ... } object on each variant. Carrying this
+  // through means the downstream axis-inferrer can skip the name-splitting
+  // heuristic entirely and produce a clean combination matrix. We only
+  // keep short string values — colorCode/dimensions are dropped since they
+  // aren't axis values, but the hex is preserved separately below.
+  let attributes: Record<string, string> | null = null
+  let hex: string | null = null
+  if (obj?.attributes && typeof obj.attributes === "object") {
+    const rawAttrs = obj.attributes as Record<string, unknown>
+    const keep: Record<string, string> = {}
+    for (const [k, v] of Object.entries(rawAttrs)) {
+      if (typeof v !== "string" || !v.trim()) continue
+      // Skip scalar descriptors that aren't axes
+      if (/^(colorCode|colorImage|dimension|hex)/i.test(k)) continue
+      if (k === "colorFilterNames") continue
+      keep[k] = v.trim()
+    }
+    if (Object.keys(keep).length > 0) attributes = keep
+    const code = rawAttrs.colorCode
+    if (typeof code === "string" && /^#?[0-9a-f]{3,8}$/i.test(code.trim())) {
+      hex = code.trim().startsWith("#") ? code.trim() : `#${code.trim()}`
+    }
+  }
+
   return {
     name,
     image_url,
@@ -183,6 +209,8 @@ function toSniffedVariant(obj: any, baseUrl: URL): SniffedVariant | null {
     price: getNumber(obj, VARIANT_PRICE_KEYS),
     slug: getString(obj, VARIANT_SLUG_KEYS),
     in_stock: getBoolean(obj, VARIANT_STOCK_KEYS),
+    attributes,
+    hex,
   }
 }
 

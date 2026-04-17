@@ -21,7 +21,7 @@ export function ProductSubNav({ productName, brandName, imageUrl, slug, hasGalle
   const lastScrollY = useRef(0)
 
   useEffect(() => {
-    const sectionIds = ["details", "gallery", "colors", "specs", "related"]
+    const sectionIds = ["details", "gallery", "colors", "specs"]
 
     const updateActiveSection = () => {
       const currentScroll = window.scrollY
@@ -107,9 +107,6 @@ export function ProductSubNav({ productName, brandName, imageUrl, slug, hasGalle
                     Specs
                   </a>
                 )}
-                <a href="#related" onClick={(e) => handleClick(e, "related")} className={getLinkClass("related")}>
-                  Related
-                </a>
               </div>
             </div>
 

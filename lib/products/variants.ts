@@ -12,6 +12,27 @@
 
 import type { RawVariant } from "@/lib/scraper/types"
 
+// Fallback hex lookup for common color names. Applied at render time so
+// products scraped before the hex-stamping was added still show swatches.
+const COLOR_HEX: Record<string, string> = {
+  "dark chrome": "#3a3a3a", "chrome": "#c0c0c0", "matt silver": "#b8b8b8", "silver": "#c0c0c0",
+  "matt black": "#1a1a1a", "black": "#000000", "black phantom": "#2a2a2a", "phantom": "#4a4a4a",
+  "matt white": "#f5f5f5", "white": "#ffffff",
+  "bronze": "#cd7f32", "rose gold": "#b76e79", "gold": "#d4af37",
+  "matt gold": "#c9a96e", "brass": "#b5a642", "brushed brass": "#c9a96e",
+  "copper": "#b87333", "nickel": "#8e8e8e", "brushed nickel": "#a0a0a0",
+  "anthracite": "#383838", "graphite": "#4b4b4b", "champagne": "#d4c5a9",
+  "walnut": "#5c4033", "oak": "#c8a96e", "teak": "#b8860b",
+  "red": "#c0392b", "blue": "#2980b9", "green": "#27ae60", "grey": "#808080", "gray": "#808080",
+  "beige": "#d4c5a9", "brown": "#6b4226", "navy": "#1b2a4a", "cream": "#fffdd0",
+  "red wine": "#722f37", "blue ink": "#345c81",
+}
+
+function resolveHex(label: string, rawHex: string | null | undefined): string | null {
+  if (rawHex) return rawHex
+  return COLOR_HEX[label.toLowerCase()] ?? null
+}
+
 export type AxisName = string
 
 export interface AxisValue {
@@ -79,7 +100,11 @@ export function normalizeVariants(
       }
     }
 
-    // Collect unique values per axis, preserving first-seen order
+    // Collect unique values per axis, preserving first-seen order.
+    // `image_url` on a RawVariant belongs to the *combination*, not to a
+    // single axis value — stamping it on the axis value would make models
+    // render as image thumbnails. We only carry `hex` through, which is
+    // genuinely a per-axis-value attribute (colorCode on Moooi).
     const axes: Axis[] = axisOrder.map((name) => {
       const seen = new Map<string, AxisValue>()
       for (const v of raw) {
@@ -91,8 +116,8 @@ export function normalizeVariants(
           seen.set(key, {
             value: key,
             label,
-            hex: v.hex ?? null,
-            image_url: v.image_url ?? null,
+            hex: name === "color" ? resolveHex(label, v.hex) : null,
+            image_url: null,
           })
         }
       }
@@ -104,10 +129,11 @@ export function normalizeVariants(
       for (const [k, val] of Object.entries(v.attributes ?? {})) {
         attrs[k] = cleanLabel(val, productName).toLowerCase()
       }
+      const colorLabel = attrs.color ?? ""
       return {
         attributes: attrs,
         image_url: v.image_url ?? null,
-        hex: v.hex ?? null,
+        hex: resolveHex(colorLabel, v.hex),
         sku: v.sku ?? null,
         price: v.price ?? null,
         slug: v.slug ?? null,
@@ -133,14 +159,14 @@ export function normalizeVariants(
         seen.set(key, {
           value: key,
           label,
-          hex: v.hex ?? null,
+          hex: resolveHex(label, v.hex),
           image_url: v.image_url ?? null,
         })
       } else {
         // Merge: keep hex/image from whichever row has them
         seen.set(key, {
           ...existing,
-          hex: existing.hex ?? v.hex ?? null,
+          hex: existing.hex ?? resolveHex(label, v.hex),
           image_url: existing.image_url ?? v.image_url ?? null,
         })
       }

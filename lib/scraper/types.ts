@@ -22,11 +22,17 @@ export interface RawVariant {
   in_stock?: boolean
 }
 
+// Scoped specs layout ("Option 2"). `_shared` holds specs that apply to
+// the whole product; any other key is a model label carrying specs
+// specific to that model. Flat specs (legacy products scraped before
+// this change) land untouched in `_shared`.
+export type ScopedSpecs = Record<string, Record<string, unknown>>
+
 export interface ScrapedProduct {
   name: string
   family: string | null
   description: string | null
-  specs: Record<string, unknown> | null
+  specs: ScopedSpecs | null
   variants: RawVariant[] | null
   photos: string[]
   category_slug: string | null

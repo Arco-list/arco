@@ -1,7 +1,6 @@
-import { Fragment } from "react"
 import { notFound } from "next/navigation"
-import Link from "next/link"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { ProductDetailClient } from "./product-detail-client"
 
 export const dynamic = "force-dynamic"
 
@@ -13,88 +12,71 @@ export default async function AdminProductDetailPage({ params }: { params: Promi
     .from("products")
     .select(`
       *,
-      brand:brands(id, name, slug, logo_url),
-      category:product_categories(name),
+      brand:brands(id, name, slug, logo_url, domain),
+      family:product_families(id, name, slug),
+      category:product_categories(id, name, slug, parent_id),
       product_photos(id, url, alt_text, is_primary, order_index)
     `)
     .eq("id", id)
     .maybeSingle()
 
   if (!product) notFound()
+  const p = product as any
 
-  const photos = ((product as any).product_photos ?? []).sort((a: any, b: any) => {
-    if (a.is_primary && !b.is_primary) return -1
-    if (!a.is_primary && b.is_primary) return 1
-    return (a.order_index ?? 0) - (b.order_index ?? 0)
-  })
+  // Siblings used for "More from [collection]" and "More by [brand]" rows,
+  // kept read-only on the admin page so editors can navigate between
+  // products without leaving the edit context.
+  let familySiblings: any[] = []
+  if (p.family?.id) {
+    const { data } = await supabase
+      .from("products")
+      .select("id, slug, name, product_photos(url, is_primary)")
+      .eq("family_id", p.family.id)
+      .neq("id", p.id)
+      .limit(6)
+    familySiblings = (data ?? []).map((s: any) => {
+      const ph = s.product_photos ?? []
+      const primary = ph.find((x: any) => x.is_primary) ?? ph[0]
+      return { id: s.id, slug: s.slug, name: s.name, imageUrl: primary?.url ?? null }
+    })
+  }
 
-  const specs = (product as any).specs as Record<string, any> | null
+  let brandSiblings: any[] = []
+  if (p.brand?.id) {
+    const excludeIds = [p.id, ...familySiblings.map((s) => s.id)]
+    const { data } = await supabase
+      .from("products")
+      .select("id, slug, name, product_photos(url, is_primary)")
+      .eq("brand_id", p.brand.id)
+      .not("id", "in", `(${excludeIds.join(",")})`)
+      .limit(6)
+    brandSiblings = (data ?? []).map((s: any) => {
+      const ph = s.product_photos ?? []
+      const primary = ph.find((x: any) => x.is_primary) ?? ph[0]
+      return { id: s.id, slug: s.slug, name: s.name, imageUrl: primary?.url ?? null }
+    })
+  }
+
+  // Editable dropdown sources
+  const [{ data: categories }, { data: families }] = await Promise.all([
+    supabase
+      .from("product_categories")
+      .select("id, slug, name, parent_id")
+      .order("order_index"),
+    supabase
+      .from("product_families")
+      .select("id, slug, name")
+      .eq("brand_id", p.brand.id)
+      .order("name"),
+  ])
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap" style={{ maxWidth: 1000, paddingBottom: 80 }}>
-          <Link href="/admin/products" className="arco-small-text" style={{ display: "inline-block", marginBottom: 24 }}>
-            ← All products
-          </Link>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, marginBottom: 40 }}>
-            {/* Photos */}
-            <div>
-              {photos[0] ? (
-                <img src={photos[0].url} alt={(product as any).name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 4 }} />
-              ) : (
-                <div style={{ width: "100%", aspectRatio: "1", background: "var(--arco-surface)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span className="arco-small-text">No photos</span>
-                </div>
-              )}
-              {photos.length > 1 && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 8 }}>
-                  {photos.slice(1).map((p: any) => (
-                    <img key={p.id} src={p.url} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 3 }} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Info */}
-            <div>
-              {(product as any).brand && (
-                <Link href={`/admin/brands/${(product as any).brand.id}`} className="arco-eyebrow" style={{ display: "inline-block", marginBottom: 8 }}>
-                  {(product as any).brand.name}
-                </Link>
-              )}
-              <h2 className="arco-page-title">{(product as any).name}</h2>
-              {(product as any).description && (
-                <p className="arco-body-text" style={{ marginTop: 16 }}>
-                  {(product as any).description}
-                </p>
-              )}
-
-              {specs && Object.keys(specs).length > 0 && (
-                <div style={{ marginTop: 32 }}>
-                  <h4 className="arco-label" style={{ marginBottom: 12 }}>Specifications</h4>
-                  <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 24px" }}>
-                    {Object.entries(specs).map(([key, value]) => (
-                      <Fragment key={key}>
-                        <dt className="arco-small-text" style={{ color: "var(--text-disabled)" }}>{key}</dt>
-                        <dd className="arco-small-text" style={{ color: "var(--text-primary)" }}>{String(value)}</dd>
-                      </Fragment>
-                    ))}
-                  </dl>
-                </div>
-              )}
-
-              {(product as any).source_url && (
-                <p className="arco-small-text" style={{ marginTop: 24 }}>
-                  Source: <a href={(product as any).source_url} target="_blank" rel="noopener noreferrer" className="text-[#016D75] hover:underline">{(product as any).source_url}</a>
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ProductDetailClient
+      product={p}
+      categories={(categories ?? []) as any}
+      families={(families ?? []) as any}
+      familySiblings={familySiblings}
+      brandSiblings={brandSiblings}
+    />
   )
 }
-

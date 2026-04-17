@@ -17,6 +17,9 @@ export interface SniffedVariant {
   slug?: string | null
   in_stock?: boolean | null
   attributes?: Record<string, string> | null
+  /** Brand-provided hex swatch (Moooi's colorCode). Preserved separately
+   *  from `attributes` so the downstream mapper can stamp it on the color. */
+  hex?: string | null
 }
 
 export interface SniffResult {

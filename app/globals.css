@@ -1718,6 +1718,157 @@ a.arco-nav-text.nav-transparent:hover {
   display: block;
 }
 
+/* ── Inline edit chrome (.ec and .ec-badge) ────────────────────────────────
+   Two flavours share the same chip ("EDIT" / "BEWERKEN") and icon:
+
+     .ec              — wraps a single contenteditable field (name heading,
+                        description paragraph) with a left-anchored chip.
+     .spec-item-edit  — wraps a cell inside .specifications-bar with a
+                        top-anchored chip; the outline extends past the
+                        bar's top/bottom rules so the chip reads as part
+                        of the cell, not floating.
+
+   Keep both shapes here so page components can drop either variant in
+   without page-local <style> blocks.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* The `.ec` wrapper owns the active/editing outline — suppress the
+   browser's default focus ring on any contenteditable inside it so we
+   don't paint two outlines on top of each other. Placeholder copy shown
+   when the field is empty, styled to match .arco-eyebrow muted grey. */
+.ec [contenteditable]:focus { outline: none; }
+.ec [contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: #b0b0ae;
+  pointer-events: none;
+}
+
+/* Generic wrapper — chip anchored top-left, outline hugs the content. */
+.ec {
+  position: relative;
+  cursor: pointer;
+}
+.ec::before {
+  content: "";
+  position: absolute;
+  inset: -6px -14px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  transition: border-color 0.18s;
+  pointer-events: none;
+  z-index: 0;
+}
+.ec:hover::before { border-color: var(--arco-black); }
+.ec.on::before { border-color: var(--primary); }
+.ec.on { cursor: default; }
+
+/* Shared chip — position/size overridden inside .spec-item-edit below. */
+.ec-badge {
+  position: absolute;
+  top: -19px;
+  left: -8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  padding: 0 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+.ec-ico {
+  display: flex;
+  align-items: center;
+  color: #c8c8c6;
+  transition: color 0.18s;
+}
+.ec-txt {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c8c8c6;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.ec:hover .ec-ico,
+.ec:hover .ec-txt { color: var(--arco-black); }
+.ec.on   .ec-ico,
+.ec.on   .ec-txt { color: var(--primary); }
+
+/* ── Spec-bar variant ──────────────────────────────────────────────────────
+   Centered chip, outline insets match .specifications-bar padding so the
+   outline punches through the top/bottom rules. Hover and editing render
+   identically; the only thing that swaps is the value <div> being replaced
+   by an <input> whose metrics mirror .arco-card-title so the cell does not
+   shift when entering edit mode.
+   ──────────────────────────────────────────────────────────────────────── */
+.spec-item-edit {
+  padding: 0;
+  text-align: center;
+  position: relative;
+  cursor: pointer;
+  z-index: 2;
+}
+.spec-item-edit::before {
+  content: "";
+  position: absolute;
+  inset: -32px -10px;        /* vertical: matches .specifications-bar padding */
+  border: 1px solid transparent;
+  border-radius: 5px;
+  pointer-events: none;
+  transition: border-color 0.18s;
+  /* Pure white masks the bar's top/bottom rules where the outline crosses
+     them. --arco-white (#FAFAF9) reads as a faint grey panel against a
+     true-white page background — use literal white instead. */
+  background: #ffffff;
+  z-index: -1;
+}
+.spec-item-edit:hover::before,
+.spec-item-edit.editing::before { border-color: var(--arco-black); }
+.spec-item-edit.editing { z-index: 10; }
+
+/* Chip repositioned to sit centered above the cell (vs the top-left anchor
+   used by the generic .ec wrapper). Coloring on hover/editing is inherited
+   via the .spec-item-edit.editing → .ec-txt chain below. */
+.spec-item-edit .ec-badge {
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  z-index: 2;
+}
+/* Hover / editing both darken the chip to match the outline. */
+.spec-item-edit:hover .ec-ico,
+.spec-item-edit:hover .ec-txt,
+.spec-item-edit.editing .ec-ico,
+.spec-item-edit.editing .ec-txt { color: var(--arco-black); }
+
+/* Centered text input shown when editing. Metrics mirror .arco-card-title
+   (15/400/1.3) so swapping the value <div> for an <input> doesn't shift
+   the cell vertically. The underline is painted as a box-shadow instead
+   of a real border so it doesn't add to the input's layout box — the
+   input occupies the same pixel height as the div it replaces. */
+.spec-inp {
+  width: 100%;
+  text-align: center;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--arco-black);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 1px 0 0 rgba(28, 28, 26, 0.3);
+}
+
+@media (max-width: 768px) {
+  .spec-item-edit::before { inset: -24px -8px; }
+  .spec-item-edit .ec-badge { top: -32px; }
+}
+
 .category-tags {
   display: flex;
   justify-content: flex-start;
@@ -4359,6 +4510,10 @@ body.no-scroll {
   line-height: 1.5;
 }
 
+/* Stack spacing: only between adjacent alerts, so a group doesn't add
+   trailing margin before neighbouring form fields. */
+.arco-alert + .arco-alert { margin-top: 12px; }
+
 .arco-alert-icon {
   width: 16px;
   height: 16px;
@@ -4369,25 +4524,21 @@ body.no-scroll {
 .arco-alert--info {
   background: #eff6ff;
   color: #1e40af;
-  border: 1px solid #bfdbfe;
 }
 
 .arco-alert--warn {
   background: #fffbeb;
   color: #92400e;
-  border: 1px solid #fde68a;
 }
 
 .arco-alert--danger {
   background: #fef2f2;
   color: #991b1b;
-  border: 1px solid #fecaca;
 }
 
 .arco-alert--success {
   background: #f0fdf4;
   color: #166534;
-  border: 1px solid #bbf7d0;
 }
 
 /* Legacy aliases */
@@ -5077,7 +5228,8 @@ body.no-scroll {
 
 .discover-breadcrumb .discover-breadcrumb-item,
 .discover-breadcrumb a.discover-breadcrumb-item,
-.discover-breadcrumb span.discover-breadcrumb-item {
+.discover-breadcrumb span.discover-breadcrumb-item,
+.discover-breadcrumb button.discover-breadcrumb-item {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
@@ -5087,9 +5239,14 @@ body.no-scroll {
   text-decoration: none;
   transition: color 0.15s;
   white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 
-.discover-breadcrumb a.discover-breadcrumb-item:hover {
+.discover-breadcrumb a.discover-breadcrumb-item:hover,
+.discover-breadcrumb button.discover-breadcrumb-item:hover {
   color: var(--text-secondary);
 }
 
@@ -5205,10 +5362,25 @@ body.no-scroll {
   padding: 4px 12px;
   border: 1px solid var(--arco-rule);
   border-radius: 24px;
-  background: var(--background);
+  /* Transparent so the pill picks up whatever surface it sits on
+     (white tables, off-white admin cards, future surfaces). The
+     previous default of var(--background) painted an off-white fill
+     on top of white surfaces, which read as a grey panel. */
+  background: transparent;
   color: var(--arco-black);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Dot-less variant used for inline annotations ("3 emails", "Day 0"
+   next to a template name). Without the 7px dot + 6px gap eating
+   horizontal space, the pill reads visibly bigger than a dot pill
+   next to it — so we trim the font + padding to match the dot pill's
+   optical size. Browser support note: :has() is ES2023, Safari 15.4+,
+   Firefox 121+, Chrome 105+ — fine for an admin-only surface. */
+.status-pill:not(:has(.status-pill-dot)) {
+  padding: 3px 10px;
+  font-size: 11px;
 }
 
 .status-pill-dot {
@@ -5866,12 +6038,13 @@ body.no-scroll {
   border-radius: 4px;
   overflow: hidden;
   aspect-ratio: 4 / 3;
+  background: #fff;
 }
 
 .product-hero-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -6293,7 +6466,7 @@ body.no-scroll {
   aspect-ratio: 4 / 3;
   overflow: hidden;
   border-radius: 3px;
-  background: var(--arco-surface);
+  background: transparent;
   margin-bottom: 12px;
 }
 

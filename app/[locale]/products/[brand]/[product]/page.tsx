@@ -7,6 +7,8 @@ import { Footer } from "@/components/footer"
 import { ProductGallery } from "@/components/product/product-gallery"
 import { ProductSubNav } from "@/components/product/product-sub-nav"
 import { ProductHero } from "@/components/product/product-hero"
+import { SmartImage } from "@/components/smart-image"
+import { groupSpecs, specLabel } from "@/lib/products/spec-groups"
 
 export const dynamic = "force-dynamic"
 
@@ -37,11 +39,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     return (a.order_index ?? 0) - (b.order_index ?? 0)
   })
 
-  const specs = p.specs as Record<string, any> | null
+  const rawSpecs = p.specs as Record<string, any> | null
 
-  // Extract designer and year from specs (case-insensitive key lookup)
+  // Normalise scoped vs flat specs — same logic as admin product edit.
+  const specsScoped: Record<string, Record<string, any>> = (() => {
+    if (!rawSpecs) return {}
+    const firstVal = Object.values(rawSpecs)[0]
+    const looksScoped =
+      firstVal !== undefined
+      && Object.values(rawSpecs).every((v) => v && typeof v === "object" && !Array.isArray(v))
+    return looksScoped ? rawSpecs : { _shared: rawSpecs }
+  })()
+  const specs = specsScoped._shared ?? {}
+
+  // Extract a spec value (case-insensitive key lookup on the shared scope)
   const specVal = (key: string) => {
-    if (!specs) return null
     const lower = key.toLowerCase()
     for (const [k, v] of Object.entries(specs)) {
       if (k.toLowerCase() === lower && v) return String(v)
@@ -49,7 +61,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     return null
   }
 
-  // Details bar items
+  // Details bar items — surface key metadata + commonly valued specs.
+  // Uses the same eyebrow-label + card-title-value pattern as the admin.
+  // Same fields as the admin product edit details bar.
   const detailsBar = [
     { label: "Category", value: (p.category as any)?.name ?? null },
     { label: "Collection", value: p.family?.name ?? null },
@@ -62,14 +76,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   if (p.family?.id) {
     const { data } = await supabase
       .from("products")
-      .select("id, slug, name, product_photos(url, is_primary)")
+      .select("id, slug, name, brand:brands(name, slug, logo_url), category:product_categories(name), product_photos(url, is_primary)")
       .eq("family_id", p.family.id)
       .neq("id", p.id)
-      .limit(6)
+      .limit(3)
     familySiblings = (data ?? []).map((s: any) => {
       const ph = s.product_photos ?? []
       const primary = ph.find((x: any) => x.is_primary) ?? ph[0]
-      return { ...s, imageUrl: primary?.url ?? null }
+      return {
+        ...s,
+        imageUrl: primary?.url ?? null,
+        brandName: s.brand?.name ?? "",
+        brandSlug: s.brand?.slug ?? brandSlug,
+        brandLogoUrl: s.brand?.logo_url ?? null,
+        categoryName: s.category?.name ?? null,
+      }
     })
   }
 
@@ -79,14 +100,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     const excludeIds = [p.id, ...familySiblings.map((s) => s.id)]
     const { data } = await supabase
       .from("products")
-      .select("id, slug, name, product_photos(url, is_primary)")
+      .select("id, slug, name, brand:brands(name, slug, logo_url), category:product_categories(name), product_photos(url, is_primary)")
       .eq("brand_id", p.brand.id)
       .not("id", "in", `(${excludeIds.join(",")})`)
-      .limit(6)
+      .limit(3)
     brandSiblings = (data ?? []).map((s: any) => {
       const ph = s.product_photos ?? []
       const primary = ph.find((x: any) => x.is_primary) ?? ph[0]
-      return { ...s, imageUrl: primary?.url ?? null }
+      return {
+        ...s,
+        imageUrl: primary?.url ?? null,
+        brandName: s.brand?.name ?? "",
+        brandSlug: s.brand?.slug ?? brandSlug,
+        brandLogoUrl: s.brand?.logo_url ?? null,
+        categoryName: s.category?.name ?? null,
+      }
     })
   }
 
@@ -134,7 +162,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           {p.family && (
             <>
               <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
-              <Link href={`/products/${p.brand?.slug ?? brandSlug}`} className="discover-breadcrumb-item">{p.family.name}</Link>
+              <Link href={`/products/${p.brand?.slug ?? brandSlug}?collection=${encodeURIComponent(p.family.name)}`} className="discover-breadcrumb-item">{p.family.name}</Link>
             </>
           )}
           <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
@@ -153,7 +181,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         />
 
         {/* Details bar — below the hero split */}
-        {detailsBar.length > 0 && (
+        {(detailsBar.length > 0 || p.source_url) && (
           <section className="specifications-bar">
             {detailsBar.map((d) => (
               <div key={d.label} className="spec-item">
@@ -161,6 +189,25 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <div className="arco-card-title">{d.value}</div>
               </div>
             ))}
+            {p.source_url && (
+              <div className="spec-item">
+                <span className="arco-eyebrow">Brand website</span>
+                <div className="arco-card-title">
+                  <a
+                    href={p.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-link-plain"
+                  >
+                    {(() => {
+                      try {
+                        return p.brand?.domain ?? new URL(p.source_url).hostname.replace(/^www\./, "")
+                      } catch { return p.brand?.domain ?? p.source_url }
+                    })()} →
+                  </a>
+                </div>
+              </div>
+            )}
           </section>
         )}
       </div>
@@ -168,82 +215,113 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       {/* Remaining photos gallery */}
       {galleryPhotos.length > 0 && (
         <div id="gallery" className="wrap" style={{ marginBottom: 60 }}>
+          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Gallery</h2>
           <ProductGallery photos={galleryPhotos} productName={p.name} />
         </div>
       )}
 
-      {/* Specifications section — auto-grouped */}
-      {specs && Object.keys(specs).length > 0 && (() => {
-        // Keys already shown in the details bar
-        const barKeys = new Set(["designer", "year"])
+      {/* Specifications section — uses the shared groupSpecs util so
+          grouping stays aligned with the admin product edit page. */}
+      {(() => {
+        const omitKeys = new Set(["designer", "year"])
 
-        // Group definitions with keyword matching
-        const groups: { label: string; keys: Set<string> }[] = [
-          { label: "Dimensions", keys: ["width", "height", "depth", "diameter", "length", "weight", "seat_height", "sizes", "dimensions", "size", "canopy", "suspension_length"] },
-          { label: "Specifications", keys: ["wattage", "lumens", "luminous_flux", "voltage", "led", "light_direction", "color_temperature", "flow_rate", "power", "ip_rating", "type", "product_type", "cri", "energy_class"] },
-          { label: "Features", keys: ["control", "rotation", "mobility", "features", "light_modes", "dimmable", "smart_home", "adjustable", "custom_colors", "available_colors", "color_options", "mounting"] },
-          { label: "Materials", keys: ["frame", "fabric", "upholstery", "finish", "material", "suspension", "glass", "base", "finish_process"] },
-        ]
-
-        const specEntries = Object.entries(specs).filter(([k]) => !barKeys.has(k.toLowerCase()))
-
-        // Match by prefix: "diameter_40" matches "diameter", "power_60" matches "power"
-        const matchesGroup = (key: string, groupKeys: string[]) => {
-          const lower = key.toLowerCase()
-          return groupKeys.some((gk) => lower === gk || lower.startsWith(gk + "_"))
-        }
-
-        const grouped: { label: string; entries: [string, any][] }[] = []
-        const used = new Set<string>()
-
-        for (const group of groups) {
-          const entries = specEntries.filter(([k]) => {
-            const lower = k.toLowerCase()
-            return matchesGroup(lower, group.keys) && !used.has(lower)
-          })
-          if (entries.length > 0) {
-            entries.forEach(([k]) => used.add(k.toLowerCase()))
-            grouped.push({ label: group.label, entries })
+        // Extract unique model labels.
+        const modelLabels: string[] = []
+        const seenModels = new Set<string>()
+        for (const v of variants) {
+          const m = v.attributes?.model ?? v.attributes?.size ?? v.size
+          if (typeof m === "string" && m.trim() && !seenModels.has(m)) {
+            seenModels.add(m)
+            modelLabels.push(m)
           }
         }
 
-        // Remaining ungrouped specs
-        const remaining = specEntries.filter(([k]) => !used.has(k.toLowerCase()))
-        if (remaining.length > 0) {
-          grouped.push({ label: "Other", entries: remaining })
+        // Collect all spec keys + per-model values for inline rendering.
+        const allKeys = new Set<string>()
+        const sharedValues: Record<string, any> = {}
+        const perModelValues: Record<string, Record<string, any>> = {}
+        for (const [k, v] of Object.entries(specs)) {
+          if (omitKeys.has(k.toLowerCase())) continue
+          allKeys.add(k)
+          sharedValues[k] = v
+        }
+        for (const model of modelLabels) {
+          const mSpecs = specsScoped[model] ?? {}
+          for (const [k, v] of Object.entries(mSpecs)) {
+            if (omitKeys.has(k.toLowerCase())) continue
+            allKeys.add(k)
+            if (!perModelValues[k]) perModelValues[k] = {}
+            perModelValues[k][model] = v
+          }
         }
 
-        if (grouped.length === 0) return null
+        // Build merged view for grouping.
+        const merged: Record<string, any> = {}
+        for (const k of allKeys) {
+          if (k in sharedValues) {
+            merged[k] = sharedValues[k]
+          } else {
+            const firstModel = Object.keys(perModelValues[k] ?? {})[0]
+            merged[k] = firstModel ? perModelValues[k][firstModel] : ""
+          }
+        }
 
-        const renderRow = ([key, value]: [string, any]) => (
-          <div
-            key={key}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              padding: "12px 0",
-              borderBottom: "1px solid var(--rule)",
-            }}
-          >
-            <span className="arco-small-text" style={{ color: "var(--text-disabled)", textTransform: "capitalize" }}>
-              {key.replace(/_/g, " ")}
-            </span>
-            <span className="arco-small-text" style={{ color: "var(--text-primary)", textAlign: "right", maxWidth: "60%" }}>
-              {String(value)}
-            </span>
-          </div>
-        )
+        const grouped = groupSpecs(merged, {
+          specOrder: (p.spec_order as string[] | null) ?? null,
+          specGroupOverrides: (p.spec_groups as Record<string, string> | null) ?? null,
+        })
+        if (grouped.length === 0) return null
 
         return (
           <div id="specs" className="wrap" style={{ marginBottom: 60 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 32 }}>Details</h2>
-            <div style={{ display: "grid", gridTemplateColumns: grouped.length > 1 ? "1fr 1fr" : "1fr", gap: "40px 48px" }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 32 }}>Specifications</h2>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
               {grouped.map((group) => (
                 <div key={group.label}>
                   <h4 className="arco-label" style={{ marginBottom: 12 }}>{group.label}</h4>
                   <div style={{ borderTop: "1px solid var(--rule)" }}>
-                    {group.entries.map(renderRow)}
+                    {group.entries.map(([key]) => {
+                      const isPerModel = !!(perModelValues[key] && Object.keys(perModelValues[key]).length > 0)
+                      return (
+                        <div
+                          key={key}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            alignItems: "baseline",
+                            padding: "12px 0",
+                            borderBottom: "1px solid var(--rule)",
+                            gap: 16,
+                          }}
+                        >
+                          <span className="arco-small-text" style={{ color: "var(--text-disabled)", textTransform: "capitalize" }}>
+                            {specLabel(key)}
+                          </span>
+                          <span className="arco-small-text" style={{ color: "var(--text-primary)" }}>
+                            {isPerModel ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                                {modelLabels.map((model, i) => {
+                                  const v = perModelValues[key]?.[model]
+                                  if (!v) return null
+                                  return (
+                                    <span key={model} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                      {String(v)}
+                                      <span className="status-pill" style={{ fontSize: 10, padding: "1px 6px" }}>{model}</span>
+                                      {i < modelLabels.filter((m) => perModelValues[key]?.[m]).length - 1 && (
+                                        <span style={{ color: "var(--text-disabled)", margin: "0 2px" }}>/</span>
+                                      )}
+                                    </span>
+                                  )
+                                })}
+                              </span>
+                            ) : (
+                              String(merged[key])
+                            )}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -257,22 +335,36 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         <div id="related" className="wrap" style={{ marginBottom: 60 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 24 }}>
             <h2 className="arco-section-title">
-              {p.family ? `More from ${p.family.name}` : "Related products"}
+              {p.family ? `More from the ${p.family.name} collection` : "Related products"}
             </h2>
           </div>
           <div className="discover-grid">
             {familySiblings.map((sibling: any) => (
-              <Link key={sibling.id} href={`/products/${brandSlug}/${sibling.slug}`} className="discover-card">
+              <Link key={sibling.id} href={`/products/${sibling.brandSlug}/${sibling.slug}`} className="discover-card">
                 <div className="discover-card-image-wrap">
                   {sibling.imageUrl ? (
                     <div className="discover-card-image-layer">
-                      <img src={sibling.imageUrl} alt={sibling.name} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <SmartImage src={sibling.imageUrl} alt={sibling.name} />
                     </div>
                   ) : (
                     <div className="discover-card-image-layer" style={{ background: "var(--arco-surface)" }} />
                   )}
                 </div>
-                <h3 className="discover-card-title">{sibling.name}</h3>
+                <div className="pro-card-info">
+                  {sibling.brandLogoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={sibling.brandLogoUrl} alt="" className="pro-card-logo" width={34} height={34} loading="lazy" />
+                  ) : (
+                    <div className="pro-card-logo pro-card-logo-placeholder">
+                      {(sibling.brandName || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="discover-card-title">{sibling.name}</h3>
+                    <p className="discover-card-sub">{[sibling.brandName, sibling.categoryName].filter(Boolean).join(" · ")}</p>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
@@ -288,31 +380,37 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
           <div className="discover-grid">
             {brandSiblings.map((sibling: any) => (
-              <Link key={sibling.id} href={`/products/${brandSlug}/${sibling.slug}`} className="discover-card">
+              <Link key={sibling.id} href={`/products/${sibling.brandSlug}/${sibling.slug}`} className="discover-card">
                 <div className="discover-card-image-wrap">
                   {sibling.imageUrl ? (
                     <div className="discover-card-image-layer">
-                      <img src={sibling.imageUrl} alt={sibling.name} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <SmartImage src={sibling.imageUrl} alt={sibling.name} />
                     </div>
                   ) : (
                     <div className="discover-card-image-layer" style={{ background: "var(--arco-surface)" }} />
                   )}
                 </div>
-                <h3 className="discover-card-title">{sibling.name}</h3>
+                <div className="pro-card-info">
+                  {sibling.brandLogoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={sibling.brandLogoUrl} alt="" className="pro-card-logo" width={34} height={34} loading="lazy" />
+                  ) : (
+                    <div className="pro-card-logo pro-card-logo-placeholder">
+                      {(sibling.brandName || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="discover-card-title">{sibling.name}</h3>
+                    <p className="discover-card-sub">{[sibling.brandName, sibling.categoryName].filter(Boolean).join(" · ")}</p>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
         </div>
       )}
 
-      {/* Source link */}
-      {p.source_url && (
-        <div className="wrap" style={{ marginBottom: 40 }}>
-          <p className="arco-small-text" style={{ textAlign: "center" }}>
-            Source: <a href={p.source_url} target="_blank" rel="noopener noreferrer" className="text-[#016D75] hover:underline">{p.brand?.domain ?? p.source_url}</a>
-          </p>
-        </div>
-      )}
 
       <Footer />
     </div>

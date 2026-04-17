@@ -9,6 +9,8 @@ import type Anthropic from "@anthropic-ai/sdk"
 import type { RawVariant, ScrapedProduct } from "./types"
 import { runSniffers } from "./sniffers"
 import { inferAxes } from "./axis-inference"
+import { scopeSpecs } from "./scope-specs"
+import { dedupePhotos } from "./dedupe-photos"
 
 export interface ScraperContext {
   firecrawl: Firecrawl
@@ -69,24 +71,24 @@ export async function scrapeProductGeneric(
       } catch {}
     }
 
-    // Extract gallery images from markdown — exclude color_picker images
+    // Extract gallery images from markdown. Raw URLs are collected first;
+    // deduplication + logo/icon filtering + resolution picking happen in
+    // dedupePhotos (shared util so sniffer + markdown paths stay aligned).
     let photos: string[] = []
     {
       const imgRegex = /!\[[^\]]*\]\(([^)]+)\)/g
       const seen = new Set<string>()
+      const raw: string[] = []
       let match
       while ((match = imgRegex.exec(mainResult.markdown ?? "")) !== null) {
         try {
           const abs = new URL(match[1], url.toString()).toString()
           if (seen.has(abs)) continue
-          if (/\.(svg|ico|gif)(\?|$)/i.test(abs)) continue
-          if (/logo|icon|favicon|sprite/i.test(abs)) continue
-          if (/color[_-]?picker|swatch|surface/i.test(abs)) continue
           seen.add(abs)
-          photos.push(abs)
+          raw.push(abs)
         } catch {}
       }
-      photos = photos.slice(0, 15)
+      photos = dedupePhotos(raw.map((u) => ({ url: u })))
     }
 
     const mainPageText = (mainResult.markdown ?? "").slice(0, 5000)
@@ -94,7 +96,30 @@ export async function scrapeProductGeneric(
       ? `${mainPageText}\n\n--- SPECIFICATIONS TAB ---\n${specsPageText}`
       : mainPageText
 
-    const html = mainResult.html ?? mainResult.rawHtml ?? ""
+    // Firecrawl's cleaned `html` strips inline <script id="__NEXT_DATA__">
+    // tags that many Next.js commerce sites (Moooi, Centra-on-Next) use to
+    // expose their full variant matrix. Fetch the raw page once so the
+    // sniffers get the untouched markup; fall back to Firecrawl's html if
+    // the direct fetch fails (CORS-ish network errors, 403s, etc.).
+    let html = mainResult.html ?? mainResult.rawHtml ?? ""
+    try {
+      const rawRes = await fetch(url.toString(), {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+      if (rawRes.ok) {
+        const rawHtml = await rawRes.text()
+        if (/__NEXT_DATA__|application\/ld\+json|Shopify\.product/.test(rawHtml)) {
+          html = rawHtml
+          console.log(`[scrape] raw fetch kept structured-data markup (${rawHtml.length} chars)`)
+        }
+      }
+    } catch (err) {
+      console.log(`[scrape] raw fetch failed, falling back to Firecrawl html:`, err instanceof Error ? err.message : err)
+    }
 
     // ── Tier 0: structured-data sniffers ───────────────────────────────────
     // Try __NEXT_DATA__, JSON-LD, Shopify etc. in order. When a sniffer
@@ -103,7 +128,17 @@ export async function scrapeProductGeneric(
     // (description, specs, category_slug).
     const sniffed = runSniffers(html, url)
     if (sniffed) {
-      console.log(`[scrape] sniffer "${sniffed.sniffer}" matched: ${sniffed.variants.length} variants, ${sniffed.photos.length} photos`)
+      const withAttrs = sniffed.variants.filter((v) => v.attributes && Object.keys(v.attributes).length > 0).length
+      const withImages = sniffed.variants.filter((v) => v.image_url).length
+      console.log(
+        `[scrape] sniffer "${sniffed.sniffer}" matched: ${sniffed.variants.length} variants ` +
+        `(${withAttrs} w/ attributes, ${withImages} w/ images), ${sniffed.photos.length} photos`,
+      )
+      if (sniffed.variants[0]) {
+        console.log(`[scrape] first variant sample:`, JSON.stringify(sniffed.variants[0]))
+      }
+    } else {
+      console.log(`[scrape] no sniffer matched (html length: ${html.length}, has __NEXT_DATA__: ${/__NEXT_DATA__/.test(html)})`)
     }
 
     // Legacy: swatch regexes only run when no sniffer matched
@@ -260,17 +295,52 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
 
     // Sniffer-driven path: use the structured variant matrix, skip the
     // swatch-merge + dedup logic entirely.
+    // Extract unique model labels from any variants — used by scopeSpecs
+    // to redistribute per-model specs into Option-2 scoped buckets.
+    const collectModels = (vs: RawVariant[] | null | undefined): string[] => {
+      if (!vs) return []
+      const seen = new Set<string>()
+      const out: string[] = []
+      for (const v of vs) {
+        const m = v.attributes?.model ?? v.attributes?.size ?? v.size
+        if (typeof m === "string" && m.trim() && !seen.has(m)) {
+          seen.add(m)
+          out.push(m)
+        }
+      }
+      return out
+    }
+
     if (sniffed) {
       const inferred = await inferAxes(sniffed.variants, productName, ctx.anthropic)
-      const finalPhotos = sniffed.photos.length > 0 ? sniffed.photos : photos
+      // Variant images shouldn't pollute the gallery — colour/model cells
+      // already own those on the edit page. Strip any photo whose URL also
+      // appears as a variant image_url, then merge sniffer gallery (first)
+      // with Firecrawl's markdown-extracted photos (second) so brand
+      // lifestyle/applied shots don't disappear on structured sites.
+      const normalise = (u: string) => u.toLowerCase().replace(/\/+$/, "")
+      const variantUrls = new Set(
+        inferred.combinations
+          .map((c) => c.image_url)
+          .filter((u): u is string => !!u)
+          .map(normalise),
+      )
+      // Collect all candidate URLs from both sources, then run through
+      // dedupePhotos so resolution duplicates and logos/icons are stripped
+      // in one pass rather than scattered across two loops.
+      const allCandidates = [...sniffed.photos, ...photos]
+        .filter((p) => !variantUrls.has(normalise(p)))
+        .map((u) => ({ url: u }))
+      const merged = dedupePhotos(allCandidates)
 
+      const models = collectModels(inferred.combinations)
       return {
         name: productName,
         family: parsed.family ?? sniffed.family ?? null,
         description: parsed.description ?? sniffed.description ?? null,
-        specs: parsed.specs ?? null,
+        specs: scopeSpecs(parsed.specs ?? null, models),
         variants: inferred.combinations.length > 0 ? inferred.combinations : null,
-        photos: finalPhotos,
+        photos: merged,
         category_slug: parsed.category_slug ?? null,
       }
     }
@@ -339,7 +409,7 @@ If the page is not a product page, return: {"name": "", "description": null, "ca
       name: parsed.name ?? "",
       family: parsed.family ?? null,
       description: parsed.description ?? null,
-      specs: parsed.specs ?? null,
+      specs: scopeSpecs(parsed.specs ?? null, collectModels(variants)),
       variants: variants.length > 0 ? variants : null,
       photos,
       category_slug: parsed.category_slug ?? null,

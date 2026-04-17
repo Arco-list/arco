@@ -167,6 +167,7 @@ function toRawVariant(v: SniffedVariant): RawVariant {
   return {
     attributes: v.attributes ?? undefined,
     image_url: v.image_url ?? null,
+    hex: v.hex ?? null,
     sku: v.sku ?? undefined,
     price: v.price ?? undefined,
     slug: v.slug ?? undefined,

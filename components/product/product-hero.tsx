@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import type { RawVariant } from "@/lib/scraper/types"
@@ -21,15 +21,29 @@ interface ProductHeroProps {
   variants: RawVariant[]
 }
 
+// Singular eyebrow labels to match the admin product-edit page.
 const AXIS_LABELS: Record<string, string> = {
-  color: "Colors",
-  material: "Materials",
-  size: "Sizes",
-  model: "Models",
+  color: "Color",
+  material: "Material",
+  size: "Model",
+  model: "Model",
 }
 
 function axisLabel(name: AxisName): string {
-  return AXIS_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1) + "s"
+  return AXIS_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+// Render order mirrors the admin edit page: model/size first, then color,
+// then anything else. Keeps display consistent with how admins edit.
+const AXIS_ORDER: Record<string, number> = {
+  model: 0,
+  size: 0,
+  color: 1,
+  material: 2,
+}
+
+function axisOrder(name: AxisName): number {
+  return AXIS_ORDER[name] ?? 10
 }
 
 /**
@@ -39,6 +53,9 @@ function axisLabel(name: AxisName): string {
  *   pill → text pills (sizes, models)
  */
 function axisStyle(axis: Axis): "hex" | "thumb" | "pill" {
+  // Color axes always render as circular swatches (dots), even when
+  // some values lack a hex — those get a neutral surface fill.
+  if (axis.name === "color") return "hex"
   if (axis.values.some((v) => v.hex)) return "hex"
   if (axis.values.some((v) => v.image_url)) return "thumb"
   return "pill"
@@ -77,10 +94,38 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
       } else {
         next[axisName] = value
         setLastChanged(axisName)
+        // In combination mode we need both axes picked to resolve a cell's
+        // image — auto-select the first value of the other axis when the
+        // user first engages, so a combination is always complete.
+        if (norm.mode === "combination") {
+          for (const axis of norm.axes) {
+            if (axis.name === axisName) continue
+            if (!next[axis.name]) {
+              const first = axis.values[0]?.value
+              if (first) next[axis.name] = first
+            }
+          }
+        }
       }
       return next
     })
   }
+
+  // Click anywhere outside the pill/dot region clears both selections and
+  // reverts the hero to the cover image. The .product-hero-variants wrapper
+  // below marks the "keep selection" zone.
+  useEffect(() => {
+    const anySelected = Object.values(selection).some((v) => !!v)
+    if (!anySelected) return
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Element | null
+      if (t?.closest("[data-product-variants]")) return
+      setSelection({})
+      setLastChanged(null)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [selection])
 
   return (
     <div className="product-hero">
@@ -119,8 +164,8 @@ export function ProductHero({ name, description, brand, heroImageUrl, variants }
         )}
 
         {hasVariants && (
-          <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 20 }}>
-            {norm.axes.map((axis) => (
+          <div data-product-variants style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 20 }}>
+            {[...norm.axes].sort((a, b) => axisOrder(a.name) - axisOrder(b.name)).map((axis) => (
               <AxisBlock
                 key={axis.name}
                 axis={axis}
@@ -196,18 +241,20 @@ function AxisButton({ value, style, isActive, isAvailable, onClick }: AxisButton
     style: { opacity: isAvailable ? 1 : 0.35 },
   }
 
+  // Selected state mirrors the admin edit page: accent outline sitting a
+  // couple pixels outside the dot/pill, rather than a filled-black swap.
   if (style === "hex") {
     return (
       <button
         {...common}
         style={{
           ...common.style,
-          width: 28, height: 28, borderRadius: "50%",
+          width: 40, height: 40, borderRadius: "50%",
           background: value.hex ?? "var(--arco-surface)",
-          border: isActive ? "2px solid var(--arco-black)" : value.hex ? "2px solid transparent" : "1px solid var(--rule)",
+          border: value.hex ? "1px solid rgba(0,0,0,.08)" : "1px solid var(--rule)",
           boxSizing: "border-box", cursor: isAvailable ? "pointer" : "not-allowed", padding: 0,
-          outline: isActive ? "2px solid var(--arco-white)" : "none",
-          outlineOffset: -4,
+          outline: isActive ? "2px solid var(--arco-accent)" : "none",
+          outlineOffset: 2,
         }}
       />
     )
@@ -219,11 +266,13 @@ function AxisButton({ value, style, isActive, isAvailable, onClick }: AxisButton
         {...common}
         style={{
           ...common.style,
-          width: 28, height: 28, borderRadius: "50%",
+          width: 40, height: 40, borderRadius: "50%",
           background: "var(--arco-surface)",
-          border: isActive ? "2px solid var(--arco-black)" : "1px solid var(--rule)",
+          border: "1px solid var(--rule)",
           boxSizing: "border-box", cursor: isAvailable ? "pointer" : "not-allowed", padding: 0,
           overflow: "hidden",
+          outline: isActive ? "2px solid var(--arco-accent)" : "none",
+          outlineOffset: 2,
         }}
       >
         {value.image_url && (
@@ -237,13 +286,20 @@ function AxisButton({ value, style, isActive, isAvailable, onClick }: AxisButton
   return (
     <button
       {...common}
-      className="status-pill"
       style={{
         ...common.style,
+        fontFamily: "var(--font-sans)",
+        display: "inline-flex", alignItems: "center",
+        padding: "8px 16px",
+        fontSize: 14, fontWeight: 400,
+        color: "var(--text-primary)",
+        background: "transparent",
+        border: "1px solid var(--arco-rule)",
+        borderRadius: 20,
         cursor: isAvailable ? "pointer" : "not-allowed",
-        background: isActive ? "var(--arco-black)" : "transparent",
-        color: isActive ? "var(--arco-white)" : "var(--arco-black)",
-        borderColor: isActive ? "var(--arco-black)" : undefined,
+        outline: isActive ? "2px solid var(--arco-accent)" : "none",
+        outlineOffset: 2,
+        transition: "all .15s",
       }}
     >
       {value.label}

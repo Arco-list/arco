@@ -449,6 +449,1190 @@ export async function updateBrandStatus(brandId: string, status: string): Promis
 }
 
 /**
+ * Update fields on a product row. Admin only.
+ *
+ * `specs` is merged into the existing jsonb column so callers can patch a
+ * single key (e.g. designer) without clobbering the rest of the object. To
+ * clear a spec key, pass the key with a null value.
+ */
+export async function updateProduct(
+  productId: string,
+  fields: {
+    name?: string
+    description?: string | null
+    category_id?: string | null
+    family_id?: string | null
+    source_url?: string | null
+    specs?: Record<string, any>
+  },
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const patch: Record<string, any> = {}
+  if (fields.name !== undefined) patch.name = fields.name
+  if (fields.description !== undefined) patch.description = fields.description
+  if (fields.category_id !== undefined) patch.category_id = fields.category_id
+  if (fields.family_id !== undefined) patch.family_id = fields.family_id
+  if (fields.source_url !== undefined) patch.source_url = fields.source_url
+
+  if (fields.specs !== undefined) {
+    // Merge into existing specs so we don't clobber unrelated keys.
+    const { data: current } = await supabase
+      .from("products")
+      .select("specs")
+      .eq("id", productId)
+      .maybeSingle()
+
+    const existing = (current?.specs ?? {}) as Record<string, any>
+    const merged: Record<string, any> = { ...existing }
+    for (const [k, v] of Object.entries(fields.specs)) {
+      if (v === null || v === "") delete merged[k]
+      else merged[k] = v
+    }
+    patch.specs = merged
+  }
+
+  if (Object.keys(patch).length === 0) return { ok: true }
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+
+  const { error } = await supabase.from("products").update(patch).eq("id", productId)
+  if (error) return { error: error.message }
+
+  revalidatePath("/admin/products")
+  revalidatePath(`/admin/products/${productId}`)
+  if (product?.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Resolve or create a product family by name for a given brand. Used by the
+ * collection field on the product edit page so editors can type a new name
+ * without jumping to the brand page to create it first.
+ */
+export async function upsertProductFamily(
+  brandId: string,
+  name: string,
+): Promise<{ id: string; name: string } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const trimmed = name.trim()
+  if (!trimmed) return { error: "Name is required." }
+
+  const supabase = createServiceRoleSupabaseClient() as any
+  const familySlug = slugify(trimmed)
+
+  const { data: existing } = await supabase
+    .from("product_families")
+    .select("id, name")
+    .eq("brand_id", brandId)
+    .eq("slug", familySlug)
+    .maybeSingle()
+
+  if (existing) return existing
+
+  const { data: inserted, error } = await supabase
+    .from("product_families")
+    .insert({ brand_id: brandId, slug: familySlug, name: trimmed })
+    .select("id, name")
+    .single()
+
+  if (error || !inserted) return { error: error?.message ?? "Could not create collection." }
+  revalidatePath(`/admin/brands/${brandId}`)
+  return inserted
+}
+
+/**
+ * Rename a collection and/or swap its hero image. Admin only.
+ */
+export async function updateProductFamily(
+  familyId: string,
+  fields: { name?: string; hero_image_url?: string | null },
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const patch: Record<string, any> = {}
+  if (fields.name !== undefined) {
+    const trimmed = fields.name.trim()
+    if (!trimmed) return { error: "Name can't be empty." }
+    patch.name = trimmed
+    patch.slug = slugify(trimmed)
+  }
+  if (fields.hero_image_url !== undefined) patch.hero_image_url = fields.hero_image_url
+
+  if (Object.keys(patch).length === 0) return { ok: true }
+
+  const { data: family } = await supabase
+    .from("product_families")
+    .select("brand_id")
+    .eq("id", familyId)
+    .maybeSingle()
+
+  const { error } = await supabase.from("product_families").update(patch).eq("id", familyId)
+  if (error) return { error: error.message }
+
+  if (family?.brand_id) revalidatePath(`/admin/brands/${family.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Upload a hero image for a collection. Admin only. Uses service role so
+ * it can write under `company-assets` without relying on per-user RLS.
+ */
+export async function uploadProductFamilyImage(
+  familyId: string,
+  formData: FormData,
+): Promise<{ url: string } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const file = formData.get("file") as File | null
+  if (!file) return { error: "No file provided." }
+  if (file.size > 8 * 1024 * 1024) return { error: "Image must be under 8MB." }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg"
+  const path = `product-families/${familyId}/cover.${ext}`
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error: uploadError } = await supabase.storage
+    .from("company-assets")
+    .upload(path, file, { cacheControl: "3600", upsert: true, contentType: file.type })
+
+  if (uploadError) return { error: uploadError.message }
+
+  const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path)
+  if (!urlData?.publicUrl) return { error: "Could not get public URL." }
+
+  const { data: family } = await (supabase as any)
+    .from("product_families")
+    .select("brand_id")
+    .eq("id", familyId)
+    .maybeSingle()
+
+  await (supabase as any).from("product_families").update({ hero_image_url: urlData.publicUrl }).eq("id", familyId)
+
+  if (family?.brand_id) revalidatePath(`/admin/brands/${family.brand_id}`)
+  return { url: urlData.publicUrl }
+}
+
+/**
+ * Delete a collection. The matching products keep existing — their
+ * `family_id` is set to null so they drop back into the uncollected set.
+ */
+export async function deleteProductFamily(
+  familyId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: family } = await supabase
+    .from("product_families")
+    .select("brand_id")
+    .eq("id", familyId)
+    .maybeSingle()
+
+  // Detach products first so the FK doesn't block the delete and so we
+  // keep the products around even when the collection is gone.
+  const { error: detachError } = await supabase
+    .from("products")
+    .update({ family_id: null })
+    .eq("family_id", familyId)
+  if (detachError) return { error: detachError.message }
+
+  const { error } = await supabase.from("product_families").delete().eq("id", familyId)
+  if (error) return { error: error.message }
+
+  if (family?.brand_id) revalidatePath(`/admin/brands/${family.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Replace the set of products assigned to a collection. Every product in
+ * `productIds` gets its `family_id` set to `familyId`; everything else in
+ * the same brand keeps its current assignment (we don't touch products
+ * assigned to other collections).
+ *
+ * Products that are no longer in the passed list but were previously in
+ * this collection get detached (family_id → null).
+ */
+export async function setFamilyProducts(
+  familyId: string,
+  productIds: string[],
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: family } = await supabase
+    .from("product_families")
+    .select("brand_id")
+    .eq("id", familyId)
+    .maybeSingle()
+  if (!family) return { error: "Collection not found." }
+
+  // Detach anything currently in the collection but not in the new set.
+  if (productIds.length > 0) {
+    const { error: detachError } = await supabase
+      .from("products")
+      .update({ family_id: null })
+      .eq("family_id", familyId)
+      .not("id", "in", `(${productIds.join(",")})`)
+    if (detachError) return { error: detachError.message }
+  } else {
+    // No products left in the collection.
+    const { error: clearError } = await supabase
+      .from("products")
+      .update({ family_id: null })
+      .eq("family_id", familyId)
+    if (clearError) return { error: clearError.message }
+  }
+
+  // Attach the selected products. `.in("id", [])` is a no-op.
+  if (productIds.length > 0) {
+    const { error: attachError } = await supabase
+      .from("products")
+      .update({ family_id: familyId })
+      .in("id", productIds)
+      .eq("brand_id", family.brand_id)
+    if (attachError) return { error: attachError.message }
+  }
+
+  revalidatePath(`/admin/brands/${family.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Upload one or more photos for a product. Admin only. Stores files in
+ * `company-assets/products/[productId]/` and inserts `product_photos` rows
+ * pointing at the public URLs. Returns the inserted ids/urls so the client
+ * can show them immediately.
+ *
+ * The first uploaded photo becomes primary when the product has no
+ * existing photos; subsequent uploads append to the end.
+ */
+export async function uploadProductPhotos(
+  productId: string,
+  formData: FormData,
+): Promise<{ photos: { id: string; url: string }[] } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const files = formData.getAll("files") as File[]
+  if (files.length === 0) return { error: "No files provided." }
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  // Find the current max order_index and whether a primary exists so new
+  // uploads slot in at the end without disturbing the existing order.
+  const { data: existing } = await supabase
+    .from("product_photos")
+    .select("id, is_primary, order_index")
+    .eq("product_id", productId)
+    .order("order_index", { ascending: false })
+    .limit(1)
+
+  const hasPrimary = existing && existing.length > 0
+  let nextOrder = hasPrimary ? (existing[0].order_index ?? 0) + 1 : 0
+
+  const inserted: { id: string; url: string }[] = []
+
+  for (const file of files) {
+    if (!(file instanceof File)) continue
+    if (file.size > 10 * 1024 * 1024) {
+      return { error: `${file.name} is over 10MB.` }
+    }
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg"
+    const rand = Math.random().toString(36).slice(2, 10)
+    const path = `products/${productId}/${Date.now()}-${rand}.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("company-assets")
+      .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type })
+    if (uploadError) return { error: uploadError.message }
+
+    const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path)
+    if (!urlData?.publicUrl) return { error: "Could not get public URL." }
+
+    const isFirst = !hasPrimary && inserted.length === 0
+    const { data: photoRow, error: insertError } = await supabase
+      .from("product_photos")
+      .insert({
+        product_id: productId,
+        url: urlData.publicUrl,
+        is_primary: isFirst,
+        order_index: nextOrder++,
+      })
+      .select("id, url")
+      .single()
+
+    if (insertError || !photoRow) return { error: insertError?.message ?? "Could not save photo." }
+    inserted.push({ id: photoRow.id, url: photoRow.url })
+  }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { photos: inserted }
+}
+
+// ── Granular axis-value editors ────────────────────────────────────────
+// These operate across both shapes in a product's `variants` array:
+//
+//  - Standalone rows: `{color|size: label, hex?, image_url?}` — carry the
+//    axis-level hex/image when no combination provides them
+//  - Combination rows: `{attributes: {color, model, ...}, image_url?, hex?}`
+//
+// Each editor updates BOTH shapes so combination-mode products get the
+// same axis controls (rename/delete/hex) as independent-mode products,
+// and independent-mode products keep working through the same surface.
+
+type AxisKind = "color" | "model"
+
+// The `attributes` map may key a model value as either "model" (Moooi /
+// Shopify) or "size" (the legacy scraper). We treat them as synonyms.
+const ATTR_KEYS: Record<AxisKind, string[]> = {
+  color: ["color"],
+  model: ["model", "size"],
+}
+const FLAT_KEYS: Record<AxisKind, string> = {
+  color: "color",
+  model: "size",
+}
+
+function attrsEq(a: Record<string, any> | null | undefined, b: Record<string, string>) {
+  if (!a || typeof a !== "object") return false
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) return false
+  return bKeys.every((k) => a[k] === b[k])
+}
+
+function getAttrValue(row: Record<string, any>, axis: AxisKind): string | null {
+  for (const k of ATTR_KEYS[axis]) {
+    const v = row.attributes?.[k]
+    if (typeof v === "string") return v
+  }
+  return null
+}
+
+function setAttrValue(row: Record<string, any>, axis: AxisKind, value: string): void {
+  // Use the same key the row already uses; default to the canonical one.
+  for (const k of ATTR_KEYS[axis]) {
+    if (row.attributes && k in row.attributes) {
+      row.attributes[k] = value
+      return
+    }
+  }
+  row.attributes = { ...(row.attributes ?? {}), [ATTR_KEYS[axis][0]]: value }
+}
+
+async function loadProductVariants(
+  productId: string,
+): Promise<{ supabase: any; variants: any[]; brandId: string | null } | { error: string }> {
+  const supabase = createServiceRoleSupabaseClient() as any
+  const { data: product } = await supabase
+    .from("products")
+    .select("variants, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+  return { supabase, variants: (product.variants ?? []) as any[], brandId: product.brand_id ?? null }
+}
+
+async function saveProductVariants(
+  supabase: any,
+  productId: string,
+  brandId: string | null,
+  nextVariants: any[],
+): Promise<{ ok: true } | { error: string }> {
+  const { error } = await supabase.from("products").update({ variants: nextVariants }).eq("id", productId)
+  if (error) return { error: error.message }
+  revalidatePath(`/admin/products/${productId}`)
+  if (brandId) revalidatePath(`/admin/brands/${brandId}`)
+  return { ok: true }
+}
+
+/**
+ * Before dropping variant rows (or clearing their image_url), make sure
+ * those images survive in the product's gallery. Inserts each URL as a
+ * `product_photos` row unless it's already there. Orphaned images stay
+ * visible and available for reassignment.
+ */
+async function preserveVariantImages(
+  supabase: any,
+  productId: string,
+  urls: Array<string | null | undefined>,
+): Promise<void> {
+  const normalise = (u: string) => u.toLowerCase().replace(/\/+$/, "")
+  const distinct = Array.from(
+    new Set(urls.filter((u): u is string => typeof u === "string" && u.length > 0)),
+  )
+  if (distinct.length === 0) return
+
+  const { data: existing } = await supabase
+    .from("product_photos")
+    .select("url")
+    .eq("product_id", productId)
+  const existingNorm = new Set(
+    (existing ?? []).map((r: any) => normalise(String(r.url))),
+  )
+
+  // Find the highest order_index so inserts slot in at the end.
+  const { data: last } = await supabase
+    .from("product_photos")
+    .select("order_index")
+    .eq("product_id", productId)
+    .order("order_index", { ascending: false })
+    .limit(1)
+  let nextOrder = last && last.length > 0 ? (last[0].order_index ?? 0) + 1 : 0
+
+  const rows: Array<Record<string, any>> = []
+  for (const url of distinct) {
+    if (existingNorm.has(normalise(url))) continue
+    rows.push({ product_id: productId, url, is_primary: false, order_index: nextOrder++ })
+  }
+  if (rows.length > 0) {
+    await supabase.from("product_photos").insert(rows)
+  }
+}
+
+/** Rename an axis value across standalone and combination rows. */
+export async function renameProductAxisValue(
+  productId: string,
+  axis: AxisKind,
+  oldLabel: string,
+  newLabel: string,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+  const trimmed = newLabel.trim()
+  if (!trimmed) return { error: "Name can't be empty." }
+  if (trimmed === oldLabel) return { ok: true }
+
+  const loaded = await loadProductVariants(productId)
+  if ("error" in loaded) return loaded
+
+  const flatKey = FLAT_KEYS[axis]
+  const next = loaded.variants.map((row) => {
+    const copy = { ...row }
+    // Combination rows
+    if (getAttrValue(copy, axis) === oldLabel) {
+      copy.attributes = { ...copy.attributes }
+      setAttrValue(copy, axis, trimmed)
+    }
+    // Standalone rows
+    if (copy[flatKey] === oldLabel) copy[flatKey] = trimmed
+    return copy
+  })
+
+  return saveProductVariants(loaded.supabase, productId, loaded.brandId, next)
+}
+
+/** Remove an axis value from every standalone and combination row. */
+/**
+ * Update a single spec value inside the scoped specs object. Scope is
+ * either "_shared" (applies to all models) or a model label. Passing
+ * `value: null | undefined | ""` removes the key from that scope.
+ *
+ * Only mutates value + presence — never renames keys. Key taxonomy stays
+ * controlled so search filters remain predictable.
+ */
+export async function updateProductSpec(
+  productId: string,
+  scope: string,
+  key: string,
+  value: unknown,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const trimmedKey = key.trim()
+  if (!trimmedKey) return { error: "Key required." }
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("specs, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  // Normalise to scoped layout. Pre-migration products have a flat
+  // specs object — treat them as entirely _shared so writes land in
+  // the right bucket without losing existing data.
+  let scoped: Record<string, Record<string, any>>
+  const raw = product.specs as Record<string, any> | null
+  if (!raw) {
+    scoped = {}
+  } else {
+    const firstVal = Object.values(raw)[0]
+    const looksScoped =
+      Object.values(raw).every((v) => v && typeof v === "object" && !Array.isArray(v))
+      && firstVal !== undefined
+    scoped = looksScoped
+      ? JSON.parse(JSON.stringify(raw))
+      : { _shared: JSON.parse(JSON.stringify(raw)) }
+  }
+
+  if (!scoped[scope]) scoped[scope] = {}
+
+  if (value === null || value === undefined || value === "") {
+    delete scoped[scope][trimmedKey]
+    // Tidy: drop empty scopes, but always keep _shared.
+    if (scope !== "_shared" && Object.keys(scoped[scope]).length === 0) {
+      delete scoped[scope]
+    }
+  } else {
+    scoped[scope][trimmedKey] = value
+  }
+
+  const { error } = await supabase
+    .from("products")
+    .update({ specs: scoped })
+    .eq("id", productId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/** Rename a spec key within a scope (preserving the value). */
+/** Persist the display order of spec keys + any group overrides.
+ *  Called after drag-and-drop reorder or cross-group moves. */
+/**
+ * Move a spec key from shared → per-model or per-model → shared.
+ *
+ * "toPerModel": copies the value from _shared to the given model scope,
+ * then removes it from _shared. Other models keep whatever they had
+ * (or nothing — they'll fall back to their own scope on next edit).
+ *
+ * "toAllModels": takes the value from the given model scope and writes
+ * it to _shared, then removes the key from ALL model scopes so every
+ * model resolves to the shared value.
+ */
+export async function toggleSpecScope(
+  productId: string,
+  key: string,
+  direction: "toPerModel" | "toAllModels",
+  activeModel: string,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+  if (!key.trim() || !activeModel.trim()) return { error: "Key and model required." }
+
+  const supabase = createServiceRoleSupabaseClient() as any
+  const { data: product } = await supabase
+    .from("products")
+    .select("specs, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  const raw = product.specs as Record<string, any> | null
+  let scoped: Record<string, Record<string, any>>
+  if (!raw) {
+    scoped = {}
+  } else {
+    const firstVal = Object.values(raw)[0]
+    const looksScoped =
+      firstVal !== undefined
+      && Object.values(raw).every((v) => v && typeof v === "object" && !Array.isArray(v))
+    scoped = looksScoped
+      ? JSON.parse(JSON.stringify(raw))
+      : { _shared: JSON.parse(JSON.stringify(raw)) }
+  }
+
+  if (direction === "toPerModel") {
+    // Copy value from _shared to the active model, then remove from _shared.
+    const value = scoped._shared?.[key]
+    if (value === undefined) return { ok: true }
+    if (!scoped[activeModel]) scoped[activeModel] = {}
+    scoped[activeModel][key] = value
+    delete scoped._shared?.[key]
+  } else {
+    // Take the active model's value and propagate to _shared, then remove
+    // the key from every model scope so they all resolve to shared.
+    const value = scoped[activeModel]?.[key] ?? scoped._shared?.[key]
+    if (value === undefined) return { ok: true }
+    if (!scoped._shared) scoped._shared = {}
+    scoped._shared[key] = value
+    for (const scope of Object.keys(scoped)) {
+      if (scope === "_shared") continue
+      if (scoped[scope] && key in scoped[scope]) {
+        delete scoped[scope][key]
+        if (Object.keys(scoped[scope]).length === 0) delete scoped[scope]
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from("products")
+    .update({ specs: scoped })
+    .eq("id", productId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+export async function updateSpecLayout(
+  productId: string,
+  specOrder: string[],
+  specGroups: Record<string, string>,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  const { error } = await supabase
+    .from("products")
+    .update({
+      spec_order: specOrder.length > 0 ? specOrder : null,
+      spec_groups: Object.keys(specGroups).length > 0 ? specGroups : null,
+    })
+    .eq("id", productId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+export async function renameProductSpec(
+  productId: string,
+  scope: string,
+  oldKey: string,
+  newKey: string,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const trimmedOld = oldKey.trim()
+  const trimmedNew = newKey.trim()
+  if (!trimmedOld || !trimmedNew) return { error: "Key required." }
+  if (trimmedOld === trimmedNew) return { ok: true }
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("specs, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  const raw = product.specs as Record<string, any> | null
+  let scoped: Record<string, Record<string, any>>
+  if (!raw) {
+    scoped = {}
+  } else {
+    const firstVal = Object.values(raw)[0]
+    const looksScoped =
+      Object.values(raw).every((v) => v && typeof v === "object" && !Array.isArray(v))
+      && firstVal !== undefined
+    scoped = looksScoped
+      ? JSON.parse(JSON.stringify(raw))
+      : { _shared: JSON.parse(JSON.stringify(raw)) }
+  }
+
+  if (!scoped[scope] || !(trimmedOld in scoped[scope])) return { ok: true }
+  const value = scoped[scope][trimmedOld]
+  delete scoped[scope][trimmedOld]
+  scoped[scope][trimmedNew] = value
+
+  const { error } = await supabase
+    .from("products")
+    .update({ specs: scoped })
+    .eq("id", productId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+export async function removeProductAxisValue(
+  productId: string,
+  axis: AxisKind,
+  label: string,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const loaded = await loadProductVariants(productId)
+  if ("error" in loaded) return loaded
+
+  const flatKey = FLAT_KEYS[axis]
+  // Capture image URLs on rows we're about to drop so they stay visible
+  // in the product gallery (just unassigned from any variant).
+  const orphaned: Array<string | null | undefined> = []
+  const next = loaded.variants.filter((row) => {
+    const matchAttr = getAttrValue(row, axis) === label
+    const matchFlat = row[flatKey] === label
+    if (matchAttr || matchFlat) {
+      orphaned.push(row.image_url)
+      return false
+    }
+    return true
+  })
+
+  await preserveVariantImages(loaded.supabase, productId, orphaned)
+  return saveProductVariants(loaded.supabase, productId, loaded.brandId, next)
+}
+
+/** Add a new standalone axis value. Does not fan out combinations —
+ *  combination cells can be created on demand by setCombinationImage. */
+export async function addProductAxisValue(
+  productId: string,
+  axis: AxisKind,
+  label: string,
+  hex: string | null = null,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+  const trimmed = label.trim()
+  if (!trimmed) return { error: "Name can't be empty." }
+
+  const loaded = await loadProductVariants(productId)
+  if ("error" in loaded) return loaded
+
+  const flatKey = FLAT_KEYS[axis]
+  // Deduplicate — already exists as standalone row
+  if (loaded.variants.some((r) => r[flatKey] === trimmed)) return { ok: true }
+
+  const newRow: Record<string, any> = { [flatKey]: trimmed }
+  if (axis === "color" && hex) newRow.hex = hex
+
+  return saveProductVariants(loaded.supabase, productId, loaded.brandId, [...loaded.variants, newRow])
+}
+
+/** Stamp a hex on the standalone color row and every matching combination row. */
+export async function setProductAxisValueHex(
+  productId: string,
+  label: string,
+  hex: string | null,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const loaded = await loadProductVariants(productId)
+  if ("error" in loaded) return loaded
+
+  let hitStandalone = false
+  const next = loaded.variants.map((row) => {
+    const copy = { ...row }
+    if (getAttrValue(copy, "color") === label) copy.hex = hex
+    if (copy.color === label) { copy.hex = hex; hitStandalone = true }
+    return copy
+  })
+  // No standalone color row yet — insert one so the hex round-trips.
+  if (!hitStandalone) next.push({ color: label, hex })
+
+  return saveProductVariants(loaded.supabase, productId, loaded.brandId, next)
+}
+
+/** Assign (or clear) an axis-level image on the standalone row for a
+ *  color/model. Distinct from combination images — those belong to a
+ *  specific {model, color, ...} cell via setCombinationImage. */
+export async function setProductAxisValueImage(
+  productId: string,
+  axis: AxisKind,
+  label: string,
+  imageUrl: string | null,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const loaded = await loadProductVariants(productId)
+  if ("error" in loaded) return loaded
+
+  const flatKey = FLAT_KEYS[axis]
+  const orphaned: Array<string | null | undefined> = []
+  let hit = false
+  const next = loaded.variants.map((row) => {
+    if (row[flatKey] !== label) return row
+    hit = true
+    // Preserve the previous URL when clearing or replacing.
+    if (row.image_url && row.image_url !== imageUrl) orphaned.push(row.image_url)
+    return { ...row, image_url: imageUrl }
+  })
+  if (!hit) next.push({ [flatKey]: label, image_url: imageUrl })
+
+  await preserveVariantImages(loaded.supabase, productId, orphaned)
+  return saveProductVariants(loaded.supabase, productId, loaded.brandId, next)
+}
+
+/**
+ * Assign (or clear) an image on a single combination row inside a
+ * combination-mode product. Matches by deep attribute equality — if no
+ * matching row exists, one is inserted so every (model, color, ...)
+ * tuple the UI exposes is round-trippable. Pass `imageUrl: null` to clear.
+ */
+export async function setCombinationImage(
+  productId: string,
+  attributes: Record<string, string>,
+  imageUrl: string | null,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("variants, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  const existing = (product.variants ?? []) as Array<Record<string, any>>
+
+  const attrsEqual = (a: Record<string, any> | null | undefined, b: Record<string, string>) => {
+    if (!a || typeof a !== "object") return false
+    const aKeys = Object.keys(a)
+    const bKeys = Object.keys(b)
+    if (aKeys.length !== bKeys.length) return false
+    return bKeys.every((k) => a[k] === b[k])
+  }
+
+  const orphaned: Array<string | null | undefined> = []
+  let matched = false
+  const nextVariants = existing.map((row) => {
+    if (!matched && attrsEqual(row.attributes, attributes)) {
+      matched = true
+      if (row.image_url && row.image_url !== imageUrl) orphaned.push(row.image_url)
+      return { ...row, image_url: imageUrl }
+    }
+    return row
+  })
+
+  if (!matched) {
+    nextVariants.push({ attributes, image_url: imageUrl })
+  }
+
+  await preserveVariantImages(supabase, productId, orphaned)
+
+  const { error } = await supabase
+    .from("products")
+    .update({ variants: nextVariants })
+    .eq("id", productId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Set a product photo as the cover (is_primary). Clears the flag on every
+ * other photo for the product so only one row carries it.
+ */
+export async function setProductCover(
+  photoId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: photo } = await supabase
+    .from("product_photos")
+    .select("id, product_id")
+    .eq("id", photoId)
+    .maybeSingle()
+  if (!photo) return { error: "Photo not found." }
+
+  const { error: clearError } = await supabase
+    .from("product_photos")
+    .update({ is_primary: false })
+    .eq("product_id", photo.product_id)
+  if (clearError) return { error: clearError.message }
+
+  const { error: setError } = await supabase
+    .from("product_photos")
+    .update({ is_primary: true })
+    .eq("id", photoId)
+  if (setError) return { error: setError.message }
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("brand_id")
+    .eq("id", photo.product_id)
+    .maybeSingle()
+
+  revalidatePath(`/admin/products/${photo.product_id}`)
+  if (product?.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Delete a product photo. If it was the primary, promote the next photo.
+ * Storage objects uploaded under `products/[id]/` are also cleaned up;
+ * external URLs (from scrapes) are left alone since we don't own them.
+ */
+export async function deleteProductPhoto(photoId: string): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: photo } = await supabase
+    .from("product_photos")
+    .select("id, url, is_primary, product_id")
+    .eq("id", photoId)
+    .maybeSingle()
+  if (!photo) return { error: "Photo not found." }
+
+  // Strip the storage object if it lives in our bucket. Public URL shape:
+  // .../storage/v1/object/public/company-assets/products/<id>/<file>
+  const match = photo.url.match(/\/storage\/v1\/object\/public\/company-assets\/(.+)$/)
+  if (match?.[1]) {
+    await supabase.storage.from("company-assets").remove([match[1]])
+  }
+
+  const { error } = await supabase.from("product_photos").delete().eq("id", photoId)
+  if (error) return { error: error.message }
+
+  // Promote the next photo to primary if we just deleted the primary.
+  if (photo.is_primary) {
+    const { data: next } = await supabase
+      .from("product_photos")
+      .select("id")
+      .eq("product_id", photo.product_id)
+      .order("order_index", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (next) {
+      await supabase.from("product_photos").update({ is_primary: true }).eq("id", next.id)
+    }
+  }
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("brand_id")
+    .eq("id", photo.product_id)
+    .maybeSingle()
+
+  revalidatePath(`/admin/products/${photo.product_id}`)
+  if (product?.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Replace the set of colors on a product (independent variant mode).
+ *
+ * This overwrites every color-carrying row in `products.variants` with the
+ * passed list, while leaving any non-color independent rows (size, material)
+ * in place. Refuses to run when the product is in combination mode — those
+ * products manage colors through the combinations grid (phase 3).
+ *
+ * Callers should pass the full list every time. Row order is preserved.
+ */
+export async function setProductColors(
+  productId: string,
+  colors: Array<{ label: string; hex: string | null; image_url: string | null }>,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("variants, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  const existing = (product.variants ?? []) as Array<Record<string, any>>
+  const hasCombinations = existing.some(
+    (v) => v.attributes && typeof v.attributes === "object" && Object.keys(v.attributes).length > 0,
+  )
+  if (hasCombinations) {
+    return { error: "This product uses size × color combinations. Edit colors from the combinations grid." }
+  }
+
+  // Preserve rows that aren't carrying a color (e.g. standalone size rows).
+  const preserved = existing.filter((v) => !v.color)
+
+  const nextColors = colors
+    .map((c) => ({ ...c, label: c.label.trim() }))
+    .filter((c) => c.label.length > 0)
+    .map((c) => {
+      const row: Record<string, any> = { color: c.label }
+      if (c.hex) row.hex = c.hex
+      if (c.image_url) row.image_url = c.image_url
+      return row
+    })
+
+  const nextVariants = [...nextColors, ...preserved]
+
+  const { error } = await supabase
+    .from("products")
+    .update({ variants: nextVariants })
+    .eq("id", productId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Replace the set of models on a product (independent variant mode).
+ *
+ * Mirrors setProductColors but for the `size` variant field (surfaced in the
+ * admin as "Model"). Preserves any non-size rows (colors, materials). Refuses
+ * to run in combination mode — the combinations grid manages sizes there.
+ */
+export async function setProductModels(
+  productId: string,
+  models: Array<{ label: string; image_url?: string | null }>,
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("variants, brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+  if (!product) return { error: "Product not found." }
+
+  const existing = (product.variants ?? []) as Array<Record<string, any>>
+  const hasCombinations = existing.some(
+    (v) => v.attributes && typeof v.attributes === "object" && Object.keys(v.attributes).length > 0,
+  )
+  if (hasCombinations) {
+    return { error: "This product uses size × color combinations. Edit models from the combinations grid." }
+  }
+
+  // Preserve rows that aren't carrying a size.
+  const preserved = existing.filter((v) => !v.size)
+
+  const nextModels = models
+    .map((m) => ({ label: m.label.trim(), image_url: m.image_url ?? null }))
+    .filter((m) => m.label.length > 0)
+    .map((m) => ({ size: m.label, image_url: m.image_url } as Record<string, any>))
+
+  const nextVariants = [...nextModels, ...preserved]
+
+  const { error } = await supabase
+    .from("products")
+    .update({ variants: nextVariants })
+    .eq("id", productId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/admin/products/${productId}`)
+  if (product.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
+ * Upload a single variant image (per-color swatch thumbnail or per-cell
+ * combination image). Admin only. Returns the public URL — the caller
+ * stamps it into the variants JSONB via setProductColors / combination
+ * editor actions. Storage path lives under the product so deleting the
+ * product cascades the files.
+ */
+export async function uploadVariantImage(
+  productId: string,
+  formData: FormData,
+): Promise<{ url: string } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const file = formData.get("file") as File | null
+  if (!file) return { error: "No file provided." }
+  if (file.size > 8 * 1024 * 1024) return { error: "Image must be under 8MB." }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg"
+  const rand = Math.random().toString(36).slice(2, 10)
+  const path = `products/${productId}/variants/${Date.now()}-${rand}.${ext}`
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error: uploadError } = await supabase.storage
+    .from("company-assets")
+    .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type })
+
+  if (uploadError) return { error: uploadError.message }
+
+  const { data: urlData } = supabase.storage.from("company-assets").getPublicUrl(path)
+  if (!urlData?.publicUrl) return { error: "Could not get public URL." }
+
+  return { url: urlData.publicUrl }
+}
+
+/**
+ * Update a single product's status. Products currently toggle between
+ * `listed` and `unlisted` — adding a new value here means extending the
+ * product_status enum in the DB too.
+ */
+export async function updateProductStatus(
+  productId: string,
+  status: "listed" | "unlisted",
+): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+
+  const supabase = createServiceRoleSupabaseClient() as any
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("brand_id")
+    .eq("id", productId)
+    .maybeSingle()
+
+  const { error } = await supabase
+    .from("products")
+    .update({ status })
+    .eq("id", productId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/admin/products")
+  revalidatePath(`/admin/products/${productId}`)
+  if (product?.brand_id) revalidatePath(`/admin/brands/${product.brand_id}`)
+  return { ok: true }
+}
+
+/**
  * Delete a brand and all its products + photos (cascade).
  */
 export async function deleteBrand(brandId: string): Promise<{ ok: true } | { error: string }> {

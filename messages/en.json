@@ -26,6 +26,9 @@
     "admin_growth": "Growth",
     "admin_prospects": "Prospects",
     "admin_sales": "Sales",
+    "admin_brands": "Brands",
+    "admin_products": "Products",
+    "admin_design": "Design",
     "search_arco": "Search Arco",
     "search_all_projects": "Search all projects →",
     "search_all_professionals": "Search all professionals →"
@@ -67,6 +70,7 @@
     "learn_more": "Learn more"
   },
   "spaces": {
+    "all": "All",
     "kitchen": "Kitchen",
     "living": "Living",
     "bedroom": "Bedroom",
@@ -76,7 +80,8 @@
     "hallway": "Hallway",
     "garden": "Garden",
     "pool": "Pool",
-    "terrace": "Terrace"
+    "terrace": "Terrace",
+    "other": "Other"
   },
   "projects": {
     "title": "Projects",
@@ -106,6 +111,7 @@
       "size": "Size",
       "space": "Space",
       "scope": "Scope",
+      "building_type": "Building type",
       "year": "Year",
       "clear_all": "Clear all",
       "show_results": "Show results",
@@ -124,9 +130,7 @@
       "building_types": "Building Types",
       "style": "Style",
       "city": "City",
-      "location_feature": "Location feature",
       "building_feature": "Building feature",
-      "material_feature": "Material feature",
       "building_type": "Building type",
       "size": "Size",
       "budget": "Budget",
@@ -1095,6 +1099,9 @@
     "phone": "Phone",
     "add_phone": "Add phone",
     "member_since": "Member Since",
+    "preferred_language": "Language",
+    "language_dutch": "Dutch",
+    "language_english": "English",
     "companies": "Companies",
     "company_count": "{count, plural, one {# company} other {# companies}}",
     "none": "None",
