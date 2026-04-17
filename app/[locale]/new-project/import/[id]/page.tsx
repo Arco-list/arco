@@ -53,7 +53,10 @@ const SERVICE_OPTIONS = [
   "Lighting Design", "Swimming Pool", "Other",
 ]
 const TYPE_OPTIONS    = ["Villa", "Apartment", "House", "Extension", "Office", "Retail", "Cultural", "Hospitality", "Multi-residential"]
-const SCOPE_OPTIONS   = ["New Build", "Renovation", "Interior Design", "Extension", "Restoration", "Conversion"]
+// Scope values map to lib/project-translations.ts canonical set. Stored
+// in DB as the English display string for compat with existing rows; the
+// SpecSelect dropdown translates for display only.
+const SCOPE_OPTIONS   = ["New Build", "Renovation", "Interior Design"]
 const STYLE_OPTIONS   = ["Contemporary", "Minimalist", "Traditional", "Industrial", "Scandinavian", "Mediterranean", "Japanese", "Brutalist", "Art Deco"]
 
 // ─── Pencil SVG ───────────────────────────────────────────────────────────────

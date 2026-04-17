@@ -1,10 +1,10 @@
 /**
  * Segmented progress bar for new project flow
- * Shows 3 sections: Details (5 steps), Photos (4 steps), Professionals (4 steps)
- * Total: 13 steps
+ * Shows 3 sections: Details (4 steps), Photos (4 steps), Professionals (4 steps)
+ * Total: 12 steps
  */
 
-const DETAILS_STEPS = 5
+const DETAILS_STEPS = 4
 const PHOTOS_STEPS = 4
 const PROFESSIONALS_STEPS = 4
 const TOTAL_STEPS = DETAILS_STEPS + PHOTOS_STEPS + PROFESSIONALS_STEPS // 13

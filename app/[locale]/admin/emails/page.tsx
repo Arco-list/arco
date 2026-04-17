@@ -39,7 +39,7 @@ type EmailTemplate = {
 
 const SENDERS: Record<string, EmailSender> = {
   arco: { name: "Arco", email: "automated@arcolist.com", icon: "/arco-logo-square.png" },
-  niek: { name: "Niek van Leeuwen", email: "niek@arcolist.com" },
+  niek: { name: "Niek van Leeuwen", email: "niek@arcolist.com", icon: "/arco-logo-square.png" },
   team: { name: "Arco Team", email: "team@arcolist.com", icon: "/arco-logo-square.png" },
 }
 
@@ -60,8 +60,8 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "client", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.arco },
-  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "client", description: "Highlights project browsing and filtering", trigger: "Drip queue · 2 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 2, from: SENDERS.niek },
-  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "client", description: "Introduces professional discovery", trigger: "Drip queue · 5 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 5, from: SENDERS.niek },
+  { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "client", description: "Highlights project browsing and filtering", trigger: "Drip queue · 3 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 3, from: SENDERS.arco },
+  { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "client", description: "Introduces professional discovery", trigger: "Drip queue · 10 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 10, from: SENDERS.arco },
   { id: "project-digest", name: "Project Digest", type: "marketing", audience: "client", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
   { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
   { id: "prospect-intro", name: "Prospect Intro", type: "marketing", audience: "professional", description: "Outreach to companies added by platform", trigger: "Admin sends from Companies table (status: Prospected)", subject: "Een podium voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "prospect-outreach", dripDay: 0, from: SENDERS.niek },
@@ -81,6 +81,31 @@ export default function AdminEmailsPage() {
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES)
   const [templateStats, setTemplateStats] = useState<Record<string, TemplateStats>>({})
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null)
+  // Preview locale — toggles the iframe URL so we can eyeball both Dutch
+  // and English rendering without restarting the dev server. Reset to EN
+  // whenever the preview popup opens on a different template.
+  const [previewLocale, setPreviewLocale] = useState<"en" | "nl">("en")
+  // Subject for the currently previewed template+locale. Fetched from
+  // /admin/emails/preview?meta=1 so it always matches what the renderer
+  // would actually send (e.g. "Welkom bij Arco" for the NL welcome).
+  const [previewSubject, setPreviewSubject] = useState<string | null>(null)
+
+  // Re-fetch whenever the previewed template or the locale toggle changes.
+  useEffect(() => {
+    if (!previewTemplate) {
+      setPreviewSubject(null)
+      return
+    }
+    let cancelled = false
+    setPreviewSubject(null)
+    fetch(`/admin/emails/preview?template=${previewTemplate}&locale=${previewLocale}&meta=1`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.subject) setPreviewSubject(json.subject)
+      })
+      .catch(() => { /* non-fatal — header just shows template name */ })
+    return () => { cancelled = true }
+  }, [previewTemplate, previewLocale])
   const [audienceFilter, setAudienceFilter] = useState<UserAudience | "all-filter">("all-filter")
   const [timeFilter, setTimeFilter] = useState<string>("all")
   const [isPending, startTransition] = useTransition()
@@ -404,7 +429,10 @@ export default function AdminEmailsPage() {
                                   {child.from.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
                                 </div>
                               )}
-                              <span className="arco-table-primary">{child.from.name}</span>
+                              <div className="flex flex-col min-w-0">
+                                <span className="arco-table-primary">{child.from.name}</span>
+                                <span className="arco-table-secondary" style={{ marginTop: 1 }}>{child.from.email}</span>
+                              </div>
                             </div>
                           ) : (
                             <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
@@ -477,17 +505,28 @@ export default function AdminEmailsPage() {
                         <tr key={email.id}>
                           <td className="text-sm text-[#1c1c1a]">{email.to.join(", ")}</td>
                           <td className="text-xs text-[#6b6b68]">
-                            {email.templateId ? (
-                              <button
-                                type="button"
-                                className="text-[#016D75] hover:underline cursor-pointer"
-                                onClick={() => setPreviewTemplate(email.templateId)}
-                              >
-                                {email.templateName}
-                              </button>
-                            ) : (
-                              <span className="text-[#c4c4c2] italic">Unknown</span>
-                            )}
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                              {email.templateId ? (
+                                <button
+                                  type="button"
+                                  className="text-[#016D75] hover:underline cursor-pointer"
+                                  onClick={() => setPreviewTemplate(email.templateId)}
+                                >
+                                  {email.templateName}
+                                </button>
+                              ) : (
+                                <span className="text-[#c4c4c2] italic">Unknown</span>
+                              )}
+                              {email.locale && (
+                                <span
+                                  className="status-pill"
+                                  title={email.locale === "nl" ? "Dutch" : "English"}
+                                  style={{ textTransform: "uppercase" }}
+                                >
+                                  {email.locale}
+                                </span>
+                              )}
+                            </span>
                           </td>
                           <td style={{ maxWidth: 300 }} className="text-sm text-[#1c1c1a] truncate">{email.subject}</td>
                           <td>
@@ -518,10 +557,44 @@ export default function AdminEmailsPage() {
                   padding: "16px 24px", background: "var(--arco-off-white)",
                   borderRadius: "12px 12px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
                 }}>
-                  <span className="text-sm font-medium text-[#1c1c1a]">
-                    {templates.find(t => t.id === previewTemplate)?.name}
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                    <span className="text-sm font-medium text-[#1c1c1a]">
+                      {templates.find(t => t.id === previewTemplate)?.name}
+                    </span>
+                    {previewSubject && (
+                      <span
+                        className="text-xs text-[#6b6b68] truncate"
+                        style={{ marginTop: 2 }}
+                        title={previewSubject}
+                      >
+                        {previewSubject}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {/* Locale toggle — affects only the iframe render.
+                        Test send still uses the resolver. */}
+                    <div style={{ display: "inline-flex", border: "1px solid var(--arco-rule)", borderRadius: 3, overflow: "hidden", fontSize: 11 }}>
+                      {(["en", "nl"] as const).map((loc) => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => setPreviewLocale(loc)}
+                          style={{
+                            padding: "4px 10px",
+                            background: previewLocale === loc ? "var(--arco-black)" : "transparent",
+                            color: previewLocale === loc ? "#fff" : "var(--arco-mid-grey)",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: previewLocale === loc ? 500 : 400,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          {loc}
+                        </button>
+                      ))}
+                    </div>
                     <button
                       onClick={(e) => handleSendTest(previewTemplate, e)}
                       disabled={isPending}
@@ -534,7 +607,7 @@ export default function AdminEmailsPage() {
                   </div>
                 </div>
                 <iframe
-                  src={`/admin/emails/preview?template=${previewTemplate}`}
+                  src={`/admin/emails/preview?template=${previewTemplate}&locale=${previewLocale}`}
                   style={{ width: "100%", flex: 1, minHeight: 500, border: "none", background: "#f5f5f4" }}
                   title="Email preview"
                 />

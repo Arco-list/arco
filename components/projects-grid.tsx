@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
+
+import { translateBuildingType, translateCategoryName } from "@/lib/project-translations"
 
 import { ShareModal } from "@/components/share-modal"
 
@@ -202,6 +204,7 @@ function ProjectCard({
   onToggleSave,
 }: ProjectCardProps) {
   const t = useTranslations("common")
+  const locale = useLocale()
   const photos = project.photos ?? []
   const hasMultiplePhotos = photos.length > 1
 
@@ -228,9 +231,19 @@ function ProjectCard({
 
   const { src, alt } = resolveImage()
 
-  const projectTypeLabel = project.primary_category
-    ? (taxonomyLabelMap.get(project.primary_category) ?? project.primary_category)
-    : null
+  // Prefer the category slug for translation (slugs are stable), falling
+  // back to the English name, then to the filter-context label map. When the
+  // project hasn't been assigned a category row (primary_category is null),
+  // fall back to projects.building_type which stores the same slug set
+  // ("villa", "house", "apartment", …).
+  const rawCategory = project.primary_category_slug ?? project.primary_category
+  const projectTypeLabel = rawCategory
+    ? (translateCategoryName(rawCategory, locale)
+        ?? taxonomyLabelMap.get(rawCategory)
+        ?? rawCategory)
+    : (project.building_type
+        ? (translateBuildingType(project.building_type as any, locale) ?? project.building_type)
+        : null)
 
   const subtitleParts = [projectTypeLabel, project.location].filter(Boolean)
   const cardSubtitle = subtitleParts.join(" · ")

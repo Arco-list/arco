@@ -70,6 +70,10 @@ type QueueRow = {
   template: string
   variables: Record<string, unknown> | null
   company_id: string | null
+  // user_id: homeowner-series drips carry this; prospect-series drips
+  // leave it null (no signed-up user yet). sendTransactionalEmail uses
+  // whichever is present to resolve the recipient's preferred_language.
+  user_id: string | null
   attempt_count: number
 }
 
@@ -110,7 +114,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   // ── Fetch due rows ─────────────────────────────────────────────────────
   const { data: dueEmails, error: fetchError } = await supabase
     .from("email_drip_queue")
-    .select("id, email, template, variables, company_id, attempt_count")
+    .select("id, email, template, variables, company_id, user_id, attempt_count")
     .lte("send_at", new Date().toISOString())
     .is("sent_at", null)
     .is("cancelled_at", null)
@@ -202,6 +206,9 @@ async function sendOne(
       row.email,
       row.template as EmailTemplate,
       variables,
+      // Resolver reads whichever identifier the drip row carries.
+      // Homeowner-series has user_id; prospect-series has company_id.
+      { userId: row.user_id, companyId: row.company_id },
     )
   } catch (err) {
     // Unhandled throw from the renderer or Resend client. Treat as transient.

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { AlertCircle, GripVertical, ImageIcon, MoreHorizontal, Trash2 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -89,6 +90,7 @@ export function FeaturePhotoSelectorModal({
   cancelLabel = "Cancel",
   onReorderPhotos,
 }: FeaturePhotoSelectorModalProps) {
+  const tSpaces = useTranslations("spaces")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const taglineInputId = useId()
   const highlightToggleId = useId()
@@ -103,7 +105,17 @@ export function FeaturePhotoSelectorModal({
     return null
   }
 
-  const featureName = featureDisplay?.name ?? "feature"
+  const featureName = (() => {
+    if (!featureDisplay) return "feature"
+    if (featureDisplay.slug) {
+      try {
+        return tSpaces(featureDisplay.slug as any)
+      } catch {
+        return featureDisplay.name
+      }
+    }
+    return featureDisplay.name
+  })()
   const selectedCount = selectedPhotoIds.length
   const coverSelected = Boolean(coverPhotoId && selectedPhotoIds.includes(coverPhotoId))
 

@@ -10,7 +10,8 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
+import { PROJECT_SCOPES, translateBuildingType, translateProjectStyle, translateScope } from "@/lib/project-translations"
 
 import { useFilters } from "@/contexts/filter-context"
 import type { ProjectSpaceKey } from "@/types/project-filters"
@@ -439,6 +440,7 @@ interface FilterBarProps {
 export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const t = useTranslations("projects.filters")
   const tSpaces = useTranslations("spaces")
+  const locale = useLocale()
 
   const {
     selectedTypes,
@@ -446,12 +448,14 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
     selectedLocations,
     selectedSpace,
     selectedBuildingTypes,
+    selectedScopes,
     projectYearRange,
     setSelectedTypes,
     setSelectedStyles,
     setSelectedLocations,
     setSelectedSpace,
     setSelectedBuildingTypes,
+    setSelectedScopes,
     setProjectYearRange,
     clearAllFilters,
     removeFilter,
@@ -525,11 +529,14 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
     })
     selectedStyles.forEach((id) => {
       const opt = styleOptions.find((s) => (s.id ?? s.slug ?? s.name) === id)
-      tags.push({ type: "style", value: id, label: opt?.name ?? id })
+      const rawLabel = opt?.name ?? id
+      tags.push({ type: "style", value: id, label: translateProjectStyle(opt?.slug ?? rawLabel, locale) ?? rawLabel })
     })
-    selectedBuildingTypes.forEach((id) => {
-      const opt = buildingTypeOptions.find((s) => (s.id ?? s.slug ?? s.name) === id)
-      tags.push({ type: "buildingType", value: id, label: opt?.name ?? id })
+    selectedBuildingTypes.forEach((slug) => {
+      tags.push({ type: "buildingType", value: slug, label: translateBuildingType(slug as any, locale) ?? slug })
+    })
+    selectedScopes.forEach((slug) => {
+      tags.push({ type: "scope", value: slug, label: translateScope(slug as any, locale) ?? slug })
     })
     if (projectYearRange[0] !== null || projectYearRange[1] !== null) {
       const min = projectYearRange[0] ?? YEAR_MIN
@@ -537,7 +544,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
       tags.push({ type: "projectYear", value: `${min}-${max}`, label: `${min} – ${max}` })
     }
     return tags
-  }, [selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces])
+  }, [selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
 
   const totalCount = chips.length
 
@@ -871,34 +878,36 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
             </div>
           </DrawerSection>
 
-          {/* Scope (Building Type) */}
-          <DrawerSection title={t("scope")} activeCount={selectedBuildingTypes.length} selectedLabel={t("selected", { count: selectedBuildingTypes.length })}>
+          {/* Scope — drives projects.project_type filter via canonical
+              slugs (lib/project-translations.ts). Distinct from the
+              Building Type section below. */}
+          <DrawerSection title={t("scope")} activeCount={selectedScopes.length} selectedLabel={t("selected", { count: selectedScopes.length })}>
             <div className="drawer-option-list">
-              {buildingTypeOptions.map((bt) => {
-                const value = bt.id ?? bt.slug ?? bt.name
-                const isChecked = selectedBuildingTypes.includes(value)
+              {PROJECT_SCOPES.map((slug) => {
+                const isChecked = selectedScopes.includes(slug)
+                const label = translateScope(slug, locale) ?? slug
                 return (
                   <div
-                    key={value}
+                    key={slug}
                     role="option"
                     aria-selected={isChecked}
                     tabIndex={0}
                     className="drawer-option"
                     data-checked={isChecked}
                     onClick={() =>
-                      setSelectedBuildingTypes(
+                      setSelectedScopes(
                         isChecked
-                          ? selectedBuildingTypes.filter((s) => s !== value)
-                          : [...selectedBuildingTypes, value]
+                          ? selectedScopes.filter((s) => s !== slug)
+                          : [...selectedScopes, slug]
                       )
                     }
                     onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
                       if (e.key === " " || e.key === "Enter") {
                         e.preventDefault()
-                        setSelectedBuildingTypes(
+                        setSelectedScopes(
                           isChecked
-                            ? selectedBuildingTypes.filter((s) => s !== value)
-                            : [...selectedBuildingTypes, value]
+                            ? selectedScopes.filter((s) => s !== slug)
+                            : [...selectedScopes, slug]
                         )
                       }
                     }}
@@ -907,7 +916,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                       <div className="drawer-option-checkbox">
                         {isChecked && <CheckIcon />}
                       </div>
-                      <span className="drawer-option-label">{bt.name}</span>
+                      <span className="drawer-option-label">{label}</span>
                     </div>
                   </div>
                 )
@@ -921,7 +930,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
               items={styleOptions}
               selectedValues={selectedStyles}
               getItemValue={(s) => s.id ?? s.slug ?? s.name}
-              getItemLabel={(s) => s.name}
+              getItemLabel={(s) => translateProjectStyle(s.slug ?? s.name, locale) ?? s.name}
               onToggle={(value, isChecked) =>
                 setSelectedStyles(
                   isChecked

@@ -1,14 +1,14 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useRef, useState, useCallback, type ChangeEvent, type FormEvent } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import { AlertTriangle, Camera, ChevronLeft, ChevronRight } from "lucide-react"
 import { ShareModal } from "@/components/share-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -30,7 +30,9 @@ const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024
 
 function HomeownerContent() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
+  const currentLocale = useLocale()
   const { user, profile, supabase, refreshSession, refreshProfile, isLoading } = useAuth()
   const t = useTranslations("homeowner")
 
@@ -53,6 +55,7 @@ function HomeownerContent() {
   const [email, setEmail] = useState("")
   const [location, setLocation] = useState("")
   const [phone, setPhone] = useState("")
+  const [preferredLanguage, setPreferredLanguage] = useState<"nl" | "en" | "">("")
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -85,19 +88,6 @@ function HomeownerContent() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [deletionCheck, setDeletionCheck] = useState<DeletionCheckResult | null>(null)
 
-  // ── Companies count ──
-  const [companyCount, setCompanyCount] = useState(0)
-
-  useEffect(() => {
-    if (!user) return
-    supabase
-      .from("professionals")
-      .select("company_id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .then(({ count }) => setCompanyCount(count ?? 0))
-  }, [user, supabase])
-
   const isEmailAuthUser = useMemo(() => {
     if (!user) return false
     const provider = user.app_metadata?.provider
@@ -118,9 +108,11 @@ function HomeownerContent() {
     setEmail(user?.email ?? "")
     setLocation(profile?.location ?? "")
     setPhone(profile?.phone ?? "")
+    const lang = (profile as { preferred_language?: string | null } | null)?.preferred_language
+    setPreferredLanguage(lang === "nl" || lang === "en" ? lang : "")
     const prefs = profile?.notification_preferences as { project_updates?: boolean; marketing?: boolean } | null
     setNotifPrefs({ project_updates: prefs?.project_updates ?? true, marketing: prefs?.marketing ?? false })
-  }, [isLoading, profile?.first_name, profile?.last_name, user?.email, profile?.location, profile?.phone, profile?.notification_preferences])
+  }, [isLoading, profile?.first_name, profile?.last_name, user?.email, profile?.location, profile?.phone, profile?.notification_preferences, profile])
 
   useEffect(() => {
     setAvatarPreview(profile?.avatar_url ?? null)
@@ -412,35 +404,8 @@ function HomeownerContent() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
-      <style>{`
-        .ec { position: relative; cursor: pointer; }
-        .ec::before { content: ''; position: absolute; inset: -6px -14px; border: 1px solid transparent; border-radius: 5px; transition: border-color .18s; pointer-events: none; z-index: 0; }
-        .ec:hover::before { border-color: #1c1c1a; }
-        .ec.on::before  { border-color: #016D75; }
-        .ec.on          { cursor: default; }
-        .ec-badge { position: absolute; top: -19px; left: -8px; display: flex; align-items: center; gap: 4px; background: #fff; padding: 0 4px; pointer-events: none; z-index: 1; }
-        .ec-ico { display: flex; align-items: center; color: #c8c8c6; transition: color .18s; }
-        .ec-txt { font-size: 10px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase; color: #c8c8c6; white-space: nowrap; transition: color .15s; }
-        .ec:hover .ec-ico, .ec:hover .ec-txt { color: #1c1c1a; }
-        .ec.on    .ec-ico, .ec.on    .ec-txt { color: #016D75; }
-        [contenteditable]:focus { outline: none; }
-        [contenteditable]:empty:before { content: attr(data-placeholder); color: #b0b0ae; pointer-events: none; }
-
-        .spec-item-edit { padding: 0; text-align: center; position: relative; cursor: pointer; transition: background .15s; z-index: 2; }
-        .spec-item-edit::before { content: ''; position: absolute; inset: -24px -10px; border: 1px solid transparent; border-radius: 5px; pointer-events: none; transition: border-color .18s; background: white; z-index: -1; }
-        .spec-item-edit:hover::before { border-color: #1c1c1a; }
-        .spec-item-edit.editing::before { border-color: #016D75; }
-        .spec-item-edit .ec-badge { top: -32px; left: 50%; transform: translateX(-50%); padding: 0 6px; background: #fff; z-index: 2; }
-        @media (max-width: 768px) {
-          .specifications-bar { gap: 32px 16px; padding: 32px 0; }
-          .spec-item-edit::before { inset: -16px -8px; }
-          .spec-item-edit .ec-badge { top: -24px; }
-        }
-        .spec-item-edit:hover .ec-ico, .spec-item-edit:hover .ec-txt { color: #1c1c1a; }
-        .spec-item-edit.editing .ec-ico, .spec-item-edit.editing .ec-txt { color: #016D75; }
-        .spec-item-edit.editing .spec-eyebrow { color: #016D75; }
-        .spec-inp { width: 100%; text-align: center; font-size: 15px; font-weight: 500; color: #1c1c1a; background: transparent; border: none; border-bottom: 1px solid rgba(1,109,117,.3); outline: none; padding: 0 0 2px; font-family: inherit; }
-      `}</style>
+      {/* Inline-edit treatment for .spec-item-edit, .ec-badge, .spec-inp
+          lives in app/globals.css. Do not duplicate here. */}
 
       <Header />
 
@@ -657,13 +622,48 @@ function HomeownerContent() {
             </div>
           </div>
 
-          {/* Companies */}
-          <div className="spec-item-edit" style={{ cursor: companyCount > 0 ? "pointer" : "default" }} onClick={() => { if (companyCount > 0) router.push("/dashboard/listings") }}>
-            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("companies")}</span>
-            <div className="arco-card-title" style={{ color: companyCount > 0 ? undefined : "#b0b0ae" }}>
-              {companyCount > 0 ? t("company_count", { count: companyCount }) : t("none")}
-            </div>
+          {/* Preferred language — drives transactional email language. Saving
+              also flips the UI locale: writes the next-intl cookie and
+              re-routes to the new /<locale>/ prefix so the rest of the
+              session matches what the user just picked. */}
+          <div
+            className={`spec-item-edit${editingSpecBar === "language" ? " editing" : ""}`}
+            onClick={() => { if (editingSpecBar !== "language") setEditingSpecBar("language") }}
+          >
+            <EditBadge />
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("preferred_language")}</span>
+            {editingSpecBar === "language" ? (
+              <select
+                autoFocus
+                className="spec-inp"
+                defaultValue={preferredLanguage || currentLocale}
+                onChange={async (e) => {
+                  const next = e.target.value as "nl" | "en"
+                  if (next === preferredLanguage) { setEditingSpecBar(null); return }
+                  setPreferredLanguage(next)
+                  await saveProfileField({ preferred_language: next })
+                  setEditingSpecBar(null)
+                  // Mirror the language switcher: persist the next-intl
+                  // cookie and route to the new locale prefix so the UI
+                  // matches the choice immediately.
+                  document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=${60 * 60 * 24 * 365}`
+                  const stripped = pathname.replace(/^\/(nl|en)/, "")
+                  router.push(`/${next}${stripped || "/homeowner"}`)
+                }}
+                onBlur={() => setEditingSpecBar(null)}
+              >
+                <option value="nl">{t("language_dutch")}</option>
+                <option value="en">{t("language_english")}</option>
+              </select>
+            ) : (
+              <div className="arco-card-title" style={{ color: preferredLanguage ? undefined : "#b0b0ae" }}>
+                {preferredLanguage === "nl" ? t("language_dutch")
+                  : preferredLanguage === "en" ? t("language_english")
+                  : "—"}
+              </div>
+            )}
           </div>
+
         </div>
 
         {/* ── Notification Preferences ── */}
@@ -855,31 +855,41 @@ function HomeownerContent() {
                     )}
 
                     {deletionCheck.canDelete && (
-                      <>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 24 }}>
                         {isEmailAuthUser && (
-                          <>
-                            <p className="body-small text-text-secondary mb-3">{t("enter_password")}</p>
+                          <div>
+                            <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>
+                              {t("enter_password")}
+                            </label>
                             <input
                               type="password"
                               value={deletePassword}
                               onChange={e => setDeletePassword(e.target.value)}
                               placeholder={t("your_current_password")}
                               autoComplete="current-password"
-                              className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
+                              className="input-base input-default"
+                              style={{ width: "100%" }}
                             />
-                          </>
+                          </div>
                         )}
 
-                        <p className="body-small text-text-secondary mb-3" dangerouslySetInnerHTML={{ __html: t("type_delete_confirm") }} />
-                        <input
-                          type="text"
-                          value={deleteConfirmText}
-                          onChange={e => setDeleteConfirmText(e.target.value)}
-                          placeholder="DELETE"
-                          autoComplete="off"
-                          className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
-                        />
-                      </>
+                        <div>
+                          <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>
+                            {t.rich("type_delete_confirm", {
+                              strong: (chunks) => <strong>{chunks}</strong>,
+                            })}
+                          </label>
+                          <input
+                            type="text"
+                            value={deleteConfirmText}
+                            onChange={e => setDeleteConfirmText(e.target.value)}
+                            placeholder="DELETE"
+                            autoComplete="off"
+                            className="input-base input-default"
+                            style={{ width: "100%" }}
+                          />
+                        </div>
+                      </div>
                     )}
                   </>
                 ) : null}

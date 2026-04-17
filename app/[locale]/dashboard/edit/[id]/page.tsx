@@ -55,24 +55,26 @@ import {
 import { setProjectStatusAction } from "@/app/admin/projects/actions"
 import { useLocale } from "next-intl"
 import { regenerateDescription, saveProjectTranslatedField } from "@/app/new-project/import/actions"
-import { getProjectTranslation } from "@/lib/project-translations"
+import {
+  getProjectTranslation,
+  translateBuildingType,
+  translateBuildingTypeInput,
+  translateProjectStyle,
+  translateScopeInput,
+} from "@/lib/project-translations"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { Header } from "@/components/header"
 import { EditSubNav } from "@/components/project/edit-sub-nav"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
-import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
 import { ProfessionalServiceCard } from "@/components/project-professional-service-card"
 import { FeaturePhotoSelectorModal } from "@/components/feature-photo-selector-modal"
 import {
-  DEFAULT_LOCATION_ICONS,
-  DEFAULT_MATERIAL_ICONS,
   generateYearErrorMessages,
   getPlainTextFromHtml,
   getWordCountFromHtml,
-  mapFeatureOptionsToIconItems,
   MAX_TITLE_LENGTH,
   MIN_DESCRIPTION_LENGTH,
   type ProjectDetailsDescriptionCommand,
@@ -201,8 +203,6 @@ const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
   projectType: "",
   buildingType: "",
   projectStyle: "",
-  locationFeatures: [],
-  materialFeatures: [],
   size: "",
   budget: "",
   yearBuilt: "",
@@ -217,7 +217,15 @@ const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
   shareExactLocation: false,
 }
 
-const SCOPE_OPTIONS = ["New Build", "Renovation", "Interior Design"]
+// Scope options. Stored in DB as the English display string (`value`) for
+// compatibility with existing rows and the import flow. Rendered via the
+// matching canonical slug (`slug`) so we can swap in a locale-aware label
+// on the fly. See lib/project-translations.ts for the canonical set.
+const SCOPE_OPTIONS: { slug: "new_build" | "renovation" | "interior_design"; value: string }[] = [
+  { slug: "new_build", value: "New Build" },
+  { slug: "renovation", value: "Renovation" },
+  { slug: "interior_design", value: "Interior Design" },
+]
 
 const getSubtypeIconForSlug = (slug?: string | null) => {
   if (!slug) return null
@@ -459,8 +467,6 @@ export default function ListingEditorPage() {
     buildingTypeOptions,
     sizeOptions,
     budgetOptions,
-    locationFeatureOptions,
-    materialFeatureOptions,
   } = useProjectTaxonomyOptions(supabase)
 
   const [detailsForm, setDetailsForm] = useState<ProjectDetailsFormState>({ ...EMPTY_DETAILS_FORM })
@@ -795,34 +801,10 @@ export default function ListingEditorPage() {
       }
       setHasProjectAccess(true)
 
-      const [{ data: categoryRows }, { data: selectionRows }] = await Promise.all([
-        supabase
-          .from("project_categories")
-          .select("category_id, is_primary")
-          .eq("project_id", project.id),
-        supabase
-          .from("project_taxonomy_selections")
-          .select("taxonomy_option_id")
-          .eq("project_id", project.id),
-      ])
-
-      const taxonomyIds = (selectionRows ?? []).map((row) => row.taxonomy_option_id)
-      let locationSelections: string[] = []
-      let materialSelections: string[] = []
-
-      if (taxonomyIds.length) {
-        const { data: taxonomyRows } = await supabase
-          .from("project_taxonomy_options")
-          .select("id, taxonomy_type")
-          .in("id", taxonomyIds)
-
-        locationSelections = (taxonomyRows ?? [])
-          .filter((row) => row.taxonomy_type === "location_feature")
-          .map((row) => row.id)
-        materialSelections = (taxonomyRows ?? [])
-          .filter((row) => row.taxonomy_type === "material_feature")
-          .map((row) => row.id)
-      }
+      const { data: categoryRows } = await supabase
+        .from("project_categories")
+        .select("category_id, is_primary")
+        .eq("project_id", project.id)
 
       const primaryCategoryId = categoryRows?.find((row) => row.is_primary)?.category_id ?? ""
       const parentCategoryId = categoryRows?.find((row) => !row.is_primary)?.category_id ?? ""
@@ -833,8 +815,6 @@ export default function ListingEditorPage() {
         projectType: primaryCategoryId || projectTypeValue,
         buildingType: project.building_type ?? "",
         projectStyle: project.style_preferences?.[0] ?? "",
-        locationFeatures: locationSelections,
-        materialFeatures: materialSelections,
         size: project.project_size ?? "",
         budget: (project.budget_level as ProjectBudgetLevel | null) ?? "",
         yearBuilt: project.project_year ? String(project.project_year) : "",
@@ -1162,15 +1142,6 @@ export default function ListingEditorPage() {
   const sortedSizeOptions = useMemo(() => [...sizeOptions].sort(sortByOrderThenLabel), [sizeOptions])
   const sortedBudgetOptions = useMemo(() => [...budgetOptions].sort(sortByOrderThenLabel), [budgetOptions])
 
-  const locationFeaturesData = useMemo(
-    () => mapFeatureOptionsToIconItems(locationFeatureOptions, DEFAULT_LOCATION_ICONS),
-    [locationFeatureOptions],
-  )
-  const materialFeaturesData = useMemo(
-    () => mapFeatureOptionsToIconItems(materialFeatureOptions, DEFAULT_MATERIAL_ICONS),
-    [materialFeatureOptions],
-  )
-
   const yearFieldValidation = useMemo(
     () => generateYearErrorMessages(detailsForm, { treatEmptyAsError: false }),
     [detailsForm],
@@ -1411,24 +1382,6 @@ export default function ListingEditorPage() {
     }
   }
 
-  const handleCheckboxChange = (field: "locationFeatures" | "materialFeatures", value: string) => {
-    setDetailsForm((prev) => {
-      const currentValues = prev[field]
-      const newValues = currentValues.includes(value)
-        ? currentValues.filter((entry) => entry !== value)
-        : [...currentValues, value]
-
-      if (newValues.length > 0) {
-        clearFieldError(field)
-      }
-
-      return {
-        ...prev,
-        [field]: newValues,
-      }
-    })
-  }
-
   const handleToggleChange = (value: boolean) => {
     setDetailsForm((prev) => ({
       ...prev,
@@ -1506,12 +1459,6 @@ export default function ListingEditorPage() {
     }
     if (!detailsForm.projectStyle) {
       errors.projectStyle = "Select a project style."
-    }
-    if (detailsForm.locationFeatures.length === 0) {
-      errors.locationFeatures = "Select at least one location feature."
-    }
-    if (detailsForm.materialFeatures.length === 0) {
-      errors.materialFeatures = "Select at least one material feature."
     }
     if (!detailsForm.size) {
       errors.size = "Select the project size."
@@ -1614,39 +1561,6 @@ export default function ListingEditorPage() {
         const { error: insertCategoriesError } = await supabase.from("project_categories").insert(insertPayload)
         if (insertCategoriesError) {
           throw insertCategoriesError
-        }
-      }
-
-      const taxonomySelectionIds = Array.from(
-        new Set(
-          [
-            ...snapshot.locationFeatures.filter((value) => isUuid(value)),
-            ...snapshot.materialFeatures.filter((value) => isUuid(value)),
-          ],
-        ),
-      )
-
-      const { error: deleteSelectionsError } = await supabase
-        .from("project_taxonomy_selections")
-        .delete()
-        .eq("project_id", projectId)
-
-      if (deleteSelectionsError) {
-        throw deleteSelectionsError
-      }
-
-      if (taxonomySelectionIds.length) {
-        const selectionRows = taxonomySelectionIds.map((id) => ({
-          project_id: projectId,
-          taxonomy_option_id: id,
-        }))
-
-        const { error: insertSelectionsError } = await supabase
-          .from("project_taxonomy_selections")
-          .insert(selectionRows)
-
-        if (insertSelectionsError) {
-          throw insertSelectionsError
         }
       }
 
@@ -4145,9 +4059,12 @@ export default function ListingEditorPage() {
     detailsForm.address ||
     ""
 
+  // Building type label — prefer the canonical translation; fall back to
+  // the dropdown option label or the raw slug if neither resolves.
   const buildingTypeLabel =
-    sortedBuildingTypeOptions.find(o => o.value === detailsForm.buildingType)?.label ||
-    detailsForm.buildingType ||
+    translateBuildingTypeInput(detailsForm.buildingType, locale) ??
+    sortedBuildingTypeOptions.find(o => o.value === detailsForm.buildingType)?.label ??
+    detailsForm.buildingType ??
     ""
 
   // Combined project type label: prefer category subtype, fall back to building type
@@ -4165,9 +4082,11 @@ export default function ListingEditorPage() {
     return buildingTypeLabel
   })()
 
-  const styleLabel =
-    sortedProjectStyleOptions.find(o => o.value === detailsForm.projectStyle)?.label ||
-    ""
+  const rawStyleLabel =
+    sortedProjectStyleOptions.find(o => o.value === detailsForm.projectStyle)?.label ?? ""
+  const styleLabel = rawStyleLabel
+    ? translateProjectStyle(rawStyleLabel, locale) ?? rawStyleLabel
+    : ""
 
   const flatInvites = useMemo(() => {
     const serviceMap = new Map(professionalServices.map(s => [s.id, s]))
@@ -4681,7 +4600,7 @@ export default function ListingEditorPage() {
             </span>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Scope</span>
             <div className="arco-card-title" style={{ color: specScope ? undefined : "#b0b0ae" }}>
-              {specScope || "Select scope"}
+              {translateScopeInput(specScope, locale) || "Select scope"}
             </div>
             {editingSpecBar === "scope" && (
               <>
@@ -4689,12 +4608,12 @@ export default function ListingEditorPage() {
                 <div className="dd-panel">
                   {SCOPE_OPTIONS.map(opt => (
                     <div
-                      key={opt}
-                      className={`dd-row${opt === specScope ? " sel" : ""}`}
-                      onClick={e => { e.stopPropagation(); setSpecScope(opt); saveSpecBarField("project_type", opt) }}
+                      key={opt.slug}
+                      className={`dd-row${opt.value === specScope ? " sel" : ""}`}
+                      onClick={e => { e.stopPropagation(); setSpecScope(opt.value); saveSpecBarField("project_type", opt.value) }}
                     >
-                      <span>{opt}</span>
-                      {opt === specScope && <span className="dd-check">✓</span>}
+                      <span>{translateScopeInput(opt.slug, locale) ?? opt.value}</span>
+                      {opt.value === specScope && <span className="dd-check">✓</span>}
                     </div>
                   ))}
                 </div>
@@ -4727,7 +4646,7 @@ export default function ListingEditorPage() {
                       className={`dd-row${opt.value === detailsForm.projectStyle ? " sel" : ""}`}
                       onClick={e => { e.stopPropagation(); setDetailsForm(prev => ({ ...prev, projectStyle: opt.value })); setEditingSpecBar(null); void saveFieldDirect({ style_preferences: opt.value ? [opt.value] : null }) }}
                     >
-                      <span>{opt.label}</span>
+                      <span>{translateProjectStyle(opt.label, locale) ?? opt.label}</span>
                       {opt.value === detailsForm.projectStyle && <span className="dd-check">✓</span>}
                     </div>
                   ))}
@@ -6040,14 +5959,16 @@ export default function ListingEditorPage() {
               Permanently delete this project and all associated data. This action cannot be undone.
             </p>
 
-            <div className="arco-alert arco-alert--danger">
-              <AlertTriangle className="arco-alert-icon" />
-              <span>This project will be permanently deleted. This cannot be undone.</span>
-            </div>
+            <div className="space-y-2 mb-4">
+              <div className="arco-alert arco-alert--danger">
+                <AlertTriangle className="arco-alert-icon" />
+                <span>This project will be permanently deleted. This cannot be undone.</span>
+              </div>
 
-            <div className="arco-alert arco-alert--warn">
-              <AlertTriangle className="arco-alert-icon" />
-              <span>This project will disappear from the portfolio of all credited professionals.</span>
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
+                <span>This project will disappear from the portfolio of all credited professionals.</span>
+              </div>
             </div>
 
             <p className="body-small text-text-secondary mb-3">

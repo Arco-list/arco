@@ -1,7 +1,7 @@
 "use client"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocale } from "next-intl"
-import { getProjectTranslation } from "@/lib/project-translations"
+import { canonicalizeScope, getProjectTranslation, translateScope } from "@/lib/project-translations"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables } from "@/lib/supabase/types"
@@ -95,9 +95,8 @@ export function useProjectsQuery({
     selectedSpace,
     selectedFeatures,
     selectedBuildingTypes,
-    selectedLocationFeatures,
+    selectedScopes,
     selectedBuildingFeatures,
-    selectedMaterialFeatures,
     selectedSizes,
     selectedBudgets,
     projectYearRange,
@@ -198,9 +197,8 @@ export function useProjectsQuery({
       locations: selectedLocations,
       features: selectedFeatures,
       buildingTypes: selectedBuildingTypes,
-      locationFeatures: selectedLocationFeatures,
+      scopes: selectedScopes,
       buildingFeatures: selectedBuildingFeatures,
-      materialFeatures: selectedMaterialFeatures,
       sizes: selectedSizes,
       budgets: selectedBudgets.filter((budget): budget is ProjectBudgetLevel =>
         ALLOWED_BUDGET_LEVELS.has(budget as ProjectBudgetLevel),
@@ -215,9 +213,8 @@ export function useProjectsQuery({
       selectedLocations,
       selectedFeatures,
       selectedBuildingTypes,
-      selectedLocationFeatures,
+      selectedScopes,
       selectedBuildingFeatures,
-      selectedMaterialFeatures,
       selectedSizes,
       selectedBudgets,
       projectYearRange,
@@ -355,6 +352,22 @@ export function useProjectsQuery({
 
       if (filters.buildingTypes.length > 0) {
         query = query.in("building_type", filters.buildingTypes)
+      }
+
+      // Scope filter — slugs (new_build / renovation / interior_design)
+      // map back to the English display strings that projects.project_type
+      // currently stores. canonicalizeScope tolerates any variant if the
+      // URL ever carries an unexpected value.
+      if (filters.scopes.length > 0) {
+        const displayValues = filters.scopes
+          .map((slug) => {
+            const canon = canonicalizeScope(slug)
+            return canon ? translateScope(canon, "en") : null
+          })
+          .filter((v): v is string => v !== null)
+        if (displayValues.length > 0) {
+          query = query.in("project_type", displayValues)
+        }
       }
 
       if (filters.sizes.length > 0) {
@@ -634,9 +647,8 @@ export function useProjectsQuery({
         selectedLocations.length > 0 ||
         selectedFeatures.length > 0 ||
         selectedBuildingTypes.length > 0 ||
-        selectedLocationFeatures.length > 0 ||
+        selectedScopes.length > 0 ||
         selectedBuildingFeatures.length > 0 ||
-        selectedMaterialFeatures.length > 0 ||
         selectedSizes.length > 0 ||
         selectedBudgets.length > 0 ||
         projectYearRange[0] !== null ||
@@ -720,9 +732,8 @@ export function useProjectsQuery({
     selectedLocations,
     selectedFeatures.length,
     selectedBuildingTypes.length,
-    selectedLocationFeatures.length,
+    selectedScopes.length,
     selectedBuildingFeatures.length,
-    selectedMaterialFeatures.length,
     selectedSizes.length,
     selectedBudgets.length,
     projectYearRange,

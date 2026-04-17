@@ -21,6 +21,9 @@ export const signUpSchema = z.object({
   password: passwordSchema,
   redirectTo: z.string().optional(),
   invitedEmail: z.union([z.string().email(), z.literal('')]).optional(),
+  // URL locale at the moment of signup — captured for transactional email
+  // targeting. Validated against the configured locales in i18n/config.ts.
+  preferredLanguage: z.enum(['nl', 'en']).optional(),
 });
 
 export const signInWithOtpSchema = z.object({

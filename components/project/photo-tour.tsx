@@ -21,33 +21,43 @@ interface PhotoTourProps {
   spaces?: string[]
 }
 
+const ALL_SLUG = "__all__"
+
+// Title-case fallback for unknown slugs not in the i18n spaces namespace
+// (e.g. future additions before translations land).
+const slugToTitleCase = (slug: string) =>
+  slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+
 export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
   const t = useTranslations("project_detail")
-  const [activeCategory, setActiveCategory] = useState('All')
+  const tSpaces = useTranslations("spaces")
+  const [activeCategory, setActiveCategory] = useState<string>(ALL_SLUG)
   const [showMore, setShowMore] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
 
-  // Build categories from actual spaces on photos, with "All" first
-  const categories = ['All', ...spaces.map((slug) => {
-    // Convert slug to display name (e.g. "living-room" → "Living Room")
-    return slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  })]
+  // Translate a space slug; fall back to a title-cased version of the slug
+  // so unknown spaces still render a reasonable label instead of raw kebab.
+  const labelForSlug = (slug: string) => {
+    try {
+      return tSpaces(slug as any)
+    } catch {
+      return slugToTitleCase(slug)
+    }
+  }
 
-  // Slug lookup for filtering
-  const categorySlugMap = new Map<string, string>()
-  spaces.forEach((slug) => {
-    const label = slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-    categorySlugMap.set(label, slug)
-  })
+  // Build the pill list from actual spaces on photos. The "all" pill uses
+  // a sentinel slug so state comparisons stay slug-based (labels can change
+  // per-locale without breaking identity).
+  const categories: Array<{ slug: string; label: string }> = [
+    { slug: ALL_SLUG, label: t("all_photos") },
+    ...spaces.map((slug) => ({ slug, label: labelForSlug(slug) })),
+  ]
 
   // Filter photos by space
-  const filteredPhotos = activeCategory === 'All'
+  const filteredPhotos = activeCategory === ALL_SLUG
     ? photos
-    : photos.filter(photo => {
-        const targetSlug = categorySlugMap.get(activeCategory)
-        return targetSlug && photo.space === targetSlug
-      })
+    : photos.filter((photo) => photo.space === activeCategory)
 
   // Initial 6 photos for display
   const initialPhotos = filteredPhotos.slice(0, 6)
@@ -74,8 +84,8 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
     setLightboxIndex((prev) => (prev - 1 + lightboxPhotos.length) % lightboxPhotos.length)
   }
 
-  const handleCategoryChange = (category: string) => {
-    setActiveCategory(category)
+  const handleCategoryChange = (slug: string) => {
+    setActiveCategory(slug)
     setShowMore(false)
     // If lightbox is open, reset to first image of new filtered set
     if (lightboxOpen) {
@@ -84,19 +94,14 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
   }
 
   // In lightbox: navigate to the first photo of a given space
-  const handleLightboxSpaceNav = (spaceLabel: string) => {
-    const targetSlug = categorySlugMap.get(spaceLabel)
-    if (!targetSlug) return
-    const targetIndex = photos.findIndex((p) => p.space === targetSlug)
+  const handleLightboxSpaceNav = (slug: string) => {
+    const targetIndex = photos.findIndex((p) => p.space === slug)
     if (targetIndex !== -1) setLightboxIndex(targetIndex)
   }
 
   // Determine which space pill should be active based on current lightbox photo
-  const currentLightboxSpace = lightboxOpen && photos[lightboxIndex]?.space
+  const activeLightboxSlug = lightboxOpen && photos[lightboxIndex]?.space
     ? photos[lightboxIndex].space
-    : null
-  const activeLightboxPill = currentLightboxSpace
-    ? currentLightboxSpace.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
     : null
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -138,13 +143,13 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
         {/* Category Tags — only show when photos have spaces */}
         {spaces.length > 0 && (
           <div className="category-tags">
-            {categories.map((category) => (
+            {categories.map(({ slug, label }) => (
               <button
-                key={category}
-                className={`category-tag ${activeCategory === category ? 'active' : ''}`}
-                onClick={() => handleCategoryChange(category)}
+                key={slug}
+                className={`category-tag ${activeCategory === slug ? 'active' : ''}`}
+                onClick={() => handleCategoryChange(slug)}
               >
-                {category === 'All' ? t("all_photos") : category}
+                {label}
               </button>
             ))}
           </div>
@@ -299,16 +304,16 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
             {spaces.length > 0 && (
               <div className="lightbox-categories">
                 <div className="category-tags category-tags-dark">
-                  {categories.filter((c) => c !== "All").map((category) => (
+                  {categories.filter(({ slug }) => slug !== ALL_SLUG).map(({ slug, label }) => (
                     <button
-                      key={category}
-                      className={`category-tag category-tag-dark ${activeLightboxPill === category ? 'active' : ''}`}
+                      key={slug}
+                      className={`category-tag category-tag-dark ${activeLightboxSlug === slug ? 'active' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleLightboxSpaceNav(category)
+                        handleLightboxSpaceNav(slug)
                       }}
                     >
-                      {category}
+                      {label}
                     </button>
                   ))}
                 </div>

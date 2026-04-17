@@ -122,18 +122,24 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
       : { data: null }
 
     const { sendProfessionalInviteEmail } = await import("@/lib/email-service")
-    await sendProfessionalInviteEmail(invite.invited_email, {
-      project_owner: ownerName,
-      company_name: ownerCompany?.name ?? undefined,
-      company_logo_url: ownerCompany?.logo_url ?? undefined,
-      project_name: project?.title || "Project",
-      project_title: project?.title || "Project",
-      project_image: photo?.url ?? undefined,
-      project_type: (project as any)?.building_type ?? (project as any)?.project_type ?? undefined,
-      project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
-      project_link: `${baseUrl}/projects/${(project as any)?.slug ?? invite.project_id}`,
-      confirmUrl,
-    })
+    await sendProfessionalInviteEmail(
+      invite.invited_email,
+      {
+        project_owner: ownerName,
+        company_name: ownerCompany?.name ?? undefined,
+        company_logo_url: ownerCompany?.logo_url ?? undefined,
+        project_name: project?.title || "Project",
+        project_title: project?.title || "Project",
+        project_image: photo?.url ?? undefined,
+        project_type: (project as any)?.building_type ?? (project as any)?.project_type ?? undefined,
+        project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+        project_link: `${baseUrl}/projects/${(project as any)?.slug ?? invite.project_id}`,
+        confirmUrl,
+      },
+      // Resolver will also do an email-based user lookup when the
+      // invited professional already has an Arco account.
+      { companyId: ownerPP?.company_id ?? null },
+    )
   } catch (err) {
     logger.error("admin-professionals", "Failed to send invite email", { inviteId: idResult.data }, err as Error)
   }
@@ -974,7 +980,7 @@ export async function changeCompanyOwnerAction(input: {
 export async function sendProspectEmailAction(input: {
   companyId: string
   emailTo: string
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string }> {
   const { supabase, user, error } = await assertAdmin()
   if (error) return { success: false, error: error.message }
 
@@ -1019,14 +1025,21 @@ export async function sendProspectEmailAction(input: {
 
   // Send email via Resend
   const { sendTransactionalEmail } = await import("@/lib/email-service")
-  const sendResult = await sendTransactionalEmail(emailResult.data, "prospect-intro", {
-    company_name: company.name,
-    company_page_url: companyPageUrl,
-    claim_url: claimUrl,
-    hero_image_url: heroImageUrl ?? undefined,
-    logo_url: company.logo_url ?? undefined,
-    company_subtitle: locationParts.join(" · ") || undefined,
-  })
+  const sendResult = await sendTransactionalEmail(
+    emailResult.data,
+    "prospect-intro",
+    {
+      company_name: company.name,
+      company_page_url: companyPageUrl,
+      claim_url: claimUrl,
+      hero_image_url: heroImageUrl ?? undefined,
+      logo_url: company.logo_url ?? undefined,
+      company_subtitle: locationParts.join(" · ") || undefined,
+    },
+    // Prospected company — no owner yet. Resolver will fall back to
+    // companies.country (NL/BE → nl) or email TLD.
+    { companyId: company.id },
+  )
 
   if (!sendResult.success) {
     return { success: false, error: sendResult.message ?? "Failed to send email" }
@@ -1091,12 +1104,19 @@ export async function sendProspectEmailAction(input: {
         send_at: finalSendAt,
       },
     ] as never)
+  // Surface any drip-enqueue error as a warning on the action result.
+  // The intro already went out via Resend, so we don't fail the whole
+  // action — but silently logging hides schema / constraint issues that
+  // would otherwise go weeks unnoticed (migration 134 fixed exactly one
+  // of those). The outer actions (startProspectSequence etc.) propagate
+  // this warning up to the client, which renders a yellow toast.
+  let dripWarning: string | undefined
   if (dripInsertError) {
-    // 23505 = unique_violation: hit our partial index, meaning a pending
-    // row already exists for this (company_id, template). Treat as no-op.
-    // Anything else is unexpected — log it but DON'T fail the action,
-    // since the intro itself was already sent successfully.
-    if ((dripInsertError as { code?: string }).code === "23505") {
+    const code = (dripInsertError as { code?: string }).code
+    if (code === "23505") {
+      // 23505 = unique_violation: partial index hit, meaning pending rows
+      // already exist for this (company_id, template). Benign — the
+      // sequence is already queued. No warning needed.
       logger.info("admin-professionals", "Drip rows already enqueued for company", {
         companyId: company.id,
       })
@@ -1106,6 +1126,8 @@ export async function sendProspectEmailAction(input: {
         "Failed to enqueue prospect drip rows (intro was sent successfully)",
         { companyId: company.id, supabaseError: dripInsertError },
       )
+      const message = (dripInsertError as { message?: string }).message ?? "unknown error"
+      dripWarning = `Intro sent, but follow-up drip couldn't be queued: ${message}`
     }
   }
 
@@ -1145,7 +1167,7 @@ export async function sendProspectEmailAction(input: {
   })
 
   revalidatePath("/", "layout")
-  return { success: true }
+  return { success: true, warning: dripWarning }
 }
 
 /**

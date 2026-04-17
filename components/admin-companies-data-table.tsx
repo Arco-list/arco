@@ -1864,7 +1864,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               </button>
             </div>
 
-            <div className="px-4 pb-3">
+            <div className="pb-3">
               <p className="text-sm font-medium text-[#1c1c1a] mb-0.5">{deleteCompany.name}</p>
 
               <div className="arco-alert arco-alert--warn">

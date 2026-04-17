@@ -6,7 +6,8 @@ import Link from "next/link"
 import { MoreHorizontal, Check, AlertTriangle, Info, X } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
+import { translateCategoryName, translateProjectStyle } from "@/lib/project-translations"
 import { ImportProjectModal } from "@/components/import-project-modal"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -100,6 +101,7 @@ const MIN_YEAR = 2000
 
 export default function DashboardListingsPage() {
   const t = useTranslations("dashboard")
+  const locale = useLocale()
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const searchParams = useSearchParams()
   const companyIdParam = searchParams.get("company_id")
@@ -321,7 +323,7 @@ export default function DashboardListingsPage() {
         invited_service_category_ids: (pp.invited_service_category_ids as string[] | null) ?? [],
         contributor_cover_photo_id: pp.cover_photo_id as string | null,
       })) as (ProjectRow & {
-        project_type_category: { name: string | null } | null
+        project_type_category: { name: string | null; slug: string | null } | null
         invited_service_category_ids?: string[] | null
         contributor_cover_photo_id: string | null
       })[]
@@ -353,7 +355,7 @@ export default function DashboardListingsPage() {
 
         const { data: stylesData, error: stylesError } = await supabase
           .from("project_taxonomy_options")
-          .select("id, name")
+          .select("id, name, slug")
           .in("id", missingStyleOptionIds)
 
         // RACE CONDITION CHECK: After metadata fetch
@@ -376,7 +378,8 @@ export default function DashboardListingsPage() {
                   taxonomyCache.styles.delete(oldestKey)
                 }
               }
-              taxonomyCache.styles.set(row.id, row.name)
+              const translated = translateProjectStyle(row.slug ?? row.name, locale) ?? row.name
+              taxonomyCache.styles.set(row.id, translated)
               taxonomyCache.accessOrder.push(row.id)
             }
           })
@@ -461,12 +464,18 @@ export default function DashboardListingsPage() {
         const styleLabel = rawStyle
           ? isUuid(rawStyle)
             ? styleMap.get(rawStyle) ?? ""
-            : rawStyle
+            : translateProjectStyle(rawStyle, locale) ?? rawStyle
           : ""
 
         // Prefer the relational category label when available, otherwise fall back to legacy text
-        const projectTypeLabel = project.project_type_category?.name ??
-          (project.project_type && !isUuid(project.project_type) ? project.project_type : "")
+        const rawCategorySlug = project.project_type_category?.slug ?? null
+        const rawCategoryName = project.project_type_category?.name ?? null
+        const legacyText = project.project_type && !isUuid(project.project_type) ? project.project_type : ""
+        const projectTypeLabel =
+          translateCategoryName(rawCategorySlug ?? rawCategoryName, locale) ??
+          rawCategoryName ??
+          translateCategoryName(legacyText, locale) ??
+          legacyText
 
         const locationLabel = project.address_city || null
         const subtitle = [projectTypeLabel, locationLabel].filter(Boolean).join(" · ")

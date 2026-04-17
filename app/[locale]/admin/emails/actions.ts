@@ -66,32 +66,104 @@ export type ResendEmail = {
   last_event: string
   templateId: string | null
   templateName: string | null
+  /**
+   * Language the email was sent in. Pulled from the Resend `locale`
+   * tag that sendTransactionalEmail writes. Null for historical sends
+   * that predate the tag (best-effort inferred from subject — see
+   * inferLocaleFromSubject).
+   */
+  locale: 'nl' | 'en' | null
+}
+
+/**
+ * Best-effort guess of the send locale for a Resend row that has no
+ * `locale` tag (historical sends). Subject-string match against the
+ * Dutch translations of the three client-welcome templates. Everything
+ * else defaults to `en` since it was the default before PR #2.
+ */
+const DUTCH_SUBJECT_PATTERNS: RegExp[] = [
+  // Welcome / drip series
+  /^Welkom bij Arco$/i,
+  /^Ontdek projecten op Arco$/i,
+  /^Vind de juiste professional op Arco$/i,
+  // Transactional Dutch variants (PR #4)
+  /staat live op Arco$/i,
+  /^Update over /i,
+  /heeft je gecrediteerd op /i,
+  /^Je bent uitgenodigd om lid te worden van /i,
+  /is je Arco domein-verificatiecode$/i,
+  /heeft een kennismaking aangevraagd op Arco$/i,
+  // Dutch prospect subject patterns. English variants ("A stage for X",
+  // "X on Arco", "Claim X on Arco") fall through to the EN default,
+  // which is correct for them.
+  /^Een podium voor /i,
+  /op Arco$/i,
+  /^Claim .* op Arco$/i,
+]
+function inferLocaleFromSubject(subject: string): 'nl' | 'en' {
+  return DUTCH_SUBJECT_PATTERNS.some((re) => re.test(subject)) ? 'nl' : 'en'
+}
+
+function extractTag(
+  tags: unknown,
+  name: string,
+): string | null {
+  if (!Array.isArray(tags)) return null
+  for (const tag of tags) {
+    if (tag && typeof tag === 'object' && (tag as { name?: unknown }).name === name) {
+      const value = (tag as { value?: unknown }).value
+      return typeof value === 'string' ? value : null
+    }
+  }
+  return null
 }
 
 const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
+  // Auth templates (Supabase-side, English-only)
   [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
-  [/is your Arco domain verification code/i, "domain-verification", "Domain Verification"],
   [/is your Arco verification code/i, "signup", "Signup Confirmation"],
   [/Confirm your Arco account/i, "signup", "Signup Confirmation"],
-  [/credited you on/i, "professional-invite", "Professional Invite"],
-  [/invited to join.*on Arco/i, "team-invite", "Team Invite"],
-  [/is now live on Arco/i, "project-live", "Project Live"],
-  [/Update on /i, "project-rejected", "Project Rejected"],
   [/Reset your Arco password/i, "password-reset", "Password Reset"],
   [/Sign in to Arco/i, "magic-link", "Sign-in Code"],
+  // Domain verification — EN + NL
+  [/is your Arco domain verification code/i, "domain-verification", "Domain Verification"],
   [/Verify your domain/i, "domain-verification", "Domain Verification"],
+  [/is je Arco domein-verificatiecode$/i, "domain-verification", "Domain Verification"],
+  // Professional invite — EN + NL. NL pattern must come before the
+  // prospect "op Arco" catch-all below.
+  [/credited you on/i, "professional-invite", "Professional Invite"],
+  [/heeft je gecrediteerd op /i, "professional-invite", "Professional Invite"],
+  // Team invite — EN + NL
+  [/invited to join.*on Arco/i, "team-invite", "Team Invite"],
+  [/^Je bent uitgenodigd om lid te worden van /i, "team-invite", "Team Invite"],
+  // Project live — EN + NL. NL is end-anchored to avoid colliding with
+  // the generic "op Arco" catch-all for prospect-followup below.
+  [/is now live on Arco/i, "project-live", "Project Live"],
+  [/staat live op Arco$/i, "project-live", "Project Live"],
+  // Project rejected — EN + NL
+  [/^Update on /i, "project-rejected", "Project Rejected"],
+  [/^Update over /i, "project-rejected", "Project Rejected"],
+  // Introduction request — EN + NL
+  [/requested an introduction on Arco$/i, "introduction-request", "Introduction Request"],
+  [/heeft een kennismaking aangevraagd op Arco$/i, "introduction-request", "Introduction Request"],
+  // Welcome / drip series (PR #2)
   [/^Welcome to Arco$/i, "welcome-homeowner", "Welcome"],
+  [/^Welkom bij Arco$/i, "welcome-homeowner", "Welcome"],
   [/Discover projects on Arco/i, "discover-projects", "Discover Projects"],
+  [/Ontdek projecten op Arco/i, "discover-projects", "Discover Projects"],
   [/Find the right professional/i, "find-professionals", "Find Professionals"],
+  [/Vind de juiste professional op Arco/i, "find-professionals", "Find Professionals"],
+  // Prospect series (PR #3)
   [/Een podium voor/i, "prospect-intro", "Prospect Intro"],
-  [/staat op Arco/i, "prospect-intro", "Prospect Intro"],
-  [/is now on Arco/i, "prospect-intro", "Prospect Intro"],
-  // Both followup and final subjects end in "op Arco". Final has the
-  // distinguishing "Claim …" prefix and MUST be matched first, otherwise
-  // the followup's end-anchored pattern would swallow it. Sequence is
-  // first-match-wins via matchTemplate().
+  [/^A stage for /i, "prospect-intro", "Prospect Intro"],
+  // Both prospect followup and final end in "op Arco" / "on Arco". Final
+  // has the distinguishing "Claim …" prefix and MUST be matched first,
+  // otherwise the followup's end-anchored pattern would swallow it.
+  // Sequence is first-match-wins via matchTemplate().
   [/^Claim .* op Arco$/i, "prospect-final", "Prospect Final"],
+  [/^Claim .* on Arco$/i, "prospect-final", "Prospect Final"],
   [/op Arco$/i, "prospect-followup", "Prospect Follow-up"],
+  [/ on Arco$/i, "prospect-followup", "Prospect Follow-up"],
 ]
 
 function matchTemplate(subject: string): { id: string; name: string } | null {
@@ -111,16 +183,25 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
     // The previous default of 20 hid almost everything.
     const rows = await fetchAllResendEmails(undefined, 500)
 
-    const emails: ResendEmail[] = rows.map((e: any) => ({
-      id: e.id,
-      from: e.from,
-      to: Array.isArray(e.to) ? e.to : [e.to],
-      subject: e.subject,
-      created_at: e.created_at,
-      last_event: e.last_event ?? 'sent',
-      templateId: matchTemplate(e.subject ?? '')?.id ?? null,
-      templateName: matchTemplate(e.subject ?? '')?.name ?? null,
-    }))
+    const emails: ResendEmail[] = rows.map((e: any) => {
+      const subject: string = e.subject ?? ''
+      const tagLocale = extractTag(e.tags, 'locale')
+      const locale: ResendEmail['locale'] =
+        tagLocale === 'nl' || tagLocale === 'en'
+          ? tagLocale
+          : inferLocaleFromSubject(subject)
+      return {
+        id: e.id,
+        from: e.from,
+        to: Array.isArray(e.to) ? e.to : [e.to],
+        subject,
+        created_at: e.created_at,
+        last_event: e.last_event ?? 'sent',
+        templateId: matchTemplate(subject)?.id ?? null,
+        templateName: matchTemplate(subject)?.name ?? null,
+        locale,
+      }
+    })
 
     return { emails }
   } catch (err) {
@@ -161,41 +242,16 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
     // every "sends" count.
     const rows = await fetchAllResendEmails(sinceDate, 1000)
 
-    // Map subject patterns to template IDs
-    const subjectToTemplate: [RegExp, string][] = [
-      [/is your Arco sign-in code/i, "magic-link"],
-      [/is your Arco domain verification code/i, "domain-verification"],
-      [/is your Arco verification code/i, "signup"],
-      [/Confirm your Arco account/i, "signup"],
-      [/credited you on/i, "professional-invite"],
-      [/invited to join.*on Arco/i, "team-invite"],
-      [/is now live on Arco/i, "project-live"],
-      [/Update on /i, "project-rejected"],
-      [/Reset your Arco password/i, "password-reset"],
-      [/Sign in to Arco/i, "magic-link"],
-      [/Verify your domain/i, "domain-verification"],
-      [/^Welcome to Arco$/i, "welcome-homeowner"],
-      [/Discover projects on Arco/i, "discover-projects"],
-      [/Find the right professional/i, "find-professionals"],
-      [/Een podium voor/i, "prospect-intro"],
-      [/staat op Arco/i, "prospect-intro"],
-      [/is now on Arco/i, "prospect-intro"],
-      // See note on the matching pattern in SUBJECT_TO_TEMPLATE above.
-      // Final must come before followup since both end in "op Arco".
-      [/^Claim .* op Arco$/i, "prospect-final"],
-      [/op Arco$/i, "prospect-followup"],
-    ]
-
+    // Reuse SUBJECT_TO_TEMPLATE so stats and the sent-email list stay in
+    // sync. Both ran independent copies of this map previously, which
+    // drifted when PR #4 added Dutch transactional subjects.
     const stats: Record<string, TemplateStats> = {}
 
     for (const email of rows) {
       const subject = (email as any).subject ?? ""
       const event = (email as any).last_event ?? "sent"
 
-      let templateId: string | null = null
-      for (const [pattern, id] of subjectToTemplate) {
-        if (pattern.test(subject)) { templateId = id; break }
-      }
+      const templateId = matchTemplate(subject)?.id ?? null
       if (!templateId) continue
 
       if (!stats[templateId]) {

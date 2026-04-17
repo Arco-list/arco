@@ -28,16 +28,47 @@ import {
   Zap,
 } from "lucide-react"
 
+// Shared icon vocabulary for space/feature rows on the photo tour. The
+// DB `project_features.icon` column stores one of the keys below; callers
+// resolve it to a Lucide component via resolveProjectDetailsIcon().
+const iconComponentMap: Record<string, LucideIcon> = {
+  anchor: Anchor,
+  brick: Brick,
+  "brick-wall": Brick,
+  building: Building,
+  "building-2": Building2,
+  cpu: Cpu,
+  "cloud-rain": CloudRainIcon,
+  eye: Eye,
+  golf: Golf,
+  home: Home,
+  landmark: Landmark,
+  layers: Layers,
+  leaf: Leaf,
+  mountain: Mountain,
+  "panel-top": PanelsTopLeft,
+  "rocking-chair": RockingChair,
+  snowflake: Snowflake,
+  sprout: Sprout,
+  square: Square,
+  sun: Sun,
+  thermometer: Thermometer,
+  "tree-pine": TreePine,
+  trees: Trees,
+  wallet: Wallet,
+  waves: Waves,
+  wind: Wind,
+  zap: Zap,
+}
+
+export const resolveProjectDetailsIcon = (iconKey?: string | null): LucideIcon | undefined => {
+  if (!iconKey) return undefined
+  return iconComponentMap[iconKey]
+}
+
 export type ProjectDetailsDropdownOption = {
   value: string
   label: string
-  sortOrder?: number | null
-}
-
-export type ProjectDetailsFeatureOption = {
-  value: string
-  label: string
-  iconKey?: string | null
   sortOrder?: number | null
 }
 
@@ -46,8 +77,6 @@ export type ProjectDetailsFormState = {
   projectType: string
   buildingType: string
   projectStyle: string
-  locationFeatures: string[]
-  materialFeatures: string[]
   size: string
   budget: string
   yearBuilt: string
@@ -159,10 +188,23 @@ export const FALLBACK_PROJECT_TYPES: Record<string, ProjectDetailsDropdownOption
   ],
 }
 
+// Canonical building-type vocabulary. Matches PROJECT_BUILDING_TYPES in
+// lib/project-translations.ts — keep them in sync. Slugs match what the
+// projects.building_type column stores ("villa", "garden-house", etc.).
+//
+// Labels here are English fallbacks; render sites should use
+// translateBuildingType() / translateBuildingTypeInput() to localise.
 export const FALLBACK_BUILDING_TYPE_OPTIONS: ProjectDetailsDropdownOption[] = [
-  { value: "new_build", label: "New build", sortOrder: 1 },
-  { value: "renovated", label: "Renovated", sortOrder: 2 },
-  { value: "interior_designed", label: "Interior designed", sortOrder: 3 },
+  { value: "villa", label: "Villa", sortOrder: 1 },
+  { value: "house", label: "House", sortOrder: 2 },
+  { value: "apartment", label: "Apartment", sortOrder: 3 },
+  { value: "townhouse", label: "Townhouse", sortOrder: 4 },
+  { value: "penthouse", label: "Penthouse", sortOrder: 5 },
+  { value: "bungalow", label: "Bungalow", sortOrder: 6 },
+  { value: "chalet", label: "Chalet", sortOrder: 7 },
+  { value: "farm", label: "Farm", sortOrder: 8 },
+  { value: "garden-house", label: "Garden house", sortOrder: 9 },
+  { value: "other", label: "Other", sortOrder: 10 },
 ]
 
 export const FALLBACK_SIZE_OPTIONS: ProjectDetailsDropdownOption[] = [
@@ -179,114 +221,6 @@ export const FALLBACK_BUDGET_OPTIONS: ProjectDetailsDropdownOption[] = [
   { value: "luxury", label: "Luxury", sortOrder: 4 },
 ]
 
-export const FALLBACK_LOCATION_FEATURES: ProjectDetailsFeatureOption[] = [
-  { value: "urban-center", label: "Urban center", iconKey: "building", sortOrder: 1 },
-  { value: "suburban", label: "Suburban", iconKey: "home", sortOrder: 2 },
-  { value: "countryside", label: "Countryside", iconKey: "trees", sortOrder: 3 },
-  { value: "coastal", label: "Coastal", iconKey: "waves", sortOrder: 4 },
-  { value: "beach", label: "Beach", iconKey: "sun", sortOrder: 5 },
-  { value: "waterfront", label: "Waterfront", iconKey: "anchor", sortOrder: 6 },
-  { value: "lakefront", label: "Lakefront", iconKey: "waves", sortOrder: 7 },
-  { value: "mountain", label: "Mountain", iconKey: "mountain", sortOrder: 8 },
-  { value: "amazing-views", label: "Amazing views", iconKey: "eye", sortOrder: 9 },
-  { value: "city-view", label: "City view", iconKey: "building-2", sortOrder: 10 },
-  { value: "golfing", label: "Golfing", iconKey: "golf", sortOrder: 11 },
-  { value: "ski-resort", label: "Ski resort", iconKey: "snowflake", sortOrder: 12 },
-  { value: "forest", label: "Forest", iconKey: "tree-pine", sortOrder: 13 },
-  { value: "historic-district", label: "Historic district", iconKey: "landmark", sortOrder: 14 },
-  { value: "business-district", label: "Business district", iconKey: "building", sortOrder: 15 },
-]
-
-export const FALLBACK_MATERIAL_FEATURES: ProjectDetailsFeatureOption[] = [
-  { value: "metal-constructions", label: "Metal constructions", iconKey: "zap", sortOrder: 1 },
-  { value: "stucco-walls", label: "Stucco walls", iconKey: "brick", sortOrder: 2 },
-  { value: "glass-facades", label: "Glass facades", iconKey: "square", sortOrder: 3 },
-  { value: "slate-roof", label: "Slate roof", iconKey: "cloud-rain", sortOrder: 4 },
-  { value: "bamboo", label: "Bamboo", iconKey: "leaf", sortOrder: 5 },
-  { value: "natural-stone", label: "Natural Stone", iconKey: "rocking-chair", sortOrder: 6 },
-  { value: "exposed-brick", label: "Exposed brick", iconKey: "brick", sortOrder: 7 },
-  { value: "reclaimed-wood", label: "Reclaimed wood", iconKey: "layers", sortOrder: 8 },
-  { value: "thatched-roof", label: "Thatched roof", iconKey: "home", sortOrder: 9 },
-  { value: "exposed-concrete", label: "Exposed concrete", iconKey: "square", sortOrder: 10 },
-  { value: "solar-panels", label: "Solar panels", iconKey: "sun", sortOrder: 11 },
-  { value: "green-roof", label: "Green roof", iconKey: "sprout", sortOrder: 12 },
-  { value: "smart-home-technology", label: "Smart home technology", iconKey: "cpu", sortOrder: 13 },
-  { value: "underfloor-heating", label: "Underfloor heating", iconKey: "waves", sortOrder: 14 },
-  { value: "heat-pump", label: "Heat pump", iconKey: "thermometer", sortOrder: 15 },
-  { value: "insulation", label: "Insulation", iconKey: "layers", sortOrder: 16 },
-  { value: "double-glazing", label: "Double glazing", iconKey: "panel-top", sortOrder: 17 },
-  { value: "ventilation-system", label: "Ventilation system", iconKey: "wind", sortOrder: 18 },
-]
-
-const iconComponentMap: Record<string, LucideIcon> = {
-  anchor: Anchor,
-  brick: Brick,
-  "brick-wall": Brick,
-  building: Building,
-  "building-2": Building2,
-  cpu: Cpu,
-  "cloud-rain": CloudRainIcon,
-  eye: Eye,
-  golf: Golf,
-  home: Home,
-  landmark: Landmark,
-  layers: Layers,
-  leaf: Leaf,
-  mountain: Mountain,
-  "panel-top": PanelsTopLeft,
-  "rocking-chair": RockingChair,
-  snowflake: Snowflake,
-  sprout: Sprout,
-  square: Square,
-  sun: Sun,
-  thermometer: Thermometer,
-  "tree-pine": TreePine,
-  trees: Trees,
-  wallet: Wallet,
-  waves: Waves,
-  wind: Wind,
-  zap: Zap,
-}
-
-export const DEFAULT_LOCATION_ICONS: LucideIcon[] = [
-  Waves,
-  Eye,
-  Building,
-  Trees,
-  Golf,
-  Snowflake,
-  Anchor,
-  TreePine,
-  Mountain,
-  Landmark,
-  Sun,
-  Wind,
-]
-
-export const DEFAULT_MATERIAL_ICONS: LucideIcon[] = [
-  Zap,
-  Square,
-  CloudRainIcon,
-  Leaf,
-  RockingChair,
-  Brick,
-  Layers,
-  Home,
-  Sun,
-  Sprout,
-  Cpu,
-  Thermometer,
-  Wind,
-]
-
-export const resolveProjectDetailsIcon = (iconKey?: string | null): LucideIcon | undefined => {
-  if (!iconKey) {
-    return undefined
-  }
-
-  return iconComponentMap[iconKey]
-}
-
 export const sortByOrderThenLabel = <T extends { sortOrder?: number | null; label: string }>(a: T, b: T) => {
   const orderA = typeof a.sortOrder === "number" ? a.sortOrder : Number.MAX_SAFE_INTEGER
   const orderB = typeof b.sortOrder === "number" ? b.sortOrder : Number.MAX_SAFE_INTEGER
@@ -296,19 +230,6 @@ export const sortByOrderThenLabel = <T extends { sortOrder?: number | null; labe
   }
 
   return a.label.localeCompare(b.label)
-}
-
-export const sortFeatureOptions = (options: ProjectDetailsFeatureOption[]) => {
-  return [...options].sort((a, b) => {
-    const orderA = typeof a.sortOrder === "number" ? a.sortOrder : Number.MAX_SAFE_INTEGER
-    const orderB = typeof b.sortOrder === "number" ? b.sortOrder : Number.MAX_SAFE_INTEGER
-
-    if (orderA !== orderB) {
-      return orderA - orderB
-    }
-
-    return a.label.localeCompare(b.label)
-  })
 }
 
 export const generateYearErrorMessages = (
@@ -383,16 +304,3 @@ export const getWordCountFromHtml = (html: string) => {
   return text.split(/\s+/).length
 }
 
-export const mapFeatureOptionsToIconItems = (
-  options: ProjectDetailsFeatureOption[],
-  defaults: LucideIcon[],
-) => {
-  return options.map((option, index) => {
-    const icon = resolveProjectDetailsIcon(option.iconKey) ?? defaults[index % defaults.length]
-    return {
-      value: option.value,
-      label: option.label,
-      icon,
-    }
-  })
-}

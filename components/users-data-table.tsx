@@ -674,8 +674,8 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
     <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Warning banner */}
       {singleActiveSuperAdmin && (
-        <div className="flex items-start gap-2.5 border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
-          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="arco-alert arco-alert--warn">
+          <Shield className="arco-alert-icon" />
           <p>
             There is only one active super admin. Invite or promote another before demoting or deactivating the current one.
           </p>
@@ -931,7 +931,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </div>
 
             {roleDialogUser.isLastSuperAdmin && roleDialogUser.role === "super_admin" && (
-              <div className="px-4 pb-2">
+              <div className="pb-2">
                 <p className="border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-900 rounded-[3px]">
                   Promote another super admin before demoting this user.
                 </p>
@@ -988,7 +988,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </div>
 
             {statusDialogUser.isLastSuperAdmin && statusSelection === "inactive" && (
-              <div className="px-4 pb-2">
+              <div className="pb-2">
                 <p className="border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-900 rounded-[3px]">
                   This is the last active super admin. Promote another before deactivating.
                 </p>
@@ -1034,7 +1034,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               </button>
             </div>
 
-            <div className="px-4 pb-3">
+            <div className="pb-3">
               <div className="flex items-center gap-3 mb-3">
                 {deleteUser.avatarUrl ? (
                   <img
@@ -1067,12 +1067,12 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </div>
 
             {isCheckingDelete ? (
-              <div className="flex items-center justify-center px-4 py-4">
+              <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-4 w-4 animate-spin text-[#a1a1a0]" />
                 <span className="ml-2 text-xs text-[#a1a1a0]">Checking deletion requirements…</span>
               </div>
             ) : deleteCheckResult ? (
-              <div className="px-4 pb-2 space-y-2">
+              <div className="pb-2 space-y-2">
                 {deleteCheckResult.blockers.length > 0 && (
                   <div className="arco-alert arco-alert--danger">
                     <AlertTriangle className="arco-alert-icon" />

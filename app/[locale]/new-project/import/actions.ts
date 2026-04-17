@@ -490,11 +490,16 @@ Fields:
   const currentYear = new Date().getFullYear()
   const year = parseInt(parsed.building_year, 10)
 
-  const validScopes = ["New Build", "Renovation", "Interior Design"]
   const validBuildingTypes = ["villa", "house", "apartment", "townhouse", "penthouse", "bungalow", "chalet", "farm", "garden-house", "other"]
   const validStyles = ["modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern"]
 
-  const rawScope = typeof parsed.scope === "string" ? parsed.scope.trim() : null
+  // Canonicalise scope to a known slug, then write back the English display
+  // string to DB (compat with existing rows). canonicalizeScope accepts
+  // Claude's expected output as well as any legacy variant.
+  const { canonicalizeScope: canonScope, translateScope: renderScope } = await import("@/lib/project-translations")
+  const scopeSlug = canonScope(typeof parsed.scope === "string" ? parsed.scope : null)
+  const rawScope = scopeSlug ? renderScope(scopeSlug, "en") : null
+
   const rawBuildingType = typeof parsed.building_type === "string" ? parsed.building_type.trim().toLowerCase() : null
   const rawStyle = typeof parsed.style === "string" ? parsed.style.trim().toLowerCase() : null
 
@@ -506,7 +511,7 @@ Fields:
       ? parsed.description.trim().slice(0, 320)
       : null,
     building_year: !isNaN(year) && year >= 1800 && year <= currentYear + 1 ? year : null,
-    scope: rawScope && validScopes.includes(rawScope) ? rawScope : null,
+    scope: rawScope, // already canonicalised above; null if Claude returned something unknown
     location: typeof parsed.location === "string" && parsed.location.trim()
       ? parsed.location.trim().slice(0, 120)
       : null,
@@ -1410,11 +1415,14 @@ Return ONLY this JSON:
       if (!existing) {
         taxonomyInserts.push({ project_id: projectId, taxonomy_option_id: scopeOpt.id })
       }
-      // Also update projects.project_type if empty
-      const scopeLabel: Record<string, string> = { "new-build": "New Build", "renovated": "Renovation", "interior-designed": "Interior Design" }
+      // Also update projects.project_type if empty. Canonicalise the
+      // taxonomy slug then render the English display string (which is
+      // what the DB and the rest of the app currently store).
+      const { canonicalizeScope, translateScope } = await import("@/lib/project-translations")
+      const canonicalSlug = canonicalizeScope(scopeSlug)
       await serviceSupabase
         .from("projects")
-        .update({ project_type: scopeLabel[scopeSlug] ?? null })
+        .update({ project_type: canonicalSlug ? translateScope(canonicalSlug, "en") : null })
         .eq("id", projectId)
         .is("project_type", null)
     }

@@ -4,7 +4,14 @@ import type { PostgrestError } from "@supabase/supabase-js"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
-import { getProjectTranslation } from "@/lib/project-translations"
+import {
+  getProjectTranslation,
+  translateBuildingTypeInput,
+  translateCategoryName,
+  translateProfessionalService,
+  translateProjectStyle,
+  translateScopeInput,
+} from "@/lib/project-translations"
 import type {
   ProfessionalCard,
   ProfessionalDetail,
@@ -311,17 +318,21 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
 
-  // The RPC doesn't return a locale-specific service name — the old
-  // Dutch-specific fallback was reading a field that never existed.
-  void locale
-  const profession = row.primary_service_name || "Professional services"
+  // The RPC returns the English service name; translate it to the caller's
+  // locale using the curated PROFESSIONAL_SERVICE_LABELS map.
+  const profession =
+    translateProfessionalService(row.primary_service_name, locale)
+    ?? row.primary_service_name
+    ?? "Professional services"
 
   // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
   const location = locationParts.length > 0 ? locationParts.join(", ") : "Location unavailable"
 
   const specialties = Array.isArray(row.services_offered)
-    ? row.services_offered.filter((value): value is string => Boolean(value))
+    ? row.services_offered
+        .filter((value): value is string => Boolean(value))
+        .map((value) => translateProfessionalService(value, locale) ?? value)
     : []
 
   return {
@@ -401,7 +412,10 @@ export const fetchDiscoverProfessionals = async (
   return { professionals, total }
 }
 
-export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
+export const fetchProfessionalMetadata = async (
+  slugOrId: string,
+  options?: { locale?: string },
+): Promise<{
   id: string
   slug: string
   name: string
@@ -522,23 +536,35 @@ export const fetchProfessionalMetadata = async (slugOrId: string): Promise<{
     coverImageUrl = coverPhoto?.url || photos[0]?.url || null
   }
 
-  const primaryServiceName = (company.primary_service as { name: string; parent_id?: string | null } | null)?.name ?? null
+  const locale = options?.locale ?? "en"
+  const primaryServiceRow = company.primary_service as
+    | { name: string; name_nl?: string | null; parent_id?: string | null }
+    | null
+  const rawPrimaryServiceName = primaryServiceRow?.name ?? null
+  const primaryServiceName =
+    (locale === "nl" && primaryServiceRow?.name_nl) ||
+    translateProfessionalService(rawPrimaryServiceName, locale) ||
+    rawPrimaryServiceName
   const primaryServiceId = company.primary_service_id ?? null
-  const parentCategoryId = (company.primary_service as { name: string; parent_id?: string | null } | null)?.parent_id ?? null
+  const parentCategoryId = primaryServiceRow?.parent_id ?? null
 
   // Fetch parent category if it exists
   let parentCategory: { id: string; name: string; slug: string | null } | null = null
   if (parentCategoryId) {
     const { data: parentData } = await supabase
       .from("categories")
-      .select("id, name, slug")
+      .select("id, name, name_nl, slug")
       .eq("id", parentCategoryId)
       .maybeSingle()
 
     if (parentData) {
+      const parentLocalizedName =
+        (locale === "nl" && parentData.name_nl) ||
+        translateProfessionalService(parentData.slug ?? parentData.name, locale) ||
+        parentData.name
       parentCategory = {
         id: parentData.id,
-        name: parentData.name,
+        name: parentLocalizedName,
         slug: parentData.slug
       }
     }
@@ -735,7 +761,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
     const projectSummariesResult = await supabase
       .from("mv_project_summary")
-      .select("id, title, translations, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, primary_category")
+      .select("id, title, translations, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, building_type, primary_category, primary_category_slug")
       .in("id", uniqueProjectIds)
 
     if (projectSummariesResult.error) {
@@ -783,18 +809,19 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         const [categoriesResult, taxonomyResult] = await Promise.all([
           supabase
             .from("categories")
-            .select("id, name")
+            .select("id, name, slug")
             .in("id", Array.from(taxonomyIds)),
           supabase
             .from("project_taxonomy_options")
-            .select("id, name")
+            .select("id, name, slug, taxonomy_type")
             .in("id", Array.from(taxonomyIds))
         ])
 
         if (categoriesResult.data) {
           categoriesResult.data.forEach((cat) => {
             if (cat.id && cat.name) {
-              taxonomyNameMap.set(cat.id, cat.name)
+              const translated = translateCategoryName(cat.slug ?? cat.name, options?.locale ?? "en")
+              taxonomyNameMap.set(cat.id, translated ?? cat.name)
             }
           })
         }
@@ -802,7 +829,10 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         if (taxonomyResult.data) {
           taxonomyResult.data.forEach((tax) => {
             if (tax.id && tax.name) {
-              taxonomyNameMap.set(tax.id, tax.name)
+              const translated = tax.taxonomy_type === "project_style"
+                ? translateProjectStyle(tax.slug ?? tax.name, options?.locale ?? "en")
+                : null
+              taxonomyNameMap.set(tax.id, translated ?? tax.name)
             }
           })
         }
@@ -812,15 +842,43 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       projects = projectRows.map((row) => {
         const styleIds = Array.isArray(row.style_preferences) ? row.style_preferences : []
         const resolvedStyles = styleIds
-          .map((id) => (isUuid(id) ? taxonomyNameMap.get(id) ?? id : id))
+          .map((id) =>
+            isUuid(id)
+              ? taxonomyNameMap.get(id) ?? id
+              : translateProjectStyle(id, options?.locale ?? "en") ?? id,
+          )
           .filter(Boolean)
 
-        // Prefer primary_category (building type like "Villa") over project_type (scope like "New Build")
+        // Resolve the display string for the card subtitle. Priority:
+        //   1. mv_project_summary.primary_category (+ slug) — a category
+        //      picked via project_categories (e.g. "Villa"). Translated via
+        //      the category map.
+        //   2. projects.building_type — kebab-case slug (villa, house,
+        //      garden-house). Translated via the building-type map.
+        //   3. projects.project_type — a scope display string
+        //      ("Interior Design", "New Build", "Renovation"). Translated
+        //      via the scope map.
+        //   4. Legacy UUID stored on project_type → taxonomy name map.
+        //   5. Raw value as a last resort.
+        const locale = options?.locale ?? "en"
         const primaryCategory = (row as any).primary_category as string | null
-        const projectType = primaryCategory ?? row.project_type
-        const resolvedType = projectType && isUuid(projectType)
-          ? taxonomyNameMap.get(projectType) ?? projectType
-          : projectType
+        const primaryCategorySlug = (row as any).primary_category_slug as string | null
+        const buildingType = (row as any).building_type as string | null
+        const rawProjectType = row.project_type as string | null
+
+        const resolvedType = (() => {
+          if (primaryCategory) {
+            return translateCategoryName(primaryCategorySlug ?? primaryCategory, locale) ?? primaryCategory
+          }
+          const translatedBuildingType = translateBuildingTypeInput(buildingType, locale)
+          if (translatedBuildingType) return translatedBuildingType
+          const translatedScope = translateScopeInput(rawProjectType, locale)
+          if (translatedScope) return translatedScope
+          if (rawProjectType && isUuid(rawProjectType)) {
+            return taxonomyNameMap.get(rawProjectType) ?? rawProjectType
+          }
+          return translateCategoryName(rawProjectType, locale) ?? rawProjectType
+        })()
 
         // Use contributor's custom cover photo if set, otherwise fall back to primary_photo_url
         const customCoverPhotoId = coverPhotoIdMap.get(row.id)
@@ -863,10 +921,20 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       detailRow?.title ||
       "Professional")
 
+  const detailLocale = options?.locale ?? "en"
+  const localizeServiceName = (name: string | null | undefined): string | null => {
+    if (!name) return null
+    return translateProfessionalService(name, detailLocale) ?? name
+  }
+
   const location = formatLocation([company.city, company.country], profile.location ?? null)
   const specialties =
     detailRow?.specialties
-      ?.map((entry) => entry?.category?.name?.trim())
+      ?.map((entry) => {
+        const raw = entry?.category?.name?.trim()
+        if (!raw) return null
+        return localizeServiceName(raw)
+      })
       .filter((value): value is string => typeof value === "string" && value.length > 0) ?? []
 
   const companyServicesRaw = toNonEmptyStrings(company.services_offered)
@@ -877,7 +945,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   if (serviceIds.length > 0) {
     const { data: serviceCategories, error: serviceCategoryError } = await supabase
       .from("categories")
-      .select("id, name")
+      .select("id, name, name_nl, slug")
       .in("id", serviceIds)
 
     if (serviceCategoryError) {
@@ -890,10 +958,17 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       serviceNameMap = new Map(
         serviceCategories
           .filter(
-            (row): row is { id: string; name: string } =>
+            (row): row is { id: string; name: string; name_nl: string | null; slug: string | null } =>
               Boolean(row && typeof row.id === "string" && isUuid(row.id) && typeof row.name === "string" && row.name.trim().length > 0),
           )
-          .map((row) => [row.id, row.name.trim()]),
+          .map((row) => {
+            const name = row.name.trim()
+            const localized =
+              (detailLocale === "nl" && row.name_nl) ||
+              translateProfessionalService(row.slug ?? name, detailLocale) ||
+              name
+            return [row.id, localized]
+          }),
       )
     }
   }
@@ -906,7 +981,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
             if (isUuid(value)) {
               return serviceNameMap.get(value) ?? null
             }
-            return value
+            return localizeServiceName(value)
           })
           .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
           .map((value) => value.trim()),
@@ -918,7 +993,12 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   const companyLanguages = toNonEmptyStrings(company.languages)
   const languages = mergeUniqueStrings(company.languages, detailRow?.languages_spoken ?? null)
 
-  const primaryServiceName = (company.primary_service as { name: string } | null)?.name ?? null
+  const primaryServiceRow = company.primary_service as { name: string; name_nl?: string | null } | null
+  const rawPrimaryServiceName = primaryServiceRow?.name ?? null
+  const primaryServiceName =
+    (detailLocale === "nl" && primaryServiceRow?.name_nl) ||
+    translateProfessionalService(rawPrimaryServiceName, detailLocale) ||
+    rawPrimaryServiceName
 
   return {
     id: company.id,

@@ -774,7 +774,7 @@ export type Database = {
           sequence: string
           step: number
           template: string
-          user_id: string
+          user_id: string | null
           variables: Json | null
         }
         Insert: {
@@ -791,7 +791,7 @@ export type Database = {
           sequence: string
           step?: number
           template: string
-          user_id: string
+          user_id?: string | null
           variables?: Json | null
         }
         Update: {
@@ -808,7 +808,7 @@ export type Database = {
           sequence?: string
           step?: number
           template?: string
-          user_id?: string
+          user_id?: string | null
           variables?: Json | null
         }
         Relationships: [
@@ -1421,6 +1421,7 @@ export type Database = {
           last_name: string | null
           location: string | null
           phone: string | null
+          preferred_language: string | null
           updated_at: string | null
           user_types: string[] | null
           website: string | null
@@ -1440,6 +1441,7 @@ export type Database = {
           last_name?: string | null
           location?: string | null
           phone?: string | null
+          preferred_language?: string | null
           updated_at?: string | null
           user_types?: string[] | null
           website?: string | null
@@ -1459,6 +1461,7 @@ export type Database = {
           last_name?: string | null
           location?: string | null
           phone?: string | null
+          preferred_language?: string | null
           updated_at?: string | null
           user_types?: string[] | null
           website?: string | null

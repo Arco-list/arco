@@ -7,15 +7,11 @@ import {
   FALLBACK_BUDGET_OPTIONS,
   FALLBACK_BUILDING_TYPE_OPTIONS,
   FALLBACK_CATEGORY_OPTIONS,
-  FALLBACK_LOCATION_FEATURES,
-  FALLBACK_MATERIAL_FEATURES,
   FALLBACK_PROJECT_STYLE_OPTIONS,
   FALLBACK_PROJECT_TYPES,
   FALLBACK_SIZE_OPTIONS,
   type ProjectDetailsDropdownOption,
-  type ProjectDetailsFeatureOption,
   sortByOrderThenLabel,
-  sortFeatureOptions,
 } from "@/lib/project-details"
 import type { Tables } from "@/lib/supabase/types"
 
@@ -33,8 +29,6 @@ export type ProjectTaxonomyState = {
   buildingTypeOptions: ProjectDetailsDropdownOption[]
   sizeOptions: ProjectDetailsDropdownOption[]
   budgetOptions: ProjectDetailsDropdownOption[]
-  locationFeatureOptions: ProjectDetailsFeatureOption[]
-  materialFeatureOptions: ProjectDetailsFeatureOption[]
   reload: () => Promise<void>
 }
 
@@ -48,8 +42,6 @@ const DEFAULT_TAXONOMY_STATE: ProjectTaxonomyState = {
   buildingTypeOptions: [...FALLBACK_BUILDING_TYPE_OPTIONS],
   sizeOptions: [...FALLBACK_SIZE_OPTIONS],
   budgetOptions: [...FALLBACK_BUDGET_OPTIONS],
-  locationFeatureOptions: [...FALLBACK_LOCATION_FEATURES],
-  materialFeatureOptions: [...FALLBACK_MATERIAL_FEATURES],
   reload: async () => {},
 }
 
@@ -78,8 +70,6 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
       buildingTypeOptions: [...FALLBACK_BUILDING_TYPE_OPTIONS].sort(sortByOrderThenLabel),
       sizeOptions: [...FALLBACK_SIZE_OPTIONS].sort(sortByOrderThenLabel),
       budgetOptions: [...FALLBACK_BUDGET_OPTIONS].sort(sortByOrderThenLabel),
-      locationFeatureOptions: sortFeatureOptions([...FALLBACK_LOCATION_FEATURES]),
-      materialFeatureOptions: sortFeatureOptions([...FALLBACK_MATERIAL_FEATURES]),
     }))
   }, [])
 
@@ -176,8 +166,6 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
           "building_type",
           "size_range",
           "budget_tier",
-          "location_feature",
-          "material_feature",
         ])
         .eq("is_active", true)
         .order("sort_order", { ascending: true, nullsFirst: false })
@@ -214,17 +202,6 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         },
       )
 
-      const groupSortedFeatureOptions = (options: ProjectTaxonomyOption[]) => {
-        return sortFeatureOptions(
-          options.map<ProjectDetailsFeatureOption>((option) => ({
-            value: option.id,
-            label: option.name,
-            iconKey: option.icon,
-            sortOrder: option.sort_order,
-          })),
-        )
-      }
-
       const styles = grouped.project_style
         .map<ProjectDetailsDropdownOption>((option) => ({
           value: option.id,
@@ -233,13 +210,13 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         }))
         .sort(sortByOrderThenLabel)
 
-      const buildingTypes = grouped.building_type
-        .map<ProjectDetailsDropdownOption>((option) => ({
-          value: option.id,
-          label: option.name,
-          sortOrder: option.sort_order,
-        }))
-        .sort(sortByOrderThenLabel)
+      // The project_taxonomy_options.building_type rows in DB are
+      // scope-shaped (new-build / renovated / interior-designed) — leftover
+      // mislabel that doesn't match what projects.building_type stores
+      // ("villa", "house", "apartment", …). Skip the DB lookup here and
+      // fall through to FALLBACK_BUILDING_TYPE_OPTIONS, which mirrors
+      // PROJECT_BUILDING_TYPES from lib/project-translations.ts.
+      const buildingTypes: ProjectDetailsDropdownOption[] = []
 
       const sizes = grouped.size_range
         .map<ProjectDetailsDropdownOption>((option) => ({
@@ -269,9 +246,6 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         }, [])
         .sort(sortByOrderThenLabel)
 
-      const mappedLocationFeatures = groupSortedFeatureOptions(grouped.location_feature)
-      const mappedMaterialFeatures = groupSortedFeatureOptions(grouped.material_feature)
-
       setTaxonomyState((prev) => ({
         ...prev,
         projectStyleOptions: styles.length ? styles : [...FALLBACK_PROJECT_STYLE_OPTIONS].sort(sortByOrderThenLabel),
@@ -280,12 +254,6 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
           : [...FALLBACK_BUILDING_TYPE_OPTIONS].sort(sortByOrderThenLabel),
         sizeOptions: sizes.length ? sizes : [...FALLBACK_SIZE_OPTIONS].sort(sortByOrderThenLabel),
         budgetOptions: budgets.length ? budgets : [...FALLBACK_BUDGET_OPTIONS].sort(sortByOrderThenLabel),
-        locationFeatureOptions: mappedLocationFeatures.length
-          ? mappedLocationFeatures
-          : sortFeatureOptions([...FALLBACK_LOCATION_FEATURES]),
-        materialFeatureOptions: mappedMaterialFeatures.length
-          ? mappedMaterialFeatures
-          : sortFeatureOptions([...FALLBACK_MATERIAL_FEATURES]),
         projectTaxonomyError: null,
       }))
     },

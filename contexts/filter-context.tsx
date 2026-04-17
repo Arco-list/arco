@@ -123,9 +123,11 @@ interface FilterState {
   selectedSpace: string
   selectedFeatures: string[]
   selectedBuildingTypes: string[]
-  selectedLocationFeatures: string[]
+  /** Project scope filter (lib/project-translations.ts canonical slugs:
+   *  new_build, renovation, interior_design). Distinct from
+   *  selectedBuildingTypes which holds villa / house / apartment /… */
+  selectedScopes: string[]
   selectedBuildingFeatures: string[]
-  selectedMaterialFeatures: string[]
   selectedSizes: string[]
   selectedBudgets: string[]
   projectYearRange: [number | null, number | null]
@@ -140,9 +142,8 @@ const INITIAL_FILTER_STATE: FilterState = {
   selectedSpace: "",
   selectedFeatures: [],
   selectedBuildingTypes: [],
-  selectedLocationFeatures: [],
+  selectedScopes: [],
   selectedBuildingFeatures: [],
-  selectedMaterialFeatures: [],
   selectedSizes: [],
   selectedBudgets: [],
   projectYearRange: [null, null],
@@ -159,9 +160,8 @@ type FilterAction =
   | { type: "SET_SPACE"; payload: string }
   | { type: "SET_FEATURES"; payload: string[] }
   | { type: "SET_BUILDING_TYPES"; payload: string[] }
-  | { type: "SET_LOCATION_FEATURES"; payload: string[] }
+  | { type: "SET_SCOPES"; payload: string[] }
   | { type: "SET_BUILDING_FEATURES"; payload: string[] }
-  | { type: "SET_MATERIAL_FEATURES"; payload: string[] }
   | { type: "SET_SIZES"; payload: string[] }
   | { type: "SET_BUDGETS"; payload: string[] }
   | { type: "SET_PROJECT_YEAR_RANGE"; payload: [number | null, number | null] }
@@ -183,12 +183,10 @@ const filterReducer = (state: FilterState, action: FilterAction): FilterState =>
       return { ...state, selectedFeatures: action.payload }
     case "SET_BUILDING_TYPES":
       return { ...state, selectedBuildingTypes: action.payload }
-    case "SET_LOCATION_FEATURES":
-      return { ...state, selectedLocationFeatures: action.payload }
+    case "SET_SCOPES":
+      return { ...state, selectedScopes: action.payload }
     case "SET_BUILDING_FEATURES":
       return { ...state, selectedBuildingFeatures: action.payload }
-    case "SET_MATERIAL_FEATURES":
-      return { ...state, selectedMaterialFeatures: action.payload }
     case "SET_SIZES":
       return { ...state, selectedSizes: action.payload }
     case "SET_BUDGETS":
@@ -215,9 +213,8 @@ interface FilterContextType {
   selectedSpace: string
   selectedFeatures: string[]
   selectedBuildingTypes: string[]
-  selectedLocationFeatures: string[]
+  selectedScopes: string[]
   selectedBuildingFeatures: string[]
-  selectedMaterialFeatures: string[]
   selectedSizes: string[]
   selectedBudgets: string[]
   projectYearRange: [number | null, number | null]
@@ -229,9 +226,8 @@ interface FilterContextType {
   setSelectedSpace: (space: string) => void
   setSelectedFeatures: (features: string[]) => void
   setSelectedBuildingTypes: (types: string[]) => void
-  setSelectedLocationFeatures: (features: string[]) => void
+  setSelectedScopes: (scopes: string[]) => void
   setSelectedBuildingFeatures: (features: string[]) => void
-  setSelectedMaterialFeatures: (features: string[]) => void
   setSelectedSizes: (sizes: string[]) => void
   setSelectedBudgets: (budgets: string[]) => void
   setProjectYearRange: (range: [number | null, number | null]) => void
@@ -265,9 +261,8 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     selectedSpace,
     selectedFeatures,
     selectedBuildingTypes,
-    selectedLocationFeatures,
+    selectedScopes,
     selectedBuildingFeatures,
-    selectedMaterialFeatures,
     selectedSizes,
     selectedBudgets,
     projectYearRange,
@@ -317,19 +312,14 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       dispatch({ type: "SET_BUILDING_TYPES", payload: Array.isArray(items) ? [...items] : [] }),
     [],
   )
-  const setSelectedLocationFeatures = useCallback(
+  const setSelectedScopes = useCallback(
     (items: string[]) =>
-      dispatch({ type: "SET_LOCATION_FEATURES", payload: Array.isArray(items) ? [...items] : [] }),
+      dispatch({ type: "SET_SCOPES", payload: Array.isArray(items) ? [...items] : [] }),
     [],
   )
   const setSelectedBuildingFeatures = useCallback(
     (items: string[]) =>
       dispatch({ type: "SET_BUILDING_FEATURES", payload: Array.isArray(items) ? [...items] : [] }),
-    [],
-  )
-  const setSelectedMaterialFeatures = useCallback(
-    (items: string[]) =>
-      dispatch({ type: "SET_MATERIAL_FEATURES", payload: Array.isArray(items) ? [...items] : [] }),
     [],
   )
   const setSelectedSizes = useCallback(
@@ -450,9 +440,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
         needsResolution(selectedTypes, categoryTokenMaps) ||
         needsResolution(selectedStyles, taxonomyTokenMaps.project_style) ||
         needsResolution(selectedBuildingTypes, taxonomyTokenMaps.building_type) ||
-        needsResolution(selectedLocationFeatures, taxonomyTokenMaps.location_feature) ||
         needsResolution(selectedBuildingFeatures, categoryTokenMaps) ||
-        needsResolution(selectedMaterialFeatures, taxonomyTokenMaps.material_feature) ||
         needsResolution(selectedSizes, taxonomyTokenMaps.size_range) ||
         needsResolution(selectedBudgets, taxonomyTokenMaps.budget_tier)
       if (!needsHydration) return
@@ -464,9 +452,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       needsResolution(selectedTypes, categoryTokenMaps) ||
       needsResolution(selectedStyles, taxonomyTokenMaps.project_style) ||
       needsResolution(selectedBuildingTypes, taxonomyTokenMaps.building_type) ||
-      needsResolution(selectedLocationFeatures, taxonomyTokenMaps.location_feature) ||
       needsResolution(selectedBuildingFeatures, categoryTokenMaps) ||
-      needsResolution(selectedMaterialFeatures, taxonomyTokenMaps.material_feature) ||
       needsResolution(selectedSizes, taxonomyTokenMaps.size_range) ||
       needsResolution(selectedBudgets, taxonomyTokenMaps.budget_tier)
 
@@ -490,25 +476,16 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     const resolvedBuildingTypes = resolveTokensToIds(buildingTypeValues, taxonomyTokenMaps.building_type)
     if (!areStringArraysEqual(selectedBuildingTypes, resolvedBuildingTypes)) setSelectedBuildingTypes(resolvedBuildingTypes)
 
-    const locationFeatureValues = parseCommaSeparatedParam(searchParams.get("locationFeatures"))
-    const resolvedLocationFeatures = resolveTokensToIds(locationFeatureValues, taxonomyTokenMaps.location_feature)
-    if (!areStringArraysEqual(selectedLocationFeatures, resolvedLocationFeatures)) setSelectedLocationFeatures(resolvedLocationFeatures)
+    // Scope filter — slugs round-trip through the URL as-is (no token map).
+    const scopeValues = parseCommaSeparatedParam(searchParams.get("scope"))
+    if (!areStringArraysEqual(selectedScopes, scopeValues)) setSelectedScopes(scopeValues)
 
     const buildingFeatureValues = parseCommaSeparatedParam(searchParams.get("buildingFeatures"))
     const resolvedBuildingFeatures = resolveTokensToIds(buildingFeatureValues, categoryTokenMaps)
     if (!areStringArraysEqual(selectedBuildingFeatures, resolvedBuildingFeatures)) setSelectedBuildingFeatures(resolvedBuildingFeatures)
 
-    const materialFeatureValues = parseCommaSeparatedParam(searchParams.get("materialFeatures"))
-    const resolvedMaterialFeatures = resolveTokensToIds(materialFeatureValues, taxonomyTokenMaps.material_feature)
-    if (!areStringArraysEqual(selectedMaterialFeatures, resolvedMaterialFeatures)) setSelectedMaterialFeatures(resolvedMaterialFeatures)
-
     const legacyFeatureValues = parseCommaSeparatedParam(searchParams.get("features"))
-    if (
-      legacyFeatureValues.length > 0 &&
-      locationFeatureValues.length === 0 &&
-      buildingFeatureValues.length === 0 &&
-      materialFeatureValues.length === 0
-    ) {
+    if (legacyFeatureValues.length > 0 && buildingFeatureValues.length === 0) {
       const resolvedLegacy = resolveTokensToIds(legacyFeatureValues, categoryTokenMaps)
       if (!areStringArraysEqual(selectedBuildingFeatures, resolvedLegacy)) setSelectedBuildingFeatures(resolvedLegacy)
     }
@@ -537,20 +514,16 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     if (!isUrlHydrated) setIsUrlHydrated(true)
   }, [
     searchParams, selectedTypes, selectedStyles, selectedLocations, selectedSpace,
-    selectedBuildingTypes, selectedLocationFeatures, selectedBuildingFeatures,
-    selectedMaterialFeatures, selectedSizes, selectedBudgets, projectYearRange,
+    selectedBuildingTypes, selectedBuildingFeatures,
+    selectedSizes, selectedBudgets, projectYearRange,
     buildingYearRange, keyword, isUrlHydrated, categoryTokenMaps, taxonomyTokenMaps,
   ])
 
   // Sync combined features
   useEffect(() => {
-    const combined = Array.from(new Set([
-      ...selectedLocationFeatures,
-      ...selectedBuildingFeatures,
-      ...selectedMaterialFeatures,
-    ]))
+    const combined = Array.from(new Set(selectedBuildingFeatures))
     if (!areStringArraysEqual(selectedFeatures, combined)) setSelectedFeatures(combined)
-  }, [selectedBuildingFeatures, selectedFeatures, selectedLocationFeatures, selectedMaterialFeatures, setSelectedFeatures])
+  }, [selectedBuildingFeatures, selectedFeatures, setSelectedFeatures])
 
   // Write to URL
   useEffect(() => {
@@ -566,9 +539,9 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     setArrayParam("location", selectedLocations)
     if (selectedSpace) params.set("space", selectedSpace)
     setArrayParam("buildingType", mapIdsToTokens(selectedBuildingTypes, taxonomyTokenMaps.building_type))
-    setArrayParam("locationFeatures", mapIdsToTokens(selectedLocationFeatures, taxonomyTokenMaps.location_feature))
+    // Scope filter — uses canonical slugs from lib/project-translations.ts
+    setArrayParam("scope", selectedScopes)
     setArrayParam("buildingFeatures", mapIdsToTokens(selectedBuildingFeatures, categoryTokenMaps))
-    setArrayParam("materialFeatures", mapIdsToTokens(selectedMaterialFeatures, taxonomyTokenMaps.material_feature))
     setArrayParam("size", mapIdsToTokens(selectedSizes, taxonomyTokenMaps.size_range))
     setArrayParam("budget", mapIdsToTokens(selectedBudgets, taxonomyTokenMaps.budget_tier))
     const trimmedKeyword = keyword.trim()
@@ -590,8 +563,8 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     debouncedReplaceRef.current(nextQuery)
   }, [
     isUrlHydrated, selectedTypes, selectedStyles, selectedLocations, selectedSpace,
-    selectedBuildingTypes, selectedLocationFeatures, selectedBuildingFeatures,
-    selectedMaterialFeatures, selectedSizes, selectedBudgets, projectYearRange,
+    selectedBuildingTypes, selectedScopes, selectedBuildingFeatures,
+    selectedSizes, selectedBudgets, projectYearRange,
     buildingYearRange, router, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword,
   ])
 
@@ -607,14 +580,11 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       case "space": setSelectedSpace(""); break
       case "feature":
         setSelectedFeatures(selectedFeatures.filter((f) => f !== value))
-        setSelectedLocationFeatures(selectedLocationFeatures.filter((item) => item !== value))
         setSelectedBuildingFeatures(selectedBuildingFeatures.filter((item) => item !== value))
-        setSelectedMaterialFeatures(selectedMaterialFeatures.filter((item) => item !== value))
         break
       case "buildingType": setSelectedBuildingTypes(selectedBuildingTypes.filter((item) => item !== value)); break
-      case "locationFeature": setSelectedLocationFeatures(selectedLocationFeatures.filter((item) => item !== value)); break
+      case "scope": setSelectedScopes(selectedScopes.filter((item) => item !== value)); break
       case "buildingFeature": setSelectedBuildingFeatures(selectedBuildingFeatures.filter((item) => item !== value)); break
-      case "materialFeature": setSelectedMaterialFeatures(selectedMaterialFeatures.filter((item) => item !== value)); break
       case "size": setSelectedSizes(selectedSizes.filter((item) => item !== value)); break
       case "budget": setSelectedBudgets(selectedBudgets.filter((item) => item !== value)); break
       case "projectYear": setProjectYearRange([null, null]); break
@@ -630,9 +600,8 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     selectedSpace !== "" ||
     selectedFeatures.length > 0 ||
     selectedBuildingTypes.length > 0 ||
-    selectedLocationFeatures.length > 0 ||
+    selectedScopes.length > 0 ||
     selectedBuildingFeatures.length > 0 ||
-    selectedMaterialFeatures.length > 0 ||
     selectedSizes.length > 0 ||
     selectedBudgets.length > 0 ||
     projectYearRange.some((value) => value !== null) ||
@@ -643,12 +612,12 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     <FilterContext.Provider
       value={{
         selectedTypes, selectedStyles, selectedLocations, selectedSpace,
-        selectedFeatures, selectedBuildingTypes, selectedLocationFeatures,
-        selectedBuildingFeatures, selectedMaterialFeatures, selectedSizes,
+        selectedFeatures, selectedBuildingTypes, selectedScopes,
+        selectedBuildingFeatures, selectedSizes,
         selectedBudgets, projectYearRange, buildingYearRange, keyword,
         setSelectedTypes, setSelectedStyles, setSelectedLocations, setSelectedSpace,
-        setSelectedFeatures, setSelectedBuildingTypes, setSelectedLocationFeatures,
-        setSelectedBuildingFeatures, setSelectedMaterialFeatures, setSelectedSizes,
+        setSelectedFeatures, setSelectedBuildingTypes, setSelectedScopes,
+        setSelectedBuildingFeatures, setSelectedSizes,
         setSelectedBudgets, setProjectYearRange, setBuildingYearRange, setKeyword,
         clearAllFilters, removeFilter, hasActiveFilters,
         taxonomy: {

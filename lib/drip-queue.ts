@@ -48,11 +48,13 @@ import { logger } from "@/lib/logger"
 
 export type CancellationReason =
   | "claimed"             // company claimed by a user
-  | "status_change"       // company status moved to removed/deactivated/added
+  | "status_change"       // funnel advanced to signup/draft/listed — the
+                          //  outreach series no longer applies
   | "bounced"             // Resend bounce event
   | "complained"          // Resend complaint event
   | "user_deleted"        // user account deleted
-  | "manual"              // admin clicked cancel
+  | "paused"              // admin clicked Pause — resume will re-enqueue
+  | "manual"              // admin clicked Finish sequence (hard stop)
   | "max_attempts"        // cron gave up after MAX_ATTEMPTS retries
   | "unknown_template"    // template not found in email-service.ts
 

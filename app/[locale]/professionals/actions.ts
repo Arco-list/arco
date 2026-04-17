@@ -104,7 +104,10 @@ export async function sendIntroductionRequestAction(input: {
           client_email: user.email || "",
           message_preview: message.trim().slice(0, 200),
           dashboard_link: `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"}/dashboard/inbox`,
-        }
+        },
+        // Prefer the owner's preferred_language; fall back to the
+        // company country if the company has no claimed owner yet.
+        { userId: company.owner_id ?? null, companyId },
       )
     } catch (err) {
       console.error("Failed to send introduction email:", err)

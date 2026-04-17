@@ -14,6 +14,9 @@ import {
   X,
   XCircle,
 } from "lucide-react"
+import { useLocale } from "next-intl"
+
+import { translateCategoryName } from "@/lib/project-translations"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import type { Tables } from "@/lib/supabase/types"
@@ -131,6 +134,7 @@ export default function ProfessionalsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const router = useRouter()
   const searchParams = useSearchParams()
+  const locale = useLocale()
   const { canPublishProjects } = useCompanyEntitlements()
 
   const TOTAL_STEPS = canPublishProjects ? TOTAL_STEPS_PUBLISHER : TOTAL_STEPS_NON_PUBLISHER
@@ -386,7 +390,7 @@ export default function ProfessionalsPage() {
         projectTypeCategoryId
           ? supabase
               .from("categories")
-              .select("id, name")
+              .select("id, name, slug")
               .eq("id", projectTypeCategoryId)
               .maybeSingle()
           : Promise.resolve({ data: null, error: null }),
@@ -415,8 +419,11 @@ export default function ProfessionalsPage() {
         styleResult.data?.name ?? (rawStyle && !isUuid(rawStyle) ? rawStyle : "")
 
       const rawProjectType = project.project_type ?? ""
+      const categorySlug = typeResult.data?.slug ?? null
+      const categoryName = typeResult.data?.name ?? null
+      const fallbackType = categoryName ?? (rawProjectType && !isUuid(rawProjectType) ? rawProjectType : "")
       const projectTypeLabel =
-        typeResult.data?.name ?? (rawProjectType && !isUuid(rawProjectType) ? rawProjectType : "")
+        translateCategoryName(categorySlug ?? fallbackType, locale) ?? fallbackType
 
       const rawSize = project.project_size ?? ""
       const sizeLabel =

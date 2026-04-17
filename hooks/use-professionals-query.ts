@@ -6,6 +6,7 @@ import { useLocale } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
+import { translateProfessionalService } from "@/lib/project-translations"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 // First page leaves a slot for the inline map card so the grid shows
@@ -68,19 +69,22 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim()
   const name = row.company_name || fullName || "Professional"
 
-  // Use primary service from company's primary_service_id (company-level data only)
-  // Locale-specific service name isn't returned by the RPC — the Dutch
-  // fallback was reading a field that never existed at runtime. Keep the
-  // locale param for future use but just use primary_service_name for now.
-  void locale
-  const profession = row.primary_service_name || "Professional services"
+  // Primary service comes back from the RPC as the English display name;
+  // translate via PROFESSIONAL_SERVICE_LABELS so NL visitors see a Dutch
+  // label without a DB round-trip.
+  const profession =
+    translateProfessionalService(row.primary_service_name, locale)
+    ?? row.primary_service_name
+    ?? "Professional services"
 
   // Use company location (city, country)
   const locationParts = [row.company_city, row.company_country].filter((value): value is string => Boolean(value))
   const location = locationParts.length > 0 ? locationParts.join(", ") : "Location unavailable"
 
   const specialties = Array.isArray(row.services_offered)
-    ? row.services_offered.filter((value): value is string => Boolean(value))
+    ? row.services_offered
+        .filter((value): value is string => Boolean(value))
+        .map((value) => translateProfessionalService(value, locale) ?? value)
     : []
 
   return {

@@ -219,6 +219,43 @@ export default function DesignPage() {
               </div>
             </div>
 
+            <div style={{ marginBottom: 48 }}>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Inline Pills</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+                {/* Mini-table demo — mirrors how inline pills render in
+                    /admin/companies, /admin/sales, etc. The label uses
+                    .arco-table-primary metrics (13px) and the pill sits
+                    immediately after it (gap: 8px, no tab/min-width).
+                    A status-dot precedes the label so the row reads as
+                    a real table row would. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* 1 · With status dot — full-size 12px (dot adds visual weight) */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a1a1a0", flexShrink: 0 }} />
+                    <span className="arco-table-primary">Cloud Nine</span>
+                    <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                  </div>
+                  {/* 2 · Coloured outline — accent border + text, no dot, compact 11px */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a1a1a0", flexShrink: 0 }} />
+                    <span className="arco-table-primary">Welcome</span>
+                    <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day 0</span>
+                  </div>
+                  {/* 3 · Grey outline — default border, no dot, compact 11px */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a1a1a0", flexShrink: 0 }} />
+                    <span className="arco-table-primary">Wolterinck</span>
+                    <span className="status-pill">Owner</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  Three variants share the <code>.status-pill</code> base — all transparent, no fill, so they pick up the surface they sit on. <strong>With a dot</strong> renders at 12px / 4-12 padding — the dot adds visual weight. <strong>Coloured outline</strong> overrides <code>borderColor</code> + <code>color</code> inline (blue for day markers, no other accents in use today). <strong>Grey outline</strong> uses the default rule border. The two dot-less variants auto-compact to 11px / 3-10 via <code>:not(:has(.status-pill-dot))</code> so they optically match a dot pill placed next to them. Sit immediately after the label they annotate (8px gap, no tab). See the Data Table row below for a combined example.
+                </p>
+              </div>
+            </div>
+
             <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Category Tags</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
@@ -551,12 +588,19 @@ export default function DesignPage() {
                       </td>
                       <td>niek@arcolist.com</td>
                       <td>
+                        {/* Three inline-pill variants, as they render in the live
+                            /admin/companies table. See Pills & Tags → Inline Pills
+                            for the canonical examples. */}
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
                           <span className="arco-table-status">
                             <span className="arco-table-status-dot" style={{ background: "#22c55e" }} />
                             Penthouse Amsterdam Z...
                           </span>
+                          {/* With status dot — dot pill, full size (12px) */}
                           <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                          {/* Coloured outline — blue border + text, no dot (compact) */}
+                          <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day 0</span>
+                          {/* Grey outline — default border, no dot (compact) */}
                           <span className="status-pill">Owner</span>
                         </div>
                       </td>
@@ -653,6 +697,64 @@ export default function DesignPage() {
                   Count and page info use <strong>Micro</strong> (Mid Gray). Arrow buttons: rule border, 28px square.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* INLINE EDIT — `.spec-item-edit` */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Inline edit cells</h2>
+            <p className="arco-body-text" style={{ marginBottom: 24, maxWidth: 720 }}>
+              Used inside <code>.specifications-bar</code> on detail bars (project edit, account, company settings).
+              Hover and editing render identically — a charcoal outline that punches through the bar&rsquo;s top/bottom
+              rules. The value <code>{`<div>`}</code> swaps for an <code>{`<input>`}</code> when editing; the input
+              matches the div&rsquo;s metrics (15/400/1.3) so the cell does not shift on click. The outline&rsquo;s
+              vertical inset matches the bar&rsquo;s padding (32px) — bump both together if you change one.
+            </p>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "40px 40px 24px" }}>
+              <div className="specifications-bar" style={{ marginBottom: 0 }}>
+                <div className="spec-item-edit">
+                  <span className="ec-badge">
+                    <span className="ec-ico">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      </svg>
+                    </span>
+                    <span className="ec-txt">Edit</span>
+                  </span>
+                  <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Hover me</span>
+                  <div className="arco-card-title">Bussum</div>
+                </div>
+                <div className="spec-item-edit editing">
+                  <span className="ec-badge">
+                    <span className="ec-ico">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      </svg>
+                    </span>
+                    <span className="ec-txt">Edit</span>
+                  </span>
+                  <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Editing state</span>
+                  <input className="spec-inp" defaultValue="Search city…" />
+                </div>
+                <div className="spec-item-edit">
+                  <span className="ec-badge">
+                    <span className="ec-ico">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      </svg>
+                    </span>
+                    <span className="ec-txt">Edit</span>
+                  </span>
+                  <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Empty</span>
+                  <div className="arco-card-title" style={{ color: "#b0b0ae" }}>Add phone</div>
+                </div>
+              </div>
+              <p className="arco-small-text" style={{ marginTop: 32, color: "var(--text-secondary)" }}>
+                Markup: <code>{`<div class="specifications-bar">`}</code> →{" "}
+                <code>{`<div class="spec-item-edit [editing]">`}</code> with <code>.ec-badge</code>,{" "}
+                <code>.spec-eyebrow</code>, and either a value <code>{`<div>`}</code> or a{" "}
+                <code>.spec-inp</code>.
+              </p>
             </div>
           </div>
 

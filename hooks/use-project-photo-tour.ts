@@ -61,6 +61,9 @@ const isUuid = (value?: string | null): value is string =>
 export type FeatureDisplay = {
   id: string
   name: string
+  /** Space slug (from lib/spaces.ts) — consumers can pass this to
+   *  useTranslations("spaces") to render a locale-aware label. */
+  slug: string | null
   icon: LucideIcon
 }
 
@@ -1190,10 +1193,10 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
   const getFeatureDisplay = useCallback(
     (featureId: string): FeatureDisplay => {
       if (featureId === BUILDING_FEATURE_ID) {
-        return { id: featureId, name: "Exterior", icon: Home }
+        return { id: featureId, name: "Exterior", slug: "exterior", icon: Home }
       }
       if (featureId === ADDITIONAL_FEATURE_ID) {
-        return { id: featureId, name: "Other", icon: Grid3x3 }
+        return { id: featureId, name: "Other", slug: "other", icon: Grid3x3 }
       }
 
       const option = featureOptions.find((item) => item.id === featureId)
@@ -1204,7 +1207,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
       const name = option?.name ?? fallback?.name ?? metadataName ?? "Unknown Feature"
       const slug = option?.slug ?? fallback?.slug ?? null
       const icon = resolveFeatureIcon(slug)
-      return { id: featureId, name, icon }
+      return { id: featureId, name, slug, icon }
     },
     [featureOptions, featureMetadata],
   )

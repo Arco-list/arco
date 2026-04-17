@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { renderEmailTemplate, type EmailTemplate } from '@/lib/email-service'
+import { renderEmailTemplate, type EmailLocale, type EmailTemplate } from '@/lib/email-service'
 
 const TEST_VARS = {
   firstname: 'Niek',
@@ -113,8 +113,23 @@ export async function GET(request: NextRequest) {
 
   const origin = request.nextUrl.origin
 
+  // Optional ?locale=nl / ?locale=en — lets the admin preview both
+  // languages side by side. Ignored (undefined → renderer default) for
+  // templates that don't branch on locale yet.
+  const rawLocale = request.nextUrl.searchParams.get('locale')
+  const locale: EmailLocale | undefined =
+    rawLocale === 'nl' || rawLocale === 'en' ? rawLocale : undefined
+
+  // ?meta=1 → return JSON { subject } instead of the rendered HTML. The
+  // preview popup header fetches this to show the real (locale-aware)
+  // subject without having to parse the HTML response or hit Resend.
+  const wantsMeta = request.nextUrl.searchParams.get('meta') === '1'
+
   // Check auth templates first
   if (AUTH_TEMPLATES[template]) {
+    if (wantsMeta) {
+      return NextResponse.json({ subject: AUTH_TEMPLATES[template].subject })
+    }
     // Replace relative paths with origin for preview
     const html = AUTH_TEMPLATES[template].html
       .replace(/src="\/arco-logo/g, `src="${origin}/arco-logo`)
@@ -152,8 +167,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const result = await renderEmailTemplate(template as EmailTemplate, vars, origin)
+  const result = await renderEmailTemplate(template as EmailTemplate, vars, origin, locale)
   if (!result) return new NextResponse('Template not found', { status: 404 })
+
+  if (wantsMeta) {
+    return NextResponse.json({ subject: result.subject })
+  }
 
   return new NextResponse(result.html, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },

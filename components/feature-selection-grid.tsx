@@ -1,6 +1,7 @@
 "use client"
 
 import type { LucideIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 type FeatureOption = {
   id: string
@@ -33,6 +34,16 @@ export function FeatureSelectionGrid({
   resolveIcon,
   errorMessage,
 }: FeatureSelectionGridProps) {
+  const tSpaces = useTranslations("spaces")
+  const localizeFeatureName = (feature: FeatureOption) => {
+    const slug = feature.slug ?? feature.id
+    try {
+      return tSpaces(slug as any)
+    } catch {
+      return feature.name
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -71,7 +82,7 @@ export function FeatureSelectionGrid({
               } ${isSaving ? "opacity-60" : ""}`}
             >
               <IconComponent aria-hidden className="mb-3 h-6 w-6 text-foreground" />
-              <span className="body-small font-medium text-foreground">{feature.name}</span>
+              <span className="body-small font-medium text-foreground">{localizeFeatureName(feature)}</span>
               {isAlreadyAdded && (
                 <span className="mt-1 text-xs text-text-secondary">Added</span>
               )}

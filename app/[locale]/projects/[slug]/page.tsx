@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation"
-import { getProjectTranslation } from "@/lib/project-translations"
+import { canonicalizeScope, getProjectTranslation, translateCategoryName, translateProjectStyle, translateScope } from "@/lib/project-translations"
 import type { Metadata } from "next"
 import { getTranslations } from "next-intl/server"
 
@@ -520,21 +520,35 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   const [{ data: resolvedCategories }, { data: resolvedTaxonomy }] = await Promise.all([
     uuidsToResolve.categories.length > 0
-      ? supabase.from("categories").select("id, name").in("id", uuidsToResolve.categories)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ? supabase.from("categories").select("id, name, slug").in("id", uuidsToResolve.categories)
+      : Promise.resolve({ data: [] as { id: string; name: string; slug: string | null }[] }),
     uuidsToResolve.taxonomy.length > 0
-      ? supabase.from("project_taxonomy_options").select("id, name").in("id", uuidsToResolve.taxonomy)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ? supabase.from("project_taxonomy_options").select("id, name, slug, taxonomy_type").in("id", uuidsToResolve.taxonomy)
+      : Promise.resolve({ data: [] as { id: string; name: string; slug: string | null; taxonomy_type: string | null }[] }),
   ])
 
+  // Prefer the slug so translateCategoryName / translateProjectStyle can
+  // resolve a Dutch label; fall back to the English name when the slug
+  // isn't in our curated translation map.
   const nameMap = new Map<string, string>()
-  for (const row of resolvedCategories ?? []) nameMap.set(row.id, row.name)
-  for (const row of resolvedTaxonomy ?? []) nameMap.set(row.id, row.name)
+  for (const row of resolvedCategories ?? []) {
+    const translated = translateCategoryName(row.slug ?? row.name, locale)
+    nameMap.set(row.id, translated ?? row.name)
+  }
+  for (const row of resolvedTaxonomy ?? []) {
+    const translated = row.taxonomy_type === "project_style"
+      ? translateProjectStyle(row.slug ?? row.name, locale)
+      : null
+    nameMap.set(row.id, translated ?? row.name)
+  }
 
   const resolveName = (value: string | null | undefined): string | null => {
     if (!value) return null
     if (isUuid(value)) return nameMap.get(value) ?? null
-    return value
+    // Non-UUID value stored directly on project.project_type — e.g. historical
+    // "Extension" / "Villa" display strings. Try the category translator first
+    // so NL visitors see a translated label; otherwise pass through.
+    return translateCategoryName(value, locale) ?? value
   }
 
   const formattedRelatedProjects = relatedProjects?.map((r) => ({
@@ -567,12 +581,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
 
   // Type from project_type_category_id, falling back to project_type if it's a UUID
   const resolvedType = resolveName(typeId) ?? resolveName(project.project_type)
-  // Scope from project_type (plain string like "New Build", "Renovation", "Interior Design")
-  const SCOPE_VALUES = ["New Build", "Renovation", "Interior Design"]
-  const resolvedScope = SCOPE_VALUES.includes(project.project_type ?? "") ? project.project_type : null
-  const resolvedStyle = resolveName(
-    Array.isArray(project.style_preferences) ? project.style_preferences[0] : null
-  )
+  // Scope from project_type — canonicalise to a slug so SpecificationsBar
+  // can render a locale-aware label (lib/project-translations.ts).
+  // canonicalizeScope accepts either the display string currently in DB or
+  // the canonical slug, so this works without a data migration.
+  const resolvedScope = canonicalizeScope(project.project_type)
+  const rawStyle = Array.isArray(project.style_preferences) ? project.style_preferences[0] : null
+  const resolvedStyle = rawStyle && isUuid(rawStyle)
+    ? nameMap.get(rawStyle) ?? null
+    : translateProjectStyle(rawStyle, locale) ?? rawStyle
 
   return (
     <>
@@ -587,7 +604,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           updatedAt: project.updated_at,
           locale,
           type: resolvedType,
-          scope: resolvedScope,
+          // Structured data (JSON-LD) stays in English for SEO — Google's
+          // knowledge graph indexes English-first. Feed the English label,
+          // not the canonical slug.
+          scope: translateScope(resolvedScope, "en"),
           style: resolvedStyle,
           location: {
             city: project.address_city,

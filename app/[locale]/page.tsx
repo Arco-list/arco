@@ -15,7 +15,7 @@ import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { getTranslations } from "next-intl/server"
 import { getLocalizedName } from "@/lib/locale-name"
-import { getProjectTranslation } from "@/lib/project-translations"
+import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
 import { TrackPageView } from "@/components/track-view"
 
 export const revalidate = 300
@@ -391,7 +391,12 @@ async function loadLandingData(locale: string) {
   const recentProjectCards: RecentProject[] = popularProjects.slice(0, 6).map((project) => {
     const projectAny = project as any
     const primaryCategory = projectAny.primary_category
-    const typeLabel = primaryCategory ? (labelMap.get(primaryCategory) || primaryCategory) : null
+    const primaryCategorySlug = projectAny.primary_category_slug
+    const typeLabel = primaryCategory
+      ? (translateCategoryName(primaryCategorySlug ?? primaryCategory, locale)
+          ?? labelMap.get(primaryCategory)
+          ?? primaryCategory)
+      : null
     const location = project.location || null
     const subtitle = [typeLabel, location].filter(Boolean).join(" · ")
 

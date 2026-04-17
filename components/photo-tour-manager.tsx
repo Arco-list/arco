@@ -4,6 +4,7 @@ import type React from "react"
 import { useMemo } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Grid3x3, ImageIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { FeaturePhotoSelectorModal } from "@/components/feature-photo-selector-modal"
 import { SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
@@ -63,6 +64,15 @@ export function PhotoTourManager({
   subtitle = "Add photos for every feature. Only features with photos will appear on the published page.",
   clearTempFeatureSelection
 }: PhotoTourManagerProps) {
+  const tSpaces = useTranslations("spaces")
+  const localizeFeatureName = (display: { name: string; slug: string | null }) => {
+    if (!display.slug) return display.name
+    try {
+      return tSpaces(display.slug as any)
+    } catch {
+      return display.name
+    }
+  }
   const {
     uploadedPhotos,
     orderedFeatureOptions,
@@ -203,7 +213,7 @@ export function PhotoTourManager({
                   {coverPhoto ? (
                     <img
                       src={coverPhoto || "/placeholder.svg"}
-                      alt={featureDisplay.name}
+                      alt={localizeFeatureName(featureDisplay)}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -219,7 +229,7 @@ export function PhotoTourManager({
                 <div className="p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <FeatureIcon className="w-4 h-4" />
-                    <p className="body-small">{featureDisplay.name}</p>
+                    <p className="body-small">{localizeFeatureName(featureDisplay)}</p>
                   </div>
                   <p className="body-small">{photoCount > 0 ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "Add photos"}</p>
                 </div>

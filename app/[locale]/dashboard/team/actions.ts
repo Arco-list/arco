@@ -141,11 +141,19 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
     : `${baseUrl}/signup?redirectTo=${encodeURIComponent("/dashboard/team")}&inviteEmail=${encodeURIComponent(emailLower)}`
 
   try {
-    await sendTransactionalEmail(emailLower, "team-invite" as any, {
-      company_name: companyInfo.companyName,
-      company_logo_url: companyInfo.companyLogoUrl ?? undefined,
-      confirmUrl,
-    })
+    await sendTransactionalEmail(
+      emailLower,
+      "team-invite" as any,
+      {
+        company_name: companyInfo.companyName,
+        company_logo_url: companyInfo.companyLogoUrl ?? undefined,
+        confirmUrl,
+      },
+      // When the invitee already has an Arco account the resolver picks
+      // up their preferred_language via the email → auth.users lookup.
+      // Otherwise it falls through to the inviting company's country.
+      { userId: existingUser?.id ?? null, companyId: companyInfo.companyId },
+    )
   } catch (e) {
     console.error("Failed to send team invite email:", e)
   }
@@ -257,11 +265,18 @@ export async function resendTeamInviteAction(memberId: string): Promise<ActionRe
   const confirmUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent("/dashboard/team")}&inviteEmail=${encodeURIComponent(member.email)}`
 
   try {
-    await sendTransactionalEmail(member.email, "team-invite" as any, {
-      company_name: companyInfo.companyName,
-      company_logo_url: companyInfo.companyLogoUrl ?? undefined,
-      confirmUrl,
-    })
+    await sendTransactionalEmail(
+      member.email,
+      "team-invite" as any,
+      {
+        company_name: companyInfo.companyName,
+        company_logo_url: companyInfo.companyLogoUrl ?? undefined,
+        confirmUrl,
+      },
+      // Resolver will find an Arco account via email if one exists,
+      // else fall back to the inviting company's country.
+      { companyId: companyInfo.companyId },
+    )
   } catch (e) {
     console.error("Failed to resend team invite email:", e)
     return { success: false, error: "Failed to send email." }

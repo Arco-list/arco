@@ -12,6 +12,111 @@ function getResend() {
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Arco <automated@arcolist.com>'
 
+/**
+ * Languages supported by email templates. Mirrors i18n/config.ts `locales`.
+ * When adding a locale: add the tag here, extend the renderer switches in
+ * individual templates, and add a resolver branch below if needed.
+ */
+export type EmailLocale = 'nl' | 'en'
+const DEFAULT_LOCALE: EmailLocale = 'en'
+
+/**
+ * Resolve the language an email should be sent in given whichever
+ * identifier the send site has.
+ *
+ * Priority:
+ *   1. If `userId` is known → read profiles.preferred_language. Falls
+ *      through on null so newly signed-up users (no preference yet)
+ *      still get a country-based guess if a company is linked.
+ *   2. If we can discover a user by `email` (transactional sends where
+ *      the recipient is already an Arco account) → same as (1).
+ *   3. If `companyId` is known → companies.country (NL/BE → nl, else
+ *      fall through to TLD).
+ *   4. Email TLD (.nl/.be → nl, else en).
+ *   5. Default → en.
+ *
+ * Returns DEFAULT_LOCALE if nothing resolves. Never throws — on DB
+ * errors we log and fall through to the default so a temporary Supabase
+ * blip can't stop a transactional email from sending.
+ */
+export async function resolveRecipientLanguage(opts: {
+  userId?: string | null
+  companyId?: string | null
+  email?: string | null
+}): Promise<EmailLocale> {
+  const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
+  const supabase = createServiceRoleSupabaseClient()
+
+  const asLocale = (v: unknown): EmailLocale | null =>
+    v === 'nl' || v === 'en' ? v : null
+
+  // (1) Direct user id
+  if (opts.userId) {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('preferred_language')
+        .eq('id', opts.userId)
+        .maybeSingle()
+      const hit = asLocale(data?.preferred_language)
+      if (hit) return hit
+    } catch (err) {
+      console.warn('[resolveRecipientLanguage] profile lookup by userId failed', err)
+    }
+  }
+
+  // (2) Lookup by email — the recipient might already have an Arco
+  // account even when the send site only has a raw email address (team
+  // invites, professional-invite, etc.)
+  if (opts.email) {
+    try {
+      const { data: authResult } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+      const user = authResult?.users.find(
+        (u) => u.email?.toLowerCase() === opts.email!.toLowerCase(),
+      )
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('preferred_language')
+          .eq('id', user.id)
+          .maybeSingle()
+        const hit = asLocale(data?.preferred_language)
+        if (hit) return hit
+      }
+    } catch (err) {
+      console.warn('[resolveRecipientLanguage] profile lookup by email failed', err)
+    }
+  }
+
+  // (3) Company country
+  if (opts.companyId) {
+    try {
+      const { data } = await supabase
+        .from('companies')
+        .select('country')
+        .eq('id', opts.companyId)
+        .maybeSingle()
+      const country = (data?.country ?? '').toUpperCase().trim()
+      if (country === 'NL' || country === 'BE' || country === 'NETHERLANDS' || country === 'BELGIUM') {
+        return 'nl'
+      }
+      // Non-Dutch country — fall through to TLD only if TLD adds signal,
+      // otherwise the country is authoritative (German company → 'en').
+      if (country.length > 0) return DEFAULT_LOCALE
+    } catch (err) {
+      console.warn('[resolveRecipientLanguage] company country lookup failed', err)
+    }
+  }
+
+  // (4) Email TLD — only signal left
+  if (opts.email) {
+    const domain = opts.email.split('@')[1]?.toLowerCase() ?? ''
+    if (domain.endsWith('.nl') || domain.endsWith('.be')) return 'nl'
+  }
+
+  return DEFAULT_LOCALE
+}
+
 export type EmailTemplate =
   | 'project-live'
   | 'project-rejected'
@@ -63,8 +168,11 @@ interface EmailResponse {
 
 const DEFAULT_LOGO_BASE = 'https://www.arcolist.com'
 
-function baseLayout(content: string, logoBaseUrl?: string): string {
+function baseLayout(content: string, logoBaseUrl?: string, locale: EmailLocale = 'en'): string {
   const base = logoBaseUrl || DEFAULT_LOGO_BASE
+  const tagline = locale === 'nl'
+    ? 'Het professionele netwerk dat architecten vertrouwen.'
+    : 'The professional network architects trust.'
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -87,7 +195,7 @@ ${content}
 <img src="${base}/arco-logo-email.png" alt="Arco" width="40" height="11" style="display:block;opacity:0.5;" />
 </td>
 <td style="vertical-align:middle;">
-<p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1;">The professional network architects trust.</p>
+<p style="margin:0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1;">${tagline}</p>
 </td>
 </tr></table>
 <p style="margin:10px 0 0;font-size:10px;color:#c4c4c2;line-height:1.4;">
@@ -274,42 +382,82 @@ ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">
 
 // ─── Template renderers ──────────────────────────────────────────────────────
 
-function lb(vars: EmailVariables, content: string): string {
-  return baseLayout(content, vars._logoBaseUrl)
+function lb(vars: EmailVariables, content: string, locale: EmailLocale = 'en'): string {
+  return baseLayout(content, vars._logoBaseUrl, locale)
 }
 
-function renderProjectLive(vars: EmailVariables): { subject: string; html: string } {
-  const projectName = vars.project_title || vars.Project_title || vars.project_name || 'Your project'
+function renderProjectLive(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const fallbackTitle = locale === 'nl' ? 'Je project' : 'Your project'
+  const projectName = vars.project_title || vars.Project_title || vars.project_name || fallbackTitle
+  const copy = locale === 'nl'
+    ? {
+        subject: `${projectName} staat live op Arco`,
+        h1: `${projectName} is live`,
+        hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
+        intro: 'Goed nieuws — je project is gepubliceerd en zichtbaar op Arco.',
+        credits: 'Je gecrediteerde professionals zijn nu zichtbaar op de projectpagina.',
+        button: 'Bekijk project',
+      }
+    : {
+        subject: `${projectName} is now live on Arco`,
+        h1: `${projectName} is live`,
+        hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
+        intro: 'Great news — your project is now published and visible on Arco.',
+        credits: 'Your credited professionals will now be visible on the project page.',
+        button: 'View project',
+      }
   return {
-    subject: `${projectName} is now live on Arco`,
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading(`${projectName} is live`)}
-      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Great news — your project is now published and visible on Arco.`)}
+      ${heading(copy.h1)}
+      ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
       ${projectCard(vars)}
-      ${body('Your credited professionals will now be visible on the project page.')}
-      ${vars.project_link ? button('View project', vars.project_link) : ''}
-    `),
+      ${body(copy.credits)}
+      ${vars.project_link ? button(copy.button, vars.project_link) : ''}
+    `, locale),
   }
 }
 
-function renderProjectRejected(vars: EmailVariables): { subject: string; html: string } {
-  const projectName = vars.project_title || vars.Project_title || vars.project_name || 'Your project'
+function renderProjectRejected(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const fallbackTitle = locale === 'nl' ? 'Je project' : 'Your project'
+  const projectName = vars.project_title || vars.Project_title || vars.project_name || fallbackTitle
+  const copy = locale === 'nl'
+    ? {
+        subject: `Update over ${projectName}`,
+        h1: 'Project-update',
+        hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
+        intro: `We hebben je project beoordeeld en het is nu niet goedgekeurd.`,
+        reasonLabel: 'Reden',
+        resubmit: 'Je kunt je project aanpassen en opnieuw ter beoordeling aanbieden.',
+        button: 'Ga naar dashboard',
+      }
+    : {
+        subject: `Update on ${projectName}`,
+        h1: 'Project update',
+        hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
+        intro: `We've reviewed your project and it wasn't approved at this time.`,
+        reasonLabel: 'Reason',
+        resubmit: 'You can update your project and resubmit it for review.',
+        button: 'Go to dashboard',
+      }
   return {
-    subject: `Update on ${projectName}`,
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('Project update')}
-      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>We've reviewed your project and it wasn't approved at this time.`)}
+      ${heading(copy.h1)}
+      ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
       ${projectCard(vars)}
-      ${vars.rejection_reason ? body(`<strong>Reason:</strong> ${vars.rejection_reason}`) : ''}
-      ${body('You can update your project and resubmit it for review.')}
-      ${vars.dashboard_link ? button('Go to dashboard', vars.dashboard_link) : ''}
-    `),
+      ${vars.rejection_reason ? body(`<strong>${copy.reasonLabel}:</strong> ${vars.rejection_reason}`) : ''}
+      ${body(copy.resubmit)}
+      ${vars.dashboard_link ? button(copy.button, vars.dashboard_link) : ''}
+    `, locale),
   }
 }
 
-function renderProfessionalInvite(vars: EmailVariables): { subject: string; html: string } {
-  const projectName = vars.project_title || vars.project_name || 'a project'
-  const ownerLabel = vars.company_name || vars.project_owner || 'An architect'
+function renderProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const projectFallback = locale === 'nl' ? 'een project' : 'a project'
+  const ownerFallback = locale === 'nl' ? 'Een architect' : 'An architect'
+  const projectName = vars.project_title || vars.project_name || projectFallback
+  const ownerLabel = vars.company_name || vars.project_owner || ownerFallback
   const projectLink = vars.project_link
   // Inviting-company badge: small icon + name on a single line, above the
   // project card. Only renders if we know the company name.
@@ -323,16 +471,31 @@ function renderProfessionalInvite(vars: EmailVariables): { subject: string; html
         </td>
       </tr></table>`
     : ''
+  const copy = locale === 'nl'
+    ? {
+        subject: `${ownerLabel} heeft je gecrediteerd op ${projectName}`,
+        h1: 'Je bent gecrediteerd',
+        intro: `${ownerLabel} heeft je bedrijf toegevoegd aan een project op Arco.`,
+        accept: 'Accepteer de uitnodiging om dit project te tonen op je bedrijfspagina.',
+        button: 'Bekijk uitnodiging',
+      }
+    : {
+        subject: `${ownerLabel} credited you on ${projectName}`,
+        h1: "You've been credited",
+        intro: `${ownerLabel} added your company to a project on Arco.`,
+        accept: 'Accept the invitation to showcase this project on your company page.',
+        button: 'View invitation',
+      }
   return {
-    subject: `${ownerLabel} credited you on ${projectName}`,
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('You\'ve been credited')}
+      ${heading(copy.h1)}
       ${inviterBadge}
-      ${body(`${ownerLabel} added your company to a project on Arco.`)}
+      ${body(copy.intro)}
       ${projectLink ? linkedProjectCard(vars, projectLink) : projectCard(vars)}
-      ${body('Accept the invitation to showcase this project on your company page.')}
-      ${vars.confirmUrl ? button('View invitation', vars.confirmUrl) : ''}
-    `),
+      ${body(copy.accept)}
+      ${vars.confirmUrl ? button(copy.button, vars.confirmUrl) : ''}
+    `, locale),
   }
 }
 
@@ -351,8 +514,9 @@ ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">
 </table></a>`
 }
 
-function renderTeamInvite(vars: EmailVariables): { subject: string; html: string } {
-  const companyName = vars.company_name || 'a company'
+function renderTeamInvite(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const companyFallback = locale === 'nl' ? 'een bedrijf' : 'a company'
+  const companyName = vars.company_name || companyFallback
   // Inviting-company badge — same shape as professional-invite for consistency.
   const inviterBadge = vars.company_name
     ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>
@@ -364,36 +528,94 @@ function renderTeamInvite(vars: EmailVariables): { subject: string; html: string
         </td>
       </tr></table>`
     : ''
+  const copy = locale === 'nl'
+    ? {
+        subject: `Je bent uitgenodigd om lid te worden van ${companyName} op Arco`,
+        h1: 'Uitnodiging voor team',
+        intro: `Je bent uitgenodigd om lid te worden van <strong>${companyName}</strong> op Arco.`,
+        accept: 'Accepteer de uitnodiging om samen te werken aan het profiel en de projecten van je bedrijf.',
+        button: 'Accepteer uitnodiging',
+      }
+    : {
+        subject: `You're invited to join ${companyName} on Arco`,
+        h1: 'Team invitation',
+        intro: `You've been invited to join <strong>${companyName}</strong> on Arco.`,
+        accept: "Accept the invitation to collaborate on your company's profile and projects.",
+        button: 'Accept invitation',
+      }
   return {
-    subject: `You're invited to join ${companyName} on Arco`,
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('Team invitation')}
+      ${heading(copy.h1)}
       ${inviterBadge}
-      ${body(`You've been invited to join <strong>${companyName}</strong> on Arco.`)}
-      ${body('Accept the invitation to collaborate on your company\'s profile and projects.')}
-      ${vars.confirmUrl ? button('Accept invitation', vars.confirmUrl) : ''}
-    `),
+      ${body(copy.intro)}
+      ${body(copy.accept)}
+      ${vars.confirmUrl ? button(copy.button, vars.confirmUrl) : ''}
+    `, locale),
   }
 }
 
-function renderDomainVerification(vars: EmailVariables): { subject: string; html: string } {
+function renderDomainVerification(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const businessFallback = locale === 'nl' ? 'je bedrijf' : 'your company'
+  const business = vars.businessname || businessFallback
+  const copy = locale === 'nl'
+    ? {
+        subject: `${vars.code} is je Arco domein-verificatiecode`,
+        h1: 'Verifieer je domein',
+        intro: `Gebruik deze code om eigendom van <strong>${business}</strong> te verifiëren:`,
+        expires: 'Deze code verloopt over 10 minuten.',
+        ignore: 'Heb je dit niet aangevraagd? Dan kun je deze email negeren.',
+      }
+    : {
+        subject: `${vars.code} is your Arco domain verification code`,
+        h1: 'Verify your domain',
+        intro: `Use this code to verify ownership of <strong>${business}</strong>:`,
+        expires: 'This code expires in 10 minutes.',
+        ignore: "If you didn't request this, you can safely ignore this email.",
+      }
   return {
-    subject: `${vars.code} is your Arco domain verification code`,
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('Verify your domain')}
-      ${body(`Use this code to verify ownership of <strong>${vars.businessname || 'your company'}</strong>:`)}
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
       <div style="margin:24px 0;padding:16px;background:#f5f5f4;border-radius:4px;text-align:center;">
         <span style="font-size:32px;font-weight:500;letter-spacing:0.3em;color:#1c1c1a;font-family:monospace;">${vars.code || '------'}</span>
       </div>
-      ${body('This code expires in 10 minutes.')}
-      ${body('<span style="color:#a1a1a0;font-size:13px;">If you didn\'t request this, you can safely ignore this email.</span>')}
-    `),
+      ${body(copy.expires)}
+      ${body(`<span style="color:#a1a1a0;font-size:13px;">${copy.ignore}</span>`)}
+    `, locale),
   }
 }
 
 // ─── Homeowner Welcome Series ────────────────────────────────────────────────
 
-function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: string } {
+function renderWelcomeHomeowner(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Welkom bij Arco',
+        h1: 'Welkom bij Arco',
+        hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
+        intro: 'Bedankt voor je aanmelding bij Arco — het platform waar gerealiseerde projecten en de professionals erachter de erkenning krijgen die ze verdienen.',
+        projectsHeading: 'Bekijk projecten',
+        projectsIntro: 'Ontdek afgeronde architectuur- en interieurontwerpprojecten uit heel Nederland.',
+        projectsButton: 'Bekijk projecten',
+        professionalsHeading: 'Ontdek professionals',
+        professionalsIntro: 'Vind architecten, interieurontwerpers en aannemers en de projecten die ze hebben gerealiseerd.',
+        professionalsButton: 'Ontdek professionals',
+      }
+    : {
+        subject: 'Welcome to Arco',
+        h1: 'Welcome to Arco',
+        hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
+        intro: 'Thanks for joining Arco — the curated architecture platform where great projects and the professionals behind them get the recognition they deserve.',
+        projectsHeading: 'Browse projects',
+        projectsIntro: 'Explore completed architecture and interior design projects from across the Netherlands.',
+        projectsButton: 'Browse projects',
+        professionalsHeading: 'Discover professionals',
+        professionalsIntro: 'Find architects, interior designers, and builders credited on real work.',
+        professionalsButton: 'Discover professionals',
+      }
+
   // Featured projects (cron pre-fetches; fallback for admin preview).
   const projects = (vars.projects as any[] | undefined) ?? [
     { title: "Villa Oisterwijk", subtitle: "Modern villa · Oisterwijk", image: "https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg", slug: "villa-oisterwijk" },
@@ -490,37 +712,55 @@ function renderWelcomeHomeowner(vars: EmailVariables): { subject: string; html: 
   `
 
   return {
-    subject: 'Welcome to Arco',
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('Welcome to Arco')}
-      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Thanks for joining Arco — the curated architecture platform where great projects and the professionals behind them get the recognition they deserve.`)}
+      ${heading(copy.h1)}
+      ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
 
       <div style="margin:36px 0 0;">
-        ${heading4('Browse projects')}
-        <p style="margin:0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Explore completed architecture and interior design projects from across the Netherlands.</p>
+        ${heading4(copy.projectsHeading)}
+        <p style="margin:0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">${copy.projectsIntro}</p>
       </div>
       ${projectsBlock}
 
       <div style="margin:24px 0 0;text-align:center;">
-        ${button('Browse projects', 'https://www.arcolist.com/projects')}
+        ${button(copy.projectsButton, 'https://www.arcolist.com/projects')}
       </div>
 
       <div style="margin:48px 0 0;height:1px;background:#e8e8e6;"></div>
 
       <div style="margin:36px 0 0;">
-        ${heading4('Discover professionals')}
-        <p style="margin:0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">Find architects, interior designers, and builders credited on real work.</p>
+        ${heading4(copy.professionalsHeading)}
+        <p style="margin:0;font-size:14px;font-weight:300;color:#4a4a48;line-height:1.5;">${copy.professionalsIntro}</p>
       </div>
       ${professionalsBlock}
 
       <div style="margin:24px 0 0;text-align:center;">
-        ${button('Discover professionals', 'https://www.arcolist.com/professionals')}
+        ${button(copy.professionalsButton, 'https://www.arcolist.com/professionals')}
       </div>
-    `),
+    `, locale),
   }
 }
 
-function renderDiscoverProjects(vars: EmailVariables): { subject: string; html: string } {
+function renderDiscoverProjects(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Ontdek projecten op Arco',
+        h1: 'Projecten om te ontdekken',
+        hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
+        intro: 'Arco verzamelt een groeiende collectie architectuur- en interieurontwerpprojecten — van moderne villa\'s tot doordachte renovaties.',
+        outro: 'Filter op stijl, locatie, type en meer. Elk project vermeldt de professionals die eraan hebben gewerkt.',
+        button: 'Bekijk alle projecten',
+      }
+    : {
+        subject: 'Discover projects on Arco',
+        h1: 'Projects worth exploring',
+        hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
+        intro: 'Arco is home to a growing collection of architecture and interior design projects — from modern villas to thoughtful renovations.',
+        outro: 'Browse by style, location, building type, and more. Every project credits the professionals who made it happen.',
+        button: 'Browse all projects',
+      }
+
   // Real sends pass `projects` via the drip-queue variables (same shape as
   // welcome-homeowner). The hardcoded list is the sample-data fallback for
   // admin preview sends.
@@ -535,47 +775,83 @@ function renderDiscoverProjects(vars: EmailVariables): { subject: string; html: 
   ).join("")
 
   return {
-    subject: 'Discover projects on Arco',
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('Projects worth exploring')}
-      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Arco is home to a growing collection of architecture and interior design projects — from modern villas to thoughtful renovations.`)}
+      ${heading(copy.h1)}
+      ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
       ${projectsHtml}
-      ${body('Browse by style, location, building type, and more. Every project credits the professionals who made it happen.')}
-      ${button('Browse all projects', 'https://www.arcolist.com/projects')}
-    `),
+      ${body(copy.outro)}
+      ${button(copy.button, 'https://www.arcolist.com/projects')}
+    `, locale),
   }
 }
 
-function renderFindProfessionals(vars: EmailVariables): { subject: string; html: string } {
+function renderFindProfessionals(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Vind de juiste professional op Arco',
+        h1: 'Stel je team samen',
+        hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
+        intro: 'Op zoek naar een architect of interieurontwerper? Op Arco heeft elke professional credits op echte projecten — zo kun je ze beoordelen op wat ze hebben opgeleverd, niet alleen op wat ze beloven.',
+        outro: 'Filter op dienst, locatie en de projecten waar ze aan hebben gewerkt. Sla je favorieten op en neem contact op wanneer je er klaar voor bent.',
+        button: 'Ontdek professionals',
+      }
+    : {
+        subject: 'Find the right professional on Arco',
+        h1: 'Find your team',
+        hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
+        intro: 'Looking for an architect or interior designer? On Arco, every professional is credited on real projects — so you can judge them by the work they\'ve delivered, not just what they promise.',
+        outro: 'Browse professionals by service, location, and the projects they\'ve worked on. Save the ones you like and reach out when you\'re ready.',
+        button: 'Discover professionals',
+      }
+
   return {
-    subject: 'Find the right professional on Arco',
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('Find your team')}
-      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br>Looking for an architect or interior designer? On Arco, every professional is credited on real projects — so you can judge them by the work they\'ve delivered, not just what they promise.`)}
-      ${body('Browse professionals by service, location, and the projects they\'ve worked on. Save the ones you like and reach out when you\'re ready.')}
-      ${button('Discover professionals', 'https://www.arcolist.com/professionals')}
-    `),
+      ${heading(copy.h1)}
+      ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
+      ${body(copy.outro)}
+      ${button(copy.button, 'https://www.arcolist.com/professionals')}
+    `, locale),
   }
 }
 
-function renderIntroductionRequest(vars: EmailVariables): { subject: string; html: string } {
-  const clientName = vars.client_name || 'A client'
+function renderIntroductionRequest(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const clientFallback = locale === 'nl' ? 'Een klant' : 'A client'
+  const clientName = vars.client_name || clientFallback
+  const copy = locale === 'nl'
+    ? {
+        subject: `${clientName} heeft een kennismaking aangevraagd op Arco`,
+        h1: 'Nieuwe kennismakingsaanvraag',
+        hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
+        intro: `<strong>${clientName}</strong> is geïnteresseerd in een samenwerking en heeft een bericht gestuurd via Arco.`,
+        emailLabel: 'Email',
+        button: 'Bekijk bericht',
+      }
+    : {
+        subject: `${clientName} requested an introduction on Arco`,
+        h1: 'New introduction request',
+        hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
+        intro: `<strong>${clientName}</strong> is interested in working with you and sent a message via Arco.`,
+        emailLabel: 'Email',
+        button: 'View message',
+      }
   return {
-    subject: `${clientName} requested an introduction on Arco`,
+    subject: copy.subject,
     html: lb(vars, `
-      ${heading('New introduction request')}
-      ${body(`${vars.firstname ? `Hi ${vars.firstname},` : 'Hi,'}<br><br><strong>${clientName}</strong> is interested in working with you and sent a message via Arco.`)}
+      ${heading(copy.h1)}
+      ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
       <div style="margin:20px 0;padding:16px;background:#f5f5f4;border-radius:4px;">
         <p style="margin:0;font-size:14px;color:#4a4a48;line-height:1.6;white-space:pre-wrap;">${vars.message_preview || ''}</p>
       </div>
-      ${vars.client_email ? body(`<strong>Email:</strong> ${vars.client_email}`) : ''}
-      ${vars.dashboard_link ? button('View message', vars.dashboard_link) : ''}
-    `),
+      ${vars.client_email ? body(`<strong>${copy.emailLabel}:</strong> ${vars.client_email}`) : ''}
+      ${vars.dashboard_link ? button(copy.button, vars.dashboard_link) : ''}
+    `, locale),
   }
 }
 
-function renderProspectIntro(vars: EmailVariables): { subject: string; html: string } {
-  const companyName = vars.company_name || 'Uw bedrijf'
+function renderProspectIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Uw bedrijf' : 'Your company')
   const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
   const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
   const card = companyCard({
@@ -586,26 +862,48 @@ function renderProspectIntro(vars: EmailVariables): { subject: string; html: str
     subtitle: vars.company_subtitle ?? null,
   })
 
+  const copy = locale === 'en'
+    ? {
+        subject: `A stage for ${companyName}`,
+        h1: `A stage for ${companyName}`,
+        intro: `I'm Niek, founder of Arco — a new professional network where leading architects publish their best work and recommend the craftspeople they work with.`,
+        livePreview: `We've put ${companyName} live on Arco with a company and project page to show what it looks like:`,
+        claimCta: `Want to be on Arco? Claim your page and get full control over your profile, add projects, and become visible to clients looking for a professional to deliver their project.`,
+        button: `Claim ${companyName}`,
+        opt_out: `Prefer we remove the page? Let me know by replying to this email.`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `Een podium voor ${companyName}`,
+        h1: `Een podium voor ${companyName}`,
+        intro: `Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`,
+        livePreview: `We hebben ${companyName} live gezet op Arco met een bedrijfs- en projectpagina om te laten zien hoe het eruitziet:`,
+        claimCta: `Wil je op Arco? Claim je pagina en krijg volledige controle over je profiel, voeg projecten toe en word zichtbaar voor opdrachtgevers die een professional zoeken om hun project te realiseren.`,
+        button: `Claim ${companyName}`,
+        opt_out: `Wil je liever dat we de pagina verwijderen? Laat het me weten door op deze email te reageren.`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
   return {
-    subject: `Een podium voor ${companyName}`,
-    html: baseLayout(`
-      ${heading(`Een podium voor ${companyName}`)}
-      ${body(`Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`)}
-      ${body(`We hebben ${companyName} live gezet op Arco met een bedrijfs- en projectpagina om te laten zien hoe het eruitziet:`)}
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.livePreview)}
       ${card}
-      ${body(`Wil je op Arco? Claim je pagina en krijg volledige controle over je profiel, voeg projecten toe en word zichtbaar voor opdrachtgevers die een professional zoeken om hun project te realiseren.`)}
-      ${button(`Claim ${companyName}`, claimUrl)}
-      ${body(`Wil je liever dat we de pagina verwijderen? Laat het me weten door op deze email te reageren.`)}
+      ${body(copy.claimCta)}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.opt_out)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
-        <span style="color:#a1a1a0;">Oprichter, Arco</span>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
       </p>
-    `),
+    `, locale),
   }
 }
 
-function renderProspectFollowup(vars: EmailVariables): { subject: string; html: string } {
-  const companyName = vars.company_name || 'Uw bedrijf'
+function renderProspectFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Uw bedrijf' : 'Your company')
   const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
   const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
   const card = companyCard({
@@ -616,26 +914,48 @@ function renderProspectFollowup(vars: EmailVariables): { subject: string; html: 
     subtitle: vars.company_subtitle ?? null,
   })
 
+  const copy = locale === 'en'
+    ? {
+        subject: `${companyName} on Arco`,
+        h1: `${companyName} on Arco`,
+        intro: `A few days ago I created a company and project page for ${companyName} on Arco. Just checking in to see if you saw it.`,
+        valueProp: `On your page, clients can view your work and reach out directly. All you need to do is claim it — takes less than two minutes, and listing is free.`,
+        afterClaim: `Once claimed, you can edit your profile, add projects, and become visible to clients across the Netherlands.`,
+        button: `Claim ${companyName}`,
+        questions: `Questions? Just reply to this email, happy to help.`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `${companyName} op Arco`,
+        h1: `${companyName} op Arco`,
+        intro: `Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of je het gezien hebt.`,
+        valueProp: `Op je pagina kunnen opdrachtgevers je werk bekijken en direct contact opnemen. Het enige wat je hoeft te doen is je pagina claimen — het kost minder dan twee minuten en publiceren is gratis.`,
+        afterClaim: `Na het claimen kun je je profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`,
+        button: `Claim ${companyName}`,
+        questions: `Vragen? Reageer op deze email, ik help je graag.`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
   return {
-    subject: `${companyName} op Arco`,
-    html: baseLayout(`
-      ${heading(`${companyName} op Arco`)}
-      ${body(`Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of je het gezien hebt.`)}
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
       ${card}
-      ${body(`Op je pagina kunnen opdrachtgevers je werk bekijken en direct contact opnemen. Het enige wat je hoeft te doen is je pagina claimen — het kost minder dan twee minuten en publiceren is gratis.`)}
-      ${body(`Na het claimen kun je je profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`)}
-      ${button(`Claim ${companyName}`, claimUrl)}
-      ${body(`Vragen? Reageer op deze email, ik help je graag.`)}
+      ${body(copy.valueProp)}
+      ${body(copy.afterClaim)}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.questions)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
-        <span style="color:#a1a1a0;">Oprichter, Arco</span>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
       </p>
-    `),
+    `, locale),
   }
 }
 
-function renderProspectFinal(vars: EmailVariables): { subject: string; html: string } {
-  const companyName = vars.company_name || 'Uw bedrijf'
+function renderProspectFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Uw bedrijf' : 'Your company')
   const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
   const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
   const card = companyCard({
@@ -646,24 +966,55 @@ function renderProspectFinal(vars: EmailVariables): { subject: string; html: str
     subtitle: vars.company_subtitle ?? null,
   })
 
+  const copy = locale === 'en'
+    ? {
+        subject: `Claim ${companyName} on Arco`,
+        h1: `Claim ${companyName} on Arco`,
+        intro: `This is my last message about your page on Arco. I understand you're busy — so I'll keep it brief.`,
+        valueProp: `Your company page with projects is ready. One click to claim, two minutes to customise. After that you're discoverable by clients looking for a professional.`,
+        button: `Claim ${companyName}`,
+        opt_out: `Not interested? No problem — reply to this email and I'll remove your page. No further messages.`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `Claim ${companyName} op Arco`,
+        h1: `Claim ${companyName} op Arco`,
+        intro: `Dit is mijn laatste bericht over je pagina op Arco. Ik begrijp dat je het druk hebt — daarom maak ik het kort.`,
+        valueProp: `Je bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna ben je vindbaar voor opdrachtgevers die een professional zoeken.`,
+        button: `Claim ${companyName}`,
+        opt_out: `Geen interesse? Geen probleem — reageer op deze email en ik verwijder je pagina. Geen verdere berichten.`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
   return {
-    subject: `Claim ${companyName} op Arco`,
-    html: baseLayout(`
-      ${heading(`Claim ${companyName} op Arco`)}
-      ${body(`Dit is mijn laatste bericht over je pagina op Arco. Ik begrijp dat je het druk hebt — daarom maak ik het kort.`)}
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
       ${card}
-      ${body(`Je bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna ben je vindbaar voor opdrachtgevers die een professional zoeken.`)}
-      ${button(`Claim ${companyName}`, claimUrl)}
-      ${body(`Geen interesse? Geen probleem — reageer op deze email en ik verwijder je pagina. Geen verdere berichten.`)}
+      ${body(copy.valueProp)}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.opt_out)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
-        <span style="color:#a1a1a0;">Oprichter, Arco</span>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
       </p>
-    `),
+    `, locale),
   }
 }
 
-const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subject: string; html: string }> = {
+/**
+ * Renderer signature. `locale` is optional today (all renderers return
+ * English) so we can introduce it incrementally without touching every
+ * template at once. Per-locale rollout happens in PR #2 (welcome
+ * client emails) and PR #3 (prospect emails).
+ */
+type TemplateRenderer = (
+  vars: EmailVariables,
+  locale?: EmailLocale,
+) => { subject: string; html: string }
+
+const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'project-live': renderProjectLive,
   'project-rejected': renderProjectRejected,
   'professional-invite': renderProfessionalInvite,
@@ -679,28 +1030,52 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, (vars: EmailVariables) => { subj
 }
 
 /**
- * Render an email template to HTML (for previews)
+ * Render an email template to HTML (for previews). Accepts an optional
+ * locale so the admin preview route can show both languages side by side
+ * once translations land in PR #2/#3.
  */
 export async function renderEmailTemplate(
   template: EmailTemplate,
   dataVariables?: EmailVariables,
-  logoBaseUrl?: string
+  logoBaseUrl?: string,
+  locale?: EmailLocale,
 ): Promise<{ subject: string; html: string } | null> {
   const renderer = TEMPLATE_RENDERERS[template]
   if (!renderer) return null
   const vars = { ...(dataVariables || {}), _logoBaseUrl: logoBaseUrl }
-  return renderer(vars)
+  return renderer(vars, locale)
 }
 
 // ─── Send function ───────────────────────────────────────────────────────────
 
 /**
- * Send a transactional email via Resend
+ * Send a transactional email via Resend.
+ *
+ * `opts.userId` / `opts.companyId` are used to resolve the recipient's
+ * preferred language at send time (see resolveRecipientLanguage). Pass
+ * whichever identifier the call site has:
+ *   - Client flows (welcome series, project notifications, password
+ *     reset) → `{ userId }`
+ *   - Prospect flows (direct send + drip cron) → `{ companyId }`
+ *   - Team invite, professional-invite → `{ userId }` when the recipient
+ *     already has an account, else `{ companyId }` (or neither — the
+ *     resolver falls back to the email TLD as a last guess).
+ *
+ * When `opts.locale` is passed explicitly, the resolver is skipped — the
+ * admin preview route uses this to force a specific language.
  */
+export interface SendEmailOptions {
+  userId?: string | null
+  companyId?: string | null
+  /** Override — skip resolver and use this locale verbatim. */
+  locale?: EmailLocale
+}
+
 export async function sendTransactionalEmail(
   email: string,
   template: EmailTemplate,
-  dataVariables?: EmailVariables
+  dataVariables?: EmailVariables,
+  opts: SendEmailOptions = {},
 ): Promise<EmailResponse> {
   if (!process.env.RESEND_API_KEY) {
     console.error('RESEND_API_KEY environment variable is required')
@@ -713,7 +1088,15 @@ export async function sendTransactionalEmail(
     return { success: false, message: `Template ${template} not configured` }
   }
 
-  const { subject, html } = renderer(dataVariables || {})
+  const locale =
+    opts.locale
+    ?? (await resolveRecipientLanguage({
+      userId: opts.userId,
+      companyId: opts.companyId,
+      email,
+    }))
+
+  const { subject, html } = renderer(dataVariables || {}, locale)
 
   try {
     const { data, error } = await getResend().emails.send({
@@ -721,6 +1104,14 @@ export async function sendTransactionalEmail(
       to: email,
       subject,
       html,
+      // Tag the send with the resolved locale so the admin/sent table
+      // can display which language an email went out in without having
+      // to reverse-engineer it from the subject line. Resend returns
+      // tags on `emails.list()`.
+      tags: [
+        { name: 'template', value: template },
+        { name: 'locale', value: locale },
+      ],
       ...(template.startsWith('prospect-') ? { reply_to: 'niek@arcolist.com' } : {}),
     })
 
@@ -729,7 +1120,7 @@ export async function sendTransactionalEmail(
       return { success: false, message: error.message }
     }
 
-    console.log(`Email sent: ${template} to ${email} (id: ${data?.id})`)
+    console.log(`Email sent: ${template} to ${email} [${locale}] (id: ${data?.id})`)
     return { success: true, messageId: data?.id }
   } catch (error) {
     console.error('Email service error:', error)
@@ -752,10 +1143,11 @@ export const sendProjectStatusEmail = async (
     project_link?: string
     dashboard_link?: string
     rejection_reason?: string
-  }
+  },
+  opts: SendEmailOptions = {},
 ): Promise<EmailResponse> => {
   const template = status === 'live' ? 'project-live' : 'project-rejected'
-  return sendTransactionalEmail(email, template, projectData)
+  return sendTransactionalEmail(email, template, projectData, opts)
 }
 
 export const sendProfessionalInviteEmail = async (
@@ -770,9 +1162,10 @@ export const sendProfessionalInviteEmail = async (
     project_location?: string
     project_link?: string
     confirmUrl: string
-  }
+  },
+  opts: SendEmailOptions = {},
 ): Promise<EmailResponse> => {
-  return sendTransactionalEmail(email, 'professional-invite', inviteData)
+  return sendTransactionalEmail(email, 'professional-invite', inviteData, opts)
 }
 
 export const sendDomainVerificationEmail = async (
@@ -780,9 +1173,10 @@ export const sendDomainVerificationEmail = async (
   data: {
     code: string
     businessname: string
-  }
+  },
+  opts: SendEmailOptions = {},
 ): Promise<EmailResponse> => {
-  return sendTransactionalEmail(email, 'domain-verification', data)
+  return sendTransactionalEmail(email, 'domain-verification', data, opts)
 }
 
 /**

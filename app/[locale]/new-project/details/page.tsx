@@ -8,12 +8,9 @@ import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
-  DEFAULT_LOCATION_ICONS,
-  DEFAULT_MATERIAL_ICONS,
   generateYearErrorMessages,
   getPlainTextFromHtml,
   getWordCountFromHtml,
-  mapFeatureOptionsToIconItems,
   MAX_TITLE_LENGTH,
   MIN_DESCRIPTION_LENGTH,
   type ProjectDetailsDescriptionCommand,
@@ -27,7 +24,6 @@ import type { Enums, TablesInsert, TablesUpdate } from "@/lib/supabase/types"
 import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
 import { isAdminUser } from "@/lib/auth-utils"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
-import { ProjectFeaturesFields } from "@/components/project-details/project-features-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
 import { SegmentedProgressBar } from "@/components/new-project/segmented-progress-bar"
@@ -127,20 +123,16 @@ export default function NewProjectPage() {
     buildingTypeOptions,
     sizeOptions,
     budgetOptions,
-    locationFeatureOptions,
-    materialFeatureOptions,
   } = useProjectTaxonomyOptions(supabase)
   const stepFromUrl = searchParams.get("step")
   const initialStep = stepFromUrl ? parseInt(stepFromUrl, 10) : 1
-  const [currentStep, setCurrentStep] = useState(initialStep >= 1 && initialStep <= 5 ? initialStep : 1)
+  const [currentStep, setCurrentStep] = useState(initialStep >= 1 && initialStep <= 4 ? initialStep : 1)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [formData, setFormData] = useState<ProjectDetailsFormState>({
     category: "",
     projectType: "",
     buildingType: "",
     projectStyle: "",
-    locationFeatures: [] as string[],
-    materialFeatures: [] as string[],
     size: "",
     budget: "",
     yearBuilt: "",
@@ -233,46 +225,13 @@ export default function NewProjectPage() {
       setProjectId(project.id)
       setLastSavedAt(project.updated_at ? new Date(project.updated_at) : new Date())
 
-      const [
-        { data: categoryRows, error: categoryError },
-        { data: selectionRows, error: selectionError },
-      ] = await Promise.all([
-        supabase
-          .from("project_categories")
-          .select("category_id, is_primary")
-          .eq("project_id", project.id),
-        supabase
-          .from("project_taxonomy_selections")
-          .select("taxonomy_option_id")
-          .eq("project_id", project.id),
-      ])
+      const { data: categoryRows, error: categoryError } = await supabase
+        .from("project_categories")
+        .select("category_id, is_primary")
+        .eq("project_id", project.id)
 
-      if ((categoryError || selectionError) && !cancelled) {
-        setSaveError(categoryError?.message ?? selectionError?.message ?? null)
-      }
-
-      let locationSelections: string[] = []
-      let materialSelections: string[] = []
-
-      const taxonomyIds = (selectionRows ?? []).map((selection) => selection.taxonomy_option_id)
-      if (taxonomyIds.length > 0) {
-        const { data: taxonomyRows, error: taxonomyError } = await supabase
-          .from("project_taxonomy_options")
-          .select("id, taxonomy_type")
-          .in("id", taxonomyIds)
-
-        if (!cancelled && taxonomyRows) {
-          locationSelections = taxonomyRows
-            .filter((row) => row.taxonomy_type === "location_feature")
-            .map((row) => row.id)
-          materialSelections = taxonomyRows
-            .filter((row) => row.taxonomy_type === "material_feature")
-            .map((row) => row.id)
-        }
-
-        if (!cancelled && taxonomyError) {
-          setSaveError(taxonomyError.message)
-        }
+      if (categoryError && !cancelled) {
+        setSaveError(categoryError.message)
       }
 
       const primaryCategoryId = categoryRows?.find((row) => row.is_primary)?.category_id ?? ""
@@ -285,8 +244,6 @@ export default function NewProjectPage() {
         projectType: primaryCategoryId || projectTypeValue,
         buildingType: project.building_type ?? "",
         projectStyle: project.style_preferences?.[0] ?? "",
-        locationFeatures: locationSelections,
-        materialFeatures: materialSelections,
         size: project.project_size ?? "",
         budget: (project.budget_level as ProjectBudgetLevel | null) ?? "",
         yearBuilt: project.project_year ? String(project.project_year) : "",
@@ -540,38 +497,6 @@ export default function NewProjectPage() {
           }
         }
 
-        const taxonomySelectionIds = Array.from(
-          new Set(
-            [
-              ...snapshot.locationFeatures.filter((value) => isUuid(value)),
-              ...snapshot.materialFeatures.filter((value) => isUuid(value)),
-            ],
-          ),
-        )
-
-        const { error: deleteSelectionsError } = await supabase
-          .from("project_taxonomy_selections")
-          .delete()
-          .eq("project_id", nextProjectId)
-
-        if (deleteSelectionsError) {
-          throw deleteSelectionsError
-        }
-        if (taxonomySelectionIds.length) {
-          const selectionRows = taxonomySelectionIds.map((id) => ({
-            project_id: nextProjectId!,
-            taxonomy_option_id: id,
-          }))
-
-          const { error: insertSelectionsError } = await supabase
-            .from("project_taxonomy_selections")
-            .insert(selectionRows)
-
-          if (insertSelectionsError) {
-            throw insertSelectionsError
-          }
-        }
-
         setIsDirty(false)
         setLastSavedAt(new Date())
         return nextProjectId
@@ -723,16 +648,6 @@ export default function NewProjectPage() {
   const isBuildingYearComplete = formData.buildingYear.trim() !== ""
   const isYearBuiltValidForState = isYearBuiltComplete && !yearFieldValidation.errors.yearBuilt
   const isBuildingYearValidForState = isBuildingYearComplete && !yearFieldValidation.errors.buildingYear
-
-  const locationFeaturesData = useMemo(
-    () => mapFeatureOptionsToIconItems(locationFeatureOptions, DEFAULT_LOCATION_ICONS),
-    [locationFeatureOptions],
-  )
-
-  const materialFeaturesData = useMemo(
-    () => mapFeatureOptionsToIconItems(materialFeatureOptions, DEFAULT_MATERIAL_ICONS),
-    [materialFeatureOptions],
-  )
 
   const updateYearFieldErrors = (state: ProjectDetailsFormState, options?: { treatEmptyAsError?: boolean }) => {
     const { errors } = generateYearErrorMessages(state, options)
@@ -1101,18 +1016,6 @@ export default function NewProjectPage() {
     chain.run()
   }
 
-  const handleCheckboxChange = (field: "locationFeatures" | "materialFeatures", value: string) => {
-    const currentValues = formData[field]
-    const newValues = currentValues.includes(value)
-      ? currentValues.filter((v) => v !== value)
-      : [...currentValues, value]
-
-    setFormData({ ...formData, [field]: newValues })
-    if (newValues.length > 0) {
-      clearFieldError(field)
-    }
-  }
-
   const validateStep = (step: number) => {
     const stepFields: string[] = []
     const newErrors: Record<string, string> = {}
@@ -1133,15 +1036,6 @@ export default function NewProjectPage() {
         newErrors.projectStyle = "Select a project style."
       }
     } else if (step === 2) {
-      stepFields.push("locationFeatures", "materialFeatures")
-
-      if (formData.locationFeatures.length === 0) {
-        newErrors.locationFeatures = "Select at least one location feature."
-      }
-      if (formData.materialFeatures.length === 0) {
-        newErrors.materialFeatures = "Select at least one material feature."
-      }
-    } else if (step === 3) {
       stepFields.push("size", "budget", "yearBuilt", "buildingYear")
 
       if (!formData.size) {
@@ -1159,7 +1053,7 @@ export default function NewProjectPage() {
       if (yearErrors.buildingYear) {
         newErrors.buildingYear = yearErrors.buildingYear
       }
-    } else if (step === 4) {
+    } else if (step === 3) {
       stepFields.push("projectTitle", "projectDescription")
 
       const trimmedTitle = formData.projectTitle.trim()
@@ -1175,7 +1069,7 @@ export default function NewProjectPage() {
       } else if (descriptionPlain.length < MIN_DESCRIPTION_LENGTH) {
         newErrors.projectDescription = `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`
       }
-    } else if (step === 5) {
+    } else if (step === 4) {
       stepFields.push("address")
       if (!formData.address.trim()) {
         newErrors.address = "Enter the project address."
@@ -1207,18 +1101,16 @@ export default function NewProjectPage() {
     (currentStep === 1 &&
       (!formData.category || !formData.projectType || !formData.buildingType || !formData.projectStyle)) ||
     (currentStep === 2 &&
-      (formData.locationFeatures.length === 0 || formData.materialFeatures.length === 0)) ||
-    (currentStep === 3 &&
       (!formData.size ||
         !formData.budget ||
         !isYearBuiltValidForState ||
         !isBuildingYearValidForState)) ||
-    (currentStep === 4 &&
+    (currentStep === 3 &&
       (!trimmedTitle ||
         trimmedTitle.length > MAX_TITLE_LENGTH ||
         descriptionPlainTextLength === 0 ||
         descriptionPlainTextLength < MIN_DESCRIPTION_LENGTH)) ||
-    (currentStep === 5 &&
+    (currentStep === 4 &&
       (!formData.address.trim() || formData.latitude === null || formData.longitude === null))
 
   const handleNext = async () => {
@@ -1232,9 +1124,9 @@ export default function NewProjectPage() {
 
     const savedProjectId = await saveDraft()
 
-    if (currentStep < 5) {
+    if (currentStep < 4) {
       if (savedProjectId || projectId) {
-        setCurrentStep((prev) => Math.min(prev + 1, 5))
+        setCurrentStep((prev) => Math.min(prev + 1, 4))
       }
       return
     }
@@ -1317,25 +1209,6 @@ export default function NewProjectPage() {
           {currentStep === 2 && (
             <>
               {/* Main heading */}
-              <h1 className="heading-3 mb-12">
-                Describe the location and materials used
-              </h1>
-
-              <ProjectFeaturesFields
-                locationItems={locationFeaturesData}
-                materialItems={materialFeaturesData}
-                selectedLocationFeatures={formData.locationFeatures}
-                selectedMaterialFeatures={formData.materialFeatures}
-                onToggle={handleCheckboxChange}
-                validationErrors={validationErrors}
-                projectTaxonomyError={projectTaxonomyError}
-              />
-            </>
-          )}
-
-          {currentStep === 3 && (
-            <>
-              {/* Main heading */}
               <h1 className="heading-3 mb-12">Add some details</h1>
 
               <ProjectMetricsFields
@@ -1351,7 +1224,7 @@ export default function NewProjectPage() {
             </>
           )}
 
-          {currentStep === 4 && (
+          {currentStep === 3 && (
             <>
               {/* Main heading */}
               <h1 className="heading-3 mb-12">
@@ -1372,7 +1245,7 @@ export default function NewProjectPage() {
             </>
           )}
 
-          {currentStep === 5 && (
+          {currentStep === 4 && (
             <>
               {/* Main heading */}
               <h1 className="heading-3 mb-12">Where is the project located?</h1>
@@ -1469,7 +1342,7 @@ export default function NewProjectPage() {
           variant="secondary"
           size="lg"
         >
-          {isSaving ? "Saving..." : currentStep === 5 ? "Complete" : "Next"}
+          {isSaving ? "Saving..." : currentStep === 4 ? "Complete" : "Next"}
         </Button>
           </div>
         </div>

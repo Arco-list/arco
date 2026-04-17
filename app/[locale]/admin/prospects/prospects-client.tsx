@@ -13,6 +13,7 @@ import {
   pauseProspectSequence,
   resumeProspectSequence,
   restartProspectSequence,
+  finishProspectSequence,
   getProspectSequence,
   type Prospect,
   type ProspectFunnel,
@@ -700,8 +701,13 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                             className="text-xs cursor-pointer"
                             onClick={async () => {
                               const result = await startProspectSequence(p.id)
-                              if (result.success) { toast.success("Sequence started — email sent"); refreshData() }
-                              else toast.error(result.error ?? "Failed to start sequence")
+                              if (result.success) {
+                                if (result.warning) toast.warning(result.warning)
+                                else toast.success("Sequence started — email sent")
+                                refreshData()
+                              } else {
+                                toast.error(result.error ?? "Failed to start sequence")
+                              }
                             }}
                           >
                             Start sequence
@@ -738,11 +744,29 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                             className="text-xs cursor-pointer"
                             onClick={async () => {
                               const result = await restartProspectSequence(p.id)
-                              if (result.success) { toast.success("Email resent"); refreshData() }
-                              else toast.error(result.error ?? "Failed to restart")
+                              if (result.success) {
+                                if (result.warning) toast.warning(result.warning)
+                                else toast.success("Email resent")
+                                refreshData()
+                              } else {
+                                toast.error(result.error ?? "Failed to restart")
+                              }
                             }}
                           >
                             Restart sequence
+                          </DropdownMenuItem>
+                        )}
+                        {/* Finish — cancels pending drips, marks sequence_status 'finished' */}
+                        {(p.source === "arco" || p.source === "invites") && p.sequence_status !== "finished" && p.sequence_status !== "not_started" && (
+                          <DropdownMenuItem
+                            className="text-xs cursor-pointer"
+                            onClick={async () => {
+                              const result = await finishProspectSequence(p.id)
+                              if (result.success) { toast.success("Sequence finished"); refreshData() }
+                              else toast.error(result.error ?? "Failed to finish sequence")
+                            }}
+                          >
+                            Finish sequence
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
@@ -819,7 +843,9 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   {sequenceSteps.map((step) => {
                     const statusColours: Record<ProspectSequenceStep["status"], { bg: string; text: string; label: string }> = {
                       sent:      { bg: "bg-emerald-50",  text: "text-emerald-700", label: "Sent" },
-                      scheduled: { bg: "bg-blue-50",     text: "text-blue-700",    label: "Scheduled" },
+                      queued:    { bg: "bg-blue-50",     text: "text-blue-700",    label: "Queued" },
+                      paused:    { bg: "bg-amber-50",    text: "text-amber-700",   label: "Paused" },
+                      finished:  { bg: "bg-[#f5f5f4]",   text: "text-[#6b6b68]",   label: "Finished" },
                       cancelled: { bg: "bg-[#f5f5f4]",   text: "text-[#6b6b68]",   label: "Cancelled" },
                       failed:    { bg: "bg-amber-50",    text: "text-amber-700",   label: "Retrying" },
                       missing:   { bg: "bg-[#f5f5f4]",   text: "text-[#a1a1a0]",   label: "Not yet enqueued" },

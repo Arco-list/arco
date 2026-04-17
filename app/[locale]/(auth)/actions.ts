@@ -220,7 +220,7 @@ export const signUpAction = async (
     };
   }
 
-  const { firstName, lastName, email, password, redirectTo: rawRedirectTo, invitedEmail } = parseResult.data;
+  const { firstName, lastName, email, password, redirectTo: rawRedirectTo, invitedEmail, preferredLanguage } = parseResult.data;
   const redirectTo = sanitizeRedirectPath(rawRedirectTo);
   
   // Detect if this is an invited user (must match email exactly and have create-company redirect)
@@ -284,6 +284,9 @@ export const signUpAction = async (
       data: {
         first_name: firstName,
         last_name: lastName,
+        // Forwarded into raw_user_meta_data → handle_new_user trigger
+        // copies it to profiles.preferred_language.
+        ...(preferredLanguage ? { preferred_language: preferredLanguage } : {}),
       },
     };
     
@@ -549,9 +552,9 @@ export const checkUserExistsAction = async (
 };
 
 export const signUpWithOtpAction = async (
-  rawInput: { email: string; firstName: string; lastName?: string; redirectTo?: string }
+  rawInput: { email: string; firstName: string; lastName?: string; redirectTo?: string; preferredLanguage?: 'nl' | 'en' }
 ): Promise<AuthActionResult<{ redirectTo?: string }>> => {
-  const { email, firstName, lastName, redirectTo: rawRedirectTo } = rawInput;
+  const { email, firstName, lastName, redirectTo: rawRedirectTo, preferredLanguage } = rawInput;
 
   if (!email?.trim() || !firstName?.trim()) {
     return { error: { message: 'Email and first name are required.' } };
@@ -584,6 +587,8 @@ export const signUpWithOtpAction = async (
       user_metadata: {
         first_name: firstName.trim(),
         last_name: lastName?.trim() || null,
+        // handle_new_user trigger copies this to profiles.preferred_language
+        ...(preferredLanguage ? { preferred_language: preferredLanguage } : {}),
       },
     });
 

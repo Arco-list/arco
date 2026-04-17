@@ -532,7 +532,7 @@ export async function startProspectSequence(prospectId: string) {
     metadata: { template: "prospect_intro", email: prospect.email },
   })
 
-  return { success: true }
+  return { success: true, warning: result.warning }
 }
 
 /**
@@ -595,7 +595,7 @@ export async function pauseProspectSequence(prospectId: string) {
       const { cancelPendingDripRows } = await import("@/lib/drip-queue")
       await cancelPendingDripRows(supabase, {
         companyId: prospect.company_id,
-        reason: "manual",
+        reason: "paused",
       })
     } catch (err) {
       console.error("[pauseProspectSequence] Failed to cancel pending drip rows", err)
@@ -616,7 +616,18 @@ export async function pauseProspectSequence(prospectId: string) {
 export type ProspectSequenceStep = {
   template: "prospect-intro" | "prospect-followup" | "prospect-final"
   label: string
-  status: "sent" | "scheduled" | "cancelled" | "failed" | "missing"
+  /**
+   *   sent      — email_drip_queue.sent_at is set (cron sent it)
+   *   queued    — pending row: send_at in future, not yet sent/cancelled
+   *   paused    — cancelled with reason 'paused'; resume will re-enqueue
+   *   finished  — cancelled with reason 'status_change' (prospect converted)
+   *               or 'manual' (admin clicked Finish sequence)
+   *   cancelled — cancelled for any other reason (bounce, complaint, etc.)
+   *   failed    — cron hit the retry cap
+   *   missing   — no row in email_drip_queue for this (company, template)
+   *               (only expected on rows scraped before migration 134)
+   */
+  status: "sent" | "queued" | "paused" | "finished" | "cancelled" | "failed" | "missing"
   timestamp: string | null
   cancelledReason: string | null
   attemptCount: number
@@ -692,10 +703,21 @@ export async function getProspectSequence(prospectId: string): Promise<{
       }
     }
     let status: ProspectSequenceStep["status"]
-    if (row.sent_at) status = "sent"
-    else if (row.cancelled_at) status = "cancelled"
-    else if (row.last_error && row.attempt_count >= 1) status = "failed"
-    else status = "scheduled"
+    if (row.sent_at) {
+      status = "sent"
+    } else if (row.cancelled_at) {
+      // Distinguish pause (resumable) from finish (terminal) from other
+      // cancellations (bounce, complaint, max_attempts) so the popup can
+      // render the right badge.
+      const reason = row.cancelled_reason
+      if (reason === "paused") status = "paused"
+      else if (reason === "status_change" || reason === "manual") status = "finished"
+      else status = "cancelled"
+    } else if (row.last_error && row.attempt_count >= 1) {
+      status = "failed"
+    } else {
+      status = "queued"
+    }
     return {
       template,
       label,
@@ -725,13 +747,22 @@ export async function getProspectSequence(prospectId: string): Promise<{
 }
 
 /**
- * Resume a paused prospect sequence
+ * Resume a paused prospect sequence.
+ *
+ * Pause cancelled the pending drip rows with reason 'paused'. Resume
+ * re-enqueues fresh rows for each step that hasn't been sent yet, with
+ * new send_at timestamps (now + 3 business days for the follow-up,
+ * now + 7 for the final). Variables are copied from the last cancelled
+ * row so the email renders identically.
+ *
+ * Steps that were already sent (e.g. sequence was paused AFTER the
+ * follow-up fired) are skipped — we don't re-send.
  */
 export async function resumeProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, sequence_status")
+    .select("id, company_id, email, sequence_status")
     .eq("id", prospectId)
     .single()
 
@@ -740,7 +771,99 @@ export async function resumeProspectSequence(prospectId: string) {
     return { success: false, error: "Sequence is not paused" }
   }
 
+  if (prospect.company_id) {
+    try {
+      const { nextBusinessSlot } = await import("@/lib/date-utils")
+      const stepConfig: Array<{
+        template: "prospect-followup" | "prospect-final"
+        step: number
+        sendAt: string
+      }> = [
+        { template: "prospect-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
+        { template: "prospect-final", step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+      ]
+
+      for (const { template, step, sendAt } of stepConfig) {
+        // Most recent row for (company, template) — carries the variables
+        // payload and tells us whether the step already went out.
+        const { data: lastRow } = await supabase
+          .from("email_drip_queue")
+          .select("variables, sent_at, email")
+          .eq("company_id", prospect.company_id)
+          .eq("template", template)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (lastRow?.sent_at) continue
+
+        const { error: insertError } = await supabase
+          .from("email_drip_queue")
+          .insert({
+            company_id: prospect.company_id,
+            email: lastRow?.email ?? prospect.email,
+            template,
+            sequence: "prospect-outreach",
+            step,
+            variables: (lastRow?.variables as Record<string, unknown> | null) ?? {},
+            send_at: sendAt,
+          } as never)
+
+        if (insertError && (insertError as { code?: string }).code !== "23505") {
+          console.error("[resumeProspectSequence] Failed to re-enqueue", template, insertError)
+        }
+      }
+    } catch (err) {
+      console.error("[resumeProspectSequence] Re-enqueue loop threw", err)
+    }
+  }
+
+  await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "sequence_resumed",
+    metadata: {},
+  })
+  return { success: true }
+}
+
+/**
+ * Finish a prospect sequence manually — admin clicked "Finish sequence"
+ * in the dropdown. Cancels any pending drip rows (reason: manual) and
+ * flips the prospect row to sequence_status 'finished'. Does not reopen
+ * — restart the sequence if you need a new cadence.
+ */
+export async function finishProspectSequence(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, company_id, sequence_status")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (prospect.sequence_status === "finished") {
+    return { success: false, error: "Sequence is already finished" }
+  }
+
+  if (prospect.company_id) {
+    try {
+      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+      await cancelPendingDripRows(supabase, {
+        companyId: prospect.company_id,
+        reason: "manual",
+      })
+    } catch (err) {
+      console.error("[finishProspectSequence] Failed to cancel pending drip rows", err)
+    }
+  }
+
   await supabase.from("prospects").update({ sequence_status: "finished" }).eq("id", prospectId)
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "sequence_finished",
+    metadata: { trigger: "admin_manual" },
+  })
   return { success: true }
 }
 
@@ -787,7 +910,7 @@ export async function restartProspectSequence(prospectId: string) {
     metadata: { template: "prospect_intro", email: prospect.email },
   })
 
-  return { success: true }
+  return { success: true, warning: result.warning }
 }
 
 /**

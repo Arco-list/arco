@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { toast } from "sonner";
 
 import { useLoginModal } from "@/contexts/login-modal-context";
@@ -20,6 +21,12 @@ export function LoginModal() {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = useMemo(() => getBrowserSupabaseClient(), []);
+  const locale = useLocale();
+  // Capture the URL locale at signup time as the user's preferred email
+  // language. middleware.ts pre-resolves this from Accept-Language for
+  // first-visit browsers, so by the time someone reaches signup the URL
+  // already reflects an explicit (cookie/switcher) or detected preference.
+  const preferredLanguage = locale === "nl" || locale === "en" ? locale : undefined;
 
   const [screen, setScreen] = useState<Screen>("email");
   const [email, setEmail] = useState("");
@@ -118,6 +125,7 @@ export function LoginModal() {
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
         redirectTo: currentRedirectTo,
+        preferredLanguage,
       });
       if (result?.error) {
         toast.error("Could not create account", { description: result.error.message });
