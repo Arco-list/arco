@@ -60,6 +60,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/auth/confirm") ||
     pathname.startsWith("/auth/v1") ||
     pathname.match(/\.(ico|svg|png|jpg|jpeg|webp|gif|woff|woff2|ttf|css|js|json|webmanifest)$/)
   ) {

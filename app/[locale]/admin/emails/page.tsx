@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { fetchRecentEmails, fetchTemplateStats, sendTestEmail, type ResendEmail, type TemplateStats } from "./actions"
+import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, sendTestEmail, type ResendEmail, type TemplateStats } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
 import {
@@ -107,8 +107,20 @@ export default function AdminEmailsPage() {
     return () => { cancelled = true }
   }, [previewTemplate, previewLocale])
   const [audienceFilter, setAudienceFilter] = useState<UserAudience | "all-filter">("all-filter")
-  const [timeFilter, setTimeFilter] = useState<string>("all")
+  const [timeFilter, setTimeFilter] = useState<string>("30d")
   const [isPending, startTransition] = useTransition()
+
+  // On mount: load cached stats instantly so the table renders with data
+  // before the slower Resend API fetch completes.
+  const [statsLoaded, setStatsLoaded] = useState(false)
+  useEffect(() => {
+    fetchCachedStats().then(({ stats }) => {
+      if (Object.keys(stats).length > 0) {
+        setTemplateStats(stats)
+        setStatsLoaded(true)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const sinceDate = timeFilter === "all" ? undefined
@@ -116,12 +128,18 @@ export default function AdminEmailsPage() {
       : timeFilter === "30d" ? new Date(Date.now() - 30 * 86400000).toISOString()
       : timeFilter === "90d" ? new Date(Date.now() - 90 * 86400000).toISOString()
       : undefined
-    setIsLoading(true)
+    if (!statsLoaded) setIsLoading(true)
     Promise.all([fetchRecentEmails(), fetchTemplateStats(sinceDate)]).then(([emailResult, statsResult]) => {
       if (emailResult.error) setError(emailResult.error)
       else setEmails(emailResult.emails)
-      if (statsResult.stats) setTemplateStats(statsResult.stats)
+      // Merge fresh stats on top of cached — keeps cached values for
+      // templates the fresh fetch didn't return (e.g. no sends in the
+      // selected time window).
+      if (statsResult.stats && Object.keys(statsResult.stats).length > 0) {
+        setTemplateStats(prev => ({ ...prev, ...statsResult.stats }))
+      }
       setIsLoading(false)
+      setStatsLoaded(true)
     })
   }, [timeFilter])
 

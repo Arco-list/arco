@@ -8,12 +8,12 @@ import { toast } from "sonner";
 
 import { useLoginModal } from "@/contexts/login-modal-context";
 import { useAuth } from "@/contexts/auth-context";
-import { signInWithOtpAction, signInWithPasswordAction, updateProfileNameAction, checkUserExistsAction, signUpWithOtpAction } from "@/app/(auth)/actions";
+import { signInWithOtpAction, signInWithPasswordAction, updateProfileNameAction, checkUserExistsAction, signUpWithOtpAction, resetPasswordAction } from "@/app/(auth)/actions";
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { resolveRedirectPath, sanitizeRedirectPath } from "@/lib/auth-redirect";
 import { trackSignup } from "@/lib/tracking";
 
-type Screen = "email" | "name-capture" | "otp" | "password" | "welcome";
+type Screen = "email" | "name-capture" | "otp" | "password" | "welcome" | "reset-password" | "reset-sent";
 
 export function LoginModal() {
   const { isOpen, redirectTo, closeLoginModal } = useLoginModal();
@@ -39,6 +39,7 @@ export function LoginModal() {
   const [isVerifying, startVerify] = useTransition();
   const [isSigningIn, startSignIn] = useTransition();
   const [isSavingName, startSaveName] = useTransition();
+  const [isResetting, startReset] = useTransition();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Store the pending redirect so the welcome screen can use it
@@ -208,6 +209,18 @@ export function LoginModal() {
     });
   };
 
+  const handleResetSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    startReset(async () => {
+      const result = await resetPasswordAction(email);
+      if (result?.error) {
+        toast.error("Could not send reset email", { description: result.error.message });
+        return;
+      }
+      setScreen("reset-sent");
+    });
+  };
+
   const handleWelcomeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName.trim()) return;
@@ -245,9 +258,11 @@ export function LoginModal() {
     screen === "name-capture" ? "Create your account" :
     screen === "otp" ? "Check your email" :
     screen === "password" ? "Sign in" :
+    screen === "reset-password" ? "Reset password" :
+    screen === "reset-sent" ? "Reset password" :
     "Welcome to Arco";
 
-  const showBack = screen === "name-capture" || screen === "otp" || screen === "password";
+  const showBack = screen === "name-capture" || screen === "otp" || screen === "password" || screen === "reset-password";
 
   return (
     <div className="popup-overlay" onClick={handleClose}>
@@ -269,6 +284,7 @@ export function LoginModal() {
                   if (screen === "name-capture") { setScreen("email"); setIsNewUser(false); setFirstName(""); setLastName(""); }
                   else if (screen === "otp") setScreen(isNewUser ? "name-capture" : "email");
                   else if (screen === "password") setScreen("otp");
+                  else if (screen === "reset-password") setScreen("password");
                 }}
                 style={{ fontSize: 16, display: "flex" }}
               >
@@ -519,14 +535,74 @@ export function LoginModal() {
               </form>
 
               <p style={{ textAlign: "center", marginTop: 16 }}>
-                <Link
-                  href="/reset-password"
-                  onClick={handleClose}
-                  style={{ fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline" }}
+                <button
+                  type="button"
+                  onClick={() => setScreen("reset-password")}
+                  style={{ fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                 >
                   Forgot your password?
-                </Link>
+                </button>
               </p>
+            </div>
+          )}
+
+          {/* ── Screen: Reset password ── */}
+          {screen === "reset-password" && (
+            <div>
+              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
+                We&apos;ll send a reset link to <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{email}</strong>
+              </p>
+
+              <form onSubmit={handleResetSubmit}>
+                <button
+                  type="submit"
+                  disabled={isResetting}
+                  className="btn-primary"
+                  style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
+                >
+                  {isResetting ? "Sending..." : "Send reset link"}
+                </button>
+              </form>
+
+              <p style={{ textAlign: "center", marginTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={() => setScreen("password")}
+                  style={{ fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                >
+                  Back to sign in
+                </button>
+              </p>
+            </div>
+          )}
+
+          {/* ── Screen: Reset link sent ── */}
+          {screen === "reset-sent" && (
+            <div>
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--arco-off-white)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                    <path d="m16 19 2 2 4-4" />
+                  </svg>
+                </div>
+              </div>
+              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 8, textAlign: "center" }}>
+                Check your email
+              </p>
+              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center", fontSize: 13 }}>
+                We sent a reset link to <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{email}</strong>. Click the link in the email to set a new password.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleClose}
+                className="btn-primary"
+                style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
+              >
+                Done
+              </button>
             </div>
           )}
 

@@ -414,9 +414,75 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       // subject-regex count we already computed above.
     }
 
+    // Persist to cache so next page load is instant
+    persistStatsCache(stats).catch(() => {})
+
     return { stats }
   } catch (err) {
     return { stats: {}, error: err instanceof Error ? err.message : 'Failed to fetch stats' }
+  }
+}
+
+/**
+ * Load cached email stats from Supabase. Returns instantly — no Resend
+ * API calls. Used to render the dashboard immediately on page load.
+ */
+export async function fetchCachedStats(): Promise<{ stats: Record<string, TemplateStats>; cachedAt: string | null }> {
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const { data, error } = await supabase
+      .from('email_stats_cache' as any)
+      .select('template_id, sends, delivered, opened, clicked, bounced, cached_at')
+
+    if (error || !data) return { stats: {}, cachedAt: null }
+
+    const stats: Record<string, TemplateStats> = {}
+    let latestCachedAt: string | null = null
+
+    for (const row of data as any[]) {
+      stats[row.template_id] = {
+        sends: row.sends,
+        delivered: row.delivered,
+        opened: row.opened,
+        clicked: row.clicked,
+        bounced: row.bounced,
+      }
+      if (!latestCachedAt || row.cached_at > latestCachedAt) {
+        latestCachedAt = row.cached_at
+      }
+    }
+
+    return { stats, cachedAt: latestCachedAt }
+  } catch {
+    return { stats: {}, cachedAt: null }
+  }
+}
+
+/**
+ * Persist stats to the email_stats_cache table. Called after a fresh
+ * fetch from Resend completes so the next page load can show data
+ * instantly.
+ */
+async function persistStatsCache(stats: Record<string, TemplateStats>): Promise<void> {
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const now = new Date().toISOString()
+    const rows = Object.entries(stats).map(([templateId, s]) => ({
+      template_id: templateId,
+      sends: s.sends,
+      delivered: s.delivered,
+      opened: s.opened,
+      clicked: s.clicked,
+      bounced: s.bounced,
+      cached_at: now,
+    }))
+
+    // Upsert all rows in one call
+    await supabase
+      .from('email_stats_cache' as any)
+      .upsert(rows, { onConflict: 'template_id' })
+  } catch (err) {
+    console.error('[persistStatsCache] Failed:', err)
   }
 }
 
