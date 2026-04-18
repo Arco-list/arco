@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import { Webhook } from "standardwebhooks"
 import { sendTransactionalEmail, resolveRecipientLanguage, type EmailTemplate } from "@/lib/email-service"
 
-// Supabase Auth Hook secret — validates that the request actually comes
-// from Supabase and not an external caller. Set in the Supabase dashboard
-// when configuring the hook, and in your env as AUTH_HOOK_SECRET.
+// Supabase Auth Hook secret — used to verify the webhook signature.
+// Supabase HTTPS hooks use the Standard Webhooks spec: they sign the
+// payload and send webhook-id, webhook-timestamp, webhook-signature headers.
 const HOOK_SECRET = process.env.AUTH_HOOK_SECRET
 
 // Map Supabase's email_action_type to our template names.
@@ -17,16 +18,26 @@ const ACTION_TO_TEMPLATE: Record<string, EmailTemplate> = {
 
 export async function POST(req: NextRequest) {
   try {
-    // Validate the hook secret
+    // Read the raw payload for signature verification
+    const rawBody = await req.text()
+    let body: any
+
+    // Verify webhook signature using Standard Webhooks
     if (HOOK_SECRET) {
-      const authHeader = req.headers.get("authorization")
-      if (authHeader !== `Bearer ${HOOK_SECRET}`) {
-        console.error("[auth-hook] Invalid hook secret")
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      try {
+        const secret = HOOK_SECRET.replace("v1,whsec_", "")
+        const wh = new Webhook(secret)
+        const headers = Object.fromEntries(req.headers)
+        body = wh.verify(rawBody, headers)
+      } catch (err) {
+        console.error("[auth-hook] Webhook signature verification failed:", err)
+        return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 })
       }
+    } else {
+      console.warn("[auth-hook] AUTH_HOOK_SECRET not set — skipping signature verification")
+      body = JSON.parse(rawBody)
     }
 
-    const body = await req.json()
     const { user, email_data } = body
 
     if (!user?.email || !email_data) {

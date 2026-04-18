@@ -48,6 +48,7 @@
     "resend": "^6.9.4",
     "server-only": "latest",
     "sonner": "latest",
+    "standardwebhooks": "^1.0.0",
     "tailwind-merge": "^2.5.5",
     "zod": "3.25.67"
   },
