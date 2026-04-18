@@ -130,6 +130,11 @@ export type EmailTemplate =
   | 'prospect-intro'
   | 'prospect-followup'
   | 'prospect-final'
+  | 'auth-confirm-signup'
+  | 'auth-magic-link'
+  | 'auth-recovery'
+  | 'auth-email-change'
+  | 'auth-invite'
 
 export interface EmailVariables {
   firstname?: string
@@ -1003,6 +1008,162 @@ function renderProspectFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
   }
 }
 
+// ── Auth email templates ─────────────────────────────────────────────────
+// Sent via the Supabase Auth Hook (POST /api/auth/send-email) instead of
+// Supabase's built-in mailer. This gives us full control over copy,
+// design, branding, and translations.
+
+function authButton(label: string, url: string): string {
+  return `<a href="${url}" target="_blank" style="display:inline-block;padding:12px 28px;background:#1c1c1a;color:#ffffff;text-decoration:none;border-radius:4px;font-size:14px;font-weight:500;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">${label}</a>`
+}
+
+function authSmallLink(label: string, url: string): string {
+  return `<p style="margin:20px 0 0;font-size:12px;color:#a1a1a0;line-height:1.5;">
+    ${label}: <a href="${url}" style="color:#016D75;word-break:break-all;">${url}</a>
+  </p>`
+}
+
+function renderAuthConfirmSignup(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Bevestig je e-mailadres',
+        hi: (name?: string) => name ? `Hoi ${name},` : 'Hoi,',
+        body: 'Welkom bij Arco. Klik op de link hieronder om je e-mailadres te bevestigen.',
+        button: 'Bevestig e-mailadres',
+        fallback: 'Of kopieer deze link',
+      }
+    : {
+        subject: 'Confirm your email address',
+        hi: (name?: string) => name ? `Hi ${name},` : 'Hi,',
+        body: 'Welcome to Arco. Click the link below to confirm your email address.',
+        button: 'Confirm email address',
+        fallback: 'Or copy this link',
+      }
+
+  const url = vars.confirmUrl ?? '#'
+  const content = `
+    <p style="margin:0 0 6px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.hi(vars.firstname)}</p>
+    <p style="margin:0 0 24px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.body}</p>
+    ${authButton(copy.button, url)}
+    ${authSmallLink(copy.fallback, url)}
+  `
+  return { subject: copy.subject, html: baseLayout(content, vars._logoBaseUrl, locale) }
+}
+
+function renderAuthMagicLink(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Je inloglink voor Arco',
+        hi: (name?: string) => name ? `Hoi ${name},` : 'Hoi,',
+        body: 'Klik op de link hieronder om in te loggen bij Arco.',
+        button: 'Inloggen',
+        fallback: 'Of kopieer deze link',
+        expiry: 'Deze link is 1 uur geldig.',
+      }
+    : {
+        subject: 'Your Arco login link',
+        hi: (name?: string) => name ? `Hi ${name},` : 'Hi,',
+        body: 'Click the link below to sign in to Arco.',
+        button: 'Sign in',
+        fallback: 'Or copy this link',
+        expiry: 'This link expires in 1 hour.',
+      }
+
+  const url = vars.confirmUrl ?? '#'
+  const content = `
+    <p style="margin:0 0 6px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.hi(vars.firstname)}</p>
+    <p style="margin:0 0 24px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.body}</p>
+    ${authButton(copy.button, url)}
+    ${authSmallLink(copy.fallback, url)}
+    <p style="margin:16px 0 0;font-size:12px;color:#c4c4c2;">${copy.expiry}</p>
+  `
+  return { subject: copy.subject, html: baseLayout(content, vars._logoBaseUrl, locale) }
+}
+
+function renderAuthRecovery(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Wachtwoord herstellen',
+        hi: (name?: string) => name ? `Hoi ${name},` : 'Hoi,',
+        body: 'We hebben een verzoek ontvangen om je wachtwoord te herstellen. Klik op de link hieronder om een nieuw wachtwoord in te stellen.',
+        button: 'Wachtwoord herstellen',
+        fallback: 'Of kopieer deze link',
+        ignore: 'Als je dit verzoek niet hebt gedaan, kun je deze e-mail negeren.',
+      }
+    : {
+        subject: 'Reset your password',
+        hi: (name?: string) => name ? `Hi ${name},` : 'Hi,',
+        body: 'We received a request to reset your password. Click the link below to set a new password.',
+        button: 'Reset password',
+        fallback: 'Or copy this link',
+        ignore: "If you didn't request this, you can safely ignore this email.",
+      }
+
+  const url = vars.confirmUrl ?? '#'
+  const content = `
+    <p style="margin:0 0 6px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.hi(vars.firstname)}</p>
+    <p style="margin:0 0 24px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.body}</p>
+    ${authButton(copy.button, url)}
+    ${authSmallLink(copy.fallback, url)}
+    <p style="margin:16px 0 0;font-size:12px;color:#c4c4c2;">${copy.ignore}</p>
+  `
+  return { subject: copy.subject, html: baseLayout(content, vars._logoBaseUrl, locale) }
+}
+
+function renderAuthEmailChange(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Bevestig je nieuwe e-mailadres',
+        hi: (name?: string) => name ? `Hoi ${name},` : 'Hoi,',
+        body: 'Klik op de link hieronder om je nieuwe e-mailadres te bevestigen.',
+        button: 'Bevestig e-mailadres',
+        fallback: 'Of kopieer deze link',
+      }
+    : {
+        subject: 'Confirm your new email address',
+        hi: (name?: string) => name ? `Hi ${name},` : 'Hi,',
+        body: 'Click the link below to confirm your new email address.',
+        button: 'Confirm email',
+        fallback: 'Or copy this link',
+      }
+
+  const url = vars.confirmUrl ?? '#'
+  const content = `
+    <p style="margin:0 0 6px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.hi(vars.firstname)}</p>
+    <p style="margin:0 0 24px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.body}</p>
+    ${authButton(copy.button, url)}
+    ${authSmallLink(copy.fallback, url)}
+  `
+  return { subject: copy.subject, html: baseLayout(content, vars._logoBaseUrl, locale) }
+}
+
+function renderAuthInvite(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const copy = locale === 'nl'
+    ? {
+        subject: 'Je bent uitgenodigd voor Arco',
+        hi: (name?: string) => name ? `Hoi ${name},` : 'Hoi,',
+        body: 'Je bent uitgenodigd om een account aan te maken op Arco. Klik op de link hieronder om te beginnen.',
+        button: 'Account aanmaken',
+        fallback: 'Of kopieer deze link',
+      }
+    : {
+        subject: "You've been invited to Arco",
+        hi: (name?: string) => name ? `Hi ${name},` : 'Hi,',
+        body: "You've been invited to create an account on Arco. Click the link below to get started.",
+        button: 'Create account',
+        fallback: 'Or copy this link',
+      }
+
+  const url = vars.confirmUrl ?? '#'
+  const content = `
+    <p style="margin:0 0 6px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.hi(vars.firstname)}</p>
+    <p style="margin:0 0 24px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.body}</p>
+    ${authButton(copy.button, url)}
+    ${authSmallLink(copy.fallback, url)}
+  `
+  return { subject: copy.subject, html: baseLayout(content, vars._logoBaseUrl, locale) }
+}
+
 /**
  * Renderer signature. `locale` is optional today (all renderers return
  * English) so we can introduce it incrementally without touching every
@@ -1027,6 +1188,11 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'prospect-intro': renderProspectIntro,
   'prospect-followup': renderProspectFollowup,
   'prospect-final': renderProspectFinal,
+  'auth-confirm-signup': renderAuthConfirmSignup,
+  'auth-magic-link': renderAuthMagicLink,
+  'auth-recovery': renderAuthRecovery,
+  'auth-email-change': renderAuthEmailChange,
+  'auth-invite': renderAuthInvite,
 }
 
 /**
