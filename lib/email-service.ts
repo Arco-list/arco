@@ -1051,30 +1051,40 @@ function renderAuthConfirmSignup(vars: EmailVariables, locale: EmailLocale = 'en
 }
 
 function renderAuthMagicLink(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
+  const code = vars.code
   const copy = locale === 'nl'
     ? {
-        subject: 'Je inloglink voor Arco',
+        subject: code ? `${code} is je Arco-inlogcode` : 'Inloggen bij Arco',
+        heading: 'Inloggen bij Arco',
         hi: (name?: string) => name ? `Hoi ${name},` : 'Hoi,',
-        body: 'Klik op de link hieronder om in te loggen bij Arco.',
+        body: 'Gebruik deze code om in te loggen bij je Arco-account:',
+        or: 'Of klik op de knop hieronder om direct in te loggen:',
         button: 'Inloggen',
-        fallback: 'Of kopieer deze link',
-        expiry: 'Deze link is 1 uur geldig.',
+        expiry: 'Deze code is 10 minuten geldig. Als je dit niet hebt aangevraagd, kun je deze e-mail negeren.',
       }
     : {
-        subject: 'Your Arco login link',
+        subject: code ? `${code} is your Arco sign-in code` : 'Sign in to Arco',
+        heading: 'Sign in to Arco',
         hi: (name?: string) => name ? `Hi ${name},` : 'Hi,',
-        body: 'Click the link below to sign in to Arco.',
+        body: 'Use this code to sign in to your Arco account:',
+        or: 'Or click the button below to sign in directly:',
         button: 'Sign in',
-        fallback: 'Or copy this link',
-        expiry: 'This link expires in 1 hour.',
+        expiry: "This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.",
       }
 
   const url = vars.confirmUrl ?? '#'
+  const codeBlock = code
+    ? `<div style="margin:24px 0;padding:16px;background:#f5f5f4;border-radius:4px;text-align:center;">
+        <span style="font-size:32px;font-weight:500;letter-spacing:0.3em;color:#1c1c1a;font-family:monospace;">${code}</span>
+      </div>`
+    : ''
   const content = `
+    ${heading4(copy.heading)}
     <p style="margin:0 0 6px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.hi(vars.firstname)}</p>
     <p style="margin:0 0 24px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.body}</p>
+    ${codeBlock}
+    <p style="margin:0 0 16px;font-size:15px;font-weight:300;color:#1c1c1a;line-height:1.7;">${copy.or}</p>
     ${authButton(copy.button, url)}
-    ${authSmallLink(copy.fallback, url)}
     <p style="margin:16px 0 0;font-size:12px;color:#c4c4c2;">${copy.expiry}</p>
   `
   return { subject: copy.subject, html: baseLayout(content, vars._logoBaseUrl, locale) }

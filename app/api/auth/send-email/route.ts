@@ -71,10 +71,16 @@ export async function POST(req: NextRequest) {
       ?? user.user_metadata?.name?.split(" ")[0]
       ?? undefined
 
+    // For magic-link and reauthentication flows, Supabase provides an OTP
+    // code in email_data.token that users can type instead of clicking a link.
+    const code = (actionType === "magiclink" || actionType === "reauthentication")
+      ? (email_data.token as string | undefined)
+      : undefined
+
     const result = await sendTransactionalEmail(
       user.email,
       template,
-      { firstname, confirmUrl },
+      { firstname, confirmUrl, code },
       { locale },
     )
 
