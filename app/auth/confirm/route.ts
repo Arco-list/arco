@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({
-      type: type === "recovery" ? "recovery" : type === "email_change" ? "email" : "signup",
+      type: type === "recovery" ? "recovery" : type === "magiclink" ? "magiclink" : type === "email_change" ? "email" : "signup",
       token_hash: tokenHash,
     })
     if (error) {
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     }
   } else if (token && type) {
     const { error } = await supabase.auth.verifyOtp({
-      type: type === "recovery" ? "recovery" : type === "email_change" ? "email" : "signup",
+      type: type === "recovery" ? "recovery" : type === "magiclink" ? "magiclink" : type === "email_change" ? "email" : "signup",
       token_hash: token,
     })
     if (error) {

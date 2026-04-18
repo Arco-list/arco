@@ -93,6 +93,14 @@ const DUTCH_SUBJECT_PATTERNS: RegExp[] = [
   /^Je bent uitgenodigd om lid te worden van /i,
   /is je Arco domein-verificatiecode$/i,
   /heeft een kennismaking aangevraagd op Arco$/i,
+  // Dutch auth subjects
+  /is je Arco-inlogcode/i,
+  /^Inloggen bij Arco$/i,
+  /is je Arco-verificatiecode/i,
+  /^Bevestig je Arco-account/i,
+  /^Wachtwoord herstellen$/i,
+  /^Bevestig je nieuwe e-mailadres$/i,
+  /^Je bent uitgenodigd voor Arco$/i,
   // Dutch prospect subject patterns. English variants ("A stage for X",
   // "X on Arco", "Claim X on Arco") fall through to the EN default,
   // which is correct for them.
@@ -119,12 +127,23 @@ function extractTag(
 }
 
 const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
-  // Auth templates (Supabase-side, English-only)
+  // Auth templates — EN + NL
   [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
+  [/is je Arco-inlogcode/i, "magic-link", "Sign-in Code"],
+  [/^Sign in to Arco$/i, "magic-link", "Sign-in Code"],
+  [/^Inloggen bij Arco$/i, "magic-link", "Sign-in Code"],
   [/is your Arco verification code/i, "signup", "Signup Confirmation"],
+  [/is je Arco-verificatiecode/i, "signup", "Signup Confirmation"],
   [/Confirm your Arco account/i, "signup", "Signup Confirmation"],
+  [/Bevestig je Arco-account/i, "signup", "Signup Confirmation"],
   [/Reset your Arco password/i, "password-reset", "Password Reset"],
-  [/Sign in to Arco/i, "magic-link", "Sign-in Code"],
+  [/^Wachtwoord herstellen$/i, "password-reset", "Password Reset"],
+  // Email change — EN + NL
+  [/^Confirm your new email address$/i, "email-change", "Email Change"],
+  [/^Bevestig je nieuwe e-mailadres$/i, "email-change", "Email Change"],
+  // Auth invite — EN + NL
+  [/^You're invited to Arco$/i, "auth-invite", "Auth Invite"],
+  [/^Je bent uitgenodigd voor Arco$/i, "auth-invite", "Auth Invite"],
   // Domain verification — EN + NL
   [/is your Arco domain verification code/i, "domain-verification", "Domain Verification"],
   [/Verify your domain/i, "domain-verification", "Domain Verification"],
