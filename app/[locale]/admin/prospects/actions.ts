@@ -922,12 +922,30 @@ export async function syncResendEmailStats() {
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY)
-    const { data, error } = await resend.emails.list()
-    if (error || !data?.data) return { synced: 0 }
+
+    // Paginate through Resend emails (up to 500) to avoid missing
+    // follow-up/final emails that fall beyond the default 20-row page.
+    const allEmails: any[] = []
+    let after: string | undefined
+    for (let page = 0; page < 5; page++) {
+      const opts: { limit: number; after?: string } = { limit: 100 }
+      if (after) opts.after = after
+      const { data, error } = await resend.emails.list(opts)
+      if (error || !data) break
+      const rows = (data as any)?.data ?? []
+      if (rows.length === 0) break
+      allEmails.push(...rows)
+      if (!(data as any)?.has_more) break
+      const lastId = rows[rows.length - 1]?.id
+      if (!lastId) break
+      after = lastId
+    }
+
+    if (allEmails.length === 0) return { synced: 0 }
 
     // Count per recipient: how many emails were sent, delivered, opened, clicked
     const recipientStats = new Map<string, { sent: number; delivered: number; opened: number; clicked: number }>()
-    for (const email of data.data as any[]) {
+    for (const email of allEmails) {
       const event = email.last_event ?? "sent"
       const recipients: string[] = Array.isArray(email.to) ? email.to : [email.to]
       for (const to of recipients) {
@@ -945,13 +963,13 @@ export async function syncResendEmailStats() {
     const supabase = createServiceRoleSupabaseClient()
     let synced = 0
 
-    const allEmails = Array.from(recipientStats.keys())
-    if (allEmails.length === 0) return { synced: 0 }
+    const recipientAddresses = Array.from(recipientStats.keys())
+    if (recipientAddresses.length === 0) return { synced: 0 }
 
     const { data: prospects } = await supabase
       .from("prospects")
       .select("id, email, emails_sent, emails_delivered, emails_opened, emails_clicked")
-      .in("email", allEmails)
+      .in("email", recipientAddresses)
 
     for (const prospect of prospects ?? []) {
       const stats = recipientStats.get(prospect.email.toLowerCase().trim())
