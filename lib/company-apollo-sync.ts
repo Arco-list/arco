@@ -51,38 +51,42 @@ export async function syncCompanyToApollo(companyId: string): Promise<void> {
     .single();
 
   if (error || !company) {
-    logger.debug("Company not found for Apollo sync", { companyId });
+    console.error("[apollo-sync] Company not found", { companyId, error: error?.message });
     return;
   }
 
   const status = (company as any).status;
   const stageName = COMPANY_STATUS_TO_APOLLO_STAGE[status];
   if (!stageName) {
-    logger.debug("No Apollo stage mapping for company status", { companyId, status });
+    console.warn("[apollo-sync] No stage mapping for status", { companyId, status });
     return;
   }
 
   // Try to get cached apollo_account_id first
   let apolloAccountId = (company as any).apollo_account_id as string | null;
+  console.log("[apollo-sync] Starting sync", { companyId, status, stageName, cachedApolloId: apolloAccountId });
 
   // If not cached, search Apollo by domain
   if (!apolloAccountId) {
-    const domain = (company as any).domain
-      ?? ((company as any).website ? urlDomain((company as any).website) : null)
+    // Prefer website domain over the domain field (domain field can be stale)
+    const domain = ((company as any).website ? urlDomain((company as any).website) : null)
+      ?? (company as any).domain
       ?? ((company as any).email?.includes("@") ? (company as any).email.split("@")[1] : null);
 
     if (!domain) {
-      logger.debug("No domain available for Apollo account lookup", { companyId });
+      console.warn("[apollo-sync] No domain available", { companyId });
       return;
     }
 
+    console.log("[apollo-sync] Searching Apollo by domain", { companyId, domain });
     apolloAccountId = await findAccountByDomain(domain);
 
     if (!apolloAccountId) {
-      logger.debug("No Apollo account found for domain", { companyId, domain });
+      console.warn("[apollo-sync] No Apollo account found for domain", { companyId, domain });
       return;
     }
 
+    console.log("[apollo-sync] Found Apollo account, caching", { companyId, apolloAccountId });
     // Cache the apollo_account_id
     await supabase
       .from("companies")
@@ -93,14 +97,9 @@ export async function syncCompanyToApollo(companyId: string): Promise<void> {
   // Update the Apollo account stage
   try {
     await updateAccountStageById(apolloAccountId, stageName);
-    logger.info("Synced company status to Apollo account stage", {
-      companyId,
-      apolloAccountId,
-      status,
-      stageName,
-    });
+    console.log("[apollo-sync] Successfully synced", { companyId, apolloAccountId, status, stageName });
   } catch (err) {
-    logger.error("Failed to sync company to Apollo", { companyId, apolloAccountId }, err as Error);
+    console.error("[apollo-sync] Failed to update stage", { companyId, apolloAccountId, error: (err as Error).message });
   }
 }
 

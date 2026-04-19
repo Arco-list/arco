@@ -1083,11 +1083,9 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                     subject="{{first_name}}, {{account.name}} past bij Arco"
                     body={`Beste {{first_name}},
 
-Ik ben Niek, oprichter van Arco. We bouwen een platform waar opdrachtgevers het juiste architectenbureau én het volledige team vinden voor verbouwing of nieuwbouw.
+Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.
 
 Op Arco tonen we gerealiseerde projecten met alle betrokken partijen — architect, aannemer, interieurontwerper — gekoppeld. Geen biedingen, geen reviews, geen zelf-gepubliceerde portfolio's. Alleen uitzonderlijk werk, redactioneel beoordeeld.
-
-We zijn net begonnen en nodigen nu geselecteerde bureaus uit. {{account.name}} past bij het type architectuur dat we op Arco willen tonen.
 
 Wat Arco biedt:
 • Publiceer onbeperkt projecten — volledig gratis, voor altijd
@@ -1171,11 +1169,9 @@ Niek`}
                     subject="{{first_name}}, {{account.name}} is a fit for Arco"
                     body={`Dear {{first_name}},
 
-I'm Niek, founder of Arco. We're building a platform where clients find the right architecture firm and the full team behind every renovation or new build.
+I'm Niek, founder of Arco — a new professional network where leading architects publish their best work and recommend the craftspeople they work with.
 
 On Arco, we showcase completed projects with all contributing parties — architect, builder, interior designer — linked together. No bidding, no reviews, no self-published portfolios. Only exceptional work, editorially reviewed.
-
-We've just launched and are now inviting selected studios. {{account.name}} fits the type of architecture we want to showcase on Arco.
 
 What Arco offers:
 • Publish unlimited projects — completely free, forever
