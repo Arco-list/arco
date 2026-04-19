@@ -57,17 +57,29 @@ export async function POST(req: NextRequest) {
     // endpoint. This handles PKCE, session creation, and cookie setting
     // properly — then redirects to our /auth/callback which exchanges the
     // code for a session and redirects the user to their destination.
+    //
+    // redirect_to for /auth/v1/verify must be an allowed Redirect URL in
+    // Supabase config. We always use /auth/callback (which is allowed) and
+    // pass the final destination as redirect_to query param so our callback
+    // handler knows where to send the user after code exchange.
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-    const redirectTo = email_data.redirect_to || siteUrl
+    const finalDestination = email_data.redirect_to || siteUrl
     const tokenHash = email_data.token_hash as string | undefined
 
-    let confirmUrl = redirectTo
+    // Build the callback URL with the final destination and type for recovery detection
+    const callbackUrl = new URL("/auth/callback", siteUrl)
+    callbackUrl.searchParams.set("redirect_to", finalDestination)
+    if (actionType === "recovery") {
+      callbackUrl.searchParams.set("type", "recovery")
+    }
+
+    let confirmUrl = finalDestination
     if (tokenHash) {
       const verifyParams = new URLSearchParams({
         token: tokenHash,
         type: actionType,
-        redirect_to: redirectTo,
+        redirect_to: callbackUrl.toString(),
       })
       confirmUrl = `${supabaseUrl}/auth/v1/verify?${verifyParams.toString()}`
     }
