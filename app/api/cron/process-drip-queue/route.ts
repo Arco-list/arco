@@ -229,6 +229,25 @@ async function sendOne(
     if (error) {
       logger.error("cron-drip-queue: Failed to mark row sent", { rowId: row.id, supabaseError: error })
     }
+
+    // Increment emails_sent on the prospect row for prospect drip emails
+    if (row.company_id && (row.template === "prospect-followup" || row.template === "prospect-final")) {
+      const { data: prospect } = await supabase
+        .from("prospects")
+        .select("id, emails_sent")
+        .eq("company_id", row.company_id)
+        .maybeSingle()
+      if (prospect) {
+        await supabase
+          .from("prospects")
+          .update({
+            emails_sent: (prospect.emails_sent ?? 0) + 1,
+            last_email_sent_at: new Date().toISOString(),
+          })
+          .eq("id", prospect.id)
+      }
+    }
+
     logger.info("cron-drip-queue: Sent", { template: row.template, email: row.email, messageId: result.messageId })
     return "sent"
   }

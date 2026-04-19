@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
@@ -40,12 +40,24 @@ export function LoginModal() {
   const [isSigningIn, startSignIn] = useTransition();
   const [isSavingName, startSaveName] = useTransition();
   const [isResetting, startReset] = useTransition();
+  const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Store the pending redirect so the welcome screen can use it
   const pendingRedirectRef = useRef<string | undefined>(undefined);
 
   const currentRedirectTo = redirectTo ?? pathname ?? undefined;
+
+  // Resend cooldown timer (60 seconds)
+  const startCooldown = useCallback(() => {
+    setResendCooldown(60);
+  }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
   const handleClose = () => {
     closeLoginModal();
@@ -57,6 +69,7 @@ export function LoginModal() {
       setLastName("");
       setIsNewUser(false);
       setOtp(["", "", "", "", "", ""]);
+      setResendCooldown(0);
       pendingRedirectRef.current = undefined;
     }, 300);
   };
@@ -107,6 +120,7 @@ export function LoginModal() {
           toast.error("Failed to send code", { description: result.error.message });
           return;
         }
+        startCooldown();
         setScreen("otp");
         setTimeout(() => inputRefs.current[0]?.focus(), 100);
       } else {
@@ -132,6 +146,7 @@ export function LoginModal() {
         toast.error("Could not create account", { description: result.error.message });
         return;
       }
+      startCooldown();
       setScreen("otp");
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     });
@@ -183,9 +198,12 @@ export function LoginModal() {
     startSendOtp(async () => {
       const result = await signInWithOtpAction({ email, redirectTo: currentRedirectTo });
       if (result?.error) {
+        // Start cooldown on rate limit errors so user sees the countdown
+        startCooldown();
         toast.error("Failed to resend code", { description: result.error.message });
         return;
       }
+      startCooldown();
       setOtp(["", "", "", "", "", ""]);
       toast.success("Code resent", { description: "Check your inbox for the new code." });
       setTimeout(() => inputRefs.current[0]?.focus(), 50);
@@ -473,14 +491,20 @@ export function LoginModal() {
               </p>
               <p style={{ textAlign: "center", fontSize: 13, color: "var(--arco-mid-grey)", marginTop: 12 }}>
                 Didn&apos;t receive the code?{" "}
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={isSendingOtp}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--arco-black)", textDecoration: "underline", fontSize: 13 }}
-                >
-                  {isSendingOtp ? "Sending..." : "Resend"}
-                </button>
+                {resendCooldown > 0 ? (
+                  <span style={{ fontSize: 13, color: "var(--arco-mid-grey)" }}>
+                    Resend in {resendCooldown}s
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={isSendingOtp}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--arco-black)", textDecoration: "underline", fontSize: 13 }}
+                  >
+                    {isSendingOtp ? "Sending..." : "Resend"}
+                  </button>
+                )}
               </p>
             </div>
           )}

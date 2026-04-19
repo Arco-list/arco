@@ -53,20 +53,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({})
     }
 
-    // Build the confirmation URL from the token_hash.
-    // Supabase provides token_hash for link-based flows. The redirect URL
-    // brings the user back to the app after clicking.
+    // Build the confirmation URL using Supabase's built-in /auth/v1/verify
+    // endpoint. This handles PKCE, session creation, and cookie setting
+    // properly — then redirects to our /auth/callback which exchanges the
+    // code for a session and redirects the user to their destination.
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
     const redirectTo = email_data.redirect_to || siteUrl
     const tokenHash = email_data.token_hash as string | undefined
-    const token = email_data.token as string | undefined
 
     let confirmUrl = redirectTo
     if (tokenHash) {
-      // Supabase's verify endpoint handles the token exchange
-      confirmUrl = `${siteUrl}/auth/confirm?token_hash=${tokenHash}&type=${actionType}&next=${encodeURIComponent(redirectTo)}`
-    } else if (token) {
-      confirmUrl = `${siteUrl}/auth/confirm?token=${token}&type=${actionType}&next=${encodeURIComponent(redirectTo)}`
+      const verifyParams = new URLSearchParams({
+        token: tokenHash,
+        type: actionType,
+        redirect_to: redirectTo,
+      })
+      confirmUrl = `${supabaseUrl}/auth/v1/verify?${verifyParams.toString()}`
     }
 
     // Resolve the recipient's preferred language
