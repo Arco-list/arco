@@ -915,10 +915,27 @@ export async function restartProspectSequence(prospectId: string) {
 
 /**
  * Sync email open/click stats from Resend API to prospects table.
- * Called when the Sales page loads to backfill webhook gaps.
+ * Called in the background when the Sales page loads to backfill
+ * webhook gaps. Throttled to run at most once per hour — the Resend
+ * webhook handles real-time updates, this is just a safety net.
  */
 export async function syncResendEmailStats() {
   if (!process.env.RESEND_API_KEY) return { synced: 0 }
+
+  // Throttle: only sync if last sync was more than 1 hour ago
+  try {
+    const supabaseCheck = createServiceRoleSupabaseClient()
+    const { data: lastSync } = await supabaseCheck
+      .from("email_stats_cache" as any)
+      .select("cached_at")
+      .eq("template_id", "_prospect_sync")
+      .maybeSingle()
+
+    if (lastSync?.cached_at) {
+      const elapsed = Date.now() - new Date(lastSync.cached_at).getTime()
+      if (elapsed < 60 * 60 * 1000) return { synced: 0 }
+    }
+  } catch { /* non-fatal — proceed with sync */ }
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY)
@@ -986,6 +1003,11 @@ export async function syncResendEmailStats() {
         synced++
       }
     }
+
+    // Record sync timestamp so we don't re-sync within the hour
+    await supabase
+      .from("email_stats_cache" as any)
+      .upsert({ template_id: "_prospect_sync", cached_at: new Date().toISOString(), sends: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 }, { onConflict: "template_id" })
 
     return { synced }
   } catch {
