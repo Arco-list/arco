@@ -5598,6 +5598,12 @@ body.no-scroll {
   border-bottom: 1px solid var(--arco-rule);
 }
 
+@media (max-width: 768px) {
+  .discover-chip-strip {
+    top: 116px; /* header 56px + filter bar 60px */
+  }
+}
+
 .discover-chip-strip-inner {
   padding: 10px 0;
   display: flex;

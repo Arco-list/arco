@@ -196,7 +196,18 @@ const ProfessionalFilterContext = createContext<ProfessionalFilterContextValue |
 
 function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) {
   const taxonomy = useProfessionalTaxonomy()
-  const [state, dispatch] = useReducer(filterReducer, INITIAL_STATE)
+  const initialSearchParams = useSearchParams()
+  // Seed keyword from URL so the first render already has it — otherwise the
+  // discover page mounts with empty filters, fetches all results, then
+  // re-fetches once the URL-sync effect populates ?search=.
+  const [state, dispatch] = useReducer(
+    filterReducer,
+    INITIAL_STATE,
+    (initial) => ({
+      ...initial,
+      keyword: initialSearchParams.get("search") ?? initialSearchParams.get("keyword") ?? "",
+    }),
+  )
   const { selectedCategories, selectedServices, selectedCities, keyword, sortBy } = state
 
   // Extract unique cities from location facets
@@ -313,7 +324,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
 
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const searchParams = initialSearchParams
   const initializedRef = useRef(false)
   const lastParsedQueryRef = useRef<string>("")
   const lastSyncedQueryRef = useRef<string>("")

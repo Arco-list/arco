@@ -253,7 +253,15 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined)
 
 function FilterProviderInner({ children }: { children: ReactNode }) {
   const { categories, taxonomyOptions, cities, isLoading: taxonomyLoading, error: taxonomyError, refresh } = useProjectTaxonomy()
-  const [state, dispatch] = useReducer(filterReducer, INITIAL_FILTER_STATE)
+  const initialSearchParams = useSearchParams()
+  // Seed keyword from URL so the first render already has it — otherwise the
+  // discover page mounts with empty filters, fetches all results, then
+  // re-fetches once the URL-sync effect populates ?search=.
+  const [state, dispatch] = useReducer(
+    filterReducer,
+    INITIAL_FILTER_STATE,
+    (initial) => ({ ...initial, keyword: initialSearchParams.get("search") ?? "" }),
+  )
   const {
     selectedTypes,
     selectedStyles,
@@ -363,7 +371,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   // ── URL sync ─────────────────────────────────────────────────────────────────
 
   const [isUrlHydrated, setIsUrlHydrated] = useState(false)
-  const searchParams = useSearchParams()
+  const searchParams = initialSearchParams
   const router = useRouter()
   const pathname = usePathname()
   const initializedRef = useRef(false)
