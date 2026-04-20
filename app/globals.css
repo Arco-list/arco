@@ -6906,6 +6906,27 @@ body.no-scroll {
   background: #333;
   border-color: #333;
 }
+.professionals-map-dismiss {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--arco-black);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+.professionals-map-dismiss:hover {
+  background: #f5f5f3;
+}
 .professionals-map-count {
   position: absolute;
   bottom: 16px;

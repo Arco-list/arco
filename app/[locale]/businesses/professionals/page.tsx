@@ -10,6 +10,7 @@ export interface RecentProfessional {
   slug: string
   service: string
   city: string | null
+  heroPhotoUrl: string | null
   logoUrl: string | null
 }
 
@@ -54,27 +55,27 @@ export default async function ProfessionalsPage({ searchParams }: PageProps) {
   const supabase = await createServerSupabaseClient()
   const locale = await getLocale()
   const { data: recentCompanies } = await supabase
-    .from("companies")
-    .select("id, name, slug, city, logo_url, primary_service:categories!companies_primary_service_id_fkey(name, name_nl, slug)")
-    .eq("status", "listed")
-    .not("logo_url", "is", null)
+    .from("mv_professional_summary")
+    .select("company_id, company_name, company_slug, company_city, cover_photo_url, company_logo, primary_service_name, primary_service_name_nl, primary_specialty_slug")
+    .in("company_status", ["listed", "prospected"])
+    .not("cover_photo_url", "is", null)
     .order("created_at", { ascending: false })
     .limit(8)
 
   const recentProfessionals: RecentProfessional[] = (recentCompanies ?? []).map((c: any) => {
-    const svc = c.primary_service
-    const rawName = svc?.name ?? ""
+    const rawName = c.primary_service_name ?? ""
     const service =
-      (locale === "nl" && svc?.name_nl) ||
-      translateProfessionalService(svc?.slug ?? rawName, locale) ||
+      (locale === "nl" && c.primary_service_name_nl) ||
+      translateProfessionalService(c.primary_specialty_slug ?? rawName, locale) ||
       rawName
     return {
-      id: c.id,
-      name: c.name,
-      slug: c.slug ?? c.id,
+      id: c.company_id,
+      name: c.company_name,
+      slug: c.company_slug ?? c.company_id,
       service,
-      city: c.city,
-      logoUrl: c.logo_url,
+      city: c.company_city,
+      heroPhotoUrl: c.cover_photo_url,
+      logoUrl: c.company_logo,
     }
   })
 

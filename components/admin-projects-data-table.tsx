@@ -531,6 +531,18 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       },
     },
     {
+      id: "linkedCount",
+      header: "Professionals",
+      accessorFn: (row) => row.companies.length,
+      sortingFn: (rowA, rowB) => rowA.original.companies.length - rowB.original.companies.length,
+      cell: ({ row }) => {
+        const count = row.original.companies.length
+        return count > 0
+          ? <span className="arco-table-primary">{count}</span>
+          : <span className="arco-table-secondary">—</span>
+      },
+    },
+    {
       accessorKey: "imageCount",
       header: "Images",
       cell: ({ row }) => {

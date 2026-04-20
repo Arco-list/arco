@@ -443,6 +443,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const locale = useLocale()
 
   const {
+    keyword,
     selectedTypes,
     selectedStyles,
     selectedLocations,
@@ -517,6 +518,9 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
 
   const chips = useMemo<Chip[]>(() => {
     const tags: Chip[] = []
+    if (keyword.trim()) {
+      tags.push({ type: "keyword", value: keyword, label: `"${keyword.trim()}"` })
+    }
     if (selectedSpace) {
       tags.push({ type: "space", value: selectedSpace, label: tSpaces(selectedSpace as any) })
     }
@@ -544,7 +548,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
       tags.push({ type: "projectYear", value: `${min}-${max}`, label: `${min} – ${max}` })
     }
     return tags
-  }, [selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
+  }, [keyword, selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
 
   const totalCount = chips.length
 

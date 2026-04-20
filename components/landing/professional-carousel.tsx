@@ -12,6 +12,7 @@ export interface ProfessionalCarouselCard {
   slug: string
   service: string
   city: string | null
+  heroPhotoUrl: string | null
   logoUrl: string | null
 }
 
@@ -160,11 +161,6 @@ export function ProfessionalCarousel({
 
   if (count === 0) return null
 
-  const getInitials = (name: string) => {
-    const words = name.split(" ")
-    return words.length >= 2 ? words[0][0] + words[1][0] : words[0].substring(0, 2)
-  }
-
   return (
     <section className="pb-[100px] bg-white">
       <div className="wrap">
@@ -179,20 +175,38 @@ export function ProfessionalCarousel({
             <Link
               key={`${pro.id}-${i}`}
               href={`/professionals/${pro.slug}`}
-              className="credit-card shrink-0 min-w-0 carousel-professional-card"
+              className="shrink-0 min-w-0 carousel-project-card no-underline text-inherit"
             >
-              <span className="arco-eyebrow">{pro.service}</span>
-
-              <div className="credit-icon">
-                {pro.logoUrl ? (
-                  <Image src={pro.logoUrl} alt={pro.name} fill className="object-cover" />
-                ) : (
-                  <span className="credit-icon-initials">{getInitials(pro.name)}</span>
-                )}
+              <div className="discover-card-image-wrap" style={{ aspectRatio: "3/2" }}>
+                <div className="discover-card-image-layer">
+                  {pro.heroPhotoUrl && (
+                    <Image src={pro.heroPhotoUrl} alt={pro.name} width={960} height={640} />
+                  )}
+                </div>
               </div>
-
-              <h3 className="arco-label">{pro.name}</h3>
-              <p className="arco-card-subtitle">{pro.city ?? ""}</p>
+              <div className="pro-card-info">
+                {pro.logoUrl ? (
+                  <img
+                    src={pro.logoUrl}
+                    alt=""
+                    className="pro-card-logo"
+                    width={34}
+                    height={34}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="pro-card-logo pro-card-logo-placeholder">
+                    {pro.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <h3 className="discover-card-title">{pro.name}</h3>
+                  <p className="discover-card-sub">
+                    {[pro.service, pro.city].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              </div>
             </Link>
           ))}
         </div>

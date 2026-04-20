@@ -116,6 +116,7 @@ export function ProfessionalsFilterBar() {
   const t = useTranslations("professionals.filters")
 
   const {
+    keyword,
     selectedCategories,
     selectedServices,
     selectedCities,
@@ -190,6 +191,9 @@ export function ProfessionalsFilterBar() {
   // ── Active chip tags ──
   const activeFilterTags = useMemo(() => {
     const tags: Array<{ type: string; value: string; label: string }> = []
+    if (keyword.trim()) {
+      tags.push({ type: "keyword", value: keyword, label: `"${keyword.trim()}"` })
+    }
     selectedCategories.forEach((id) =>
       tags.push({ type: "category", value: id, label: taxonomyLabelMap.get(id) ?? id }),
     )
@@ -200,7 +204,7 @@ export function ProfessionalsFilterBar() {
       tags.push({ type: "city", value: city, label: city }),
     )
     return tags
-  }, [selectedCategories, selectedServices, selectedCities, taxonomyLabelMap])
+  }, [keyword, selectedCategories, selectedServices, selectedCities, taxonomyLabelMap])
 
   const totalCount = activeFilterTags.length
   const serviceFilterCount = selectedCategories.length + selectedServices.length

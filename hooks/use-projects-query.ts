@@ -347,7 +347,17 @@ export function useProjectsQuery({
         query = query.contains("features", filters.features)
       }
       if (filters.keyword) {
-        query = query.textSearch("search_vector", filters.keyword, { type: "websearch", config: "simple" })
+        const pattern = `%${escapeIlikePattern(filters.keyword)}%`
+        query = query.or(
+          [
+            `title.ilike.${pattern}`,
+            `location.ilike.${pattern}`,
+            `description.ilike.${pattern}`,
+            `primary_category.ilike.${pattern}`,
+            `building_type.ilike.${pattern}`,
+            `project_type.ilike.${pattern}`,
+          ].join(",")
+        )
       }
 
       if (filters.buildingTypes.length > 0) {

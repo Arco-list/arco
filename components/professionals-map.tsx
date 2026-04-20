@@ -439,6 +439,13 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
         {t("map_count", { shown: mappable.length, total: professionals.length })}
       </div>
 
+      {/* Dismiss button — top-right */}
+      <button className="professionals-map-dismiss" onClick={onClose} aria-label={t("show_list")}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 3l10 10M13 3L3 13" />
+        </svg>
+      </button>
+
       {/* Show list button — centered at bottom */}
       <button className="professionals-map-close" onClick={onClose} aria-label="Show list">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
