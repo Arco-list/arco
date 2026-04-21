@@ -200,10 +200,27 @@ async function sendOne(
     if (featuredProfessionals) variables.professionals = featuredProfessionals
   }
 
+  // Prospect-series drips: row.email is a snapshot from enqueue time. If the
+  // prospect's email was later corrected (admin edit, Apollo sync), we want
+  // the current address. Homeowner-series untouched — the user_id already
+  // anchors the recipient there.
+  let recipient = row.email
+  if (
+    row.company_id &&
+    (row.template === "prospect-followup" || row.template === "prospect-final")
+  ) {
+    const { data: prospect } = await supabase
+      .from("prospects")
+      .select("email")
+      .eq("company_id", row.company_id)
+      .maybeSingle()
+    if (prospect?.email) recipient = prospect.email
+  }
+
   let result: { success: boolean; messageId?: string; message?: string }
   try {
     result = await sendTransactionalEmail(
-      row.email,
+      recipient,
       row.template as EmailTemplate,
       variables,
       // Resolver reads whichever identifier the drip row carries.
@@ -249,7 +266,7 @@ async function sendOne(
       }
     }
 
-    logger.info("cron-drip-queue: Sent", { template: row.template, email: row.email, messageId: result.messageId })
+    logger.info("cron-drip-queue: Sent", { template: row.template, email: recipient, messageId: result.messageId })
     return "sent"
   }
 
@@ -268,7 +285,7 @@ async function sendOne(
     if (error) {
       logger.error("cron-drip-queue: Failed to mark row cancelled", { rowId: row.id, supabaseError: error })
     }
-    logger.warn("cron-drip-queue: Cancelled (unknown template)", { template: row.template, email: row.email, error: errorMessage })
+    logger.warn("cron-drip-queue: Cancelled (unknown template)", { template: row.template, email: recipient, error: errorMessage })
     return "cancelled"
   }
 
@@ -294,7 +311,7 @@ async function sendOne(
     `cron-drip-queue: ${willCancel ? "Cancelled (max attempts)" : "Failed (will retry)"}`,
     {
       template: row.template,
-      email: row.email,
+      email: recipient,
       attempt: nextAttempt,
       maxAttempts: MAX_ATTEMPTS,
       error: errorMessage,
