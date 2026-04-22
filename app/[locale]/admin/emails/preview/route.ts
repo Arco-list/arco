@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { renderEmailTemplate, type EmailLocale, type EmailTemplate } from '@/lib/email-service'
 
-// The route reads ?locale=en|nl from the URL; without force-dynamic, Next/Vercel
-// has been observed to serve the same prerendered response for every locale value.
+// The route reads ?lang=en|nl from the URL. We use ?lang rather than ?locale
+// because next-intl's middleware consumes any ?locale= query string for its
+// own locale-routing purposes and strips it before the function runs.
 export const dynamic = 'force-dynamic'
 
 const TEST_VARS = {
@@ -42,12 +43,12 @@ export async function GET(request: NextRequest) {
 
   const origin = request.nextUrl.origin
 
-  // Optional ?locale=nl / ?locale=en — lets the admin preview both
-  // languages side by side. Ignored (undefined → renderer default) for
-  // templates that don't branch on locale yet.
-  // Parse via new URL(request.url) — request.nextUrl.searchParams was
-  // observed in production to return null for ?locale=… on this route.
-  const rawLocale = new URL(request.url).searchParams.get('locale')
+  // Optional ?lang=nl / ?lang=en — lets the admin preview both languages
+  // side by side. Ignored (undefined → renderer default) for templates
+  // that don't branch on locale yet. Named `lang` rather than `locale`
+  // because next-intl's middleware strips ?locale= from the request before
+  // the function runs.
+  const rawLocale = request.nextUrl.searchParams.get('lang')
   const locale: EmailLocale | undefined =
     rawLocale === 'nl' || rawLocale === 'en' ? rawLocale : undefined
 
@@ -102,15 +103,7 @@ export async function GET(request: NextRequest) {
   if (!result) return new NextResponse('Template not found', { status: 404 })
 
   if (wantsMeta) {
-    return NextResponse.json({
-      subject: result.subject,
-      _debug: {
-        url: request.url,
-        rawLocale,
-        resolvedLocale: locale ?? null,
-        nextUrlLocale: request.nextUrl.searchParams.get('locale'),
-      },
-    })
+    return NextResponse.json({ subject: result.subject })
   }
 
   return new NextResponse(result.html, {

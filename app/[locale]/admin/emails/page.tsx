@@ -98,7 +98,7 @@ export default function AdminEmailsPage() {
     }
     let cancelled = false
     setPreviewSubject(null)
-    fetch(`/admin/emails/preview?template=${previewTemplate}&locale=${previewLocale}&meta=1`)
+    fetch(`/admin/emails/preview?template=${previewTemplate}&lang=${previewLocale}&meta=1`)
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (!cancelled && json?.subject) setPreviewSubject(json.subject)
@@ -625,7 +625,7 @@ export default function AdminEmailsPage() {
                   </div>
                 </div>
                 <iframe
-                  src={`/admin/emails/preview?template=${previewTemplate}&locale=${previewLocale}`}
+                  src={`/admin/emails/preview?template=${previewTemplate}&lang=${previewLocale}`}
                   style={{ width: "100%", flex: 1, minHeight: 500, border: "none", background: "#f5f5f4" }}
                   title="Email preview"
                 />
