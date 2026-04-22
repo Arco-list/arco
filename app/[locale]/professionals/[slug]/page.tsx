@@ -148,7 +148,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
   return (
     <div className="min-h-screen bg-white">
-      <CompanyStructuredData professional={professional} locale={locale} />
+      <CompanyStructuredData professional={professional} />
       <TrackProfessionalView companyId={professional.company.id} slug={slug} />
       <Header />
 

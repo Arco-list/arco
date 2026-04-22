@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { renderEmailTemplate, type EmailLocale, type EmailTemplate } from '@/lib/email-service'
 
+// The route reads ?locale=en|nl from the URL; without force-dynamic, Next/Vercel
+// has been observed to serve the same prerendered response for every locale value.
+export const dynamic = 'force-dynamic'
+
 const TEST_VARS = {
   firstname: 'Niek',
   project_title: 'Villa Oisterwijk',
@@ -41,7 +45,9 @@ export async function GET(request: NextRequest) {
   // Optional ?locale=nl / ?locale=en — lets the admin preview both
   // languages side by side. Ignored (undefined → renderer default) for
   // templates that don't branch on locale yet.
-  const rawLocale = request.nextUrl.searchParams.get('locale')
+  // Parse via new URL(request.url) — request.nextUrl.searchParams was
+  // observed in production to return null for ?locale=… on this route.
+  const rawLocale = new URL(request.url).searchParams.get('locale')
   const locale: EmailLocale | undefined =
     rawLocale === 'nl' || rawLocale === 'en' ? rawLocale : undefined
 

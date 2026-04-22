@@ -19,8 +19,6 @@ import type { ProfessionalDetail } from "@/lib/professionals/types"
  */
 interface CompanyStructuredDataProps {
   professional: ProfessionalDetail
-  /** Active locale; used to localise the description and inLanguage hint */
-  locale: string
 }
 
 const ISO_LANG_MAP: Record<string, string> = {
@@ -46,7 +44,7 @@ const toIsoLanguage = (value: string): string => {
   return ISO_LANG_MAP[trimmed.toLowerCase()] ?? trimmed
 }
 
-export function CompanyStructuredData({ professional, locale }: CompanyStructuredDataProps) {
+export function CompanyStructuredData({ professional }: CompanyStructuredDataProps) {
   const baseUrl = getSiteUrl()
   const companyUrl = `${baseUrl}/professionals/${professional.slug}`
   const companyId = `${companyUrl}#org`
@@ -130,12 +128,6 @@ export function CompanyStructuredData({ professional, locale }: CompanyStructure
     ...(company.foundedYear ? { foundingDate: String(company.foundedYear) } : {}),
     ...(numberOfEmployees ? { numberOfEmployees } : {}),
     ...(sameAs.length > 0 ? { sameAs } : {}),
-    isPartOf: {
-      "@type": "WebSite",
-      name: "Arco",
-      url: baseUrl,
-    },
-    inLanguage: locale,
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": companyUrl,

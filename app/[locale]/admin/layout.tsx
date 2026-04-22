@@ -63,7 +63,7 @@ const ADMIN_NAV_LINKS: NavItem[] = [
   {
     label: "Growth",
     children: [
-      { href: "/admin/prospects", label: "Sales", icon: ICONS.sales },
+      { href: "/admin/sales", label: "Sales", icon: ICONS.sales },
       { href: "/admin/growth", label: "Growth", icon: ICONS.growth },
       { href: "/admin/emails", label: "Emails", icon: ICONS.emails },
     ],

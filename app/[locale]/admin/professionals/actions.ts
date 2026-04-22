@@ -345,7 +345,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
         // Auto-send prospect email if company has an email
         if (newProspect && company.email) {
           try {
-            const { startProspectSequence } = await import("@/app/admin/prospects/actions")
+            const { startProspectSequence } = await import("@/app/admin/sales/actions")
             await startProspectSequence(newProspect.id)
           } catch (err) {
             console.error("Auto-send prospect email failed:", err)

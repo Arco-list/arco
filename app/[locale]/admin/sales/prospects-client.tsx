@@ -518,8 +518,6 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               <SelectItem value="apollo">Apollo</SelectItem>
               <SelectItem value="arco">Arco</SelectItem>
               <SelectItem value="invites">Invites</SelectItem>
-              <SelectItem value="manual">Manual</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
         </div>
