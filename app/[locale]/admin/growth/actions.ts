@@ -92,7 +92,7 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
     supabase.from("companies").select("id, status, plan_tier, created_at, owner_id"),
-    supabase.from("projects").select("id, status, client_id, created_at, updated_at"),
+    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at"),
     supabase.from("project_professionals").select("id, professional_id, company_id, project_id, created_at, is_project_owner"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
@@ -145,8 +145,9 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   const totalProjects = projects.length
   const publishedProjects = projects.filter((p: any) => p.status === "published").length
   // Unique companies that own at least one project published in the period.
-  // The publish date is approximated by projects.updated_at (no published_at
-  // column). The owner is project_professionals where is_project_owner=true.
+  // Uses projects.published_at (stamped by migration 143's trigger). Rows
+  // with NULL published_at — every project that was already published
+  // before the migration — are intentionally skipped.
   const projectIdToOwner = new Map<string, string>()
   for (const pp of allInvites) {
     if (!pp.is_project_owner || !pp.project_id || !pp.company_id) continue
@@ -157,8 +158,7 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   const publisherCompanyIds = new Set<string>()
   for (const p of allProjects) {
     if (p.status !== "published") continue
-    const ts = p.updated_at ?? p.created_at
-    if (!ts || !inRange(ts, cutoff)) continue
+    if (!p.published_at || !inRange(p.published_at, cutoff)) continue
     const owner = projectIdToOwner.get(p.id)
     if (owner) publisherCompanyIds.add(owner)
   }

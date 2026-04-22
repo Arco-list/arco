@@ -109,7 +109,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
     supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id"),
-    supabase.from("projects").select("id, status, client_id, created_at, updated_at"),
+    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at"),
     supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
@@ -195,17 +195,19 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     }
   }
 
-  // For each published project, derive (companyId, publishedAt) — falling back
-  // to created_at when updated_at is missing.
+  // For each published project, derive (companyId, publishedAt) using the
+  // published_at column stamped by migration 143's trigger. Rows with NULL
+  // published_at — every project that was already published before the
+  // migration — are intentionally skipped so the metric isn't polluted by
+  // an updated_at proxy.
   type PublishedRow = { companyId: string; publishedAt: Date }
   const publishedRows: PublishedRow[] = []
   for (const p of projects) {
     if (p.status !== "published") continue
     const companyId = projectIdToOwnerCompany.get(p.id)
     if (!companyId) continue
-    const ts = p.updated_at ?? p.created_at
-    if (!ts) continue
-    publishedRows.push({ companyId, publishedAt: new Date(ts) })
+    if (!p.published_at) continue
+    publishedRows.push({ companyId, publishedAt: new Date(p.published_at) })
   }
 
   // Publishers per bucket: count distinct company_ids whose published date
