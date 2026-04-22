@@ -108,7 +108,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     savedCompaniesResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
-    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at"),
+    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id"),
     supabase.from("projects").select("id, status, client_id, created_at, updated_at"),
     supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
@@ -138,14 +138,20 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const proSignupDates = makeDates(profiles, (p) => p.user_types?.includes("professional"))
   const proSignups = bucket8(proSignupDates, buckets)
 
-  // Drafts = ALL companies ever created (every company starts as draft)
-  const draftDates = makeDates(companies)
+  // Drafts = companies created in the period that have been claimed by a
+  // real user (owner_id != null). Scraped/unclaimed companies (e.g. invited
+  // contributors that haven't signed up yet) sit outside the funnel and
+  // shouldn't inflate the draft count.
+  const claimedCompanies = (c: any) => c.owner_id != null
+  const draftDates = makeDates(companies, claimedCompanies)
   const drafts = bucket8(draftDates, buckets)
 
-  // Listed = companies that have been listed (status is listed, unlisted, or deactivated — they all passed through listed)
-  // Use updated_at as the "when they became listed" timestamp
-  const listedStatuses = ["listed", "unlisted", "deactivated"]
-  const activeDates = makeDatesByUpdated(companies, (c) => listedStatuses.includes(c.status))
+  // Listed = claimed companies whose current status is exactly 'listed'.
+  // Bucketed by updated_at as a proxy for the listing date. The previous
+  // `listedStatuses` set lumped 'unlisted' in (assuming "they all passed
+  // through listed"), but 'unlisted' is overloaded — it also covers scraped
+  // companies that never reached listed.
+  const activeDates = makeDatesByUpdated(companies, (c) => c.status === "listed" && claimedCompanies(c))
   const actives = bucket8(activeDates, buckets)
 
   // Current totals and bucketed data for supporting metrics
@@ -245,17 +251,94 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   }
   const projectsPerPublisherSeries = bucketProjectsPerPublisher()
 
-  const inviteDates = makeDates(invites, (i) => !i.is_project_owner)
-  const inviters = bucket8(inviteDates, buckets)
-
-  // Invites per published project
+  // Inviters: unique project-owner companies whose projects received any
+  // non-owner project_professionals row created in the bucket window. The
+  // previous implementation bucketed invite events, so a single project that
+  // invited 3 pros looked like 3 inviters.
   const nonOwnerInvites = invites.filter((i: any) => !i.is_project_owner)
-  const publishedProjectIds = new Set(projects.filter((p: any) => p.status === "published").map((p: any) => p.id))
-  const invitesPerProject = publishedProjectIds.size > 0 ? Math.round((nonOwnerInvites.length / publishedProjectIds.size) * 10) / 10 : 0
+  function bucketUniqueInviters(): number[] {
+    return buckets.starts.map((_, i) => {
+      const owners = new Set<string>()
+      for (const pp of nonOwnerInvites) {
+        if (!pp.created_at) continue
+        const d = new Date(pp.created_at)
+        if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
+        const owner = projectIdToOwnerCompany.get(pp.project_id)
+        if (owner) owners.add(owner)
+      }
+      return owners.size
+    })
+  }
+  const invitersBucketed = bucketUniqueInviters()
+  const inviters = { datapoints: invitersBucketed, labels: [] as string[] }
 
-  // Invited companies that are not claimed (company exists but status is draft/unlisted or no owner)
-  const invitedCompanyIds = new Set(nonOwnerInvites.map((i: any) => i.company_id).filter(Boolean))
-  const unclaimedInvitedCompanies = companies.filter((c: any) => invitedCompanyIds.has(c.id) && c.status === "draft").length
+  // Total unique inviters across the whole window
+  const totalInvitersInWindow = (() => {
+    const owners = new Set<string>()
+    for (const pp of nonOwnerInvites) {
+      const owner = projectIdToOwnerCompany.get(pp.project_id)
+      if (owner) owners.add(owner)
+    }
+    return owners.size
+  })()
+
+  // Period-scope the invites for the supporting metrics — `invites` (and
+  // therefore `nonOwnerInvites`) is the unfiltered all-time array so the
+  // per-project map above could see owners correctly. Drop to the window
+  // for the in-period averages and totals.
+  const nonOwnerInvitesInPeriod = nonOwnerInvites.filter(
+    (pp: any) => pp.created_at && new Date(pp.created_at) >= from,
+  )
+
+  // Invites per published project — only count published projects that
+  // actually received at least one invite in the period, so the average
+  // reflects "how many pros does an inviting project end up with" rather
+  // than diluting across non-inviting projects.
+  const publishedProjectIds = new Set(projects.filter((p: any) => p.status === "published").map((p: any) => p.id))
+  const invitesByProject = new Map<string, number>()
+  for (const pp of nonOwnerInvitesInPeriod) {
+    if (!publishedProjectIds.has(pp.project_id)) continue
+    invitesByProject.set(pp.project_id, (invitesByProject.get(pp.project_id) ?? 0) + 1)
+  }
+  const projectsWithInvites = invitesByProject.size
+  const totalInvitesOnPublished = Array.from(invitesByProject.values()).reduce((a, b) => a + b, 0)
+  const invitesPerProject = projectsWithInvites > 0
+    ? Math.round((totalInvitesOnPublished / projectsWithInvites) * 10) / 10
+    : 0
+
+  // Sparkline: invites/project per bucket window — same denominator rule
+  // (only inviting projects in that bucket count).
+  function bucketInvitesPerProject(): number[] {
+    return buckets.starts.map((_, i) => {
+      const byProject = new Map<string, number>()
+      for (const pp of nonOwnerInvitesInPeriod) {
+        if (!publishedProjectIds.has(pp.project_id)) continue
+        const d = new Date(pp.created_at)
+        if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
+        byProject.set(pp.project_id, (byProject.get(pp.project_id) ?? 0) + 1)
+      }
+      const projs = byProject.size
+      const total = Array.from(byProject.values()).reduce((a, b) => a + b, 0)
+      return projs > 0 ? Math.round((total / projs) * 10) / 10 : 0
+    })
+  }
+  const invitesPerProjectSeries = bucketInvitesPerProject()
+
+  // Total invited: count of invitations sent in the period.
+  const totalInvited = nonOwnerInvitesInPeriod.length
+
+  // Sparkline: total invited per bucket window.
+  function bucketTotalInvited(): number[] {
+    return buckets.starts.map((_, i) => {
+      let count = 0
+      for (const pp of nonOwnerInvitesInPeriod) {
+        const d = new Date(pp.created_at)
+        if (d >= buckets.starts[i] && d < buckets.ends[i]) count++
+      }
+      return count
+    })
+  }
+  const totalInvitedSeries = bucketTotalInvited()
 
   const paidTiers = ["pro", "premium", "enterprise"]
   const subscribedDates = makeDates(companies, (c) => paidTiers.includes(c.plan_tier))
@@ -351,10 +434,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     },
     {
       key: "inviters", label: "Inviters", definition: "Unique companies that invited one or more professionals on a project", source: "supabase" as MetricSource, driver: "retention",
-      total: inviteDates.length, ...inviters,
+      total: totalInvitersInWindow, ...inviters,
       subs: [
-        { key: "invites_per_project", label: "Invites/project", definition: "Professionals invited per published project", total: invitesPerProject, datapoints: empty8 },
-        { key: "total_invited_unclaimed", label: "Total invited", definition: "Total invited companies that are not claimed", total: unclaimedInvitedCompanies, datapoints: empty8 },
+        { key: "invites_per_project", label: "Invites/project", definition: "Avg. professionals invited per inviting project", total: invitesPerProject, datapoints: invitesPerProjectSeries },
+        { key: "total_invited", label: "Total invited", definition: "Total invitations sent in the period", total: totalInvited, datapoints: totalInvitedSeries },
       ],
     },
     {

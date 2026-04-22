@@ -91,9 +91,9 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     professionalsResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
-    supabase.from("companies").select("id, status, plan_tier, created_at"),
-    supabase.from("projects").select("id, status, client_id, created_at"),
-    supabase.from("project_professionals").select("id, professional_id, company_id, project_id, created_at"),
+    supabase.from("companies").select("id, status, plan_tier, created_at, owner_id"),
+    supabase.from("projects").select("id, status, client_id, created_at, updated_at"),
+    supabase.from("project_professionals").select("id, professional_id, company_id, project_id, created_at, is_project_owner"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
     supabase.from("professionals").select("user_id, company_id"),
@@ -132,19 +132,36 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   const professionalUsers = professionalProfiles.length
   const clientUsers = clientProfiles.length
   const totalCompanies = allCompanies.length
-  // Drafts = all companies ever created in the timeframe (every company starts as draft)
-  const draftCompanies = companies.length
-  // Listed = companies that have been listed (current status is listed, unlisted, or deactivated)
-  const listedStatuses = ["listed", "unlisted", "deactivated"]
-  const listedCompanies = allCompanies.filter((c: any) => listedStatuses.includes(c.status)).length
+  // Drafts = claimed companies created in the timeframe. Scraped/unclaimed
+  // companies (owner_id null) sit outside the funnel.
+  const claimedCompany = (c: any) => c.owner_id != null
+  const draftCompanies = companies.filter(claimedCompany).length
+  // Listed = claimed companies whose current status is exactly 'listed'.
+  // Earlier code lumped 'unlisted' / 'deactivated' in on the assumption that
+  // they "all passed through listed", but 'unlisted' also covers scraped
+  // companies that never reached listed.
+  const listedCompanies = allCompanies.filter((c: any) => c.status === "listed" && claimedCompany(c)).length
   const unlistedCompanies = allCompanies.filter((c: any) => c.status === "unlisted").length
   const totalProjects = projects.length
   const publishedProjects = projects.filter((p: any) => p.status === "published").length
-  // Unique companies with at least one published project
-  const publishedProjectIds = new Set(allProjects.filter((p: any) => p.status === "published").map((p: any) => p.id))
-  const publisherCompanyIds = new Set(
-    allInvites.filter((i: any) => i.company_id && publishedProjectIds.has(i.project_id)).map((i: any) => i.company_id)
-  )
+  // Unique companies that own at least one project published in the period.
+  // The publish date is approximated by projects.updated_at (no published_at
+  // column). The owner is project_professionals where is_project_owner=true.
+  const projectIdToOwner = new Map<string, string>()
+  for (const pp of allInvites) {
+    if (!pp.is_project_owner || !pp.project_id || !pp.company_id) continue
+    if (!projectIdToOwner.has(pp.project_id)) {
+      projectIdToOwner.set(pp.project_id, pp.company_id)
+    }
+  }
+  const publisherCompanyIds = new Set<string>()
+  for (const p of allProjects) {
+    if (p.status !== "published") continue
+    const ts = p.updated_at ?? p.created_at
+    if (!ts || !inRange(ts, cutoff)) continue
+    const owner = projectIdToOwner.get(p.id)
+    if (owner) publisherCompanyIds.add(owner)
+  }
   const publisherCompanies = publisherCompanyIds.size
   const paidTiers = ["pro", "premium", "enterprise"]
   const paidCompanies = companies.filter((c: any) => paidTiers.includes(c.plan_tier)).length
@@ -232,21 +249,16 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     companiesCreated: totalCompanies,
     projectsStarted: totalProjects,
     projectsPublished: publishedProjects,
-    professionalsInvited: invites.length,
+    professionalsInvited: invites.filter((i: any) => !i.is_project_owner).length,
     inviterCompanies: (() => {
-      // Companies that have project_professionals entries where they invited others
-      // A company is an "inviter" if it owns a project that has other invited professionals
-      const ownerPPs = allInvites.filter((i: any) => i.company_id)
-      // Group by project_id to find projects with multiple companies
-      const projectCompanies = new Map<string, Set<string>>()
-      for (const pp of ownerPPs) {
-        if (!projectCompanies.has(pp.project_id)) projectCompanies.set(pp.project_id, new Set())
-        projectCompanies.get(pp.project_id)!.add(pp.company_id)
-      }
-      // Inviter = company that is on a project with other companies invited
+      // An inviter is the project-owner company of a project that received at
+      // least one non-owner project_professionals row created in the period.
+      // (`invites` is already filtered by created_at within the timeframe.)
       const inviterIds = new Set<string>()
-      for (const [, companies] of projectCompanies) {
-        if (companies.size > 1) companies.forEach((id) => inviterIds.add(id))
+      for (const pp of invites) {
+        if (pp.is_project_owner) continue
+        const owner = projectIdToOwner.get(pp.project_id)
+        if (owner) inviterIds.add(owner)
       }
       return inviterIds.size
     })(),
