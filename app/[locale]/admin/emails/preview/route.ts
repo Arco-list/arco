@@ -102,7 +102,15 @@ export async function GET(request: NextRequest) {
   if (!result) return new NextResponse('Template not found', { status: 404 })
 
   if (wantsMeta) {
-    return NextResponse.json({ subject: result.subject })
+    return NextResponse.json({
+      subject: result.subject,
+      _debug: {
+        url: request.url,
+        rawLocale,
+        resolvedLocale: locale ?? null,
+        nextUrlLocale: request.nextUrl.searchParams.get('locale'),
+      },
+    })
   }
 
   return new NextResponse(result.html, {
