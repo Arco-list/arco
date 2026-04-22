@@ -516,6 +516,14 @@ export async function sendTestEmail(template: string, toEmail: string): Promise<
     hero_image_url: 'https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/04-min.jpg',
     // Visual field used by professional-invite + team-invite
     company_logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-assets/0b3b44d9-92aa-40e2-94e4-972038f8be50/logo/1774966489783-mvv.jpeg',
+    // Inviter fields used by professional-invite + new-professional-* so
+    // the test send renders the inviter badge identically to the preview.
+    // Distinct from the recipient (Marco) so the email visually shows
+    // two parties: inviter "Arco Test" → recipient "Marco van Veldhuizen".
+    inviter_company_name: 'Arco Test',
+    inviter_logo_url: null,
+    inviter_subtitle: 'Architect · Amsterdam',
+    inviter_page_url: 'https://www.arcolist.com/professionals',
   }
 
   // For templates that render live featured projects/professionals, pull

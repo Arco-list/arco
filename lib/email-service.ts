@@ -130,6 +130,9 @@ export type EmailTemplate =
   | 'prospect-intro'
   | 'prospect-followup'
   | 'prospect-final'
+  | 'new-professional-invite'
+  | 'new-professional-followup'
+  | 'new-professional-final'
   | 'auth-confirm-signup'
   | 'auth-magic-link'
   | 'auth-recovery'
@@ -371,6 +374,21 @@ function companyCard(opts: {
   </a>`
 }
 
+/** Compact inviter row shown above the project card in invite emails.
+ *  Icon + name (+ optional subtitle, e.g. "Architect · Amsterdam"). */
+function inviterBadge(opts: { name: string; logoUrl?: string | null; subtitle?: string | null }): string {
+  const { name, logoUrl, subtitle } = opts
+  return `<table cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>
+    <td style="vertical-align:middle;padding-right:10px;">
+      ${companyIcon(name, logoUrl, 32)}
+    </td>
+    <td style="vertical-align:middle;">
+      <p style="margin:0;font-size:14px;font-weight:400;color:#1c1c1a;line-height:1.3;">${name}</p>
+      ${subtitle ? `<p style="margin:2px 0 0;font-size:12px;font-weight:300;color:#a1a1a0;line-height:1.3;">${subtitle}</p>` : ''}
+    </td>
+  </tr></table>`
+}
+
 function projectCard(vars: EmailVariables): string {
   const title = vars.project_title || vars.project_name || ''
   const subtitle = [vars.project_type, vars.project_location].filter(Boolean).join(' · ')
@@ -400,7 +418,7 @@ function renderProjectLive(vars: EmailVariables, locale: EmailLocale = 'en'): { 
         h1: `${projectName} is live`,
         hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
         intro: 'Goed nieuws — je project is gepubliceerd en zichtbaar op Arco.',
-        credits: 'Je gecrediteerde professionals zijn nu zichtbaar op de projectpagina.',
+        credits: 'Je vermelde professionals zijn uitgenodigd. Ze verschijnen live op de projectpagina zodra ze de uitnodiging hebben geaccepteerd en een bedrijfsprofiel hebben aangemaakt.',
         button: 'Bekijk project',
       }
     : {
@@ -408,7 +426,7 @@ function renderProjectLive(vars: EmailVariables, locale: EmailLocale = 'en'): { 
         h1: `${projectName} is live`,
         hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
         intro: 'Great news — your project is now published and visible on Arco.',
-        credits: 'Your credited professionals will now be visible on the project page.',
+        credits: 'Your credited professionals have been invited. They appear live on the project page once they accept the invitation and create a company profile.',
         button: 'View project',
       }
   return {
@@ -464,29 +482,21 @@ function renderProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'e
   const projectName = vars.project_title || vars.project_name || projectFallback
   const ownerLabel = vars.company_name || vars.project_owner || ownerFallback
   const projectLink = vars.project_link
-  // Inviting-company badge: small icon + name on a single line, above the
-  // project card. Only renders if we know the company name.
-  const inviterBadge = vars.company_name
-    ? `<table cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>
-        <td style="vertical-align:middle;padding-right:10px;">
-          ${companyIcon(vars.company_name, vars.company_logo_url, 32)}
-        </td>
-        <td style="vertical-align:middle;">
-          <p style="margin:0;font-size:14px;font-weight:400;color:#1c1c1a;line-height:1.3;">${vars.company_name}</p>
-        </td>
-      </tr></table>`
+  // Inviter row above the project card: icon + name + (service · city) subtitle.
+  const inviter = vars.company_name
+    ? inviterBadge({ name: vars.company_name, logoUrl: vars.company_logo_url, subtitle: vars.company_subtitle ?? null })
     : ''
   const copy = locale === 'nl'
     ? {
-        subject: `${ownerLabel} heeft je gecrediteerd op ${projectName}`,
-        h1: 'Je bent gecrediteerd',
+        subject: `${ownerLabel} heeft je vermeld op ${projectName}`,
+        h1: `Je bent vermeld door ${ownerLabel}`,
         intro: `${ownerLabel} heeft je bedrijf toegevoegd aan een project op Arco.`,
         accept: 'Accepteer de uitnodiging om dit project te tonen op je bedrijfspagina.',
         button: 'Bekijk uitnodiging',
       }
     : {
         subject: `${ownerLabel} credited you on ${projectName}`,
-        h1: "You've been credited",
+        h1: `You've been credited by ${ownerLabel}`,
         intro: `${ownerLabel} added your company to a project on Arco.`,
         accept: 'Accept the invitation to showcase this project on your company page.',
         button: 'View invitation',
@@ -495,7 +505,7 @@ function renderProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'e
     subject: copy.subject,
     html: lb(vars, `
       ${heading(copy.h1)}
-      ${inviterBadge}
+      ${inviter}
       ${body(copy.intro)}
       ${projectLink ? linkedProjectCard(vars, projectLink) : projectCard(vars)}
       ${body(copy.accept)}
@@ -1008,6 +1018,144 @@ function renderProspectFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
   }
 }
 
+// ─── New Professional Invite Series ──────────────────────────────────────
+//
+// Three-email drip for invites to unclaimed companies — fires when an
+// existing project owner credits a scraped/never-signed-up company on a
+// published project. Mirrors the prospect outreach series structure:
+// intro fires immediately via Resend, followup + final get enqueued in
+// email_drip_queue for the cron to send. Cancellation is handled by the
+// same migration-134 trigger that stops prospect drips at signup.
+//
+// Copy here is placeholder — to be rewritten before launch. Variables
+// expected: company_name, project_title/project_name, project_image,
+// project_type, project_location, project_link, claim_url,
+// inviter_company_name, inviter_logo_url.
+
+function renderNewProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const projectName = vars.project_title || vars.project_name || (locale === 'nl' ? 'een project' : 'a project')
+  const inviterName = vars.inviter_company_name || vars.project_owner || (locale === 'nl' ? 'Een architect' : 'An architect')
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+  const inviter = vars.inviter_company_name
+    ? inviterBadge({
+        name: vars.inviter_company_name,
+        logoUrl: vars.inviter_logo_url,
+        subtitle: vars.inviter_subtitle ?? null,
+      })
+    : ''
+
+  const copy = locale === 'en'
+    ? {
+        subject: `${inviterName} credited you on ${projectName}`,
+        h1: `${inviterName} credited you on ${projectName}`,
+        belowBadge: `${inviterName} added your company to ${projectName} on Arco - a curated platform where architects publish their work and credit the professionals they collaborate with.`,
+        button: `Claim ${companyName}`,
+        afterButton: `Claim your page on Arco to manage how ${companyName} appears, manage your projects, and become discoverable to clients.`,
+      }
+    : {
+        subject: `${inviterName} heeft je vermeld op ${projectName}`,
+        h1: `${inviterName} heeft je vermeld op ${projectName}`,
+        belowBadge: `${inviterName} heeft je bedrijf toegevoegd aan ${projectName} op Arco - een curated platform waar architecten hun werk publiceren en de professionals waarmee ze samenwerken crediteren.`,
+        button: `Claim ${companyName}`,
+        afterButton: `Claim je pagina op Arco om te bepalen hoe ${companyName} wordt getoond, je projecten te beheren en zichtbaar te worden voor opdrachtgevers.`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${inviter}
+      ${body(copy.belowBadge)}
+      ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.afterButton)}
+    `, locale),
+  }
+}
+
+function renderNewProfessionalFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const inviterName = vars.inviter_company_name || vars.project_owner || (locale === 'nl' ? 'Een architect' : 'An architect')
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+  const inviter = vars.inviter_company_name
+    ? inviterBadge({
+        name: vars.inviter_company_name,
+        logoUrl: vars.inviter_logo_url,
+        subtitle: vars.inviter_subtitle ?? null,
+      })
+    : ''
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Claim ${companyName}`,
+        h1: `${inviterName} credited you on Arco`,
+        belowBadge: `A few days ago we let you know that ${companyName} was credited by ${inviterName}.`,
+        afterCard: `The project is live on Arco and your company page is ready to be claimed.`,
+        button: `Claim ${companyName}`,
+      }
+    : {
+        subject: `Claim ${companyName}`,
+        h1: `${inviterName} heeft je vermeld op Arco`,
+        belowBadge: `Een paar dagen geleden lieten we je weten dat ${companyName} is vermeld door ${inviterName}.`,
+        afterCard: `Het project staat live op Arco en je bedrijfspagina is klaar om geclaimd te worden.`,
+        button: `Claim ${companyName}`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${inviter}
+      ${body(copy.belowBadge)}
+      ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
+      ${body(copy.afterCard)}
+      ${button(copy.button, claimUrl)}
+    `, locale),
+  }
+}
+
+function renderNewProfessionalFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/businesses/professionals'
+  const inviter = vars.inviter_company_name
+    ? inviterBadge({
+        name: vars.inviter_company_name,
+        logoUrl: vars.inviter_logo_url,
+        subtitle: vars.inviter_subtitle ?? null,
+      })
+    : ''
+
+  const inviterName = vars.inviter_company_name || vars.project_owner || (locale === 'nl' ? 'de architect' : 'the architect')
+  const copy = locale === 'en'
+    ? {
+        subject: `Last reminder: claim ${companyName} on Arco`,
+        h1: `Last reminder — ${inviterName} credited you on Arco`,
+        belowBadge: `This is the last message about your page on Arco. ${companyName} has been credited on a project.`,
+        valueProp: `Claim your page so it is visible under your control. One click, two minutes.`,
+        button: `Claim ${companyName}`,
+      }
+    : {
+        subject: `Laatste herinnering: claim ${companyName} op Arco`,
+        h1: `Laatste herinnering — ${inviterName} heeft je vermeld op Arco`,
+        belowBadge: `Dit is het laatste bericht over je pagina op Arco. ${companyName} is gecrediteerd op een project.`,
+        valueProp: `Claim je pagina zodat het zichtbaar is onder jouw beheer. Eén klik, twee minuten.`,
+        button: `Claim ${companyName}`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${inviter}
+      ${body(copy.belowBadge)}
+      ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
+      ${body(copy.valueProp)}
+      ${button(copy.button, claimUrl)}
+    `, locale),
+  }
+}
+
 // ── Auth email templates ─────────────────────────────────────────────────
 // Sent via the Supabase Auth Hook (POST /api/auth/send-email) instead of
 // Supabase's built-in mailer. Uses the same heading/body/button helpers
@@ -1199,6 +1347,9 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'prospect-intro': renderProspectIntro,
   'prospect-followup': renderProspectFollowup,
   'prospect-final': renderProspectFinal,
+  'new-professional-invite': renderNewProfessionalInvite,
+  'new-professional-followup': renderNewProfessionalFollowup,
+  'new-professional-final': renderNewProfessionalFinal,
   'auth-confirm-signup': renderAuthConfirmSignup,
   'auth-magic-link': renderAuthMagicLink,
   'auth-recovery': renderAuthRecovery,
@@ -1275,9 +1426,15 @@ export async function sendTransactionalEmail(
 
   const { subject, html } = renderer(dataVariables || {}, locale)
 
+  // Prospect outreach is the only person-to-person series — it comes from
+  // Niek's mailbox and replies route to him. Everything else (including the
+  // new-professional invite series, which is automated and brand-voiced) is
+  // sent from the generic Arco address.
+  const isPersonalSeries = template.startsWith('prospect-')
+
   try {
     const { data, error } = await getResend().emails.send({
-      from: template.startsWith('prospect-') ? 'Niek van Leeuwen <niek@arcolist.com>' : FROM_EMAIL,
+      from: isPersonalSeries ? 'Niek van Leeuwen <niek@arcolist.com>' : FROM_EMAIL,
       to: email,
       subject,
       html,
@@ -1289,7 +1446,7 @@ export async function sendTransactionalEmail(
         { name: 'template', value: template },
         { name: 'locale', value: locale },
       ],
-      ...(template.startsWith('prospect-') ? { reply_to: 'niek@arcolist.com' } : {}),
+      ...(isPersonalSeries ? { reply_to: 'niek@arcolist.com' } : {}),
     })
 
     if (error) {

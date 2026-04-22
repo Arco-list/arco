@@ -1,12 +1,7 @@
 "use server"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { sendProfessionalInviteEmail, checkUserAndGenerateInviteUrl } from "@/lib/email-service"
-
-async function isProjectPublished(supabase: ReturnType<typeof createServiceRoleSupabaseClient>, projectId: string): Promise<boolean> {
-  const { data } = await supabase.from("projects").select("status").eq("id", projectId).maybeSingle()
-  return data?.status === "published" || data?.status === "completed"
-}
+import { dispatchProfessionalInvite } from "@/lib/invites/dispatch-professional-invite"
 
 type CreateUnlistedCompanyInput = {
   name: string
@@ -124,72 +119,21 @@ export async function createUnlistedCompanyAction(
       return { error: insertError?.message || "Failed to create company" }
     }
 
-    // --- Send invite email (only if project is published) ---
+    // --- Send invite email via the shared dispatcher ---
+    // Newly-created unlisted companies are by definition unclaimed, so the
+    // dispatcher will fire the three-step new-professional-invite sequence
+    // (intro now via Resend, followup + final via the drip queue).
     let emailSent = false
-    const projectIsLive = await isProjectPublished(supabase, input.projectId)
-    if (!projectIsLive) {
-      return { success: true, companyId: company.id, emailSent: false }
-    }
     try {
-      const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.email, input.projectId)
-      // Fetch project primary photo for email card
-      const { data: projectPhoto } = await supabase
-        .from("project_photos")
-        .select("url")
-        .eq("project_id", input.projectId)
-        .order("order_index", { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      // Fetch project details
-      const { data: projectData } = await supabase
-        .from("projects")
-        .select("location, address_city, building_type, project_type, project_type_category_id")
-        .eq("id", input.projectId)
-        .maybeSingle()
-      // Inviter (project owner) company — used to render the inviting-company
-      // badge in the email so the recipient instantly recognises the studio.
-      const { data: ownerPP } = await supabase
-        .from("project_professionals")
-        .select("company_id")
-        .eq("project_id", input.projectId)
-        .eq("is_project_owner", true)
-        .maybeSingle()
-      const { data: ownerCompany } = ownerPP?.company_id
-        ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
-        : { data: null }
-      // Resolve building type label
-      let projectType: string | undefined
-      const bt = projectData?.building_type
-      const isUuid = bt && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bt)
-      if (bt && !isUuid) {
-        projectType = bt.charAt(0).toUpperCase() + bt.slice(1).replace(/-/g, " ")
-      }
-      // Look up category name: try building_type UUID, then project_type_category_id
-      if (!projectType) {
-        const idsToTry = [isUuid ? bt : null, projectData?.project_type_category_id].filter(Boolean) as string[]
-        for (const catId of idsToTry) {
-          const { data: cat } = await supabase.from("categories").select("name").eq("id", catId).maybeSingle()
-          if (cat?.name) { projectType = cat.name; break }
-        }
-      }
-      // Final fallback: project_type field (e.g. "New Build")
-      if (!projectType && (projectData as any)?.project_type) {
-        projectType = (projectData as any).project_type
-      }
-      const result = await sendProfessionalInviteEmail(input.email, {
-        project_owner: input.inviterName,
-        company_name: ownerCompany?.name ?? undefined,
-        company_logo_url: ownerCompany?.logo_url ?? undefined,
-        project_name: input.projectTitle,
-        project_title: input.projectTitle,
-        project_image: projectPhoto?.url ?? undefined,
-        project_location: projectData?.address_city ?? projectData?.location ?? undefined,
-        project_type: projectType,
-        confirmUrl,
+      const result = await dispatchProfessionalInvite(supabase, {
+        recipientEmail: input.email,
+        projectId: input.projectId,
+        inviterName: input.inviterName,
+        recipientCompanyId: company.id,
       })
       emailSent = result.success
     } catch (e) {
-      console.error("Failed to send invite email:", e)
+      console.error("Failed to dispatch invite email:", e)
     }
 
     return { success: true, companyId: company.id, emailSent }
@@ -229,51 +173,19 @@ export async function confirmLinkExistingCompanyAction(
       return { success: false, error: error.message }
     }
 
-    // Send invite email if email provided and project is published
-    const projectIsLive = await isProjectPublished(supabase, input.projectId)
-    if (input.email && projectIsLive) {
+    // Dispatch the invite. The dispatcher branches on whether the linked
+    // company is claimed (one-shot professional-invite) or unclaimed
+    // (three-step new-professional-invite sequence + prospects row).
+    if (input.email) {
       try {
-        const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.email, input.projectId)
-        const { data: projectPhoto } = await supabase
-          .from("project_photos")
-          .select("url")
-          .eq("project_id", input.projectId)
-          .order("order_index", { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        const { data: projectData } = await supabase
-          .from("projects")
-          .select("location, address_city, building_type, project_type, project_type_category_id")
-          .eq("id", input.projectId)
-          .maybeSingle()
-        let projectType = projectData?.building_type ? projectData.building_type.charAt(0).toUpperCase() + projectData.building_type.slice(1) : undefined
-        if (!projectType && projectData?.project_type_category_id) {
-          const { data: cat } = await supabase.from("categories").select("name").eq("id", projectData.project_type_category_id).maybeSingle()
-          projectType = cat?.name ?? undefined
-        }
-        // Inviter (project owner) company for the badge in the email.
-        const { data: ownerPP } = await supabase
-          .from("project_professionals")
-          .select("company_id")
-          .eq("project_id", input.projectId)
-          .eq("is_project_owner", true)
-          .maybeSingle()
-        const { data: ownerCompany } = ownerPP?.company_id
-          ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
-          : { data: null }
-        await sendProfessionalInviteEmail(input.email, {
-          project_owner: input.inviterName,
-          company_name: ownerCompany?.name ?? undefined,
-          company_logo_url: ownerCompany?.logo_url ?? undefined,
-          project_name: input.projectTitle,
-          project_title: input.projectTitle,
-          project_image: projectPhoto?.url ?? undefined,
-          project_location: projectData?.address_city ?? projectData?.location ?? undefined,
-          project_type: projectType,
-          confirmUrl,
+        await dispatchProfessionalInvite(supabase, {
+          recipientEmail: input.email,
+          projectId: input.projectId,
+          inviterName: input.inviterName,
+          recipientCompanyId: input.companyId,
         })
       } catch (e) {
-        console.error("Failed to send invite email:", e)
+        console.error("Failed to dispatch invite email:", e)
       }
     }
 
@@ -316,55 +228,10 @@ export async function sendInviteEmailAction(input: {
 }): Promise<{ success: boolean }> {
   try {
     const supabase = createServiceRoleSupabaseClient()
-    // Only send if project is published
-    const projectIsLive = await isProjectPublished(supabase, input.projectId)
-    if (!projectIsLive) return { success: false }
-    const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.email, input.projectId)
-    const { data: projectPhoto } = await supabase
-      .from("project_photos")
-      .select("url")
-      .eq("project_id", input.projectId)
-      .order("order_index", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-    const { data: projectData } = await supabase
-      .from("projects")
-      .select("location, address_city, building_type, project_type, project_type_category_id")
-      .eq("id", input.projectId)
-      .maybeSingle()
-    let projectType = projectData?.building_type ? projectData.building_type.charAt(0).toUpperCase() + projectData.building_type.slice(1) : undefined
-    if (!projectType && projectData?.project_type_category_id) {
-      const { data: cat } = await supabase.from("categories").select("name").eq("id", projectData.project_type_category_id).maybeSingle()
-      projectType = cat?.name ?? undefined
-    }
-    const { data: projectSlug } = await supabase
-      .from("projects")
-      .select("slug")
-      .eq("id", input.projectId)
-      .maybeSingle()
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://arcolist.com"
-    // Get the owner's company name
-    const { data: ownerPP } = await supabase
-      .from("project_professionals")
-      .select("company_id")
-      .eq("project_id", input.projectId)
-      .eq("is_project_owner", true)
-      .maybeSingle()
-    const { data: ownerCompany } = ownerPP?.company_id
-      ? await supabase.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
-      : { data: null }
-
-    const result = await sendProfessionalInviteEmail(input.email, {
-      project_owner: input.inviterName,
-      company_name: ownerCompany?.name ?? undefined,
-      company_logo_url: ownerCompany?.logo_url ?? undefined,
-      project_name: input.projectTitle,
-      project_title: input.projectTitle,
-      project_image: projectPhoto?.url ?? undefined,
-      project_location: projectData?.address_city ?? projectData?.location ?? undefined,
-      project_type: projectType,
-      project_link: `${baseUrl}/projects/${projectSlug?.slug ?? input.projectId}`,
-      confirmUrl,
+    const result = await dispatchProfessionalInvite(supabase, {
+      recipientEmail: input.email,
+      projectId: input.projectId,
+      inviterName: input.inviterName,
     })
     return { success: result.success }
   } catch (e) {

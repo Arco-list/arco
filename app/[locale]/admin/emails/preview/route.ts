@@ -27,6 +27,13 @@ const TEST_VARS = {
   hero_image_url: 'https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg',
   logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-logos/marco-van-veldhuizen.png',
   company_subtitle: 'Architect · Naarden',
+  // Inviter fields — used by professional-invite + new-professional-* so the
+  // preview renders with the inviter badge. In production these are
+  // populated by the dispatcher from the project owner's company.
+  inviter_company_name: 'Marco van Veldhuizen',
+  inviter_logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-logos/marco-van-veldhuizen.png',
+  inviter_subtitle: 'Architect · Naarden',
+  inviter_page_url: 'https://arcolist.com/professionals/marco-van-veldhuizen',
 }
 
 // Map admin template IDs to email-service template names for auth emails.

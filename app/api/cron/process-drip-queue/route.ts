@@ -200,15 +200,19 @@ async function sendOne(
     if (featuredProfessionals) variables.professionals = featuredProfessionals
   }
 
-  // Prospect-series drips: row.email is a snapshot from enqueue time. If the
+  // Sequence drips that target a company (prospect-* and the new
+  // new-professional-*): row.email is a snapshot from enqueue time. If the
   // prospect's email was later corrected (admin edit, Apollo sync), we want
   // the current address. Homeowner-series untouched — the user_id already
   // anchors the recipient there.
+  const COMPANY_SEQUENCE_TEMPLATES = new Set([
+    "prospect-followup",
+    "prospect-final",
+    "new-professional-followup",
+    "new-professional-final",
+  ])
   let recipient = row.email
-  if (
-    row.company_id &&
-    (row.template === "prospect-followup" || row.template === "prospect-final")
-  ) {
+  if (row.company_id && COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
     const { data: prospect } = await supabase
       .from("prospects")
       .select("email")
@@ -247,8 +251,9 @@ async function sendOne(
       logger.error("cron-drip-queue: Failed to mark row sent", { rowId: row.id, supabaseError: error })
     }
 
-    // Increment emails_sent + emails_delivered on the prospect row for prospect drip emails
-    if (row.company_id && (row.template === "prospect-followup" || row.template === "prospect-final")) {
+    // Increment emails_sent + emails_delivered on the prospect row for any
+    // company-targeted sequence (prospect-* + new-professional-*).
+    if (row.company_id && COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
       const { data: prospect } = await supabase
         .from("prospects")
         .select("id, emails_sent, emails_delivered")

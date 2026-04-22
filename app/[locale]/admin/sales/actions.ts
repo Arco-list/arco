@@ -614,7 +614,13 @@ export async function pauseProspectSequence(prospectId: string) {
  * each step as a row with timestamp + status badge.
  */
 export type ProspectSequenceStep = {
-  template: "prospect-intro" | "prospect-followup" | "prospect-final"
+  template:
+    | "prospect-intro"
+    | "prospect-followup"
+    | "prospect-final"
+    | "new-professional-invite"
+    | "new-professional-followup"
+    | "new-professional-final"
   label: string
   /**
    *   sent      — email_drip_queue.sent_at is set (cron sent it)
@@ -643,7 +649,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
 
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, company_id, email")
+    .select("id, company_id, email, source")
     .eq("id", prospectId)
     .maybeSingle()
 
@@ -654,13 +660,20 @@ export async function getProspectSequence(prospectId: string): Promise<{
     return { success: true, steps: [] }
   }
 
+  // Pick the template trio for this prospect's source. 'arco' = the original
+  // outbound prospect series; 'invites' = the new-professional sequence.
+  const isInviteSeries = prospect.source === "invites"
+  const introTemplate = isInviteSeries ? "new_professional_invite" : "prospect_intro"
+  const followupTemplate = isInviteSeries ? "new-professional-followup" : "prospect-followup"
+  const finalTemplate = isInviteSeries ? "new-professional-final" : "prospect-final"
+
   // Intro: read from company_outreach (intro is sent direct via Resend, not
   // via email_drip_queue, so it's the only template that ever lands here).
   const { data: outreachRows } = await supabase
     .from("company_outreach" as never)
     .select("template, sent_at, opened_at, clicked_at")
     .eq("company_id", prospect.company_id)
-    .eq("template", "prospect_intro")
+    .eq("template", introTemplate)
     .order("sent_at", { ascending: false })
     .limit(1)
 
@@ -669,7 +682,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
     .from("email_drip_queue")
     .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error")
     .eq("company_id", prospect.company_id)
-    .in("template", ["prospect-followup", "prospect-final"])
+    .in("template", [followupTemplate, finalTemplate])
     .order("created_at", { ascending: false })
 
   // Build a map: template → most recent row (we sorted desc above)
@@ -683,11 +696,11 @@ export async function getProspectSequence(prospectId: string): Promise<{
   const introRow = (outreachRows ?? [])[0] as
     | { template: string; sent_at: string | null; opened_at: string | null; clicked_at: string | null }
     | undefined
-  const followupRow = queueByTemplate.get("prospect-followup")
-  const finalRow = queueByTemplate.get("prospect-final")
+  const followupRow = queueByTemplate.get(followupTemplate)
+  const finalRow = queueByTemplate.get(finalTemplate)
 
   const queueRowToStep = (
-    template: "prospect-followup" | "prospect-final",
+    template: ProspectSequenceStep["template"],
     label: string,
     row: NonNullable<typeof queueRows>[number] | undefined,
   ): ProspectSequenceStep => {
@@ -729,18 +742,20 @@ export async function getProspectSequence(prospectId: string): Promise<{
     }
   }
 
+  const introStepTemplate: ProspectSequenceStep["template"] =
+    isInviteSeries ? "new-professional-invite" : "prospect-intro"
   const steps: ProspectSequenceStep[] = [
     {
-      template: "prospect-intro",
-      label: "Intro",
+      template: introStepTemplate,
+      label: isInviteSeries ? "Invite" : "Intro",
       status: introRow?.sent_at ? "sent" : "missing",
       timestamp: introRow?.sent_at ?? null,
       cancelledReason: null,
       attemptCount: 0,
       lastError: null,
     },
-    queueRowToStep("prospect-followup", "Follow-up", followupRow),
-    queueRowToStep("prospect-final", "Final", finalRow),
+    queueRowToStep(followupTemplate, "Follow-up", followupRow),
+    queueRowToStep(finalTemplate, "Final", finalRow),
   ]
 
   return { success: true, steps }
@@ -762,7 +777,7 @@ export async function resumeProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, company_id, email, sequence_status")
+    .select("id, company_id, email, sequence_status, source")
     .eq("id", prospectId)
     .single()
 
@@ -774,14 +789,20 @@ export async function resumeProspectSequence(prospectId: string) {
   if (prospect.company_id) {
     try {
       const { nextBusinessSlot } = await import("@/lib/date-utils")
-      const stepConfig: Array<{
-        template: "prospect-followup" | "prospect-final"
-        step: number
-        sendAt: string
-      }> = [
-        { template: "prospect-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
-        { template: "prospect-final", step: 2, sendAt: nextBusinessSlot(7).toISOString() },
-      ]
+      // Pick the right template trio + sequence label for this prospect's
+      // source. 'arco' → original prospect outreach; 'invites' → the new
+      // professional-invite sequence.
+      const isInviteSeries = prospect.source === "invites"
+      const sequenceName = isInviteSeries ? "new-professional-invite" : "prospect-outreach"
+      const stepConfig = (isInviteSeries
+        ? [
+            { template: "new-professional-followup" as const, step: 1, sendAt: nextBusinessSlot(3).toISOString() },
+            { template: "new-professional-final" as const, step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+          ]
+        : [
+            { template: "prospect-followup" as const, step: 1, sendAt: nextBusinessSlot(3).toISOString() },
+            { template: "prospect-final" as const, step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+          ])
 
       for (const { template, step, sendAt } of stepConfig) {
         // Most recent row for (company, template) — carries the variables
@@ -803,7 +824,7 @@ export async function resumeProspectSequence(prospectId: string) {
             company_id: prospect.company_id,
             email: lastRow?.email ?? prospect.email,
             template,
-            sequence: "prospect-outreach",
+            sequence: sequenceName,
             step,
             variables: (lastRow?.variables as Record<string, unknown> | null) ?? {},
             send_at: sendAt,
