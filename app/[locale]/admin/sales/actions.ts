@@ -412,13 +412,17 @@ export async function syncPlatformProspects() {
   }
 
   // 2. Sync invited companies (from project_professionals, not project owner, no company owner)
+  // Order by created_at DESC so the first row per company is the most recent
+  // invite — we carry its project_id onto the prospect so startProspectSequence
+  // has context for the invite email.
   const { data: invitedPros } = await supabase
     .from("project_professionals")
-    .select("company_id, invited_email, status, companies(id, name, email, city, slug, owner_id)")
+    .select("company_id, project_id, invited_email, status, created_at, companies(id, name, email, city, slug, owner_id)")
     .eq("is_project_owner", false)
     .not("company_id", "is", null)
+    .order("created_at", { ascending: false })
 
-  const invitedByCompany = new Map<string, { email: string; companyName: string; city: string | null; slug: string | null; inviteCount: number; hasSentEmail: boolean }>()
+  const invitedByCompany = new Map<string, { email: string; companyName: string; city: string | null; slug: string | null; inviteCount: number; hasSentEmail: boolean; latestProjectId: string | null }>()
 
   for (const pp of invitedPros ?? []) {
     const company = (pp as any).companies
@@ -437,6 +441,7 @@ export async function syncPlatformProspects() {
         slug: company.slug ?? null,
         inviteCount: 1,
         hasSentEmail: isSent,
+        latestProjectId: pp.project_id ?? null,
       })
     }
   }
@@ -445,7 +450,7 @@ export async function syncPlatformProspects() {
     if (!info.email) continue
     const { data: existing } = await supabase
       .from("prospects")
-      .select("id")
+      .select("id, project_id")
       .eq("company_id", companyId)
       .eq("source", "invites")
       .maybeSingle()
@@ -462,8 +467,16 @@ export async function syncPlatformProspects() {
         emails_sent: info.hasSentEmail ? info.inviteCount : 0,
         emails_delivered: info.hasSentEmail ? info.inviteCount : 0,
         company_id: companyId,
+        project_id: info.latestProjectId,
         ref_code: info.slug ?? companyId,
       })
+    } else if (!existing.project_id && info.latestProjectId) {
+      // Backfill project_id onto existing prospect rows that pre-date the
+      // project_id sync — so startProspectSequence has context.
+      await supabase
+        .from("prospects")
+        .update({ project_id: info.latestProjectId })
+        .eq("id", existing.id)
     }
   }
 
