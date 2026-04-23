@@ -176,10 +176,25 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/is your Arco domain verification code/i, "domain-verification", "Domain Verification"],
   [/Verify your domain/i, "domain-verification", "Domain Verification"],
   [/is je Arco domein-verificatiecode$/i, "domain-verification", "Domain Verification"],
-  // Professional invite — EN + NL. NL pattern must come before the
-  // prospect "op Arco" catch-all below.
-  [/credited you on/i, "professional-invite", "Professional Invite"],
-  [/heeft je gecrediteerd op /i, "professional-invite", "Professional Invite"],
+  // New-professional-* (unclaimed company invite sequence) — MUST come
+  // before the claimed professional-invite and the prospect "op Arco"
+  // catch-alls below, since subjects share suffixes. Resend's list
+  // endpoint omits `tags` per row so we can't rely on the template tag
+  // here; authoritative disambiguation is "ends in 'on Arco' / 'op Arco'"
+  // for the intro, and the distinctive "Last reminder" / "Laatste
+  // herinnering" prefix for the final.
+  [/credited you on Arco$/i, "new-professional-invite", "New Professional Invite"],
+  [/heeft je vermeld op Arco$/i, "new-professional-invite", "New Professional Invite"],
+  [/^Last reminder: claim .* on Arco$/i, "new-professional-final", "New Professional Final"],
+  [/^Laatste herinnering: claim .* op Arco$/i, "new-professional-final", "New Professional Final"],
+  // Followup subject is bare "Claim {company}" with no suffix. Negative
+  // lookahead keeps it from swallowing prospect-final's "Claim X on Arco"
+  // / "Claim X op Arco" subjects (handled further down the stack).
+  [/^Claim (?!.* (?:on|op) Arco$).+$/i, "new-professional-followup", "New Professional Follow-up"],
+  // Professional invite (claimed) — EN + NL. NL pattern must come before
+  // the prospect "op Arco" catch-all below.
+  [/credited you on /i, "professional-invite", "Professional Invite"],
+  [/ heeft je vermeld op /i, "professional-invite", "Professional Invite"],
   // Team invite — EN + NL
   [/invited to join.*on Arco/i, "team-invite", "Team Invite"],
   [/^Je bent uitgenodigd om lid te worden van /i, "team-invite", "Team Invite"],
