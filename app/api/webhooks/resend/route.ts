@@ -98,6 +98,14 @@ export async function POST(request: NextRequest) {
         .from("company_outreach" as any)
         .update(updateData)
         .eq("resend_message_id", messageId)
+
+      // Mirror the same write to email_drip_queue so followup / final rows
+      // get per-message engagement tracking. Same column shape (added in
+      // migration 144), so the updateData payload is reused as-is.
+      await supabase
+        .from("email_drip_queue")
+        .update(updateData as never)
+        .eq("resend_message_id", messageId)
     }
   }
 

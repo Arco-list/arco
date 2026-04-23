@@ -245,14 +245,22 @@ async function sendOne(
       .update({
         sent_at: new Date().toISOString(),
         last_error: null,
-      })
+        // Persist the Resend message id so the webhook can fan opens /
+        // clicks back to this row (mirrors company_outreach.resend_message_id).
+        resend_message_id: result.messageId ?? null,
+        last_event_cached: 'sent',
+        last_event_cached_at: new Date().toISOString(),
+      } as never)
       .eq("id", row.id)
     if (error) {
       logger.error("cron-drip-queue: Failed to mark row sent", { rowId: row.id, supabaseError: error })
     }
 
     // Increment emails_sent + emails_delivered on the prospect row for any
-    // company-targeted sequence (prospect-* + new-professional-*).
+    // company-targeted sequence (prospect-* + new-professional-*), and log
+    // a prospect_events row so the Sales details popup shows the send in
+    // Event History — mirrors the event written by startProspectSequence
+    // for the intro.
     if (row.company_id && COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
       const { data: prospect } = await supabase
         .from("prospects")
@@ -268,6 +276,11 @@ async function sendOne(
             last_email_sent_at: new Date().toISOString(),
           })
           .eq("id", prospect.id)
+        await supabase.from("prospect_events").insert({
+          prospect_id: prospect.id,
+          event_type: "email_sent",
+          metadata: { template: row.template, email: recipient },
+        })
       }
     }
 

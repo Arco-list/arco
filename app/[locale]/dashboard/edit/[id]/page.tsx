@@ -118,7 +118,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { MailPlus, Pencil, RotateCw, XCircle } from "lucide-react"
+import { MailPlus, Pencil, XCircle } from "lucide-react"
 
 type ProjectBudgetLevel = Enums<"project_budget_level">
 type ProjectStatus = Enums<"project_status">
@@ -3977,19 +3977,6 @@ export default function ListingEditorPage() {
                     getInviteStatusMeta={getInviteStatusMeta}
                     canEditInvite={(invite) => !invite.isOwner && invite.status === "invited"}
                     canDeleteInvite={(invite) => !invite.isOwner}
-                    onResendInvite={async (invite) => {
-                      const result = await sendInviteEmailAction({
-                        email: invite.email,
-                        projectId: projectId!,
-                        inviterName: "Project owner",
-                        projectTitle: detailsForm.projectTitle || "Project",
-                      })
-                      if (result.success) {
-                        toast.success(`Invite resent to ${invite.email}`)
-                      } else {
-                        toast.error("Failed to resend invite")
-                      }
-                    }}
                     professionals={professionals}
                     onProfessionalDirectSelect={handleProfessionalDirectSelect}
                     userTypes={userTypes}
@@ -5088,30 +5075,6 @@ export default function ListingEditorPage() {
                             return <><span className={`status-pill-dot status-pill-dot--${dotClass}`} />{label}</>
                           })()}
                         </span>
-                        {inv.status === "invited" && !inv.isOwner && (
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation()
-                              const result = await sendInviteEmailAction({
-                                email: inv.email,
-                                projectId: projectId!,
-                                inviterName: "Project owner",
-                                projectTitle: detailsForm.projectTitle || "Project",
-                              })
-                              if (result.success) {
-                                toast.success(`Invite resent to ${inv.email}`)
-                              } else {
-                                toast.error("Failed to resend invite")
-                              }
-                            }}
-                            className="group/resend inline-flex items-center gap-1 rounded-full px-1.5 py-1 text-[#016D75] transition-all hover:bg-[#016D75]/8"
-                            aria-label="Resend invite"
-                          >
-                            <RotateCw className="h-3 w-3 shrink-0" />
-                            <span className="max-w-0 overflow-hidden whitespace-nowrap text-[11px] font-medium opacity-0 transition-all duration-200 group-hover/resend:max-w-[80px] group-hover/resend:opacity-100">Resend</span>
-                          </button>
-                        )}
                       </div>
                     </>
                   )}

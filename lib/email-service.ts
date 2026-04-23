@@ -1047,18 +1047,18 @@ function renderNewProfessionalInvite(vars: EmailVariables, locale: EmailLocale =
 
   const copy = locale === 'en'
     ? {
-        subject: `${inviterName} credited you on ${projectName}`,
-        h1: `${inviterName} credited you on ${projectName}`,
-        belowBadge: `${inviterName} added your company to ${projectName} on Arco - a curated platform where architects publish their work and credit the professionals they collaborate with.`,
+        subject: `${inviterName} credited you on Arco`,
+        h1: `${inviterName} credited you on Arco`,
+        belowBadge: `${inviterName} added ${companyName} on Arco to ${projectName}. Arco is a curated platform where architects publish their work and credit the professionals they collaborate with.`,
         button: `Claim ${companyName}`,
-        afterButton: `Claim your page on Arco to manage how ${companyName} appears, manage your projects, and become discoverable to clients.`,
+        afterButton: `Claim your page on Arco to manage how ${companyName} appears, update your projects, and become discoverable to clients.`,
       }
     : {
-        subject: `${inviterName} heeft je vermeld op ${projectName}`,
-        h1: `${inviterName} heeft je vermeld op ${projectName}`,
-        belowBadge: `${inviterName} heeft je bedrijf toegevoegd aan ${projectName} op Arco - een curated platform waar architecten hun werk publiceren en de professionals waarmee ze samenwerken crediteren.`,
+        subject: `${inviterName} heeft je vermeld op Arco`,
+        h1: `${inviterName} heeft je vermeld op Arco`,
+        belowBadge: `${inviterName} heeft ${companyName} op Arco toegevoegd aan ${projectName}. Arco is een curated platform waar architecten hun werk publiceren en de professionals waarmee ze samenwerken crediteren.`,
         button: `Claim ${companyName}`,
-        afterButton: `Claim je pagina op Arco om te bepalen hoe ${companyName} wordt getoond, je projecten te beheren en zichtbaar te worden voor opdrachtgevers.`,
+        afterButton: `Claim je pagina op Arco om te bepalen hoe ${companyName} wordt getoond, je projecten bij te werken en zichtbaar te worden voor opdrachtgevers.`,
       }
 
   return {
@@ -1089,14 +1089,14 @@ function renderNewProfessionalFollowup(vars: EmailVariables, locale: EmailLocale
   const copy = locale === 'en'
     ? {
         subject: `Claim ${companyName}`,
-        h1: `${inviterName} credited you on Arco`,
+        h1: `${inviterName} added you to a project on Arco`,
         belowBadge: `A few days ago we let you know that ${companyName} was credited by ${inviterName}.`,
         afterCard: `The project is live on Arco and your company page is ready to be claimed.`,
         button: `Claim ${companyName}`,
       }
     : {
         subject: `Claim ${companyName}`,
-        h1: `${inviterName} heeft je vermeld op Arco`,
+        h1: `${inviterName} heeft je toegevoegd aan een project op Arco`,
         belowBadge: `Een paar dagen geleden lieten we je weten dat ${companyName} is vermeld door ${inviterName}.`,
         afterCard: `Het project staat live op Arco en je bedrijfspagina is klaar om geclaimd te worden.`,
         button: `Claim ${companyName}`,

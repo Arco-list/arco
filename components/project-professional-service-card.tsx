@@ -47,7 +47,6 @@ type ProfessionalServiceCardProps<TInvite extends BaseInvite> = {
   getInviteStatusMeta: (invite: TInvite) => InviteStatusMeta
   canEditInvite?: (invite: TInvite) => boolean
   canDeleteInvite?: (invite: TInvite) => boolean
-  onResendInvite?: (invite: TInvite) => void | Promise<void>
   emptyStateCtaLabel?: ReactNode
   professionals?: ProfessionalOption[]
   onProfessionalDirectSelect?: (professional: ProfessionalOption, serviceId: string) => void
@@ -66,7 +65,6 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
   getInviteStatusMeta,
   canEditInvite,
   canDeleteInvite,
-  onResendInvite,
   emptyStateCtaLabel,
   professionals = [],
   onProfessionalDirectSelect,
@@ -226,17 +224,6 @@ export function ProfessionalServiceCard<TInvite extends BaseInvite>({
                         {statusMeta.label}
                       </span>
                       <div className="flex items-center gap-2">
-                        {invite.status === "invited" && onResendInvite && (
-                          <button
-                            type="button"
-                            onClick={() => { void onResendInvite(invite) }}
-                            disabled={isBusy}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#F2F2F2] text-[#222222] transition-colors hover:bg-[#EBEBEB] disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-transparent disabled:border disabled:border-[#EBEBEB] disabled:text-[#EBEBEB]"
-                            aria-label={`Resend invite to ${invite.email}`}
-                          >
-                            <MailPlus className="h-4 w-4" />
-                          </button>
-                        )}
                         {inviteCanEdit && (
                           <button
                             type="button"

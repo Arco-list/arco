@@ -5355,13 +5355,17 @@ body.no-scroll {
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  /* Single tight size across all status pills (with or without a dot)
+     so the dotted "Featured" pill reads at the same size as a dotless
+     "Day 0" or "Owner". Matches the previous .arco-table .status-pill
+     override so table and non-table surfaces look the same. */
+  font-size: 10px;
   font-weight: 400;
-  padding: 4px 12px;
+  padding: 2px 8px;
   border: 1px solid var(--arco-rule);
-  border-radius: 24px;
+  border-radius: 12px;
   /* Transparent so the pill picks up whatever surface it sits on
      (white tables, off-white admin cards, future surfaces). The
      previous default of var(--background) painted an off-white fill
@@ -5372,20 +5376,9 @@ body.no-scroll {
   flex-shrink: 0;
 }
 
-/* Dot-less variant used for inline annotations ("3 emails", "Day 0"
-   next to a template name). Without the 7px dot + 6px gap eating
-   horizontal space, the pill reads visibly bigger than a dot pill
-   next to it — so we trim the font + padding to match the dot pill's
-   optical size. Browser support note: :has() is ES2023, Safari 15.4+,
-   Firefox 121+, Chrome 105+ — fine for an admin-only surface. */
-.status-pill:not(:has(.status-pill-dot)) {
-  padding: 3px 10px;
-  font-size: 11px;
-}
-
 .status-pill-dot {
-  width: 7px;
-  height: 7px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -5399,6 +5392,14 @@ body.no-scroll {
 .status-pill-dot--rejected   { background: #dc2626; }
 .status-pill-dot--draft      { background: #3b82f6; }
 .status-pill-dot--pending    { background: #a1a1a0; }
+
+/* Coloured pill variants — coloured border + matching text, transparent
+   background. Use for tags (Day 1, Day 7, Sent, etc.), not for status —
+   for status, use the dot variants above. Pair with .status-pill. */
+.status-pill--blue   { border-color: #bfdbfe; color: #1d4ed8; }
+.status-pill--green  { border-color: #a7f3d0; color: #047857; }
+.status-pill--orange { border-color: #fed7aa; color: #c2410c; }
+.status-pill--red    { border-color: #fecaca; color: #b91c1c; }
 
 /* Pill buttons */
 .filter-pill {
@@ -6324,20 +6325,6 @@ body.no-scroll {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.arco-table .status-pill {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  gap: 4px;
-  background: transparent;
-  border-color: var(--arco-rule);
-}
-
-.arco-table .status-pill-dot {
-  width: 5px;
-  height: 5px;
 }
 
 .arco-table-avatar {

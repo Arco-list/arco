@@ -222,36 +222,50 @@ export default function DesignPage() {
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Inline Pills</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
-                {/* Mini-table demo — mirrors how inline pills render in
-                    /admin/companies, /admin/sales, etc. The label uses
-                    .arco-table-primary metrics (13px) and the pill sits
-                    immediately after it (gap: 8px, no tab/min-width).
-                    A status-dot precedes the label so the row reads as
-                    a real table row would. */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {/* 1 · With status dot — full-size 12px (dot adds visual weight) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a1a1a0", flexShrink: 0 }} />
-                    <span className="arco-table-primary">Cloud Nine</span>
-                    <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                {/* Three groups: the standard status-pill variants (with /
+                    without a dot, default grey outline), and the four
+                    semantic colour variants (blue / green / orange / red).
+                    Mirrors how inline pills render in /admin/companies,
+                    /admin/sales, etc. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                  {/* Status pills — pair the label with one or more pills. */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <span className="arco-eyebrow" style={{ color: "#a1a1a0" }}>Status pills</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="arco-table-primary">Cloud Nine</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                      <span className="status-pill">Owner</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="arco-table-primary">Welcome</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
+                      <span className="status-pill">Day 0</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="arco-table-primary">Wolterinck</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
+                    </div>
                   </div>
-                  {/* 2 · Coloured outline — accent border + text, no dot, compact 11px */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a1a1a0", flexShrink: 0 }} />
-                    <span className="arco-table-primary">Welcome</span>
-                    <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day 0</span>
-                  </div>
-                  {/* 3 · Grey outline — default border, no dot, compact 11px */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#a1a1a0", flexShrink: 0 }} />
-                    <span className="arco-table-primary">Wolterinck</span>
-                    <span className="status-pill">Owner</span>
+
+                  {/* Coloured pills — tags, not status. */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <span className="arco-eyebrow" style={{ color: "#a1a1a0" }}>Coloured pills</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span className="status-pill status-pill--blue">Day 0</span>
+                      <span className="status-pill status-pill--blue">Day 1</span>
+                      <span className="status-pill status-pill--blue">Day 7</span>
+                      <span className="status-pill status-pill--green">Sent</span>
+                      <span className="status-pill status-pill--orange">Beta</span>
+                      <span className="status-pill status-pill--red">New</span>
+                    </div>
                   </div>
                 </div>
               </div>
               <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
-                  Three variants share the <code>.status-pill</code> base — all transparent, no fill, so they pick up the surface they sit on. <strong>With a dot</strong> renders at 12px / 4-12 padding — the dot adds visual weight. <strong>Coloured outline</strong> overrides <code>borderColor</code> + <code>color</code> inline (blue for day markers, no other accents in use today). <strong>Grey outline</strong> uses the default rule border. The two dot-less variants auto-compact to 11px / 3-10 via <code>:not(:has(.status-pill-dot))</code> so they optically match a dot pill placed next to them. Sit immediately after the label they annotate (8px gap, no tab). See the Data Table row below for a combined example.
+                  All variants share the <code>.status-pill</code> base — 10px / 2-8 padding / 12px radius, transparent background. <strong>Status pills</strong> use a <code>.status-pill-dot</code> + a <code>--state</code> modifier inside (Featured, Listed, Invited, Draft, Unlisted, Owner) — these represent a state. <strong>Coloured pills</strong> use a <code>.status-pill--colour</code> modifier (<code>blue</code> / <code>green</code> / <code>orange</code> / <code>red</code>) for a coloured border + matching text — use these for tags / markers (Day 1, Day 7, Sent count, etc.), not for status. Sit immediately after the label they annotate (8px gap, no tab).
                 </p>
               </div>
             </div>

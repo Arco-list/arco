@@ -488,24 +488,56 @@ export async function syncPlatformProspects() {
 }
 
 /**
- * Start prospect sequence: send the prospect email and update status
+ * Start prospect sequence — branches on source:
+ *   - 'invites' → fires the new-professional invite sequence via the
+ *     dispatcher (intro now + followup/final via drip queue), with the
+ *     project + inviter context the prospect was originally tagged on.
+ *   - 'arco'    → fires the original prospect outreach (prospect-intro
+ *     now + prospect-followup/-final via drip queue).
  */
 export async function startProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
 
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, email, company_id, source, emails_sent")
+    .select("id, email, company_id, source, emails_sent, emails_delivered, project_id")
     .eq("id", prospectId)
     .single()
 
   if (!prospect) return { success: false, error: "Prospect not found" }
   if (!prospect.company_id) return { success: false, error: "No linked company" }
 
-  // Set sequence to active
+  // Set sequence to active up front; rolled back to not_started if the send fails.
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
-  // Send the prospect email
+  // ── Invite-source prospects: fire the new-professional sequence ──
+  if (prospect.source === "invites") {
+    if (!prospect.project_id) {
+      await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+      return { success: false, error: "Invite prospect has no linked project" }
+    }
+    const { dispatchProfessionalInvite } = await import("@/lib/invites/dispatch-professional-invite")
+    const result = await dispatchProfessionalInvite(supabase, {
+      recipientEmail: prospect.email,
+      projectId: prospect.project_id,
+      inviterName: "Project owner",
+      recipientCompanyId: prospect.company_id,
+    })
+    if (!result.success) {
+      await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+      return { success: false, error: result.reason ?? "Failed to send invite email" }
+    }
+    // Dispatcher already upserts the prospect row's status / counters /
+    // last_email_sent_at when it sends the intro, so no extra update here.
+    await supabase.from("prospect_events").insert({
+      prospect_id: prospectId,
+      event_type: "email_sent",
+      metadata: { template: "new_professional_invite", email: prospect.email },
+    })
+    return { success: true }
+  }
+
+  // ── Arco-source prospects: fire the original prospect outreach ──
   const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
   const result = await sendProspectEmailAction({
     companyId: prospect.company_id,
@@ -638,11 +670,122 @@ export type ProspectSequenceStep = {
   cancelledReason: string | null
   attemptCount: number
   lastError: string | null
+  /** Resend lifecycle event ('sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | …)
+   *  populated by the Resend webhook. Null until the first event lands. */
+  lastEvent: string | null
+  openedAt: string | null
+  clickedAt: string | null
+}
+
+/**
+ * Source-specific context for the details popup. Apollo prospects already
+ * carry their IDs on the prospect row, and arco prospects use the
+ * client-side companyMap, so this lookup is only needed for invite
+ * prospects: resolve the project they were tagged on plus the project
+ * owner's company (the inviter), so the popup can show a real card
+ * instead of just IDs.
+ */
+export type ProspectInviteContext = {
+  project: {
+    id: string
+    slug: string | null
+    title: string | null
+    photoUrl: string | null
+    projectType: string | null
+    location: string | null
+  } | null
+  inviter: {
+    id: string
+    name: string | null
+    slug: string | null
+    logoUrl: string | null
+    subtitle: string | null
+  } | null
+}
+
+export async function getProspectInviteContext(prospectId: string): Promise<{
+  success: boolean
+  context?: ProspectInviteContext
+  error?: string
+}> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("project_id, source")
+    .eq("id", prospectId)
+    .maybeSingle()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+  if (prospect.source !== "invites" || !prospect.project_id) {
+    return { success: true, context: { project: null, inviter: null } }
+  }
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, slug, title, location, address_city")
+    .eq("id", prospect.project_id)
+    .maybeSingle()
+
+  // Primary photo (lowest order_index) — same selection rule the email
+  // dispatcher uses, kept consistent so the popup mirrors what gets sent.
+  const { data: photoRow } = await supabase
+    .from("project_photos")
+    .select("url")
+    .eq("project_id", prospect.project_id)
+    .order("order_index", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  // Inviter = project owner company (project_professionals.is_project_owner)
+  const { data: ownerPP } = await supabase
+    .from("project_professionals")
+    .select("company_id")
+    .eq("project_id", prospect.project_id)
+    .eq("is_project_owner", true)
+    .maybeSingle()
+
+  const { data: inviterCompany } = ownerPP?.company_id
+    ? await supabase
+        .from("companies")
+        .select("id, name, slug, logo_url, city, primary_service:categories!companies_primary_service_id_fkey(name)")
+        .eq("id", ownerPP.company_id)
+        .maybeSingle()
+    : { data: null }
+
+  const context: ProspectInviteContext = {
+    project: project
+      ? {
+          id: project.id,
+          slug: project.slug ?? null,
+          title: project.title ?? null,
+          photoUrl: photoRow?.url ?? null,
+          projectType: null, // not surfaced in popup, kept on type for future use
+          location: project.address_city ?? project.location ?? null,
+        }
+      : null,
+    inviter: inviterCompany
+      ? {
+          id: inviterCompany.id,
+          name: inviterCompany.name ?? null,
+          slug: inviterCompany.slug ?? null,
+          logoUrl: inviterCompany.logo_url ?? null,
+          subtitle: [(inviterCompany as any).primary_service?.name, inviterCompany.city]
+            .filter(Boolean)
+            .join(" · ") || null,
+        }
+      : null,
+  }
+
+  return { success: true, context }
 }
 
 export async function getProspectSequence(prospectId: string): Promise<{
   success: boolean
   steps?: ProspectSequenceStep[]
+  /** Language the sequence went out in (or will go out in) — resolved
+   *  with the same priority order sendTransactionalEmail uses, so the
+   *  admin popup shows the real locale instead of a TLD-only guess. */
+  locale?: "nl" | "en"
   error?: string
 }> {
   const supabase = createServiceRoleSupabaseClient()
@@ -660,6 +803,12 @@ export async function getProspectSequence(prospectId: string): Promise<{
     return { success: true, steps: [] }
   }
 
+  const { resolveRecipientLanguage } = await import("@/lib/email-service")
+  const locale = await resolveRecipientLanguage({
+    email: prospect.email,
+    companyId: prospect.company_id,
+  })
+
   // Pick the template trio for this prospect's source. 'arco' = the original
   // outbound prospect series; 'invites' = the new-professional sequence.
   const isInviteSeries = prospect.source === "invites"
@@ -671,7 +820,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
   // via email_drip_queue, so it's the only template that ever lands here).
   const { data: outreachRows } = await supabase
     .from("company_outreach" as never)
-    .select("template, sent_at, opened_at, clicked_at")
+    .select("template, sent_at, opened_at, clicked_at, last_event_cached")
     .eq("company_id", prospect.company_id)
     .eq("template", introTemplate)
     .order("sent_at", { ascending: false })
@@ -680,7 +829,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
   // Followup + Final: read from email_drip_queue. Most recent matching row wins.
   const { data: queueRows } = await supabase
     .from("email_drip_queue")
-    .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error")
+    .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
     .eq("company_id", prospect.company_id)
     .in("template", [followupTemplate, finalTemplate])
     .order("created_at", { ascending: false })
@@ -694,7 +843,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
   }
 
   const introRow = (outreachRows ?? [])[0] as
-    | { template: string; sent_at: string | null; opened_at: string | null; clicked_at: string | null }
+    | { template: string; sent_at: string | null; opened_at: string | null; clicked_at: string | null; last_event_cached: string | null }
     | undefined
   const followupRow = queueByTemplate.get(followupTemplate)
   const finalRow = queueByTemplate.get(finalTemplate)
@@ -713,6 +862,9 @@ export async function getProspectSequence(prospectId: string): Promise<{
         cancelledReason: null,
         attemptCount: 0,
         lastError: null,
+        lastEvent: null,
+        openedAt: null,
+        clickedAt: null,
       }
     }
     let status: ProspectSequenceStep["status"]
@@ -739,6 +891,9 @@ export async function getProspectSequence(prospectId: string): Promise<{
       cancelledReason: row.cancelled_reason ?? null,
       attemptCount: row.attempt_count ?? 0,
       lastError: row.last_error ?? null,
+      lastEvent: (row as any).last_event_cached ?? null,
+      openedAt: (row as any).opened_at ?? null,
+      clickedAt: (row as any).clicked_at ?? null,
     }
   }
 
@@ -753,12 +908,15 @@ export async function getProspectSequence(prospectId: string): Promise<{
       cancelledReason: null,
       attemptCount: 0,
       lastError: null,
+      lastEvent: introRow?.last_event_cached ?? null,
+      openedAt: introRow?.opened_at ?? null,
+      clickedAt: introRow?.clicked_at ?? null,
     },
     queueRowToStep(followupTemplate, "Follow-up", followupRow),
     queueRowToStep(finalTemplate, "Final", finalRow),
   ]
 
-  return { success: true, steps }
+  return { success: true, steps, locale }
 }
 
 /**
@@ -889,24 +1047,53 @@ export async function finishProspectSequence(prospectId: string) {
 }
 
 /**
- * Restart a prospect sequence — resend the email
+ * Restart a finished sequence. Branches on source the same way
+ * startProspectSequence does:
+ *   - 'invites' → re-fire the new-professional invite via the dispatcher
+ *     using the prospect's stored project_id (intro now via Resend,
+ *     followup + final back into the drip queue).
+ *   - 'arco'    → re-send prospect-intro and re-enqueue followup + final.
  */
 export async function restartProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, email, company_id, source, emails_sent, sequence_status")
+    .select("id, email, company_id, source, emails_sent, emails_delivered, sequence_status, project_id")
     .eq("id", prospectId)
     .single()
 
   if (!prospect) return { success: false, error: "Prospect not found" }
   if (!prospect.company_id) return { success: false, error: "No linked company" }
-  if (prospect.source !== "arco") return { success: false, error: "Restart only available for Arco prospects" }
 
-  // Set sequence to active
+  const previousStatus = prospect.sequence_status ?? "not_started"
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
-  // Send the prospect email
+  // ── Invite-source restart: dispatcher with project context ──
+  if (prospect.source === "invites") {
+    if (!prospect.project_id) {
+      await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
+      return { success: false, error: "Invite prospect has no linked project" }
+    }
+    const { dispatchProfessionalInvite } = await import("@/lib/invites/dispatch-professional-invite")
+    const result = await dispatchProfessionalInvite(supabase, {
+      recipientEmail: prospect.email,
+      projectId: prospect.project_id,
+      inviterName: "Project owner",
+      recipientCompanyId: prospect.company_id,
+    })
+    if (!result.success) {
+      await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
+      return { success: false, error: result.reason ?? "Failed to send invite email" }
+    }
+    await supabase.from("prospect_events").insert({
+      prospect_id: prospectId,
+      event_type: "email_resent",
+      metadata: { template: "new_professional_invite", email: prospect.email },
+    })
+    return { success: true }
+  }
+
+  // ── Arco-source restart ──
   const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
   const result = await sendProspectEmailAction({
     companyId: prospect.company_id,
@@ -914,7 +1101,7 @@ export async function restartProspectSequence(prospectId: string) {
   })
 
   if (!result.success) {
-    await supabase.from("prospects").update({ sequence_status: prospect.sequence_status ?? "not_started" }).eq("id", prospectId)
+    await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
     return { success: false, error: result.error }
   }
 
@@ -1025,12 +1212,82 @@ export async function syncResendEmailStats() {
       }
     }
 
+    // ── Drip queue backfill ──
+    // Followup / final rows sent before migration 144 + the cron update
+    // landed have NULL resend_message_id, so the Resend webhook can't fan
+    // open / click events back to them. Match by the `template` tag we
+    // attach to every send + recipient + nearest sent_at, then patch the
+    // row with the message id and the engagement state Resend reports.
+    const { data: unmatchedDrips } = await supabase
+      .from("email_drip_queue")
+      .select("id, template, email, sent_at")
+      .is("resend_message_id", null)
+      .not("sent_at", "is", null)
+
+    type DripCandidate = { id: string; sent_at: string }
+    const dripsByKey = new Map<string, DripCandidate[]>()
+    for (const row of unmatchedDrips ?? []) {
+      if (!row.email || !row.template || !row.sent_at) continue
+      const key = `${row.template}::${row.email.toLowerCase().trim()}`
+      const list = dripsByKey.get(key) ?? []
+      list.push({ id: row.id as string, sent_at: row.sent_at as string })
+      dripsByKey.set(key, list)
+    }
+
+    let dripPatched = 0
+    if (dripsByKey.size > 0) {
+      for (const email of allEmails) {
+        const tags = (email as any).tags
+        const templateTag = Array.isArray(tags)
+          ? tags.find((t: { name?: string }) => t?.name === "template")?.value
+          : undefined
+        if (!templateTag) continue
+        const recipients: string[] = Array.isArray(email.to) ? email.to : [email.to]
+        for (const to of recipients) {
+          if (!to) continue
+          const key = `${templateTag}::${to.toLowerCase().trim()}`
+          const candidates = dripsByKey.get(key)
+          if (!candidates || candidates.length === 0) continue
+          // Pick the row whose sent_at is closest to Resend's created_at —
+          // protects against a re-enqueue having multiple rows for the
+          // same (template, recipient) pair.
+          const resendTs = new Date(email.created_at).getTime()
+          let best = candidates[0]
+          let bestDelta = Math.abs(new Date(best.sent_at).getTime() - resendTs)
+          for (const c of candidates.slice(1)) {
+            const delta = Math.abs(new Date(c.sent_at).getTime() - resendTs)
+            if (delta < bestDelta) { best = c; bestDelta = delta }
+          }
+          const lastEvent = (email as any).last_event ?? "sent"
+          const update: Record<string, unknown> = {
+            resend_message_id: email.id,
+            last_event_cached: lastEvent,
+            last_event_cached_at: new Date().toISOString(),
+          }
+          // Stamp opened_at / clicked_at when Resend reports them — engagement
+          // function uses both lastEvent and the timestamp columns. Resend's
+          // list response only carries created_at, so we approximate the
+          // engagement timestamp with that (good enough for the popup which
+          // only checks for non-null).
+          if (lastEvent === "opened" || lastEvent === "clicked") {
+            update.opened_at = email.created_at
+          }
+          if (lastEvent === "clicked") {
+            update.clicked_at = email.created_at
+          }
+          await supabase.from("email_drip_queue").update(update as never).eq("id", best.id)
+          dripPatched++
+          dripsByKey.set(key, candidates.filter((c) => c.id !== best.id))
+        }
+      }
+    }
+
     // Record sync timestamp so we don't re-sync within the hour
     await supabase
       .from("email_stats_cache" as any)
       .upsert({ template_id: "_prospect_sync", cached_at: new Date().toISOString(), sends: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 }, { onConflict: "template_id" })
 
-    return { synced }
+    return { synced, dripPatched }
   } catch {
     return { synced: 0 }
   }

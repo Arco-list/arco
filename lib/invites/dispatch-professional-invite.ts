@@ -301,6 +301,11 @@ export async function dispatchProfessionalInvite(
       emails_delivered: introResult.success ? 1 : 0,
       last_email_sent_at: introResult.success ? new Date().toISOString() : null,
       company_id: recipient.id,
+      // Project context — needed by /admin/sales "Start sequence" so we can
+      // re-fire the dispatcher with the same project. Without it, restart
+      // / pause-resume actions can't reconstruct what the prospect was
+      // tagged on.
+      project_id: input.projectId,
       ref_code: recipient.slug ?? recipient.id,
     })
   } else if (introResult.success) {

@@ -126,6 +126,34 @@ function extractTag(
   return null
 }
 
+/**
+ * Display name per template id. Used when the Resend `template` tag
+ * identifies the send — subject regex fallback carries its own name in
+ * SUBJECT_TO_TEMPLATE, but the tag path is authoritative and shouldn't
+ * have to round-trip through the regex map just to recover a label.
+ *
+ * Keep in sync with INITIAL_TEMPLATES in page.tsx — any new template
+ * added there needs a row here too, otherwise the sent-emails tab will
+ * show the raw id instead of a human name.
+ */
+const TEMPLATE_ID_TO_NAME: Record<string, string> = {
+  "domain-verification": "Domain Verification",
+  "professional-invite": "Professional Invite",
+  "team-invite": "Team Invite",
+  "project-live": "Project Live",
+  "project-rejected": "Project Rejected",
+  "introduction-request": "Introduction Request",
+  "welcome-homeowner": "Welcome",
+  "discover-projects": "Discover Projects",
+  "find-professionals": "Find Professionals",
+  "prospect-intro": "Prospect Intro",
+  "prospect-followup": "Prospect Follow-up",
+  "prospect-final": "Prospect Final",
+  "new-professional-invite": "New Professional Invite",
+  "new-professional-followup": "New Professional Follow-up",
+  "new-professional-final": "New Professional Final",
+}
+
 const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   // Auth templates — EN + NL
   [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
@@ -192,6 +220,23 @@ function matchTemplate(subject: string): { id: string; name: string } | null {
   return null
 }
 
+/**
+ * Resolve the template id + display name for a Resend row. Prefers the
+ * `template` tag that sendTransactionalEmail writes on every send, because
+ * subject regex is ambiguous — e.g. both the claimed-company `professional-invite`
+ * and the unclaimed `new-professional-invite` render `"X credited you on Arco"`,
+ * and the Dutch new-professional-invite subject ends in `"op Arco"` which
+ * the prospect-followup catch-all would otherwise swallow. Falls back to
+ * subject regex for historical sends that predate the tag.
+ */
+function resolveTemplate(subject: string, tags: unknown): { id: string; name: string } | null {
+  const tagTemplate = extractTag(tags, 'template')
+  if (tagTemplate && TEMPLATE_ID_TO_NAME[tagTemplate]) {
+    return { id: tagTemplate, name: TEMPLATE_ID_TO_NAME[tagTemplate] }
+  }
+  return matchTemplate(subject)
+}
+
 export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; error?: string }> {
   if (!process.env.RESEND_API_KEY) {
     return { emails: [], error: 'RESEND_API_KEY not configured' }
@@ -209,6 +254,7 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
         tagLocale === 'nl' || tagLocale === 'en'
           ? tagLocale
           : inferLocaleFromSubject(subject)
+      const template = resolveTemplate(subject, e.tags)
       return {
         id: e.id,
         from: e.from,
@@ -216,8 +262,8 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
         subject,
         created_at: e.created_at,
         last_event: e.last_event ?? 'sent',
-        templateId: matchTemplate(subject)?.id ?? null,
-        templateName: matchTemplate(subject)?.name ?? null,
+        templateId: template?.id ?? null,
+        templateName: template?.name ?? null,
         locale,
       }
     })
@@ -270,7 +316,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       const subject = (email as any).subject ?? ""
       const event = (email as any).last_event ?? "sent"
 
-      const templateId = matchTemplate(subject)?.id ?? null
+      const templateId = resolveTemplate(subject, (email as any).tags)?.id ?? null
       if (!templateId) continue
 
       if (!stats[templateId]) {
