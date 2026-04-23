@@ -473,7 +473,7 @@ Fields:
 - building_year (number | null): The year the project was completed or built (4-digit integer). Return null if not found.
 - scope (string | null): The project scope. MUST be one of: "New Build", "Renovation", "Interior Design". Return null if unclear.
 - location (string | null): City and/or country, e.g. "Amsterdam, Netherlands". Return null if not found.
-- building_type (string | null): The type of building. MUST be one of: "villa", "house", "apartment", "townhouse", "penthouse", "bungalow", "chalet", "farm", "garden-house", "other". Return null if unclear.
+- building_type (string | null): The project type. MUST be one of: "villa", "apartment", "townhouse", "bungalow", "chalet", "extension", "garden-house", "garden-design". Return null if none of these fit.
 - style (string | null): The design style. MUST be one of: "modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern". Return null if unclear.`,
     messages: [
       {
@@ -490,7 +490,7 @@ Fields:
   const currentYear = new Date().getFullYear()
   const year = parseInt(parsed.building_year, 10)
 
-  const validBuildingTypes = ["villa", "house", "apartment", "townhouse", "penthouse", "bungalow", "chalet", "farm", "garden-house", "other"]
+  const validBuildingTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "extension", "garden-house", "garden-design"]
   const validStyles = ["modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern"]
 
   // Canonicalise scope to a known slug, then write back the English display
@@ -683,7 +683,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       }
 
       // If we found very few images, try CMS-specific API discovery
-      if (imageUrls.length < 4 && (result.html || result.rawHtml)) {
+      if (imageUrls.length < 10 && (result.html || result.rawHtml)) {
         try {
           const cmsImages = await tryDiscoverCmsImages(result.rawHtml ?? result.html, url.toString())
           for (const img of cmsImages) {
@@ -699,8 +699,9 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
 
       // If Firecrawl still returned very few images, fall back to a
       // direct fetch + JSDOM parse which often picks up images that
-      // Firecrawl's renderer missed (e.g. custom CSS-grid layouts).
-      if (imageUrls.length < 4) {
+      // Firecrawl's renderer missed (e.g. custom CSS-grid layouts,
+      // anchor-wrapped gallery thumbnails, DotNetNuke lightbox links).
+      if (imageUrls.length < 10) {
         try {
           console.log(`[scrape] Firecrawl found only ${imageUrls.length} images — trying direct fetch fallback`)
           const directRes = await fetch(url.toString(), {
@@ -785,8 +786,16 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
 
     imageUrls = extractImagesFromDom(doc, url.toString())
 
+    // Augment DOM extraction with raw-HTML regex — catches anchor-wrapped
+    // gallery thumbnails (e.g. `<a href="…jpg"><img …>`) that our DOM walker
+    // only captures via <img>, missing the full-res href.
+    const rawImages = extractImagesFromRawHtml(html, url.toString())
+    for (const img of rawImages) {
+      if (!imageUrls.includes(img)) imageUrls.push(img)
+    }
+
     // If few images found, try CMS-specific API discovery
-    if (imageUrls.length < 4) {
+    if (imageUrls.length < 10) {
       try {
         const cmsImages = await tryDiscoverCmsImages(html, url.toString())
         for (const img of cmsImages) {
@@ -824,6 +833,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       .from("categories")
       .select("id")
       .eq("slug", building_type)
+      .eq("is_active", true)
       .maybeSingle()
     buildingTypeCategoryId = cat?.id ?? null
     console.log(`[scrape] Building type "${building_type}" → category ID:`, buildingTypeCategoryId)
