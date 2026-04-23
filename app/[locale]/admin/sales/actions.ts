@@ -498,6 +498,90 @@ export async function syncPlatformProspects() {
       await supabase.from("prospects").delete().eq("id", p.id)
     }
   }
+
+  // 4. Link Apollo prospects to claimed companies by email-domain match.
+  // Apollo contacts are created before the target signs up on Arco; when a
+  // matching company later appears (owner_id set = Draft or Listed), wire
+  // the prospect row to it so the admin/sales Company column renders the
+  // logo/services/city and we can jump straight to the company page.
+  //
+  // Free-mail domains (gmail, outlook, etc.) are skipped — matching by a
+  // shared @gmail.com would collapse unrelated companies into one row.
+  const FREE_EMAIL_DOMAINS = new Set([
+    "gmail.com", "googlemail.com",
+    "outlook.com", "hotmail.com", "hotmail.nl", "live.com", "live.nl",
+    "yahoo.com", "yahoo.nl", "icloud.com", "me.com",
+    "proton.me", "protonmail.com",
+    "ziggo.nl", "kpn.nl", "kpnmail.nl", "planet.nl", "home.nl",
+  ])
+  const stripHost = (raw: string | null | undefined): string | null => {
+    if (!raw) return null
+    const cleaned = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]
+    return cleaned || null
+  }
+
+  const { data: unlinkedApollo } = await supabase
+    .from("prospects")
+    .select("id, email, company_id")
+    .eq("source", "apollo")
+    .is("company_id", null)
+
+  if (unlinkedApollo && unlinkedApollo.length > 0) {
+    const domainToProspects = new Map<string, string[]>()
+    for (const p of unlinkedApollo) {
+      const dom = p.email?.includes("@") ? p.email.split("@").pop()?.toLowerCase() ?? null : null
+      if (!dom || FREE_EMAIL_DOMAINS.has(dom)) continue
+      const bucket = domainToProspects.get(dom) ?? []
+      bucket.push(p.id)
+      domainToProspects.set(dom, bucket)
+    }
+
+    if (domainToProspects.size > 0) {
+      const { data: claimedCompanies } = await supabase
+        .from("companies")
+        .select("id, name, domain, owner_id, status, created_at")
+        .not("owner_id", "is", null)
+        .not("domain", "is", null)
+
+      // Status advances to 'active' when the company is Listed and 'company'
+      // when it's Draft. The resolvedContact join only renders the owner
+      // profile for those two stages — without this, a linked Apollo row
+      // would still display the Apollo outreach email as the contact.
+      const STATUS_ORDER: Record<string, number> = {
+        prospect: 0, contacted: 1, visitor: 2, signup: 3, company: 4, active: 5,
+      }
+
+      for (const company of claimedCompanies ?? []) {
+        const dom = stripHost(company.domain)
+        if (!dom) continue
+        const prospectIds = domainToProspects.get(dom)
+        if (!prospectIds?.length) continue
+
+        const targetStatus = company.status === "listed" ? "active" : "company"
+        const targetRank = STATUS_ORDER[targetStatus]
+        const createdAt = company.created_at as string
+
+        const { data: currentRows } = await supabase
+          .from("prospects")
+          .select("id, status, company_created_at, converted_at")
+          .in("id", prospectIds)
+
+        for (const row of currentRows ?? []) {
+          const currentRank = STATUS_ORDER[row.status ?? ""] ?? -1
+          const updates: Record<string, unknown> = {
+            company_id: company.id,
+            company_name: company.name,
+          }
+          if (targetRank > currentRank) updates.status = targetStatus
+          if (!row.company_created_at) updates.company_created_at = createdAt
+          if (targetStatus === "active" && !row.converted_at) {
+            updates.converted_at = createdAt
+          }
+          await supabase.from("prospects").update(updates).eq("id", row.id)
+        }
+      }
+    }
+  }
 }
 
 /**
