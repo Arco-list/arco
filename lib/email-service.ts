@@ -96,10 +96,19 @@ export async function resolveRecipientLanguage(opts: {
         .select('country')
         .eq('id', opts.companyId)
         .maybeSingle()
-      const country = (data?.country ?? '').toUpperCase().trim()
-      if (country === 'NL' || country === 'BE' || country === 'NETHERLANDS' || country === 'BELGIUM') {
-        return 'nl'
-      }
+      // Normalise so 'België' / 'belgie' / 'BELGIË' all collapse to the
+      // same key — the country column is free-form user input and may be
+      // stored in English or Dutch spelling, with or without diacritics.
+      const country = (data?.country ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .trim()
+      const DUTCH_COUNTRIES = new Set([
+        'NL', 'NETHERLANDS', 'NEDERLAND', 'THE NETHERLANDS',
+        'BE', 'BELGIUM', 'BELGIE',
+      ])
+      if (DUTCH_COUNTRIES.has(country)) return 'nl'
       // Non-Dutch country — fall through to TLD only if TLD adds signal,
       // otherwise the country is authoritative (German company → 'en').
       if (country.length > 0) return DEFAULT_LOCALE
