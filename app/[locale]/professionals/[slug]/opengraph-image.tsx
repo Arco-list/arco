@@ -1,8 +1,9 @@
 import { ImageResponse } from "next/og"
-import { fetchProfessionalMetadata } from "@/lib/professionals/queries"
+import sharp from "sharp"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getSiteUrl } from "@/lib/utils"
 
+export const runtime = "nodejs"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 export const alt = "Arco"
@@ -10,35 +11,61 @@ export const alt = "Arco"
 const BADGE_SIZE = Math.round(size.width * 0.14)   // 168
 const RIGHT_MARGIN = Math.round(size.width * 0.033) // ~40
 
+// Fetch the hero photo ourselves and return a JPEG data URL. Kept in
+// sync with the identical helper in projects/[slug]/opengraph-image.tsx.
+async function loadHeroAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "image/jpeg,image/png;q=0.9,image/*;q=0.5" },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return null
+    const mime = (res.headers.get("content-type") ?? "").toLowerCase()
+    let buf = Buffer.from(await res.arrayBuffer())
+    if (!/^image\/(jpeg|png)\b/.test(mime)) {
+      buf = await sharp(buf).jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+    }
+    return `data:image/jpeg;base64,${buf.toString("base64")}`
+  } catch {
+    return null
+  }
+}
+
 export default async function OgImage({
   params,
 }: {
   params: Promise<{ locale: string; slug: string }>
 }) {
-  const { slug, locale } = await params
-  const professional = await fetchProfessionalMetadata(slug, { locale })
-  let heroUrl: string | null = professional?.coverImageUrl ?? null
+  const { slug } = await params
+  // Service role — the OG endpoint is requested by anonymous link-preview
+  // crawlers with no session cookies, and many companies have no active
+  // team-member link (common for prospected ones), which makes the usual
+  // fetchProfessionalMetadata path return null. Query the cover photo
+  // directly so every listed/prospected company gets a branded card.
+  const service = createServiceRoleSupabaseClient()
 
-  // Fallback — fetchProfessionalMetadata returns null when a company has no
-  // active team-member linked (common for prospected companies), losing the
-  // hero. Look up a cover photo directly so those pages still get branded.
-  if (!heroUrl) {
-    const service = createServiceRoleSupabaseClient()
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)
-    const { data: company } = isUuid
-      ? await service.from("companies").select("id").eq("id", slug).maybeSingle()
-      : await service.from("companies").select("id").eq("slug", slug).maybeSingle()
-    if (company) {
-      const { data: photos } = await service
-        .from("company_photos")
-        .select("url, is_cover")
-        .eq("company_id", company.id)
-        .order("is_cover", { ascending: false })
-        .limit(1)
-      heroUrl = photos?.[0]?.url ?? null
-    }
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)
+  const { data: company, error: companyError } = isUuid
+    ? await service.from("companies").select("id").eq("id", slug).maybeSingle()
+    : await service.from("companies").select("id").eq("slug", slug).maybeSingle()
+
+  let heroUrl: string | null = null
+  if (company) {
+    const { data: photos, error: photoError } = await service
+      .from("company_photos")
+      .select("url, is_cover")
+      .eq("company_id", company.id)
+      .order("is_cover", { ascending: false })
+      .limit(1)
+    heroUrl = photos?.[0]?.url ?? null
+    if (photoError) console.error("[og-image:professional] photos lookup failed", { slug, error: photoError.message })
+  } else if (companyError) {
+    console.error("[og-image:professional] company lookup failed", { slug, error: companyError.message })
+  } else {
+    console.warn("[og-image:professional] company not found", { slug })
   }
 
+  const heroDataUrl = heroUrl ? await loadHeroAsDataUrl(heroUrl) : null
   const base = getSiteUrl()
   const badgeUrl = `${base}/arco-og-badge.png`
 
@@ -53,10 +80,10 @@ export default async function OgImage({
           backgroundColor: "#1c1c1a",
         }}
       >
-        {heroUrl ? (
+        {heroDataUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={heroUrl}
+            src={heroDataUrl}
             alt=""
             width={size.width}
             height={size.height}
