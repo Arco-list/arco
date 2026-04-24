@@ -1,5 +1,4 @@
 import { ImageResponse } from "next/og"
-import sharp from "sharp"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getSiteUrl } from "@/lib/utils"
 
@@ -23,6 +22,8 @@ async function loadHeroAsDataUrl(url: string): Promise<string | null> {
     const mime = (res.headers.get("content-type") ?? "").toLowerCase()
     let buf = Buffer.from(await res.arrayBuffer())
     if (!/^image\/(jpeg|png)\b/.test(mime)) {
+      // Dynamic import — see matching note in projects/[slug]/opengraph-image.tsx
+      const { default: sharp } = await import("sharp")
       buf = await sharp(buf).jpeg({ quality: 85, mozjpeg: true }).toBuffer()
     }
     return `data:image/jpeg;base64,${buf.toString("base64")}`
