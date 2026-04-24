@@ -77,14 +77,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     }
   }
 
-  const { data: photos } = await supabase
-    .from("project_photos")
-    .select("url, is_primary")
-    .eq("project_id", project.id)
-    .order("is_primary", { ascending: false })
-    .limit(1)
-
-  const primaryPhoto = photos?.[0]
   const metaLocale = resolvedParams.locale ?? "en"
   const localizedMetaTitle = getProjectTranslation(project, "title", metaLocale) || project.title
   const localizedMetaDesc = getProjectTranslation(project, "description", metaLocale) || project.description
@@ -116,12 +108,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `${title} | Arco`,
       description,
       url: canonical,
-      images: primaryPhoto?.url ? [{
-        url: primaryPhoto.url,
-        width: 1200,
-        height: 630,
-        alt: project.title,
-      }] : undefined,
+      // og:image is provided by opengraph-image.tsx co-located with this
+      // route — omit `images` here so Next.js doesn't emit two <meta
+      // property="og:image"> tags.
     }
   }
 }

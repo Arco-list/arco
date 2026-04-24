@@ -41,8 +41,6 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
       ? t("discover_in_location", { name: professional.name, location: professional.location })
       : t("discover_name", { name: professional.name }))
 
-  const image = professional.coverImageUrl ?? "/placeholder.svg"
-
   const baseUrl = getSiteUrl()
   const canonical = `${baseUrl}/professionals/${slug}`
   const languages = Object.fromEntries(
@@ -60,7 +58,9 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
       title: `${professional.name} | Arco`,
       description,
       url: canonical,
-      images: image ? [{ url: image, alt: professional.name }] : undefined,
+      // og:image is provided by opengraph-image.tsx co-located with this
+      // route — omit `images` here so Next.js doesn't emit two <meta
+      // property="og:image"> tags.
     },
   }
 }
