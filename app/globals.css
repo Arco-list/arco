@@ -1703,6 +1703,14 @@ a.arco-nav-text.nav-transparent:hover {
     padding: 24px 0;
     margin-bottom: 40px;
   }
+  /* Editable variant needs extra vertical room so each cell's outline and
+     top-anchored EDIT chip clear the row above. Same values as the local
+     rules in components/company-edit/company-edit-client.tsx — keep these
+     in sync. */
+  .specifications-bar:has(.spec-item-edit) {
+    gap: 84px 16px;
+    padding: 36px 0;
+  }
 }
 
 .spec-item {
@@ -1865,8 +1873,8 @@ a.arco-nav-text.nav-transparent:hover {
 }
 
 @media (max-width: 768px) {
-  .spec-item-edit::before { inset: -24px -8px; }
-  .spec-item-edit .ec-badge { top: -32px; }
+  .spec-item-edit::before { inset: -36px -8px; }
+  .spec-item-edit .ec-badge { top: -44px; }
 }
 
 .category-tags {
