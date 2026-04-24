@@ -48,8 +48,9 @@
   }
 
   /* ── The badge ─── single rule for every aspect ratio.
-     Size: 14% of the card's *shorter side* — min(14cqw, 14cqh).
-       • Landscape (1200×630) → 14% × 630 = ~88px
+     Size: 14% of the canvas WIDTH — uniform across ratios so the landscape
+     OG card gets the same visual weight as the square Instagram card.
+       • Landscape (1200×630)  → 14% × 1200 = ~168px
        • Square    (1080×1080) → 14% × 1080 = ~151px
        • Portrait  (1080×1350) → 14% × 1080 = ~151px
        • Story     (1080×1920) → 14% × 1080 = ~151px
@@ -59,7 +60,7 @@
     position: absolute;
     right: 3.3%;
     bottom: 0;
-    width: min(14cqw, 14cqh);
+    width: 14%;
     aspect-ratio: 1 / 1;
     background-image: url('../../public/arco-og-badge.png');
     background-size: contain;
@@ -134,14 +135,14 @@
 <body>
 <div class="wrap">
   <h1>Branded social image — option B, across platforms</h1>
-  <p class="lede">Single placement rule everywhere: badge flush with the bottom edge, <strong>3.3% off the right edge</strong>, sized at <strong>14% of the canvas's shorter side</strong>. That's one CSS line — <code>width: min(14cqw, 14cqh); aspect-ratio: 1</code> — so the badge scales up automatically on portrait / square / story canvases where the shorter side is the width, and holds at ~88px on the landscape OG card where the shorter side is the height.</p>
+  <p class="lede">Single placement rule everywhere: badge flush with the bottom edge, <strong>3.3% off the right edge</strong>, sized at <strong>14% of the canvas width</strong>. That's one CSS line — <code>width: 14%; aspect-ratio: 1</code> — uniform across ratios so the landscape OG card carries the same visual weight as the Instagram square.</p>
 
   <div class="rail">
 
     <!-- 1 — OG / Twitter / LinkedIn / FB / WhatsApp / Slack -->
     <div class="slot full">
       <h2>1.91 : 1 — OG / Twitter · LinkedIn · Facebook · WhatsApp · Slack</h2>
-      <div class="meta">1200 × 630 · badge 14% of 630 ≈ 88px</div>
+      <div class="meta">1200 × 630 · badge 14% of 1200 ≈ 168px</div>
       <div class="card-wrap">
         <div class="card r-og">
           <div class="badge"></div>
@@ -200,10 +201,10 @@
     <h3>Locked spec — badge rules (all formats)</h3>
     <p><strong>Asset:</strong> <code>/public/arco-og-badge.png</code> (312×312 master; source at <code>docs/brand/arco-og-badge-source.png</code>).</p>
     <p><strong>Position:</strong> flush with the bottom edge of the canvas, <strong>3.3% off the right edge</strong>. Pinned in percentages so it lands in the same visual spot regardless of aspect ratio.</p>
-    <p><strong>Size:</strong> <strong>14% of the canvas's shorter side</strong> — a single rule for every ratio. CSS: <code>width: min(14cqw, 14cqh); aspect-ratio: 1</code> on a card with <code>container-type: size</code>. Resolves to:
-      <br><code>landscape 1200×630</code> — 88px (short side = height)
+    <p><strong>Size:</strong> <strong>14% of the canvas width</strong> — a single rule for every ratio. CSS: <code>width: 14%; aspect-ratio: 1</code>. Resolves to:
+      <br><code>landscape 1200×630</code> — 168px
       <br><code>square 1080×1080</code> — 151px
-      <br><code>portrait 1080×1350</code> — 151px (short side = width)
+      <br><code>portrait 1080×1350</code> — 151px
       <br><code>story 1080×1920</code> — 151px
       <br><code>pin 1000×1500</code> — 140px
     </p>
