@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Check } from "lucide-react"
+import { Check, Info } from "lucide-react"
 import { useTranslations } from "next-intl"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { FAQSection } from "@/components/landing"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/contexts/auth-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
 
@@ -23,11 +25,12 @@ type FeatureRow = {
 
 // Feature keys for translation lookup
 const FEATURE_KEYS = [
-  { labelKey: "pricing_feature_published", freeKey: "pricing_unlimited", proKey: "pricing_unlimited", freeBool: true, proBool: true },
-  { labelKey: "pricing_feature_contributor", freeKey: "pricing_3_projects", proKey: "pricing_unlimited", freeBool: true, proBool: true },
-  { labelKey: "pricing_feature_company_page", freeKey: null, proKey: null, freeBool: true, proBool: true },
-  { labelKey: "pricing_feature_team", freeKey: null, proKey: null, freeBool: false, proBool: true },
-  { labelKey: "pricing_feature_analytics", freeKey: null, proKey: null, freeBool: false, proBool: true },
+  { labelKey: "pricing_feature_published", freeKey: "pricing_unlimited", proKey: "pricing_unlimited", freeBool: true, proBool: true, tooltipKey: "pricing_feature_published_tooltip", tooltipTitleKey: null },
+  { labelKey: "pricing_feature_contributor", freeKey: "pricing_1_project", proKey: "pricing_unlimited", freeBool: true, proBool: true, tooltipKey: "pricing_feature_contributor_tooltip", tooltipTitleKey: null },
+  { labelKey: "pricing_feature_company_page", freeKey: null, proKey: null, freeBool: true, proBool: true, tooltipKey: "pricing_feature_company_page_tooltip", tooltipTitleKey: null },
+  { labelKey: "pricing_feature_team", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_team_tooltip", tooltipTitleKey: null },
+  { labelKey: "pricing_feature_analytics", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_analytics_tooltip", tooltipTitleKey: null },
+  { labelKey: "pricing_feature_arco_approved", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_arco_approved_tooltip", tooltipTitleKey: "pricing_feature_arco_approved_tooltip_title" },
 ] as const
 
 export default function PricingPage() {
@@ -69,7 +72,7 @@ export default function PricingPage() {
           {/* Header */}
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <h1 className="arco-page-title" style={{ marginBottom: 16 }}>{t("pricing_title")}</h1>
-            <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto", color: "var(--arco-light)" }}>
+            <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
               {t("pricing_subtitle")}
             </p>
           </div>
@@ -100,11 +103,10 @@ export default function PricingPage() {
             <div className="pricing-card pricing-card-subgrid">
               <div className="pricing-card-header">
                 <p className="pricing-card-label">{t("pricing_free")}</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <h2 className="pricing-card-price">€0</h2>
                 </div>
-                <p style={{ fontSize: 12, minHeight: 18, marginTop: 4 }}>&nbsp;</p>
-                <p className="pricing-card-desc">{t("pricing_free_desc")}</p>
+                <p className="arco-small-text" style={{ marginTop: 8 }}>{t("pricing_free_desc")}</p>
               </div>
 
               <div className="pricing-card-features">
@@ -119,7 +121,24 @@ export default function PricingPage() {
                       ) : (
                         <span style={{ width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--arco-rule)" }}>—</span>
                       )}
-                      <span>{valueStr ? `${label}: ${valueStr}` : label}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        {valueStr ? `${label}: ${valueStr}` : label}
+                        {f.tooltipKey && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" aria-label={`More info: ${label}`} style={{ display: "inline-flex", alignItems: "center", border: "none", background: "transparent", padding: 0, cursor: "help", color: "var(--arco-light)" }}>
+                                <Info size={13} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-left">
+                              <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                                {t((f.tooltipTitleKey ?? f.labelKey) as any)}
+                              </div>
+                              <div style={{ fontWeight: 300, lineHeight: 1.5 }}>{t(f.tooltipKey as any)}</div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
                     </div>
                   )
                 })}
@@ -144,14 +163,18 @@ export default function PricingPage() {
               <span className="pricing-card-badge">{t("pricing_recommended")}</span>
               <div className="pricing-card-header">
                 <p className="pricing-card-label" style={{ color: "var(--primary)" }}>{t("pricing_pro")}</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                  <h2 className="pricing-card-price">€{proPrice}</h2>
-                  <span style={{ fontSize: 14, color: "var(--arco-light)" }}>{t("pricing_per_month")}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                    <h2 className="pricing-card-price">€{proPrice}</h2>
+                    <span style={{ fontSize: 14, color: "var(--arco-light)" }}>{t("pricing_per_month")}</span>
+                  </div>
+                  {billingCycle === "yearly" && (
+                    <span className="status-pill" style={{ marginLeft: "auto" }}>
+                      {t("pricing_billed_annually", { amount: "€468" })}
+                    </span>
+                  )}
                 </div>
-                <p style={{ fontSize: 12, color: "var(--arco-light)", marginTop: 4, minHeight: 18 }}>
-                  {billingCycle === "yearly" ? t("pricing_billed_annually", { amount: "€468" }) : "\u00A0"}
-                </p>
-                <p className="pricing-card-desc">{t("pricing_pro_desc")}</p>
+                <p className="arco-small-text" style={{ marginTop: 8 }}>{t("pricing_pro_desc")}</p>
               </div>
 
               <div className="pricing-card-features">
@@ -161,7 +184,24 @@ export default function PricingPage() {
                   return (
                     <div key={f.labelKey} className="pricing-feature">
                       <Check size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
-                      <span>{valueStr ? `${label}: ${valueStr}` : label}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        {valueStr ? `${label}: ${valueStr}` : label}
+                        {f.tooltipKey && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" aria-label={`More info: ${label}`} style={{ display: "inline-flex", alignItems: "center", border: "none", background: "transparent", padding: 0, cursor: "help", color: "var(--primary)" }}>
+                                <Info size={13} />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-left">
+                              <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                                {t((f.tooltipTitleKey ?? f.labelKey) as any)}
+                              </div>
+                              <div style={{ fontWeight: 300, lineHeight: 1.5 }}>{t(f.tooltipKey as any)}</div>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </span>
                     </div>
                   )
                 })}
@@ -180,48 +220,26 @@ export default function PricingPage() {
 
           {/* Architect hero section */}
           <div style={{ margin: "56px 0 0", padding: "40px 32px", background: "var(--arco-off-white)", borderRadius: 8, textAlign: "center" }}>
-            <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--primary)", marginBottom: 12 }}>
+            <p className="arco-eyebrow" style={{ marginBottom: 12 }}>
               {t("pricing_for_architects")}
             </p>
             <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_publishing_free")}</h3>
-            <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto", color: "var(--arco-light)" }}>
+            <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
               {t("pricing_publishing_free_body")}
             </p>
           </div>
 
-          {/* FAQ section */}
-          <div style={{ maxWidth: 600, margin: "48px auto 0", paddingBottom: 80 }}>
-            <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 32 }}>{t("pricing_faq_title")}</h3>
-
-            {[
-              {
-                q: t("pricing_faq_q1"),
-                a: t("pricing_faq_a1"),
-              },
-              {
-                q: t("pricing_faq_q2"),
-                a: t("pricing_faq_a2"),
-              },
-              {
-                q: t("pricing_faq_q3"),
-                a: t("pricing_faq_a3"),
-              },
-            ].map((item) => (
-              <details key={item.q} style={{ borderBottom: "1px solid var(--arco-rule)", padding: "16px 0" }}>
-                <summary style={{ fontSize: 14, fontWeight: 400, cursor: "pointer", color: "var(--arco-black)", listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  {item.q}
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--arco-light)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, transition: "transform .2s" }}>
-                    <path d="M4 6l4 4 4-4" />
-                  </svg>
-                </summary>
-                <p className="arco-body-text" style={{ marginTop: 12, color: "var(--arco-light)" }}>
-                  {item.a}
-                </p>
-              </details>
-            ))}
-          </div>
-
         </div>
+
+        <FAQSection
+          heading={t("pricing_faq_title")}
+          items={[
+            { question: t("pricing_faq_q1"), answer: t("pricing_faq_a1") },
+            { question: t("pricing_faq_q2"), answer: t("pricing_faq_a2") },
+            { question: t("pricing_faq_q3"), answer: t("pricing_faq_a3") },
+          ]}
+          paddingTop={56}
+        />
       </main>
 
       <Footer />

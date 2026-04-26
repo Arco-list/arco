@@ -4831,22 +4831,20 @@ body.no-scroll {
 .pricing-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr auto;
   gap: 24px;
-  align-items: start;
-  grid-template-rows: subgrid;
 }
 
 .pricing-card {
   border: 1px solid var(--arco-rule);
   border-radius: 8px;
   padding: 32px;
-  display: flex;
-  flex-direction: column;
 }
 
 .pricing-card-subgrid {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
 }
 
 .pricing-card-featured {
@@ -4870,7 +4868,7 @@ body.no-scroll {
 }
 
 .pricing-card-header {
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .pricing-card-billing {

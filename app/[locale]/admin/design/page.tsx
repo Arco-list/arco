@@ -1,3 +1,5 @@
+import { FAQPreview } from "./faq-preview"
+
 export const dynamic = "force-dynamic"
 
 export default function DesignPage() {
@@ -415,6 +417,19 @@ export default function DesignPage() {
                   .how-number uses <strong>Section</strong> (serif). .how-title uses <strong>Label</strong>. .how-body uses <strong>Body</strong>.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* FAQ */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>FAQ</h2>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+              <FAQPreview />
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Question uses <strong>Standard</strong> (15px, 400) → Teal on hover. Answer uses <strong>Body</strong>. Each item has a top + bottom rule; the <code>+</code> toggle rotates 45° when active and the answer animates open via <code>max-height</code>. Source: <code>FAQSection</code> in <code>components/landing</code>, items from <code>businesses/architects/data.ts</code>.
+              </p>
             </div>
           </div>
 
