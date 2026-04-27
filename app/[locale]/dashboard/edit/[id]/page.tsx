@@ -111,6 +111,7 @@ import {
 } from "@/app/new-project/actions"
 import { createUnlistedCompanyAction, confirmLinkExistingCompanyAction, sendInviteEmailAction, getCompanyOwnerEmailAction } from "@/app/dashboard/edit/actions"
 import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions"
+import { PhotographerSpecCell } from "./photographer-spec-cell"
 import { isAdminUser } from "@/lib/auth-utils"
 import { trackProjectPublished, trackProfessionalInvited } from "@/lib/tracking"
 import {
@@ -4641,6 +4642,9 @@ export default function ListingEditorPage() {
               </>
             )}
           </div>
+
+          {/* Photographer */}
+          {projectId && <PhotographerSpecCell projectId={projectId} />}
 
           </div>
         </div>

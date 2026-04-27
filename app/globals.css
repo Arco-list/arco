@@ -1726,6 +1726,22 @@ a.arco-nav-text.nav-transparent:hover {
   display: block;
 }
 
+/* Link variant inside a spec cell (e.g. photographer credit when their
+   company page is live). Inherits the .arco-card-title typography from the
+   surrounding cell; we only add the hover affordance + remove the default
+   browser underline, matching the Inline link pattern in /admin/design. */
+.spec-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--arco-rule);
+  text-underline-offset: 2px;
+  transition: color .15s ease, text-decoration-color .15s ease;
+}
+.spec-link:hover {
+  color: var(--primary);
+  text-decoration-color: var(--primary);
+}
+
 /* ── Inline edit chrome (.ec and .ec-badge) ────────────────────────────────
    Two flavours share the same chip ("EDIT" / "BEWERKEN") and icon:
 
@@ -7172,7 +7188,8 @@ body.no-scroll {
 /* ═══════════════════ SETUP NAV CTA ═══════════════════ */
 
 .setup-nav-cta {
-  padding: 7px 18px !important;
+  padding: 8px 18px !important;
+  font-size: 13px !important;
   white-space: nowrap;
 }
 

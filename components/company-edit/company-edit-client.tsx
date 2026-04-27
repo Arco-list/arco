@@ -1388,7 +1388,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   View all listings →
                 </Link>
               )}
-              {companyProjects.length > 0 && (
+              {companyProjects.length > 0 && canPublishProjects && (
                 <button
                   type="button"
                   className="btn-primary"

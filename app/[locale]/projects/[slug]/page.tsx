@@ -180,7 +180,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   // Fetch related data
-  const [photosResult, professionalsResult, featuresResult] = await Promise.all([
+  const [photosResult, professionalsResult, featuresResult, photographerResult] = await Promise.all([
     supabase
       .from("project_photos")
       .select("id, url, caption, feature_id, is_primary, order_index")
@@ -213,7 +213,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .from("project_features")
       .select("id, space:spaces!space_id(slug)")
       .eq("project_id", project.id)
-      .not("space_id", "is", null)
+      .not("space_id", "is", null),
+    // Photographer credit. Separate from the main professionals query because
+    // photographers should appear in the specs bar regardless of company
+    // status — unclaimed photographers still get a name shown (plain text);
+    // only once their company is `listed` does the name become a link to
+    // /photographers/[slug]. Filtering on companies.audience = 'pro' picks
+    // them out without binding to the photographer category UUID.
+    supabase
+      .from("project_professionals")
+      .select(`
+        id,
+        company_id,
+        companies!inner(id, name, slug, status, audience)
+      `)
+      .eq("project_id", project.id)
+      .eq("companies.audience", "pro")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
   ])
 
   const photos = photosResult.data ?? []
@@ -568,6 +586,18 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     imageUrl: relatedPhotoMap.get(p.id) ?? null,
   }))
 
+  // Photographer credit for the specs bar. isLive controls whether the name
+  // links to /photographers/[slug] (only once the company is fully listed) or
+  // renders as plain text.
+  const photographerCompany = (photographerResult?.data as any)?.companies ?? null
+  const photographerCredit = photographerCompany
+    ? {
+        name: photographerCompany.name as string,
+        slug: (photographerCompany.slug as string | null) ?? null,
+        isLive: photographerCompany.status === "listed",
+      }
+    : null
+
   // Type from project_type_category_id, falling back to project_type if it's a UUID
   const resolvedType = resolveName(typeId) ?? resolveName(project.project_type)
   // Scope from project_type — canonicalise to a slug so SpecificationsBar
@@ -652,6 +682,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             type={resolvedType}
             scope={resolvedScope}
             style={resolvedStyle}
+            photographer={photographerCredit}
           />
         </div>
 
