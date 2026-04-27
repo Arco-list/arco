@@ -92,7 +92,10 @@ export async function syncApolloList(listId: string) {
             apollo_list_id: listId,
             source: "apollo",
           },
-          { onConflict: "email" }
+          // Matches the prospects_email_source_key UNIQUE (email, source)
+          // constraint. A plain `email` key would collide with the arco
+          // and invites source rows that legitimately share the email.
+          { onConflict: "email,source" }
         )
 
       if (error) {

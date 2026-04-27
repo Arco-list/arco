@@ -27,6 +27,7 @@ import {
 } from "@/app/dashboard/company/actions"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { getCompanyTranslation } from "@/lib/company-translations"
+import { PHOTOGRAPHER_SPECIALTIES } from "@/lib/photographer-specialties"
 import type { Database } from "@/lib/supabase/types"
 import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
@@ -118,6 +119,8 @@ export interface CompanyEditClientProps {
   isSetupMode?: boolean
   pendingProjects?: PendingProject[]
   canPublishProjects?: boolean
+  /** Distinct architect-owner companies this company has been credited beside. Surfaced as the "Collaborations" cell on photographer profiles. */
+  collaborationsCount?: number
   showImportedBanner?: boolean
   importedProjectId?: string | null
   adminCompanyId?: string
@@ -155,7 +158,7 @@ const EditBadge = () => (
 
 // ── Component ──
 
-export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, showImportedBanner = false, importedProjectId = null, adminCompanyId }: CompanyEditClientProps) {
+export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId }: CompanyEditClientProps) {
   const router = useRouter()
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
@@ -195,6 +198,11 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   })
   const [languages, setLanguages] = useState<string[]>(company.languages ?? [])
   const [certificates, setCertificates] = useState<string[]>(company.certificates ?? [])
+  const [specialties, setSpecialties] = useState<string[]>(((company as any).specialties as string[] | null) ?? [])
+  // Photographer variant — flips the specs bar (Specialties / Collaborations
+  // instead of Team Size / Certificates), locks the services badge, hides the
+  // Team nav link, and renames "Featured projects" → "Photographed projects".
+  const isPhotographer = (company as any).audience === "pro"
 
   // ── Specs state ──
   const [foundedYear, setFoundedYear] = useState<number | null>(company.founded_year ?? null)
@@ -327,13 +335,24 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [importFirstProjectOpen, setImportFirstProjectOpen] = useState(false)
   const [highlightMissing, setHighlightMissing] = useState(false)
 
-  const setupComplete = useMemo(() => ({
-    name: !!name?.trim(),
-    services: servicesOffered.length > 0,
-    description: !!description?.trim(),
-    location: !!city?.trim(),
-    domain: !!domain?.trim(),
-  }), [name, servicesOffered, description, city, domain])
+  // Photographers only need name + location to complete setup. Services are
+  // locked to "Photographer" by category, and description / domain are
+  // optional — the architect endorsement is the trust signal, not a filled
+  // out marketing page. Homeowner-facing companies still need the full set.
+  const setupComplete = useMemo(() => (
+    isPhotographer
+      ? {
+          name: !!name?.trim(),
+          location: !!city?.trim(),
+        }
+      : {
+          name: !!name?.trim(),
+          services: servicesOffered.length > 0,
+          description: !!description?.trim(),
+          location: !!city?.trim(),
+          domain: !!domain?.trim(),
+        }
+  ), [isPhotographer, name, servicesOffered, description, city, domain])
   const allRequiredComplete = Object.values(setupComplete).every(Boolean)
 
   // Clear highlight when all fields are complete
@@ -360,9 +379,25 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       return
     }
 
-    // Show the appropriate popup
+    // Photographers auto-list on completion — skip the publish popup, no
+    // explicit "list now / list later" choice. The architect endorsement is
+    // the trust signal that already vetted them.
+    if (isPhotographer) {
+      completeCompanySetupAction({ listCompany: true, listProjectIds: [] }).then((result) => {
+        if (result.success) {
+          toast.success("Your photographer page is now live!")
+          router.refresh()
+        } else {
+          toast.error(result.error ?? t("something_wrong"))
+        }
+      })
+      return
+    }
+
+    // Homeowner-facing companies see the popup so they can opt into listing
+    // versus staying unlisted.
     setPublishPopupOpen(true)
-  }, [allRequiredComplete, importedProjectId, router])
+  }, [allRequiredComplete, importedProjectId, isPhotographer, router, t])
 
   // ── Project card handlers ──
   const userId = user?.id ?? null
@@ -730,7 +765,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     saveSpecs({ city: mainText })
   }, [saveSpecs])
 
-  const saveServices = useCallback(async (overrides?: { servicesOffered?: string[]; languages?: string[]; certificates?: string[] }) => {
+  const saveServices = useCallback(async (overrides?: { servicesOffered?: string[]; languages?: string[]; certificates?: string[]; specialties?: string[] }) => {
     const sOffered = overrides?.servicesOffered ?? servicesOffered
     setEditSaveStatus("saving")
     startTransition(async () => {
@@ -739,6 +774,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         servicesOffered: sOffered,
         languages: overrides?.languages ?? languages,
         certificates: overrides?.certificates ?? certificates,
+        // Only photographer companies pass specialties; other callers leave
+        // it undefined so the action skips the column update.
+        specialties: isPhotographer ? (overrides?.specialties ?? specialties) : undefined,
       })
       if (!result.success) {
         toast.error(result.error ?? t("services_error"))
@@ -747,7 +785,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       }
       flashSaved()
     })
-  }, [servicesOffered, languages, certificates, flashSaved])
+  }, [servicesOffered, languages, certificates, specialties, isPhotographer, flashSaved])
 
   const handleSocialSave = useCallback(async (platform: Platform, url: string) => {
     const newSocial = { ...socialForm, [platform]: url }
@@ -1033,7 +1071,10 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <Header navLinks={[
         { href: `/dashboard/listings?company_id=${company.id}`, label: "Listings" },
         { href: `/dashboard/company?company_id=${company.id}`, label: "Company" },
-        { href: `/dashboard/team?company_id=${company.id}`, label: "Team" },
+        // Photographers are typically solo — Team management is hidden for
+        // audience='pro' companies. Filter rather than spread-conditional so
+        // the nav order stays stable.
+        ...(isPhotographer ? [] : [{ href: `/dashboard/team?company_id=${company.id}`, label: "Team" }]),
         { href: "/dashboard/inbox", label: "Messages" },
         { href: "/dashboard/pricing", label: "Plans" },
       ]} />
@@ -1153,12 +1194,17 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </h1>
           </div>
 
-          {/* Services badge — click to open service selection popup */}
+          {/* Services badge — click to open service selection popup. Locked
+              for photographers (audience='pro'); the service is fixed by
+              category and shouldn't drift to homeowner-facing categories. */}
           <p
             className="professional-badge service-popup-badge"
-            onClick={() => { servicesSnapshotRef.current = [...servicesOffered]; setServicePopupOpen(true) }}
+            onClick={isPhotographer ? undefined : () => { servicesSnapshotRef.current = [...servicesOffered]; setServicePopupOpen(true) }}
             data-setup-highlight={highlightMissing && !setupComplete.services ? "true" : undefined}
-            style={orderedServiceNames.length === 0 ? { color: "var(--primary)" } : undefined}
+            style={{
+              ...(orderedServiceNames.length === 0 ? { color: "var(--primary)" } : undefined),
+              ...(isPhotographer ? { cursor: "default" } : undefined),
+            }}
           >
             {servicesBadge}
           </p>
@@ -1266,42 +1312,79 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             />
           </div>
 
-          {/* Team Size */}
-          <div
-            className={`spec-item-edit${editingSpecBar === "teamSize" ? " editing" : ""}`}
-            onClick={() => { if (editingSpecBar !== "teamSize") setEditingSpecBar("teamSize") }}
-          >
-            <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("team_size")}</span>
-            {editingSpecBar === "teamSize" ? (
-              <input
-                type="number"
-                className="spec-inp-inline"
-                value={teamSizeMin ?? ""}
-                autoFocus
-                placeholder={t("add_size")}
-                min={1}
-                onChange={(e) => {
-                  const val = e.target.value.trim()
-                  setTeamSizeMin(val ? parseInt(val, 10) : null)
-                }}
-                onBlur={(e) => {
-                  const val = e.target.value.trim()
-                  const size = val ? parseInt(val, 10) : null
-                  setTeamSizeMin(size)
-                  setTeamSizeMax(size)
-                  setEditingSpecBar(null)
-                  saveSpecs({ teamSizeMin: size, teamSizeMax: size })
-                }}
-                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="spec-inp-inline" style={{ display: "block" }}>
-                {teamSizeMin ? `${teamSizeMin}` : <span style={{ color: "#b0b0ae" }}>{t("add_size")}</span>}
-              </span>
-            )}
-          </div>
+          {/* Team Size (homeowner-facing) ─ Specialties (photographer) */}
+          {isPhotographer ? (
+            <div
+              className={`spec-item-edit${editingSpecBar === "specialties" ? " editing" : ""}`}
+              style={{ position: "relative" }}
+              onClick={() => { if (editingSpecBar !== "specialties") setEditingSpecBar("specialties") }}
+            >
+              <EditBadge />
+              <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("specialties")}</span>
+              <div className="arco-card-title" style={{ color: specialties.length > 0 ? undefined : "#b0b0ae" }}>
+                {specialties.length > 0 ? specialties.join(" · ") : t("add_specialties")}
+              </div>
+              {editingSpecBar === "specialties" && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null); saveServices({ specialties }) }} />
+                  <div className="dd-panel" style={{ maxHeight: 260, overflowY: "auto" }}>
+                    {PHOTOGRAPHER_SPECIALTIES.map(spec => (
+                      <div
+                        key={spec}
+                        className={`dd-row${specialties.includes(spec) ? " sel" : ""}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          const updated = specialties.includes(spec)
+                            ? specialties.filter(s => s !== spec)
+                            : [...specialties, spec]
+                          setSpecialties(updated)
+                        }}
+                      >
+                        <span>{spec}</span>
+                        {specialties.includes(spec) && <span className="dd-check">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div
+              className={`spec-item-edit${editingSpecBar === "teamSize" ? " editing" : ""}`}
+              onClick={() => { if (editingSpecBar !== "teamSize") setEditingSpecBar("teamSize") }}
+            >
+              <EditBadge />
+              <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("team_size")}</span>
+              {editingSpecBar === "teamSize" ? (
+                <input
+                  type="number"
+                  className="spec-inp-inline"
+                  value={teamSizeMin ?? ""}
+                  autoFocus
+                  placeholder={t("add_size")}
+                  min={1}
+                  onChange={(e) => {
+                    const val = e.target.value.trim()
+                    setTeamSizeMin(val ? parseInt(val, 10) : null)
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim()
+                    const size = val ? parseInt(val, 10) : null
+                    setTeamSizeMin(size)
+                    setTeamSizeMax(size)
+                    setEditingSpecBar(null)
+                    saveSpecs({ teamSizeMin: size, teamSizeMax: size })
+                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="spec-inp-inline" style={{ display: "block" }}>
+                  {teamSizeMin ? `${teamSizeMin}` : <span style={{ color: "#b0b0ae" }}>{t("add_size")}</span>}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Languages */}
           <div
@@ -1339,41 +1422,50 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             )}
           </div>
 
-          {/* Certificates */}
-          <div
-            className={`spec-item-edit${editingSpecBar === "certificates" ? " editing" : ""}`}
-            style={{ position: "relative" }}
-            onClick={() => { if (editingSpecBar !== "certificates") setEditingSpecBar("certificates") }}
-          >
-            <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("certificates")}</span>
-            <div className="arco-card-title" style={{ color: certificates.length > 0 ? undefined : "#b0b0ae" }}>
-              {certificates.length > 0 ? certificates.join(", ") : t("add_certificates")}
+          {/* Certificates (homeowner-facing) ─ Collaborations (photographer, read-only) */}
+          {isPhotographer ? (
+            <div className="spec-item-edit" style={{ cursor: "default" }}>
+              <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("architect_collaborations")}</span>
+              <div className="arco-card-title" style={{ color: collaborationsCount > 0 ? undefined : "#b0b0ae" }}>
+                {collaborationsCount > 0 ? collaborationsCount : "—"}
+              </div>
             </div>
-            {editingSpecBar === "certificates" && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null); saveServices({ certificates }) }} />
-                <div className="dd-panel" style={{ maxHeight: 260, overflowY: "auto" }}>
-                  {certificateOptions.map(cert => (
-                    <div
-                      key={cert}
-                      className={`dd-row${certificates.includes(cert) ? " sel" : ""}`}
-                      onClick={e => {
-                        e.stopPropagation()
-                        const updated = certificates.includes(cert)
-                          ? certificates.filter(c => c !== cert)
-                          : [...certificates, cert]
-                        setCertificates(updated)
-                      }}
-                    >
-                      <span>{cert}</span>
-                      {certificates.includes(cert) && <span className="dd-check">✓</span>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          ) : (
+            <div
+              className={`spec-item-edit${editingSpecBar === "certificates" ? " editing" : ""}`}
+              style={{ position: "relative" }}
+              onClick={() => { if (editingSpecBar !== "certificates") setEditingSpecBar("certificates") }}
+            >
+              <EditBadge />
+              <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("certificates")}</span>
+              <div className="arco-card-title" style={{ color: certificates.length > 0 ? undefined : "#b0b0ae" }}>
+                {certificates.length > 0 ? certificates.join(", ") : t("add_certificates")}
+              </div>
+              {editingSpecBar === "certificates" && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null); saveServices({ certificates }) }} />
+                  <div className="dd-panel" style={{ maxHeight: 260, overflowY: "auto" }}>
+                    {certificateOptions.map(cert => (
+                      <div
+                        key={cert}
+                        className={`dd-row${certificates.includes(cert) ? " sel" : ""}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          const updated = certificates.includes(cert)
+                            ? certificates.filter(c => c !== cert)
+                            : [...certificates, cert]
+                          setCertificates(updated)
+                        }}
+                      >
+                        <span>{cert}</span>
+                        {certificates.includes(cert) && <span className="dd-check">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1381,7 +1473,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <section id="projects" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 className="arco-section-title">{t("featured_projects")}</h2>
+            <h2 className="arco-section-title">{isPhotographer ? t("photographed_projects") : t("featured_projects")}</h2>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               {companyProjects.length > 3 && (
                 <Link href="/dashboard/listings" className="text-[13px] font-light text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors">

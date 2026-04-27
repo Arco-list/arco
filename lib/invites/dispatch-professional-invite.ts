@@ -321,31 +321,37 @@ export async function dispatchProfessionalInvite(
   // 3. Enqueue the followup + final. Same partial-unique-index dedup as
   //    the prospect outreach: a duplicate enqueue for (company_id,
   //    template) WHERE pending will hit 23505 and silently no-op.
-  const { nextBusinessSlot } = await import("@/lib/date-utils")
-  const followupSendAt = nextBusinessSlot(3).toISOString()
-  const finalSendAt = nextBusinessSlot(7).toISOString()
-  await supabase
-    .from("email_drip_queue")
-    .insert([
-      {
-        company_id: recipient.id,
-        email: input.recipientEmail,
-        template: "new-professional-followup",
-        sequence: "new-professional-invite",
-        step: 1,
-        variables: sequenceVars as Record<string, unknown>,
-        send_at: followupSendAt,
-      },
-      {
-        company_id: recipient.id,
-        email: input.recipientEmail,
-        template: "new-professional-final",
-        sequence: "new-professional-invite",
-        step: 2,
-        variables: sequenceVars as Record<string, unknown>,
-        send_at: finalSendAt,
-      },
-    ] as never)
+  // Skip for pro-audience companies (photographers): they reach Arco via
+  // architect credit, not via the new-professional invite sequence — and
+  // shouldn't get followups even if dispatch is somehow triggered for them.
+  const { isProAudienceCompany } = await import("@/lib/drip-queue")
+  if (!(await isProAudienceCompany(supabase, recipient.id))) {
+    const { nextBusinessSlot } = await import("@/lib/date-utils")
+    const followupSendAt = nextBusinessSlot(3).toISOString()
+    const finalSendAt = nextBusinessSlot(7).toISOString()
+    await supabase
+      .from("email_drip_queue")
+      .insert([
+        {
+          company_id: recipient.id,
+          email: input.recipientEmail,
+          template: "new-professional-followup",
+          sequence: "new-professional-invite",
+          step: 1,
+          variables: sequenceVars as Record<string, unknown>,
+          send_at: followupSendAt,
+        },
+        {
+          company_id: recipient.id,
+          email: input.recipientEmail,
+          template: "new-professional-final",
+          sequence: "new-professional-invite",
+          step: 2,
+          variables: sequenceVars as Record<string, unknown>,
+          send_at: finalSendAt,
+        },
+      ] as never)
+  }
 
   return { success: introResult.success, sequence: "drip" }
 }

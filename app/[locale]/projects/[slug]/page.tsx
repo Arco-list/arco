@@ -197,10 +197,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           professional_id,
           company_id,
           is_project_owner,
-          companies!inner(id, name, slug, status, logo_url, primary_service_id, services_offered)
+          companies!inner(id, name, slug, status, logo_url, primary_service_id, services_offered, audience)
         `)
         .eq("project_id", project.id)
         .not("company_id", "is", null)
+        // Photographers (audience='pro') are surfaced via the dedicated
+        // spec-bar credit (see photographerResult below). Hide them from
+        // the Credited professionals section so they don't double up.
+        .neq("companies.audience", "pro")
       if (canPreview) {
         // In preview mode, show listed/featured professionals + the project owner
         q = q.or("status.in.(live_on_page,listed),is_project_owner.eq.true")

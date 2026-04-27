@@ -69,7 +69,7 @@ export async function ProfessionalContact({
                   rel="noopener noreferrer"
                   className="text-link-plain"
                 >
-                  {websiteUrl.replace(/^https?:\/\//, '')} →
+                  {websiteUrl.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')} →
                 </a>
               </p>
             </div>

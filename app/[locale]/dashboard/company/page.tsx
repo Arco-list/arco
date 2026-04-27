@@ -32,9 +32,9 @@ export default async function CompanySettingsPage({
   const companySelect = `
     id, slug, name, description, website, status, plan_tier, plan_expires_at,
     upgrade_eligible, logo_url, email, phone, domain, is_verified, address, city, country,
-    services_offered, languages, certificates, primary_service_id, founded_year,
+    services_offered, languages, certificates, specialties, primary_service_id, founded_year,
     team_size_min, team_size_max, hero_photo_url, hero_photo_project_id, owner_id,
-    setup_completed, translations
+    setup_completed, translations, audience
   `
 
   let company = null
@@ -260,6 +260,29 @@ export default async function CompanySettingsPage({
   // Deduplicate by project id
   const uniqueProjects = Array.from(new Map(projects.map((p) => [p.id, p])).values())
 
+  // Architect-collaborations count for photographer profiles. Surface only
+  // for audience='pro' companies; resolves the "Collaborations" cell on the
+  // photographer-variant of the specs bar. One round-trip per page load —
+  // distinct project owners' company_ids that this photographer has been
+  // credited beside on a published project.
+  let collaborationsCount = 0
+  if ((company as any).audience === "pro") {
+    const photographerProjectIds = projects.map((p) => p.id)
+    if (photographerProjectIds.length > 0) {
+      const { data: ownerRows } = await supabase
+        .from("project_professionals")
+        .select("company_id, project_id, is_project_owner")
+        .in("project_id", photographerProjectIds)
+        .eq("is_project_owner", true)
+      const ownerCompanyIds = new Set(
+        (ownerRows ?? [])
+          .map((r: any) => r.company_id)
+          .filter((id: string | null) => Boolean(id)),
+      )
+      collaborationsCount = ownerCompanyIds.size
+    }
+  }
+
   // Build pending projects for setup mode
   const pendingProjects = (pendingProjectLinks ?? [])
     .filter((link: any) => link.projects?.status === "published" || link.projects?.status === "completed")
@@ -283,6 +306,7 @@ export default async function CompanySettingsPage({
       isSetupMode={isSetupMode}
       pendingProjects={pendingProjects}
       canPublishProjects={canPublishProjects}
+      collaborationsCount={collaborationsCount}
       showImportedBanner={imported === "1"}
       importedProjectId={importedProjectId ?? null}
       adminCompanyId={isAdmin ? company.id : undefined}

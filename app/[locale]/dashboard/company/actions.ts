@@ -102,6 +102,9 @@ const servicesSchema = z.object({
   servicesOffered: z.array(z.string().trim()).max(12, "Select up to 12 services"),
   languages: z.array(z.string().trim()).max(10, "Select up to 10 languages"),
   certificates: z.array(z.string().trim()).max(10, "Select up to 10 certificates"),
+  // Free-form tags surfaced on photographer profiles (Residential / Interior /
+  // etc.). Allowed values enforced client-side via PHOTOGRAPHER_SPECIALTIES.
+  specialties: z.array(z.string().trim()).max(10, "Select up to 10 specialties").optional(),
 })
 
 const statusSchema = z.object({
@@ -551,7 +554,7 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
     return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid services" }
   }
 
-  const { primaryServiceId, servicesOffered, languages, certificates } = parsed.data
+  const { primaryServiceId, servicesOffered, languages, certificates, specialties } = parsed.data
 
   console.log("[updateCompanyServices]", {
     companyId: company!.id,
@@ -559,17 +562,25 @@ export async function updateCompanyServicesAction(input: z.infer<typeof services
     servicesOffered,
     languages,
     certificates,
+    specialties,
   })
 
   // Update services — use direct update to avoid RPC auth check (needed for admin override)
+  const updatePayload: Record<string, unknown> = {
+    primary_service_id: primaryServiceId || null,
+    services_offered: servicesOffered,
+    languages,
+    certificates,
+  }
+  // Only touch specialties when the caller passed an explicit array — leaves
+  // the column alone for non-photographer callers that don't surface it.
+  if (specialties !== undefined) {
+    updatePayload.specialties = specialties
+  }
+
   const { error: updateError } = await supabase
     .from("companies")
-    .update({
-      primary_service_id: primaryServiceId || null,
-      services_offered: servicesOffered,
-      languages,
-      certificates,
-    })
+    .update(updatePayload)
     .eq("id", company!.id)
 
   // Refresh materialized views

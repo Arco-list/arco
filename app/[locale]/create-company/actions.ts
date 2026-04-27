@@ -365,20 +365,32 @@ export async function claimCompanyAction(input: {
   // Verify the company exists and has no owner
   const { data: company, error: companyError } = await supabase
     .from("companies")
-    .select("id, owner_id, name")
+    .select("id, owner_id, name, city, audience")
     .eq("id", companyId)
     .single()
 
   if (companyError || !company) return { success: false, error: "Company not found." }
   if (company.owner_id) return { success: false, error: "This company already has an owner." }
 
-  // Claim: set owner_id, mark verified, keep as draft until signup is completed
+  // Auto-list photographers (audience='pro') when minimum required fields
+  // (name + city) are present. Photographer companies are pre-populated from
+  // Google Places at credit time, so name + city are virtually always set
+  // already — sending them through the homeowner-style draft → setup wizard
+  // → review pipeline is friction without value. Trust signal is the
+  // architect endorsement that put them on Arco in the first place.
+  // Homeowner-facing companies still go to draft and require explicit setup
+  // completion.
+  const isPhotographer = (company as any).audience === "pro"
+  const photographerReady = isPhotographer && Boolean(company.name?.trim()) && Boolean((company as any).city?.trim())
+  const initialStatus = photographerReady ? "listed" : "draft"
+
   const { error: claimError } = await supabase
     .from("companies")
     .update({
       owner_id: user.id,
       is_verified: true,
-      status: "draft",
+      status: initialStatus,
+      ...(photographerReady ? { setup_completed: true } : {}),
       ...(domain ? { domain } : {}),
     })
     .eq("id", companyId)

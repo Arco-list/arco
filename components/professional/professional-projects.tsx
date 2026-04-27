@@ -15,12 +15,15 @@ interface Project {
 
 interface ProfessionalProjectsProps {
   projects: Project[]
+  /** Optional heading override — defaults to t("featured_projects"). Used by the photographer page to render "Photographed projects". */
+  heading?: string
 }
 
-export async function ProfessionalProjects({ projects }: ProfessionalProjectsProps) {
+export async function ProfessionalProjects({ projects, heading }: ProfessionalProjectsProps) {
   if (projects.length === 0) return null
 
   const t = await getTranslations("professional_detail")
+  const sectionHeading = heading ?? t("featured_projects")
 
   // Show up to 6 projects with images, or first 10 if no images
   const projectsWithImages = projects.filter(p => p.image)
@@ -34,7 +37,7 @@ export async function ProfessionalProjects({ projects }: ProfessionalProjectsPro
     <section id="projects" className="projects-section">
       <div className="wrap">
         <div className="projects-header">
-          <h2 className="arco-section-title">{t("featured_projects")}</h2>
+          <h2 className="arco-section-title">{sectionHeading}</h2>
         </div>
 
         {hasImages ? (

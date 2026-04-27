@@ -2004,6 +2004,7 @@ export default function ListingEditorPage() {
     // Fetch project counts and company status for all companies
     let companyProjectCounts = new Map<string, number>()
     let companyStatusMap = new Map<string, string>()
+    let companyAudienceMap = new Map<string, string>()
     if (allCompanyIds.length) {
       const [{ data: projectCounts }, { data: companyStatuses }] = await Promise.all([
         supabase
@@ -2013,7 +2014,7 @@ export default function ListingEditorPage() {
           .eq("projects.status" as any, "published"),
         supabase
           .from("companies")
-          .select("id, status")
+          .select("id, status, audience")
           .in("id", allCompanyIds),
       ])
       // Count unique published projects per company
@@ -2025,7 +2026,10 @@ export default function ListingEditorPage() {
         }
       })
       countSets.forEach((projects, companyId) => companyProjectCounts.set(companyId, projects.size))
-      companyStatuses?.forEach(c => companyStatusMap.set(c.id, c.status))
+      companyStatuses?.forEach((c: any) => {
+        companyStatusMap.set(c.id, c.status)
+        if (c.audience) companyAudienceMap.set(c.id, c.audience)
+      })
     }
 
     const invitesByService: Record<string, ProfessionalInviteSummary[]> = {}
@@ -2034,6 +2038,10 @@ export default function ListingEditorPage() {
     ;(inviteRows ?? []).forEach((row) => {
       const professionalData = row.professional_id ? professionalMap.get(row.professional_id) : null
       const companyId = (row as any).company_id ?? professionalData?.company_id ?? null
+      // Photographers (audience='pro' companies) are credited via the
+      // dedicated spec-bar cell, not the Credited professionals section —
+      // skip them here so they don't double up.
+      if (companyId && companyAudienceMap.get(companyId) === "pro") return
       const companyDirect = companyId && !professionalData ? companyMap.get(companyId) : null
       const isListed = row.professional_id ? true : (companyId ? companyStatusMap.get(companyId) === "listed" : false)
       const serviceIds = (row.invited_service_category_ids as string[] | null) ?? []

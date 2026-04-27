@@ -1082,28 +1082,36 @@ export async function sendProspectEmailAction(input: {
   }
   const followupSendAt = nextBusinessSlot(3).toISOString()
   const finalSendAt = nextBusinessSlot(7).toISOString()
-  const { error: dripInsertError } = await serviceClient
-    .from("email_drip_queue")
-    .insert([
-      {
-        company_id: company.id,
-        email: emailResult.data,
-        template: "prospect-followup",
-        sequence: "prospect-outreach",
-        step: 1,
-        variables: dripVariables,
-        send_at: followupSendAt,
-      },
-      {
-        company_id: company.id,
-        email: emailResult.data,
-        template: "prospect-final",
-        sequence: "prospect-outreach",
-        step: 2,
-        variables: dripVariables,
-        send_at: finalSendAt,
-      },
-    ] as never)
+  // Skip pro-audience companies (photographers). Their entry to Arco is via
+  // architect credit on a project, not outbound prospect outreach — running
+  // them through the prospect drip would spam an info@ address with
+  // architect-flavoured templates.
+  const { isProAudienceCompany } = await import("@/lib/drip-queue")
+  const skipDrip = await isProAudienceCompany(serviceClient, company.id)
+  const dripInsertError = skipDrip
+    ? null
+    : (await serviceClient
+        .from("email_drip_queue")
+        .insert([
+          {
+            company_id: company.id,
+            email: emailResult.data,
+            template: "prospect-followup",
+            sequence: "prospect-outreach",
+            step: 1,
+            variables: dripVariables,
+            send_at: followupSendAt,
+          },
+          {
+            company_id: company.id,
+            email: emailResult.data,
+            template: "prospect-final",
+            sequence: "prospect-outreach",
+            step: 2,
+            variables: dripVariables,
+            send_at: finalSendAt,
+          },
+        ] as never)).error
   // Surface any drip-enqueue error as a warning on the action result.
   // The intro already went out via Resend, so we don't fail the whole
   // action — but silently logging hides schema / constraint issues that

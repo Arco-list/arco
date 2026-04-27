@@ -1699,7 +1699,10 @@ a.arco-nav-text.nav-transparent:hover {
 @media (max-width: 768px) {
   .specifications-bar {
     grid-template-columns: repeat(2, 1fr);
-    gap: 20px 16px;
+    /* Row-gap matches the desktop / iPad default (32px) so wrapped layouts
+       breathe the same on iPhone as on iPad. Column-gap stays tight (16px)
+       so 2-col rows still fit comfortably at 360–414px viewport widths. */
+    gap: 32px 16px;
     padding: 24px 0;
     margin-bottom: 40px;
   }
@@ -1710,6 +1713,61 @@ a.arco-nav-text.nav-transparent:hover {
   .specifications-bar:has(.spec-item-edit) {
     gap: 84px 16px;
     padding: 36px 0;
+  }
+}
+
+/* Even distribution with most-on-top.
+   Applies whenever the bar can wrap to multiple rows — on iPad and on the
+   desktop "small-laptop" zone where 6 items spill into 5+1 with auto-fit.
+   Locks the column count to ceil(n/2) based on child count so wrapping
+   reads as "more on top, balanced bottom":
+     4 items → 2 cols → 2+2
+     5 items → 3 cols → 3+2  (instead of auto-fit's 4+1)
+     6 items → 3 cols → 3+3  (instead of 4+2 / 5+1)
+     7 items → 4 cols → 4+3
+   Mobile (≤768px) is intentionally excluded — at iPhone widths we keep the
+   simpler 2-column layout from the .specifications-bar mobile rule above.
+   Above 1280px there's enough width for any reasonable cell count to fit
+   in one row, so the rule is also unnecessary. */
+@media (min-width: 769px) and (max-width: 1280px) {
+  .specifications-bar:has(> :nth-child(4):last-child),
+  .edit-specs-bar:has(> :nth-child(4):last-child) {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .specifications-bar:has(> :nth-child(5):last-child),
+  .edit-specs-bar:has(> :nth-child(5):last-child) {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .specifications-bar:has(> :nth-child(6):last-child),
+  .edit-specs-bar:has(> :nth-child(6):last-child) {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .specifications-bar:has(> :nth-child(7):last-child),
+  .edit-specs-bar:has(> :nth-child(7):last-child) {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+}
+
+/* iPad / desktop-wrap zone (769–1280px): floating EDIT badges + cell
+   outlines need the same generous row-gap that's already in place on
+   mobile. Without this, the EDIT chip on row 2 visually crashes into row
+   1's value text, and adjacent cell outlines overlap in the row-gap.
+   row-gap (longhand) leaves the inline-set column-gap intact. */
+@media (min-width: 769px) and (max-width: 1280px) {
+  .specifications-bar:has(.spec-item-edit),
+  .edit-specs-bar {
+    row-gap: 84px !important;
+    padding-top: 36px !important;
+    padding-bottom: 36px !important;
+  }
+  /* Match the cell-outline inset to the bumped padding so the outline still
+     pierces the top + bottom section borders cleanly (existing mobile
+     behaviour, extended to wider wrapped layouts). */
+  .spec-item-edit::before {
+    inset: -36px -6px !important;
+  }
+  .spec-item-edit .ec-badge {
+    top: -44px !important;
   }
 }
 

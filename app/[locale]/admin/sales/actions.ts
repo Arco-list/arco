@@ -743,6 +743,9 @@ export async function pauseProspectSequence(prospectId: string) {
  * each step as a row with timestamp + status badge.
  */
 export type ProspectSequenceStep = {
+  /** Stable id for the step. Known Arco templates get autocompletion;
+   *  Apollo steps use the free-form `apollo-step-<n>` namespace and rely
+   *  on the templateDisplayName fallback. */
   template:
     | "prospect-intro"
     | "prospect-followup"
@@ -750,6 +753,7 @@ export type ProspectSequenceStep = {
     | "new-professional-invite"
     | "new-professional-followup"
     | "new-professional-final"
+    | (string & {})
   label: string
   /**
    *   sent      — email_drip_queue.sent_at is set (cron sent it)
@@ -876,6 +880,179 @@ export async function getProspectInviteContext(prospectId: string): Promise<{
   return { success: true, context }
 }
 
+/**
+ * Build a sequence display for an Apollo-source prospect by reading per-step
+ * message state from Apollo's /emailer_messages/search endpoint. This is the
+ * authoritative source — Apollo's contact-level endpoint exposes only the
+ * contact's *position* in the sequence (which counts the next-scheduled step
+ * already), not what's actually been sent.
+ *
+ * Apollo's API silently ignores per-contact filters on this endpoint, so we
+ * filter by campaign and narrow client-side. Cost: 1 contact fetch + 1
+ * campaign metadata fetch + 1–2 message search pages per popup open.
+ */
+async function getApolloSequence(prospect: {
+  id: string
+  source?: string | null
+  apollo_contact_id?: string | null
+  apollo_sequence_id?: string | null
+  emails_sent?: number | null
+  last_email_sent_at?: string | null
+  sequence_status?: string | null
+}): Promise<{ success: boolean; steps: ProspectSequenceStep[]; locale?: "nl" | "en" }> {
+  const apiKey = process.env.APOLLO_API_KEY
+  if (!apiKey || !prospect.apollo_contact_id) {
+    return { success: true, steps: [] }
+  }
+
+  const apollo = (path: string, init?: RequestInit) =>
+    fetch(`https://api.apollo.io/api/v1${path}`, {
+      ...init,
+      headers: { "X-Api-Key": apiKey, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      signal: AbortSignal.timeout(8000),
+    })
+
+  // 1. Resolve the active campaign id + sequence status from the contact.
+  let campaignId = prospect.apollo_sequence_id ?? null
+  let sequenceStatus = prospect.sequence_status ?? "active"
+  try {
+    const r = await apollo(`/contacts/${prospect.apollo_contact_id}`)
+    if (r.ok) {
+      const d = await r.json()
+      const cs = (d?.contact?.contact_campaign_statuses ?? [])[0]
+      if (cs) {
+        campaignId = cs.emailer_campaign_id ?? campaignId
+        sequenceStatus = cs.status ?? sequenceStatus
+      }
+    }
+  } catch {
+    /* fall through to synced fields */
+  }
+
+  if (!campaignId) {
+    return { success: true, steps: [] }
+  }
+
+  // 2. Campaign name + step total (used for the section label).
+  let campaignName: string | null = null
+  let campaignNumSteps = 0
+  try {
+    const r = await apollo(`/emailer_campaigns/${campaignId}`)
+    if (r.ok) {
+      const d = await r.json()
+      campaignName = d?.emailer_campaign?.name ?? null
+      campaignNumSteps = d?.emailer_campaign?.num_steps ?? 0
+    }
+  } catch {
+    /* non-fatal — we can derive step total from the messages list below */
+  }
+
+  // 3. Pull every message in the campaign (Apollo's per-contact filter is
+  // silently ignored here, so we filter client-side). Cap at 500 messages to
+  // bound runtime; campaigns much larger than that need a different design.
+  const messages: any[] = []
+  for (let page = 1; page <= 5; page++) {
+    try {
+      const r = await apollo(`/emailer_messages/search`, {
+        method: "POST",
+        body: JSON.stringify({
+          q_emailer_campaign_ids: [campaignId],
+          page,
+          per_page: 100,
+        }),
+      })
+      if (!r.ok) break
+      const d = await r.json()
+      const batch: any[] = d?.emailer_messages ?? []
+      messages.push(...batch)
+      const total = d?.pagination?.total_entries ?? messages.length
+      if (messages.length >= total || batch.length < 100) break
+    } catch {
+      break
+    }
+  }
+
+  const mine = messages
+    .filter((m) => m.contact_id === prospect.apollo_contact_id)
+    .sort((a, b) => (a.campaign_position ?? 0) - (b.campaign_position ?? 0))
+
+  if (mine.length === 0) {
+    // No per-message data found — render a minimal placeholder rather than
+    // misleading the admin into thinking the sequence is empty.
+    return { success: true, steps: [] }
+  }
+
+  // 4. Map Apollo message states → our sequence-step statuses.
+  //   completed / sent       → sent
+  //   scheduled / pending    → queued
+  //   failed                 → failed
+  //   not_sent / unscheduled → cancelled (with reason)
+  const statusOf = (apolloStatus: string | null | undefined): ProspectSequenceStep["status"] => {
+    switch ((apolloStatus ?? "").toLowerCase()) {
+      case "completed":
+      case "sent":
+        return "sent"
+      case "scheduled":
+      case "pending":
+        return "queued"
+      case "failed":
+      case "bounced":
+        return "failed"
+      case "not_sent":
+      case "unscheduled":
+      case "skipped":
+        return "cancelled"
+      default:
+        return "missing"
+    }
+  }
+
+  // Apollo's `due_at` is the scheduled send time; `completed_at` is the actual
+  // send time. Pin whichever applies to the row's status.
+  const totalSteps = Math.max(campaignNumSteps, mine[mine.length - 1]?.campaign_position ?? mine.length)
+
+  const steps: ProspectSequenceStep[] = []
+  for (let i = 1; i <= totalSteps; i++) {
+    const m = mine.find((x) => (x.campaign_position ?? 0) === i)
+    const baseLabel = i === 1 && campaignName ? `${campaignName} · Step 1` : `Step ${i}`
+
+    if (!m) {
+      // Step exists in the campaign template but not yet scheduled for this
+      // contact (typical for unfinished sequences where later steps are only
+      // materialised once the prior one fires).
+      steps.push({
+        template: `apollo-step-${i}`,
+        label: baseLabel,
+        status: sequenceStatus === "finished" ? "finished" : sequenceStatus === "paused" ? "paused" : "missing",
+        timestamp: null,
+        cancelledReason: null,
+        attemptCount: 0,
+        lastError: null,
+        lastEvent: null,
+        openedAt: null,
+        clickedAt: null,
+      })
+      continue
+    }
+
+    const stepStatus = statusOf(m.status)
+    steps.push({
+      template: `apollo-step-${i}`,
+      label: m.subject ? (i === 1 && campaignName ? `${campaignName} · ${m.subject}` : m.subject) : baseLabel,
+      status: stepStatus,
+      timestamp: m.completed_at ?? m.due_at ?? null,
+      cancelledReason: m.failure_reason ?? m.not_sent_reason ?? null,
+      attemptCount: 0,
+      lastError: m.failure_reason ?? null,
+      lastEvent: null,
+      openedAt: null,
+      clickedAt: null,
+    })
+  }
+
+  return { success: true, steps }
+}
+
 export async function getProspectSequence(prospectId: string): Promise<{
   success: boolean
   steps?: ProspectSequenceStep[]
@@ -889,14 +1066,20 @@ export async function getProspectSequence(prospectId: string): Promise<{
 
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, company_id, email, source")
+    .select("id, company_id, email, source, apollo_contact_id, apollo_sequence_id, emails_sent, last_email_sent_at, sequence_status")
     .eq("id", prospectId)
     .maybeSingle()
 
   if (!prospect) return { success: false, error: "Prospect not found" }
+
+  // Apollo: synthesise sequence steps from the contact's campaign on Apollo,
+  // not from our own email_drip_queue (Apollo runs the sequence externally).
+  if ((prospect as any).source === "apollo") {
+    return getApolloSequence(prospect as any)
+  }
+
   if (!prospect.company_id) {
-    // Can't have a sequence without a linked company. Return an empty
-    // result so the UI can show "no sequence" gracefully.
+    // Arco / invites prospects need a linked company to resolve the queue.
     return { success: true, steps: [] }
   }
 
@@ -1059,6 +1242,13 @@ export async function resumeProspectSequence(prospectId: string) {
             { template: "prospect-final" as const, step: 2, sendAt: nextBusinessSlot(7).toISOString() },
           ])
 
+      // Skip pro-audience companies (photographers). Their entry to Arco is
+      // via architect credit, not outbound prospect outreach — re-enqueuing
+      // a sequence on resume would spam them. One audience check up front
+      // saves an extra read per step.
+      const { isProAudienceCompany } = await import("@/lib/drip-queue")
+      const skipResumeDrip = await isProAudienceCompany(supabase, prospect.company_id)
+
       for (const { template, step, sendAt } of stepConfig) {
         // Most recent row for (company, template) — carries the variables
         // payload and tells us whether the step already went out.
@@ -1072,6 +1262,7 @@ export async function resumeProspectSequence(prospectId: string) {
           .maybeSingle()
 
         if (lastRow?.sent_at) continue
+        if (skipResumeDrip) continue
 
         const { error: insertError } = await supabase
           .from("email_drip_queue")

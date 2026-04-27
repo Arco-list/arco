@@ -130,3 +130,34 @@ export async function cancelPendingDripRows(
 
   return totalCancelled
 }
+
+/**
+ * Returns true when the company should be excluded from any prospect-style
+ * email sequence (intro / followup / final) — i.e. when its `audience` is
+ * `'pro'`. Photographer companies live behind audience='pro' and are
+ * surfaced via the project spec-bar credit, not via outbound prospect
+ * sequences. Reusing the same `email_drip_queue` table for them would
+ * spam unrelated email addresses (the company's `info@` derived from
+ * Google Places) with templates aimed at architects.
+ *
+ * Call this guard before any `.from("email_drip_queue").insert(...)` that
+ * targets a `company_id`. Returns false (do enqueue) when the company is
+ * homeowner-facing or when the lookup fails — fail-open by design so a
+ * transient DB error doesn't silently disable the whole prospect funnel.
+ */
+export async function isProAudienceCompany(
+  supabase: SupabaseClient,
+  companyId: string | null | undefined,
+): Promise<boolean> {
+  if (!companyId) return false
+  const { data, error } = await supabase
+    .from("companies")
+    .select("audience")
+    .eq("id", companyId)
+    .maybeSingle()
+  if (error) {
+    logger.warn("drip-queue: audience lookup failed; defaulting to enqueue", { companyId, error: error.message })
+    return false
+  }
+  return (data as any)?.audience === "pro"
+}

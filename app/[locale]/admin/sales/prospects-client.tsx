@@ -1135,13 +1135,22 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                             style={{ gridTemplateColumns: "minmax(180px, 1fr) minmax(80px, auto) minmax(120px, auto) minmax(100px, auto)" }}
                           >
                             <span className="inline-flex items-center gap-2 min-w-0">
-                              <button
-                                type="button"
-                                className="text-[#016D75] hover:underline truncate cursor-pointer text-left"
-                                onClick={() => setPreviewEmail({ template: step.template, lang: guessedLang })}
-                              >
-                                {templateDisplayName(step.template)}
-                              </button>
+                              {step.template.startsWith("apollo-step-") ? (
+                                // Apollo emails live outside our template
+                                // system — render the label as plain text so
+                                // clicking doesn't open a broken preview.
+                                <span className="text-[#1c1c1a] truncate text-left">
+                                  {step.label || templateDisplayName(step.template)}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="text-[#016D75] hover:underline truncate cursor-pointer text-left"
+                                  onClick={() => setPreviewEmail({ template: step.template, lang: guessedLang })}
+                                >
+                                  {templateDisplayName(step.template)}
+                                </button>
+                              )}
                               <span className="status-pill">{guessedLang.toUpperCase()}</span>
                             </span>
                             <span className={`status-pill ${sc.variant} justify-self-start`}>{sc.label}</span>
