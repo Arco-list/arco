@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/process-drip-queue",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-apollo-activity",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

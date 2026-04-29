@@ -46,10 +46,12 @@ interface ApolloContact {
 
 // ─── Sync contacts from an Apollo list ──────────────────────────────────────
 
-export async function syncApolloList(listId: string) {
+export async function syncApolloList(listId: string): Promise<{ synced: number; errorCount: number; lastError: string | null }> {
   const supabase = createServiceRoleSupabaseClient()
   let page = 1
   let totalSynced = 0
+  let errorCount = 0
+  let lastError: string | null = null
   let hasMore = true
 
   while (hasMore) {
@@ -99,6 +101,8 @@ export async function syncApolloList(listId: string) {
         )
 
       if (error) {
+        errorCount++
+        lastError = error.message ?? String(error)
         logger.error("Failed to upsert prospect from Apollo", { email: contact.email, error })
       } else {
         totalSynced++
@@ -111,13 +115,13 @@ export async function syncApolloList(listId: string) {
     page++
   }
 
-  logger.info("Apollo list sync complete", { listId, totalSynced })
-  return { synced: totalSynced }
+  logger.info("Apollo list sync complete", { listId, totalSynced, errorCount })
+  return { synced: totalSynced, errorCount, lastError }
 }
 
 // ─── Sync email activity for all active prospects ───────────────────────────
 
-export async function syncApolloActivity() {
+export async function syncApolloActivity(): Promise<{ updated: number; total: number; errorCount: number; lastError: string | null }> {
   const supabase = createServiceRoleSupabaseClient()
 
   // Get all prospects with an Apollo contact ID that aren't terminal
@@ -131,10 +135,12 @@ export async function syncApolloActivity() {
 
   if (error || !prospects) {
     logger.error("Failed to fetch prospects for activity sync", { error })
-    return { updated: 0 }
+    return { updated: 0, total: 0, errorCount: 1, lastError: error?.message ?? "fetch failed" }
   }
 
   let updated = 0
+  let errorCount = 0
+  let lastError: string | null = null
 
   for (const prospect of prospects as any[]) {
     try {
@@ -243,13 +249,17 @@ export async function syncApolloActivity() {
         updated++
       }
 
-      // Small delay to respect Apollo rate limits (10 req/min on free plan)
-      await new Promise((r) => setTimeout(r, 700))
+      // Apollo's free plan caps /contacts/show at 50 calls/minute. 1300ms
+      // = ~46 calls/minute, comfortably under the ceiling. The previous
+      // 700ms (~85 calls/min) reliably tripped 429s after the 30th call.
+      await new Promise((r) => setTimeout(r, 1300))
     } catch (err) {
+      errorCount++
+      lastError = err instanceof Error ? err.message : String(err)
       logger.error("Failed to sync activity for prospect", { id: prospect.id, error: err })
     }
   }
 
-  logger.info("Apollo activity sync complete", { updated, total: prospects.length })
-  return { updated, total: prospects.length }
+  logger.info("Apollo activity sync complete", { updated, total: prospects.length, errorCount })
+  return { updated, total: prospects.length, errorCount, lastError }
 }

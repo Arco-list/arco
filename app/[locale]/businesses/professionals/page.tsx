@@ -60,7 +60,7 @@ export default async function ProfessionalsPage({ searchParams }: PageProps) {
     .in("company_status", ["listed", "prospected"])
     .not("cover_photo_url", "is", null)
     .order("created_at", { ascending: false })
-    .limit(8)
+    .limit(6)
 
   const recentProfessionals: RecentProfessional[] = (recentCompanies ?? []).map((c: any) => {
     const rawName = c.primary_service_name ?? ""

@@ -1,6 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProspectsClient } from "./prospects-client"
-import { fetchFunnel, fetchProspects, syncPlatformProspects } from "./actions"
+import { fetchFunnel, fetchLatestApolloSyncRuns, fetchProspects, syncPlatformProspects } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +27,15 @@ export default async function ProspectsPage() {
     .maybeSingle()
   const currentApolloListId = (lastListRow as any)?.apollo_list_id ?? null
 
+  // Latest sync runs (list import + activity refresh) for the Apollo Sync popup
+  const apolloSyncRuns = await fetchLatestApolloSyncRuns()
+
+  // Total Apollo prospects — surfaced as "X contacts synced" in the popup
+  const { count: apolloProspectsCount } = await supabase
+    .from("prospects")
+    .select("id", { count: "exact", head: true })
+    .eq("source", "apollo")
+
   // Fetch company metadata (logo, services, city) for linked prospects
   const companyIds = [...new Set(prospects.map((p) => p.company_id).filter((id): id is string => Boolean(id)))]
   let companyMap: Record<string, { logoUrl: string | null; services: string[]; city: string | null }> = {}
@@ -48,7 +57,14 @@ export default async function ProspectsPage() {
     <div className="min-h-screen bg-white">
       <div className="discover-page-title">
         <div className="wrap">
-          <ProspectsClient initialProspects={prospects} initialFunnel={funnel} companyMap={companyMap} currentApolloListId={currentApolloListId} />
+          <ProspectsClient
+            initialProspects={prospects}
+            initialFunnel={funnel}
+            companyMap={companyMap}
+            currentApolloListId={currentApolloListId}
+            apolloSyncRuns={apolloSyncRuns}
+            apolloProspectsCount={apolloProspectsCount ?? 0}
+          />
         </div>
       </div>
     </div>

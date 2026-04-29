@@ -85,7 +85,8 @@ export type ProspectFunnel = {
 }
 
 type FetchProspectsFilters = {
-  status?: ProspectStatus | "all"
+  /** Empty / undefined = no status filter (all statuses). Multi-select. */
+  statuses?: ProspectStatus[]
   source?: string
   sequence?: SequenceStatus | "all"
   search?: string
@@ -95,7 +96,7 @@ type FetchProspectsFilters = {
 
 export async function fetchProspects(filters: FetchProspectsFilters = {}) {
   const supabase = createServiceRoleSupabaseClient()
-  const { status, source, sequence, search, offset = 0, limit = 50 } = filters
+  const { statuses, source, sequence, search, offset = 0, limit = 50 } = filters
 
   let query = supabase
     .from("prospects")
@@ -103,8 +104,8 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)
 
-  if (status && status !== "all") {
-    query = query.eq("status", status)
+  if (statuses && statuses.length > 0) {
+    query = query.in("status", statuses)
   }
 
   if (source && source !== "all") {
@@ -230,6 +231,55 @@ const EMPTY_FUNNEL: ProspectFunnel = {
   total: 0, prospect: 0, contacted: 0, visitor: 0,
   signup: 0, company: 0, publisher: 0, active: 0,
   total_emails_sent: 0,
+}
+
+export type ApolloSyncRun = {
+  id: string
+  kind: "list" | "activity"
+  triggeredBy: "manual" | "cron"
+  startedAt: string
+  finishedAt: string | null
+  syncedCount: number | null
+  totalCount: number | null
+  errorCount: number
+  lastError: string | null
+  listId: string | null
+}
+
+/**
+ * Latest sync run per kind (list / activity) for the Apollo Sync popup
+ * on /admin/sales. Returns null per kind when no run exists yet.
+ */
+export async function fetchLatestApolloSyncRuns(): Promise<{
+  list: ApolloSyncRun | null
+  activity: ApolloSyncRun | null
+}> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data } = await supabase
+    .from("apollo_sync_runs")
+    .select("id, kind, triggered_by, started_at, finished_at, synced_count, total_count, error_count, last_error, list_id")
+    .order("started_at", { ascending: false })
+    .limit(20)
+
+  const rows = (data ?? []) as any[]
+  const find = (kind: "list" | "activity") => {
+    const row = rows.find((r) => r.kind === kind)
+    if (!row) return null
+    return {
+      id: row.id,
+      kind: row.kind,
+      triggeredBy: row.triggered_by,
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      syncedCount: row.synced_count,
+      totalCount: row.total_count,
+      errorCount: row.error_count ?? 0,
+      lastError: row.last_error,
+      listId: row.list_id,
+    } as ApolloSyncRun
+  }
+
+  return { list: find("list"), activity: find("activity") }
 }
 
 export async function fetchFunnel(source?: string) {

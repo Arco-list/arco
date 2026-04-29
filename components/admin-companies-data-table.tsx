@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import { format } from "date-fns"
 import { useRouter } from "next/navigation"
@@ -51,6 +51,7 @@ import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/acti
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -424,7 +425,30 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | CompanyStatus | "invited" | "prospected">("all")
+  // Multi-select status filter. Empty array = no filter (all statuses) — same
+  // semantics as the previous "all" sentinel but enables OR'd multi-status
+  // filtering. Funnel cards toggle in/out of the array; the dropdown uses
+  // checkbox items.
+  type CompanyStatusFilterValue = CompanyStatus | "invited" | "prospected"
+  const [statusFilter, setStatusFilter] = useState<CompanyStatusFilterValue[]>([])
+
+  /** Pushes the array into TanStack Table's column filter. Empty = clear. */
+  const applyStatusFilter = useCallback((next: CompanyStatusFilterValue[]) => {
+    setStatusFilter(next)
+    table.getColumn("status")?.setFilterValue(next.length === 0 ? undefined : next)
+  // table is defined below; the closure captures the latest reference each render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** Toggle one status in or out of the multi-select filter (funnel card click). */
+  const toggleStatus = useCallback((status: CompanyStatusFilterValue) => {
+    setStatusFilter((prev) => {
+      const next = prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+      table.getColumn("status")?.setFilterValue(next.length === 0 ? undefined : next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [removeOwnerCompany, setRemoveOwnerCompany] = useState<AdminCompanyRow | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingStatusAction | null>(null)
@@ -833,7 +857,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           )
         },
         filterFn: (row, columnId, filterValue) => {
-          if (!filterValue || filterValue === "all") return true
+          // Multi-select: filterValue is an array of statuses (or undefined = no filter).
+          if (!filterValue) return true
+          if (Array.isArray(filterValue)) {
+            if (filterValue.length === 0) return true
+            return filterValue.includes(row.original.status)
+          }
+          // Backwards-compat: single string filter still works (e.g. legacy "all" sentinel).
+          if (filterValue === "all") return true
           return row.original.status === filterValue
         },
       },
@@ -1400,7 +1431,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   }
                 }
 
-                const isActive = statusFilter === stage.status
+                const isActive = statusFilter.includes(stage.status as CompanyStatusFilterValue)
                 return (
                   <Fragment key={stage.status}>
                     {i > 0 && (
@@ -1422,12 +1453,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <div style={{ gridRow: 3 }} className="flex flex-col">
                       <button
                         type="button"
-                        onClick={() => {
-                          const next = isActive ? "all" : (stage.status as any)
-                          setStatusFilter(next)
-                          table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
-                        }}
-                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#c4c4c2] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        onClick={() => toggleStatus(stage.status as CompanyStatusFilterValue)}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
                         style={{ width: CARD_WIDTH }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">
@@ -1461,36 +1488,59 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              const next = value as typeof statusFilter
-              setStatusFilter(next)
-              table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
-            }}
-          >
-            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All statuses">
-                {statusFilter === "all" ? "All statuses" : (
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[statusFilter]}`} />
-                    {STATUS_LABEL[statusFilter]}
-                  </span>
-                )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {["listed", "unlisted", "draft", "invited", "prospected", "unclaimed", "deactivated"].map((s) => (
-                <SelectItem key={s} value={s}>
+          {/* Multi-select status filter — checkbox items in a dropdown menu.
+              Empty selection = all statuses (no filter). Synced with the
+              funnel cards above. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-[160px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {statusFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All statuses</span>
+                  ) : statusFilter.length === 1 ? (
+                    <>
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[statusFilter[0]]}`} />
+                      <span className="truncate">{STATUS_LABEL[statusFilter[0]]}</span>
+                    </>
+                  ) : (
+                    <span>{statusFilter.length} statuses</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (statusFilter.length > 0) applyStatusFilter([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {(["listed", "unlisted", "draft", "invited", "prospected", "unclaimed", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={statusFilter.includes(s)}
+                  onCheckedChange={() => toggleStatus(s)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
                     {STATUS_LABEL[s]}
                   </span>
-                </SelectItem>
+                </DropdownMenuCheckboxItem>
               ))}
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

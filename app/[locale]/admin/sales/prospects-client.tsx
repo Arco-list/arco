@@ -24,6 +24,7 @@ import {
   syncResendEmailStats,
   getProspectInviteContext,
   type ProspectInviteContext,
+  fetchLatestApolloSyncRuns,
 } from "./actions"
 import {
   Select,
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/select"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -116,6 +118,23 @@ function formatDateShort(dateStr: string | null) {
       month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",
     })
+  } catch { return dateStr }
+}
+
+/** Human-friendly "5m ago" / "2h ago" / "3d ago" — falls back to formatDateShort beyond 7 days. */
+function formatRelativeTime(dateStr: string | null) {
+  if (!dateStr) return "never"
+  try {
+    const ms = Date.now() - new Date(dateStr).getTime()
+    if (ms < 0) return "just now"
+    const m = Math.floor(ms / 60000)
+    if (m < 1) return "just now"
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.floor(h / 24)
+    if (d < 7) return `${d}d ago`
+    return formatDateShort(dateStr)
   } catch { return dateStr }
 }
 
@@ -348,17 +367,43 @@ function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRef
 
 export type CompanyInfo = { logoUrl: string | null; services: string[]; city: string | null }
 
+type ApolloSyncRunSummary = {
+  id: string
+  kind: "list" | "activity"
+  triggeredBy: "manual" | "cron"
+  startedAt: string
+  finishedAt: string | null
+  syncedCount: number | null
+  totalCount: number | null
+  errorCount: number
+  lastError: string | null
+  listId: string | null
+}
+
 type Props = {
   initialProspects: Prospect[]
   initialFunnel: ProspectFunnel
   companyMap?: Record<string, CompanyInfo>
   currentApolloListId?: string | null
+  apolloSyncRuns?: { list: ApolloSyncRunSummary | null; activity: ApolloSyncRunSummary | null }
+  apolloProspectsCount?: number
 }
 
-export function ProspectsClient({ initialProspects, initialFunnel, companyMap = {}, currentApolloListId = null }: Props) {
+export function ProspectsClient({
+  initialProspects,
+  initialFunnel,
+  companyMap = {},
+  currentApolloListId = null,
+  apolloSyncRuns = { list: null, activity: null },
+  apolloProspectsCount = 0,
+}: Props) {
   const [prospects, setProspects] = useState(initialProspects)
   const [funnel, setFunnel] = useState(initialFunnel)
-  const [statusFilter, setStatusFilter] = useState<ProspectStatus | "all">("all")
+  // Multi-select status filter. Empty array = no filter (all statuses) — same
+  // semantics as the previous "all" sentinel but enables OR'd multi-status
+  // filtering. Funnel cards toggle status in/out of the array; the dropdown
+  // uses checkbox items.
+  const [statusFilter, setStatusFilter] = useState<ProspectStatus[]>([])
   const [sourceFilter, setSourceFilter] = useState("all")
   const [sequenceFilter, setSequenceFilter] = useState<SequenceStatus | "all">("all")
   const [search, setSearch] = useState("")
@@ -381,8 +426,13 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   // HTML for the chosen template + language.
   const [previewEmail, setPreviewEmail] = useState<{ template: string; lang: string } | null>(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
+  // Distinct popup for the Apollo Sync surface — pulled out of the Sales
+  // statuses popup so list import + activity refresh + sync history live in
+  // one place that's easy to reach from the header button.
+  const [showApolloSync, setShowApolloSync] = useState(false)
   const [syncListId, setSyncListId] = useState("")
   const [editingListId, setEditingListId] = useState(false)
+  const [latestRuns, setLatestRuns] = useState(apolloSyncRuns)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
   const [showEmailsModal, setShowEmailsModal] = useState(false)
@@ -395,7 +445,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   const refreshData = useCallback(() => {
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 }),
+        fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 }),
         fetchFunnel(sourceFilter),
       ])
       setProspects(prospectsResult.prospects)
@@ -415,17 +465,20 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
     })
   }, [refreshData])
 
-  // Filter change
-  const handleFilterChange = useCallback((newStatus?: ProspectStatus | "all", newSource?: string, newSequence?: SequenceStatus | "all") => {
-    const s = newStatus ?? statusFilter
+  // Filter change. statusFilter is now an array, so callers pass either:
+  //   • a new full array (dropdown checkbox toggle), or
+  //   • a single status to toggle in/out (funnel card click — convenience)
+  // The `toggleStatus` helper below handles the latter.
+  const handleFilterChange = useCallback((newStatuses?: ProspectStatus[], newSource?: string, newSequence?: SequenceStatus | "all") => {
+    const s = newStatuses ?? statusFilter
     const src = newSource ?? sourceFilter
     const seq = newSequence ?? sequenceFilter
-    if (newStatus !== undefined) setStatusFilter(s)
+    if (newStatuses !== undefined) setStatusFilter(s)
     if (newSource !== undefined) setSourceFilter(src)
     if (newSequence !== undefined) setSequenceFilter(seq)
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ status: s, source: src, sequence: seq, search, offset: 0, limit: 50 }),
+        fetchProspects({ statuses: s, source: src, sequence: seq, search, offset: 0, limit: 50 }),
         fetchFunnel(src),
       ])
       setProspects(prospectsResult.prospects)
@@ -435,10 +488,20 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
     })
   }, [statusFilter, sourceFilter, sequenceFilter, search])
 
+  /** Toggle one status in or out of the multi-select filter. Used by the
+   *  funnel cards: click an unselected card → adds; click a selected card
+   *  → removes. */
+  const toggleStatus = useCallback((status: ProspectStatus) => {
+    const next = statusFilter.includes(status)
+      ? statusFilter.filter((s) => s !== status)
+      : [...statusFilter, status]
+    handleFilterChange(next)
+  }, [statusFilter, handleFilterChange])
+
   // Search
   const handleSearch = useCallback(() => {
     startTransition(async () => {
-      const result = await fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 })
+      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 })
       setProspects(result.prospects)
       setOffset(0)
       setHasMore(result.prospects.length >= 50)
@@ -449,7 +512,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
   const handleLoadMore = useCallback(() => {
     const newOffset = offset + 50
     startTransition(async () => {
-      const result = await fetchProspects({ status: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: newOffset, limit: 50 })
+      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: newOffset, limit: 50 })
       setProspects((prev) => [...prev, ...result.prospects])
       setOffset(newOffset)
       setHasMore(result.prospects.length >= 50)
@@ -511,6 +574,15 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
     })
   }, [refreshData])
 
+  const refreshSyncRuns = async () => {
+    try {
+      const runs = await fetchLatestApolloSyncRuns()
+      setLatestRuns(runs)
+    } catch {
+      /* keep existing state if the fetch fails */
+    }
+  }
+
   const handleSyncList = async () => {
     if (!syncListId.trim()) return
     setIsSyncing(true)
@@ -524,6 +596,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
       const data = await res.json()
       if (res.ok) {
         setSyncResult(`Synced ${data.synced} contacts from Apollo`)
+        await refreshSyncRuns()
         refreshData()
       } else {
         setSyncResult(`Error: ${data.error}`)
@@ -547,6 +620,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
       const data = await res.json()
       if (res.ok) {
         setSyncResult(`Updated ${data.updated} of ${data.total} prospects`)
+        await refreshSyncRuns()
         refreshData()
       } else {
         setSyncResult(`Error: ${data.error}`)
@@ -580,11 +654,13 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
             Email Templates
           </button>
           <button
-            onClick={handleSyncActivity}
-            disabled={isSyncing}
-            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
+            onClick={() => {
+              setSyncListId(currentApolloListId ?? "")
+              setShowApolloSync(true)
+            }}
+            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
           >
-            {isSyncing ? "Syncing…" : "Refresh Activity"}
+            Apollo Sync
           </button>
         </div>
       </div>
@@ -626,8 +702,8 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                         <div style={{ height: 24 }} />
                       )}
                       <button
-                        onClick={() => handleFilterChange(stage.status)}
-                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${statusFilter === stage.status ? "border-[#c4c4c2] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        onClick={() => toggleStatus(stage.status)}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${statusFilter.includes(stage.status) ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
                         style={{ width: 100 }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">
@@ -670,29 +746,60 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={statusFilter} onValueChange={(v) => handleFilterChange(v as ProspectStatus | "all")}>
-            <SelectTrigger className="w-[170px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All statuses">
-                {statusFilter === "all" ? "All statuses" : (
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter as ProspectStatus].dot}`} />
-                    {STATUS_CONFIG[statusFilter as ProspectStatus].label}
-                  </span>
-                )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+          {/* Multi-select status filter — checkbox items in a dropdown menu.
+              Empty selection = all statuses (no filter). Trigger label shows
+              "All statuses" / "<status name>" / "N statuses" for 0 / 1 / 2+
+              selected. Synced with the funnel cards above. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-[170px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {statusFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All statuses</span>
+                  ) : statusFilter.length === 1 ? (
+                    <>
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter[0]].dot}`} />
+                      <span className="truncate">{STATUS_CONFIG[statusFilter[0]].label}</span>
+                    </>
+                  ) : (
+                    <span>{statusFilter.length} statuses</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (statusFilter.length > 0) handleFilterChange([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {ALL_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={statusFilter.includes(s)}
+                  onCheckedChange={() => toggleStatus(s)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dot}`} />
                     {STATUS_CONFIG[s].label}
                   </span>
-                </SelectItem>
+                </DropdownMenuCheckboxItem>
               ))}
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Select value={sequenceFilter} onValueChange={(v) => handleFilterChange(undefined, undefined, v as SequenceStatus | "all")}>
             <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
               <SelectValue placeholder="All sequences">
@@ -858,14 +965,19 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   <td style={{ textAlign: "center" }}>{p.emails_sent || "—"}</td>
                   <td style={{ textAlign: "center" }}>
                     {p.emails_sent > 0 ? (() => {
-                      // An open or click implies delivery — clamp so we never
-                      // show a delivered rate lower than opened/clicked, which
-                      // happens when the Resend webhook updates opens but the
-                      // delivered counter hasn't been backfilled yet.
-                      const effectiveDelivered = Math.max(
-                        p.emails_delivered ?? 0,
-                        p.emails_opened ?? 0,
-                        p.emails_clicked ?? 0,
+                      // An open or click implies delivery — clamp UP so we never
+                      // show a delivered rate lower than opened/clicked (happens
+                      // when Resend updates opens but the delivered counter
+                      // hasn't been backfilled yet). Cap at emails_sent so
+                      // double-counted webhook events / multi-opens can't push
+                      // the rate past 100%.
+                      const effectiveDelivered = Math.min(
+                        Math.max(
+                          p.emails_delivered ?? 0,
+                          p.emails_opened ?? 0,
+                          p.emails_clicked ?? 0,
+                        ),
+                        p.emails_sent,
                       )
                       const pct = Math.round((effectiveDelivered / p.emails_sent) * 100)
                       return <span className={deliveredRateColor(pct, p.emails_sent)}>{pct}%</span>
@@ -873,13 +985,17 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   </td>
                   <td style={{ textAlign: "center" }}>
                     {p.emails_sent > 0 ? (() => {
-                      const pct = Math.round(((p.emails_opened ?? 0) / p.emails_sent) * 100)
+                      // Raw opens can exceed sent (recipient re-opens). Cap at
+                      // sent so the rate stays in [0, 100] for funnel display.
+                      const effectiveOpened = Math.min(p.emails_opened ?? 0, p.emails_sent)
+                      const pct = Math.round((effectiveOpened / p.emails_sent) * 100)
                       return <span className={openedRateColor(pct, p.emails_sent)}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
                   <td style={{ textAlign: "center" }}>
                     {p.emails_sent > 0 ? (() => {
-                      const pct = Math.round(((p.emails_clicked ?? 0) / p.emails_sent) * 100)
+                      const effectiveClicked = Math.min(p.emails_clicked ?? 0, p.emails_sent)
+                      const pct = Math.round((effectiveClicked / p.emails_sent) * 100)
                       return <span className={clickedRateColor(pct, p.emails_sent)}>{pct}%</span>
                     })() : <span className="text-[#a1a1a0] font-normal">—</span>}
                   </td>
@@ -1365,9 +1481,30 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
               </p>
             </div>
 
-            {/* Apollo import */}
-            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #e5e5e4" }}>
-              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Import from Apollo</h4>
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowStatusGuide(false)}
+                className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Apollo Sync popup — list import + activity refresh + sync history */}
+      {showApolloSync && (
+        <div className="popup-overlay" onClick={() => setShowApolloSync(false)}>
+          <div className="popup-card" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Apollo Sync</h3>
+              <button type="button" className="popup-close" onClick={() => setShowApolloSync(false)} aria-label="Close">✕</button>
+            </div>
+
+            {/* ── Import contacts ────────────────────────────────────────── */}
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Import contacts from a list</h4>
               <p style={{ margin: "0 0 10px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
                 The list ID feeds prospects into the sales funnel. Find it in Apollo → Lists → click a list → the ID is in the URL.
               </p>
@@ -1388,7 +1525,7 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   <button
                     type="button"
                     onClick={() => {
-                      setSyncListId(currentApolloListId)
+                      setSyncListId(currentApolloListId ?? "")
                       setEditingListId(true)
                     }}
                     className="text-xs font-medium text-[#016D75] hover:underline shrink-0"
@@ -1398,19 +1535,19 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                 </div>
               )}
 
-              {syncResult && (
-                <p className={`text-xs mt-3 ${syncResult.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>
-                  {syncResult}
-                </p>
-              )}
+              <p style={{ margin: "10px 0 12px", fontSize: 11, color: "#6b6b68" }}>
+                {apolloProspectsCount} contact{apolloProspectsCount === 1 ? "" : "s"} in the prospects table from Apollo.
+                {latestRuns.list?.startedAt && (
+                  <>
+                    {" · "}
+                    Last import {formatRelativeTime(latestRuns.list.startedAt)}
+                    {latestRuns.list.syncedCount !== null && ` (synced ${latestRuns.list.syncedCount})`}
+                    {latestRuns.list.errorCount > 0 && ` · ${latestRuns.list.errorCount} error${latestRuns.list.errorCount === 1 ? "" : "s"}`}
+                  </>
+                )}
+              </p>
 
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  onClick={() => setShowStatusGuide(false)}
-                  className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-                >
-                  Close
-                </button>
+              <div className="flex justify-end">
                 <button
                   onClick={handleSyncList}
                   disabled={isSyncing || !syncListId.trim()}
@@ -1418,6 +1555,65 @@ export function ProspectsClient({ initialProspects, initialFunnel, companyMap = 
                   style={{ background: "var(--primary, #016D75)" }}
                 >
                   {isSyncing ? "Syncing…" : "Import Contacts"}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Activity refresh ──────────────────────────────────────── */}
+            <div style={{ paddingTop: 20, borderTop: "1px solid #e5e5e4" }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Refresh prospect activity</h4>
+              <p style={{ margin: "0 0 12px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
+                Re-reads campaign status from Apollo for every active prospect. Runs automatically every 6 hours; the manual button below is for "I just sent emails, refresh now" cases.
+              </p>
+
+              <div style={{ background: "#fafaf9", border: "1px solid #e5e5e4", borderRadius: 3, padding: "10px 12px", marginBottom: 12, fontSize: 11, lineHeight: 1.6, color: "#1c1c1a" }}>
+                {latestRuns.activity ? (
+                  <>
+                    <div>
+                      <strong style={{ fontWeight: 500 }}>Last sync:</strong>{" "}
+                      <span style={{ color: "#6b6b68" }}>
+                        {formatRelativeTime(latestRuns.activity.startedAt)}
+                        {" "}({latestRuns.activity.triggeredBy})
+                      </span>
+                    </div>
+                    <div>
+                      <strong style={{ fontWeight: 500 }}>Result:</strong>{" "}
+                      <span style={{ color: latestRuns.activity.errorCount > 0 ? "#dc2626" : "#059669" }}>
+                        {latestRuns.activity.finishedAt
+                          ? `${latestRuns.activity.syncedCount ?? 0} of ${latestRuns.activity.totalCount ?? 0} prospects refreshed${latestRuns.activity.errorCount > 0 ? ` · ${latestRuns.activity.errorCount} error${latestRuns.activity.errorCount === 1 ? "" : "s"}` : ""}`
+                          : "Running…"}
+                      </span>
+                    </div>
+                    {latestRuns.activity.lastError && (
+                      <div style={{ marginTop: 4, color: "#dc2626", fontSize: 10 }}>
+                        Last error: {latestRuns.activity.lastError}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ color: "#a1a1a0" }}>No syncs run yet.</span>
+                )}
+              </div>
+
+              {syncResult && (
+                <p className={`text-xs mb-3 ${syncResult.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>
+                  {syncResult}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowApolloSync(false)}
+                  className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={handleSyncActivity}
+                  disabled={isSyncing}
+                  className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#1c1c1a] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
+                >
+                  {isSyncing ? "Refreshing…" : "Refresh now"}
                 </button>
               </div>
             </div>

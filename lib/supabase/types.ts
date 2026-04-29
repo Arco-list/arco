@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      apollo_sync_runs: {
+        Row: {
+          created_at: string
+          error_count: number
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          list_id: string | null
+          started_at: string
+          synced_count: number | null
+          total_count: number | null
+          triggered_by: string
+        }
+        Insert: {
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          list_id?: string | null
+          started_at?: string
+          synced_count?: number | null
+          total_count?: number | null
+          triggered_by: string
+        }
+        Update: {
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          list_id?: string | null
+          started_at?: string
+          synced_count?: number | null
+          total_count?: number | null
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       brand_retailers: {
         Row: {
           brand_id: string
