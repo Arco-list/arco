@@ -198,6 +198,19 @@
     }
   },
   "company_edit": {
+    "owner_label": "Eigenaar",
+    "edit_listing": "Listing bewerken",
+    "update_status": "Status bijwerken",
+    "change_cover": "Omslag wijzigen",
+    "project_options_aria": "Projectopties",
+    "contact_information": "Contactgegevens",
+    "office_location": "Kantoorlocatie",
+    "website": "Website",
+    "search_address": "Adres zoeken...",
+    "searching": "Zoeken...",
+    "no_results_found": "Geen resultaten gevonden",
+    "add_address": "Adres toevoegen",
+    "add_website": "Website toevoegen",
     "status_listed": "Gepubliceerd",
     "status_unlisted": "Verborgen",
     "status_deactivated": "Gedeactiveerd",
@@ -1175,12 +1188,54 @@
     "member": "Lid",
     "cancel": "Annuleren"
   },
+  "project_status": {
+    "labels": {
+      "draft": "In bewerking",
+      "in_progress": "In beoordeling",
+      "published": "Vermeld",
+      "archived": "Niet vermeld",
+      "rejected": "Afgewezen",
+      "invited": "Uitgenodigd",
+      "unlisted": "Niet vermeld",
+      "listed": "Vermeld",
+      "live_on_page": "Uitgelicht",
+      "contributor_rejected": "Afgewezen"
+    },
+    "featured": {
+      "label": "Uitgelicht",
+      "description_owner": "Project is gepubliceerd en zichtbaar in je portfolio.",
+      "description_contributor": "Vermeld op de projectpagina en project zichtbaar in je portfolio."
+    },
+    "listed": {
+      "label": "Vermeld",
+      "description_owner": "Project is gepubliceerd maar niet zichtbaar in je portfolio.",
+      "description_contributor": "Vermeld op de projectpagina maar niet zichtbaar in je portfolio.",
+      "description_listing": "Project is zichtbaar voor gebruikers en je wordt vermeld op de projectpagina."
+    },
+    "unlisted": {
+      "label": "Niet vermeld",
+      "description_contributor": "Niet vermeld op de projectpagina en niet zichtbaar in je portfolio.",
+      "description_listing": "Project is niet zichtbaar voor gebruikers."
+    }
+  },
   "project_edit": {
     "nav": {
       "listings": "Listings",
       "company": "Bedrijf",
       "team": "Team",
       "plans": "Abonnementen"
+    },
+    "sub_nav": {
+      "back_listings": "Listings",
+      "back_projects": "Projecten",
+      "details": "Details",
+      "photos": "Foto's",
+      "professionals": "Professionals",
+      "saved": "✓ Opgeslagen",
+      "preview": "Voorbeeld",
+      "approve": "Goedkeuren",
+      "approving": "Goedkeuren…",
+      "reject": "Afwijzen"
     },
     "actions": {
       "save": "Opslaan",

@@ -39,15 +39,14 @@ import {
   type ProjectStatus,
   type ListingStatusValue,
   isListingStatusValue,
-  LISTING_STATUS_OPTIONS,
   ACTIVE_STATUS_VALUES,
 } from "@/lib/project-status-config"
 import {
   type ContributorStatus,
   CONTRIBUTOR_STATUS_LABELS,
   CONTRIBUTOR_STATUS_DOT_CLASS,
-  CONTRIBUTOR_STATUS_OPTIONS,
-  OWNER_STATUS_OPTIONS,
+  buildContributorStatusOptions,
+  buildOwnerStatusOptions,
 } from "@/lib/contributor-status-config"
 import { ListingStatusModal } from "@/components/listing-status-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -163,6 +162,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
   const t = useTranslations("company_edit")
+  const tStatus = useTranslations("project_status")
+  const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
+  const contributorStatusOptions = useMemo(() => buildContributorStatusOptions((k) => tStatus(k)), [tStatus])
   const locale = useLocale()
 
   // Admin override: set the active company cookie so server actions can access it
@@ -1615,7 +1617,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                             backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
                           }}
                         >
-                          Owner
+                          {t("owner_label")}
                         </span>
                       )}
                     </div>
@@ -1641,7 +1643,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         className="filter-pill"
                         onClick={() => setProjectDropdown(projectDropdown === cardKey ? null : cardKey)}
                         data-open={projectDropdown === cardKey ? "true" : undefined}
-                        aria-label="Project options"
+                        aria-label={t("project_options_aria")}
                         style={{ padding: "6px 8px", gap: 0 }}
                       >
                         <MoreHorizontal style={{ width: 16, height: 16 }} />
@@ -1654,18 +1656,18 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       >
                         {project.isOwner && (
                           <div className="filter-dropdown-option" onClick={() => { setProjectDropdown(null); router.push(`/dashboard/edit/${project.id}`) }} role="menuitem">
-                            <span className="filter-dropdown-label">Edit listing</span>
+                            <span className="filter-dropdown-label">{t("edit_listing")}</span>
                           </div>
                         )}
                         <div className="filter-dropdown-option" onClick={() => handleProjectUpdateStatus(project)} role="menuitem">
-                          <span className="filter-dropdown-label">Update status</span>
+                          <span className="filter-dropdown-label">{t("update_status")}</span>
                         </div>
                         <div className="filter-dropdown-option" onClick={() => handleProjectChangeCover(project)} role="menuitem">
-                          <span className="filter-dropdown-label">Change cover</span>
+                          <span className="filter-dropdown-label">{t("change_cover")}</span>
                         </div>
                         {project.slug && (
                           <div className="filter-dropdown-option" onClick={() => { setProjectDropdown(null); window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer") }} role="menuitem">
-                            <span className="filter-dropdown-label">View project</span>
+                            <span className="filter-dropdown-label">{t("view_project")}</span>
                           </div>
                         )}
                       </div>
@@ -1709,7 +1711,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <section id="contact" className="contact-section" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header">
-            <h2 className="arco-section-title">Contact information</h2>
+            <h2 className="arco-section-title">{t("contact_information")}</h2>
           </div>
           <div className="contact-row">
             {/* Office Location */}
@@ -1719,7 +1721,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               onClick={() => { if (activeEditField !== "address") setActiveEditField("address") }}
             >
               <EditBadge />
-              <span className="arco-eyebrow">Office Location</span>
+              <span className="arco-eyebrow">{t("office_location")}</span>
               {activeEditField === "address" ? (
                 <div style={{ position: "relative" }}>
                   <input
@@ -1727,7 +1729,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     className="contact-edit-input"
                     value={addressQuery}
                     onChange={(e) => searchAddress(e.target.value)}
-                    placeholder="Search address..."
+                    placeholder={t("search_address")}
                     onKeyDown={(e) => {
                       if (e.key === "Escape") {
                         setActiveEditField(null)
@@ -1752,17 +1754,17 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         </button>
                       ))}
                       {isAddressSearching && (
-                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching...</div>
+                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{t("searching")}</div>
                       )}
                       {!isAddressSearching && addressResults.length === 0 && (
-                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>No results found</div>
+                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{t("no_results_found")}</div>
                       )}
                     </div>
                   )}
                 </div>
               ) : (
                 <p className="contact-row-value">
-                  {address || city ? [address?.split(",")[0]?.trim(), city].filter(Boolean).join(", ") : <span className="contact-row-placeholder">Add address</span>}
+                  {address || city ? [address?.split(",")[0]?.trim(), city].filter(Boolean).join(", ") : <span className="contact-row-placeholder">{t("add_address")}</span>}
                 </p>
               )}
             </div>
@@ -1774,7 +1776,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               data-setup-highlight={highlightMissing && !setupComplete.domain ? "true" : undefined}
             >
               <EditBadge />
-              <span className="arco-eyebrow">Website</span>
+              <span className="arco-eyebrow">{t("website")}</span>
               {activeEditField === "website" ? (
                 <input
                   autoFocus
@@ -1810,7 +1812,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       )}
                     </>
                   ) : (
-                    <span className="contact-row-placeholder">Add website</span>
+                    <span className="contact-row-placeholder">{t("add_website")}</span>
                   )}
                 </p>
               )}
@@ -2457,7 +2459,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         companyPlan={companyPlan}
         selectedStatus={selectedContributorStatus}
         onStatusChange={setSelectedContributorStatus}
-        statusOptions={selectedCardProject?.isOwner ? OWNER_STATUS_OPTIONS : CONTRIBUTOR_STATUS_OPTIONS}
+        statusOptions={selectedCardProject?.isOwner ? ownerStatusOptions : contributorStatusOptions}
         saveDisabled={!selectedContributorStatus || selectedContributorStatus === "invited"}
         isPendingAdminReview={selectedCardProject?.rawProjectStatus === "in_progress"}
         isRejected={selectedCardProject?.rawProjectStatus === "rejected"}

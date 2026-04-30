@@ -198,6 +198,19 @@
     }
   },
   "company_edit": {
+    "owner_label": "Owner",
+    "edit_listing": "Edit listing",
+    "update_status": "Update status",
+    "change_cover": "Change cover",
+    "project_options_aria": "Project options",
+    "contact_information": "Contact information",
+    "office_location": "Office location",
+    "website": "Website",
+    "search_address": "Search address...",
+    "searching": "Searching...",
+    "no_results_found": "No results found",
+    "add_address": "Add address",
+    "add_website": "Add website",
     "status_listed": "Listed",
     "status_unlisted": "Unlisted",
     "status_deactivated": "Deactivated",
@@ -1175,12 +1188,54 @@
     "member": "Member",
     "cancel": "Cancel"
   },
+  "project_status": {
+    "labels": {
+      "draft": "In progress",
+      "in_progress": "In review",
+      "published": "Listed",
+      "archived": "Unlisted",
+      "rejected": "Rejected",
+      "invited": "Invited",
+      "unlisted": "Unlisted",
+      "listed": "Listed",
+      "live_on_page": "Featured",
+      "contributor_rejected": "Declined"
+    },
+    "featured": {
+      "label": "Featured",
+      "description_owner": "Project is published and shown in your portfolio.",
+      "description_contributor": "Listed on the project page and project shown in your portfolio."
+    },
+    "listed": {
+      "label": "Listed",
+      "description_owner": "Project is published but not shown in your portfolio.",
+      "description_contributor": "Listed on the project page but not shown in your portfolio.",
+      "description_listing": "Project is visible to users and you are displayed on the project page."
+    },
+    "unlisted": {
+      "label": "Unlisted",
+      "description_contributor": "Not listed on the project page and not shown in your portfolio.",
+      "description_listing": "Project is not visible to users."
+    }
+  },
   "project_edit": {
     "nav": {
       "listings": "Listings",
       "company": "Company",
       "team": "Team",
       "plans": "Plans"
+    },
+    "sub_nav": {
+      "back_listings": "Listings",
+      "back_projects": "Projects",
+      "details": "Details",
+      "photos": "Photos",
+      "professionals": "Professionals",
+      "saved": "✓ Saved",
+      "preview": "Preview",
+      "approve": "Approve",
+      "approving": "Approving…",
+      "reject": "Reject"
     },
     "actions": {
       "save": "Save",

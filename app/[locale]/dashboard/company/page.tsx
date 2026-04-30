@@ -1,18 +1,24 @@
 import { redirect } from "next/navigation"
+import { getTranslations } from "next-intl/server"
 
 import { CompanyEditClient } from "@/components/company-edit/company-edit-client"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getActiveCompanyId } from "@/lib/active-company"
 import { isAdminUser } from "@/lib/auth-utils"
 import type { Database } from "@/lib/supabase/types"
-import { PROJECT_STATUS_LABELS, PROJECT_STATUS_DOT_CLASS, type ProjectStatus } from "@/lib/project-status-config"
-import { CONTRIBUTOR_STATUS_LABELS, CONTRIBUTOR_STATUS_DOT_CLASS, type ContributorStatus } from "@/lib/contributor-status-config"
+import { PROJECT_STATUS_DOT_CLASS, type ProjectStatus } from "@/lib/project-status-config"
+import { CONTRIBUTOR_STATUS_DOT_CLASS, type ContributorStatus } from "@/lib/contributor-status-config"
+import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
 
 export default async function CompanySettingsPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ locale: string }>
   searchParams: Promise<{ company_id?: string; imported?: string; project_id?: string }>
 }) {
+  const { locale } = await params
+  const tStatusLabels = await getTranslations({ locale, namespace: "project_status.labels" })
   const { company_id: companyIdParam, imported, project_id: importedProjectId } = await searchParams
   const supabase = await createServerSupabaseClient()
 
@@ -163,7 +169,7 @@ export default async function CompanySettingsPage({
       .maybeSingle(),
     supabase
       .from("project_professionals")
-      .select("id, project_id, is_project_owner, status, cover_photo_id, projects!inner(id, slug, title, location, status, rejection_reason, project_type, address_city, project_type_category:categories!projects_project_type_category_id_fkey(name), project_photos(id, url, is_primary, order_index))")
+      .select("id, project_id, is_project_owner, status, cover_photo_id, projects!inner(id, slug, title, location, status, rejection_reason, project_type, address_city, translations, project_type_category:categories!projects_project_type_category_id_fkey(name), project_photos(id, url, is_primary, order_index))")
       .eq("company_id", company.id)
       .limit(10),
     // Fetch projects this company is invited to (for setup mode go-live)
@@ -215,9 +221,15 @@ export default async function CompanySettingsPage({
           if (!a.is_primary && b.is_primary) return 1
           return (a.order_index ?? 0) - (b.order_index ?? 0)
         })
-      const projectTypeLabel = p.project_type_category?.name ??
+      const rawTypeLabel = p.project_type_category?.name ??
         (p.project_type && !/^[0-9a-f]{8}-/.test(p.project_type) ? p.project_type : "")
+      const projectTypeLabel = rawTypeLabel ? (translateCategoryName(rawTypeLabel, locale) ?? rawTypeLabel) : ""
       const locationLabel = p.address_city || p.location || null
+      const localizedTitle = getProjectTranslation(
+        { title: p.title, translations: (p as any).translations as Record<string, any> | null },
+        "title",
+        locale,
+      ) || p.title
       const isProjectOwner = !!link.is_project_owner
       // Show project_professionals status for both owners and contributors
       // For draft/in_progress/rejected projects, show project-level status
@@ -225,9 +237,16 @@ export default async function CompanySettingsPage({
       const ppStatus = link.status as ContributorStatus
       const useProjectStatus = ["draft", "in_progress", "rejected"].includes(projectStatus)
       const displayStatus = useProjectStatus ? projectStatus : ppStatus
-      const statusLabel = useProjectStatus
-        ? (PROJECT_STATUS_LABELS[projectStatus] ?? projectStatus)
-        : (CONTRIBUTOR_STATUS_LABELS[ppStatus] ?? ppStatus)
+      // The "rejected" enum value exists for both project-level and contributor-level
+      // statuses but reads differently to the user — "Rejected" vs "Declined". The
+      // translation namespace exposes both so we route the contributor case via a
+      // disambiguated key.
+      const statusLabelKey = useProjectStatus
+        ? projectStatus
+        : ppStatus === "rejected" ? "contributor_rejected" : ppStatus
+      const statusLabel = (() => {
+        try { return tStatusLabels(statusLabelKey as never) } catch { return statusLabelKey }
+      })()
       const statusDotClass = useProjectStatus
         ? (PROJECT_STATUS_DOT_CLASS[projectStatus] ?? "bg-muted-foreground")
         : (CONTRIBUTOR_STATUS_DOT_CLASS[ppStatus] ?? "bg-muted-foreground")
@@ -239,7 +258,7 @@ export default async function CompanySettingsPage({
       return {
         id: p.id,
         slug: p.slug,
-        title: p.title,
+        title: localizedTitle,
         location: p.location,
         status: displayStatus,
         statusLabel,

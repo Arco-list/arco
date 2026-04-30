@@ -36,17 +36,21 @@ export const PROJECT_STATUS_DOT_CLASS: Record<ProjectStatus, string> = {
   rejected: "bg-red-500",
 }
 
-export const LISTING_STATUS_OPTIONS: ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> = [
+export type StatusTranslator = (key: string) => string
+
+export const buildListingStatusOptions = (
+  t: StatusTranslator,
+): ReadonlyArray<ListingStatusModalOption<ListingStatusValue>> => [
   {
     value: "published",
-    label: "Listed",
-    description: "Project is visible to users and you are displayed on the project page.",
+    label: t("listed.label"),
+    description: t("listed.description_listing"),
     colorClass: "bg-emerald-500",
   },
   {
     value: "archived",
-    label: "Unlisted",
-    description: "Project is not visible to users.",
+    label: t("unlisted.label"),
+    description: t("unlisted.description_listing"),
     colorClass: "bg-muted-foreground",
   },
 ]

@@ -50,7 +50,7 @@ import {
   type ContributorStatus,
   CONTRIBUTOR_STATUS_LABELS,
   CONTRIBUTOR_STATUS_DOT_CLASS,
-  OWNER_STATUS_OPTIONS,
+  buildOwnerStatusOptions,
 } from "@/lib/contributor-status-config"
 import { setProjectStatusAction } from "@/app/admin/projects/actions"
 import { useLocale, useTranslations } from "next-intl"
@@ -403,6 +403,21 @@ export default function ListingEditorPage() {
   const tErrors = useTranslations("project_edit.errors")
   const tValid = useTranslations("project_edit.validation")
   const tPreview = useTranslations("project_edit.preview")
+  const tStatus = useTranslations("project_status")
+  const tSpaces = useTranslations("spaces")
+  const translateSpaceLabel = useCallback(
+    (slug: string | null | undefined, fallback: string) => {
+      if (!slug) return fallback
+      try {
+        const v = tSpaces(slug as never)
+        return v && v !== slug ? v : fallback
+      } catch {
+        return fallback
+      }
+    },
+    [tSpaces],
+  )
+  const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
   const getInviteStatusMeta = useMemo(() => makeGetInviteStatusMeta((k) => tTeam(k)), [tTeam])
   const importToastFiredRef = useRef(false)
   const [activeSection, setActiveSection] = useState("location")
@@ -607,8 +622,8 @@ export default function ListingEditorPage() {
   const isPendingAdminReview = projectStatus === "in_progress"
   const limitReachedForNewActivation = false
   const selectedStatusOption = useMemo(
-    () => OWNER_STATUS_OPTIONS.find((option) => option.value === selectedStatus),
-    [selectedStatus],
+    () => ownerStatusOptions.find((option) => option.value === selectedStatus),
+    [ownerStatusOptions, selectedStatus],
   )
   const canSaveStatus = Boolean(selectedStatusOption) && !isPendingAdminReview
 
@@ -1802,7 +1817,7 @@ export default function ListingEditorPage() {
     }
   }
 
-  const statusOptions = OWNER_STATUS_OPTIONS
+  const statusOptions = ownerStatusOptions
 
   const statusOptionByValue = useMemo(
     () => new Map(statusOptions.map((option) => [option.value, option])),
@@ -3642,13 +3657,14 @@ export default function ListingEditorPage() {
           {displayFeatureIds.map(featureId => {
             const fd = getFeatureDisplay(featureId)
             const count = getFeaturePhotoCount(featureId)
+            const label = translateSpaceLabel(fd.slug, fd.name)
             return (
               <button
                 key={featureId}
                 className={`category-tag${activeEditFeature === featureId ? " active" : ""}`}
                 onClick={() => setActiveEditFeature(featureId)}
               >
-                {fd.name}{count > 0 ? ` · ${count}` : ""}
+                {label}{count > 0 ? ` · ${count}` : ""}
               </button>
             )
           })}
@@ -3820,7 +3836,7 @@ export default function ListingEditorPage() {
                               }
                             }}
                           >
-                            {opt.name}
+                            {translateSpaceLabel(opt.slug, opt.name)}
                           </button>
                         )
                       })}

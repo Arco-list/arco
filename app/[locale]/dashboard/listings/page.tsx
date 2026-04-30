@@ -32,15 +32,15 @@ import {
   ACTIVE_STATUS_VALUES,
   BASIC_ACTIVE_LIMIT,
   isListingStatusValue,
-  LISTING_STATUS_OPTIONS,
+  buildListingStatusOptions,
 } from "@/lib/project-status-config"
 import {
   type ContributorStatus,
   CONTRIBUTOR_STATUS_LABELS,
   CONTRIBUTOR_STATUS_CHIP_CLASS,
   CONTRIBUTOR_STATUS_DOT_CLASS,
-  CONTRIBUTOR_STATUS_OPTIONS,
-  OWNER_STATUS_OPTIONS,
+  buildContributorStatusOptions,
+  buildOwnerStatusOptions,
 } from "@/lib/contributor-status-config"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { updateCoverPhotoAction } from "@/app/dashboard/company/actions"
@@ -101,6 +101,10 @@ const MIN_YEAR = 2000
 
 export default function DashboardListingsPage() {
   const t = useTranslations("dashboard")
+  const tStatus = useTranslations("project_status")
+  const listingStatusOptions = useMemo(() => buildListingStatusOptions((k) => tStatus(k)), [tStatus])
+  const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
+  const contributorStatusOptions = useMemo(() => buildContributorStatusOptions((k) => tStatus(k)), [tStatus])
   const locale = useLocale()
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const searchParams = useSearchParams()
@@ -587,7 +591,7 @@ export default function DashboardListingsPage() {
       return
     }
 
-    const statusOption = LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus)
+    const statusOption = listingStatusOptions.find((option) => option.value === selectedStatus)
     if (!statusOption) {
       toast.error(t("select_valid_status"))
       return
@@ -979,7 +983,7 @@ export default function DashboardListingsPage() {
     })
   }, [])
 
-  const selectedStatusOption = LISTING_STATUS_OPTIONS.find((option) => option.value === selectedStatus)
+  const selectedStatusOption = listingStatusOptions.find((option) => option.value === selectedStatus)
 
   const isValidStatusSelection =
     !isPendingAdminReview && Boolean(selectedStatusOption)
@@ -1451,7 +1455,7 @@ export default function DashboardListingsPage() {
         companyPlan={companyPlan}
         selectedStatus={selectedContributorStatus}
         onStatusChange={setSelectedContributorStatus}
-        statusOptions={selectedProject?.role === "owner" ? OWNER_STATUS_OPTIONS : CONTRIBUTOR_STATUS_OPTIONS}
+        statusOptions={selectedProject?.role === "owner" ? ownerStatusOptions : contributorStatusOptions}
         saveDisabled={!selectedContributorStatus || selectedContributorStatus === "invited"}
         isPendingAdminReview={selectedProject?.rawProjectStatus === "in_progress"}
         isRejected={selectedProject?.rawProjectStatus === "rejected"}

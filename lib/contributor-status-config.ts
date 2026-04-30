@@ -30,42 +30,44 @@ export const CONTRIBUTOR_STATUS_DOT_CLASS: Record<ContributorStatus, string> = {
   rejected: "bg-red-500",
 }
 
-export const CONTRIBUTOR_STATUS_OPTIONS: ReadonlyArray<
-  ListingStatusModalOption<ContributorStatus>
-> = [
+export type StatusTranslator = (key: string) => string
+
+export const buildContributorStatusOptions = (
+  t: StatusTranslator,
+): ReadonlyArray<ListingStatusModalOption<ContributorStatus>> => [
   {
     value: "live_on_page",
-    label: "Featured",
-    description: "Listed on the project page and project shown in your portfolio.",
+    label: t("featured.label"),
+    description: t("featured.description_contributor"),
     colorClass: "bg-teal-500",
   },
   {
     value: "listed",
-    label: "Listed",
-    description: "Listed on the project page but not shown in your portfolio.",
+    label: t("listed.label"),
+    description: t("listed.description_contributor"),
     colorClass: "bg-emerald-500",
   },
   {
     value: "unlisted",
-    label: "Unlisted",
-    description: "Not listed on the project page and not shown in your portfolio.",
+    label: t("unlisted.label"),
+    description: t("unlisted.description_contributor"),
     colorClass: "bg-muted-foreground",
   },
 ]
 
-export const OWNER_STATUS_OPTIONS: ReadonlyArray<
-  ListingStatusModalOption<ContributorStatus>
-> = [
+export const buildOwnerStatusOptions = (
+  t: StatusTranslator,
+): ReadonlyArray<ListingStatusModalOption<ContributorStatus>> => [
   {
     value: "live_on_page",
-    label: "Featured",
-    description: "Project is published and shown in your portfolio.",
+    label: t("featured.label"),
+    description: t("featured.description_owner"),
     colorClass: "bg-teal-500",
   },
   {
     value: "listed",
-    label: "Listed",
-    description: "Project is published but not shown in your portfolio.",
+    label: t("listed.label"),
+    description: t("listed.description_owner"),
     colorClass: "bg-emerald-500",
   },
 ]

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 
 interface EditSubNavProps {
   statusIndicatorClass: string
@@ -36,6 +37,9 @@ export function EditSubNav({
   onReject,
   isApproving = false,
 }: EditSubNavProps) {
+  const t = useTranslations("project_edit.sub_nav")
+  const tActions = useTranslations("project_edit.actions")
+  const tSubmit = useTranslations("project_edit.submit_review")
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down")
   const lastScrollY = useRef(0)
@@ -117,7 +121,7 @@ export function EditSubNav({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="sub-nav-back-label">{isAdminReview ? "Projects" : "Listings"}</span>
+              <span className="sub-nav-back-label">{isAdminReview ? t("back_projects") : t("back_listings")}</span>
             </Link>
 
             <div className="sub-nav-mobile-divider" aria-hidden="true" />
@@ -125,13 +129,13 @@ export function EditSubNav({
             {/* Section links */}
             <div className="sub-nav-links" style={{ paddingRight: 0, marginRight: 0 }}>
               <a href="#details" onClick={(e) => handleClick(e, "details")} className={getLinkClass("details")}>
-                Details
+                {t("details")}
               </a>
               <a href="#photos" onClick={(e) => handleClick(e, "photos")} className={getLinkClass("photos")}>
-                Photos
+                {t("photos")}
               </a>
               <a href="#professionals" onClick={(e) => handleClick(e, "professionals")} className={getLinkClass("professionals")}>
-                Professionals
+                {t("professionals")}
               </a>
             </div>
           </div>
@@ -140,7 +144,7 @@ export function EditSubNav({
           <div className="sub-nav-actions">
             {!isAdminReview && showSaveStatus && (
               <span style={{ fontSize: 12, color: isSaving ? "#a1a1a0" : "#016D75" }}>
-                {isSaving ? "Saving…" : "✓ Saved"}
+                {isSaving ? tActions("saving") : t("saved")}
               </span>
             )}
             {!isAdminReview && projectStatus !== "draft" && (
@@ -163,7 +167,7 @@ export function EditSubNav({
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
                 </svg>
-                <span className="sub-nav-pill-label">Preview</span>
+                <span className="sub-nav-pill-label">{t("preview")}</span>
               </a>
             )}
             {!isAdminReview && projectStatus === "draft" && onSubmitForReview && (
@@ -173,7 +177,7 @@ export function EditSubNav({
                 disabled={isSubmitting}
                 style={isSubmitting ? { opacity: 0.5 } : undefined}
               >
-                {isSubmitting ? "Submitting…" : "Submit for review"}
+                {isSubmitting ? tSubmit("submitting") : tSubmit("trigger")}
               </button>
             )}
             {isAdminReview && (
@@ -184,7 +188,7 @@ export function EditSubNav({
                   disabled={isApproving}
                   style={{ fontSize: 13, padding: "6px 16px" }}
                 >
-                  Reject
+                  {t("reject")}
                 </button>
                 <button
                   className="btn-primary"
@@ -192,7 +196,7 @@ export function EditSubNav({
                   disabled={isApproving}
                   style={{ fontSize: 13, padding: "6px 16px" }}
                 >
-                  {isApproving ? "Approving…" : "Approve"}
+                  {isApproving ? t("approving") : t("approve")}
                 </button>
               </>
             )}
