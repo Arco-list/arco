@@ -53,7 +53,7 @@ import {
   OWNER_STATUS_OPTIONS,
 } from "@/lib/contributor-status-config"
 import { setProjectStatusAction } from "@/app/admin/projects/actions"
-import { useLocale } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import { regenerateDescription, saveProjectTranslatedField } from "@/app/new-project/import/actions"
 import {
   getProjectTranslation,
@@ -249,27 +249,29 @@ const resolveIconForFeatureOption = (feature?: FeatureOption | null) => {
 const isUuid = (value?: string | null): value is string =>
   Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))
 
-const getInviteStatusMeta = (invite: ProfessionalInviteSummary) => {
+type InviteStatusTranslator = (key: string) => string
+
+const makeGetInviteStatusMeta = (tTeam: InviteStatusTranslator) => (invite: ProfessionalInviteSummary) => {
   if (invite.isOwner) {
     return {
-      label: "Listing owner",
+      label: tTeam("invite_status_listing_owner"),
       className: "bg-surface text-foreground",
     }
   }
 
   switch (invite.status) {
     case "invited":
-      return { label: "Invite pending", className: "bg-amber-100 text-amber-800" }
+      return { label: tTeam("invite_status_invite_pending"), className: "bg-amber-100 text-amber-800" }
     case "listed":
-      return { label: "Listed", className: "bg-green-100 text-green-800" }
+      return { label: tTeam("invite_status_listed"), className: "bg-green-100 text-green-800" }
     case "live_on_page":
-      return { label: "Active", className: "bg-green-100 text-green-800" }
+      return { label: tTeam("invite_status_active"), className: "bg-green-100 text-green-800" }
     case "unlisted":
-      return { label: "Unlisted", className: "bg-gray-100 text-gray-500" }
+      return { label: tTeam("invite_status_unlisted"), className: "bg-gray-100 text-gray-500" }
     case "removed":
-      return { label: "Removed", className: "bg-red-100 text-red-800" }
+      return { label: tTeam("invite_status_removed"), className: "bg-red-100 text-red-800" }
     case "rejected":
-      return { label: "Opted out", className: "bg-red-100 text-red-800" }
+      return { label: tTeam("invite_status_opted_out"), className: "bg-red-100 text-red-800" }
     default:
       return { label: invite.status.replace(/_/g, " "), className: "bg-surface text-foreground" }
   }
@@ -315,9 +317,13 @@ const buildLocationUpdate = (state: ProjectDetailsFormState): ProjectLocationUpd
 const EditableTitle = memo(function EditableTitle({
   initialValue,
   onSave,
+  editLabel,
+  placeholder,
 }: {
   initialValue: string
   onSave: (value: string) => void
+  editLabel: string
+  placeholder: string
 }) {
   const ecRef = useRef<HTMLDivElement>(null)
   const elRef = useRef<HTMLHeadingElement>(null)
@@ -343,7 +349,7 @@ const EditableTitle = memo(function EditableTitle({
             <path d="M11.5 1.5l3 3L5 14H2v-3z" />
           </svg>
         </span>
-        <span className="ec-txt">Edit</span>
+        <span className="ec-txt">{editLabel}</span>
       </span>
       <h1
         ref={elRef}
@@ -360,27 +366,44 @@ const EditableTitle = memo(function EditableTitle({
           }
         }}
         style={{ cursor: "text", outline: "none" }}
-        data-placeholder="Project title"
+        data-placeholder={placeholder}
       />
     </div>
   )
 })
 
-const REJECTION_REASONS = [
-  "Not a residential project",
-  "Insufficient photos",
-  "Low quality images",
-  "Missing project details",
-  "Duplicate project",
-  "Inappropriate content",
-  "Not architecture or interior design",
-]
+const REJECTION_REASON_KEYS = [
+  "reason_not_residential",
+  "reason_insufficient_photos",
+  "reason_low_quality_images",
+  "reason_missing_details",
+  "reason_duplicate",
+  "reason_inappropriate",
+  "reason_not_architecture",
+] as const
 
 export default function ListingEditorPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
   const locale = useLocale()
+  const t = useTranslations("project_edit")
+  const tNav = useTranslations("project_edit.nav")
+  const tActions = useTranslations("project_edit.actions")
+  const tSpecs = useTranslations("project_edit.specs")
+  const tPhoto = useTranslations("project_edit.photo_tour")
+  const tLoc = useTranslations("project_edit.location")
+  const tTeam = useTranslations("project_edit.team")
+  const tDelete = useTranslations("project_edit.delete_project")
+  const tSubmit = useTranslations("project_edit.submit_review")
+  const tLowRes = useTranslations("project_edit.low_res")
+  const tReject = useTranslations("project_edit.rejection")
+  const tUpload = useTranslations("project_edit.upload_popup")
+  const tToast = useTranslations("project_edit.toasts")
+  const tErrors = useTranslations("project_edit.errors")
+  const tValid = useTranslations("project_edit.validation")
+  const tPreview = useTranslations("project_edit.preview")
+  const getInviteStatusMeta = useMemo(() => makeGetInviteStatusMeta((k) => tTeam(k)), [tTeam])
   const importToastFiredRef = useRef(false)
   const [activeSection, setActiveSection] = useState("location")
   const [showStatusModal, setShowStatusModal] = useState(false)
@@ -566,7 +589,7 @@ export default function ListingEditorPage() {
       .map((value) => value.trim())
 
     return {
-      title: detailsForm.projectTitle?.trim() || "Untitled project",
+      title: detailsForm.projectTitle?.trim() || t("untitled_project"),
       descriptor: descriptorParts.join(" • ") || "Add project details",
       coverImageUrl: coverPhotoUrl,
       planBadgeLabel: isPlus ? "Plus plan" : "Basic plan",
@@ -656,9 +679,7 @@ export default function ListingEditorPage() {
       retryCount++
 
       if (retryCount >= MAX_RETRIES) {
-        setMapsError(
-          "Google Maps failed to load. Please check your internet connection and refresh the page."
-        )
+        setMapsError(tLoc("map_failed_load"))
         return
       }
 
@@ -735,7 +756,7 @@ export default function ListingEditorPage() {
 
     if (!projectId) {
       setDetailsLoading(false)
-      setDetailsLoadError("Project not found.")
+      setDetailsLoadError(tErrors("project_not_found"))
       return
     }
 
@@ -763,7 +784,7 @@ export default function ListingEditorPage() {
       }
 
       if (error || !project) {
-        setDetailsLoadError(error?.message ?? "We couldn't load this project.")
+        setDetailsLoadError(error?.message ?? tErrors("load_project_failed"))
         setDetailsLoading(false)
         return
       }
@@ -796,7 +817,7 @@ export default function ListingEditorPage() {
         }
       }
       if (!hasAccess) {
-        setDetailsLoadError("You do not have access to edit this project.")
+        setDetailsLoadError(tErrors("no_access"))
         setDetailsLoading(false)
         return
       }
@@ -858,8 +879,8 @@ export default function ListingEditorPage() {
     if (importToastFiredRef.current) return
     if (searchParams?.get("from") !== "import") return
     importToastFiredRef.current = true
-    toast.success("Project imported!", {
-      description: "We pre-filled what we could from your website. Add photos and complete the remaining fields before publishing.",
+    toast.success(tToast("import_success_title"), {
+      description: tToast("import_success_description"),
       duration: 8000,
     })
   }, [searchParams])
@@ -895,9 +916,7 @@ export default function ListingEditorPage() {
         const firstReason = reasons.values().next().value ?? "Upload failed"
         const failedCount = Array.from(errorFileNames).length
         toast.error(
-          failedCount === 1
-            ? `Could not upload 1 photo`
-            : `Could not upload ${failedCount} photos`,
+          tToast("upload_failed_count", { count: failedCount }),
           { description: firstReason },
         )
       }
@@ -1154,13 +1173,13 @@ export default function ListingEditorPage() {
 
   const detailsLastSavedLabel = useMemo(() => {
     if (detailsSaving) {
-      return "Saving..."
+      return tActions("saving")
     }
     if (!detailsLastSavedAt) {
       return "Not saved yet"
     }
     return `Saved ${detailsLastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-  }, [detailsLastSavedAt, detailsSaving])
+  }, [detailsLastSavedAt, detailsSaving, tActions])
 
   const descriptionEditor = useEditor({
     extensions: [
@@ -1202,11 +1221,11 @@ export default function ListingEditorPage() {
       const plainTextLength = editor.getText().trim().length
 
       if (plainTextLength === 0) {
-        setDetailsErrors((prev) => ({ ...prev, projectDescription: "Add a project description." }))
+        setDetailsErrors((prev) => ({ ...prev, projectDescription: tValid("add_description") }))
       } else if (plainTextLength < MIN_DESCRIPTION_LENGTH) {
         setDetailsErrors((prev) => ({
           ...prev,
-          projectDescription: `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`,
+          projectDescription: tValid("description_too_short", { min: MIN_DESCRIPTION_LENGTH }),
         }))
       } else {
         setDetailsErrors((prev) => {
@@ -1276,12 +1295,12 @@ export default function ListingEditorPage() {
           descEditRef.current.textContent = result.description
         }
         setDescCharCount(result.description.length)
-        toast.success("Description generated")
+        toast.success(tToast("description_generated"))
       } else if ("error" in result) {
         toast.error(result.error)
       }
     } catch {
-      toast.error("Failed to generate description")
+      toast.error(tToast("description_generation_failed"))
     } finally {
       setGeneratingDesc(false)
     }
@@ -1407,7 +1426,7 @@ export default function ListingEditorPage() {
     const locationUpdate = buildLocationUpdate(snapshot)
 
     if (!locationUpdate.address_formatted) {
-      toast.error("Enter the project address before saving.")
+      toast.error(tToast("address_required"))
       return
     }
 
@@ -1437,10 +1456,10 @@ export default function ListingEditorPage() {
         address: nextAddress,
       }))
       setDetailsLastSavedAt(new Date())
-      toast.success("Location saved.")
+      toast.success(tToast("location_saved"))
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to update the project location."
-      toast.error("Location not saved", { description: message })
+      const message = error instanceof Error ? error.message : tErrors("update_location_failed")
+      toast.error(tToast("location_not_saved"), { description: message })
     } finally {
       setLocationSaving(false)
     }
@@ -1450,22 +1469,22 @@ export default function ListingEditorPage() {
     const errors: Record<string, string> = {}
 
     if (!detailsForm.category) {
-      errors.category = "Select a project category."
+      errors.category = tValid("select_category")
     }
     if (!detailsForm.projectType) {
-      errors.projectType = "Select a project type."
+      errors.projectType = tValid("select_type")
     }
     if (!detailsForm.buildingType) {
-      errors.buildingType = "Select a building type."
+      errors.buildingType = tValid("select_building_type")
     }
     if (!detailsForm.projectStyle) {
-      errors.projectStyle = "Select a project style."
+      errors.projectStyle = tValid("select_style")
     }
     if (!detailsForm.size) {
-      errors.size = "Select the project size."
+      errors.size = tValid("select_size")
     }
     if (!detailsForm.budget) {
-      errors.budget = "Select the project budget."
+      errors.budget = tValid("select_budget")
     }
 
     const yearErrors = generateYearErrorMessages(detailsForm, { treatEmptyAsError: true }).errors
@@ -1473,20 +1492,20 @@ export default function ListingEditorPage() {
 
     const trimmedTitle = detailsForm.projectTitle.trim()
     if (!trimmedTitle) {
-      errors.projectTitle = "Enter a project title."
+      errors.projectTitle = tValid("enter_title")
     } else if (trimmedTitle.length > MAX_TITLE_LENGTH) {
-      errors.projectTitle = `Project title must be ${MAX_TITLE_LENGTH} characters or fewer.`
+      errors.projectTitle = tValid("title_too_long", { max: MAX_TITLE_LENGTH })
     }
 
     const descriptionText = descriptionPlainText.trim()
     if (!descriptionText) {
-      errors.projectDescription = "Add a project description."
+      errors.projectDescription = tValid("add_description")
     } else if (descriptionText.length < MIN_DESCRIPTION_LENGTH) {
-      errors.projectDescription = `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters.`
+      errors.projectDescription = tValid("description_too_short", { min: MIN_DESCRIPTION_LENGTH })
     }
 
     if (!detailsForm.address.trim()) {
-      errors.address = "Enter the project address."
+      errors.address = tValid("enter_address")
     }
 
     setDetailsErrors(errors)
@@ -1505,7 +1524,7 @@ export default function ListingEditorPage() {
 
     const isValid = validateDetailsForm()
     if (!isValid) {
-      setDetailsFeedback({ type: "error", message: "Please resolve the highlighted fields." })
+      setDetailsFeedback({ type: "error", message: tErrors("resolve_highlighted") })
       return
     }
 
@@ -1566,10 +1585,10 @@ export default function ListingEditorPage() {
       }
 
       setDetailsLastSavedAt(new Date())
-      toast.success("Project details saved.")
+      toast.success(tToast("details_saved"))
       setDetailsFeedback(null)
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Something went wrong while saving."
+      const message = error instanceof Error ? error.message : tErrors("generic_save")
       setDetailsFeedback({ type: "error", message })
     } finally {
       setDetailsSaving(false)
@@ -1666,7 +1685,7 @@ export default function ListingEditorPage() {
 
     try {
       if (!userId) {
-        toast.error("User not authenticated")
+        toast.error(tToast("user_not_authenticated"))
         return
       }
 
@@ -1679,17 +1698,17 @@ export default function ListingEditorPage() {
           .eq("id", projectId)
 
         if (error) {
-          toast.error("Failed to update project status")
+          toast.error(tToast("edit_status_failed"))
           console.error("Error updating project status:", error)
         } else {
           setProjectStatus("in_progress")
-          toast.success("Editing enabled - Project moved to review")
+          toast.success(tToast("edit_enabled_review"))
         }
       } else {
-        toast.success("Editing enabled")
+        toast.success(tToast("edit_enabled"))
       }
     } catch (err) {
-      toast.error("Failed to enable editing")
+      toast.error(tToast("edit_enable_failed"))
       console.error("Error enabling edit mode:", err)
     }
   }
@@ -1719,7 +1738,7 @@ export default function ListingEditorPage() {
 
     try {
       if (!userId) {
-        toast.error("User not authenticated")
+        toast.error(tToast("user_not_authenticated"))
         return
       }
 
@@ -1752,7 +1771,7 @@ export default function ListingEditorPage() {
         .eq("id", projectId)
 
       if (error) {
-        toast.error("Failed to submit for review")
+        toast.error(tToast("submit_failed"))
         console.error("Error submitting for review:", error)
       } else {
         // Update project_professionals status
@@ -1771,12 +1790,12 @@ export default function ListingEditorPage() {
         setIsEditMode(false)
         setShowStatusModal(false)
         if (autoApprove && projectId) {
-          trackProjectPublished(projectId, detailsForm.projectTitle || "Untitled project")
+          trackProjectPublished(projectId, detailsForm.projectTitle || t("untitled_project"))
         }
-        toast.success(autoApprove ? "Project published!" : "Submitted for review!")
+        toast.success(autoApprove ? tToast("project_published") : tToast("submitted_for_review"))
       }
     } catch (err) {
-      toast.error("Failed to submit for review")
+      toast.error(tToast("submit_failed"))
       console.error("Error submitting for review:", err)
     } finally {
       setIsSubmittingForReview(false)
@@ -1806,8 +1825,8 @@ export default function ListingEditorPage() {
     if (projectStatus) {
       return PROJECT_STATUS_LABELS[projectStatus]
     }
-    return "Set status"
-  }, [currentStatusValue, projectStatus, statusOptionByValue, useProjectLevelStatus])
+    return t("status_set_status")
+  }, [currentStatusValue, projectStatus, statusOptionByValue, useProjectLevelStatus, t])
 
   const statusIndicatorClass = useMemo(() => {
     if (useProjectLevelStatus && projectStatus) {
@@ -1921,7 +1940,7 @@ export default function ListingEditorPage() {
       serviceOptions = await loadProfessionalServiceOptions()
     } catch (error) {
       serviceLoadError =
-        error instanceof Error ? error.message : "We couldn't load professional services. Please try again."
+        error instanceof Error ? error.message : tErrors("load_services_failed")
       serviceOptions = []
     }
 
@@ -2193,7 +2212,7 @@ export default function ListingEditorPage() {
       } catch (error) {
         if (!cancelled) {
           const message =
-            error instanceof Error ? error.message : "We couldn't load professionals for this project."
+            error instanceof Error ? error.message : tErrors("load_professionals_failed")
           setProfessionalsError(message)
         }
       } finally {
@@ -2357,7 +2376,7 @@ export default function ListingEditorPage() {
       const message =
         error instanceof Error
           ? error.message
-          : "We couldn't update your professional services. Please try again."
+          : tErrors("update_services_failed")
       setProfessionalsError(message)
   } finally {
     setIsUpdatingServices(false)
@@ -2366,8 +2385,8 @@ export default function ListingEditorPage() {
 
   const handlePreviewListing = useCallback(() => {
     if (!projectSlug) {
-      toast.error("Preview unavailable", {
-        description: "This listing does not have a public link yet.",
+      toast.error(tPreview("unavailable_title"), {
+        description: tPreview("unavailable_description"),
       })
       return
     }
@@ -2423,7 +2442,7 @@ export default function ListingEditorPage() {
       const message =
         error instanceof Error
           ? error.message
-          : "We couldn't remove that professional service. Please try again."
+          : tErrors("remove_service_failed")
       setProfessionalsError(message)
     } finally {
       setIsUpdatingServices(false)
@@ -2440,14 +2459,14 @@ export default function ListingEditorPage() {
 
   const openInviteModal = (serviceId: string, invite?: ProfessionalInviteSummary) => {
     if (!isUuid(serviceId)) {
-      setInviteError("Please select a service from the Supabase taxonomy before sending invites.")
+      setInviteError(tErrors("select_taxonomy_service"))
       return
     }
 
     if (!invite) {
       const existingInvites = professionalInvites[serviceId] ?? []
       if (existingInvites.length >= 1) {
-        setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+        setInviteError(tErrors("one_per_service"))
         return
       }
     }
@@ -2473,25 +2492,25 @@ export default function ListingEditorPage() {
   const sendInviteWithUndo = (email: string, companyName?: string) => {
     const isPublished = projectStatus === "published" || projectStatus === "completed"
     if (!isPublished || !projectId) {
-      toast.success("Professional added", { description: "Invite will be sent when the project is published." })
+      toast.success(tToast("professional_added"), { description: tToast("professional_added_pending") })
       return
     }
     if (projectId) {
       trackProfessionalInvited(projectId, email)
     }
-    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
-    const projectTitle = detailsForm.projectTitle || "Untitled project"
+    const inviterName = projectOwnerInvite?.companyName ?? t("the_project_owner")
+    const projectTitle = detailsForm.projectTitle || t("untitled_project")
     let cancelled = false
     const timer = setTimeout(() => {
       if (!cancelled) {
         sendInviteEmailAction({ email, projectId, inviterName, projectTitle }).catch(() => {})
       }
     }, 5000)
-    toast.success(`Invite will be sent to ${companyName || email}`, {
+    toast.success(tToast("invite_will_be_sent", { target: companyName || email }), {
       duration: 5000,
       action: {
-        label: "Undo",
-        onClick: () => { cancelled = true; clearTimeout(timer); toast.info("Invite cancelled") },
+        label: tToast("invite_undo"),
+        onClick: () => { cancelled = true; clearTimeout(timer); toast.info(tToast("invite_cancelled")) },
       },
     })
   }
@@ -2518,12 +2537,12 @@ export default function ListingEditorPage() {
     const existingInvite = findExistingInviteByCompany(professional.company_id, professional.email)
     if (existingInvite) {
       if (existingInvite.isOwner) {
-        setInviteError("This company is the project owner and is already credited on this project.")
+        setInviteError(tErrors("owner_already_credited"))
         return
       }
       // Add service to existing row
       if (existingInvite.serviceIds.includes(serviceId)) {
-        setInviteError("This company is already credited for this service.")
+        setInviteError(tErrors("company_already_credited_for_service"))
         return
       }
       setIsInviteMutating(true)
@@ -2536,7 +2555,7 @@ export default function ListingEditorPage() {
         if (error) throw error
         await refreshProfessionalSection()
       } catch (error) {
-        setInviteError(error instanceof Error ? error.message : "We couldn't add this service. Please try again.")
+        setInviteError(error instanceof Error ? error.message : tErrors("add_service_failed"))
       } finally {
         setIsInviteMutating(false)
       }
@@ -2545,7 +2564,7 @@ export default function ListingEditorPage() {
 
     const existingInvites = professionalInvites[serviceId] ?? []
     if (existingInvites.length >= 1) {
-      setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+      setInviteError(tErrors("one_per_service"))
       return
     }
 
@@ -2567,12 +2586,12 @@ export default function ListingEditorPage() {
       const { data, error } = await createInvite(supabase, inviteData)
 
       if (error || !data) {
-        throw error ?? new Error("Professional could not be added to project.")
+        throw error ?? new Error(tErrors("professional_could_not_be_added"))
       }
 
       await refreshProfessionalSection()
     } catch (error) {
-      setInviteError(error instanceof Error ? error.message : "We couldn't add this professional. Please try again.")
+      setInviteError(error instanceof Error ? error.message : tErrors("add_professional_failed"))
     } finally {
       setIsInviteMutating(false)
     }
@@ -2586,22 +2605,22 @@ export default function ListingEditorPage() {
     if (!editingInviteId) {
       const existingInvites = professionalInvites[inviteServiceId] ?? []
       if (existingInvites.length >= 1) {
-        setInviteError("Only one professional can be invited per service. Remove the existing invite before adding another.")
+        setInviteError(tErrors("one_per_service"))
         return
       }
     }
 
     const email = selectedProfessional ? selectedProfessional.email : inviteEmail.trim()
-    
+
     if (!selectedProfessional) {
       if (!EMAIL_REGEX.test(email)) {
-        setInviteError("Please enter a valid company email address.")
+        setInviteError(tErrors("valid_company_email"))
         return
       }
 
       const domain = getDomain(email)
       if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) {
-        setInviteError("Please use a company email address (personal domains are not allowed).")
+        setInviteError(tErrors("personal_domains_blocked"))
         return
       }
     }
@@ -2625,7 +2644,7 @@ export default function ListingEditorPage() {
           .maybeSingle()
 
         if (error || !data) {
-          throw error ?? new Error("Invite could not be updated.")
+          throw error ?? new Error(tErrors("invite_not_updated"))
         }
       } else {
         let professionalId = selectedProfessional?.id || null
@@ -2653,14 +2672,14 @@ export default function ListingEditorPage() {
         const { data, error } = await createInvite(supabase, inviteData)
 
         if (error || !data) {
-          throw error ?? new Error("Invite could not be saved.")
+          throw error ?? new Error(tErrors("invite_not_saved"))
         }
       }
 
       await refreshProfessionalSection()
       closeInviteModal()
     } catch (error) {
-      setInviteError(error instanceof Error ? error.message : "We couldn't send that invite. Please try again.")
+      setInviteError(error instanceof Error ? error.message : tErrors("send_invite_failed"))
     } finally {
       setIsInviteMutating(false)
     }
@@ -2686,7 +2705,7 @@ export default function ListingEditorPage() {
       if (error) throw error
       await refreshProfessionalSection()
     } catch {
-      toast.error("Failed to update service")
+      toast.error(tToast("service_update_failed"))
     }
     setEditingInviteField(null)
   }
@@ -2694,9 +2713,9 @@ export default function ListingEditorPage() {
   const saveInviteEmail = async (inviteId: string, newEmail: string) => {
     const trimmed = newEmail.trim()
     if (!trimmed) { setEditingInviteField(null); return }
-    if (!EMAIL_REGEX.test(trimmed)) { toast.error("Please enter a valid email address"); return }
+    if (!EMAIL_REGEX.test(trimmed)) { toast.error(tToast("valid_email")); return }
     const domain = getDomain(trimmed)
-    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error(tToast("use_company_email")); return }
     try {
       const updateData: Record<string, unknown> = { invited_email: trimmed }
       const { data: foundPro } = await findProfessionalByEmailAction(trimmed)
@@ -2708,7 +2727,7 @@ export default function ListingEditorPage() {
       if (error) throw error
       await refreshProfessionalSection()
     } catch {
-      toast.error("Failed to update email")
+      toast.error(tToast("email_update_failed"))
     }
     setEditingInviteField(null)
   }
@@ -2719,8 +2738,8 @@ export default function ListingEditorPage() {
       const existing = findExistingInviteByCompany(companyId, companyEmail)
       if (existing && existing.id !== inviteId) {
         toast.error(existing.isOwner
-          ? "This company is the project owner and is already credited on this project."
-          : "This company is already credited on this project.")
+          ? tErrors("owner_already_credited")
+          : tErrors("company_already_credited"))
         setEditingInviteField(null)
         setCompanySearchQuery("")
         setCompanySearchResults([])
@@ -2761,7 +2780,7 @@ export default function ListingEditorPage() {
       if (error) throw error
       await refreshProfessionalSection()
     } catch {
-      toast.error("Failed to update company")
+      toast.error(tToast("company_update_failed"))
     }
     setEditingInviteField(null)
     setCompanySearchQuery("")
@@ -2834,9 +2853,9 @@ export default function ListingEditorPage() {
   const saveTier23Company = async (inviteId: string, email: string) => {
     const trimmed = email.trim()
     if (!trimmed) return
-    if (!EMAIL_REGEX.test(trimmed)) { toast.error("Please enter a valid email address"); return }
+    if (!EMAIL_REGEX.test(trimmed)) { toast.error(tToast("valid_email")); return }
     const domain = getDomain(trimmed)
-    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error(tToast("use_company_email")); return }
     if (!projectId || !pendingTier23) return
 
     // Check if company is already on the project (draft card may have companyId from Arco search)
@@ -2845,8 +2864,8 @@ export default function ListingEditorPage() {
       const existing = findExistingInviteByCompany(checkCompanyId, trimmed)
       if (existing) {
         toast.error(existing.isOwner
-          ? "This company is the project owner and is already credited on this project."
-          : "This company is already credited on this project.")
+          ? tErrors("owner_already_credited")
+          : tErrors("company_already_credited"))
         setDraftCard(null)
         setPendingTier23(null)
         setEditingInviteField(null)
@@ -2854,10 +2873,10 @@ export default function ListingEditorPage() {
       }
     }
 
-    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
-    const projectTitle = detailsForm.projectTitle || "Untitled project"
+    const inviterName = projectOwnerInvite?.companyName ?? t("the_project_owner")
+    const projectTitle = detailsForm.projectTitle || t("untitled_project")
 
-    if (!userId) { toast.error("Not authenticated"); return }
+    if (!userId) { toast.error(tToast("not_authenticated")); return }
 
     try {
       const result = await createUnlistedCompanyAction({
@@ -2903,9 +2922,9 @@ export default function ListingEditorPage() {
               })
             }
             await refreshProfessionalSection()
-            toast.success("Professional added")
+            toast.success(tToast("professional_added"))
           } catch {
-            toast.error("Failed to add professional")
+            toast.error(tToast("add_professional_failed"))
           }
           setPendingTier23(null)
           setEditingInviteField(null)
@@ -2964,7 +2983,7 @@ export default function ListingEditorPage() {
         await refreshProfessionalSection()
         if (!result.emailSent) {
           const isPublished = projectStatus === "published" || projectStatus === "completed"
-          toast.success("Professional added", { description: !isPublished ? "Invite will be sent when the project is published." : undefined })
+          toast.success(tToast("professional_added"), { description: !isPublished ? tToast("professional_added_pending") : undefined })
         } else {
           sendInviteWithUndo(trimmed, pendingTier23?.companyName)
         }
@@ -2972,7 +2991,7 @@ export default function ListingEditorPage() {
         // For existing card: update company_id and email
         await saveInviteCompany(inviteId, result.companyId, trimmed)
         if (!result.emailSent) {
-          toast.success("Company linked")
+          toast.success(tToast("company_linked"))
         } else {
           sendInviteWithUndo(trimmed, pendingTier23?.companyName)
         }
@@ -2981,7 +3000,7 @@ export default function ListingEditorPage() {
       setEditingInviteField(null)
     } catch (err) {
       console.error("saveTier23Company error:", err)
-      toast.error("Failed to add professional")
+      toast.error(tToast("add_professional_failed"))
       // Keep pendingTier23 and re-open email field so user can retry
       setEditingInviteField({ inviteId, field: "email" })
     }
@@ -2994,13 +3013,13 @@ export default function ListingEditorPage() {
     const existing = findExistingInviteByCompany(dupWarning.existingId)
     if (existing) {
       toast.error(existing.isOwner
-        ? "This company is the project owner and is already credited on this project."
-        : "This company is already credited on this project.")
+        ? tErrors("owner_already_credited")
+        : tErrors("company_already_credited"))
       setDupWarning(null)
       return
     }
-    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
-    const projectTitle = detailsForm.projectTitle || "Untitled project"
+    const inviterName = projectOwnerInvite?.companyName ?? t("the_project_owner")
+    const projectTitle = detailsForm.projectTitle || t("untitled_project")
 
     if (dupWarning.pendingInviteId === "__draft__") {
       // For draft card, insert row with existing company
@@ -3019,9 +3038,9 @@ export default function ListingEditorPage() {
         if (error) throw error
         setDraftCard(null)
         await refreshProfessionalSection()
-        toast.success("Professional added")
+        toast.success(tToast("professional_added"))
       } catch {
-        toast.error("Failed to add professional")
+        toast.error(tToast("add_professional_failed"))
       }
     } else {
       const res = await confirmLinkExistingCompanyAction({
@@ -3034,9 +3053,9 @@ export default function ListingEditorPage() {
       })
       if (res.success) {
         await refreshProfessionalSection()
-        toast.success("Company linked")
+        toast.success(tToast("company_linked"))
       } else {
-        toast.error(res.error || "Failed to link company")
+        toast.error(res.error || tToast("link_company_failed"))
       }
     }
     setDupWarning(null)
@@ -3046,8 +3065,8 @@ export default function ListingEditorPage() {
 
   const handleDupForceCreate = async () => {
     if (!dupWarning || !projectId || !userId) return
-    const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
-    const projectTitle = detailsForm.projectTitle || "Untitled project"
+    const inviterName = projectOwnerInvite?.companyName ?? t("the_project_owner")
+    const projectTitle = detailsForm.projectTitle || t("untitled_project")
 
     const result = await createUnlistedCompanyAction({
       name: dupWarning.pendingInput.name,
@@ -3080,14 +3099,14 @@ export default function ListingEditorPage() {
             sendInviteWithUndo(dupWarning.pendingInput.email, dupWarning.pendingInput.name)
           } else {
             const isPublished = projectStatus === "published" || projectStatus === "completed"
-            toast.success("Professional added", { description: !isPublished ? "Invite will be sent when the project is published." : undefined })
+            toast.success(tToast("professional_added"), { description: !isPublished ? tToast("professional_added_pending") : undefined })
           }
         } catch {
-          toast.error("Failed to add professional")
+          toast.error(tToast("add_professional_failed"))
         }
       } else {
         await saveInviteCompany(dupWarning.pendingInviteId, result.companyId, dupWarning.pendingInput.email)
-        toast.success(result.emailSent ? "Invite email sent" : "Company linked")
+        toast.success(result.emailSent ? tToast("invite_email_sent") : tToast("company_linked"))
       }
     }
     setDupWarning(null)
@@ -3167,9 +3186,9 @@ export default function ListingEditorPage() {
   const saveDraftCard = async (email: string) => {
     const trimmed = email.trim()
     if (!trimmed) return
-    if (!EMAIL_REGEX.test(trimmed)) { toast.error("Please enter a valid email address"); return }
+    if (!EMAIL_REGEX.test(trimmed)) { toast.error(tToast("valid_email")); return }
     const domain = getDomain(trimmed)
-    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error("Please use a company email address"); return }
+    if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error(tToast("use_company_email")); return }
     if (!projectId) return
     try {
       const updateData: Record<string, unknown> = {
@@ -3186,9 +3205,9 @@ export default function ListingEditorPage() {
       if (error) throw error
       setDraftCard(null)
       await refreshProfessionalSection()
-      toast.success("Professional added")
+      toast.success(tToast("professional_added"))
     } catch {
-      toast.error("Failed to add professional")
+      toast.error(tToast("add_professional_failed"))
     }
   }
 
@@ -3200,8 +3219,8 @@ export default function ListingEditorPage() {
     const existing = findExistingInviteByCompany(companyId, companyEmail)
     if (existing) {
       toast.error(existing.isOwner
-        ? "This company is the project owner and is already credited on this project."
-        : "This company is already credited on this project.")
+        ? tErrors("owner_already_credited")
+        : tErrors("company_already_credited"))
       setDraftCard(null)
       setEditingInviteField(null)
       setCompanySearchQuery("")
@@ -3246,8 +3265,8 @@ export default function ListingEditorPage() {
       if (allInvites.some(inv => inv.email?.toLowerCase() === finalEmail.toLowerCase())) {
         finalEmail = `${companyId.slice(0, 8)}@arcolist.com`
       }
-      const inviterName = projectOwnerInvite?.companyName ?? "The project owner"
-      const projectTitle = detailsForm.projectTitle || "Untitled project"
+      const inviterName = projectOwnerInvite?.companyName ?? t("the_project_owner")
+      const projectTitle = detailsForm.projectTitle || t("untitled_project")
 
       // Use confirmLinkExistingCompanyAction which has service role access
       // First create a placeholder row, then link the company
@@ -3287,11 +3306,11 @@ export default function ListingEditorPage() {
         const companyName = companySearchResults.find(c => c.id === companyId)?.name
         sendInviteWithUndo(inviteEmail, companyName ?? undefined)
       } else {
-        toast.success("Professional added")
+        toast.success(tToast("professional_added"))
       }
     } catch (err) {
       console.error("saveDraftCardWithCompany error:", err)
-      toast.error("Failed to add professional")
+      toast.error(tToast("add_professional_failed"))
     }
     setEditingInviteField(null)
     setCompanySearchQuery("")
@@ -3315,7 +3334,7 @@ export default function ListingEditorPage() {
       await refreshProfessionalSection()
     } catch (error) {
       setInviteError(
-        error instanceof Error ? error.message : "We couldn't update that invite. Please try again.",
+        error instanceof Error ? error.message : tErrors("update_invite_failed"),
       )
     } finally {
       setIsInviteMutating(false)
@@ -3357,7 +3376,7 @@ export default function ListingEditorPage() {
       const nextIndex = Math.min(currentIndex, remaining.length - 1)
       router.push(`/dashboard/edit/${remaining[nextIndex]}?review=1`)
     } else {
-      toast.success("All projects reviewed!")
+      toast.success(tToast("all_reviewed"))
       router.push("/admin/projects")
     }
   }, [reviewQueue, projectId, router])
@@ -3368,14 +3387,14 @@ export default function ListingEditorPage() {
     try {
       const result = await setProjectStatusAction({ projectId, status: "published" })
       if (result && "error" in result) {
-        toast.error(typeof result.error === "string" ? result.error : "Failed to approve project")
+        toast.error(typeof result.error === "string" ? result.error : tToast("approve_failed"))
         return
       }
-      trackProjectPublished(projectId, detailsForm.projectTitle || "Untitled project")
-      toast.success("Project approved")
+      trackProjectPublished(projectId, detailsForm.projectTitle || t("untitled_project"))
+      toast.success(tToast("project_approved"))
       navigateToNextReview()
     } catch {
-      toast.error("Failed to approve project")
+      toast.error(tToast("approve_failed"))
     } finally {
       setIsApproving(false)
     }
@@ -3391,16 +3410,16 @@ export default function ListingEditorPage() {
       ].join(". ")
       const result = await setProjectStatusAction({ projectId, status: "rejected", rejectionReason: combinedReason })
       if (result && "error" in result) {
-        toast.error(typeof result.error === "string" ? result.error : "Failed to reject project")
+        toast.error(typeof result.error === "string" ? result.error : tToast("reject_failed"))
         return
       }
-      toast.success("Project rejected")
+      toast.success(tToast("project_rejected"))
       setShowRejectModal(false)
       setRejectionReason("")
       setSelectedRejectionReasons([])
       navigateToNextReview()
     } catch {
-      toast.error("Failed to reject project")
+      toast.error(tToast("reject_failed"))
     } finally {
       setIsRejecting(false)
     }
@@ -3412,10 +3431,10 @@ export default function ListingEditorPage() {
     try {
       const { error } = await supabase.from("projects").delete().eq("id", projectId).eq("client_id", userId)
       if (error) throw error
-      toast.success("Project deleted")
+      toast.success(tToast("project_deleted"))
       router.push("/dashboard/listings")
     } catch {
-      toast.error("Failed to delete project")
+      toast.error(tToast("delete_failed"))
     } finally {
       setIsDeletingProject(false)
     }
@@ -3551,7 +3570,7 @@ export default function ListingEditorPage() {
     if (!hasProjectAccess) {
       return (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-6 body-small text-amber-800">
-          You need access to this project to manage its photo tour.
+          {tPhoto("no_access")}
         </div>
       )
     }
@@ -3559,13 +3578,13 @@ export default function ListingEditorPage() {
     if (!projectId) {
       return (
         <div className="py-16 text-center body-small text-text-secondary">
-          Select a project to manage its photo tour.
+          {tPhoto("no_project_selected")}
         </div>
       )
     }
 
     if (isLoadingProject) {
-      return <div className="py-16 text-center body-small text-text-secondary">Loading project photos…</div>
+      return <div className="py-16 text-center body-small text-text-secondary">{tPhoto("loading_photos")}</div>
     }
 
     if (photoProjectLoadError) {
@@ -3618,7 +3637,7 @@ export default function ListingEditorPage() {
             className={`category-tag${activeEditFeature === null ? " active" : ""}`}
             onClick={() => setActiveEditFeature(null)}
           >
-            All{uploadedPhotos.length > 0 ? ` · ${uploadedPhotos.length}` : ""}
+            {tPhoto("all")}{uploadedPhotos.length > 0 ? ` · ${uploadedPhotos.length}` : ""}
           </button>
           {displayFeatureIds.map(featureId => {
             const fd = getFeatureDisplay(featureId)
@@ -3638,7 +3657,7 @@ export default function ListingEditorPage() {
               className={`category-tag category-tag--untagged${activeEditFeature === "__untagged__" ? " active" : ""}`}
               onClick={() => setActiveEditFeature("__untagged__")}
             >
-              Untagged · {untaggedCount}
+              {tPhoto("untagged")} · {untaggedCount}
             </button>
           )}
         </div>
@@ -3670,13 +3689,13 @@ export default function ListingEditorPage() {
             />
             <Plus size={18} style={{ color: "#c0c0be", marginBottom: 4 }} />
             <span style={{ fontSize: 12, color: "#b8b8b6", letterSpacing: ".03em" }}>
-              {isUploading ? "Uploading…" : "Add photos"}
+              {isUploading ? tPhoto("uploading") : tPhoto("add_photos")}
             </span>
           </label>
           {filteredPhotos.map((photo, photoIndex) => {
             // Find which space this photo belongs to (excluding building/additional)
             const photoSpace = orderedFeatureOptions.find(opt => (featurePhotos[opt.id] ?? []).includes(photo.id))
-            const roomLabel = photoSpace?.name ?? "No space"
+            const roomLabel = photoSpace?.name ?? tPhoto("no_space")
             const isRoomView = activeEditFeature && activeEditFeature !== "__untagged__"
             const isSpaceCover = isRoomView && photoIndex === 0
             const canMoveLeft = isRoomView && photoIndex > 0
@@ -3701,17 +3720,17 @@ export default function ListingEditorPage() {
                 <img src={photo.url} alt="" />
                 {isSpaceCover && (
                   <div style={{ position: "absolute", left: 6, top: 6, background: "#016D75", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2 }}>
-                    Cover
+                    {tPhoto("cover_badge")}
                   </div>
                 )}
 
                 {/* Low resolution warning badge */}
                 {isLowRes && (
                   <div
-                    title={`${photo.width} × ${photo.height}px — minimum recommended 1600 × 800`}
+                    title={tPhoto("low_res_title", { width: photo.width as number, height: photo.height as number })}
                     style={{ position: "absolute", right: 6, top: 6, background: "#f59e0b", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2, cursor: "help" }}
                   >
-                    Low res
+                    {tPhoto("low_res_badge")}
                   </div>
                 )}
 
@@ -3723,7 +3742,7 @@ export default function ListingEditorPage() {
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleMove("left") }}
                         className="photo-reorder-btn"
-                        title="Move left (closer to cover)"
+                        title={tPhoto("move_left_title")}
                       >
                         <ChevronLeft size={14} />
                       </button>
@@ -3733,7 +3752,7 @@ export default function ListingEditorPage() {
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleMove("right") }}
                         className="photo-reorder-btn"
-                        title="Move right"
+                        title={tPhoto("move_right_title")}
                       >
                         <ChevronRight size={14} />
                       </button>
@@ -3745,7 +3764,7 @@ export default function ListingEditorPage() {
                 <button
                   className="photo-del-btn"
                   onClick={() => setPhotoDeleteConfirmId(photo.id)}
-                  title="Delete photo"
+                  title={tPhoto("delete_photo_title")}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -3753,19 +3772,19 @@ export default function ListingEditorPage() {
                 {/* Delete confirmation overlay */}
                 {photoDeleteConfirmId === photo.id && (
                   <div className="photo-del-confirm">
-                    <p>Delete this photo?</p>
+                    <p>{tPhoto("delete_photo_prompt")}</p>
                     <div className="photo-del-confirm-btns">
                       <button
                         className="photo-del-yes"
                         onClick={() => { deletePhoto(photo.id); setPhotoDeleteConfirmId(null) }}
                       >
-                        Delete
+                        {tActions("delete")}
                       </button>
                       <button
                         className="photo-del-no"
                         onClick={() => setPhotoDeleteConfirmId(null)}
                       >
-                        Cancel
+                        {tActions("cancel")}
                       </button>
                     </div>
                   </div>
@@ -3816,7 +3835,7 @@ export default function ListingEditorPage() {
         {/* Empty state */}
         {filteredPhotos.length === 0 && !isUploading && (
           <p style={{ fontSize: 13, color: "#b0b0ae", marginTop: 16 }}>
-            {activeEditFeature ? "No photos in this room yet." : "Upload your first photo to get started."}
+            {activeEditFeature ? tPhoto("no_photos_in_room") : tPhoto("no_photos_yet")}
           </p>
         )}
 
@@ -3827,8 +3846,8 @@ export default function ListingEditorPage() {
   const renderLocationSection = () => (
     <div className="space-y-6 pb-24 md:pb-0">
       <div className="hidden md:block">
-        <h3 className="heading-4 text-foreground">Location</h3>
-        <p className="body-regular text-text-secondary mt-1">Where is the project located?</p>
+        <h3 className="heading-4 text-foreground">{tLoc("title")}</h3>
+        <p className="body-regular text-text-secondary mt-1">{tLoc("subtitle")}</p>
       </div>
 
       <div className="space-y-8">
@@ -3844,13 +3863,13 @@ export default function ListingEditorPage() {
                     type="text"
                     value={addressInputValue}
                     onChange={(event) => handleLocationInputChange("address", event.target.value)}
-                    placeholder="Search for your address"
+                    placeholder={tLoc("search_placeholder")}
                     className="pointer-events-auto w-full max-w-xl px-4 py-3 bg-white border border-border rounded-md shadow-sm text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
                   />
                 </div>
                 {!isMapsApiLoaded && !mapsError && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-foreground">
-                    Loading map...
+                    {tLoc("loading_map")}
                   </div>
                 )}
               </div>
@@ -3858,29 +3877,28 @@ export default function ListingEditorPage() {
           ) : (
             <div className="space-y-4">
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 body-small text-amber-800">
-                Add your Google Maps API key to `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to enable address autocomplete and map
-                selection.
+                {tLoc("missing_api_key")}
               </div>
               <input
                 type="text"
                 value={addressInputValue}
                 onChange={(event) => handleLocationInputChange("address", event.target.value)}
-                placeholder="Enter your project address"
+                placeholder={tLoc("manual_placeholder")}
                 className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent hover:border-border transition-colors"
               />
             </div>
           )}
           <p className="body-small text-text-secondary mt-2">
-            Search for your project location or drag the pin on the map to fine-tune it
+            {tLoc("search_hint")}
           </p>
           {mapsError && <p className="body-small text-red-600 mt-2">{mapsError}</p>}
           {detailsErrors.address && <p className="body-small text-red-600 mt-2">{detailsErrors.address}</p>}
           <div className="mt-4 rounded-lg border border-border bg-surface p-4">
-            <p className="body-small font-medium text-foreground">Selected address</p>
+            <p className="body-small font-medium text-foreground">{tLoc("selected_address")}</p>
             <p className="mt-1 body-small text-foreground">
               {detailsForm.address
                 ? detailsForm.address
-                : "Start typing in the search box or drag the map pin to capture the address."}
+                : tLoc("selected_address_empty")}
             </p>
           </div>
         </div>
@@ -3888,8 +3906,8 @@ export default function ListingEditorPage() {
         {/* Share exact location toggle */}
         <div className="flex items-center justify-between p-4 bg-surface rounded-lg">
           <div>
-            <h4 className="heading-5 text-foreground mb-1">Share the exact location of the project</h4>
-            <p className="body-small text-text-secondary">Allow others to see the precise location of your project</p>
+            <h4 className="heading-5 text-foreground mb-1">{tLoc("share_exact_title")}</h4>
+            <p className="body-small text-text-secondary">{tLoc("share_exact_description")}</p>
           </div>
           <button
             type="button"
@@ -3909,7 +3927,7 @@ export default function ListingEditorPage() {
         {/* Save Button - Sticky on Mobile */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-border md:static md:border-0 md:p-0 md:flex md:justify-end z-10">
           <Button variant="secondary" size="sm" onClick={() => void handleSaveLocation()} disabled={locationSaving} className="w-full md:w-auto">
-            {locationSaving ? "Saving…" : "Save location"}
+            {locationSaving ? tActions("saving") : tActions("save_location")}
           </Button>
         </div>
       </div>
@@ -3938,13 +3956,13 @@ export default function ListingEditorPage() {
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div className="hidden md:block">
-            <h3 className="heading-4 text-foreground">Professionals</h3>
-            <p className="mt-1 body-regular text-text-secondary">Manage the professional services linked to this project.</p>
+            <h3 className="heading-4 text-foreground">{tTeam("title")}</h3>
+            <p className="mt-1 body-regular text-text-secondary">{tTeam("manage_subtitle")}</p>
           </div>
           <button
             type="button"
             onClick={openServiceModal}
-            aria-label="Manage professional services"
+            aria-label={tTeam("manage_aria")}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-white transition-colors hover:bg-secondary-hover ml-auto"
           >
             <Plus className="h-5 w-5" />
@@ -3964,13 +3982,13 @@ export default function ListingEditorPage() {
         {professionalsLoading ? (
           <div className="flex items-center gap-2 rounded-lg border border-border bg-white p-6 body-small text-text-secondary">
             <Loader2 className="h-5 w-5 animate-spin" />
-            Loading professionals…
+            {tTeam("loading")}
           </div>
         ) : (
           <div className="space-y-6">
             {selectedServices.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border bg-surface p-6 body-small text-text-secondary">
-                Add a professional service to invite collaborators to this project.
+                {tTeam("no_services_hint")}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -4037,7 +4055,7 @@ export default function ListingEditorPage() {
       onHighlightChange={setTempFeatureHighlight}
       saveDisabled={false}
       saveLabel={
-        tempSelectedPhotos.length > 0 ? `Save Selection (${tempSelectedPhotos.length})` : "Save selection"
+        tempSelectedPhotos.length > 0 ? tActions("save") + ` (${tempSelectedPhotos.length})` : tActions("save")
       }
     />
   )
@@ -4090,7 +4108,7 @@ export default function ListingEditorPage() {
     const formatServiceName = (ids: string[], fallback?: string | null) => {
       const sorted = ids.slice().sort((a, b) => (serviceOrder.get(a) ?? 999) - (serviceOrder.get(b) ?? 999))
       const names = sorted.map(sid => serviceMap.get(sid)?.name).filter(Boolean) as string[]
-      if (names.length === 0) return fallback ?? "Select service"
+      if (names.length === 0) return fallback ?? tTeam("select_service")
       if (names.length === 1) return names[0]
       return `${names[0]} +${names.length - 1}`
     }
@@ -4259,7 +4277,7 @@ export default function ListingEditorPage() {
         .ccm-row:hover { background: #f5f5f3; }
       `}</style>
 
-      <Header navLinks={[{ href: "/dashboard/listings", label: "Listings" }, { href: "/dashboard/company", label: "Company" }, { href: "/dashboard/team", label: "Team" }, { href: "/dashboard/pricing", label: "Plans" }]} />
+      <Header navLinks={[{ href: "/dashboard/listings", label: tNav("listings") }, { href: "/dashboard/company", label: tNav("company") }, { href: "/dashboard/team", label: tNav("team") }, { href: "/dashboard/pricing", label: tNav("plans") }]} />
 
       <div>
 
@@ -4273,7 +4291,7 @@ export default function ListingEditorPage() {
             <>
               <img
                 src={coverPhotoUrl}
-                alt="Cover photo"
+                alt={t("cover_alt")}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
               />
               <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.18)" }} />
@@ -4283,7 +4301,7 @@ export default function ListingEditorPage() {
                 className="hero-cover-btn"
               >
                 <ImageIcon size={14} />
-                Change cover
+                {t("change_cover")}
               </button>
 
             </>
@@ -4295,11 +4313,11 @@ export default function ListingEditorPage() {
           <div className="popup-overlay" onClick={() => setShowCoverPicker(false)}>
             <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
               <div className="popup-header">
-                <h3 className="arco-section-title">Select cover photo</h3>
-                <button type="button" className="popup-close" onClick={() => setShowCoverPicker(false)} aria-label="Close">✕</button>
+                <h3 className="arco-section-title">{t("select_cover_photo")}</h3>
+                <button type="button" className="popup-close" onClick={() => setShowCoverPicker(false)} aria-label={tActions("close")}>✕</button>
               </div>
               <p className="arco-body-text" style={{ marginBottom: 20 }}>
-                Choose which image to display as the project cover.
+                {t("select_cover_description")}
               </p>
               <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -4354,12 +4372,14 @@ export default function ListingEditorPage() {
           <EditableTitle
             initialValue={detailsForm.projectTitle}
             onSave={handleTitleSave}
+            editLabel={t("edit_badge")}
+            placeholder={t("title_placeholder")}
           />
 
           {/* Architect attribution */}
           {projectOwnerInvite?.companyName && (
             <p className="architect-attribution" style={{ textAlign: "center", marginBottom: 24 }}>
-              by{' '}<span style={{ color: "var(--arco-black)", textDecoration: "none", borderBottom: "1px solid var(--arco-rule)", cursor: "default" }}>{projectOwnerInvite.companyName}</span>
+              {t("by_attribution")}{' '}<span style={{ color: "var(--arco-black)", textDecoration: "none", borderBottom: "1px solid var(--arco-rule)", cursor: "default" }}>{projectOwnerInvite.companyName}</span>
             </p>
           )}
 
@@ -4376,7 +4396,7 @@ export default function ListingEditorPage() {
                   <path d="M11.5 1.5l3 3L5 14H2v-3z" />
                 </svg>
               </span>
-              <span className="ec-txt">Edit</span>
+              <span className="ec-txt">{t("edit_badge")}</span>
             </span>
             <p
               ref={descEditRef}
@@ -4389,7 +4409,7 @@ export default function ListingEditorPage() {
                 setDescCharCount((descEditRef.current?.textContent?.trim() ?? "").length)
               }}
               style={{ cursor: "text", minHeight: "1.7em", textAlign: "center", outline: "none" }}
-              data-placeholder="Add a project description…"
+              data-placeholder={t("description_placeholder")}
             >
               {descriptionPlainText || ""}
             </p>
@@ -4405,20 +4425,20 @@ export default function ListingEditorPage() {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
                       <path d="M21 12a9 9 0 11-6.219-8.56" />
                     </svg>
-                    Generating…
+                    {t("generating")}
                   </>
                 ) : (
                   <>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M9.937 15.5A2 2 0 008.5 14.063l-6.135-1.582a.5.5 0 010-.962L8.5 9.936A2 2 0 009.937 8.5l1.582-6.135a.5.5 0 01.963 0L14.063 8.5A2 2 0 0015.5 9.937l6.135 1.582a.5.5 0 010 .963L15.5 14.063a2 2 0 00-1.437 1.437l-1.582 6.135a.5.5 0 01-.963 0z" />
                     </svg>
-                    {descriptionPlainText ? "Regenerate" : "Generate with AI"}
+                    {descriptionPlainText ? t("regenerate") : t("generate_with_ai")}
                   </>
                 )}
               </button>
               {descEditing && (
                 <span className={`text-[11px] absolute right-0 ${descCharCount > 750 ? "text-red-500" : "text-[#a1a1a0]"}`}>
-                  {descCharCount} / 750
+                  {t("char_count", { count: descCharCount, max: 750 })}
                 </span>
               )}
             </div>
@@ -4437,9 +4457,9 @@ export default function ListingEditorPage() {
           >
             <span className="ec-badge">
               <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
-              <span className="ec-txt">Edit</span>
+              <span className="ec-txt">{t("edit_badge")}</span>
             </span>
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Location</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("location_label")}</span>
             {editingSpecBar === "location" ? (
               <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
                 <input
@@ -4447,7 +4467,7 @@ export default function ListingEditorPage() {
                   className="spec-inp"
                   value={cityQuery}
                   onChange={e => searchCity(e.target.value)}
-                  placeholder="Search city…"
+                  placeholder={tSpecs("city_search_placeholder")}
                   onKeyDown={e => {
                     if (e.key === "Escape") { setCityQuery(""); setCityResults([]); setEditingSpecBar(null) }
                   }}
@@ -4472,17 +4492,17 @@ export default function ListingEditorPage() {
                       </button>
                     ))}
                     {isCitySearching && (
-                      <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching…</div>
+                      <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{tSpecs("searching")}</div>
                     )}
                     {!isCitySearching && cityResults.length === 0 && (
-                      <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>No results found</div>
+                      <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{tSpecs("no_results")}</div>
                     )}
                   </div>
                 )}
               </div>
             ) : (
               <div className="arco-card-title" style={{ color: locationDisplayValue ? undefined : "#b0b0ae" }}>
-                {locationDisplayValue || "Add location"}
+                {locationDisplayValue || tSpecs("add_location")}
               </div>
             )}
           </div>
@@ -4494,16 +4514,16 @@ export default function ListingEditorPage() {
           >
             <span className="ec-badge">
               <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
-              <span className="ec-txt">Edit</span>
+              <span className="ec-txt">{t("edit_badge")}</span>
             </span>
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Year</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("year_label")}</span>
             <input
               type="number"
               className="spec-inp-inline"
               value={detailsForm.yearBuilt ?? ""}
               readOnly={editingSpecBar !== "year"}
               autoFocus={editingSpecBar === "year"}
-              placeholder="Add year"
+              placeholder={tSpecs("add_year")}
               min={1800}
               max={new Date().getFullYear()}
               onChange={e => setDetailsForm(prev => ({ ...prev, yearBuilt: e.target.value }))}
@@ -4528,11 +4548,11 @@ export default function ListingEditorPage() {
           >
             <span className="ec-badge">
               <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
-              <span className="ec-txt">Edit</span>
+              <span className="ec-txt">{t("edit_badge")}</span>
             </span>
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Type</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("type_label")}</span>
             <div className="arco-card-title" style={{ color: projectTypeLabel ? undefined : "#b0b0ae" }}>
-              {projectTypeLabel || "Select type"}
+              {projectTypeLabel || tSpecs("select_type")}
             </div>
             {editingSpecBar === "type" && (
               <>
@@ -4592,11 +4612,11 @@ export default function ListingEditorPage() {
           >
             <span className="ec-badge">
               <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
-              <span className="ec-txt">Edit</span>
+              <span className="ec-txt">{t("edit_badge")}</span>
             </span>
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Scope</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("scope_label")}</span>
             <div className="arco-card-title" style={{ color: specScope ? undefined : "#b0b0ae" }}>
-              {translateScopeInput(specScope, locale) || "Select scope"}
+              {translateScopeInput(specScope, locale) || tSpecs("select_scope")}
             </div>
             {editingSpecBar === "scope" && (
               <>
@@ -4626,11 +4646,11 @@ export default function ListingEditorPage() {
           >
             <span className="ec-badge">
               <span className="ec-ico"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" /></svg></span>
-              <span className="ec-txt">Edit</span>
+              <span className="ec-txt">{t("edit_badge")}</span>
             </span>
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Style</span>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("style_label")}</span>
             <div className="arco-card-title" style={{ color: styleLabel ? undefined : "#b0b0ae" }}>
-              {styleLabel || "Select style"}
+              {styleLabel || tSpecs("select_style")}
             </div>
             {editingSpecBar === "style" && (
               <>
@@ -4660,8 +4680,8 @@ export default function ListingEditorPage() {
         {/* ── Photos ────────────────────────────────────────────────── */}
         <section id="photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 0 }}>
           <div style={{ marginBottom: 28 }}>
-            <h2 className="arco-section-title">Photo tour</h2>
-            <p className="arco-body-text" style={{ marginTop: 6 }}>Add photos to showcase your project and organise them by space.</p>
+            <h2 className="arco-section-title">{tPhoto("title")}</h2>
+            <p className="arco-body-text" style={{ marginTop: 6 }}>{tPhoto("description")}</p>
           </div>
           {renderPhotoTourSection()}
         </section>
@@ -4669,9 +4689,9 @@ export default function ListingEditorPage() {
         {/* ── Professionals ─────────────────────────────────────────── */}
         <section id="professionals" className="wrap" style={{ paddingTop: 72, paddingBottom: 120 }}>
           <div style={{ marginBottom: 40 }}>
-            <h2 className="arco-section-title">Credited professionals</h2>
+            <h2 className="arco-section-title">{tTeam("title")}</h2>
             <p className="arco-body-text" style={{ marginTop: 6, maxWidth: 600 }}>
-              The trusted team behind this project. Click any field to edit.
+              {tTeam("description")}
             </p>
           </div>
 
@@ -4710,14 +4730,14 @@ export default function ListingEditorPage() {
                 >
                   <span className="ec-badge">
                     <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
-                    <span className="ec-txt">Edit</span>
+                    <span className="ec-txt">{t("edit_badge")}</span>
                   </span>
                   {/* Delete button — only for non-owner cards */}
                   {!inv.isOwner && (
                     <button
                       className="card-del"
                       onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(inv.id) }}
-                      aria-label="Remove"
+                      aria-label={tTeam("remove_aria")}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -4726,10 +4746,10 @@ export default function ListingEditorPage() {
                   {/* Delete confirmation overlay */}
                   {isConfirmingDelete && (
                     <div className="card-del-confirm">
-                      <p>Delete?</p>
+                      <p>{tTeam("delete_prompt")}</p>
                       <div className="photo-del-confirm-btns">
-                        <button className="photo-del-yes" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null); void handleDeleteInvite(inv) }}>Yes</button>
-                        <button className="photo-del-no" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null) }}>No</button>
+                        <button className="photo-del-yes" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null); void handleDeleteInvite(inv) }}>{tActions("yes")}</button>
+                        <button className="photo-del-no" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null) }}>{tActions("no")}</button>
                       </div>
                     </div>
                   )}
@@ -4773,13 +4793,13 @@ export default function ListingEditorPage() {
                                         // Remove service from array
                                         const newIds = inv.serviceIds.filter(sid => sid !== s.id)
                                         if (newIds.length === 0) {
-                                          toast.error("At least one service is required")
+                                          toast.error(tToast("min_one_service"))
                                           return
                                         }
                                         void supabase.from("project_professionals").update({ invited_service_category_ids: newIds } as any).eq("id", inv.id).then(() => refreshProfessionalSection())
                                       } else {
                                         if (inv.serviceIds.length >= 3) {
-                                          toast.error("Maximum 3 services per professional")
+                                          toast.error(tToast("max_three_services"))
                                           return
                                         }
                                         void supabase.from("project_professionals").update({ invited_service_category_ids: [...inv.serviceIds, s.id] } as any).eq("id", inv.id).then(() => refreshProfessionalSection())
@@ -4840,7 +4860,7 @@ export default function ListingEditorPage() {
                       })}
                     >
                       {inv.isOwner ? (
-                        inv.companyName || "Your company"
+                        inv.companyName || t("your_company")
                       ) : isEditingCompany ? (
                         <>
                           <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); companySearchActive.current = false }} />
@@ -4856,7 +4876,7 @@ export default function ListingEditorPage() {
                             style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit" }}
                             value={companySearchQuery}
                             onChange={e => { companySearchActive.current = true; searchCompanies(e.target.value) }}
-                            placeholder="Search company…"
+                            placeholder={tTeam("company_search_placeholder")}
                             onClick={e => e.stopPropagation()}
                           />
                           {companySearchActive.current && (companySearchResults.length > 0 || googleResults.length > 0 || companySearchQuery.trim().length >= 2) && (
@@ -4899,7 +4919,7 @@ export default function ListingEditorPage() {
                                   }}
                                 >
                                   <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                                  <span className="tier-badge arco">{c.owner_id ? "On Arco" : "Invited"}</span>
+                                  <span className="tier-badge arco">{c.owner_id ? tTeam("tier_on_arco") : tTeam("tier_invited")}</span>
                                 </button>
                               ))}
                               {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
@@ -4910,7 +4930,7 @@ export default function ListingEditorPage() {
                                   onClick={e => { e.stopPropagation(); handleSelectTier23Company(inv.id, g.name, g.placeId, g.city) }}
                                 >
                                   <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
-                                  <span className="tier-badge google">Google</span>
+                                  <span className="tier-badge google">{tTeam("tier_google")}</span>
                                 </button>
                               ))}
                               {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
@@ -4919,21 +4939,21 @@ export default function ListingEditorPage() {
                                   <div
                                     className="company-search-add"
                                     style={{ cursor: "default", opacity: 0.5 }}
-                                    onClick={e => { e.stopPropagation(); toast.info("Manual company creation is not available. Select a company from the search results.") }}
+                                    onClick={e => { e.stopPropagation(); toast.info(tTeam("manual_creation_unavailable")) }}
                                   >
                                     <Plus size={12} />
-                                    <span>Add &ldquo;{companySearchQuery.trim()}&rdquo;</span>
+                                    <span>{tTeam("add_company_quoted", { name: companySearchQuery.trim() })}</span>
                                   </div>
                                 </>
                               )}
                               {isSearchingCompanies && (
-                                <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching…</div>
+                                <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>{tSpecs("searching")}</div>
                               )}
                             </div>
                           )}
                         </>
                       ) : (
-                        <span className="editable-hint">{inv.companyName || "Company name"}</span>
+                        <span className="editable-hint">{inv.companyName || tTeam("company_name_placeholder")}</span>
                       )}
                     </h3>
                   </div>
@@ -4965,7 +4985,7 @@ export default function ListingEditorPage() {
                                 }
                                 if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
                               }}
-                              placeholder="name"
+                              placeholder={tTeam("name_placeholder")}
                               onClick={e => e.stopPropagation()}
                             />
                             <span style={{ color: "var(--arco-mid-grey)" }}>@{pendingTier23.domain}</span>
@@ -4981,12 +5001,12 @@ export default function ListingEditorPage() {
                               if (e.key === "Enter") void saveTier23Company(inv.id, (e.target as HTMLInputElement).value)
                               if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
                             }}
-                            placeholder="Enter email to send invite…"
+                            placeholder={tTeam("email_invite_placeholder")}
                             onClick={e => e.stopPropagation()}
                           />
                         )
                       ) : (
-                        <span className="editable-hint">{pendingTier23.domain ? `name@${pendingTier23.domain}` : "Enter email to send invite…"}</span>
+                        <span className="editable-hint">{pendingTier23.domain ? tTeam("email_invite_hint", { domain: pendingTier23.domain }) : tTeam("email_invite_placeholder")}</span>
                       )}
                     </p>
                   ) : isEditingEmail && !inv.isOwner && inv.status === "invited" && !inv.isListedCompany ? (
@@ -5013,8 +5033,8 @@ export default function ListingEditorPage() {
                                   try {
                                     await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
                                     await refreshProfessionalSection()
-                                    toast.success("Email updated")
-                                  } catch { toast.error("Failed to update email") }
+                                    toast.success(tToast("email_updated"))
+                                  } catch { toast.error(tToast("email_update_failed")) }
                                 }
                                 setEditingInviteField(null)
                               }}
@@ -5033,7 +5053,7 @@ export default function ListingEditorPage() {
                                 }
                                 if (e.key === "Escape") setEditingInviteField(null)
                               }}
-                              placeholder="name"
+                              placeholder={tTeam("name_placeholder")}
                               onClick={e => e.stopPropagation()}
                             />
                             <span style={{ color: "var(--arco-mid-grey)" }}>@{emailDomain}</span>
@@ -5050,8 +5070,8 @@ export default function ListingEditorPage() {
                                 try {
                                   await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
                                   await refreshProfessionalSection()
-                                  toast.success("Email updated")
-                                } catch { toast.error("Failed to update email") }
+                                  toast.success(tToast("email_updated"))
+                                } catch { toast.error(tToast("email_update_failed")) }
                               }
                               setEditingInviteField(null)
                             }}
@@ -5062,14 +5082,14 @@ export default function ListingEditorPage() {
                                   try {
                                     await supabase.from("project_professionals").update({ invited_email: newEmail }).eq("id", inv.id)
                                     await refreshProfessionalSection()
-                                    toast.success("Email updated")
-                                  } catch { toast.error("Failed to update email") }
+                                    toast.success(tToast("email_updated"))
+                                  } catch { toast.error(tToast("email_update_failed")) }
                                 }
                                 setEditingInviteField(null)
                               }
                               if (e.key === "Escape") setEditingInviteField(null)
                             }}
-                            placeholder="Enter email…"
+                            placeholder={tTeam("email_placeholder")}
                             onClick={e => e.stopPropagation()}
                           />
                         )
@@ -5083,7 +5103,19 @@ export default function ListingEditorPage() {
                             const isPublished = projectStatus === "published" || projectStatus === "completed"
                             const isPending = inv.status === "invited" && !isPublished
                             const dotClass = inv.isOwner ? "owner" : isPending ? "pending" : inv.status === "live_on_page" ? "featured" : inv.status
-                            const label = inv.isOwner ? "Owner" : isPending ? "Pending" : inv.status === "live_on_page" ? "Featured" : inv.status === "listed" ? "Listed" : inv.status === "invited" ? "Invited" : inv.status === "unlisted" ? "Unlisted" : inv.status.replace(/_/g, " ")
+                            const label = inv.isOwner
+                              ? tTeam("status_owner")
+                              : isPending
+                                ? tTeam("status_pending")
+                                : inv.status === "live_on_page"
+                                  ? tTeam("status_featured")
+                                  : inv.status === "listed"
+                                    ? tTeam("status_listed")
+                                    : inv.status === "invited"
+                                      ? tTeam("status_invited")
+                                      : inv.status === "unlisted"
+                                        ? tTeam("status_unlisted")
+                                        : inv.status.replace(/_/g, " ")
                             return <><span className={`status-pill-dot status-pill-dot--${dotClass}`} />{label}</>
                           })()}
                         </span>
@@ -5099,12 +5131,12 @@ export default function ListingEditorPage() {
               <div className="credit-card-edit">
                 <span className="ec-badge">
                   <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
-                  <span className="ec-txt">Edit</span>
+                  <span className="ec-txt">{t("edit_badge")}</span>
                 </span>
                 <button
                   className="card-del"
                   onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null) }}
-                  aria-label="Remove"
+                  aria-label={tTeam("remove_aria")}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -5116,7 +5148,7 @@ export default function ListingEditorPage() {
                     style={{ display: "inline", cursor: "pointer", paddingBottom: 1, color: draftCard.serviceIds.length > 0 ? undefined : "#016D75" }}
                     onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: "__draft__", field: "service" }) }}
                   >
-                    {draftCard.serviceName || "Select service"}
+                    {draftCard.serviceName || tTeam("select_service")}
                   </span>
                   {editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "service" && (() => {
                     // Use company-specific services if the draft has an Arco company
@@ -5152,14 +5184,14 @@ export default function ListingEditorPage() {
                                     setDraftCard(d => {
                                       if (!d) return d
                                       if (!isSelected && d.serviceIds.length >= 3) {
-                                        toast.error("Maximum 3 services per professional")
+                                        toast.error(tToast("max_three_services"))
                                         return d
                                       }
                                       const newIds = isSelected ? d.serviceIds.filter(sid => sid !== s.id) : [...d.serviceIds, s.id]
                                       const serviceOrderMap = new Map(serviceOptions.map((ps, i) => [ps.id, i]))
                                       const sorted = newIds.slice().sort((a, b) => (serviceOrderMap.get(a) ?? 999) - (serviceOrderMap.get(b) ?? 999))
                                       const names = sorted.map(sid => serviceOptions.find(ps => ps.id === sid)?.name).filter(Boolean) as string[]
-                                      const displayName = names.length <= 1 ? (names[0] ?? "Select service") : `${names[0]} +${names.length - 1}`
+                                      const displayName = names.length <= 1 ? (names[0] ?? tTeam("select_service")) : `${names[0]} +${names.length - 1}`
                                       return { ...d, serviceIds: newIds, serviceName: displayName }
                                     })
                                     setEditingInviteField(null)
@@ -5234,7 +5266,7 @@ export default function ListingEditorPage() {
                           style={{ fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit" }}
                           value={companySearchQuery}
                           onChange={e => { companySearchActive.current = true; searchCompanies(e.target.value) }}
-                          placeholder="Search company…"
+                          placeholder={tTeam("company_search_placeholder")}
                           onClick={e => e.stopPropagation()}
                         />
                         {companySearchActive.current && (companySearchResults.length > 0 || googleResults.length > 0 || companySearchQuery.trim().length >= 2) && (
@@ -5246,7 +5278,7 @@ export default function ListingEditorPage() {
                                 onClick={e => { e.stopPropagation(); void saveDraftCardWithCompany(c.id, c.email, !!c.owner_id) }}
                               >
                                 <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                                <span className="tier-badge arco">{c.owner_id ? "On Arco" : "Invited"}</span>
+                                <span className="tier-badge arco">{c.owner_id ? tTeam("tier_on_arco") : tTeam("tier_invited")}</span>
                               </button>
                             ))}
                             {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
@@ -5257,7 +5289,7 @@ export default function ListingEditorPage() {
                                 onClick={e => { e.stopPropagation(); setDraftCard(d => d ? { ...d, companyName: g.name } : d); handleSelectTier23Company("__draft__", g.name, g.placeId, g.city) }}
                               >
                                 <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
-                                <span className="tier-badge google">Google</span>
+                                <span className="tier-badge google">{tTeam("tier_google")}</span>
                               </button>
                             ))}
                             {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
@@ -5266,21 +5298,21 @@ export default function ListingEditorPage() {
                                 <div
                                   className="company-search-add"
                                   style={{ cursor: "default", opacity: 0.5 }}
-                                  onClick={e => { e.stopPropagation(); toast.info("Manual company creation is not available. Select a company from the search results.") }}
+                                  onClick={e => { e.stopPropagation(); toast.info(tTeam("manual_creation_unavailable")) }}
                                 >
                                   <Plus size={12} />
-                                  <span>Add &ldquo;{companySearchQuery.trim()}&rdquo;</span>
+                                  <span>{tTeam("add_company_quoted", { name: companySearchQuery.trim() })}</span>
                                 </div>
                               </>
                             )}
                             {isSearchingCompanies && (
-                              <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>Searching…</div>
+                              <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>{tSpecs("searching")}</div>
                             )}
                           </div>
                         )}
                       </>
                     ) : (
-                      <span className="editable-hint">{draftCard.companyName || "Company name"}</span>
+                      <span className="editable-hint">{draftCard.companyName || tTeam("company_name_placeholder")}</span>
                     )}
                   </h3>
                 </div>
@@ -5312,7 +5344,7 @@ export default function ListingEditorPage() {
                               }
                               if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
                             }}
-                            placeholder="name"
+                            placeholder={tTeam("name_placeholder")}
                             onClick={e => e.stopPropagation()}
                           />
                           <span style={{ color: "var(--arco-mid-grey)" }}>@{pendingTier23.domain}</span>
@@ -5328,12 +5360,12 @@ export default function ListingEditorPage() {
                             if (e.key === "Enter") void saveTier23Company("__draft__", (e.target as HTMLInputElement).value.trim())
                             if (e.key === "Escape") { setEditingInviteField(null); setPendingTier23(null) }
                           }}
-                          placeholder="Enter email to send invite…"
+                          placeholder={tTeam("email_invite_placeholder")}
                           onClick={e => e.stopPropagation()}
                         />
                       )
                     ) : (
-                      <span className="editable-hint">{pendingTier23.domain ? `name@${pendingTier23.domain}` : "Enter email to send invite…"}</span>
+                      <span className="editable-hint">{pendingTier23.domain ? tTeam("email_invite_hint", { domain: pendingTier23.domain }) : tTeam("email_invite_placeholder")}</span>
                     )}
                   </p>
                 )}
@@ -5347,7 +5379,7 @@ export default function ListingEditorPage() {
               style={draftCard ? { opacity: 0.4, cursor: "default" } : undefined}
             >
               <Plus size={18} className="add-pro-icon" style={{ color: "#a1a1a0", marginBottom: 4, transition: "color .18s" }} />
-              <span className="add-pro-label" style={{ fontSize: 12, color: "#a1a1a0", letterSpacing: ".03em", fontWeight: 400, transition: "color .18s" }}>Add professional</span>
+              <span className="add-pro-label" style={{ fontSize: 12, color: "#a1a1a0", letterSpacing: ".03em", fontWeight: 400, transition: "color .18s" }}>{tTeam("add_professional")}</span>
             </div>
           </div>
 
@@ -5356,11 +5388,11 @@ export default function ListingEditorPage() {
             <div className="popup-overlay" onClick={() => setDupWarning(null)}>
               <div className="popup-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
                 <div className="popup-header">
-                  <h3 className="arco-section-title">Company found on Arco</h3>
-                  <button type="button" className="popup-close" onClick={() => setDupWarning(null)} aria-label="Close">✕</button>
+                  <h3 className="arco-section-title">{tTeam("duplicate_dialog_title")}</h3>
+                  <button type="button" className="popup-close" onClick={() => setDupWarning(null)} aria-label={tActions("close")}>✕</button>
                 </div>
                 <p className="arco-body-text" style={{ marginBottom: 16 }}>
-                  This company is already on Arco. Link them to credit their work on this project.
+                  {tTeam("duplicate_dialog_description")}
                 </p>
 
                 {/* Company preview */}
@@ -5379,17 +5411,19 @@ export default function ListingEditorPage() {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500, color: "var(--arco-black)" }}>{dupWarning.existingName}</div>
                     <div style={{ fontSize: 12, color: "var(--arco-mid-grey)" }}>
-                      {dupWarning.existingProjectCount} {dupWarning.existingProjectCount === 1 ? "project" : "projects"}
+                      {dupWarning.existingProjectCount === 1
+                        ? tTeam("project_count_one", { count: dupWarning.existingProjectCount })
+                        : tTeam("project_count_other", { count: dupWarning.existingProjectCount })}
                     </div>
                   </div>
                 </div>
 
                 <div className="popup-actions">
                   <button className="btn-tertiary" onClick={() => setDupWarning(null)} style={{ flex: 1 }}>
-                    Cancel
+                    {tActions("cancel")}
                   </button>
                   <button className="btn-primary" onClick={() => void handleDupLinkExisting()} style={{ flex: 1 }}>
-                    Link company
+                    {tTeam("duplicate_link_company")}
                   </button>
                 </div>
               </div>
@@ -5413,7 +5447,7 @@ export default function ListingEditorPage() {
             }}
           >
             <Trash2 size={14} />
-            Delete project
+            {tDelete("trigger")}
           </button>
         </section>
       )}
@@ -5456,8 +5490,8 @@ export default function ListingEditorPage() {
                 background: "var(--arco-off-white)", borderRadius: "12px 12px 0 0", flexShrink: 0,
               }}
             >
-              <h3 className="arco-section-title" style={{ margin: 0 }}>Select professional services</h3>
-              <button type="button" className="popup-close" onClick={() => handleServiceModalOpenChange(false)} aria-label="Close">
+              <h3 className="arco-section-title" style={{ margin: 0 }}>{tTeam("select_services_modal_title")}</h3>
+              <button type="button" className="popup-close" onClick={() => handleServiceModalOpenChange(false)} aria-label={tActions("close")}>
                 ✕
               </button>
             </div>
@@ -5466,7 +5500,7 @@ export default function ListingEditorPage() {
             <div style={{ flex: 1, overflowY: "auto", padding: "12px 28px 28px" }}>
               {professionalServices.length === 0 ? (
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)" }}>
-                  Professional services are not available right now. Please try again later.
+                  {tTeam("services_unavailable")}
                 </p>
               ) : (
                 <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
@@ -5504,10 +5538,10 @@ export default function ListingEditorPage() {
               }}
             >
               <button type="button" className="btn-tertiary" onClick={() => handleServiceModalOpenChange(false)} disabled={isUpdatingServices} style={{ fontSize: 14, padding: "10px 20px" }}>
-                Cancel
+                {tActions("cancel")}
               </button>
               <button type="button" className="btn-secondary" onClick={() => void handleSaveServiceSelection()} disabled={isUpdatingServices} style={{ fontSize: 14, padding: "10px 20px" }}>
-                {isUpdatingServices ? "Saving…" : "Save"}
+                {isUpdatingServices ? tActions("saving") : tActions("save")}
               </button>
             </div>
           </div>
@@ -5530,8 +5564,8 @@ export default function ListingEditorPage() {
                 background: "var(--arco-off-white)", borderRadius: "12px 12px 0 0", flexShrink: 0,
               }}
             >
-              <h3 className="arco-section-title" style={{ margin: 0 }}>{editingInviteId ? "Update invite" : "Invite professional"}</h3>
-              <button type="button" className="popup-close" onClick={() => handleInviteDialogChange(false)} aria-label="Close">
+              <h3 className="arco-section-title" style={{ margin: 0 }}>{editingInviteId ? tTeam("invite_dialog_title_update") : tTeam("invite_dialog_title_invite")}</h3>
+              <button type="button" className="popup-close" onClick={() => handleInviteDialogChange(false)} aria-label={tActions("close")}>
                 ✕
               </button>
             </div>
@@ -5540,7 +5574,7 @@ export default function ListingEditorPage() {
             <div style={{ padding: "12px 28px 28px" }}>
               {inviteServiceId && (
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                  Service: {professionalServices.find(s => s.id === inviteServiceId)?.name}
+                  {tTeam("invite_service_label", { name: professionalServices.find(s => s.id === inviteServiceId)?.name ?? "" })}
                 </p>
               )}
 
@@ -5552,7 +5586,7 @@ export default function ListingEditorPage() {
 
               <div>
                 <label htmlFor="invite-email" style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                  Company email address
+                  {tTeam("invite_email_label")}
                 </label>
                 <input
                   id="invite-email"
@@ -5561,11 +5595,11 @@ export default function ListingEditorPage() {
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                   disabled={isInviteMutating}
-                  placeholder="name@company.com"
+                  placeholder={tTeam("invite_email_placeholder")}
                   style={{ marginBottom: 0 }}
                 />
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginTop: 8, fontSize: 13 }}>
-                  No invites are sent until the project is approved by Arco.
+                  {tTeam("invite_review_hint")}
                 </p>
               </div>
             </div>
@@ -5579,11 +5613,11 @@ export default function ListingEditorPage() {
               }}
             >
               <button type="button" className="btn-tertiary" onClick={() => handleInviteDialogChange(false)} disabled={isInviteMutating} style={{ fontSize: 14, padding: "10px 20px" }}>
-                Cancel
+                {tActions("cancel")}
               </button>
               <button type="button" className="btn-secondary" onClick={() => void handleInviteSubmit()} disabled={isInviteMutating} style={{ fontSize: 14, padding: "10px 20px" }}>
                 {isInviteMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add to project
+                {tActions("add_to_project")}
               </button>
             </div>
           </div>
@@ -5596,16 +5630,20 @@ export default function ListingEditorPage() {
         <div className="popup-overlay" onClick={() => setShowLowResWarning(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Low resolution photos</h3>
-              <button type="button" className="popup-close" onClick={() => setShowLowResWarning(false)} aria-label="Close">✕</button>
+              <h3 className="arco-section-title">{tLowRes("title")}</h3>
+              <button type="button" className="popup-close" onClick={() => setShowLowResWarning(false)} aria-label={tActions("close")}>✕</button>
             </div>
             <div className="arco-alert arco-alert--warn" style={{ marginBottom: 24 }}>
               <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M8 1L1 14h14L8 1z" /><path d="M8 6v3" /><circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
               </svg>
-              <div>
-                <strong>{lowResCount} photo{lowResCount > 1 ? "s are" : " is"} below the recommended resolution</strong> (1600 × 800px). Low-resolution images may be rejected during review. Replace photos marked with a &quot;Low res&quot; badge with higher quality versions.
-              </div>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: lowResCount === 1
+                    ? tLowRes("warning_one", { count: lowResCount })
+                    : tLowRes("warning_other", { count: lowResCount }),
+                }}
+              />
             </div>
             <div className="popup-actions">
               <button
@@ -5614,7 +5652,7 @@ export default function ListingEditorPage() {
                 style={{ flex: 1 }}
                 onClick={() => setShowLowResWarning(false)}
               >
-                Go back
+                {tActions("go_back")}
               </button>
               <button
                 type="button"
@@ -5626,7 +5664,7 @@ export default function ListingEditorPage() {
                   setShowSubmitReviewPopup(true)
                 }}
               >
-                Submit anyway
+                {tLowRes("submit_anyway")}
               </button>
             </div>
           </div>
@@ -5649,32 +5687,32 @@ export default function ListingEditorPage() {
         const profCount = flatInvites.length
 
         const required = [
-          { label: "Project name", ok: Boolean(title) },
-          { label: "Description", ok: Boolean(desc) },
-          { label: "Location", ok: Boolean(location) },
-          { label: "Type", ok: Boolean(type) },
-          { label: "Scope", ok: Boolean(scope) },
-          { label: "Style", ok: Boolean(style) },
-          { label: "Minimum 5 photos", ok: photoCount >= 5 },
+          { label: tSubmit("req_project_name"), ok: Boolean(title) },
+          { label: tSubmit("req_description"), ok: Boolean(desc) },
+          { label: tSubmit("req_location"), ok: Boolean(location) },
+          { label: tSubmit("req_type"), ok: Boolean(type) },
+          { label: tSubmit("req_scope"), ok: Boolean(scope) },
+          { label: tSubmit("req_style"), ok: Boolean(style) },
+          { label: tSubmit("req_min_photos"), ok: photoCount >= 5 },
         ]
         const allRequiredMet = required.every(r => r.ok)
 
         const recommendations = [
-          { label: "Add 20+ photos for a complete project showcase", ok: photoCount >= 20 },
-          { label: "Tag photos to spaces for a guided photo tour", ok: photoCount > 0 && taggedCount === photoCount },
-          { label: "Credit 5+ professionals to increase project visibility", ok: profCount >= 5 },
+          { label: tSubmit("rec_more_photos"), ok: photoCount >= 20 },
+          { label: tSubmit("rec_tag_photos"), ok: photoCount > 0 && taggedCount === photoCount },
+          { label: tSubmit("rec_credit_more"), ok: profCount >= 5 },
         ]
 
         return (
           <div className="popup-overlay" onClick={() => setShowSubmitReviewPopup(false)}>
             <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
               <div className="popup-header">
-                <h3 className="arco-section-title">Submit for review</h3>
-                <button type="button" className="popup-close" onClick={() => setShowSubmitReviewPopup(false)} aria-label="Close">✕</button>
+                <h3 className="arco-section-title">{tSubmit("title")}</h3>
+                <button type="button" className="popup-close" onClick={() => setShowSubmitReviewPopup(false)} aria-label={tActions("close")}>✕</button>
               </div>
 
               {/* Required fields */}
-              <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--arco-mid-grey)", marginBottom: 12 }}>Required</p>
+              <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--arco-mid-grey)", marginBottom: 12 }}>{tSubmit("required_label")}</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
                 {required.map(r => (
                   <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 300, color: r.ok ? "var(--arco-mid-grey)" : "#dc2626" }}>
@@ -5689,7 +5727,7 @@ export default function ListingEditorPage() {
               </div>
 
               {/* Recommendations */}
-              <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--arco-mid-grey)", marginBottom: 12 }}>Recommended</p>
+              <p style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--arco-mid-grey)", marginBottom: 12 }}>{tSubmit("recommended_label")}</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
                 {recommendations.map(r => (
                   <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 300, color: r.ok ? "var(--arco-mid-grey)" : "var(--arco-mid-grey)" }}>
@@ -5706,14 +5744,14 @@ export default function ListingEditorPage() {
               {/* Info note */}
               {profCount > 0 && (
                 <p style={{ fontSize: 12, fontWeight: 300, color: "var(--arco-mid-grey)", marginBottom: 20, lineHeight: 1.5 }}>
-                  Credited professionals will be invited to Arco once your project is approved and listed.
+                  {tSubmit("invites_note")}
                 </p>
               )}
 
               {/* Actions */}
               <div className="popup-actions">
                 <button className="btn-tertiary" onClick={() => { setShowSubmitReviewPopup(false); if (!allRequiredMet) setHighlightMissingFields(true) }} style={{ flex: 1 }}>
-                  Back to editing
+                  {tSubmit("back_to_editing")}
                 </button>
                 <button
                   className="btn-primary"
@@ -5721,7 +5759,7 @@ export default function ListingEditorPage() {
                   onClick={handleSubmitForReview}
                   style={{ flex: 1 }}
                 >
-                  {isSubmittingForReview ? "Submitting…" : "Submit"}
+                  {isSubmittingForReview ? tSubmit("submitting") : tSubmit("submit")}
                 </button>
               </div>
             </div>
@@ -5734,25 +5772,26 @@ export default function ListingEditorPage() {
         <div className="popup-overlay" onClick={() => { if (!isRejecting) { setShowRejectModal(false); setRejectionReason(""); setSelectedRejectionReasons([]) } }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Reject project</h3>
+              <h3 className="arco-section-title">{tReject("title")}</h3>
               <button
                 type="button"
                 className="popup-close"
                 onClick={() => { setShowRejectModal(false); setRejectionReason(""); setSelectedRejectionReasons([]) }}
-                aria-label="Close"
+                aria-label={tActions("close")}
               >
                 ✕
               </button>
             </div>
             <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
-              Select one or more reasons for rejecting this project.
+              {tReject("description")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-              {REJECTION_REASONS.map((reason) => {
+              {REJECTION_REASON_KEYS.map((reasonKey) => {
+                const reason = tReject(reasonKey)
                 const isSelected = selectedRejectionReasons.includes(reason)
                 return (
                   <button
-                    key={reason}
+                    key={reasonKey}
                     type="button"
                     onClick={() => setSelectedRejectionReasons((prev) =>
                       isSelected ? prev.filter((r) => r !== reason) : [...prev, reason]
@@ -5816,7 +5855,7 @@ export default function ListingEditorPage() {
                       </svg>
                     )}
                   </span>
-                  Other
+                  {tReject("other")}
                 </button>
                 {rejectionReason !== "" && (
                   <textarea
@@ -5826,7 +5865,7 @@ export default function ListingEditorPage() {
                       borderRadius: "0 0 3px 3px", background: "var(--arco-surface)",
                     }}
                     rows={2}
-                    placeholder="Describe the reason…"
+                    placeholder={tReject("other_placeholder")}
                     value={rejectionReason.trim() === "" ? "" : rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
                     autoFocus
@@ -5842,7 +5881,7 @@ export default function ListingEditorPage() {
                 disabled={isRejecting}
                 style={{ flex: 1 }}
               >
-                Cancel
+                {tActions("cancel")}
               </button>
               <button
                 type="button"
@@ -5851,7 +5890,7 @@ export default function ListingEditorPage() {
                 disabled={isRejecting || (selectedRejectionReasons.length === 0 && !rejectionReason.trim())}
                 style={{ flex: 1 }}
               >
-                {isRejecting ? "Rejecting…" : "Reject"}
+                {isRejecting ? tReject("rejecting") : tReject("reject")}
               </button>
             </div>
           </div>
@@ -5866,13 +5905,15 @@ export default function ListingEditorPage() {
             <div className="popup-header">
               <h3 className="arco-section-title">
                 {isUploading
-                  ? `Uploading ${uploadTracker.length} ${uploadTracker.length === 1 ? "photo" : "photos"}…`
+                  ? (uploadTracker.length === 1
+                      ? tUpload("uploading_one", { count: uploadTracker.length })
+                      : tUpload("uploading_other", { count: uploadTracker.length }))
                   : uploadTracker.some(f => f.status === "error")
-                    ? "Upload completed with errors"
-                    : "Upload complete"}
+                    ? tUpload("completed_with_errors")
+                    : tUpload("upload_complete")}
               </h3>
               {!isUploading && (
-                <button type="button" className="popup-close" onClick={() => { setShowUploadPopup(false); setUploadTracker(prev => { prev.forEach(f => URL.revokeObjectURL(f.thumbnail)); return [] }) }} aria-label="Close">
+                <button type="button" className="popup-close" onClick={() => { setShowUploadPopup(false); setUploadTracker(prev => { prev.forEach(f => URL.revokeObjectURL(f.thumbnail)); return [] }) }} aria-label={tActions("close")}>
                   ✕
                 </button>
               )}
@@ -5900,7 +5941,7 @@ export default function ListingEditorPage() {
                   </div>
                   {file.status === "error" && file.error && (
                     <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "2px 4px", background: "rgba(220,38,38,0.85)", fontSize: 9, color: "white", lineHeight: 1.2, textAlign: "center" }}>
-                      Failed
+                      {tUpload("failed")}
                     </div>
                   )}
                 </div>
@@ -5925,35 +5966,36 @@ export default function ListingEditorPage() {
         <div className="popup-overlay" onClick={() => { if (!isDeletingProject) { setShowDeleteConfirm(false); setDeleteConfirmText("") } }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Delete project</h3>
-              <button type="button" className="popup-close" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText("") }} aria-label="Close">
+              <h3 className="arco-section-title">{tDelete("title")}</h3>
+              <button type="button" className="popup-close" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText("") }} aria-label={tActions("close")}>
                 ✕
               </button>
             </div>
             <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
-              Permanently delete this project and all associated data. This action cannot be undone.
+              {tDelete("description")}
             </p>
 
             <div className="space-y-2 mb-4">
               <div className="arco-alert arco-alert--danger">
                 <AlertTriangle className="arco-alert-icon" />
-                <span>This project will be permanently deleted. This cannot be undone.</span>
+                <span>{tDelete("warning_primary")}</span>
               </div>
 
               <div className="arco-alert arco-alert--warn">
                 <AlertTriangle className="arco-alert-icon" />
-                <span>This project will disappear from the portfolio of all credited professionals.</span>
+                <span>{tDelete("warning_secondary")}</span>
               </div>
             </div>
 
-            <p className="body-small text-text-secondary mb-3">
-              Type <strong>DELETE</strong> to confirm.
-            </p>
+            <p
+              className="body-small text-text-secondary mb-3"
+              dangerouslySetInnerHTML={{ __html: tDelete("type_to_confirm") }}
+            />
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="DELETE"
+              placeholder={tDelete("confirm_placeholder")}
               className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
             />
 
@@ -5965,7 +6007,7 @@ export default function ListingEditorPage() {
                 disabled={isDeletingProject}
                 style={{ flex: 1 }}
               >
-                Cancel
+                {tActions("cancel")}
               </button>
               <button
                 type="button"
@@ -5978,7 +6020,7 @@ export default function ListingEditorPage() {
                 } ${isDeletingProject ? "opacity-60" : ""}`}
                 style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
               >
-                {isDeletingProject ? "Deleting…" : "Delete project"}
+                {isDeletingProject ? tDelete("deleting") : tDelete("trigger")}
               </button>
             </div>
           </div>
