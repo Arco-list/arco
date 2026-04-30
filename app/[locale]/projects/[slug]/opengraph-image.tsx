@@ -14,11 +14,17 @@ export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 export const alt = "Arco"
 
-// Fetch the hero photo ourselves and return a JPEG data URL. Satori can
-// only decode JPEG/PNG, and several external hosts we import from
-// (Squarespace, bongersarchitecten, etc.) content-negotiate WEBP even
-// when the URL suffix is `.jpg`. Converting server-side with sharp
-// makes the OG render independent of the CDN's format choices.
+// Fetch the hero photo and return a baseline JPEG data URL, resized to
+// OG canvas. Satori (the renderer behind ImageResponse) silently fails
+// on **progressive JPEGs** — the <img> slot renders but the pixel data
+// stays black, which is what crawlers were seeing in WhatsApp / Slack
+// previews. Two routes hit that bug:
+//   1. Source already progressive (e.g. marcovanveldhuizen's exports).
+//   2. Source is WebP/AVIF, sharp re-encodes with mozjpeg defaults
+//      (which is progressive on).
+// Always normalising through sharp + forcing `progressive: false` fixes
+// both paths. Resizing to 1200×630 also caps the base64 string size so
+// large source photos don't bloat the OG render's memory footprint.
 async function loadHeroAsDataUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
@@ -26,18 +32,18 @@ async function loadHeroAsDataUrl(url: string): Promise<string | null> {
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return null
-    const mime = (res.headers.get("content-type") ?? "").toLowerCase()
-    let buf = Buffer.from(await res.arrayBuffer())
-    if (!/^image\/(jpeg|png)\b/.test(mime)) {
-      // Dynamic import so Next.js's build-time "Collecting page data"
-      // phase doesn't eagerly load sharp's native binary. Combined with
-      // `pnpm.onlyBuiltDependencies: ["sharp"]` in package.json, this
-      // keeps the build green on Vercel (where postinstall scripts are
-      // off by default in pnpm 10).
-      const { default: sharp } = await import("sharp")
-      buf = await sharp(buf).jpeg({ quality: 85, mozjpeg: true }).toBuffer()
-    }
-    return `data:image/jpeg;base64,${buf.toString("base64")}`
+    const buf = Buffer.from(await res.arrayBuffer())
+    // Dynamic import so Next.js's build-time "Collecting page data"
+    // phase doesn't eagerly load sharp's native binary. Combined with
+    // `pnpm.onlyBuiltDependencies: ["sharp"]` in package.json, this
+    // keeps the build green on Vercel (where postinstall scripts are
+    // off by default in pnpm 10).
+    const { default: sharp } = await import("sharp")
+    const out = await sharp(buf)
+      .resize({ width: size.width, height: size.height, fit: "cover" })
+      .jpeg({ quality: 85, mozjpeg: true, progressive: false })
+      .toBuffer()
+    return `data:image/jpeg;base64,${out.toString("base64")}`
   } catch {
     return null
   }

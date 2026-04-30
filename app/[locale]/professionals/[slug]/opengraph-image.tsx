@@ -10,8 +10,11 @@ export const alt = "Arco"
 const BADGE_SIZE = Math.round(size.width * 0.14)   // 168
 const RIGHT_MARGIN = Math.round(size.width * 0.033) // ~40
 
-// Fetch the hero photo ourselves and return a JPEG data URL. Kept in
-// sync with the identical helper in projects/[slug]/opengraph-image.tsx.
+// Fetch the hero photo and return a baseline JPEG data URL, resized to
+// OG canvas. Kept in sync with the identical helper in
+// projects/[slug]/opengraph-image.tsx — see the longer note there for
+// why we always normalise through sharp + force `progressive: false`
+// (Satori silently fails on progressive JPEGs).
 async function loadHeroAsDataUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
@@ -19,14 +22,13 @@ async function loadHeroAsDataUrl(url: string): Promise<string | null> {
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return null
-    const mime = (res.headers.get("content-type") ?? "").toLowerCase()
-    let buf = Buffer.from(await res.arrayBuffer())
-    if (!/^image\/(jpeg|png)\b/.test(mime)) {
-      // Dynamic import — see matching note in projects/[slug]/opengraph-image.tsx
-      const { default: sharp } = await import("sharp")
-      buf = await sharp(buf).jpeg({ quality: 85, mozjpeg: true }).toBuffer()
-    }
-    return `data:image/jpeg;base64,${buf.toString("base64")}`
+    const buf = Buffer.from(await res.arrayBuffer())
+    const { default: sharp } = await import("sharp")
+    const out = await sharp(buf)
+      .resize({ width: size.width, height: size.height, fit: "cover" })
+      .jpeg({ quality: 85, mozjpeg: true, progressive: false })
+      .toBuffer()
+    return `data:image/jpeg;base64,${out.toString("base64")}`
   } catch {
     return null
   }
