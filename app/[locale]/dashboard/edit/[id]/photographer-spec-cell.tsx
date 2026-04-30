@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
+import { useTranslations } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import {
   addPhotographerToProject,
@@ -26,6 +27,8 @@ const MIN_QUERY_LENGTH = 2
 
 export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCellProps) {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const t = useTranslations("project_edit.photographer")
+  const tBadge = useTranslations("project_edit")
   const [photographer, setPhotographer] = useState<{ companyId: string; name: string } | null>(initial ?? null)
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -206,28 +209,28 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
       const enriched = await fetchPlaceDetails(prediction.placeId, prediction.name)
       const result = await addPhotographerToProject(projectId, enriched)
       if (!result.success) {
-        toast.error(result.error ?? "Could not add photographer")
+        toast.error(result.error ?? t("could_not_add"))
         return
       }
       setPhotographer({ companyId: result.companyId!, name: enriched.name })
       setIsOpen(false)
-      toast.success(`${enriched.name} credited as photographer`)
+      toast.success(t("credited_success", { name: enriched.name }))
     } finally {
       setIsSelecting(false)
     }
-  }, [projectId, fetchPlaceDetails])
+  }, [projectId, fetchPlaceDetails, t])
 
   const handleRemove = useCallback(() => {
     startRemoveTransition(async () => {
       const result = await removePhotographerFromProject(projectId)
       if (!result.success) {
-        toast.error(result.error ?? "Could not remove photographer")
+        toast.error(result.error ?? t("could_not_remove"))
         return
       }
       setPhotographer(null)
-      toast.success("Photographer removed")
+      toast.success(t("removed_success"))
     })
-  }, [projectId])
+  }, [projectId, t])
 
   const handleManualAdd = useCallback(async () => {
     const name = query.trim()
@@ -246,16 +249,16 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
         domain: null,
       })
       if (!result.success) {
-        toast.error(result.error ?? "Could not add photographer")
+        toast.error(result.error ?? t("could_not_add"))
         return
       }
       setPhotographer({ companyId: result.companyId!, name })
       setIsOpen(false)
-      toast.success(`${name} credited as photographer`)
+      toast.success(t("credited_success", { name }))
     } finally {
       setIsSelecting(false)
     }
-  }, [query, projectId])
+  }, [query, projectId, t])
 
   const trimmedQuery = query.trim()
   const showAddRow =
@@ -275,11 +278,11 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
             <path d="M11.5 1.5l3 3L5 14H2v-3z" />
           </svg>
         </span>
-        <span className="ec-txt">Edit</span>
+        <span className="ec-txt">{tBadge("edit_badge")}</span>
       </span>
 
       <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>
-        Photographer
+        {t("label")}
       </span>
 
       {isOpen ? (
@@ -290,7 +293,7 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
             className="spec-inp"
             value={query}
             onChange={(e) => runSearch(e.target.value)}
-            placeholder="Search studio…"
+            placeholder={t("search_placeholder")}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 setIsOpen(false)
@@ -332,13 +335,13 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                       <path d="M8 3v10M3 8h10" />
                     </svg>
-                    <span>Add &ldquo;{trimmedQuery}&rdquo;</span>
+                    <span>{t("add_quoted", { name: trimmedQuery })}</span>
                   </button>
                 </>
               )}
               {isSearching && (
                 <div className="company-search-row" style={{ color: "#a1a1a0", cursor: "default" }}>
-                  Searching…
+                  {t("searching")}
                 </div>
               )}
             </div>
@@ -347,12 +350,12 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
       ) : (
         <>
           <div className="arco-card-title" style={{ color: photographer ? undefined : "#b0b0ae" }}>
-            {photographer?.name ?? "Add photographer"}
+            {photographer?.name ?? t("add")}
           </div>
           {photographer && (
             <button
               type="button"
-              aria-label="Remove photographer"
+              aria-label={t("remove_aria")}
               onClick={(e) => { e.stopPropagation(); handleRemove() }}
               disabled={isRemoving}
               style={{
