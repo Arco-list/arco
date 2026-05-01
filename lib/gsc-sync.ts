@@ -116,11 +116,11 @@ type InspectResponse = {
   }
 }
 
-// 20s per URL is generous — typical responses are 1–3s, but Google's URL
-// Inspection API occasionally takes much longer on URLs it hasn't recently
-// crawled. Beyond 20s we'd rather skip-and-retry-tomorrow than hold the
-// whole cron hostage.
-const URL_INSPECTION_TIMEOUT_MS = 20_000
+// 8s per URL — typical responses are 1–3s. Beyond 8s the call is almost
+// certainly hung (rare but does happen on URLs Google hasn't recrawled
+// recently); we'd rather skip-and-retry-tomorrow than hold the whole cron
+// hostage. With 79 URLs at concurrency 10 worst case is ~64s.
+const URL_INSPECTION_TIMEOUT_MS = 8_000
 
 async function inspectUrl(token: string, url: string): Promise<{
   state: IndexationState
@@ -269,11 +269,11 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
   let lastError: string | null = null
   const now = new Date().toISOString()
 
-  // Process URL Inspection in batches of 5 in parallel. URL Inspection is the
-  // slow part (1–20s per URL); serial would blow the 300s Vercel timeout on
-  // ~20 URLs. Search Analytics is already a single bulk call. Each batch's
+  // Process URL Inspection in batches of 10 in parallel. URL Inspection is
+  // the slow part (1–8s per URL); serial would blow the 300s Vercel timeout
+  // on ~80 URLs. Search Analytics is already a single bulk call. Each batch's
   // failures are isolated so one bad URL can't poison the whole run.
-  const CONCURRENCY = 5
+  const CONCURRENCY = 10
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     const batch = targets.slice(i, i + CONCURRENCY)
     logger.info("[gsc-sync] batch", { from: i, to: i + batch.length, total: targets.length })
