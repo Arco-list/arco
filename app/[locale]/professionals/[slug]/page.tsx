@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 
   if (!professional) {
     return {
-      title: t("professional_not_found"),
+      title: { absolute: t("professional_not_found") },
     }
   }
 
@@ -48,14 +48,14 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
   )
 
   return {
-    title: professional.name,
+    title: { absolute: professional.name },
     description,
     alternates: {
       canonical,
       languages: { ...languages, "x-default": canonical },
     },
     openGraph: {
-      title: `${professional.name} | Arco`,
+      title: professional.name,
       description,
       url: canonical,
       // og:image is provided by opengraph-image.tsx co-located with this

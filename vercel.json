@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/sync-apollo-activity",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-gsc-indexation",
+      "schedule": "0 3 * * *"
     }
   ]
 }

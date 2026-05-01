@@ -153,6 +153,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
     subs: [
       { key: "unlisted", label: "Unlisted", definition: "Companies not yet visible to clients", source: "supabase" },
       { key: "companies", label: "Total companies", definition: "All companies regardless of status", source: "supabase" },
+      { key: "ranked_companies", label: "Ranked companies", definition: "% of companies created in the period whose page is ranked (≥1 GSC impression in 28d)", source: "supabase" },
     ],
   },
   responders: {
@@ -178,6 +179,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
     supabaseFilter: { status: "published" },
     subs: [
       { key: "projects", label: "Total projects", definition: "All projects regardless of status", source: "supabase" },
+      { key: "ranked_projects", label: "Ranked projects", definition: "% of projects created in the period that are ranked (≥1 GSC impression in 28d)", source: "supabase" },
     ],
   },
   inviters: {

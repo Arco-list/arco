@@ -24,7 +24,7 @@ async function loadAdminProjectsData() {
     serviceSupabase
       .from("projects")
       .select(
-        "id, title, slug, status, is_featured, rejection_reason, project_type, client_id, project_year, created_at, location, address_city, address_region, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
+        "id, title, slug, status, is_featured, rejection_reason, project_type, client_id, project_year, created_at, location, address_city, address_region, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
       )
       .eq("client.is_active", true)
       .order("created_at", { ascending: false, nullsFirst: false }),
@@ -182,6 +182,12 @@ async function loadAdminProjectsData() {
       owner,
       companies,
       rejectionReason: project.rejection_reason ?? null,
+      seoIndexed: project.seo_indexed ?? null,
+      seoIndexationState: project.seo_indexation_state ?? null,
+      seoImpressions28d: project.seo_impressions_28d ?? null,
+      seoClicks28d: project.seo_clicks_28d ?? null,
+      seoCtr28d: project.seo_ctr_28d != null ? Number(project.seo_ctr_28d) : null,
+      seoPosition28d: project.seo_position_28d != null ? Number(project.seo_position_28d) : null,
     }
   })
 

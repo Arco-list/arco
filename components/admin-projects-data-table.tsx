@@ -99,6 +99,12 @@ export type AdminProjectRow = {
   owner: { name: string; avatarUrl: string | null } | null
   companies: LinkedCompany[]
   rejectionReason: string | null
+  seoIndexed: boolean | null
+  seoIndexationState: string | null
+  seoImpressions28d: number | null
+  seoClicks28d: number | null
+  seoCtr28d: number | null
+  seoPosition28d: number | null
 }
 
 const REJECTION_REASONS = [
@@ -593,6 +599,51 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         } catch {
           return <span className="arco-table-secondary">—</span>
         }
+      },
+    },
+    {
+      accessorKey: "seoImpressions28d",
+      header: "Impressions",
+      sortingFn: (rowA, rowB) =>
+        (rowA.original.seoImpressions28d ?? -1) - (rowB.original.seoImpressions28d ?? -1),
+      cell: ({ row }) => {
+        const r = row.original
+        // Pages where Google did NOT pass indexation read as "Not indexed"
+        // — distinct from indexed pages that simply earned no impressions
+        // (those render `0`). The seoIndexed flag is null until the cron has
+        // ever run; render `—` in that case so we don't claim "not indexed"
+        // before we have data.
+        if (r.seoIndexed === false) {
+          return <span className="arco-table-secondary" title={r.seoIndexationState ?? undefined}>Not indexed</span>
+        }
+        if (r.seoImpressions28d == null) return <span className="arco-table-secondary">—</span>
+        return <span className="arco-table-primary">{r.seoImpressions28d.toLocaleString()}</span>
+      },
+    },
+    {
+      accessorKey: "seoClicks28d",
+      header: "Clicks",
+      sortingFn: (rowA, rowB) =>
+        (rowA.original.seoClicks28d ?? -1) - (rowB.original.seoClicks28d ?? -1),
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.seoIndexed === false || r.seoClicks28d == null) {
+          return <span className="arco-table-secondary">—</span>
+        }
+        return <span className="arco-table-primary">{r.seoClicks28d.toLocaleString()}</span>
+      },
+    },
+    {
+      accessorKey: "seoCtr28d",
+      header: "CTR",
+      sortingFn: (rowA, rowB) =>
+        (rowA.original.seoCtr28d ?? -1) - (rowB.original.seoCtr28d ?? -1),
+      cell: ({ row }) => {
+        const r = row.original
+        if (r.seoIndexed === false || r.seoCtr28d == null) {
+          return <span className="arco-table-secondary">—</span>
+        }
+        return <span className="arco-table-primary">{r.seoCtr28d.toFixed(1)}%</span>
       },
     },
     {

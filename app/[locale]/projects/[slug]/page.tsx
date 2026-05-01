@@ -72,7 +72,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!project) {
     const t = await getTranslations("project_detail")
     return {
-      title: t("not_found_title"),
+      title: { absolute: t("not_found_title") },
       description: t("not_found_description")
     }
   }
@@ -80,7 +80,26 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const metaLocale = resolvedParams.locale ?? "en"
   const localizedMetaTitle = getProjectTranslation(project, "title", metaLocale) || project.title
   const localizedMetaDesc = getProjectTranslation(project, "description", metaLocale) || project.description
-  const title = project.seo_title?.trim() || localizedMetaTitle
+
+  // Append the project-owner credit ("by Marco van Veldhuizen" / "door …") to
+  // the page title. The owner is the company on the project_professionals row
+  // with is_project_owner = true — same source the JSON-LD `author` field uses,
+  // so structured data and the visible title always match. seo_title is an
+  // admin-set override; when it's present, it wins as-is — no auto-credit.
+  let ownerName: string | null = null
+  const { data: ownerRow } = await supabase
+    .from("project_professionals")
+    .select("companies(name)")
+    .eq("project_id", project.id)
+    .eq("is_project_owner", true)
+    .maybeSingle()
+  ownerName = ((ownerRow as { companies?: { name?: string | null } | null } | null)?.companies?.name) ?? null
+  const byLabel = metaLocale === "nl" ? "door" : "by"
+  const titleBase = project.seo_title?.trim() || localizedMetaTitle
+  const title = !project.seo_title?.trim() && ownerName
+    ? `${titleBase} ${byLabel} ${ownerName}`
+    : titleBase
+
   const description = project.seo_description?.trim() ||
     (localizedMetaDesc ?
       localizedMetaDesc.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
@@ -95,7 +114,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     : undefined
 
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: {
       canonical,
@@ -105,7 +124,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     },
     openGraph: {
       type: 'article',
-      title: `${title} | Arco`,
+      title,
       description,
       url: canonical,
       // og:image is provided by opengraph-image.tsx co-located with this

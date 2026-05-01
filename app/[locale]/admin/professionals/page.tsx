@@ -27,7 +27,7 @@ async function loadAdminCompaniesData() {
       supabase
         .from("companies")
         .select(
-          "id, name, slug, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, plan_expires_at, owner_id, created_at, auto_approve_projects"
+          "id, name, slug, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, plan_expires_at, owner_id, created_at, auto_approve_projects, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         ),
       supabase
         .from("company_metrics")
@@ -266,6 +266,12 @@ async function loadAdminCompaniesData() {
       ),
       canPublishProjects: serviceIds.some((id) => publishableCategoryIds.has(id)),
       autoApproveProjects: Boolean((company as any).auto_approve_projects),
+      seoIndexed: (company as any).seo_indexed ?? null,
+      seoIndexationState: (company as any).seo_indexation_state ?? null,
+      seoImpressions28d: (company as any).seo_impressions_28d ?? null,
+      seoClicks28d: (company as any).seo_clicks_28d ?? null,
+      seoCtr28d: (company as any).seo_ctr_28d != null ? Number((company as any).seo_ctr_28d) : null,
+      seoPosition28d: (company as any).seo_position_28d != null ? Number((company as any).seo_position_28d) : null,
     }
   })
 
@@ -326,6 +332,12 @@ async function loadAdminCompaniesData() {
         hasPublishedProjects: false,
         canPublishProjects: false,
         autoApproveProjects: false,
+        seoIndexed: null,
+        seoIndexationState: null,
+        seoImpressions28d: null,
+        seoClicks28d: null,
+        seoCtr28d: null,
+        seoPosition28d: null,
       }
     }
   )
