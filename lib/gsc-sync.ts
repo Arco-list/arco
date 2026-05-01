@@ -116,30 +116,43 @@ type InspectResponse = {
   }
 }
 
+// 20s per URL is generous — typical responses are 1–3s, but Google's URL
+// Inspection API occasionally takes much longer on URLs it hasn't recently
+// crawled. Beyond 20s we'd rather skip-and-retry-tomorrow than hold the
+// whole cron hostage.
+const URL_INSPECTION_TIMEOUT_MS = 20_000
+
 async function inspectUrl(token: string, url: string): Promise<{
   state: IndexationState
   indexed: boolean
   canonicalChosen: string | null
 }> {
-  const res = await fetch(
-    "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect",
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ inspectionUrl: url, siteUrl: GSC_PROPERTY }),
-    },
-  )
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`URL inspection ${res.status} for ${url}: ${body}`)
-  }
-  const json = (await res.json()) as InspectResponse
-  const verdict = (json.inspectionResult?.indexStatusResult?.verdict ?? "NEUTRAL") as IndexationState
-  const canonicalChosen = json.inspectionResult?.indexStatusResult?.googleCanonical ?? null
-  return {
-    state: verdict,
-    indexed: verdict === "PASS",
-    canonicalChosen,
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), URL_INSPECTION_TIMEOUT_MS)
+  try {
+    const res = await fetch(
+      "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ inspectionUrl: url, siteUrl: GSC_PROPERTY }),
+        signal: controller.signal,
+      },
+    )
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`URL inspection ${res.status} for ${url}: ${body}`)
+    }
+    const json = (await res.json()) as InspectResponse
+    const verdict = (json.inspectionResult?.indexStatusResult?.verdict ?? "NEUTRAL") as IndexationState
+    const canonicalChosen = json.inspectionResult?.indexStatusResult?.googleCanonical ?? null
+    return {
+      state: verdict,
+      indexed: verdict === "PASS",
+      canonicalChosen,
+    }
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -246,7 +259,9 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
   ]
 
   // One Search Analytics call covers the whole property.
+  logger.info("[gsc-sync] fetching Search Analytics 28d window", { targetCount: targets.length })
   const performance = await fetchPagePerformance28d(token)
+  logger.info("[gsc-sync] Search Analytics returned", { rowsWithImpressions: performance.size })
 
   let projectsSynced = 0
   let companiesSynced = 0
@@ -254,42 +269,54 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
   let lastError: string | null = null
   const now = new Date().toISOString()
 
-  for (const target of targets) {
-    try {
-      const inspection = await inspectUrl(token, target.url)
-      // Search Analytics indexes pages by their *Google-chosen* canonical, but
-      // we'll match on our declared URL first and fall back to whatever Google
-      // canonicalised to. Pages with no impressions are absent from the map.
-      const perf =
-        performance.get(target.url) ??
-        (inspection.canonicalChosen ? performance.get(inspection.canonicalChosen) : undefined) ??
-        null
-
-      const update = {
-        seo_indexed: inspection.indexed,
-        seo_indexation_state: inspection.state,
-        seo_canonical_chosen: inspection.canonicalChosen,
-        seo_impressions_28d: perf?.impressions ?? 0,
-        seo_clicks_28d: perf?.clicks ?? 0,
-        seo_ctr_28d: perf?.ctr ?? 0,
-        seo_position_28d: perf?.position ?? null,
-        seo_synced_at: now,
+  // Process URL Inspection in batches of 5 in parallel. URL Inspection is the
+  // slow part (1–20s per URL); serial would blow the 300s Vercel timeout on
+  // ~20 URLs. Search Analytics is already a single bulk call. Each batch's
+  // failures are isolated so one bad URL can't poison the whole run.
+  const CONCURRENCY = 5
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY)
+    logger.info("[gsc-sync] batch", { from: i, to: i + batch.length, total: targets.length })
+    const results = await Promise.allSettled(
+      batch.map(async (target) => {
+        const inspection = await inspectUrl(token, target.url)
+        const perf =
+          performance.get(target.url) ??
+          (inspection.canonicalChosen ? performance.get(inspection.canonicalChosen) : undefined) ??
+          null
+        const update = {
+          seo_indexed: inspection.indexed,
+          seo_indexation_state: inspection.state,
+          seo_canonical_chosen: inspection.canonicalChosen,
+          seo_impressions_28d: perf?.impressions ?? 0,
+          seo_clicks_28d: perf?.clicks ?? 0,
+          seo_ctr_28d: perf?.ctr ?? 0,
+          seo_position_28d: perf?.position ?? null,
+          seo_synced_at: now,
+        }
+        const { error } = await supabase
+          .from(target.table)
+          .update(update as any)
+          .eq("id", target.id)
+        if (error) throw error
+        return target.table
+      }),
+    )
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j]
+      const target = batch[j]
+      if (result.status === "fulfilled") {
+        if (result.value === "projects") projectsSynced += 1
+        else companiesSynced += 1
+      } else {
+        errorCount += 1
+        lastError = result.reason instanceof Error ? result.reason.message : String(result.reason)
+        logger.error("[gsc-sync] row failed", { url: target.url, error: lastError })
       }
-      const { error } = await supabase
-        .from(target.table)
-        .update(update as any)
-        .eq("id", target.id)
-      if (error) throw error
-
-      if (target.table === "projects") projectsSynced += 1
-      else companiesSynced += 1
-    } catch (err) {
-      errorCount += 1
-      lastError = err instanceof Error ? err.message : String(err)
-      logger.error("[gsc-sync] row failed", { url: target.url, error: lastError })
     }
   }
 
+  logger.info("[gsc-sync] done", { projectsSynced, companiesSynced, errorCount })
   return {
     projectsSynced,
     companiesSynced,
