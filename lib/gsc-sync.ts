@@ -164,8 +164,11 @@ async function fetchPagePerformance28d(token: string): Promise<Map<string, {
   startDate.setDate(today.getDate() - 28)
   const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
+  // Search Analytics still lives under the legacy Webmasters v3 path —
+  // unlike URL Inspection, which is on searchconsole.googleapis.com v1.
+  // https://developers.google.com/webmaster-tools/v1/searchanalytics/query
   const res = await fetch(
-    `https://searchconsole.googleapis.com/v1/sites/${encodeURIComponent(GSC_PROPERTY)}/searchAnalytics/query`,
+    `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(GSC_PROPERTY)}/searchAnalytics/query`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
