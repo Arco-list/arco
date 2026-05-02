@@ -646,20 +646,21 @@ export function GrowthClient({ initialMetrics }: Props) {
             conversion rate — what fraction of all signups (any role) end up
             creating a draft company. Sits on the divider rather than as a
             connDown on Signups because the two halves are in separate grids
-            and a Card-to-Card vertical line can't bridge them cleanly. */}
-        <div className="relative my-6">
-          <div className="border-t border-[#e5e5e4]" />
-          <div className="absolute left-0" style={{ top: -18 }}>
+            and a Card-to-Card vertical line can't bridge them cleanly.
+            Renders as flex so it can't get clipped or hidden behind the
+            vertical connector line that passes through the centre column. */}
+        <div className="my-6">
+          <div className="flex items-center gap-3" style={{ position: "relative", zIndex: 30 }}>
             <p className="arco-eyebrow text-[#a1a1a0] bg-white pr-2">Clients ↑</p>
+            <div className="flex-1 border-t border-[#e5e5e4]" />
+            {cr.signupToDraft && cr.signupToDraft !== "—" && (
+              <p className="text-[11px] font-medium text-[#6b6b68] bg-white px-2 whitespace-nowrap">
+                Signups → Drafts: {cr.signupToDraft}
+              </p>
+            )}
+            <div className="flex-1 border-t border-[#e5e5e4]" />
           </div>
-          <div className="absolute left-0" style={{ top: 4 }}>
-            <p className="arco-eyebrow text-[#a1a1a0] bg-white pr-2">Professionals ↓</p>
-          </div>
-          {cr.signupToDraft && cr.signupToDraft !== "—" && (
-            <div className="absolute left-1/2 -translate-x-1/2 bg-white px-3" style={{ top: -10 }}>
-              <p className="text-[11px] font-medium text-[#6b6b68]">Signups → Drafts: {cr.signupToDraft}</p>
-            </div>
-          )}
+          <p className="arco-eyebrow text-[#a1a1a0] mt-1">Professionals ↓</p>
         </div>
 
         {/* ── Professionals ───────────────────────────────────────────────── */}
