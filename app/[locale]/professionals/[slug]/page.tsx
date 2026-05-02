@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect } from "next/navigation"
 import { getTranslations } from "next-intl/server"
 
 import { Header } from "@/components/header"
@@ -16,6 +16,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
 import { locales } from "@/i18n/config"
+import { resolveCompanyRedirect } from "@/lib/company-slug"
 
 type PageParams = {
   locale: string
@@ -25,8 +26,13 @@ type PageParams = {
 export const revalidate = 300
 
 export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
-  const { slug } = await params
+  const { slug: requestedSlug } = await params
   const t = await getTranslations("professional_detail")
+  // Resolve through company_redirects so metadata for renamed companies
+  // points at the canonical URL, even if the visitor arrived via the old
+  // slug. The page component below issues the actual 308 redirect.
+  const supabase = await createServerSupabaseClient()
+  const slug = await resolveCompanyRedirect(requestedSlug, supabase)
   const professional = await fetchProfessionalMetadata(slug)
 
   if (!professional) {
@@ -66,15 +72,24 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 }
 
 export default async function ProfessionalDetailPage({ params }: { params: Promise<PageParams> }) {
-  const { slug, locale } = await params
+  const { slug: requestedSlug, locale } = await params
   const t = await getTranslations("professional_detail")
+
+  // Resolve through company_redirects. If the company has been renamed,
+  // 308-redirect to the new canonical URL so Google passes link equity and
+  // existing share links keep working. Cheap one-row lookup against an
+  // indexed `old_slug` column — runs before any expensive fetches.
+  const supabase = await createServerSupabaseClient()
+  const slug = await resolveCompanyRedirect(requestedSlug, supabase)
+  if (slug !== requestedSlug) {
+    permanentRedirect(`/${locale}/professionals/${slug}`)
+  }
 
   // First try normal fetch (listed companies)
   let professional = await fetchProfessionalDetail(slug, { locale })
 
   // If not found, check if current user is an owner/member and allow preview
   if (!professional) {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (user) {

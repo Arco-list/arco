@@ -39,13 +39,25 @@ export default async function OgImage({
 }: {
   params: Promise<{ locale: string; slug: string }>
 }) {
-  const { slug } = await params
+  const { slug: requestedSlug } = await params
   // Service role — the OG endpoint is requested by anonymous link-preview
   // crawlers with no session cookies, and many companies have no active
   // team-member link (common for prospected ones), which makes the usual
   // fetchProfessionalMetadata path return null. Query the cover photo
   // directly so every listed/prospected company gets a branded card.
   const service = createServiceRoleSupabaseClient()
+
+  // One-hop redirect resolve — covers crawlers (Slack, WhatsApp, etc.) that
+  // hit an old slug after a rename. Mirrors the behaviour of the project
+  // OG route. Falls through to "company not found" for deeper chains, which
+  // is acceptable because the resolveCompanyRedirect chain is also one-hop
+  // in practice (we only emit one row per rename).
+  const { data: redirect } = await service
+    .from("company_redirects")
+    .select("new_slug")
+    .eq("old_slug", requestedSlug)
+    .maybeSingle()
+  const slug = redirect?.new_slug ?? requestedSlug
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug)
   const { data: company, error: companyError } = isUuid

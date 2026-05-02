@@ -22,6 +22,7 @@ import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } fro
 import { logger, sanitizeForLogging } from "@/lib/logger"
 import type { Database } from "@/lib/supabase/types"
 import { checkRateLimit } from "@/lib/rate-limit"
+import { slugifyCompanyName, ensureUniqueCompanySlug } from "@/lib/company-slug"
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/svg+xml"]
@@ -393,12 +394,51 @@ export async function updateCompanyProfileAction(input: { name: string; descript
     return { success: false, error: "A company with this name already exists." }
   }
 
+  const updates: Record<string, unknown> = {
+    name: normalizedName,
+    description: normalizedDescription ?? null,
+  }
+
+  // Slug-rename machinery. For non-draft companies (listed / prospected /
+  // unlisted) the old slug may already be in Google's index, so we preserve
+  // it via a `company_redirects` row before updating to the new slug. Draft
+  // companies have a transient slug — it'll be rebuilt cleanly at the
+  // draft → listed transition (see completeCompanySetupAction), so we don't
+  // touch it here to avoid noise.
+  if (normalizedName !== company!.name) {
+    const { data: row } = await supabase
+      .from("companies")
+      .select("status, slug")
+      .eq("id", company!.id)
+      .maybeSingle()
+
+    const currentSlug = (row as { slug?: string | null } | null)?.slug ?? null
+    const status = (row as { status?: string } | null)?.status ?? null
+    const desiredBase = slugifyCompanyName(normalizedName)
+
+    if (currentSlug && desiredBase && desiredBase !== currentSlug && status !== "draft") {
+      try {
+        const newSlug = await ensureUniqueCompanySlug(desiredBase, supabase, company!.id)
+        const { error: redirectErr } = await supabase
+          .from("company_redirects")
+          .insert({ old_slug: currentSlug, new_slug: newSlug, company_id: company!.id } as any)
+        if (redirectErr) {
+          // Don't block the name change on a redirect-write failure (e.g. an
+          // existing redirect row from a prior rename). Keep the old slug;
+          // operator can fix manually.
+          logger.warn("Failed to write company_redirects row; keeping old slug", { companyId: company!.id, oldSlug: currentSlug, newSlug }, redirectErr as unknown as Error)
+        } else {
+          updates.slug = newSlug
+        }
+      } catch (err) {
+        logger.warn("Slug regeneration failed during rename; keeping existing slug", { companyId: company!.id }, err as Error)
+      }
+    }
+  }
+
   const { error: updateError } = await supabase
     .from("companies")
-    .update({
-      name: normalizedName,
-      description: normalizedDescription ?? null,
-    })
+    .update(updates)
     .eq("id", company!.id)
 
   if (updateError) {
@@ -1530,7 +1570,7 @@ export async function completeCompanySetupAction(input: {
   // Find company owned by this user
   const { data: ownedCompany } = await supabase
     .from("companies")
-    .select("id")
+    .select("id, name, slug, status")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -1541,9 +1581,27 @@ export async function completeCompanySetupAction(input: {
 
   // List the company and mark setup as completed
   if (input.listCompany) {
+    // Lock-in moment: regenerate the slug from the current name. While the
+    // company was draft the slug was transient (set at insert from whatever
+    // the name was *then*), and Google never indexed it. Once status flips
+    // to listed the URL becomes the public, indexable contract — so we want
+    // it to match the *current* name. Any future rename of a listed company
+    // goes through updateCompanyProfileAction's redirect path instead.
+    const desiredBase = ownedCompany?.name ? slugifyCompanyName(ownedCompany.name) : null
+    const updates: Record<string, unknown> = { status: "listed", setup_completed: true }
+    if (desiredBase && desiredBase !== ownedCompany?.slug) {
+      try {
+        updates.slug = await ensureUniqueCompanySlug(desiredBase, supabase, companyId)
+      } catch (err) {
+        // Don't block the listing on slug-uniqueness exhaustion — keep the
+        // existing slug and surface a warning. Operator can rename later.
+        logger.warn("Slug regeneration failed at listing time; keeping existing slug", { companyId }, err as Error)
+      }
+    }
+
     const { error: statusErr } = await supabase
       .from("companies")
-      .update({ status: "listed", setup_completed: true })
+      .update(updates)
       .eq("id", companyId)
 
     if (statusErr) {
