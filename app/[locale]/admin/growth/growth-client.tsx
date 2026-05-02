@@ -616,11 +616,12 @@ export function GrowthClient({ initialMetrics }: Props) {
           {/* Row 2: Visitors → Signups → ─── → Contacters (with branches up/down) */}
           <Card label="Visitors" value={posthogData.clientVisitors} metricKey="client_visitors" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={posthogData.clientVisitorsSeries.length > 0 ? posthogData.clientVisitorsSeries : dp("client_visitors")} />
           {/* connDownHeight bridges Signups (top grid, row 2) → Drafts (bottom
-              grid, row 2). The line passes through column 1 of the Savers
-              row (which is empty in column 1) and the Clients/Professionals
-              divider. ~200px total: rowGap 16 + Savers row 80 + rowGap 16 +
-              divider 72 (my-6 + content) + 16 (a touch into bottom grid). */}
-          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={200} timeframe={timeframe} datapoints={dp("client_signups")} />
+              grid, row 2). The line passes through column 1 of:
+                - top grid: rowGap 16 + Savers row 80
+                - divider: my-6 (24+24) + content ~18
+                - bottom grid: marginTop 24 + Responders row 80 (col 1 empty) + rowGap 36
+              Total ≈ 302px. Round up a touch for label clearance. */}
+          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={320} timeframe={timeframe} datapoints={dp("client_signups")} />
           {/* Junction: horizontal line with vertical branches to Sharers (up) and Savers (down) */}
           <div className="relative h-full" style={{ overflow: "visible" }}>
             {/* Horizontal line through center — extends across gap to next column */}
