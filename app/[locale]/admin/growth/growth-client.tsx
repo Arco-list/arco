@@ -265,6 +265,7 @@ export function GrowthClient({ initialMetrics }: Props) {
     const cr = metrics.cohortedRates
     const convMap: Record<string, Array<{ label: string; value: string }>> = {
       drafts: [
+        { label: "← From signup", value: cr.signupToDraft },
         { label: "→ Listed", value: cr.proSignupToActive },
       ],
       actives: [
@@ -283,14 +284,15 @@ export function GrowthClient({ initialMetrics }: Props) {
         { label: "← From active", value: cr.proActiveToSubscriber },
       ],
       client_signups: [
-        { label: "→ Active", value: "—" },
+        { label: "→ Draft (cross-funnel)", value: cr.signupToDraft },
+        { label: "→ Saver", value: cr.clientSignupToSaver },
       ],
       client_actives: [
         { label: "← From signup", value: "—" },
         { label: "→ Saver", value: cr.clientSignupToSaver },
       ],
       savers: [
-        { label: "← From active", value: "—" },
+        { label: "← From signup", value: cr.clientSignupToSaver },
       ],
       inquirers: [
         { label: "← From active", value: "—" },
@@ -640,6 +642,11 @@ export function GrowthClient({ initialMetrics }: Props) {
         </div>
 
         {/* ── Divider with labels ─────────────────────────────────────────── */}
+        {/* The "Signups → Drafts" annotation in the centre is the cross-funnel
+            conversion rate — what fraction of all signups (any role) end up
+            creating a draft company. Sits on the divider rather than as a
+            connDown on Signups because the two halves are in separate grids
+            and a Card-to-Card vertical line can't bridge them cleanly. */}
         <div className="relative my-6">
           <div className="border-t border-[#e5e5e4]" />
           <div className="absolute left-0" style={{ top: -18 }}>
@@ -648,6 +655,11 @@ export function GrowthClient({ initialMetrics }: Props) {
           <div className="absolute left-0" style={{ top: 4 }}>
             <p className="arco-eyebrow text-[#a1a1a0] bg-white pr-2">Professionals ↓</p>
           </div>
+          {cr.signupToDraft && cr.signupToDraft !== "—" && (
+            <div className="absolute left-1/2 -translate-x-1/2 bg-white px-3" style={{ top: -10 }}>
+              <p className="text-[11px] font-medium text-[#6b6b68]">Signups → Drafts: {cr.signupToDraft}</p>
+            </div>
+          )}
         </div>
 
         {/* ── Professionals ───────────────────────────────────────────────── */}
@@ -662,8 +674,8 @@ export function GrowthClient({ initialMetrics }: Props) {
 
           {/* Row 2: main flow */}
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
-          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={dp("drafts")} />
-          <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight="" connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
+          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} timeframe={timeframe} datapoints={dp("drafts")} />
+          <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
           <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Renewers" metricKey="renewals" onCardClick={openDetail} value="—" driver="monetization" connRight="" connUp="" connDown="" timeframe={timeframe} datapoints={dp("renewals")} />
           <Card label="Churners" metricKey="churn" onCardClick={openDetail} value="—" driver="churn" timeframe={timeframe} datapoints={dp("churn")} />

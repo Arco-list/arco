@@ -24,8 +24,13 @@ export type CohortedRates = {
   // Professional cohort: users who signed up as professional in this timeframe
   proSignupToActive: string       // % of pro signups that created a listed company
   proActiveToPublisher: string    // % of active companies that published a project
-  proPublisherToInviter: string   // % of publishers that invited a professional
+  proPublisherToInviter: string   // K-factor: avg invites per publishing project (>100% expected)
   proActiveToSubscriber: string   // % of active companies that subscribed
+  // Cross-funnel: any signup in cohort (pro or client) → created a draft company.
+  // Captures the visitor → signup → draft path including users who signed up
+  // without picking a role and only later created a company. This is what the
+  // SEO loop measures as Step 4 (signup → draft).
+  signupToDraft: string
   // Client cohort: users who signed up as client in this timeframe
   clientSignupToSaver: string     // % of client signups that saved something
   clientSaverToInquirer: string   // placeholder
@@ -214,18 +219,46 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     }
   })
 
-  // How many published companies also invited professionals?
+  // Set of cohort companies that have invited any professional. Used as the
+  // intersection partner with companiesWithPublished to compute a true
+  // unique-to-unique publisher → inviter conversion rate (capped at 100%).
   const companiesWithInvites = new Set<string>()
   allInvites.forEach((inv: any) => {
     if (inv.company_id && cohortActiveIds.has(inv.company_id)) {
       companiesWithInvites.add(inv.company_id)
     }
   })
+  // True conversion: of the publishers, how many ALSO appear in the inviters
+  // set? Earlier code compared the two set sizes directly which produced a
+  // "K-factor" multiplier (e.g. 200% when one publisher generates two invites
+  // worth of edges). Useful number, wrong framing for a conversion arrow.
+  const publishersWhoAlsoInvited = new Set<string>()
+  companiesWithPublished.forEach((id) => {
+    if (companiesWithInvites.has(id)) publishersWhoAlsoInvited.add(id)
+  })
 
-  // How many cohort companies subscribed?
-  const cohortSubscribed = allCompanies.filter(
-    (c: any) => cohortCompanyIds.has(c.id) && paidTiers.includes(c.plan_tier)
+  // Subscribers must intersect with active (listed) companies for the rate to
+  // be a true active → subscriber conversion. Earlier code used
+  // cohortCompanyIds (all cohort companies, listed or not) in the numerator
+  // and cohortActiveIds in the denominator, which can exceed 100% when a
+  // cohort company is paid but never reached "listed".
+  const activeAndSubscribed = allCompanies.filter(
+    (c: any) => cohortActiveIds.has(c.id) && paidTiers.includes(c.plan_tier)
   ).length
+
+  // Cross-funnel signup → draft. "Drafts" in the model = claimed companies
+  // with owner_id set. We count signups in cohort whose user_id maps to a
+  // company (via the professionals table). Unique-user denominator,
+  // unique-user numerator. Captures all paths into draft creation, including
+  // signups who didn't pick a role at signup time and added a company later.
+  const signupsWithDraft = profiles.filter((p: any) => {
+    const cid = userToCompany.get(p.id)
+    if (!cid) return false
+    // Only count if the company is claimed (has owner) — scraped/unclaimed
+    // companies aren't drafts in the funnel sense.
+    const company = allCompanies.find((c: any) => c.id === cid)
+    return company && claimedCompany(company)
+  }).length
 
   // Client cohort
   const clientUserIds = new Set(clientProfiles.map((p: any) => p.id))
@@ -237,8 +270,9 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   const cohortedRates: CohortedRates = {
     proSignupToActive: cohortRate(proUserIds.size, cohortActiveIds.size),
     proActiveToPublisher: cohortRate(cohortActiveIds.size, companiesWithPublished.size),
-    proPublisherToInviter: cohortRate(companiesWithPublished.size, companiesWithInvites.size),
-    proActiveToSubscriber: cohortRate(cohortActiveIds.size, cohortSubscribed),
+    proPublisherToInviter: cohortRate(companiesWithPublished.size, publishersWhoAlsoInvited.size),
+    proActiveToSubscriber: cohortRate(cohortActiveIds.size, activeAndSubscribed),
+    signupToDraft: cohortRate(profiles.length, signupsWithDraft),
     clientSignupToSaver: cohortRate(clientUserIds.size, clientsWhoSaved.size),
     clientSaverToInquirer: "—",
   }
