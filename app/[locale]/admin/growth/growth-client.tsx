@@ -84,9 +84,14 @@ const ROLLING_LABEL: Record<string, string> = {
 }
 
 // Card with optional connectors and sparkline chart
-function Card({ label, value, driver, connRight, connDown, connUp, datapoints, metricKey, onCardClick, timeframe }: {
+// connDownHeight overrides the default G height for the down connector line.
+// Used for cross-grid connections like Signups → Drafts where the line
+// needs to span Savers row + the Clients/Professionals divider + Responders
+// row before reaching the target card.
+function Card({ label, value, driver, connRight, connDown, connUp, connDownHeight, datapoints, metricKey, onCardClick, timeframe }: {
   label: string; value: number | string | null; driver: Driver
   connRight?: string; connDown?: string; connUp?: string
+  connDownHeight?: number | string
   datapoints?: number[]
   metricKey?: string
   onCardClick?: (key: string, value: number | string | null) => void
@@ -106,9 +111,9 @@ function Card({ label, value, driver, connRight, connDown, connUp, datapoints, m
       )}
       {/* Down connector */}
       {connDown !== undefined && (
-        <div className="absolute" style={{ top: "100%", left: "50%", transform: "translateX(-50%)", height: G, zIndex: 20 }}>
+        <div className="absolute" style={{ top: "100%", left: "50%", transform: "translateX(-50%)", height: connDownHeight ?? G, zIndex: 20 }}>
           {connDown && connDown !== "—" && (
-            <span className="absolute text-[10px] font-medium text-[#6b6b68]" style={{ left: 8, top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{connDown}</span>
+            <span className="absolute text-[10px] font-medium text-[#6b6b68] bg-white px-1" style={{ left: 8, top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{connDown}</span>
           )}
           <div className="h-full border-l border-[#d4d4d3]" />
         </div>
@@ -610,7 +615,12 @@ export function GrowthClient({ initialMetrics }: Props) {
 
           {/* Row 2: Visitors → Signups → ─── → Contacters (with branches up/down) */}
           <Card label="Visitors" value={posthogData.clientVisitors} metricKey="client_visitors" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={posthogData.clientVisitorsSeries.length > 0 ? posthogData.clientVisitorsSeries : dp("client_visitors")} />
-          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={dp("client_signups")} />
+          {/* connDownHeight bridges Signups (top grid, row 2) → Drafts (bottom
+              grid, row 2). The line passes through column 1 of the Savers
+              row (which is empty in column 1) and the Clients/Professionals
+              divider. ~200px total: rowGap 16 + Savers row 80 + rowGap 16 +
+              divider 72 (my-6 + content) + 16 (a touch into bottom grid). */}
+          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={200} timeframe={timeframe} datapoints={dp("client_signups")} />
           {/* Junction: horizontal line with vertical branches to Sharers (up) and Savers (down) */}
           <div className="relative h-full" style={{ overflow: "visible" }}>
             {/* Horizontal line through center — extends across gap to next column */}
@@ -642,25 +652,17 @@ export function GrowthClient({ initialMetrics }: Props) {
         </div>
 
         {/* ── Divider with labels ─────────────────────────────────────────── */}
-        {/* The "Signups → Drafts" annotation in the centre is the cross-funnel
-            conversion rate — what fraction of all signups (any role) end up
-            creating a draft company. Sits on the divider rather than as a
-            connDown on Signups because the two halves are in separate grids
-            and a Card-to-Card vertical line can't bridge them cleanly.
-            Renders as flex so it can't get clipped or hidden behind the
-            vertical connector line that passes through the centre column. */}
-        <div className="my-6">
-          <div className="flex items-center gap-3" style={{ position: "relative", zIndex: 30 }}>
+        {/* The Signups → Drafts cross-funnel conversion rate is rendered as a
+            connDown line on the Signups card (with `connDownHeight={200}`)
+            that passes through this divider down to the Drafts card. */}
+        <div className="relative my-6">
+          <div className="border-t border-[#e5e5e4]" />
+          <div className="absolute left-0" style={{ top: -18 }}>
             <p className="arco-eyebrow text-[#a1a1a0] bg-white pr-2">Clients ↑</p>
-            <div className="flex-1 border-t border-[#e5e5e4]" />
-            {cr.signupToDraft && cr.signupToDraft !== "—" && (
-              <p className="text-[11px] font-medium text-[#6b6b68] bg-white px-2 whitespace-nowrap">
-                Signups → Drafts: {cr.signupToDraft}
-              </p>
-            )}
-            <div className="flex-1 border-t border-[#e5e5e4]" />
           </div>
-          <p className="arco-eyebrow text-[#a1a1a0] mt-1">Professionals ↓</p>
+          <div className="absolute left-0" style={{ top: 4 }}>
+            <p className="arco-eyebrow text-[#a1a1a0] bg-white pr-2">Professionals ↓</p>
+          </div>
         </div>
 
         {/* ── Professionals ───────────────────────────────────────────────── */}
