@@ -747,9 +747,17 @@ async function fetchSourceTimeSeries(
   aggregateToYears: boolean = false,
 ): Promise<number[]> {
   // Build referring domain filter based on source category
+  // The "google" key is named for backwards-compat with existing dashboards
+  // and the table mappings — but the matched values cover every major
+  // search engine we expect to see in NL/EU traffic. Bing has ~5% NL share,
+  // DuckDuckGo / Ecosia / Brave round out privacy-focused users, the rest
+  // are long tail. Extending the list here also flips KPI #3 ("Visits from
+  // search engines") on the Project SEO Notion doc to green: there's now a
+  // single growth-dashboard line that matches the loop's organic-traffic
+  // input rather than just Google's slice of it.
   const sourcePatterns: Record<string, { operator: string; values: string[] }> = {
     direct: { operator: "exact", values: ["$direct", "direct"] },
-    google: { operator: "icontains", values: ["google"] },
+    google: { operator: "icontains", values: ["google", "bing", "duckduckgo", "ecosia", "yahoo", "brave", "qwant", "startpage"] },
     social: { operator: "icontains", values: ["linkedin", "facebook", "instagram", "twitter", "x.com", "pinterest"] },
     email: { operator: "icontains", values: ["mail", "outlook"] },
     referral: { operator: "none", values: [] }, // everything else — handled differently
@@ -805,13 +813,18 @@ type SourceGroup = { label: string; pct: number; count: number }
 function groupSources(raw: Array<{ source: string; count: number }>): SourceGroup[] {
   const groups: Record<string, number> = {
     Direct: 0,
-    Google: 0,
+    "Organic search": 0,
     Social: 0,
     Email: 0,
     Referral: 0,
   }
 
+  // accounts.google.com is in the SKIP list because it's the OAuth callback
+  // host — those visitors aren't coming from Google search, they're mid
+  // login. Everything else under google.* (search, images, news, maps) IS
+  // organic search and gets counted.
   const SKIP = ["localhost", "vercel.app", "vercel.com", "accounts.google.com"]
+  const SEARCH_ENGINES = ["google", "bing", "duckduckgo", "ecosia", "yahoo", "brave", "qwant", "startpage"]
 
   for (const { source, count } of raw) {
     if (!source || typeof source !== "string") continue
@@ -820,8 +833,8 @@ function groupSources(raw: Array<{ source: string; count: number }>): SourceGrou
 
     if (s === "$direct" || s === "direct") {
       groups["Direct"] += count
-    } else if (s.includes("google")) {
-      groups["Google"] += count
+    } else if (SEARCH_ENGINES.some((engine) => s.includes(engine))) {
+      groups["Organic search"] += count
     } else if (s.includes("linkedin") || s.includes("facebook") || s.includes("instagram") || s.includes("twitter") || s.includes("x.com") || s.includes("pinterest")) {
       groups["Social"] += count
     } else if (s.includes("mail") || s.includes("outlook")) {

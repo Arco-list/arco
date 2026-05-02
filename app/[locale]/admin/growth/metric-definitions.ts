@@ -41,7 +41,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
     ],
     subs: [
       { key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer", source: "posthog" },
-      { key: "google", label: "Google", definition: "Google search (organic)", source: "posthog" },
+      { key: "google", label: "Organic search", definition: "Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage", source: "posthog" },
       { key: "social", label: "Social", definition: "LinkedIn, Facebook, Instagram, X, Pinterest", source: "posthog" },
       { key: "email", label: "Email", definition: "Gmail, Outlook, email clients", source: "posthog" },
       { key: "referral", label: "Referral", definition: "Other websites linking to Arco", source: "posthog" },
@@ -126,7 +126,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
       { key: "apollo", label: "Sales (Apollo)", definition: "Visitors from Apollo email sequences — clicked a link with ?ref= param", source: "posthog" },
       { key: "invites", label: "Professional invites", definition: "Professionals who clicked the invite link in a project invitation email", source: "posthog" },
       { key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer", source: "posthog" },
-      { key: "google", label: "Google", definition: "Google search (organic)", source: "posthog" },
+      { key: "google", label: "Organic search", definition: "Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage", source: "posthog" },
       { key: "referral", label: "Referral", definition: "Other websites linking to Arco", source: "posthog" },
     ],
   },

@@ -228,8 +228,12 @@ export function MetricDetailModal({ metricKey, currentValue, conversions, source
             <>
               <p className="arco-eyebrow text-[#a1a1a0] mb-3">Traffic sources</p>
               {(() => {
+                // The "google" key remains for historical reasons (PostHog
+                // route, table mapping, definition list) — but the user-facing
+                // label is "Organic search" since the matched values now
+                // cover all major search engines, not just Google.
                 const sourceKeyMap: Record<string, string> = {
-                  "Direct": "direct", "Google": "google", "Social": "social",
+                  "Direct": "direct", "Organic search": "google", "Social": "social",
                   "Email": "email", "Referral": "referral",
                   "Sales (Apollo)": "sales_apollo", "Invites": "invites",
                 }

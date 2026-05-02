@@ -411,7 +411,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "sales_apollo", label: "Sales (Apollo)", definition: "Visitors from Apollo outbound campaigns", total: 0, datapoints: empty8 },
         { key: "invites", label: "Invites", definition: "Visitors from project invite emails", total: 0, datapoints: empty8 },
         { key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer", total: 0, datapoints: empty8 },
-        { key: "google", label: "Organic search", definition: "Google search (organic)", total: 0, datapoints: empty8 },
+        { key: "google", label: "Organic search", definition: "Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage", total: 0, datapoints: empty8 },
         { key: "social", label: "Social", definition: "LinkedIn, Facebook, Instagram, X, Pinterest", total: 0, datapoints: empty8 },
         { key: "email", label: "Email", definition: "Gmail, Outlook, email clients", total: 0, datapoints: empty8 },
         { key: "referral", label: "Referral", definition: "Other websites linking to Arco", total: 0, datapoints: empty8 },
@@ -496,7 +496,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       total: 0, datapoints: empty8, labels,
       subs: [
         { key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer", total: 0, datapoints: empty8 },
-        { key: "google", label: "Organic search", definition: "Google search (organic)", total: 0, datapoints: empty8 },
+        { key: "google", label: "Organic search", definition: "Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage", total: 0, datapoints: empty8 },
         { key: "social", label: "Social", definition: "LinkedIn, Facebook, Instagram, X, Pinterest", total: 0, datapoints: empty8 },
         { key: "email", label: "Email", definition: "Gmail, Outlook, email clients", total: 0, datapoints: empty8 },
         { key: "referral", label: "Referral", definition: "Other websites linking to Arco", total: 0, datapoints: empty8 },
