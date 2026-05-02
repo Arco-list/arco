@@ -176,93 +176,84 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   const companiesLast30d = allCompanies.filter((c: any) => new Date(c.created_at) > d30).length
   const projectsLast30d = allProjects.filter((p: any) => new Date(p.created_at) > d30).length
 
-  // ── Cohorted conversion rates ──────────────────────────────────────────────
-  // Pro cohort: professional users who signed up in this timeframe
-  const proUserIds = new Set(professionalProfiles.map((p: any) => p.id))
+  // ── All-time conversion rates ─────────────────────────────────────────────
+  // Conversion rates use all-time data, not the timeframe-filtered cohort.
+  // Cohort sizes are too small at current scale (~10s of signups) for
+  // weekly/monthly windows to be meaningful — they'd swing wildly between 0%
+  // and 200% on noise. All-time rates are stable and don't change when the
+  // timeframe selector toggles. The "Volume" cards above still respect the
+  // timeframe; only the conversion arrows are all-time.
 
-  // Map user → company via professionals table
+  // Map user → company via professionals table (all-time)
   const userToCompany = new Map<string, string>()
   allProfessionals.forEach((p: any) => {
     if (p.user_id && p.company_id) userToCompany.set(p.user_id, p.company_id)
   })
 
-  // Companies owned by cohort users
+  // Pro user set, all-time
+  const allProfessionalProfilesArr = allProfiles.filter((p: any) => p.user_types?.includes("professional"))
+  const allClientProfilesArr = allProfiles.filter((p: any) => p.user_types?.includes("client"))
+  const proUserIds = new Set(allProfessionalProfilesArr.map((p: any) => p.id))
+  const clientUserIds = new Set(allClientProfilesArr.map((p: any) => p.id))
+
+  // Companies owned by pro users (all-time)
   const cohortCompanyIds = new Set<string>()
   proUserIds.forEach((uid) => {
     const cid = userToCompany.get(uid)
     if (cid) cohortCompanyIds.add(cid)
   })
 
-  // How many of those companies are listed (active)?
+  // Listed (active) subset
   const cohortActiveCompanies = allCompanies.filter(
     (c: any) => cohortCompanyIds.has(c.id) && c.status === "listed"
   )
   const cohortActiveIds = new Set(cohortActiveCompanies.map((c: any) => c.id))
 
-  // How many of those active companies published a project?
+  // Listed companies that published a project
   const companiesWithPublished = new Set<string>()
   allProjects.forEach((p: any) => {
     if (p.status === "published" && p.client_id) {
-      // client_id is the user who created the project — map to company
       const cid = userToCompany.get(p.client_id)
       if (cid && cohortActiveIds.has(cid)) companiesWithPublished.add(cid)
     }
   })
-  // Also check via invites (company_id on project_professionals)
-  allInvites.forEach((inv: any) => {
-    if (inv.company_id && cohortActiveIds.has(inv.company_id)) {
-      // Check if this company's projects include published ones
-      const hasPublished = allProjects.some(
-        (p: any) => p.status === "published" && p.id === inv.project_id
-      )
-      // Simplified: just check if company has any published project
-    }
-  })
 
-  // Set of cohort companies that have invited any professional. Used as the
-  // intersection partner with companiesWithPublished to compute a true
-  // unique-to-unique publisher → inviter conversion rate (capped at 100%).
+  // Listed companies that invited any professional. Intersected with
+  // companiesWithPublished below to give a true publisher → inviter rate
+  // (capped at 100%) rather than the K-factor multiplier the old code
+  // produced when comparing two independent set sizes.
   const companiesWithInvites = new Set<string>()
   allInvites.forEach((inv: any) => {
     if (inv.company_id && cohortActiveIds.has(inv.company_id)) {
       companiesWithInvites.add(inv.company_id)
     }
   })
-  // True conversion: of the publishers, how many ALSO appear in the inviters
-  // set? Earlier code compared the two set sizes directly which produced a
-  // "K-factor" multiplier (e.g. 200% when one publisher generates two invites
-  // worth of edges). Useful number, wrong framing for a conversion arrow.
   const publishersWhoAlsoInvited = new Set<string>()
   companiesWithPublished.forEach((id) => {
     if (companiesWithInvites.has(id)) publishersWhoAlsoInvited.add(id)
   })
 
-  // Subscribers must intersect with active (listed) companies for the rate to
-  // be a true active → subscriber conversion. Earlier code used
-  // cohortCompanyIds (all cohort companies, listed or not) in the numerator
-  // and cohortActiveIds in the denominator, which can exceed 100% when a
-  // cohort company is paid but never reached "listed".
+  // Active → subscribed: must intersect with listed for a true conversion.
+  // Earlier code used cohortCompanyIds (listed or not) which could exceed
+  // 100% when a paid company never reached "listed".
   const activeAndSubscribed = allCompanies.filter(
     (c: any) => cohortActiveIds.has(c.id) && paidTiers.includes(c.plan_tier)
   ).length
 
-  // Cross-funnel signup → draft. "Drafts" in the model = claimed companies
-  // with owner_id set. We count signups in cohort whose user_id maps to a
-  // company (via the professionals table). Unique-user denominator,
-  // unique-user numerator. Captures all paths into draft creation, including
-  // signups who didn't pick a role at signup time and added a company later.
-  const signupsWithDraft = profiles.filter((p: any) => {
+  // Cross-funnel signup → draft. Counts ALL signups (any role) whose user_id
+  // maps to a claimed company. Captures the visit → signup → draft path
+  // including users who signed up without picking a role and only later
+  // created a company.
+  const signupsWithDraft = allProfiles.filter((p: any) => {
     const cid = userToCompany.get(p.id)
     if (!cid) return false
-    // Only count if the company is claimed (has owner) — scraped/unclaimed
-    // companies aren't drafts in the funnel sense.
     const company = allCompanies.find((c: any) => c.id === cid)
     return company && claimedCompany(company)
   }).length
 
-  // Client cohort
-  const clientUserIds = new Set(clientProfiles.map((p: any) => p.id))
-  // How many client signups saved something?
+  // Client signups (all-time) who saved any project or company. clientUserIds
+  // already declared above with the all-time set; we just need the savers
+  // intersection here.
   const clientsWhoSaved = new Set<string>()
   allSavedProjects.forEach((s: any) => { if (clientUserIds.has(s.user_id)) clientsWhoSaved.add(s.user_id) })
   allSavedCompanies.forEach((s: any) => { if (clientUserIds.has(s.user_id)) clientsWhoSaved.add(s.user_id) })
@@ -272,7 +263,7 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     proActiveToPublisher: cohortRate(cohortActiveIds.size, companiesWithPublished.size),
     proPublisherToInviter: cohortRate(companiesWithPublished.size, publishersWhoAlsoInvited.size),
     proActiveToSubscriber: cohortRate(cohortActiveIds.size, activeAndSubscribed),
-    signupToDraft: cohortRate(profiles.length, signupsWithDraft),
+    signupToDraft: cohortRate(allProfiles.length, signupsWithDraft),
     clientSignupToSaver: cohortRate(clientUserIds.size, clientsWhoSaved.size),
     clientSaverToInquirer: "—",
   }
