@@ -108,8 +108,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     savedCompaniesResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
-    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id"),
-    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at"),
+    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id, seo_indexed"),
+    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed"),
     supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
@@ -252,6 +252,52 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     })
   }
   const projectsPerPublisherSeries = bucketProjectsPerPublisher()
+
+  // ── SEO indexation supporting metrics ─────────────────────────────────────
+  // % Companies ranked: of companies that became listed in this period, what
+  // share is currently indexed by Google (seo_indexed = true). seo_indexed
+  // is refreshed nightly by /api/cron/sync-gsc-indexation. Treats NULL as
+  // not-yet-measured — counts toward the denominator but not the numerator,
+  // which matches the lifecycle dashboard convention.
+  const indexedListedDates = makeDatesByUpdated(
+    companies,
+    (c) => c.status === "listed" && claimedCompanies(c) && c.seo_indexed === true,
+  )
+  const indexedListedBuckets = bucket8(indexedListedDates, buckets)
+  const rankedCompaniesPctSeries = activeDates.length > 0
+    ? actives.datapoints.map((listedInBucket: number, i: number) => {
+        const indexedInBucket = indexedListedBuckets.datapoints[i] ?? 0
+        return listedInBucket > 0 ? Math.round((indexedInBucket / listedInBucket) * 100) : 0
+      })
+    : (Array(8).fill(0) as number[])
+  const rankedCompaniesPct = activeDates.length > 0
+    ? Math.round((indexedListedDates.length / activeDates.length) * 100)
+    : 0
+
+  // Total published projects (published_at falls in the period). Different
+  // from the Publishers metric, which counts unique COMPANIES.
+  const publishedProjectDates = projects
+    .filter((p) => p.status === "published" && p.published_at)
+    .map((p) => new Date(p.published_at))
+    .filter((d: Date) => d >= from)
+  const publishedProjectsBuckets = bucket8(publishedProjectDates, buckets)
+
+  // % Projects ranked: of projects published in this period, what share is
+  // indexed by Google.
+  const indexedPublishedDates = projects
+    .filter((p) => p.status === "published" && p.published_at && p.seo_indexed === true)
+    .map((p) => new Date(p.published_at))
+    .filter((d: Date) => d >= from)
+  const indexedPublishedBuckets = bucket8(indexedPublishedDates, buckets)
+  const rankedProjectsPctSeries = publishedProjectDates.length > 0
+    ? publishedProjectsBuckets.datapoints.map((publishedInBucket: number, i: number) => {
+        const indexedInBucket = indexedPublishedBuckets.datapoints[i] ?? 0
+        return publishedInBucket > 0 ? Math.round((indexedInBucket / publishedInBucket) * 100) : 0
+      })
+    : (Array(8).fill(0) as number[])
+  const rankedProjectsPct = publishedProjectDates.length > 0
+    ? Math.round((indexedPublishedDates.length / publishedProjectDates.length) * 100)
+    : 0
 
   // Inviters: unique project-owner companies whose projects received any
   // non-owner project_professionals row created in the bucket window. The
@@ -425,12 +471,16 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     {
       key: "actives", label: "Listed", definition: "Unique first time listed companies", source: "supabase" as MetricSource, driver: "retention",
       total: activeDates.length, ...actives,
-      subs: [],
+      subs: [
+        { key: "ranked_companies", label: "% Companies ranked", definition: "% of companies listed in this period that are indexed by Google", total: rankedCompaniesPct, datapoints: rankedCompaniesPctSeries },
+      ],
     },
     {
       key: "publishers", label: "Publishers", definition: "Unique companies that published at least one project in the period", source: "supabase" as MetricSource, driver: "retention",
       total: totalPublishersInWindow, ...publishers,
       subs: [
+        { key: "published_projects", label: "Published projects", definition: "Total projects published in the period", total: publishedProjectDates.length, datapoints: publishedProjectsBuckets.datapoints },
+        { key: "ranked_projects", label: "% Projects ranked", definition: "% of projects published in this period that are indexed by Google", total: rankedProjectsPct, datapoints: rankedProjectsPctSeries },
         { key: "projects_per_publisher", label: "Projects/publisher", definition: "Avg. published projects per publishing company", total: projectsPerPublisher, datapoints: projectsPerPublisherSeries },
       ],
     },
