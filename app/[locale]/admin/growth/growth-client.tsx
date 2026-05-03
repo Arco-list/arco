@@ -83,12 +83,13 @@ const ROLLING_LABEL: Record<string, string> = {
   years: "this year",
 }
 
-// Card with optional connectors and sparkline chart
-// connDownHeight overrides the default G height for the down connector line.
-// Used for cross-grid connections like Signups → Drafts where the line
-// needs to span Savers row + the Clients/Professionals divider + Responders
-// row before reaching the target card.
-function Card({ label, value, driver, connRight, connDown, connUp, connDownHeight, datapoints, metricKey, onCardClick, timeframe }: {
+// Card with optional connectors and sparkline chart.
+// dataName is a stable identifier for measurement queries — used when a
+// connector line needs to span across grid boundaries (e.g. the
+// Signups → Drafts bridge that crosses the Clients / Professionals
+// divider). connDownHeight overrides the default G height of the down
+// connector when set.
+function Card({ label, value, driver, connRight, connDown, connUp, connDownHeight, datapoints, metricKey, onCardClick, timeframe, dataName }: {
   label: string; value: number | string | null; driver: Driver
   connRight?: string; connDown?: string; connUp?: string
   connDownHeight?: number | string
@@ -96,10 +97,11 @@ function Card({ label, value, driver, connRight, connDown, connUp, connDownHeigh
   metricKey?: string
   onCardClick?: (key: string, value: number | string | null) => void
   timeframe?: string
+  dataName?: string
 }) {
   const c = DRIVER[driver]
   return (
-    <div className="relative h-full" style={{ overflow: "visible" }}>
+    <div className="relative h-full" style={{ overflow: "visible" }} data-card-name={dataName}>
       {/* Right connector */}
       {connRight !== undefined && (
         <div className="absolute" style={{ left: "100%", top: "50%", transform: "translateY(-50%)", width: G, zIndex: 20 }}>
@@ -259,6 +261,30 @@ export function GrowthClient({ initialMetrics }: Props) {
 
   const [detailMetric, setDetailMetric] = useState<string | null>(null)
   const [detailValue, setDetailValue] = useState<number | string | null>(null)
+
+  // The Signups → Drafts cross-grid bridge needs a height that exactly spans
+  // from the bottom of the Signups card to the top of the Drafts card.
+  // Calculating that with rowGap + card height + marginTop arithmetic is
+  // brittle (different deploy environments rendered different gaps;
+  // hardcoded values cycled between under- and over-shooting). Measuring
+  // both cards' bounding rects after mount gives the exact pixel distance.
+  const [signupsDraftsBridgeHeight, setSignupsDraftsBridgeHeight] = useState<number>(280)
+  useEffect(() => {
+    const measure = () => {
+      const sig = document.querySelector('[data-card-name="signups"]')?.getBoundingClientRect()
+      const drf = document.querySelector('[data-card-name="drafts"]')?.getBoundingClientRect()
+      if (!sig || !drf) return
+      const h = drf.top - sig.bottom
+      if (h > 0 && Math.abs(h - signupsDraftsBridgeHeight) > 1) {
+        setSignupsDraftsBridgeHeight(h)
+      }
+    }
+    // Initial measurement after first paint, then on resize. Posthog data
+    // arriving later doesn't change layout so we don't measure on that.
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [view, signupsDraftsBridgeHeight])
 
   const openDetail = (key: string, value: number | string | null) => {
     setDetailMetric(key)
@@ -668,14 +694,10 @@ export function GrowthClient({ initialMetrics }: Props) {
 
           {/* Row 2: Visitors → Signups → ─── → Contacters (with branches up/down) */}
           <Card label="Visitors" value={posthogData.clientVisitors} metricKey="client_visitors" onCardClick={openDetail} driver="acquisition" connRight={visitorToSignup} timeframe={timeframe} datapoints={posthogData.clientVisitorsSeries.length > 0 ? posthogData.clientVisitorsSeries : dp("client_visitors")} />
-          {/* connDownHeight bridges Signups (top grid, row 2) → Drafts (bottom
-              grid, row 2). Traversal: rowGap 16 + Savers row 80 + my-6 48 +
-              divider content ~30 + bottom-grid marginTop 24 + Responders row
-              80 + rowGap 36 + a margin for label/border = ≈ 450 in practice.
-              Iterated empirically: 200 undershot, 320 undershot, 450
-              overshot through Drafts. 380 lands at the top edge of Drafts.
-              If layout changes around this divider, adjust here. */}
-          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={380} timeframe={timeframe} datapoints={dp("client_signups")} />
+          {/* connDownHeight is measured at runtime — see signupsDraftsBridgeHeight
+              effect below. Falls back to 280 on first render before measurement
+              completes; the useEffect updates it once both cards are in the DOM. */}
+          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={signupsDraftsBridgeHeight} dataName="signups" timeframe={timeframe} datapoints={dp("client_signups")} />
           {/* Junction: horizontal line with vertical branches to Sharers (up) and Savers (down) */}
           <div className="relative h-full" style={{ overflow: "visible" }}>
             {/* Horizontal line through center — extends across gap to next column */}
@@ -732,7 +754,7 @@ export function GrowthClient({ initialMetrics }: Props) {
 
           {/* Row 2: main flow */}
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
-          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} timeframe={timeframe} datapoints={dp("drafts")} />
+          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
           <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Renewers" metricKey="renewals" onCardClick={openDetail} value="—" driver="monetization" connRight="" connUp="" connDown="" timeframe={timeframe} datapoints={dp("renewals")} />
