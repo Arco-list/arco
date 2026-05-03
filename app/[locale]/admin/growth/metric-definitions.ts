@@ -218,39 +218,9 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
       { key: "mrr", label: "MRR", definition: "Monthly recurring revenue", source: "supabase" },
     ],
   },
-  renewals: {
-    key: "renewals",
-    title: "Renewals",
-    definition: "Subscriptions that were renewed. Not yet tracked.",
-    source: "supabase",
-    driver: "monetization",
-    user: "professional",
-    subs: [
-      { key: "renewed", label: "Renewed", definition: "Total renewals", source: "supabase" },
-    ],
-  },
-  expansions: {
-    key: "expansions",
-    title: "Expansions",
-    definition: "Subscriptions upgraded to a higher tier. Not yet tracked.",
-    source: "supabase",
-    driver: "monetization",
-    user: "professional",
-    subs: [
-      { key: "upgrades", label: "Upgrades", definition: "Plan upgrades", source: "supabase" },
-    ],
-  },
-  contractions: {
-    key: "contractions",
-    title: "Contractions",
-    definition: "Subscriptions downgraded to a lower tier. Not yet tracked.",
-    source: "supabase",
-    driver: "monetization",
-    user: "professional",
-    subs: [
-      { key: "downgrades", label: "Downgrades", definition: "Plan downgrades", source: "supabase" },
-    ],
-  },
+  // renewals / expansions / contractions removed — these will return as
+  // supporting metrics on the Subscribers card once subscription billing
+  // is wired. They were placeholder definitions with no real data.
   churn: {
     key: "churn",
     title: "Churn",

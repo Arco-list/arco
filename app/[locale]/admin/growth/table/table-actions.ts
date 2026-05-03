@@ -456,27 +456,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "mrr", label: "MRR", definition: "Monthly recurring revenue", total: 0, datapoints: empty8 },
       ],
     },
-    {
-      key: "renewals", label: "Renewers", definition: "Unique subscribers that renewed their plan", source: "supabase" as MetricSource, driver: "monetization",
-      total: 0, datapoints: empty8, labels,
-      subs: [
-        { key: "renewed", label: "Renewed", definition: "Subscriptions renewed this period", total: 0, datapoints: empty8 },
-      ],
-    },
-    {
-      key: "expansions", label: "Expanders", definition: "Unique subscribers that upgraded to a higher plan", source: "supabase" as MetricSource, driver: "monetization",
-      total: 0, datapoints: empty8, labels,
-      subs: [
-        { key: "upgrades", label: "Upgrades", definition: "Subscribers that moved to a higher tier", total: 0, datapoints: empty8 },
-      ],
-    },
-    {
-      key: "contractions", label: "Contractors", definition: "Unique subscribers that downgraded to a lower plan", source: "supabase" as MetricSource, driver: "monetization",
-      total: 0, datapoints: empty8, labels,
-      subs: [
-        { key: "downgrades", label: "Downgrades", definition: "Subscribers that moved to a lower tier", total: 0, datapoints: empty8 },
-      ],
-    },
+    // Renewers / Expanders / Contractors removed from the table view.
+    // They were placeholder rows with no real data and they no longer
+    // appear in the lifecycle view either. Will return as supporting
+    // metrics on the Subscribers card when subscription billing is wired.
     {
       key: "churn", label: "Churners", definition: "Unique companies that cancelled or let their subscription expire", source: "supabase" as MetricSource, driver: "churn",
       total: 0, datapoints: empty8, labels,
