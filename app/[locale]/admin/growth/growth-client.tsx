@@ -674,14 +674,16 @@ export function GrowthClient({ initialMetrics }: Props) {
       <div className="mb-12 overflow-x-auto">
         <div style={{ minWidth: 1100 }}>
 
-        {/* Column headers */}
+        {/* Column headers — Monetization sits in col 3, the column where the
+            Subscribers card lives in the pro grid (and Contacters now sits
+            above Subscribers in the same column). Acquisition (col 0) and
+            Retention (col 2) keep their existing positions. */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: G, marginBottom: 16 }}>
           <p className="arco-eyebrow" style={{ color: DRIVER.acquisition.label }}>Acquisition</p>
           <Empty />
           <p className="arco-eyebrow" style={{ color: DRIVER.retention.label }}>Retention</p>
-          <Empty />
           <p className="arco-eyebrow" style={{ color: DRIVER.monetization.label }}>Monetization</p>
-          <Empty /><Empty />
+          <Empty /><Empty /><Empty />
         </div>
 
         {/* ── Clients ─────────────────────────────────────────────────── */}
@@ -692,28 +694,31 @@ export function GrowthClient({ initialMetrics }: Props) {
           <Card label="Sharers" value={posthogData.sharers} metricKey="sharers" onCardClick={openDetail} driver="retention" connDown="" timeframe={timeframe} datapoints={posthogData.sharersSeries.length > 0 ? posthogData.sharersSeries : dp("sharers")} />
           <Empty /><Empty /><Empty /><Empty />
 
-          {/* Row 2: Visitors → Signups → ─── → Contacters (with branches up/down) */}
+          {/* Row 2: Visitors → Signups → junction (branches up to Sharers,
+              down to Savers). Contacters has been moved to the pro grid
+              above Subscribers, so the horizontal continuation line that
+              previously extended past the junction is gone. */}
           <Card label="Visitors" value={posthogData.clientVisitors} metricKey="client_visitors" onCardClick={openDetail} driver="acquisition" connRight={visitorToSignup} timeframe={timeframe} datapoints={posthogData.clientVisitorsSeries.length > 0 ? posthogData.clientVisitorsSeries : dp("client_visitors")} />
           {/* connDownHeight is measured at runtime — see signupsDraftsBridgeHeight
               effect below. Falls back to 280 on first render before measurement
               completes; the useEffect updates it once both cards are in the DOM. */}
           <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={signupsDraftsBridgeHeight} dataName="signups" timeframe={timeframe} datapoints={dp("client_signups")} />
-          {/* Junction: horizontal line with vertical branches to Sharers (up) and Savers (down) */}
+          {/* Junction: short horizontal stem from Signups (left) to centre,
+              with vertical branches up (Sharers) and down (Savers). */}
           <div className="relative h-full" style={{ overflow: "visible" }}>
-            {/* Horizontal line through center — extends across gap to next column */}
-            <div className="absolute" style={{ left: 0, top: "50%", transform: "translateY(-50%)", width: `calc(100% + ${G}px)`, zIndex: 20 }}>
+            {/* Horizontal stem — only the left half of the column, since
+                there is no Contacters card to the right anymore. */}
+            <div className="absolute" style={{ left: 0, top: "50%", transform: "translateY(-50%)", width: "50%", zIndex: 20 }}>
               <div className="w-full border-t border-[#d4d4d3]" />
             </div>
-            {/* Vertical branch up to Sharers — labelled with the
-                signup → sharer conversion rate. White-bg pill keeps the
-                label readable as it sits on top of the vertical line. */}
+            {/* Vertical branch up to Sharers */}
             <div className="absolute" style={{ left: "50%", transform: "translateX(-50%)", top: -16, bottom: "50%", zIndex: 20 }}>
               <div className="h-full border-l border-[#d4d4d3]" />
               {signupToSharer && signupToSharer !== "—" && (
                 <span className="absolute text-[10px] font-medium text-[#6b6b68] bg-white px-1" style={{ left: 8, top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{signupToSharer}</span>
               )}
             </div>
-            {/* Vertical branch down to Savers — labelled with signup → saver. */}
+            {/* Vertical branch down to Savers */}
             <div className="absolute" style={{ left: "50%", transform: "translateX(-50%)", top: "50%", bottom: -16, zIndex: 20 }}>
               <div className="h-full border-l border-[#d4d4d3]" />
               {cr.clientSignupToSaver && cr.clientSignupToSaver !== "—" && (
@@ -721,14 +726,7 @@ export function GrowthClient({ initialMetrics }: Props) {
               )}
             </div>
           </div>
-          {/* Horizontal continuation line across the empty column to Contacters */}
-          <div className="relative h-full" style={{ overflow: "visible" }}>
-            <div className="absolute" style={{ left: 0, top: "50%", transform: "translateY(-50%)", width: `calc(100% + ${G}px)`, zIndex: 20 }}>
-              <div className="w-full border-t border-[#d4d4d3]" />
-            </div>
-          </div>
-          <Card label="Contacters" metricKey="inquirers" onCardClick={openDetail} value={posthogData.contacters ?? "—"} driver="monetization" timeframe={timeframe} datapoints={dp("inquirers")} />
-          <Empty /><Empty />
+          <Empty /><Empty /><Empty /><Empty />
 
           {/* Row 3: Savers (below the Signups→Contacters line) */}
           <Empty /><Empty />
@@ -753,28 +751,28 @@ export function GrowthClient({ initialMetrics }: Props) {
         {/* ── Professionals ───────────────────────────────────────────────── */}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: G, overflow: "visible", alignItems: "stretch", marginTop: 24 }}>
-          {/* Row 1: Responder, Expansion */}
+          {/* Row 1: Responders (col 2) and Contacters (col 3, above Subscribers).
+              Expanders / Contractors removed — they will be folded back in
+              later as supporting metrics on the Subscribers card. */}
           <Empty /><Empty />
           <Card label="Responders" metricKey="responders" onCardClick={openDetail} value="—" driver="retention" connDown="" timeframe={timeframe} datapoints={dp("responders")} />
-          <Empty />
-          <Card label="Expanders" metricKey="expansions" onCardClick={openDetail} value="—" driver="monetization" connDown="" timeframe={timeframe} datapoints={dp("expansions")} />
-          <Empty /><Empty />
+          <Card label="Contacters" metricKey="inquirers" onCardClick={openDetail} value={posthogData.contacters ?? "—"} driver="monetization" connDown="" timeframe={timeframe} datapoints={dp("inquirers")} />
+          <Empty /><Empty /><Empty />
 
-          {/* Row 2: main flow */}
+          {/* Row 2: main flow. Renewers removed — Subscribers connects
+              directly to Churners. Churners shifted from col 5 → col 4 so
+              the line between them is a single column gap. */}
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
           <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
-          <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
-          <Card label="Renewers" metricKey="renewals" onCardClick={openDetail} value="—" driver="monetization" connRight="" connUp="" connDown="" timeframe={timeframe} datapoints={dp("renewals")} />
+          <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" connUp="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Churners" metricKey="churn" onCardClick={openDetail} value="—" driver="churn" timeframe={timeframe} datapoints={dp("churn")} />
-          <Empty />
+          <Empty /><Empty />
 
-          {/* Row 3: Publisher, Contraction */}
+          {/* Row 3: Publishers only — Contractors removed. */}
           <Empty /><Empty />
           <Card label="Publishers" metricKey="publishers" onCardClick={openDetail} value={metrics.publisherCompanies} driver="retention" connUp="" connDown={cr.proPublisherToInviter} timeframe={timeframe} datapoints={dp("publishers")} />
-          <Empty />
-          <Card label="Contractors" metricKey="contractions" onCardClick={openDetail} value="—" driver="monetization" connUp="" timeframe={timeframe} datapoints={dp("contractions")} />
-          <Empty /><Empty />
+          <Empty /><Empty /><Empty /><Empty />
 
           {/* Row 4: Inviter */}
           <Empty /><Empty />
