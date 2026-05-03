@@ -672,10 +672,10 @@ export function GrowthClient({ initialMetrics }: Props) {
               grid, row 2). Traversal: rowGap 16 + Savers row 80 + my-6 48 +
               divider content ~30 + bottom-grid marginTop 24 + Responders row
               80 + rowGap 36 + a margin for label/border = ≈ 450 in practice.
-              Iterated empirically against the rendered layout — earlier
-              values undershot. If layout changes around this divider, this
-              number will need adjusting. */}
-          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={450} timeframe={timeframe} datapoints={dp("client_signups")} />
+              Iterated empirically: 200 undershot, 320 undershot, 450
+              overshot through Drafts. 380 lands at the top edge of Drafts.
+              If layout changes around this divider, adjust here. */}
+          <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={380} timeframe={timeframe} datapoints={dp("client_signups")} />
           {/* Junction: horizontal line with vertical branches to Sharers (up) and Savers (down) */}
           <div className="relative h-full" style={{ overflow: "visible" }}>
             {/* Horizontal line through center — extends across gap to next column */}
