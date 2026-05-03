@@ -124,6 +124,7 @@ export async function GET(request: NextRequest) {
       clientVisitorsHog,
       apolloVisitorsHog,
       inviteVisitorsHog,
+      contactersCount,
     ] = await Promise.all([
       // All four Sharers metrics (sharers / project_shares / professional_shares
       // / shares_per_client) in a single HogQL query. HogQL instead of
@@ -134,6 +135,12 @@ export async function GET(request: NextRequest) {
       fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, CLIENT_URL_PREDICATE),
       fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, APOLLO_URL_PREDICATE),
       fetchVisitorSeriesHogQL(apiKey, dateFrom, hogqlVisitorInterval, INVITE_URL_PREDICATE),
+      // Distinct people who fired professional_contacted in the window.
+      // Used by the lifecycle dashboard to compute the signup → contacter
+      // conversion rate. lead_responded is similar but the event isn't
+      // wired in product yet, so Responders stays "—" until trackLeadResponded
+      // starts firing.
+      fetchUniqueActorsHogQL(apiKey, "professional_contacted", dateFrom),
     ])
     const sharersSeries = sharesAllSeries.sharersSeries
     const projectSharesSeries = sharesAllSeries.projectSharesSeries
@@ -235,6 +242,7 @@ export async function GET(request: NextRequest) {
       professionalSharesSeries,
       sharesPerClientSeries,
       sharers: uniqueSharers,
+      contacters: contactersCount,
       totalShares,
       projectShares: totalProjectShares ?? 0,
       professionalShares: totalProShares ?? 0,
@@ -412,6 +420,31 @@ async function fetchSharesSeriesHogQL(
     professionalSharesSeries,
     sharesPerClientSeries,
   }
+}
+
+/**
+ * Count distinct identified person_ids that fired a specific event in the
+ * given window. Used for client-side conversion rates like
+ *   signupToContacter = uniqueContacters / totalClientSignups
+ * Caveat: uniq(person_id) includes anonymous people too. PostHog merges
+ * anon → identified after a $identify call, so most active users end up
+ * counted as identified persons. At small scale the conflation is
+ * acceptable; the alternative is filtering by `person.properties` IS NOT
+ * NULL which is fiddly in HogQL and not always reliable.
+ */
+async function fetchUniqueActorsHogQL(
+  apiKey: string,
+  event: string,
+  dateFrom: string,
+): Promise<number> {
+  const query = `
+    SELECT uniq(person_id) AS users
+    FROM events
+    WHERE event = '${event}'
+      AND timestamp >= now() - interval '${hogqlIntervalFor(dateFrom)}'
+  `
+  const rows = await fetchHogQL<{ users: number }>(apiKey, query)
+  return Number(rows[0]?.users ?? 0)
 }
 
 /**

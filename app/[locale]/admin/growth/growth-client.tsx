@@ -209,6 +209,7 @@ export function GrowthClient({ initialMetrics }: Props) {
     proVisitors: number | null
     clientVisitors: number | null
     sharers: number | null
+    contacters: number | null
     sharesPerClient: number
     projectShares: number
     professionalShares: number
@@ -229,7 +230,7 @@ export function GrowthClient({ initialMetrics }: Props) {
     clientSourceSeries: Record<string, number[]>
     proSourceSeries: Record<string, number[]>
     loaded: boolean
-  }>({ proVisitors: null, clientVisitors: null, sharers: null, sharesPerClient: 0, projectShares: 0, professionalShares: 0, apolloVisitors: 0, inviteVisitors: 0, clientActives: 0, clientActivesSeries: [], apolloVisitorsSeries: [], inviteVisitorsSeries: [], proVisitorsSeries: [], clientVisitorsSeries: [], sharersSeries: [], projectSharesSeries: [], professionalSharesSeries: [], sharesPerClientSeries: [], clientSources: [], proSources: [], clientSourceSeries: {}, proSourceSeries: {}, loaded: false })
+  }>({ proVisitors: null, clientVisitors: null, sharers: null, contacters: null, sharesPerClient: 0, projectShares: 0, professionalShares: 0, apolloVisitors: 0, inviteVisitors: 0, clientActives: 0, clientActivesSeries: [], apolloVisitorsSeries: [], inviteVisitorsSeries: [], proVisitorsSeries: [], clientVisitorsSeries: [], sharersSeries: [], projectSharesSeries: [], professionalSharesSeries: [], sharesPerClientSeries: [], clientSources: [], proSources: [], clientSourceSeries: {}, proSourceSeries: {}, loaded: false })
 
   // Surface PostHog API errors instead of silently rendering zeros across the
   // dashboard. The most common cause is POSTHOG_PERSONAL_API_KEY missing in
@@ -268,6 +269,16 @@ export function GrowthClient({ initialMetrics }: Props) {
   const getConversions = (key: string | null) => {
     if (!key || !metrics.cohortedRates) return []
     const cr = metrics.cohortedRates
+    // visitorToSignup / proVisitorToDraft / signupToSharer / signupToContacter
+    // are PostHog ↔ Supabase composite rates — declared further down in this
+    // component (just before the return). Reading them here works because
+    // getConversions is invoked at render time, after all locals exist.
+    const r = {
+      visitorToSignup,
+      proVisitorToDraft,
+      signupToSharer,
+      signupToContacter,
+    }
     const convMap: Record<string, Array<{ label: string; value: string }>> = {
       drafts: [
         { label: "← From signup", value: cr.signupToDraft },
@@ -288,19 +299,31 @@ export function GrowthClient({ initialMetrics }: Props) {
       subscribers: [
         { label: "← From active", value: cr.proActiveToSubscriber },
       ],
+      client_visitors: [
+        { label: "→ Signup", value: r.visitorToSignup },
+      ],
+      pro_visitors: [
+        { label: "→ Draft", value: r.proVisitorToDraft },
+      ],
       client_signups: [
+        { label: "← From visitor", value: r.visitorToSignup },
         { label: "→ Draft (cross-funnel)", value: cr.signupToDraft },
+        { label: "→ Sharer", value: r.signupToSharer },
         { label: "→ Saver", value: cr.clientSignupToSaver },
+        { label: "→ Contacter", value: r.signupToContacter },
       ],
       client_actives: [
         { label: "← From signup", value: "—" },
         { label: "→ Saver", value: cr.clientSignupToSaver },
       ],
+      sharers: [
+        { label: "← From signup", value: r.signupToSharer },
+      ],
       savers: [
         { label: "← From signup", value: cr.clientSignupToSaver },
       ],
       inquirers: [
-        { label: "← From active", value: "—" },
+        { label: "← From signup", value: r.signupToContacter },
       ],
     }
     return convMap[key] ?? []
@@ -338,6 +361,7 @@ export function GrowthClient({ initialMetrics }: Props) {
           proVisitors: d.proVisitors ?? null,
           clientVisitors: d.clientVisitors ?? null,
           sharers: d.sharers ?? null,
+          contacters: d.contacters ?? null,
           sharesPerClient: d.sharesPerClient ?? 0,
           projectShares: d.projectShares ?? 0,
           professionalShares: d.professionalShares ?? 0,
@@ -394,6 +418,7 @@ export function GrowthClient({ initialMetrics }: Props) {
         proVisitors: activeData.proVisitors ?? null,
         clientVisitors: activeData.clientVisitors ?? null,
         sharers: activeData.sharers ?? null,
+        contacters: activeData.contacters ?? null,
         sharesPerClient: activeData.sharesPerClient ?? 0,
         projectShares: activeData.projectShares ?? 0,
         professionalShares: activeData.professionalShares ?? 0,
@@ -485,6 +510,34 @@ export function GrowthClient({ initialMetrics }: Props) {
   const pr = metrics.professionals
   const ho = metrics.clients
   const cr = metrics.cohortedRates
+
+  // Cross-source conversion rates: PostHog (numerator/denominator) ÷ Supabase
+  // for the visitor → signup / visitor → draft pair, or PostHog event
+  // counts ÷ Supabase signup count for the signup → sharer / contacter
+  // pair. These can't live in cohortedRates because actions.ts only sees
+  // Supabase data — composing them here is the simplest cross-source path.
+  //
+  // Caveats:
+  //   - Visitor totals are timeframe-bound (PostHog returns a window), but
+  //     signup/draft totals from Supabase are all-time. The ratio is
+  //     therefore approximate. Visitor windows on /admin/growth typically
+  //     cover the same window the user is reading, so the bias is small in
+  //     practice.
+  //   - PostHog uniq(person_id) for sharer/contacter events includes
+  //     anonymous people who fired the event without ever signing up. At
+  //     low scale this is rare, but the rate can exceed 100% if many anon
+  //     visitors share a project. Capped to 100% for display.
+  const pctRate = (numerator: number | null | undefined, denominator: number | null | undefined): string => {
+    if (!denominator || denominator === 0) return "—"
+    if (numerator == null) return "—"
+    const v = (numerator / denominator) * 100
+    if (!isFinite(v)) return "—"
+    return `${Math.min(Math.round(v), 100)}%`
+  }
+  const visitorToSignup = pctRate(metrics.clientUsers, posthogData.clientVisitors)
+  const proVisitorToDraft = pctRate(metrics.draftCompanies, posthogData.proVisitors)
+  const signupToSharer = pctRate(posthogData.sharers, metrics.clientUsers)
+  const signupToContacter = pctRate(posthogData.contacters, metrics.clientUsers)
 
   return (
     <>
@@ -614,7 +667,7 @@ export function GrowthClient({ initialMetrics }: Props) {
           <Empty /><Empty /><Empty /><Empty />
 
           {/* Row 2: Visitors → Signups → ─── → Contacters (with branches up/down) */}
-          <Card label="Visitors" value={posthogData.clientVisitors} metricKey="client_visitors" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={posthogData.clientVisitorsSeries.length > 0 ? posthogData.clientVisitorsSeries : dp("client_visitors")} />
+          <Card label="Visitors" value={posthogData.clientVisitors} metricKey="client_visitors" onCardClick={openDetail} driver="acquisition" connRight={visitorToSignup} timeframe={timeframe} datapoints={posthogData.clientVisitorsSeries.length > 0 ? posthogData.clientVisitorsSeries : dp("client_visitors")} />
           {/* connDownHeight bridges Signups (top grid, row 2) → Drafts (bottom
               grid, row 2). The line passes through column 1 of:
                 - top grid: rowGap 16 + Savers row 80
@@ -643,7 +696,7 @@ export function GrowthClient({ initialMetrics }: Props) {
               <div className="w-full border-t border-[#d4d4d3]" />
             </div>
           </div>
-          <Card label="Contacters" metricKey="inquirers" onCardClick={openDetail} value="—" driver="monetization" timeframe={timeframe} datapoints={dp("inquirers")} />
+          <Card label="Contacters" metricKey="inquirers" onCardClick={openDetail} value={posthogData.contacters ?? "—"} driver="monetization" timeframe={timeframe} datapoints={dp("inquirers")} />
           <Empty /><Empty />
 
           {/* Row 3: Savers (below the Signups→Contacters line) */}
@@ -677,7 +730,7 @@ export function GrowthClient({ initialMetrics }: Props) {
           <Empty /><Empty />
 
           {/* Row 2: main flow */}
-          <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight="" timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
+          <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
           <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} timeframe={timeframe} datapoints={dp("drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
           <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
