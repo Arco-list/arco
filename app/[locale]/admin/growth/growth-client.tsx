@@ -704,13 +704,21 @@ export function GrowthClient({ initialMetrics }: Props) {
             <div className="absolute" style={{ left: 0, top: "50%", transform: "translateY(-50%)", width: `calc(100% + ${G}px)`, zIndex: 20 }}>
               <div className="w-full border-t border-[#d4d4d3]" />
             </div>
-            {/* Vertical branch up to Sharers */}
+            {/* Vertical branch up to Sharers — labelled with the
+                signup → sharer conversion rate. White-bg pill keeps the
+                label readable as it sits on top of the vertical line. */}
             <div className="absolute" style={{ left: "50%", transform: "translateX(-50%)", top: -16, bottom: "50%", zIndex: 20 }}>
               <div className="h-full border-l border-[#d4d4d3]" />
+              {signupToSharer && signupToSharer !== "—" && (
+                <span className="absolute text-[10px] font-medium text-[#6b6b68] bg-white px-1" style={{ left: 8, top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{signupToSharer}</span>
+              )}
             </div>
-            {/* Vertical branch down to Savers */}
+            {/* Vertical branch down to Savers — labelled with signup → saver. */}
             <div className="absolute" style={{ left: "50%", transform: "translateX(-50%)", top: "50%", bottom: -16, zIndex: 20 }}>
               <div className="h-full border-l border-[#d4d4d3]" />
+              {cr.clientSignupToSaver && cr.clientSignupToSaver !== "—" && (
+                <span className="absolute text-[10px] font-medium text-[#6b6b68] bg-white px-1" style={{ left: 8, top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{cr.clientSignupToSaver}</span>
+              )}
             </div>
           </div>
           {/* Horizontal continuation line across the empty column to Contacters */}
