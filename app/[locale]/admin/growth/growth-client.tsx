@@ -703,12 +703,13 @@ export function GrowthClient({ initialMetrics }: Props) {
               effect below. Falls back to 280 on first render before measurement
               completes; the useEffect updates it once both cards are in the DOM. */}
           <Card label="Signups" value={ho.signups} metricKey="client_signups" onCardClick={openDetail} driver="acquisition" connRight="" connDown={cr.signupToDraft} connDownHeight={signupsDraftsBridgeHeight} dataName="signups" timeframe={timeframe} datapoints={dp("client_signups")} />
-          {/* Junction: short horizontal stem from Signups (left) to centre,
-              with vertical branches up (Sharers) and down (Savers). */}
+          {/* Junction: horizontal stem extends from Signups (left) all the
+              way to Contacters (right, col 3) crossing the column gap.
+              Vertical branches up (Sharers) and down (Savers). */}
           <div className="relative h-full" style={{ overflow: "visible" }}>
-            {/* Horizontal stem — only the left half of the column, since
-                there is no Contacters card to the right anymore. */}
-            <div className="absolute" style={{ left: 0, top: "50%", transform: "translateY(-50%)", width: "50%", zIndex: 20 }}>
+            {/* Horizontal stem: full junction width + gap, so it reaches
+                Contacters' left edge in col 3. */}
+            <div className="absolute" style={{ left: 0, top: "50%", transform: "translateY(-50%)", width: `calc(100% + ${G}px)`, zIndex: 20 }}>
               <div className="w-full border-t border-[#d4d4d3]" />
             </div>
             {/* Vertical branch up to Sharers */}
@@ -726,7 +727,12 @@ export function GrowthClient({ initialMetrics }: Props) {
               )}
             </div>
           </div>
-          <Empty /><Empty /><Empty /><Empty />
+          {/* Contacters lives in the Clients (top) grid at col 3 — same row
+              as Signups, vertically aligned with the Subscribers card in
+              the pro grid (which is also col 3). The Monetization column
+              header sits above this column. */}
+          <Card label="Contacters" metricKey="inquirers" onCardClick={openDetail} value={posthogData.contacters ?? "—"} driver="monetization" timeframe={timeframe} datapoints={dp("inquirers")} />
+          <Empty /><Empty /><Empty />
 
           {/* Row 3: Savers (below the Signups→Contacters line) */}
           <Empty /><Empty />
@@ -751,13 +757,13 @@ export function GrowthClient({ initialMetrics }: Props) {
         {/* ── Professionals ───────────────────────────────────────────────── */}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: G, overflow: "visible", alignItems: "stretch", marginTop: 24 }}>
-          {/* Row 1: Responders (col 2) and Contacters (col 3, above Subscribers).
-              Expanders / Contractors removed — they will be folded back in
-              later as supporting metrics on the Subscribers card. */}
+          {/* Row 1: Responders only. Contacters lives in the Clients grid
+              (top, col 3 — same column as Subscribers below). Expanders /
+              Contractors removed — will be folded back as supporting
+              metrics on the Subscribers card. */}
           <Empty /><Empty />
           <Card label="Responders" metricKey="responders" onCardClick={openDetail} value="—" driver="retention" connDown="" timeframe={timeframe} datapoints={dp("responders")} />
-          <Card label="Contacters" metricKey="inquirers" onCardClick={openDetail} value={posthogData.contacters ?? "—"} driver="monetization" connDown="" timeframe={timeframe} datapoints={dp("inquirers")} />
-          <Empty /><Empty /><Empty />
+          <Empty /><Empty /><Empty /><Empty />
 
           {/* Row 2: main flow. Renewers removed — Subscribers connects
               directly to Churners. Churners shifted from col 5 → col 4 so
@@ -765,7 +771,7 @@ export function GrowthClient({ initialMetrics }: Props) {
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
           <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
-          <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" connUp="" timeframe={timeframe} datapoints={dp("subscribers")} />
+          <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Churners" metricKey="churn" onCardClick={openDetail} value="—" driver="churn" timeframe={timeframe} datapoints={dp("churn")} />
           <Empty /><Empty />
 
