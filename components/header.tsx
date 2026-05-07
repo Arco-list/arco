@@ -409,6 +409,28 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                         </Link>
                       )
                     })}
+                    {(!isLoggedIn || companies.length === 0) && (
+                      <>
+                        <div className="my-1 border-t border-border mx-5" />
+                        {!isLoggedIn ? (
+                          <Link
+                            href="/businesses/architects"
+                            className="block px-5 py-2 text-sm font-normal text-primary hover:opacity-70 transition-colors"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                          >
+                            {t("list_with_us")}
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            className="block w-full text-left px-5 py-2 text-sm font-normal text-primary hover:opacity-70 transition-colors"
+                            onClick={() => { setIsMobileMenuOpen(false); openCreateCompanyModal() }}
+                          >
+                            {t("create_your_company")}
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -491,17 +513,37 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               </div>
             </div>
 
-            {/* Right: Language + Search + Menu */}
+            {/* Right: List with us / Create your company + Language + Search + Menu */}
             <div className="relative flex items-center justify-end gap-3">
+              {/* List with us (logged out) / Create your company (logged in, no company) — desktop only */}
+              {!isLoggedIn ? (
+                <Link
+                  href="/businesses/architects"
+                  className={`hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
+                    transparent && !isScrolled ? "text-white hover:text-white/80" : "text-primary hover:opacity-70"
+                  }`}
+                >
+                  {t("list_with_us")}
+                </Link>
+              ) : companies.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => openCreateCompanyModal()}
+                  className={`hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
+                    transparent && !isScrolled ? "text-white hover:text-white/80" : "text-primary hover:opacity-70"
+                  }`}
+                >
+                  {t("create_your_company")}
+                </button>
+              ) : null}
               {/* Language Switcher */}
               <HeaderLanguageSwitcher isLight={transparent && !isScrolled} />
               {/* Search Icon */}
               <button
                 onClick={toggleSearch}
-                className={`flex items-center justify-center h-8 transition-opacity hover:opacity-70 ${
-                  transparent && !isScrolled ? "text-white" : "text-black"
+                className={`flex items-center justify-center h-8 transition-colors ${
+                  transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                 }`}
-                style={{ opacity: 0.6 }}
                 aria-label="Search"
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -663,6 +705,16 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
                               {t("for_professionals")}
                             </Link>
+                            {isLoggedIn && companies.length === 0 && (
+                              <button
+                                type="button"
+                                className="flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal text-primary hover:opacity-70 transition-colors w-full text-left"
+                                onClick={() => { setIsAccountMenuOpen(false); openCreateCompanyModal() }}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                {t("create_your_company")}
+                              </button>
+                            )}
                           </div>
                           <div className="border-t border-border mx-4" />
                         </>

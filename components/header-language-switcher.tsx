@@ -51,14 +51,13 @@ export function HeaderLanguageSwitcher({ isLight }: { isLight?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`flex items-center justify-center gap-1.5 h-8 text-sm font-normal transition-opacity hover:opacity-70 ${
-          isLight ? "text-white" : "text-black"
+        className={`flex items-center justify-center gap-1.5 h-8 text-sm font-normal transition-colors ${
+          isLight ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
         }`}
         style={{
           border: "none",
           background: "none",
           cursor: "pointer",
-          opacity: 0.6,
         }}
         aria-label="Switch language"
       >
