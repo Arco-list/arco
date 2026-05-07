@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/sync-call-list-to-notion",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/sync-gmail",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

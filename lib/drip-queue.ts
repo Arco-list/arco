@@ -53,6 +53,8 @@ export type CancellationReason =
   | "bounced"             // Resend bounce event
   | "complained"          // Resend complaint event
   | "unsubscribed"        // recipient clicked the List-Unsubscribe link
+  | "replied"             // recipient replied to a marketing send (Gmail
+                          //  sync detected the reply)
   | "user_deleted"        // user account deleted
   | "paused"              // admin clicked Pause — resume will re-enqueue
   | "manual"              // admin clicked Finish sequence (hard stop)
