@@ -281,17 +281,23 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
     // Engagement events for those messages — `metadata.resend_message_id`
     // matches the sent row's `provider_event_id`. Pull the latest event
     // type per message to derive `last_event` for the UI.
+    //
+    // Provider filter is intentionally absent: most engagement comes from
+    // Resend webhooks (provider='resend') but the unsubscribe endpoint
+    // logs with provider='arco' (we own the action, not Resend) — both
+    // need to bubble up to the per-row status.
     const messageIds = sends.map((s) => s.provider_event_id as string)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: eventRows } = await ((supabase as any).from("email_events") as any)
       .select("metadata, event_type, occurred_at")
-      .eq("provider", "resend")
       .neq("event_type", "sent")
       .in("metadata->>resend_message_id", messageIds)
 
     // Rank states so a message that went sent → delivered → opened lands
-    // as `opened` rather than `delivered`. Terminal failure states
-    // (bounced/failed/complained) outrank progress states.
+    // as `opened` rather than `delivered`. Unsubscribed is the recipient-
+    // initiated terminal state and outranks every engagement event — a
+    // click on the unsubscribe link itself otherwise paints the row
+    // "Clicked", which buries the more important "Unsubscribed" signal.
     const STATE_RANK: Record<string, number> = {
       sent: 0,
       delivered: 1,
@@ -300,6 +306,7 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
       bounced: 4,
       complained: 4,
       failed: 4,
+      unsubscribed: 5,
     }
     const latestByMsg = new Map<string, string>()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

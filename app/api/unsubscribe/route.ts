@@ -66,9 +66,31 @@ async function handle(token: string | null): Promise<{ ok: boolean; email?: stri
     logger.error("[unsubscribe] drip cancellation failed", { email, error: err })
   }
 
-  // 3. Log to email_events so the sales UI shows "Unsubscribed" as the
-  //    final engagement state. provider='arco' (not 'resend') because the
-  //    event originates from us, not a Resend webhook.
+  // 3. Attribute the unsubscribe to the recipient's most recent send so
+  //    the /admin/emails Sent table can promote that row's status to
+  //    "Unsubscribed" instead of "Clicked" (the click was on the
+  //    unsubscribe link itself). Token only carries the email — the
+  //    most-recent send is a reasonable proxy for "the email they just
+  //    unsubscribed from" since recipients rarely act on weeks-old mail.
+  let resendMessageId: string | null = null
+  try {
+    const { data: lastSent } = await (supabase as any)
+      .from("email_events")
+      .select("provider_event_id")
+      .eq("provider", "resend")
+      .eq("event_type", "sent")
+      .ilike("recipient_email", email)
+      .order("occurred_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    resendMessageId = (lastSent as { provider_event_id?: string } | null)?.provider_event_id ?? null
+  } catch (err) {
+    logger.error("[unsubscribe] last-send lookup failed", { email, error: err })
+  }
+
+  // 4. Log to email_events. metadata.resend_message_id (when present)
+  //    lets the Sent table query promote that specific row's status to
+  //    Unsubscribed via the existing engagement-event join.
   try {
     await (supabase as any).from("email_events").insert({
       provider: "arco",
@@ -77,12 +99,15 @@ async function handle(token: string | null): Promise<{ ok: boolean; email?: stri
       recipient_email: email,
       campaign_kind: "sales_outbound",
       occurred_at: now,
+      metadata: resendMessageId
+        ? { resend_message_id: resendMessageId, source: "list_unsubscribe" }
+        : { source: "list_unsubscribe" },
     })
   } catch (err) {
     logger.error("[unsubscribe] email_events insert failed", { email, error: err })
   }
 
-  // 4. Log a prospect_events row per affected prospect so the popup's
+  // 5. Log a prospect_events row per affected prospect so the popup's
   //    Event History timeline surfaces the unsubscribe alongside other
   //    funnel events (status changes, sends, etc.).
   if (updated && (updated as Array<{ id: string }>).length > 0) {
@@ -99,7 +124,7 @@ async function handle(token: string | null): Promise<{ ok: boolean; email?: stri
     }
   }
 
-  // 5. Mirror to profiles.notification_preferences for any auth user with
+  // 6. Mirror to profiles.notification_preferences for any auth user with
   //    this email. Keeps the in-app Marketing toggle in sync — a logged-
   //    in user clicking unsubscribe in an email and a logged-in user
   //    flipping the toggle off in settings end up at the same state.

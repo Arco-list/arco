@@ -211,6 +211,7 @@ export default function AdminEmailsPage() {
     clicked: { label: "Clicked", dot: "#7c3aed" },
     bounced: { label: "Bounced", dot: "#dc2626" },
     complained: { label: "Spam", dot: "#dc2626" },
+    unsubscribed: { label: "Unsubscribed", dot: "#dc2626" },
   }
 
   return (
