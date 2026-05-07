@@ -1464,6 +1464,66 @@ export async function sendTransactionalEmail(
     }
 
     console.log(`Email sent: ${template} to ${email} [${locale}] (id: ${data?.id})`)
+
+    // Best-effort: log a 'sent' event row to the unified email_events table.
+    // This becomes the single source of truth for outbound email — every
+    // downstream metric (Sales pros contacted, /admin/emails, prospect
+    // timeline) reads from here. Webhook events (delivered/opened/clicked/
+    // bounced) get inserted by /api/webhooks/resend keyed on the same
+    // resend message id. Failure to log MUST NOT fail the send — the email
+    // already left the building.
+    if (data?.id) {
+      try {
+        const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
+        const supabase = createServiceRoleSupabaseClient()
+        // Granular categorization matters for downstream analytics:
+        //   sales_outbound — cold prospect outreach (prospect-* sequence)
+        //   invite         — pro-discovery invites: professional-invite +
+        //                    new-professional-* invite sequence. team-invite
+        //                    is internal team-member onboarding (a different
+        //                    kind of "invite") and stays transactional.
+        //   transactional  — everything else (auth, lifecycle, project status,
+        //                    domain verification, team onboarding, marketing).
+        let campaignKind: 'sales_outbound' | 'invite' | 'transactional'
+        if (template.startsWith('prospect-')) {
+          campaignKind = 'sales_outbound'
+        } else if (
+          template === 'professional-invite' ||
+          template.startsWith('new-professional-')
+        ) {
+          campaignKind = 'invite'
+        } else {
+          campaignKind = 'transactional'
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('email_events').insert({
+          provider: 'resend',
+          provider_event_id: data.id,
+          event_type: 'sent',
+          recipient_email: email,
+          recipient_user_id: opts.userId ?? null,
+          recipient_company_id: opts.companyId ?? null,
+          campaign_kind: campaignKind,
+          template,
+          subject,
+          locale,
+          occurred_at: new Date().toISOString(),
+          // Mirror the resend id into metadata too so analytics joins
+          // (engagement rows → send row) use a symmetric key:
+          //   `metadata->>'resend_message_id'` on both sides.
+          metadata: { resend_message_id: data.id },
+        })
+      } catch (logErr) {
+        // Don't propagate — Resend already accepted the send. Log loudly.
+        console.error('[email-events] Failed to log sent event', {
+          messageId: data.id,
+          template,
+          email,
+          err: logErr,
+        })
+      }
+    }
+
     return { success: true, messageId: data?.id }
   } catch (error) {
     console.error('Email service error:', error)

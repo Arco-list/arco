@@ -53,6 +53,50 @@ export async function POST(request: NextRequest) {
 
   console.log(`[resend-webhook] ${type} for ${messageId} (${recipientEmail})`)
 
+  // Mirror every engagement event into email_events as the unified source
+  // of truth. Per-table cache writes below stay running unchanged — they
+  // back the existing dashboards. New consumers (growth-table metrics,
+  // /admin/emails refactor, prospect timelines) read from email_events.
+  //
+  // Idempotency: provider_event_id = `${messageId}:${type}:${event.created_at}`.
+  // Webhook retries land the same composite key → upsert dedupes.
+  // Distinct user opens/clicks have different timestamps → distinct rows.
+  // Skip 'email.sent' here — sendTransactionalEmail already inserts that
+  // row directly. Skip 'email.delivery_delayed' — not in our event_type
+  // enum and not analytically interesting.
+  if (messageId) {
+    const eventTypeMap: Record<string, string> = {
+      "email.delivered": "delivered",
+      "email.opened": "opened",
+      "email.clicked": "clicked",
+      "email.bounced": "bounced",
+      "email.complained": "complained",
+      "email.failed": "failed",
+    }
+    const mappedType = eventTypeMap[type]
+    if (mappedType) {
+      try {
+        const occurredAt = event.created_at ?? now
+        const subject = data?.subject ?? null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from("email_events").upsert(
+          {
+            provider: "resend",
+            provider_event_id: `${messageId}:${mappedType}:${occurredAt}`,
+            event_type: mappedType,
+            recipient_email: recipientEmail ?? "",
+            subject,
+            occurred_at: occurredAt,
+            metadata: { resend_message_id: messageId, raw_type: type },
+          },
+          { onConflict: "provider,provider_event_id" },
+        )
+      } catch (err) {
+        console.error("[resend-webhook] Failed to log email_events row", { messageId, type, err })
+      }
+    }
+  }
+
   // Update company_outreach table
   if (messageId) {
     const updateData: Record<string, string> = {}
