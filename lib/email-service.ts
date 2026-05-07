@@ -186,6 +186,51 @@ interface EmailResponse {
   messageId?: string
 }
 
+/**
+ * True when a recipient should not receive marketing/sales sends.
+ * Two gates, OR'd:
+ *
+ *   1. profiles.notification_preferences.marketing === false (in-app
+ *      Marketing toggle off; default ON when the column is null/missing)
+ *   2. any prospects row matching this email has unsubscribed_at set
+ *      (List-Unsubscribe one-click for cold leads)
+ *
+ * The unsubscribe endpoint mirrors writes to both surfaces so either
+ * path's "off" sticks at send time. Errors are logged and treated as
+ * "not opted out" — failing closed (skipping the send) on a transient
+ * Supabase blip would silently kill legitimate marketing flow.
+ */
+async function isOptedOutOfMarketing(email: string, userId: string | null): Promise<boolean> {
+  try {
+    const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
+    const supabase = createServiceRoleSupabaseClient()
+
+    if (userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('notification_preferences')
+        .eq('id', userId)
+        .maybeSingle()
+      const prefs = (profile as { notification_preferences?: { marketing?: boolean } | null } | null)
+        ?.notification_preferences ?? null
+      if (prefs && prefs.marketing === false) return true
+    }
+
+    const { data: prospect } = await (supabase as any)
+      .from('prospects')
+      .select('id')
+      .ilike('email', email)
+      .not('unsubscribed_at', 'is', null)
+      .limit(1)
+    if (Array.isArray(prospect) && prospect.length > 0) return true
+
+    return false
+  } catch (err) {
+    console.error('isOptedOutOfMarketing failed; defaulting to not-opted-out', err)
+    return false
+  }
+}
+
 // ─── Email HTML templates ────────────────────────────────────────────────────
 
 const DEFAULT_LOGO_BASE = 'https://www.arcolist.com'
@@ -1641,15 +1686,35 @@ export async function sendTransactionalEmail(
     }))
 
   // Marketing/sales sends — the three drip series (Showcase / Invite /
-  // Outreach) — get a signed unsubscribe URL injected so the visible
-  // footer link + the List-Unsubscribe headers point at /api/unsubscribe.
-  // Auth + transactional sends skip this entirely; they're not bulk
-  // marketing and Gmail's bulk-sender rules don't apply.
+  // Outreach) plus the homeowner onboarding series — get a signed
+  // unsubscribe URL injected so the visible footer link + the
+  // List-Unsubscribe headers point at /api/unsubscribe. Auth +
+  // transactional sends skip this entirely; they're not bulk marketing
+  // and Gmail's bulk-sender rules don't apply.
   const isMarketingSeries =
     template.startsWith('prospect-')
     || template.startsWith('outreach-')
     || template === 'professional-invite'
     || template.startsWith('new-professional-')
+    || template === 'welcome-homeowner'
+    || template === 'discover-projects'
+    || template === 'find-professionals'
+
+  // Opt-out gate. For marketing templates we honour both surfaces:
+  //   - profiles.notification_preferences.marketing === false  (the in-app
+  //     "Marketing emails" toggle)
+  //   - prospects.unsubscribed_at IS NOT NULL                   (List-
+  //     Unsubscribe one-click for cold leads)
+  // The unsubscribe endpoint mirrors writes to both so either path is a
+  // single source of truth at send time.
+  if (isMarketingSeries) {
+    const optedOut = await isOptedOutOfMarketing(email, opts.userId ?? null)
+    if (optedOut) {
+      console.log(`Skipping ${template} to ${email} — recipient opted out of marketing`)
+      return { success: true, message: 'recipient opted out of marketing' }
+    }
+  }
+
   const unsubscribeUrl = isMarketingSeries ? buildUnsubscribeUrl(email) : null
 
   const { subject, html } = renderer(

@@ -78,7 +78,14 @@ function HomeownerContent() {
   const [isSavingPassword, setIsSavingPassword] = useState(false)
 
   // ── Notification preferences state ──
-  const [notifPrefs, setNotifPrefs] = useState<{ project_updates: boolean; marketing: boolean }>({ project_updates: true, marketing: false })
+  // Marketing default is ON for signed-up users — a soft opt-in pattern
+  // matching standard SaaS practice. Recipients without a profile (cold
+  // prospects) are governed by prospects.unsubscribed_at instead. The
+  // bridge keeps the two surfaces in sync: clicking unsubscribe in a
+  // marketing email also flips this toggle off, and toggling off here
+  // also stamps prospects.unsubscribed_at so a future Apollo re-import
+  // can't accidentally re-enrol them.
+  const [notifPrefs, setNotifPrefs] = useState<{ project_updates: boolean; marketing: boolean }>({ project_updates: true, marketing: true })
 
   // ── Delete account state ──
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -111,7 +118,7 @@ function HomeownerContent() {
     const lang = (profile as { preferred_language?: string | null } | null)?.preferred_language
     setPreferredLanguage(lang === "nl" || lang === "en" ? lang : "")
     const prefs = profile?.notification_preferences as { project_updates?: boolean; marketing?: boolean } | null
-    setNotifPrefs({ project_updates: prefs?.project_updates ?? true, marketing: prefs?.marketing ?? false })
+    setNotifPrefs({ project_updates: prefs?.project_updates ?? true, marketing: prefs?.marketing ?? true })
   }, [isLoading, profile?.first_name, profile?.last_name, user?.email, profile?.location, profile?.phone, profile?.notification_preferences, profile])
 
   useEffect(() => {
@@ -282,6 +289,11 @@ function HomeownerContent() {
   }
 
   // ── Notification toggle ──
+  // Marketing toggle is bridged to prospects.unsubscribed_at so a future
+  // Apollo / invite re-import using the same email can't silently re-
+  // enrol the user. Toggling off stamps the timestamp; toggling back on
+  // clears it (the user explicitly opted back in). Project_updates stays
+  // profile-only — it doesn't have a prospects analogue.
   const handleNotifToggle = useCallback(async (key: "project_updates" | "marketing") => {
     if (!user) return
     const updated = { ...notifPrefs, [key]: !notifPrefs[key] }
@@ -293,6 +305,22 @@ function HomeownerContent() {
     if (error) {
       toast.error("Could not save notification preferences")
       setNotifPrefs(notifPrefs)
+      return
+    }
+
+    if (key === "marketing" && user.email) {
+      const { error: prospectErr } = await supabase
+        .from("prospects")
+        .update({
+          unsubscribed_at: updated.marketing ? null : new Date().toISOString(),
+        } as any)
+        .ilike("email", user.email)
+      if (prospectErr) {
+        // Non-fatal — the profile preference is the primary source of
+        // truth for logged-in users; the prospect mirror is just there
+        // to defend against re-imports.
+        console.error("[notif-toggle] prospect mirror failed", prospectErr)
+      }
     }
   }, [user, supabase, notifPrefs])
 
@@ -675,13 +703,8 @@ function HomeownerContent() {
             {t("notification_description")}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 400 }}>
-            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-              <div>
-                <div className="arco-card-title">{t("project_updates")}</div>
-                <p className="arco-body-text" style={{ margin: 0 }}>{t("project_updates_description")}</p>
-              </div>
-              <ToggleSwitch checked={notifPrefs.project_updates} onChange={() => handleNotifToggle("project_updates")} />
-            </label>
+            {/* Project updates toggle is hidden until we actually have project-
+                update emails to send — it'd be a dead switch otherwise. */}
             <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
               <div>
                 <div className="arco-card-title">{t("marketing_emails")}</div>

@@ -99,6 +99,39 @@ async function handle(token: string | null): Promise<{ ok: boolean; email?: stri
     }
   }
 
+  // 5. Mirror to profiles.notification_preferences for any auth user with
+  //    this email. Keeps the in-app Marketing toggle in sync — a logged-
+  //    in user clicking unsubscribe in an email and a logged-in user
+  //    flipping the toggle off in settings end up at the same state.
+  //    profiles.email may not be the auth email (it isn't always backfilled),
+  //    so we resolve via auth.admin.listUsers as the source of truth.
+  try {
+    const { data: usersList } = await (supabase as any).auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    })
+    const matched = (usersList?.users ?? []).filter(
+      (u: { email?: string | null }) => (u.email ?? "").toLowerCase() === email.toLowerCase(),
+    )
+    for (const u of matched as Array<{ id: string }>) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("notification_preferences")
+        .eq("id", u.id)
+        .maybeSingle()
+      const current = ((prof as any)?.notification_preferences ?? {}) as Record<string, unknown>
+      await (supabase as any)
+        .from("profiles")
+        .update({
+          notification_preferences: { ...current, marketing: false },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", u.id)
+    }
+  } catch (err) {
+    logger.error("[unsubscribe] profile preference mirror failed", { email, error: err })
+  }
+
   logger.info("[unsubscribe] processed", { email, newlyUnsubscribed })
   return { ok: true, email, status: 200 }
 }
