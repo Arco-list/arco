@@ -84,6 +84,9 @@ export type ProspectFunnel = {
   total_emails_sent: number
 }
 
+export type ProspectSortBy = "created_at" | "last_email_sent_at"
+export type ProspectSortDir = "asc" | "desc"
+
 type FetchProspectsFilters = {
   /** Empty / undefined = no status filter (all statuses). Multi-select. */
   statuses?: ProspectStatus[]
@@ -92,16 +95,31 @@ type FetchProspectsFilters = {
   search?: string
   offset?: number
   limit?: number
+  /** Defaults to `created_at` desc to preserve historical behaviour. */
+  sortBy?: ProspectSortBy
+  sortDir?: ProspectSortDir
 }
 
 export async function fetchProspects(filters: FetchProspectsFilters = {}) {
   const supabase = createServiceRoleSupabaseClient()
-  const { statuses, source, sequence, search, offset = 0, limit = 50 } = filters
+  const {
+    statuses,
+    source,
+    sequence,
+    search,
+    offset = 0,
+    limit = 50,
+    sortBy = "created_at",
+    sortDir = "desc",
+  } = filters
 
   let query = supabase
     .from("prospects")
     .select("*")
-    .order("created_at", { ascending: false })
+    // nullsFirst:false so prospects with no contact date sink to the bottom
+    // when sorting by last_email_sent_at — desc would otherwise float every
+    // never-contacted row to the top, which is the opposite of useful.
+    .order(sortBy, { ascending: sortDir === "asc", nullsFirst: false })
     .range(offset, offset + limit - 1)
 
   if (statuses && statuses.length > 0) {
@@ -965,6 +983,11 @@ async function getApolloSequence(prospect: {
   // 1. Resolve the active campaign id + sequence status from the contact.
   let campaignId = prospect.apollo_sequence_id ?? null
   let sequenceStatus = prospect.sequence_status ?? "active"
+  // current_step_position is Apollo's count of how far the contact has
+  // progressed through the sequence. Used below to repair "not_sent"
+  // states on steps the contact has actually passed (Apollo can mark
+  // earlier steps as skipped when a campaign is edited after enrollment).
+  let currentStepPosition = 0
   try {
     const r = await apollo(`/contacts/${prospect.apollo_contact_id}`)
     if (r.ok) {
@@ -973,6 +996,7 @@ async function getApolloSequence(prospect: {
       if (cs) {
         campaignId = cs.emailer_campaign_id ?? campaignId
         sequenceStatus = cs.status ?? sequenceStatus
+        currentStepPosition = (cs.current_step_position as number | undefined) ?? 0
       }
     }
   } catch {
@@ -1085,7 +1109,18 @@ async function getApolloSequence(prospect: {
       continue
     }
 
-    const stepStatus = statusOf(m.status)
+    // Apollo sometimes reports earlier steps as `not_sent`/`unscheduled`/
+    // `skipped` even though the contact has progressed past them — typical
+    // failure mode is a campaign edit after enrollment that orphans the
+    // original step's message. The contact's `current_step_position` is
+    // authoritative for "how far have they actually gone" — if step i is
+    // <= currentStepPosition, the contact has passed it, so override the
+    // bogus "cancelled" status to "sent" with the closest available
+    // timestamp (Apollo's `last_event` or the contact's recorded send time
+    // for that position fall back to null with an inferred-flag note).
+    const rawStatus = statusOf(m.status)
+    const stepStatus: ProspectSequenceStep["status"] =
+      rawStatus === "cancelled" && currentStepPosition >= i ? "sent" : rawStatus
     steps.push({
       template: `apollo-step-${i}`,
       label: m.subject ? (i === 1 && campaignName ? `${campaignName} · ${m.subject}` : m.subject) : baseLabel,

@@ -440,12 +440,17 @@ export function ProspectsClient({
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(initialProspects.length >= 50)
   const [isPending, startTransition] = useTransition()
+  // Sortable date columns. Default matches the historical query order
+  // (created_at desc) so the page renders identically before any header
+  // click.
+  const [sortBy, setSortBy] = useState<"created_at" | "last_email_sent_at">("created_at")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
   // Refresh data
   const refreshData = useCallback(() => {
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 }),
+        fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50, sortBy, sortDir }),
         fetchFunnel(sourceFilter),
       ])
       setProspects(prospectsResult.prospects)
@@ -453,7 +458,7 @@ export function ProspectsClient({
       setOffset(0)
       setHasMore(prospectsResult.prospects.length >= 50)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
 
   // Sync Resend email stats on mount (backfills opened/clicked from Resend API)
   const syncedRef = useRef(false)
@@ -478,7 +483,7 @@ export function ProspectsClient({
     if (newSequence !== undefined) setSequenceFilter(seq)
     startTransition(async () => {
       const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ statuses: s, source: src, sequence: seq, search, offset: 0, limit: 50 }),
+        fetchProspects({ statuses: s, source: src, sequence: seq, search, offset: 0, limit: 50, sortBy, sortDir }),
         fetchFunnel(src),
       ])
       setProspects(prospectsResult.prospects)
@@ -486,7 +491,7 @@ export function ProspectsClient({
       setOffset(0)
       setHasMore(prospectsResult.prospects.length >= 50)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
 
   /** Toggle one status in or out of the multi-select filter. Used by the
    *  funnel cards: click an unselected card → adds; click a selected card
@@ -501,23 +506,38 @@ export function ProspectsClient({
   // Search
   const handleSearch = useCallback(() => {
     startTransition(async () => {
-      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50 })
+      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50, sortBy, sortDir })
       setProspects(result.prospects)
       setOffset(0)
       setHasMore(result.prospects.length >= 50)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
 
   // Load more
   const handleLoadMore = useCallback(() => {
     const newOffset = offset + 50
     startTransition(async () => {
-      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: newOffset, limit: 50 })
+      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: newOffset, limit: 50, sortBy, sortDir })
       setProspects((prev) => [...prev, ...result.prospects])
       setOffset(newOffset)
       setHasMore(result.prospects.length >= 50)
     })
-  }, [offset, statusFilter, sourceFilter, sequenceFilter, search])
+  }, [offset, statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
+
+  // Sort toggle: click same column → flip direction, click different column →
+  // switch column and start at desc (most recent first feels like the default
+  // people want for date columns). Re-fires the query with new ordering.
+  const toggleSort = useCallback((field: "created_at" | "last_email_sent_at") => {
+    const nextDir: "asc" | "desc" = sortBy === field ? (sortDir === "desc" ? "asc" : "desc") : "desc"
+    setSortBy(field)
+    setSortDir(nextDir)
+    startTransition(async () => {
+      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50, sortBy: field, sortDir: nextDir })
+      setProspects(result.prospects)
+      setOffset(0)
+      setHasMore(result.prospects.length >= 50)
+    })
+  }, [sortBy, sortDir, statusFilter, sourceFilter, sequenceFilter, search])
 
   // Expand row
   const openDetails = useCallback((prospect: Prospect) => {
@@ -839,7 +859,7 @@ export function ProspectsClient({
 
       {/* Prospects table */}
       <div className="arco-table-wrap">
-        <table className="arco-table" style={{ minWidth: 1050 }}>
+        <table className="arco-table" style={{ minWidth: 1150 }}>
           <thead>
             <tr>
               <th>Contact</th>
@@ -851,14 +871,37 @@ export function ProspectsClient({
               <th style={{ textAlign: "center" }}>Opened</th>
               <th style={{ textAlign: "center" }}>Clicked</th>
               <th>Source</th>
-              <th style={{ textAlign: "right" }}>Created</th>
+              <th
+                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("created_at")}
+                title="Sort by created"
+              >
+                <span className="inline-flex items-center justify-end gap-1">
+                  Created
+                  {sortBy === "created_at" && (
+                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </span>
+              </th>
+              <th
+                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("last_email_sent_at")}
+                title="Sort by last contacted"
+              >
+                <span className="inline-flex items-center justify-end gap-1">
+                  Last contacted
+                  {sortBy === "last_email_sent_at" && (
+                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </span>
+              </th>
               <th className="w-[40px]"></th>
             </tr>
           </thead>
           <tbody>
             {prospects.length === 0 && (
               <tr>
-                <td colSpan={11} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={12} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No prospects found.
                 </td>
               </tr>
@@ -1001,6 +1044,9 @@ export function ProspectsClient({
                   </td>
                   <td style={{ textTransform: "capitalize" }}>{p.source}</td>
                   <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>{formatDate(p.created_at)}</td>
+                  <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
+                    {p.last_email_sent_at ? formatDate(p.last_email_sent_at) : <span className="text-[#c4c4c2]">—</span>}
+                  </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
