@@ -253,39 +253,107 @@ function resolveTemplate(subject: string, tags: unknown): { id: string; name: st
 }
 
 export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; error?: string }> {
-  if (!process.env.RESEND_API_KEY) {
-    return { emails: [], error: 'RESEND_API_KEY not configured' }
-  }
-
+  // Reads from the unified email_events table (one row per send + one per
+  // engagement event). No more Resend-pagination ceiling, no more subject-
+  // regex fallback for templates — sendTransactionalEmail tags every send
+  // at write time, and webhook handlers fan out engagement rows.
+  //
+  // Filtered to provider='resend' for now since the detail view (fetchEmail
+  // ById) still calls Resend's API for HTML preview. Apollo-sourced sends
+  // exist in email_events but have no detail page.
   try {
-    // Surface up to ~500 most recent emails on the recent-emails tab.
-    // The previous default of 20 hid almost everything.
-    const rows = await fetchAllResendEmails(undefined, 500)
+    const supabase = createServiceRoleSupabaseClient()
 
-    const emails: ResendEmail[] = rows.map((e: any) => {
-      const subject: string = e.subject ?? ''
-      const tagLocale = extractTag(e.tags, 'locale')
-      const locale: ResendEmail['locale'] =
-        tagLocale === 'nl' || tagLocale === 'en'
+    const { data: sendRows, error: sendErr } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("email_events" as any)
+      .select("provider_event_id, recipient_email, subject, occurred_at, template, locale")
+      .eq("provider", "resend")
+      .eq("event_type", "sent")
+      .order("occurred_at", { ascending: false })
+      .limit(500)
+
+    if (sendErr) return { emails: [], error: sendErr.message }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sends = (sendRows ?? []) as any[]
+    if (sends.length === 0) return { emails: [] }
+
+    // Engagement events for those messages — `metadata.resend_message_id`
+    // matches the sent row's `provider_event_id`. Pull the latest event
+    // type per message to derive `last_event` for the UI.
+    const messageIds = sends.map((s) => s.provider_event_id as string)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: eventRows } = await ((supabase as any).from("email_events") as any)
+      .select("metadata, event_type, occurred_at")
+      .eq("provider", "resend")
+      .neq("event_type", "sent")
+      .in("metadata->>resend_message_id", messageIds)
+
+    // Rank states so a message that went sent → delivered → opened lands
+    // as `opened` rather than `delivered`. Terminal failure states
+    // (bounced/failed/complained) outrank progress states.
+    const STATE_RANK: Record<string, number> = {
+      sent: 0,
+      delivered: 1,
+      opened: 2,
+      clicked: 3,
+      bounced: 4,
+      complained: 4,
+      failed: 4,
+    }
+    const latestByMsg = new Map<string, string>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const r of (eventRows ?? []) as any[]) {
+      const msgId = r.metadata?.resend_message_id as string | undefined
+      if (!msgId) continue
+      const existing = latestByMsg.get(msgId) ?? "sent"
+      const candidate = r.event_type as string
+      if ((STATE_RANK[candidate] ?? 0) >= (STATE_RANK[existing] ?? 0)) {
+        latestByMsg.set(msgId, candidate)
+      }
+    }
+
+    const FROM_DEFAULT = process.env.RESEND_FROM_EMAIL ?? "Arco <automated@arcolist.com>"
+
+    const emails: ResendEmail[] = sends.map((s) => {
+      const subject: string = s.subject ?? ""
+      const tagLocale = s.locale as string | null
+      const locale: ResendEmail["locale"] =
+        tagLocale === "nl" || tagLocale === "en"
           ? tagLocale
           : inferLocaleFromSubject(subject)
-      const template = resolveTemplate(subject, e.tags)
+      // Template comes from email_events.template (set by sendTransactionalEmail
+      // tag at write time). For backfilled rows from Resend's list endpoint
+      // — which doesn't return tags — fall back to subject-regex resolution.
+      const storedTemplate = (s.template as string | null) ?? null
+      const resolved = storedTemplate
+        ? { id: storedTemplate, name: TEMPLATE_ID_TO_NAME[storedTemplate] ?? storedTemplate }
+        : resolveTemplate(subject, null)
+      const templateId = resolved?.id ?? null
+      const templateName = resolved?.name ?? null
+      // Mirror sendTransactionalEmail's from-address logic so historical rows
+      // and live rows render the same sender column. prospect-* sequence is
+      // sent personally; everything else is the brand address.
+      const from = templateId?.startsWith("prospect-")
+        ? "Niek van Leeuwen <niek@arcolist.com>"
+        : FROM_DEFAULT
+
       return {
-        id: e.id,
-        from: e.from,
-        to: Array.isArray(e.to) ? e.to : [e.to],
+        id: s.provider_event_id,
+        from,
+        to: [s.recipient_email],
         subject,
-        created_at: e.created_at,
-        last_event: e.last_event ?? 'sent',
-        templateId: template?.id ?? null,
-        templateName: template?.name ?? null,
+        created_at: s.occurred_at,
+        last_event: latestByMsg.get(s.provider_event_id) ?? "sent",
+        templateId,
+        templateName,
         locale,
       }
     })
 
     return { emails }
   } catch (err) {
-    return { emails: [], error: err instanceof Error ? err.message : 'Failed to fetch emails' }
+    return { emails: [], error: err instanceof Error ? err.message : "Failed to fetch emails" }
   }
 }
 
@@ -312,177 +380,96 @@ export type TemplateStats = {
 }
 
 export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: Record<string, TemplateStats>; error?: string }> {
-  if (!process.env.RESEND_API_KEY) {
-    return { stats: {}, error: 'RESEND_API_KEY not configured' }
-  }
-
+  // Reads from the unified email_events table. Replaces the previous flow
+  // (Resend pagination + per-row resend.emails.get() fallback for prospect-
+  // intro) which was a mash of workarounds for the Resend API's pagination
+  // ceiling and silent rate limits. None of that applies to email_events:
+  //   - no pagination ceiling (whole table queryable)
+  //   - per-row engagement state lives in webhook-driven rows already
+  //   - no need for a "company_outreach override" since the source-of-truth
+  //     is now email_events itself
   try {
-    // Pull up to ~1000 most recent emails (10 pages of 100). Previous
-    // call was bounded by Resend's default of 20, which silently capped
-    // every "sends" count.
-    const rows = await fetchAllResendEmails(sinceDate, 1000)
+    const supabase = createServiceRoleSupabaseClient()
 
-    // Reuse SUBJECT_TO_TEMPLATE so stats and the sent-email list stay in
-    // sync. Both ran independent copies of this map previously, which
-    // drifted when PR #4 added Dutch transactional subjects.
+    let query = supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .from("email_events" as any)
+      .select("provider_event_id, metadata, event_type, template, subject, occurred_at")
+      .eq("provider", "resend")
+    if (sinceDate) query = query.gte("occurred_at", sinceDate)
+
+    const { data: eventRows, error } = await query
+    if (error) return { stats: {}, error: error.message }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const events = (eventRows ?? []) as any[]
+
+    // Group by Resend message id, find highest-state event per message.
+    // For a 'sent' row the message id IS the provider_event_id; for an
+    // engagement row it's in metadata.resend_message_id.
+    const STATE_RANK: Record<string, number> = {
+      sent: 0,
+      delivered: 1,
+      opened: 2,
+      clicked: 3,
+      bounced: 4,
+      complained: 4,
+      failed: 4,
+    }
+    type MsgState = { template: string | null; subject: string | null; state: string }
+    const byMsg = new Map<string, MsgState>()
+    for (const e of events) {
+      const msgId = e.event_type === "sent"
+        ? (e.provider_event_id as string)
+        : ((e.metadata?.resend_message_id as string | undefined) ?? null)
+      if (!msgId) continue
+
+      const candidateState = e.event_type as string
+      const candidateTemplate = (e.template as string | null) ?? null
+      const candidateSubject = (e.subject as string | null) ?? null
+      const existing = byMsg.get(msgId)
+      if (!existing) {
+        byMsg.set(msgId, { template: candidateTemplate, subject: candidateSubject, state: candidateState })
+      } else {
+        const newState =
+          (STATE_RANK[candidateState] ?? 0) > (STATE_RANK[existing.state] ?? 0)
+            ? candidateState
+            : existing.state
+        // Sent rows carry the canonical template + subject; preserve them
+        // across engagement events.
+        const newTemplate = existing.template ?? candidateTemplate
+        const newSubject = existing.subject ?? candidateSubject
+        byMsg.set(msgId, { template: newTemplate, subject: newSubject, state: newState })
+      }
+    }
+
     const stats: Record<string, TemplateStats> = {}
-
-    for (const email of rows) {
-      const subject = (email as any).subject ?? ""
-      const event = (email as any).last_event ?? "sent"
-
-      const templateId = resolveTemplate(subject, (email as any).tags)?.id ?? null
+    for (const m of byMsg.values()) {
+      // Backfilled rows from Resend's list endpoint don't have a template
+      // (the API doesn't return tags). Fall back to subject-regex resolution
+      // so historical sends still aggregate into the right bucket.
+      const templateId = m.template ?? resolveTemplate(m.subject ?? "", null)?.id ?? null
       if (!templateId) continue
-
       if (!stats[templateId]) {
         stats[templateId] = { sends: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 }
       }
       stats[templateId].sends++
-      if (event === "delivered" || event === "opened" || event === "clicked") stats[templateId].delivered++
-      if (event === "opened" || event === "clicked") stats[templateId].opened++
-      if (event === "clicked") stats[templateId].clicked++
-      if (event === "bounced") stats[templateId].bounced++
-    }
-
-    // Override prospect-intro with the canonical count from company_outreach.
-    // The intro is sent synchronously by sendProspectEmailAction, which logs
-    // each send as a row in company_outreach with the resend_message_id.
-    // Counting from that table is immune to Resend's pagination ceiling and
-    // immune to subject-regex drift.
-    //
-    // Per-row delivery state lives in last_event_cached, populated live by
-    // the Resend webhook. For rows where the cached state is terminal
-    // (delivered/opened/clicked/bounced/complained) we use the cache and
-    // skip the API call entirely. For rows that are still in-flight or
-    // never got a webhook, we fall back to a sequential, rate-limited
-    // resend.emails.get() and write the result back into the cache so the
-    // next dashboard load gets it for free.
-    try {
-      const supabase = createServiceRoleSupabaseClient()
-      let outreachQuery = supabase
-        .from("company_outreach" as any)
-        .select("id, resend_message_id, last_event_cached, created_at")
-        .eq("template", "prospect_intro")
-      if (sinceDate) outreachQuery = outreachQuery.gte("created_at", sinceDate)
-      const { data: outreachRows, error: outreachError } = await outreachQuery
-
-      if (!outreachError && outreachRows) {
-        const rows = (outreachRows as any[]).filter(
-          (r) => typeof r.resend_message_id === "string" && r.resend_message_id.length > 0,
-        )
-
-        const introStats: TemplateStats = {
-          sends: (outreachRows as any[]).length,
-          delivered: 0,
-          opened: 0,
-          clicked: 0,
-          bounced: 0,
-        }
-
-        // Helper that maps a Resend last_event value into the four counters.
-        const TERMINAL = new Set(["delivered", "opened", "clicked", "bounced", "complained", "failed"])
-        const applyEvent = (event: string) => {
-          const isFailure = event === "queued" || event === "bounced" || event === "complained" || event === "failed"
-          if (!isFailure) introStats.delivered++
-          if (event === "opened" || event === "clicked") introStats.opened++
-          if (event === "clicked") introStats.clicked++
-          if (event === "bounced") introStats.bounced++
-        }
-
-        // Split rows into "use cache" vs "needs fetch".
-        const cacheHit: Array<{ event: string }> = []
-        const needsFetch: Array<{ id: string; messageId: string }> = []
-        for (const r of rows) {
-          const cached = r.last_event_cached as string | null
-          if (cached && TERMINAL.has(cached)) {
-            cacheHit.push({ event: cached })
-          } else {
-            needsFetch.push({ id: r.id, messageId: r.resend_message_id })
-          }
-        }
-
-        for (const { event } of cacheHit) applyEvent(event)
-
-        // Sequential fetch with backoff for the remaining in-flight rows.
-        // Resend's /emails/{id} caps around 2 RPS; previous parallel batches
-        // were being silently rate-limited and dropping most of the count.
-        const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
-
-        const fetchOne = async (id: string): Promise<any | null> => {
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              const res = await resend.emails.get(id)
-              if (res?.error) {
-                const statusCode = (res.error as { statusCode?: number }).statusCode
-                if (statusCode && statusCode !== 429 && statusCode < 500) return null
-                await sleep(500 * (attempt + 1))
-                continue
-              }
-              return res
-            } catch {
-              await sleep(500 * (attempt + 1))
-            }
-          }
-          return null
-        }
-
-        // Collect cache writes so we can flush them in a single update batch.
-        const cacheUpdates: Array<{ outreachRowId: string; event: string }> = []
-
-        for (const { id: outreachRowId, messageId } of needsFetch) {
-          const r = await fetchOne(messageId)
-          // 600ms gap = ~1.6 RPS
-          await sleep(600)
-
-          if (!r) continue
-          const event = ((r.data as any)?.last_event ?? "sent") as string
-          applyEvent(event)
-          // Only persist terminal states — non-terminal sends are still
-          // in flight and could change, no point pinning the cache.
-          if (TERMINAL.has(event)) {
-            cacheUpdates.push({ outreachRowId, event })
-          }
-        }
-
-        // Flush cache writes (best-effort; failures are non-fatal).
-        if (cacheUpdates.length > 0) {
-          const nowIso = new Date().toISOString()
-          await Promise.all(
-            cacheUpdates.map(({ outreachRowId, event }) =>
-              supabase
-                .from("company_outreach" as any)
-                .update({ last_event_cached: event, last_event_cached_at: nowIso })
-                .eq("id", outreachRowId),
-            ),
-          )
-        }
-
-        console.log("[fetchTemplateStats] prospect-intro override:", {
-          totalSends: introStats.sends,
-          totalRows: rows.length,
-          cacheHits: cacheHit.length,
-          fetched: needsFetch.length,
-          cacheWritesPersisted: cacheUpdates.length,
-          computed: { delivered: introStats.delivered, opened: introStats.opened, clicked: introStats.clicked },
-        })
-
-        if (introStats.sends > 0) {
-          stats["prospect-intro"] = introStats
-        }
+      if (m.state === "delivered" || m.state === "opened" || m.state === "clicked") {
+        stats[templateId].delivered++
       }
-    } catch {
-      // Non-fatal: if the company_outreach lookup fails, fall back to the
-      // subject-regex count we already computed above.
+      if (m.state === "opened" || m.state === "clicked") stats[templateId].opened++
+      if (m.state === "clicked") stats[templateId].clicked++
+      if (m.state === "bounced") stats[templateId].bounced++
     }
 
-    // Persist to cache so next page load is instant
+    // Persist to cache so next page load is instant.
     persistStatsCache(stats).catch(() => {})
 
     return { stats }
   } catch (err) {
-    return { stats: {}, error: err instanceof Error ? err.message : 'Failed to fetch stats' }
+    return { stats: {}, error: err instanceof Error ? err.message : "Failed to fetch stats" }
   }
 }
+
 
 /**
  * Load cached email stats from Supabase. Returns instantly — no Resend
