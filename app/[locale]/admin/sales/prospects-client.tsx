@@ -190,6 +190,8 @@ const EVENT_LABELS: Record<string, string> = {
   sequence_finished: "Sequence finished",
   removed_from_funnel: "Removed from funnel",
   unsubscribed: "Unsubscribed",
+  bounced: "Email bounced",
+  complained: "Marked as spam",
   company_invited: "Company invited",
   "prospect.landing_visited": "Visited landing page",
 }
@@ -1763,14 +1765,38 @@ function ContactInline({ contact }: { contact: SalesContact }) {
         <span className={`status-pill-dot ${statusCfg.dot}`} />
         {statusCfg.label}
       </span>
-      {contact.unsubscribedAt ? (
-        <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-          <span className="status-pill-dot bg-red-500" />
-          Unsubscribed
-        </span>
-      ) : (
-        <span className="status-pill">{sourceLabel(contact.source)}</span>
-      )}
+      {(() => {
+        // Suppression states outrank the channel pill — show why we
+        // can't email this contact at a glance. Priority:
+        //   complained > bounced > unsubscribed > (channel pill)
+        // Spam complaints are the most reputation-damaging signal,
+        // bounces are next, recipient unsubscribe is the friendliest.
+        if (contact.complainedAt) {
+          return (
+            <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+              <span className="status-pill-dot bg-red-500" />
+              Spam
+            </span>
+          )
+        }
+        if (contact.bouncedAt) {
+          return (
+            <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+              <span className="status-pill-dot bg-red-500" />
+              Bounced
+            </span>
+          )
+        }
+        if (contact.unsubscribedAt) {
+          return (
+            <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+              <span className="status-pill-dot bg-red-500" />
+              Unsubscribed
+            </span>
+          )
+        }
+        return <span className="status-pill">{sourceLabel(contact.source)}</span>
+      })()}
     </>
   )
 }
@@ -1932,14 +1958,33 @@ function ContactDetailCard({
           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sequenceCfg.dot}`} />
           <span className="text-[11px] text-[#6b6b68] whitespace-nowrap">{sequenceCfg.label}</span>
         </span>
-        {contact.unsubscribedAt ? (
-          <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-            <span className="status-pill-dot bg-red-500" />
-            Unsubscribed
-          </span>
-        ) : (
-          <span className="status-pill shrink-0">{sourceLabel(contact.source)}</span>
-        )}
+        {(() => {
+          if (contact.complainedAt) {
+            return (
+              <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+                <span className="status-pill-dot bg-red-500" />
+                Spam
+              </span>
+            )
+          }
+          if (contact.bouncedAt) {
+            return (
+              <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+                <span className="status-pill-dot bg-red-500" />
+                Bounced
+              </span>
+            )
+          }
+          if (contact.unsubscribedAt) {
+            return (
+              <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+                <span className="status-pill-dot bg-red-500" />
+                Unsubscribed
+              </span>
+            )
+          }
+          return <span className="status-pill shrink-0">{sourceLabel(contact.source)}</span>
+        })()}
         <span
           className={`text-[#a1a1a0] inline-block transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
           style={{ width: 8, fontSize: 10 }}

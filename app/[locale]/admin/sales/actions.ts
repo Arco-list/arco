@@ -60,6 +60,8 @@ export type Prospect = {
   project_published_at: string | null
   converted_at: string | null
   unsubscribed_at: string | null
+  bounced_at: string | null
+  complained_at: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -151,7 +153,7 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
     return { prospects: [] as Prospect[], error: error.message }
   }
 
-  const rows = (data ?? []) as Omit<Prospect, "resolvedContact">[]
+  const rows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
   const prospects = await attachResolvedContacts(supabase, rows)
   return { prospects }
 }
@@ -366,6 +368,14 @@ export type SalesContact = {
    *  red "Unsubscribed" pill alongside the inline contact row so the
    *  admin sees at a glance not to manually re-enrol them. */
   unsubscribedAt: string | null
+  /** Set by the Resend webhook on email.bounced. Same UX role as
+   *  unsubscribedAt — surfaces a red pill on the contact and gates
+   *  every future marketing send. */
+  bouncedAt: string | null
+  /** Set by the Resend webhook on email.complained (recipient marked
+   *  our mail as spam). Treated identically to bounced from a "stop
+   *  sending" perspective. */
+  complainedAt: string | null
   createdAt: string
   updatedAt: string
   refCode: string
@@ -610,7 +620,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, error: error.message }
   }
 
-  const rawRows = (data ?? []) as Omit<Prospect, "resolvedContact">[]
+  const rawRows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
   const prospectsWithContact = await attachResolvedContacts(supabase, rawRows)
 
   // Convert prospect rows to flat SalesContact objects.
@@ -629,6 +639,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     lastEmailOpenedAt: p.last_email_opened_at,
     lastEmailClickedAt: p.last_email_clicked_at,
     unsubscribedAt: (p as any).unsubscribed_at ?? null,
+    bouncedAt: (p as any).bounced_at ?? null,
+    complainedAt: (p as any).complained_at ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     refCode: p.ref_code,
@@ -969,7 +981,7 @@ export async function fetchProspectById(prospectId: string): Promise<Prospect | 
     if (error) console.error("Failed to fetch prospect by id", error)
     return null
   }
-  const [withContact] = await attachResolvedContacts(supabase, [data] as Omit<Prospect, "resolvedContact">[])
+  const [withContact] = await attachResolvedContacts(supabase, [data] as unknown as Omit<Prospect, "resolvedContact">[])
   return withContact ?? null
 }
 

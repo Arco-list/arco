@@ -153,33 +153,58 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // PR 4 of the drip pipeline: bounce / complaint cancels the rest of
-  // the prospect sequence for that company.
+  // Bounce / complaint auto-stop.
   //
-  // We only want to cancel for *prospect* outreach — a bounced welcome
-  // email shouldn't cancel a future prospect intro to the same address
-  // (different sender, different sequence). To check, look up the
-  // company_outreach row by resend_message_id and confirm the template
-  // is one of prospect_*.
-  if ((type === "email.bounced" || type === "email.complained") && messageId) {
-    const { data: outreachRow } = await supabase
-      .from("company_outreach" as any)
-      .select("company_id, template")
-      .eq("resend_message_id", messageId)
-      .maybeSingle()
+  // Once an address bounces or complains it's terminal: every future
+  // send to it (Showcase / Invite / Outreach / Welcome / transactional
+  // alike) will fail or hurt sender reputation. Old logic only stopped
+  // the prospect sequence for one company_id when a prospect-* template
+  // bounced, which left other drips and the homeowner welcome series
+  // happily retrying the same dead address.
+  //
+  // New logic, gated on recipientEmail (not template):
+  //
+  //   1. Stamp prospects.bounced_at / .complained_at on every prospect
+  //      row sharing that email — feeds the isOptedOutOfMarketing gate
+  //      so future sends short-circuit before hitting Resend.
+  //   2. Cancel pending email_drip_queue rows by email (covers every
+  //      company / template, not just one company's prospect sequence).
+  //   3. Log prospect_events rows so the /admin/sales popup timeline
+  //      surfaces the bounce/complaint alongside other funnel events.
+  if ((type === "email.bounced" || type === "email.complained") && recipientEmail) {
+    const isBounce = type === "email.bounced"
+    const stampField = isBounce ? "bounced_at" : "complained_at"
+    const cancelReason = isBounce ? "bounced" : "complained"
 
-    const template = (outreachRow as { template?: string } | null)?.template
-    const companyId = (outreachRow as { company_id?: string } | null)?.company_id
-    if (companyId && template?.startsWith("prospect")) {
-      try {
-        const { cancelPendingDripRows } = await import("@/lib/drip-queue")
-        await cancelPendingDripRows(supabase, {
-          companyId,
-          reason: type === "email.bounced" ? "bounced" : "complained",
-        })
-      } catch (err) {
-        console.error("[resend-webhook] Failed to cancel drip rows on bounce/complaint", err)
+    try {
+      const { data: affected } = await (supabase as any)
+        .from("prospects")
+        .update({ [stampField]: now })
+        .ilike("email", recipientEmail)
+        .is(stampField, null)
+        .select("id")
+
+      const affectedIds = ((affected ?? []) as Array<{ id: string }>).map((r) => r.id)
+      if (affectedIds.length > 0) {
+        await supabase.from("prospect_events").insert(
+          affectedIds.map((id) => ({
+            prospect_id: id,
+            event_type: cancelReason,
+            metadata: { email: recipientEmail, message_id: messageId ?? null },
+          })),
+        )
       }
+
+      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+      await cancelPendingDripRows(supabase, {
+        email: recipientEmail,
+        reason: cancelReason,
+      })
+    } catch (err) {
+      console.error(
+        "[resend-webhook] Failed to record bounce/complaint",
+        { email: recipientEmail, type, err },
+      )
     }
   }
 
