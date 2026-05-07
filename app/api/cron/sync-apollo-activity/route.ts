@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { syncApolloActivity } from "@/lib/apollo-sync"
+import { syncApolloActivity, syncApolloEmailEvents, recomputeProspectLastEmailSentAt } from "@/lib/apollo-sync"
 import { logger } from "@/lib/logger"
 
 /**
@@ -56,6 +56,37 @@ export async function GET(request: NextRequest) {
   try {
     const result = await syncApolloActivity()
 
+    // After the per-prospect aggregate sync, materialize per-message events
+    // into email_events. Best-effort — the activity sync above is the
+    // load-bearing piece for the popup + status transitions; email_events
+    // is for analytics and shouldn't fail the run if it errors.
+    let emailEvents:
+      | Awaited<ReturnType<typeof syncApolloEmailEvents>>
+      | { error: string }
+      | null = null
+    try {
+      emailEvents = await syncApolloEmailEvents()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.error("[sync-apollo-activity] email_events sync failed", { error: message })
+      emailEvents = { error: message }
+    }
+
+    // After per-message events are synced, refresh prospects.last_email_sent_at
+    // from email_events.occurred_at so the table column + popup show the
+    // actual last-send time rather than the last cron run.
+    let lastSentRecompute:
+      | Awaited<ReturnType<typeof recomputeProspectLastEmailSentAt>>
+      | { error: string }
+      | null = null
+    try {
+      lastSentRecompute = await recomputeProspectLastEmailSentAt()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.error("[sync-apollo-activity] last_email_sent_at recompute failed", { error: message })
+      lastSentRecompute = { error: message }
+    }
+
     if (runId) {
       await supabase
         .from("apollo_sync_runs")
@@ -69,7 +100,7 @@ export async function GET(request: NextRequest) {
         .eq("id", runId)
     }
 
-    return NextResponse.json({ ok: true, ...result })
+    return NextResponse.json({ ok: true, ...result, emailEvents, lastSentRecompute })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error("sync-apollo-activity cron failed", { error: err })

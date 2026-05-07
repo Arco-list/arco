@@ -207,7 +207,11 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
       }
 
       if (sequenceId) updates.apollo_sequence_id = sequenceId
-      if (totalSent > 0) updates.last_email_sent_at = new Date().toISOString()
+      // Note: do NOT set last_email_sent_at = now() here. That used to be
+      // the case but it drifted to "last cron run" rather than "actual last
+      // send". The correct value is derived from email_events.occurred_at
+      // by recomputeProspectLastEmailSentAt() — invoked from the cron route
+      // after syncApolloEmailEvents() populates per-message timestamps.
 
       const { error: updateError } = await supabase
         .from("prospects")
@@ -262,4 +266,271 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
 
   logger.info("Apollo activity sync complete", { updated, total: prospects.length, errorCount })
   return { updated, total: prospects.length, errorCount, lastError }
+}
+
+// ─── Per-message email_events sync ─────────────────────────────────────────
+
+/**
+ * Materialize per-message Apollo email events into the unified email_events
+ * table. Replaces the `prospects.last_email_sent_at` aggregate as the source
+ * for any metric that needs accurate per-send bucketing (e.g., growth-table
+ * "Sales pros contacted").
+ *
+ * One run pulls every message across every active campaign that any prospect
+ * is enrolled in, then upserts:
+ *   - 'sent' rows for messages with `completed_at`
+ *   - 'bounced' / 'failed' rows for messages whose status indicates failure
+ *
+ * Idempotency: provider_event_id = `apollo:${msg.id}` for sent,
+ * `apollo:${msg.id}:bounced` / `:failed` for engagement. Upsert on the
+ * unique (provider, provider_event_id) constraint, so re-runs are no-ops for
+ * already-synced messages.
+ *
+ * Apollo's `emailer_messages/search` doesn't expose per-event open/click
+ * timestamps — only aggregate counts on the contact — so we don't emit
+ * 'opened' / 'clicked' rows from this path. Resend webhooks remain the
+ * source for those when we send through Resend; the Apollo side is sales-
+ * outbound only and we accept the gap.
+ */
+export async function syncApolloEmailEvents(): Promise<{
+  campaignsScanned: number
+  messagesProcessed: number
+  eventsUpserted: number
+  errorCount: number
+  lastError: string | null
+}> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  // Build contact_id → (email, prospect_id) map up front to avoid an Apollo
+  // contact-fetch per message. Apollo messages reference `contact_id`; we
+  // already have that mapping in our prospects table.
+  const { data: prospectsRaw } = await supabase
+    .from("prospects")
+    .select("id, email, apollo_contact_id, apollo_sequence_id")
+    .not("apollo_contact_id", "is", null)
+  const prospectsList = (prospectsRaw ?? []) as Array<{
+    id: string; email: string; apollo_contact_id: string; apollo_sequence_id: string | null
+  }>
+
+  const contactIdToProspect = new Map<string, { id: string; email: string }>()
+  const campaignIds = new Set<string>()
+  for (const p of prospectsList) {
+    if (p.apollo_contact_id && p.email) {
+      contactIdToProspect.set(p.apollo_contact_id, { id: p.id, email: p.email })
+    }
+    if (p.apollo_sequence_id) campaignIds.add(p.apollo_sequence_id)
+  }
+
+  if (campaignIds.size === 0) {
+    return { campaignsScanned: 0, messagesProcessed: 0, eventsUpserted: 0, errorCount: 0, lastError: null }
+  }
+
+  let messagesProcessed = 0
+  let eventsUpserted = 0
+  let errorCount = 0
+  let lastError: string | null = null
+
+  for (const campaignId of campaignIds) {
+    try {
+      // Paginate every message in the campaign. Cap at 5 pages × 100 = 500
+      // messages to bound runtime per campaign — large campaigns need a
+      // different design (cursor-based incremental sync).
+      const messages: any[] = []
+      for (let page = 1; page <= 5; page++) {
+        const data = await apolloRequest("/emailer_messages/search", {
+          method: "POST",
+          body: JSON.stringify({
+            q_emailer_campaign_ids: [campaignId],
+            page,
+            per_page: 100,
+          }),
+        })
+        const batch: any[] = data?.emailer_messages ?? []
+        messages.push(...batch)
+        const total = data?.pagination?.total_entries ?? messages.length
+        if (messages.length >= total || batch.length < 100) break
+        // Light throttle between pages to stay polite on the API.
+        await new Promise((r) => setTimeout(r, 200))
+      }
+
+      for (const m of messages) {
+        messagesProcessed++
+        const contactInfo = contactIdToProspect.get(m.contact_id)
+        if (!contactInfo) continue // Apollo contact not in our prospects table
+
+        const status = String(m.status ?? "").toLowerCase()
+        const subject = (m.subject as string | null) ?? null
+        const campaignPos = (m.campaign_position as number | null) ?? null
+        const baseRow = {
+          provider: "apollo",
+          recipient_email: contactInfo.email,
+          prospect_id: contactInfo.id,
+          campaign_kind: "sales_outbound",
+          campaign_id: campaignId,
+          campaign_position: campaignPos,
+          subject,
+          metadata: {
+            apollo_message_id: m.id,
+            apollo_contact_id: m.contact_id,
+            apollo_status: m.status ?? null,
+          },
+        }
+
+        // 'sent' event: any message with a completed_at timestamp.
+        if (m.completed_at && (status === "completed" || status === "sent")) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error } = await (supabase as any).from("email_events").upsert(
+            {
+              ...baseRow,
+              provider_event_id: `apollo:${m.id}`,
+              event_type: "sent",
+              occurred_at: m.completed_at,
+            },
+            { onConflict: "provider,provider_event_id" },
+          )
+          if (error) {
+            errorCount++
+            lastError = error.message
+            logger.error("[apollo-email-events] sent upsert failed", { msgId: m.id, error: error.message })
+          } else {
+            eventsUpserted++
+          }
+        }
+
+        // 'bounced' event: failure indicators. Apollo flags these via
+        // status='bounced' or a non-null bounced_at on the message.
+        if (status === "bounced" || m.bounced_at) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error } = await (supabase as any).from("email_events").upsert(
+            {
+              ...baseRow,
+              provider_event_id: `apollo:${m.id}:bounced`,
+              event_type: "bounced",
+              occurred_at: m.bounced_at ?? m.completed_at ?? new Date().toISOString(),
+            },
+            { onConflict: "provider,provider_event_id" },
+          )
+          if (error) {
+            errorCount++
+            lastError = error.message
+          } else {
+            eventsUpserted++
+          }
+        }
+
+        // 'failed' event: terminal non-bounce failure (e.g., suppression list,
+        // no_email_on_record, unsubscribed).
+        if (status === "failed" || m.failure_reason) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error } = await (supabase as any).from("email_events").upsert(
+            {
+              ...baseRow,
+              provider_event_id: `apollo:${m.id}:failed`,
+              event_type: "failed",
+              occurred_at: m.completed_at ?? new Date().toISOString(),
+              metadata: {
+                ...baseRow.metadata,
+                failure_reason: m.failure_reason ?? m.not_sent_reason ?? null,
+              },
+            },
+            { onConflict: "provider,provider_event_id" },
+          )
+          if (error) {
+            errorCount++
+            lastError = error.message
+          } else {
+            eventsUpserted++
+          }
+        }
+      }
+    } catch (err) {
+      errorCount++
+      lastError = err instanceof Error ? err.message : String(err)
+      logger.error("[apollo-email-events] campaign sync failed", { campaignId, error: lastError })
+    }
+  }
+
+  logger.info("[apollo-email-events] sync complete", {
+    campaignsScanned: campaignIds.size,
+    messagesProcessed,
+    eventsUpserted,
+    errorCount,
+  })
+  return {
+    campaignsScanned: campaignIds.size,
+    messagesProcessed,
+    eventsUpserted,
+    errorCount,
+    lastError,
+  }
+}
+
+// ─── Refresh prospects.last_email_sent_at from email_events ─────────────────
+
+/**
+ * Recompute prospects.last_email_sent_at from the canonical email_events
+ * sent timestamps. Run after syncApolloEmailEvents (and any Resend-side
+ * sales_outbound send) so the prospect cache reflects the real "last
+ * contacted" time rather than the last cron run.
+ *
+ * Matches by lowercased email — prospects.email is treated as canonical.
+ * Captures both Apollo and Resend sales_outbound sends since both write
+ * email_events with campaign_kind='sales_outbound'.
+ */
+export async function recomputeProspectLastEmailSentAt(): Promise<{ updated: number; error: string | null }> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  // Use a CTE-style update via PostgREST. PostgREST doesn't expose CTEs
+  // directly, so we do it in two passes: pull max(occurred_at) per email
+  // from email_events, then update prospects in a batch.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: maxRows, error: readErr } = await (supabase as any)
+    .from("email_events")
+    .select("recipient_email, occurred_at")
+    .eq("event_type", "sent")
+    .eq("campaign_kind", "sales_outbound")
+    .neq("recipient_email", "")
+
+  if (readErr) {
+    logger.error("[apollo-email-events] recompute read failed", { error: readErr.message })
+    return { updated: 0, error: readErr.message }
+  }
+
+  // Build email → max(occurred_at) map.
+  const maxByEmail = new Map<string, string>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (maxRows ?? []) as any[]) {
+    const key = String(r.recipient_email).toLowerCase()
+    const ts = r.occurred_at as string
+    const existing = maxByEmail.get(key)
+    if (!existing || ts > existing) maxByEmail.set(key, ts)
+  }
+
+  if (maxByEmail.size === 0) return { updated: 0, error: null }
+
+  // Pull current prospect timestamps to detect changes (avoid no-op writes).
+  const { data: prospects, error: pErr } = await supabase
+    .from("prospects")
+    .select("id, email, last_email_sent_at")
+    .not("email", "is", null)
+
+  if (pErr || !prospects) {
+    logger.error("[apollo-email-events] recompute prospects fetch failed", { error: pErr?.message })
+    return { updated: 0, error: pErr?.message ?? "fetch failed" }
+  }
+
+  let updated = 0
+  for (const p of prospects as Array<{ id: string; email: string; last_email_sent_at: string | null }>) {
+    const target = maxByEmail.get(p.email.toLowerCase())
+    if (!target) continue
+    if (p.last_email_sent_at === target) continue
+    const { error: uErr } = await supabase
+      .from("prospects")
+      .update({ last_email_sent_at: target } as never)
+      .eq("id", p.id)
+    if (!uErr) updated++
+  }
+
+  logger.info("[apollo-email-events] recompute complete", { updated })
+  return { updated, error: null }
 }
