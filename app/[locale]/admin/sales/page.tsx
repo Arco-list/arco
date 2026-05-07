@@ -1,6 +1,10 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProspectsClient } from "./prospects-client"
-import { fetchFunnel, fetchLatestApolloSyncRuns, fetchProspects, syncPlatformProspects } from "./actions"
+import {
+  fetchLatestApolloSyncRuns,
+  fetchSalesCompanies,
+  syncPlatformProspects,
+} from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -10,13 +14,13 @@ export default async function ProspectsPage() {
 
   const supabase = createServiceRoleSupabaseClient()
 
-  // fetchProspects handles the resolvedContact join (profiles + auth email
-  // + company owner) so the Contact cell matches the admin/companies Owner
-  // cell once a prospect advances to Signup / Draft / Listed.
-  const { prospects } = await fetchProspects({ limit: 50 })
-  const { funnel } = await fetchFunnel()
+  // One-row-per-company aggregation. fetchSalesCompanies bakes the
+  // claimed-company metadata (logo, owner, primary service) into each
+  // row, so we no longer need a separate companyMap join here.
+  const { companies, totalCompanies, funnel } = await fetchSalesCompanies({ limit: 50 })
+  const totalEmailsSent = companies.reduce((sum, c) => sum + c.emailsSent, 0)
 
-  // Most recently used Apollo list ID — surfaced in the Status Guide
+  // Most recently used Apollo list ID — surfaced in the Apollo Sync
   // popup so the admin can see at a glance which list feeds sales.
   const { data: lastListRow } = await supabase
     .from("prospects")
@@ -36,31 +40,15 @@ export default async function ProspectsPage() {
     .select("id", { count: "exact", head: true })
     .eq("source", "apollo")
 
-  // Fetch company metadata (logo, services, city) for linked prospects
-  const companyIds = [...new Set(prospects.map((p) => p.company_id).filter((id): id is string => Boolean(id)))]
-  let companyMap: Record<string, { logoUrl: string | null; services: string[]; city: string | null }> = {}
-  if (companyIds.length > 0) {
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, logo_url, city, primary_service:categories!companies_primary_service_id_fkey(name)")
-      .in("id", companyIds)
-    for (const c of companies ?? []) {
-      companyMap[c.id] = {
-        logoUrl: c.logo_url ?? null,
-        services: [(c.primary_service as any)?.name].filter(Boolean),
-        city: c.city ?? null,
-      }
-    }
-  }
-
   return (
     <div className="min-h-screen bg-white">
       <div className="discover-page-title">
         <div className="wrap">
           <ProspectsClient
-            initialProspects={prospects}
+            initialCompanies={companies}
+            initialTotalCompanies={totalCompanies}
             initialFunnel={funnel}
-            companyMap={companyMap}
+            initialEmailsSent={totalEmailsSent}
             currentApolloListId={currentApolloListId}
             apolloSyncRuns={apolloSyncRuns}
             apolloProspectsCount={apolloProspectsCount ?? 0}

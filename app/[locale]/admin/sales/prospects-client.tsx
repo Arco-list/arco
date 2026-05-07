@@ -3,28 +3,31 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { toast } from "sonner"
 import {
-  fetchProspects,
+  fetchSalesCompanies,
+  fetchProspectById,
   fetchProspectEvents,
-  updateProspectStatus,
-  deleteProspect,
-  fetchFunnel,
+  fetchLatestApolloSyncRuns,
   startProspectSequence,
-  updateProspectEmail,
   pauseProspectSequence,
   resumeProspectSequence,
   restartProspectSequence,
   finishProspectSequence,
+  removeProspectFromFunnel,
+  updateProspectEmail,
   getProspectSequence,
+  getProspectInviteContext,
+  syncResendEmailStats,
   type Prospect,
-  type ProspectFunnel,
-  type ProspectStatus,
   type ProspectEvent,
   type ProspectSequenceStep,
-  type SequenceStatus,
-  syncResendEmailStats,
-  getProspectInviteContext,
+  type ProspectStatus,
   type ProspectInviteContext,
-  fetchLatestApolloSyncRuns,
+  type SalesCompanyRow,
+  type SalesContact,
+  type SalesFunnel,
+  type SalesSortBy,
+  type SalesSortDir,
+  type SequenceStatus,
 } from "./actions"
 import {
   Select,
@@ -39,6 +42,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal } from "lucide-react"
@@ -53,8 +59,14 @@ const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: s
   signup: { label: "Signup", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   company: { label: "Draft", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]" },
+  // Removed never renders in the funnel — the row hides any contact with this
+  // status, and the company row drops entirely if every contact is removed.
+  // Kept here so per-contact rendering doesn't crash if a stray row slips in.
+  removed: { label: "Removed", cls: "bg-gray-50 text-gray-500", dot: "bg-[#a1a1a0]" },
 }
 
+// Statuses surfaced in the multi-select status filter. 'removed' is a soft-
+// delete marker — admin doesn't filter for it, the row is just hidden.
 const ALL_STATUSES: ProspectStatus[] = [
   "prospect", "contacted", "visitor", "signup", "company", "active",
 ]
@@ -89,6 +101,19 @@ const DRIVER_COLORS: Record<string, string> = {
   retention: "#7c3aed",
 }
 
+// Source labels shown in the multi-pill cell. The DB still stores the
+// historical source codes ('arco' | 'invites' | 'apollo') — this map
+// renders them as their post-Apollo-cutover names: Showcase (we built a
+// page + project), Invite (peer-to-peer from another professional), and
+// Outreach (cold outbound, formerly run from Apollo).
+const SOURCE_LABELS: Record<string, string> = {
+  arco: "Showcase",
+  invites: "Invite",
+  apollo: "Outreach",
+  manual: "Manual",
+}
+const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
+
 // -- Helpers -----------------------------------------------------------------
 
 function formatDate(dateStr: string | null) {
@@ -100,17 +125,6 @@ function formatDate(dateStr: string | null) {
   } catch { return dateStr }
 }
 
-function formatDateTime(dateStr: string | null) {
-  if (!dateStr) return "—"
-  try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    })
-  } catch { return dateStr }
-}
-
-// Same shape as the Sent overview — month + day + time, no year.
 function formatDateShort(dateStr: string | null) {
   if (!dateStr) return "—"
   try {
@@ -141,12 +155,18 @@ function formatRelativeTime(dateStr: string | null) {
 // Map template ids → friendly display names (same labels as the
 // Marketing table on /admin/emails). Falls back to humanised slug.
 const TEMPLATE_NAMES: Record<string, string> = {
-  "prospect-intro": "Prospect Intro",
-  "prospect-followup": "Prospect Follow-up",
-  "prospect-final": "Prospect Final",
-  "new-professional-invite": "New Professional Invite",
-  "new-professional-followup": "New Professional Follow-up",
-  "new-professional-final": "New Professional Final",
+  // Showcase (formerly "prospect-") — we built a page + project, recipient claims.
+  "prospect-intro": "Showcase Intro",
+  "prospect-followup": "Showcase Follow-up",
+  "prospect-final": "Showcase Final",
+  // Invite — peer-to-peer from another professional on a real project.
+  "new-professional-invite": "Invite Intro",
+  "new-professional-followup": "Invite Follow-up",
+  "new-professional-final": "Invite Final",
+  // Outreach (cold) — formerly run via Apollo, now Arco-controlled.
+  "outreach-intro": "Outreach Intro",
+  "outreach-followup": "Outreach Follow-up",
+  "outreach-final": "Outreach Final",
 }
 function templateDisplayName(template: string): string {
   if (TEMPLATE_NAMES[template]) return TEMPLATE_NAMES[template]
@@ -160,12 +180,6 @@ function conversionRate(from: number, to: number): string {
   return `${Math.round((to / from) * 100)}%`
 }
 
-// -- Event history formatters -----------------------------------------------
-//
-// Event types come from many writers (admin actions, Apollo webhooks, the
-// status-sync trigger, the prospect-ref landing handler, …). Known types
-// get a curated label; everything else falls back to humanised snake_case.
-
 const EVENT_LABELS: Record<string, string> = {
   status_changed: "Status changed",
   email_sent: "Email sent",
@@ -174,18 +188,18 @@ const EVENT_LABELS: Record<string, string> = {
   sequence_paused: "Sequence paused",
   sequence_resumed: "Sequence resumed",
   sequence_finished: "Sequence finished",
+  removed_from_funnel: "Removed from funnel",
+  unsubscribed: "Unsubscribed",
   company_invited: "Company invited",
   "prospect.landing_visited": "Visited landing page",
 }
 
 function formatEventLabel(type: string): string {
   if (EVENT_LABELS[type]) return EVENT_LABELS[type]
-  // Apollo sync writes status_changed_to_<status>; render as "Status → <status>"
   if (type.startsWith("status_changed_to_")) {
     const to = type.slice("status_changed_to_".length).replace(/_/g, " ")
     return `Status → ${to}`
   }
-  // Generic snake_case → Title Case fallback for unknown event types.
   return type
     .replace(/[._]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -216,12 +230,10 @@ function formatMetadataValue(value: unknown): string {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value)
   }
-  // Arrays + objects: pretty-print compact JSON so the structure is still
-  // visible without a hard-to-read single-line dump.
   return JSON.stringify(value)
 }
 
-// -- Event history row — collapsed by default, expand for metadata ---------
+// -- Event history row -------------------------------------------------------
 
 function EventHistoryRow({ event }: { event: ProspectEvent }) {
   const [open, setOpen] = useState(false)
@@ -262,10 +274,6 @@ function EventHistoryRow({ event }: { event: ProspectEvent }) {
   )
 }
 
-// Simple key/value rendering for the synthetic "Company invited" event,
-// matching the layout of "Email sent" (Email / Template) — just label
-// followed by name. Project + inviter names are clickable links to the
-// public pages.
 function CompanyInvitedDetails({ metadata }: { metadata: Record<string, unknown> }) {
   const project = metadata.project as
     | { slug: string | null; title: string | null }
@@ -365,7 +373,17 @@ function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRef
 
 // -- Component ---------------------------------------------------------------
 
-export type CompanyInfo = { logoUrl: string | null; services: string[]; city: string | null }
+/**
+ * Per-contact data fetched lazily when the company popup opens. Keyed by
+ * `prospectId` in the parent's contactDetails map.
+ */
+type ContactDetailBundle = {
+  prospect: Prospect | null
+  events: ProspectEvent[]
+  sequence: ProspectSequenceStep[]
+  locale: "en" | "nl" | null
+  inviteContext: ProspectInviteContext | null
+}
 
 type ApolloSyncRunSummary = {
   id: string
@@ -381,54 +399,45 @@ type ApolloSyncRunSummary = {
 }
 
 type Props = {
-  initialProspects: Prospect[]
-  initialFunnel: ProspectFunnel
-  companyMap?: Record<string, CompanyInfo>
+  initialCompanies: SalesCompanyRow[]
+  initialTotalCompanies: number
+  initialFunnel: SalesFunnel
+  initialEmailsSent: number
   currentApolloListId?: string | null
   apolloSyncRuns?: { list: ApolloSyncRunSummary | null; activity: ApolloSyncRunSummary | null }
   apolloProspectsCount?: number
 }
 
 export function ProspectsClient({
-  initialProspects,
+  initialCompanies,
+  initialTotalCompanies,
   initialFunnel,
-  companyMap = {},
+  initialEmailsSent,
   currentApolloListId = null,
   apolloSyncRuns = { list: null, activity: null },
   apolloProspectsCount = 0,
 }: Props) {
-  const [prospects, setProspects] = useState(initialProspects)
+  const [companies, setCompanies] = useState(initialCompanies)
+  const [totalCompanies, setTotalCompanies] = useState(initialTotalCompanies)
   const [funnel, setFunnel] = useState(initialFunnel)
-  // Multi-select status filter. Empty array = no filter (all statuses) — same
-  // semantics as the previous "all" sentinel but enables OR'd multi-status
-  // filtering. Funnel cards toggle status in/out of the array; the dropdown
-  // uses checkbox items.
+  const [totalEmailsSent, setTotalEmailsSent] = useState(initialEmailsSent)
   const [statusFilter, setStatusFilter] = useState<ProspectStatus[]>([])
   const [sourceFilter, setSourceFilter] = useState("all")
   const [sequenceFilter, setSequenceFilter] = useState<SequenceStatus | "all">("all")
   const [search, setSearch] = useState("")
-  const [detailProspect, setDetailProspect] = useState<Prospect | null>(null)
-  const [events, setEvents] = useState<ProspectEvent[]>([])
-  // PR 5 of the drip pipeline: load and render the full sequence (intro,
-  // followup, final) for the prospect's company in the details panel.
-  const [sequenceSteps, setSequenceSteps] = useState<ProspectSequenceStep[]>([])
-  // Resolved locale for the sequence — same priority order the sender
-  // uses (profile preference → company country → email TLD). Null until
-  // getProspectSequence responds; falls back to the TLD heuristic if the
-  // server didn't return one (e.g. prospect has no company_id).
-  const [sequenceLocale, setSequenceLocale] = useState<"en" | "nl" | null>(null)
-  // Invite-source prospects also load the project + inviter snapshot so the
-  // popup can show real cards instead of bare IDs.
-  const [inviteContext, setInviteContext] = useState<ProspectInviteContext | null>(null)
-  // Email preview popup, opened by clicking a template name in the
-  // outreach sequence. Mirrors the popup in /admin/emails — fetches
-  // /admin/emails/preview as an iframe so the admin sees the rendered
-  // HTML for the chosen template + language.
+  // Company-scoped details popup. Holds the row the admin clicked, plus
+  // a per-contact map of fetched details (events + sequence + invite ctx +
+  // full Prospect snapshot). Expanded contacts render their full timeline;
+  // collapsed contacts show only the identity header. Primary contact (or
+  // the contact the admin clicked from the per-contact menu) is expanded
+  // by default.
+  const [detailCompany, setDetailCompany] = useState<SalesCompanyRow | null>(null)
+  const [contactDetails, setContactDetails] = useState<
+    Map<string, ContactDetailBundle>
+  >(new Map())
+  const [expandedContacts, setExpandedContacts] = useState<Set<string>>(new Set())
   const [previewEmail, setPreviewEmail] = useState<{ template: string; lang: string } | null>(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
-  // Distinct popup for the Apollo Sync surface — pulled out of the Sales
-  // statuses popup so list import + activity refresh + sync history live in
-  // one place that's easy to reach from the header button.
   const [showApolloSync, setShowApolloSync] = useState(false)
   const [syncListId, setSyncListId] = useState("")
   const [editingListId, setEditingListId] = useState(false)
@@ -438,64 +447,76 @@ export function ProspectsClient({
   const [showEmailsModal, setShowEmailsModal] = useState(false)
   const [emailLang, setEmailLang] = useState<"en" | "nl">("nl")
   const [offset, setOffset] = useState(0)
-  const [hasMore, setHasMore] = useState(initialProspects.length >= 50)
+  const [hasMore, setHasMore] = useState(initialTotalCompanies > 50)
   const [isPending, startTransition] = useTransition()
-  // Sortable date columns. Default matches the historical query order
-  // (created_at desc) so the page renders identically before any header
-  // click.
-  const [sortBy, setSortBy] = useState<"created_at" | "last_email_sent_at">("created_at")
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
+  // last_contacted_at desc is the primary sales workflow — admins want to
+  // see who they last touched first. Created sort exists for cohort
+  // analysis ("everyone added this week").
+  const [sortBy, setSortBy] = useState<SalesSortBy>("last_contacted_at")
+  const [sortDir, setSortDir] = useState<SalesSortDir>("desc")
 
-  // Refresh data
-  const refreshData = useCallback(() => {
+  const reload = useCallback((opts?: { offset?: number; append?: boolean }) => {
+    const off = opts?.offset ?? 0
     startTransition(async () => {
-      const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50, sortBy, sortDir }),
-        fetchFunnel(sourceFilter),
-      ])
-      setProspects(prospectsResult.prospects)
-      setFunnel(funnelResult.funnel)
-      setOffset(0)
-      setHasMore(prospectsResult.prospects.length >= 50)
+      const result = await fetchSalesCompanies({
+        statuses: statusFilter,
+        source: sourceFilter,
+        sequence: sequenceFilter,
+        search,
+        offset: off,
+        limit: 50,
+        sortBy,
+        sortDir,
+      })
+      if (opts?.append) {
+        setCompanies((prev) => [...prev, ...result.companies])
+        // Email totals are summed across the loaded page, so when paginating
+        // we accumulate; resetting on a fresh load would clobber prior pages.
+        setTotalEmailsSent((prev) => prev + result.companies.reduce((s, c) => s + c.emailsSent, 0))
+      } else {
+        setCompanies(result.companies)
+        setTotalEmailsSent(result.companies.reduce((s, c) => s + c.emailsSent, 0))
+      }
+      setTotalCompanies(result.totalCompanies)
+      setFunnel(result.funnel)
+      setOffset(off)
+      setHasMore(result.totalCompanies > off + result.companies.length)
     })
   }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
 
-  // Sync Resend email stats on mount (backfills opened/clicked from Resend API)
+  // Resend email backfill — pulls open/click events the webhook may have
+  // missed. Cheap (throttled to once/hour server-side); refresh the table
+  // afterwards so newly-credited engagements show up.
   const syncedRef = useRef(false)
   useEffect(() => {
     if (syncedRef.current) return
     syncedRef.current = true
     syncResendEmailStats().then(({ synced }) => {
-      if (synced > 0) refreshData()
+      if (synced > 0) reload()
     })
-  }, [refreshData])
+  }, [reload])
 
-  // Filter change. statusFilter is now an array, so callers pass either:
-  //   • a new full array (dropdown checkbox toggle), or
-  //   • a single status to toggle in/out (funnel card click — convenience)
-  // The `toggleStatus` helper below handles the latter.
   const handleFilterChange = useCallback((newStatuses?: ProspectStatus[], newSource?: string, newSequence?: SequenceStatus | "all") => {
+    if (newStatuses !== undefined) setStatusFilter(newStatuses)
+    if (newSource !== undefined) setSourceFilter(newSource)
+    if (newSequence !== undefined) setSequenceFilter(newSequence)
     const s = newStatuses ?? statusFilter
     const src = newSource ?? sourceFilter
     const seq = newSequence ?? sequenceFilter
-    if (newStatuses !== undefined) setStatusFilter(s)
-    if (newSource !== undefined) setSourceFilter(src)
-    if (newSequence !== undefined) setSequenceFilter(seq)
     startTransition(async () => {
-      const [prospectsResult, funnelResult] = await Promise.all([
-        fetchProspects({ statuses: s, source: src, sequence: seq, search, offset: 0, limit: 50, sortBy, sortDir }),
-        fetchFunnel(src),
-      ])
-      setProspects(prospectsResult.prospects)
-      setFunnel(funnelResult.funnel)
+      const result = await fetchSalesCompanies({
+        statuses: s, source: src, sequence: seq, search,
+        offset: 0, limit: 50, sortBy, sortDir,
+      })
+      setCompanies(result.companies)
+      setTotalCompanies(result.totalCompanies)
+      setFunnel(result.funnel)
+      setTotalEmailsSent(result.companies.reduce((sum, c) => sum + c.emailsSent, 0))
       setOffset(0)
-      setHasMore(prospectsResult.prospects.length >= 50)
+      setHasMore(result.totalCompanies > result.companies.length)
     })
   }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
 
-  /** Toggle one status in or out of the multi-select filter. Used by the
-   *  funnel cards: click an unselected card → adds; click a selected card
-   *  → removes. */
   const toggleStatus = useCallback((status: ProspectStatus) => {
     const next = statusFilter.includes(status)
       ? statusFilter.filter((s) => s !== status)
@@ -503,104 +524,107 @@ export function ProspectsClient({
     handleFilterChange(next)
   }, [statusFilter, handleFilterChange])
 
-  // Search
   const handleSearch = useCallback(() => {
-    startTransition(async () => {
-      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50, sortBy, sortDir })
-      setProspects(result.prospects)
-      setOffset(0)
-      setHasMore(result.prospects.length >= 50)
-    })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
+    reload({ offset: 0 })
+  }, [reload])
 
-  // Load more
   const handleLoadMore = useCallback(() => {
-    const newOffset = offset + 50
-    startTransition(async () => {
-      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: newOffset, limit: 50, sortBy, sortDir })
-      setProspects((prev) => [...prev, ...result.prospects])
-      setOffset(newOffset)
-      setHasMore(result.prospects.length >= 50)
-    })
-  }, [offset, statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
+    reload({ offset: offset + 50, append: true })
+  }, [reload, offset])
 
-  // Sort toggle: click same column → flip direction, click different column →
-  // switch column and start at desc (most recent first feels like the default
-  // people want for date columns). Re-fires the query with new ordering.
-  const toggleSort = useCallback((field: "created_at" | "last_email_sent_at") => {
-    const nextDir: "asc" | "desc" = sortBy === field ? (sortDir === "desc" ? "asc" : "desc") : "desc"
+  const toggleSort = useCallback((field: SalesSortBy) => {
+    const nextDir: SalesSortDir = sortBy === field ? (sortDir === "desc" ? "asc" : "desc") : "desc"
     setSortBy(field)
     setSortDir(nextDir)
     startTransition(async () => {
-      const result = await fetchProspects({ statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search, offset: 0, limit: 50, sortBy: field, sortDir: nextDir })
-      setProspects(result.prospects)
+      const result = await fetchSalesCompanies({
+        statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search,
+        offset: 0, limit: 50, sortBy: field, sortDir: nextDir,
+      })
+      setCompanies(result.companies)
+      setTotalCompanies(result.totalCompanies)
+      setFunnel(result.funnel)
+      setTotalEmailsSent(result.companies.reduce((sum, c) => sum + c.emailsSent, 0))
       setOffset(0)
-      setHasMore(result.prospects.length >= 50)
+      setHasMore(result.totalCompanies > result.companies.length)
     })
   }, [sortBy, sortDir, statusFilter, sourceFilter, sequenceFilter, search])
 
-  // Expand row
-  const openDetails = useCallback((prospect: Prospect) => {
-    setDetailProspect(prospect)
-    setSequenceSteps([])
-    setSequenceLocale(null)
-    setInviteContext(null)
+  // Open the company-scoped details popup. Two entry points:
+  //   1. Row-level "Details" menu → focuses primary contact (no focusId).
+  //   2. Per-contact "Details" → opens with that contact expanded.
+  // Per-contact data (events / sequence / invite context / full Prospect)
+  // is fetched in parallel for every contact in the row, then dropped into
+  // a Map for the popup to read. Multiple contacts × ~4 server calls each
+  // is acceptable here — popups are admin-only and on demand.
+  const openCompanyDetails = useCallback((row: SalesCompanyRow, focusContactId?: string) => {
+    setDetailCompany(row)
+    setExpandedContacts(new Set([focusContactId ?? row.primaryContact.prospectId]))
+    setContactDetails(new Map())
     startTransition(async () => {
-      const [eventsResult, sequenceResult, inviteResult] = await Promise.all([
-        fetchProspectEvents(prospect.id),
-        getProspectSequence(prospect.id),
-        prospect.source === "invites"
-          ? getProspectInviteContext(prospect.id)
-          : Promise.resolve({ success: true, context: null } as const),
-      ])
-      setEvents(eventsResult.events)
-      if (sequenceResult.success && sequenceResult.steps) {
-        setSequenceSteps(sequenceResult.steps)
-      }
-      if (sequenceResult.success && sequenceResult.locale) {
-        setSequenceLocale(sequenceResult.locale)
-      }
-      if (inviteResult.success && inviteResult.context) {
-        setInviteContext(inviteResult.context)
-      }
+      const entries = await Promise.all(row.contacts.map(async (c): Promise<[string, ContactDetailBundle]> => {
+        const [prospect, eventsResult, sequenceResult, inviteResult] = await Promise.all([
+          fetchProspectById(c.prospectId),
+          fetchProspectEvents(c.prospectId),
+          getProspectSequence(c.prospectId),
+          c.source === "invites"
+            ? getProspectInviteContext(c.prospectId)
+            : Promise.resolve({ success: true, context: null } as const),
+        ])
+        return [c.prospectId, {
+          prospect,
+          events: eventsResult.events,
+          sequence: sequenceResult.success ? sequenceResult.steps ?? [] : [],
+          locale: sequenceResult.success ? sequenceResult.locale ?? null : null,
+          inviteContext: inviteResult.success ? inviteResult.context ?? null : null,
+        }]
+      }))
+      setContactDetails(new Map(entries))
     })
   }, [])
 
-  // Delete
-  const handleDelete = useCallback((id: string) => {
-    if (!confirm("Are you sure you want to delete this prospect?")) return
-    startTransition(async () => {
-      const result = await deleteProspect(id)
-      if (result.success) {
-        toast.success("Prospect deleted")
-        setExpandedId(null)
-        refreshData()
-      } else {
-        toast.error(result.error ?? "Failed to delete")
-      }
-    })
-  }, [refreshData])
+  // Find a row by prospect id and open the company popup focused on that
+  // contact. Used by the per-contact chevron menu in the expanded contacts
+  // cell — the menu only knows the prospectId, not the row.
+  const openContactDetails = useCallback((prospectId: string) => {
+    const row = companies.find((r) => r.contacts.some((c) => c.prospectId === prospectId))
+    if (!row) return
+    openCompanyDetails(row, prospectId)
+  }, [companies, openCompanyDetails])
 
-  // Status update
-  const handleStatusUpdate = useCallback((id: string, newStatus: ProspectStatus) => {
-    startTransition(async () => {
-      const result = await updateProspectStatus(id, newStatus)
-      if (result.success) {
-        toast.success("Status updated")
-        refreshData()
-      } else {
-        toast.error(result.error ?? "Failed to update status")
-      }
+  const toggleContactExpanded = useCallback((prospectId: string) => {
+    setExpandedContacts((prev) => {
+      const next = new Set(prev)
+      if (next.has(prospectId)) next.delete(prospectId)
+      else next.add(prospectId)
+      return next
     })
-  }, [refreshData])
+  }, [])
+
+  // ── Per-contact actions ────────────────────────────────────────────────
+  // Reuse the existing per-prospect server actions; the row aggregator will
+  // re-derive Status / Sequence / Sources after each call via reload().
+
+  const runContactAction = useCallback(async (
+    fn: () => Promise<{ success: boolean; error?: string; warning?: string }>,
+    successLabel: string,
+    failLabel: string,
+  ) => {
+    const result = await fn()
+    if (result.success) {
+      if (result.warning) toast.warning(result.warning)
+      else toast.success(successLabel)
+      reload({ offset })
+    } else {
+      toast.error(result.error ?? failLabel)
+    }
+  }, [reload, offset])
 
   const refreshSyncRuns = async () => {
     try {
       const runs = await fetchLatestApolloSyncRuns()
       setLatestRuns(runs)
-    } catch {
-      /* keep existing state if the fetch fails */
-    }
+    } catch { /* keep state */ }
   }
 
   const handleSyncList = async () => {
@@ -617,7 +641,7 @@ export function ProspectsClient({
       if (res.ok) {
         setSyncResult(`Synced ${data.synced} contacts from Apollo`)
         await refreshSyncRuns()
-        refreshData()
+        reload({ offset: 0 })
       } else {
         setSyncResult(`Error: ${data.error}`)
       }
@@ -641,7 +665,7 @@ export function ProspectsClient({
       if (res.ok) {
         setSyncResult(`Updated ${data.updated} of ${data.total} prospects`)
         await refreshSyncRuns()
-        refreshData()
+        reload({ offset: 0 })
       } else {
         setSyncResult(`Error: ${data.error}`)
       }
@@ -652,6 +676,12 @@ export function ProspectsClient({
     }
   }
 
+  const closeDetails = () => {
+    setDetailCompany(null)
+    setContactDetails(new Map())
+    setExpandedContacts(new Set())
+  }
+
   return (
     <>
       {/* Page header */}
@@ -659,7 +689,7 @@ export function ProspectsClient({
         <div>
           <h3 className="arco-section-title">Sales</h3>
           <p className="text-xs text-[#a1a1a0] mt-0.5">
-            {prospects.length} shown · {funnel.total} total
+            {companies.length} of {totalCompanies} companies
             {" · "}
             <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
               Status guide
@@ -685,21 +715,19 @@ export function ProspectsClient({
         </div>
       </div>
 
-      {/* Conversion funnel */}
+      {/* Conversion funnel — counts unique companies per stage. */}
       <div className="mb-8 -mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
-        {/* Single grid row: connector cells align center, card cells align end */}
         {(() => {
           const cols = FUNNEL_STAGES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
-          // Cohorted counts: everyone who reached stage X = count at X + all later stages
           const stageKeys = FUNNEL_STAGES.map((s) => s.status)
           const cohorted = stageKeys.map((key, i) =>
-            stageKeys.slice(i).reduce((sum, k) => sum + (funnel[k] ?? 0), 0)
+            stageKeys.slice(i).reduce((sum, k) => sum + ((funnel as any)[k] ?? 0), 0)
           )
 
           return (
             <div style={{ display: "grid", gridTemplateColumns: cols, gap: 0, alignItems: "start" }}>
               {FUNNEL_STAGES.map((stage, i) => {
-                const count = funnel[stage.status]
+                const count = (funnel as any)[stage.status] ?? 0
                 const prevCohort = i > 0 ? cohorted[i - 1] : funnel.total
                 const thisCohort = cohorted[i]
                 const rate = i === 0 ? "" : conversionRate(prevCohort, thisCohort)
@@ -739,11 +767,11 @@ export function ProspectsClient({
             </div>
           )
         })()}
-        {/* Email stats */}
+        {/* Email stats — sum across the loaded page; cards stay stable when filters narrow. */}
         <div className="flex items-center gap-3 mt-4 justify-end">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] text-[#a1a1a0]">Emails sent</span>
-            <span className="text-[11px] font-medium text-[#1c1c1a]">{funnel.total_emails_sent.toLocaleString()}</span>
+            <span className="text-[11px] font-medium text-[#1c1c1a]">{totalEmailsSent.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -754,7 +782,7 @@ export function ProspectsClient({
           <div className="relative max-w-xs">
             <input
               type="text"
-              placeholder="Search email or company..."
+              placeholder="Search company or contact..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -766,10 +794,7 @@ export function ProspectsClient({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Multi-select status filter — checkbox items in a dropdown menu.
-              Empty selection = all statuses (no filter). Trigger label shows
-              "All statuses" / "<status name>" / "N statuses" for 0 / 1 / 2+
-              selected. Synced with the funnel cards above. */}
+          {/* Multi-select status filter — empty selection = all statuses. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -833,7 +858,7 @@ export function ProspectsClient({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All sequences</SelectItem>
-              {(["not_started", "active", "finished"] as SequenceStatus[]).map((s) => (
+              {(["not_started", "active", "paused", "finished"] as SequenceStatus[]).map((s) => (
                 <SelectItem key={s} value={s}>
                   <span className="flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_CONFIG[s].dot}`} />
@@ -845,32 +870,32 @@ export function ProspectsClient({
           </Select>
           <Select value={sourceFilter} onValueChange={(v) => handleFilterChange(undefined, v)}>
             <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All sources" />
+              <SelectValue placeholder="All channels" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All sources</SelectItem>
-              <SelectItem value="apollo">Apollo</SelectItem>
-              <SelectItem value="arco">Arco</SelectItem>
-              <SelectItem value="invites">Invites</SelectItem>
+              <SelectItem value="all">All channels</SelectItem>
+              <SelectItem value="arco">Showcase</SelectItem>
+              <SelectItem value="invites">Invite</SelectItem>
+              <SelectItem value="apollo">Outreach</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Prospects table */}
+      {/* Companies table — one row per company, contacts column expands inline. */}
       <div className="arco-table-wrap">
-        <table className="arco-table" style={{ minWidth: 1150 }}>
+        <table className="arco-table" style={{ minWidth: 1200 }}>
           <thead>
             <tr>
-              <th>Contact</th>
+              <th>Company</th>
+              <th>Contacts</th>
               <th>Status</th>
               <th>Sequence</th>
-              <th>Company</th>
+              <th>Channel</th>
               <th style={{ textAlign: "center" }}>Sent</th>
               <th style={{ textAlign: "center" }}>Delivered</th>
               <th style={{ textAlign: "center" }}>Opened</th>
               <th style={{ textAlign: "center" }}>Clicked</th>
-              <th>Source</th>
               <th
                 style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
                 onClick={() => toggleSort("created_at")}
@@ -885,12 +910,12 @@ export function ProspectsClient({
               </th>
               <th
                 style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                onClick={() => toggleSort("last_email_sent_at")}
+                onClick={() => toggleSort("last_contacted_at")}
                 title="Sort by last contacted"
               >
                 <span className="inline-flex items-center justify-end gap-1">
                   Last contacted
-                  {sortBy === "last_email_sent_at" && (
+                  {sortBy === "last_contacted_at" && (
                     <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
                   )}
                 </span>
@@ -899,262 +924,21 @@ export function ProspectsClient({
             </tr>
           </thead>
           <tbody>
-            {prospects.length === 0 && (
+            {companies.length === 0 && (
               <tr>
                 <td colSpan={12} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
-                  No prospects found.
+                  No companies found.
                 </td>
               </tr>
             )}
-            {prospects.map((p) => {
-              const rc = p.resolvedContact
-              // resolvedContact is computed server-side to match the funnel
-              // stage — outreach email for Prospect/Contacted/Visitor, the
-              // signed-up user for Signup, the company owner for Draft/Listed
-              // (which overrides the signup when a different user claimed the
-              // company). See lib/admin/prospects/actions.ts.
-              const contactInitials = (rc.name ?? "")
-                .split(" ")
-                .filter(Boolean)
-                .map((t) => t[0]?.toUpperCase())
-                .slice(0, 2)
-                .join("") || (rc.email?.charAt(0).toUpperCase() ?? "?")
-
-              // Only outreach rows have an editable email — signup/owner
-              // pull from auth, which the admin can't edit inline.
-              const outreachEditable = rc.source === "outreach" && (p.source === "arco" || p.source === "invites")
-
-              const companyInitials = (p.company_name ?? "")
-                .split(" ")
-                .filter(Boolean)
-                .map((t) => t[0]?.toUpperCase())
-                .slice(0, 2)
-                .join("")
-
-              return (
-              <Fragment key={p.id}>
-                <tr>
-                  {/* Contact — avatar/initials + name + email (resolved per stage) */}
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68", overflow: "hidden" }}>
-                        {rc.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={rc.avatarUrl}
-                            alt={rc.name ?? ""}
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
-                        ) : (
-                          contactInitials
-                        )}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        {rc.name && <span className="arco-table-primary">{rc.name}</span>}
-                        {outreachEditable ? (
-                          <ProspectEmailField prospect={p} onRefresh={refreshData} />
-                        ) : (
-                          <span className={rc.name ? "arco-table-secondary" : "arco-table-primary"}>
-                            {rc.email ?? "—"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  {/* Status — dot + label */}
-                  <td>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[p.status].dot}`} />
-                      <span className="arco-table-primary" style={{ whiteSpace: "nowrap" }}>{STATUS_CONFIG[p.status].label}</span>
-                    </div>
-                  </td>
-                  {/* Sequence — dot + label */}
-                  <td>
-                    {(() => {
-                      const seq = (p.sequence_status ?? "not_started") as SequenceStatus
-                      const cfg = SEQUENCE_CONFIG[seq] ?? SEQUENCE_CONFIG.not_started
-                      return (
-                        <div className="flex items-center gap-1.5">
-                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-                          <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>{cfg.label}</span>
-                        </div>
-                      )
-                    })()}
-                  </td>
-                  {/* Company — logo/initials + name + service · city */}
-                  <td>
-                    {p.company_name ? (() => {
-                      const ci = p.company_id ? companyMap[p.company_id] : null
-                      const subtitle = [ci?.services?.[0], ci?.city].filter(Boolean).join(" · ")
-                      return (
-                        <div className="flex items-center gap-3">
-                          {ci?.logoUrl ? (
-                            <div className="arco-table-avatar"><img src={ci.logoUrl} alt={p.company_name} /></div>
-                          ) : (
-                            <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
-                              {companyInitials}
-                            </div>
-                          )}
-                          <div className="flex flex-col min-w-0">
-                            <span className="arco-table-primary">{p.company_name}</span>
-                            {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
-                          </div>
-                        </div>
-                      )
-                    })() : (
-                      <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: "center" }}>{p.emails_sent || "—"}</td>
-                  <td style={{ textAlign: "center" }}>
-                    {p.emails_sent > 0 ? (() => {
-                      // An open or click implies delivery — clamp UP so we never
-                      // show a delivered rate lower than opened/clicked (happens
-                      // when Resend updates opens but the delivered counter
-                      // hasn't been backfilled yet). Cap at emails_sent so
-                      // double-counted webhook events / multi-opens can't push
-                      // the rate past 100%.
-                      const effectiveDelivered = Math.min(
-                        Math.max(
-                          p.emails_delivered ?? 0,
-                          p.emails_opened ?? 0,
-                          p.emails_clicked ?? 0,
-                        ),
-                        p.emails_sent,
-                      )
-                      const pct = Math.round((effectiveDelivered / p.emails_sent) * 100)
-                      return <span className={deliveredRateColor(pct, p.emails_sent)}>{pct}%</span>
-                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    {p.emails_sent > 0 ? (() => {
-                      // Raw opens can exceed sent (recipient re-opens). Cap at
-                      // sent so the rate stays in [0, 100] for funnel display.
-                      const effectiveOpened = Math.min(p.emails_opened ?? 0, p.emails_sent)
-                      const pct = Math.round((effectiveOpened / p.emails_sent) * 100)
-                      return <span className={openedRateColor(pct, p.emails_sent)}>{pct}%</span>
-                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    {p.emails_sent > 0 ? (() => {
-                      const effectiveClicked = Math.min(p.emails_clicked ?? 0, p.emails_sent)
-                      const pct = Math.round((effectiveClicked / p.emails_sent) * 100)
-                      return <span className={clickedRateColor(pct, p.emails_sent)}>{pct}%</span>
-                    })() : <span className="text-[#a1a1a0] font-normal">—</span>}
-                  </td>
-                  <td style={{ textTransform: "capitalize" }}>{p.source}</td>
-                  <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>{formatDate(p.created_at)}</td>
-                  <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
-                    {p.last_email_sent_at ? formatDate(p.last_email_sent_at) : <span className="text-[#c4c4c2]">—</span>}
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="arco-table-action">
-                          <MoreHorizontal size={14} className="text-[#a1a1a0]" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-[160px]">
-                        <DropdownMenuItem
-                          className="text-xs cursor-pointer"
-                          onClick={() => openDetails(p)}
-                        >
-                          Details
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {/* Start sequence — not started yet */}
-                        {(p.source === "arco" || p.source === "invites") && p.sequence_status === "not_started" && p.company_id && (
-                          <DropdownMenuItem
-                            className="text-xs cursor-pointer"
-                            onClick={async () => {
-                              const result = await startProspectSequence(p.id)
-                              if (result.success) {
-                                if (result.warning) toast.warning(result.warning)
-                                else toast.success("Sequence started — email sent")
-                                refreshData()
-                              } else {
-                                toast.error(result.error ?? "Failed to start sequence")
-                              }
-                            }}
-                          >
-                            Start sequence
-                          </DropdownMenuItem>
-                        )}
-                        {/* Pause / Resume */}
-                        {(p.source === "arco" || p.source === "invites") && (p.sequence_status === "active" || p.sequence_status === "finished") && (
-                          <DropdownMenuItem
-                            className="text-xs cursor-pointer"
-                            onClick={async () => {
-                              const result = await pauseProspectSequence(p.id)
-                              if (result.success) { toast.success("Sequence paused"); refreshData() }
-                              else toast.error(result.error ?? "Failed to pause")
-                            }}
-                          >
-                            Pause sequence
-                          </DropdownMenuItem>
-                        )}
-                        {(p.source === "arco" || p.source === "invites") && p.sequence_status === "paused" && (
-                          <DropdownMenuItem
-                            className="text-xs cursor-pointer"
-                            onClick={async () => {
-                              const result = await resumeProspectSequence(p.id)
-                              if (result.success) { toast.success("Sequence resumed"); refreshData() }
-                              else toast.error(result.error ?? "Failed to resume")
-                            }}
-                          >
-                            Resume sequence
-                          </DropdownMenuItem>
-                        )}
-                        {/* Restart — finished sequences (arco or invites) */}
-                        {(p.source === "arco" || p.source === "invites") && p.sequence_status === "finished" && (
-                          <DropdownMenuItem
-                            className="text-xs cursor-pointer"
-                            onClick={async () => {
-                              const result = await restartProspectSequence(p.id)
-                              if (result.success) {
-                                if (result.warning) toast.warning(result.warning)
-                                else toast.success("Sequence restarted")
-                                refreshData()
-                              } else {
-                                toast.error(result.error ?? "Failed to restart")
-                              }
-                            }}
-                          >
-                            Restart sequence
-                          </DropdownMenuItem>
-                        )}
-                        {/* Finish — cancels pending drips, marks sequence_status 'finished' */}
-                        {(p.source === "arco" || p.source === "invites") && p.sequence_status !== "finished" && p.sequence_status !== "not_started" && (
-                          <DropdownMenuItem
-                            className="text-xs cursor-pointer"
-                            onClick={async () => {
-                              const result = await finishProspectSequence(p.id)
-                              if (result.success) { toast.success("Sequence finished"); refreshData() }
-                              else toast.error(result.error ?? "Failed to finish sequence")
-                            }}
-                          >
-                            Finish sequence
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        {/* Remove */}
-                        <DropdownMenuItem
-                          className="text-xs cursor-pointer text-red-600"
-                          onClick={async () => {
-                            const result = await deleteProspect(p.id)
-                            if (result.success) { toast.success("Prospect removed"); refreshData() }
-                            else toast.error(result.error ?? "Failed to remove")
-                          }}
-                        >
-                          Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              </Fragment>
-              )
-            })}
+            {companies.map((row) => (
+              <CompanyRowView
+                key={row.rowId}
+                row={row}
+                onOpenContactDetails={openContactDetails}
+                onContactAction={runContactAction}
+              />
+            ))}
           </tbody>
         </table>
       </div>
@@ -1172,226 +956,97 @@ export function ProspectsClient({
         </div>
       )}
 
-      {/* Details popup */}
-      {detailProspect && (
-        <div className="popup-overlay" onClick={() => { setDetailProspect(null); setEvents([]); setSequenceSteps([]); setSequenceLocale(null); setInviteContext(null) }}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+      {/* Details popup — company-scoped, every contact rendered as an
+          accordion with its own lifecycle / sequence / events history.
+          Primary contact (or the per-contact "Details" target) opens
+          expanded; the rest collapse to identity headers. */}
+      {detailCompany && (
+        <div className="popup-overlay" onClick={closeDetails}>
+          <div
+            className="popup-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 720, maxHeight: "90vh", overflowY: "auto" }}
+          >
             <div className="popup-header">
-              <h3 className="arco-section-title">{detailProspect.company_name || detailProspect.email}</h3>
-              <button type="button" className="popup-close" onClick={() => { setDetailProspect(null); setEvents([]); setSequenceSteps([]); setSequenceLocale(null); setInviteContext(null) }} aria-label="Close">✕</button>
+              <div className="flex items-center gap-3 min-w-0">
+                {detailCompany.claimedCompany?.logoUrl ? (
+                  <div className="arco-table-avatar shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={detailCompany.claimedCompany.logoUrl}
+                      alt={detailCompany.companyName}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="arco-table-avatar shrink-0"
+                    style={{ background: "#f5f5f4", color: "#6b6b68" }}
+                  >
+                    {(detailCompany.companyName ?? "")
+                      .split(" ")
+                      .filter(Boolean)
+                      .map((t) => t[0]?.toUpperCase())
+                      .slice(0, 2)
+                      .join("") || "?"}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  {detailCompany.claimedCompany?.slug ? (
+                    <a
+                      href={`/professionals/${detailCompany.claimedCompany.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="arco-section-title hover:underline"
+                    >
+                      {detailCompany.companyName}
+                    </a>
+                  ) : (
+                    <h3 className="arco-section-title">{detailCompany.companyName}</h3>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    {[detailCompany.claimedCompany?.primaryService, detailCompany.claimedCompany?.city ?? detailCompany.city]
+                      .filter(Boolean)
+                      .map((label, i, arr) => (
+                        <Fragment key={String(label)}>
+                          <span className="text-xs text-[#6b6b68]">{label}</span>
+                          {i < arr.length - 1 && <span className="text-[#c4c4c2] text-xs">·</span>}
+                        </Fragment>
+                      ))}
+                    {detailCompany.sources.length > 0 && (
+                      <span className="flex items-center gap-1 ml-1">
+                        {detailCompany.sources.map((s) => (
+                          <span key={s} className="status-pill">{sourceLabel(s)}</span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button type="button" className="popup-close" onClick={closeDetails} aria-label="Close">✕</button>
             </div>
 
-            {/* ── Lifecycle — only stages that have happened. Bullet colour
-                matches the funnel-status dot used in the table for the same
-                status, so the popup reads consistently with the row. ── */}
-            {(() => {
-              const isInvite = detailProspect.source === "invites"
-              const initial = (isInvite ? "contacted" : "prospect") as ProspectStatus
-              const lifecycle: Array<{ label: string; ts: string | null; status: ProspectStatus }> = [
-                { label: isInvite ? "Invited" : "Prospect", ts: detailProspect.created_at, status: initial },
-                { label: "Contacted", ts: detailProspect.last_email_sent_at, status: "contacted" },
-                { label: "Visitor", ts: detailProspect.landing_visited_at, status: "visitor" },
-                { label: "Signup", ts: detailProspect.signed_up_at, status: "signup" },
-                { label: "Draft", ts: detailProspect.company_created_at, status: "company" },
-                { label: "Listed", ts: detailProspect.converted_at, status: "active" },
-              ].filter((s) => s.ts) as Array<{ label: string; ts: string; status: ProspectStatus }>
-              if (lifecycle.length === 0) return null
-              return (
-                <div className="mb-5">
-                  <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Lifecycle</span>
-                  <div className="mt-1.5 space-y-1">
-                    {lifecycle.map((s) => (
-                      <div key={s.label} className="flex items-center gap-2 text-xs">
-                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s.status].dot}`} />
-                        <span className="font-medium text-[#1c1c1a] w-32 shrink-0">{s.label}</span>
-                        <span className="text-[#6b6b68]">{formatDateShort(s.ts)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* ── Source-specific context (apollo IDs and invites project/inviter only) ── */}
-            {detailProspect.source === "apollo" && (
-              <div className="mb-5">
-                <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Apollo</span>
-                <div className="mt-1.5 space-y-1">
-                  {[
-                    { label: "Contact ID", value: detailProspect.apollo_contact_id },
-                    { label: "Sequence ID", value: detailProspect.apollo_sequence_id },
-                    { label: "List ID", value: detailProspect.apollo_list_id },
-                  ]
-                    .filter((r) => r.value)
-                    .map((r) => (
-                      <div key={r.label} className="flex items-center gap-2 text-xs">
-                        <span className="font-medium text-[#1c1c1a] w-32 shrink-0">{r.label}</span>
-                        <span className="text-[#6b6b68] break-all">{r.value}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {detailProspect.notes && (
-              <div className="mb-4">
-                <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Notes</span>
-                <p className="text-xs text-[#6b6b68] mt-0.5">{detailProspect.notes}</p>
-              </div>
-            )}
-
-            {/* Outreach sequence — columns align across rows: name (clickable +
-                language pill) | date | status pill | email status (dot + label).
-                Section title carries an inline source pill (Apollo / Arco / Invites). */}
-            {sequenceSteps.length > 0 && (() => {
-              const sourceLabel =
-                detailProspect.source === "arco" ? "Arco" :
-                detailProspect.source === "apollo" ? "Apollo" :
-                detailProspect.source === "invites" ? "Invites" :
-                detailProspect.source
-              // Locale for the preview link + the lang pill. Use the
-              // server-resolved value from getProspectSequence (same priority
-              // order as sendTransactionalEmail: profile preference → company
-              // country → email TLD), falling back to the TLD-only guess
-              // while the server response is pending or unavailable.
-              const guessedLang: "en" | "nl" = sequenceLocale
-                ?? (detailProspect.country?.toLowerCase().startsWith("nl") || detailProspect.country?.toLowerCase().startsWith("be") ||
-                    detailProspect.email?.toLowerCase().endsWith(".nl") || detailProspect.email?.toLowerCase().endsWith(".be")
-                  ? "nl"
-                  : "en")
-              return (
-                <div className="mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Outreach Sequence</span>
-                    <span className="status-pill">{sourceLabel}</span>
-                  </div>
-                  <div className="mt-1.5 space-y-1">
-                    {sequenceSteps.map((step) => {
-                      // Status pill — uses the shared coloured-pill variants.
-                      const statusPill: Record<ProspectSequenceStep["status"], { variant: string; label: string }> = {
-                        sent:      { variant: "status-pill--green",  label: "Sent" },
-                        queued:    { variant: "status-pill--blue",   label: "Queued" },
-                        paused:    { variant: "status-pill--orange", label: "Paused" },
-                        finished:  { variant: "",                    label: "Finished" },
-                        cancelled: { variant: "",                    label: "Cancelled" },
-                        failed:    { variant: "status-pill--orange", label: "Retrying" },
-                        missing:   { variant: "",                    label: "Not queued" },
-                      }
-                      const sc = statusPill[step.status]
-                      // Engagement: Resend webhook lifecycle. Only render when
-                      // the webhook has reported a real engagement event —
-                      // showing "Sent" here would just mirror the status pill
-                      // on the left.
-                      const engagement: { dot: string; label: string } | null = (() => {
-                        if (step.clickedAt || step.lastEvent === "clicked") return { dot: "bg-purple-500", label: "Clicked" }
-                        if (step.openedAt || step.lastEvent === "opened") return { dot: "bg-blue-500", label: "Opened" }
-                        if (step.lastEvent === "delivered") return { dot: "bg-emerald-500", label: "Delivered" }
-                        if (step.lastEvent === "bounced") return { dot: "bg-red-500", label: "Bounced" }
-                        if (step.lastEvent === "complained") return { dot: "bg-red-500", label: "Complained" }
-                        return null
-                      })()
-                      return (
-                        <div key={step.template} className="text-xs">
-                          <div
-                            className="grid items-center gap-2"
-                            style={{ gridTemplateColumns: "minmax(180px, 1fr) minmax(80px, auto) minmax(120px, auto) minmax(100px, auto)" }}
-                          >
-                            <span className="inline-flex items-center gap-2 min-w-0">
-                              {step.template.startsWith("apollo-step-") ? (
-                                // Apollo emails live outside our template
-                                // system — render the label as plain text so
-                                // clicking doesn't open a broken preview.
-                                <span className="text-[#1c1c1a] truncate text-left">
-                                  {step.label || templateDisplayName(step.template)}
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="text-[#016D75] hover:underline truncate cursor-pointer text-left"
-                                  onClick={() => setPreviewEmail({ template: step.template, lang: guessedLang })}
-                                >
-                                  {templateDisplayName(step.template)}
-                                </button>
-                              )}
-                              <span className="status-pill">{guessedLang.toUpperCase()}</span>
-                            </span>
-                            <span className={`status-pill ${sc.variant} justify-self-start`}>{sc.label}</span>
-                            <span className="text-[#6b6b68] whitespace-nowrap">
-                              {step.timestamp ? formatDateShort(step.timestamp) : ""}
-                            </span>
-                            {engagement ? (
-                              <span className="flex items-center gap-1.5 whitespace-nowrap">
-                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${engagement.dot}`} />
-                                <span className="text-[#6b6b68]">{engagement.label}</span>
-                              </span>
-                            ) : (
-                              <span />
-                            )}
-                          </div>
-                          {(() => {
-                            // Hide reasons that don't add new info — finished
-                            // ('manual' / 'status_change') and paused ('paused')
-                            // are already conveyed by the status label itself.
-                            // Only surface a reason when it carries signal
-                            // (bounced, complained, max_attempts on cancelled).
-                            const showReason = step.cancelledReason && step.status === "cancelled"
-                            const showError = step.lastError && step.status === "failed"
-                            if (!showReason && !showError) return null
-                            return (
-                              <div className="mt-0.5 ml-1 text-[#a1a1a0]">
-                                {showReason && <span>· {step.cancelledReason}</span>}
-                                {showError && <span className="text-amber-600 break-all"> · {step.lastError}</span>}
-                              </div>
-                            )
-                          })()}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {(() => {
-              // Synthesise a "Company invited" event for invite-source prospects
-              // — folds the project + inviter context (previously its own
-              // section) into the timeline. Always rendered last (oldest).
-              const inviteEvent: ProspectEvent | null =
-                detailProspect.source === "invites" && inviteContext && (inviteContext.project || inviteContext.inviter)
-                  ? {
-                      id: "synthetic-company-invited",
-                      prospect_id: detailProspect.id,
-                      event_type: "company_invited",
-                      created_at: detailProspect.created_at,
-                      metadata: {
-                        project: inviteContext.project,
-                        inviter: inviteContext.inviter,
-                      } as Record<string, unknown>,
-                    }
-                  : null
-              const allEvents = inviteEvent ? [...events, inviteEvent] : events
-              return (
-                <div>
-                  <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Event History</span>
-                  {allEvents.length === 0 ? (
-                    <p className="mt-1 text-xs text-[#a1a1a0]">No events yet.</p>
-                  ) : (
-                    <div className="mt-1.5 space-y-1" style={{ maxHeight: 320, overflowY: "auto" }}>
-                      {allEvents.map((ev) => (
-                        <EventHistoryRow key={ev.id} event={ev} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+            <div className="mb-2 mt-2">
+              <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
+                Contacts ({detailCompany.contacts.length})
+              </span>
+            </div>
+            <div className="space-y-3">
+              {detailCompany.contacts.map((contact) => (
+                <ContactDetailCard
+                  key={contact.prospectId}
+                  contact={contact}
+                  details={contactDetails.get(contact.prospectId) ?? null}
+                  expanded={expandedContacts.has(contact.prospectId)}
+                  onToggleExpand={() => toggleContactExpanded(contact.prospectId)}
+                  onPreviewEmail={(template, lang) => setPreviewEmail({ template, lang })}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Email preview popup — fetched as an iframe from /admin/emails/preview
-          so the admin sees the actual rendered HTML for the chosen template +
-          language without leaving the Sales view. */}
+      {/* Email preview popup */}
       {previewEmail && (
         <div className="popup-overlay" onClick={() => setPreviewEmail(null)}>
           <div
@@ -1451,7 +1106,7 @@ export function ProspectsClient({
                 { dot: "bg-[#2563eb]", label: "Signup", desc: "Created an Arco account but has not claimed or created a company yet.", specs: "Account created · No company" },
                 { dot: "bg-[#2563eb]", label: "Visitor", desc: "Clicked a link in an outreach email and visited the site.", specs: "Email engagement · No account yet" },
                 { dot: "bg-[#f59e0b]", label: "Contacted", desc: "At least one intro email has been sent. Advances automatically on send.", specs: "Intro sent · Drip sequence active" },
-                { dot: "bg-[#f59e0b]", label: "Prospect", desc: "Imported from Apollo. No outreach sent yet.", specs: "In sales funnel · Awaiting first email" },
+                { dot: "bg-[#f59e0b]", label: "Prospect", desc: "In the sales funnel — Showcase, Invite, or Outreach contact with no email sent yet.", specs: "In sales funnel · Awaiting first email" },
               ].map((s) => (
                 <div key={s.label} style={{ display: "flex", gap: 12 }}>
                   <span className={`${s.dot} shrink-0`} style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5 }} />
@@ -1467,64 +1122,7 @@ export function ProspectsClient({
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
               <strong>Flow:</strong> Prospect → Contacted → Visitor → Signup → Draft → Listed
               <br />
-              <strong>Automation:</strong> Statuses advance automatically from events (email sent, link click, signup). They are rarely edited manually.
-            </div>
-
-            {/* Apollo sync */}
-            <div style={{ marginTop: 24 }}>
-              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Apollo sync</h4>
-              <p style={{ margin: "0 0 12px", fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-                Arco pushes status changes to Apollo so contact and account stages stay in sync. Syncs fire <strong>on change only</strong> — direct SQL updates bypass them.
-              </p>
-
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: "#1c1c1a" }}>Prospect → Apollo contact stage</p>
-                <div style={{ border: "1px solid #e5e5e4", borderRadius: 3, overflow: "hidden" }}>
-                  {[
-                    { arco: "Listed", apollo: "Listed", dot: "#7c3aed" },
-                    { arco: "Draft", apollo: "Draft", dot: "#2563eb" },
-                    { arco: "Signup", apollo: "Signup", dot: "#2563eb" },
-                    { arco: "Visitor", apollo: "Visitor", dot: "#2563eb" },
-                    { arco: "Contacted", apollo: "Contacted", dot: "#f59e0b" },
-                    { arco: "Prospect", apollo: "Prospect", dot: "#f59e0b" },
-                  ].map(({ arco, apollo, dot }, i) => (
-                    <div key={arco} style={{ display: "flex", fontSize: 11, borderTop: i > 0 ? "1px solid #e5e5e4" : undefined }}>
-                      <div style={{ flex: 1, padding: "6px 12px", color: "#1c1c1a", background: "#fafaf9", display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-                        {arco}
-                      </div>
-                      <div style={{ flex: 1, padding: "6px 12px", color: "#6b6b68" }}>{apollo}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: "#1c1c1a" }}>Company → Apollo account stage</p>
-                <div style={{ border: "1px solid #e5e5e4", borderRadius: 3, overflow: "hidden" }}>
-                  {[
-                    { arco: "Deactivated", apollo: "Deactivated", dot: "#dc2626" },
-                    { arco: "Unlisted", apollo: "Unlisted", dot: "#a1a1a0" },
-                    { arco: "Listed", apollo: "Listed", dot: "#7c3aed" },
-                    { arco: "Draft", apollo: "Draft", dot: "#2563eb" },
-                    { arco: "Invited", apollo: "Invited", dot: "#f59e0b" },
-                    { arco: "Prospected", apollo: "Prospected", dot: "#f59e0b" },
-                    { arco: "Unclaimed", apollo: "Unclaimed", dot: "#ea580c" },
-                  ].map(({ arco, apollo, dot }, i) => (
-                    <div key={arco} style={{ display: "flex", fontSize: 11, borderTop: i > 0 ? "1px solid #e5e5e4" : undefined }}>
-                      <div style={{ flex: 1, padding: "6px 12px", color: "#1c1c1a", background: "#fafaf9", display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-                        {arco}
-                      </div>
-                      <div style={{ flex: 1, padding: "6px 12px", color: "#6b6b68" }}>{apollo}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <p style={{ margin: "10px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
-                If a row looks stale in Apollo, call <code style={{ fontSize: 10, background: "#fafaf9", padding: "1px 4px", borderRadius: 2 }}>/api/admin/sync-all-apollo</code> to reconcile every company in one pass.
-              </p>
+              <strong>Aggregation:</strong> Each row shows the highest stage any contact at the company has reached. Channel column shows every distinct entry point (Showcase, Invite, Outreach).
             </div>
 
             <div className="flex justify-end mt-6">
@@ -1539,7 +1137,7 @@ export function ProspectsClient({
         </div>
       )}
 
-      {/* Apollo Sync popup — list import + activity refresh + sync history */}
+      {/* Apollo Sync popup */}
       {showApolloSync && (
         <div className="popup-overlay" onClick={() => setShowApolloSync(false)}>
           <div className="popup-card" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
@@ -1548,7 +1146,6 @@ export function ProspectsClient({
               <button type="button" className="popup-close" onClick={() => setShowApolloSync(false)} aria-label="Close">✕</button>
             </div>
 
-            {/* ── Import contacts ────────────────────────────────────────── */}
             <div style={{ marginBottom: 24 }}>
               <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Import contacts from a list</h4>
               <p style={{ margin: "0 0 10px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
@@ -1605,11 +1202,10 @@ export function ProspectsClient({
               </div>
             </div>
 
-            {/* ── Activity refresh ──────────────────────────────────────── */}
             <div style={{ paddingTop: 20, borderTop: "1px solid #e5e5e4" }}>
               <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Refresh prospect activity</h4>
               <p style={{ margin: "0 0 12px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
-                Re-reads campaign status from Apollo for every active prospect. Runs automatically every 6 hours; the manual button below is for "I just sent emails, refresh now" cases.
+                Re-reads campaign status from Apollo for every active prospect. Runs automatically every 6 hours; the manual button is for "I just sent emails, refresh now" cases.
               </p>
 
               <div style={{ background: "#fafaf9", border: "1px solid #e5e5e4", borderRadius: 3, padding: "10px 12px", marginBottom: 12, fontSize: 11, lineHeight: 1.6, color: "#1c1c1a" }}>
@@ -1724,7 +1320,6 @@ Groet,
 Niek van Leeuwen
 Oprichter, Arco`}
                   />
-
                   <EmailTemplate
                     step={2}
                     delay="Dag 4"
@@ -1745,7 +1340,6 @@ Jullie projecten zouden er goed bij passen. Maak jullie studiopagina aan en publ
 Groet,
 Niek`}
                   />
-
                   <EmailTemplate
                     step={3}
                     delay="Dag 8"
@@ -1766,7 +1360,6 @@ Ik zou {{account.name}} graag verwelkomen. Het aanmaken van jullie studiopagina 
 Groet,
 Niek`}
                   />
-
                   <EmailTemplate
                     step={4}
                     delay="Dag 14"
@@ -1810,7 +1403,6 @@ Best,
 Niek van Leeuwen
 Founder, Arco`}
                   />
-
                   <EmailTemplate
                     step={2}
                     delay="Day 4"
@@ -1831,7 +1423,6 @@ Your projects would be a great fit. Set up your studio page and publish your fir
 Best,
 Niek`}
                   />
-
                   <EmailTemplate
                     step={3}
                     delay="Day 8"
@@ -1852,7 +1443,6 @@ I'd love to welcome {{account.name}}. Setting up your studio page takes just a f
 Best,
 Niek`}
                   />
-
                   <EmailTemplate
                     step={4}
                     delay="Day 14"
@@ -1881,6 +1471,694 @@ Niek`}
 }
 
 // -- Sub-components ----------------------------------------------------------
+
+type ContactActionRunner = (
+  fn: () => Promise<{ success: boolean; error?: string; warning?: string }>,
+  successLabel: string,
+  failLabel: string,
+) => void | Promise<void>
+
+/**
+ * One row of the Sales table = one company.
+ *
+ * Contacts column mirrors the Projects column on /admin/professionals:
+ * the primary contact is rendered inline with `dot + name + status pill +
+ * sequence pill` and is itself a dropdown trigger for the per-contact
+ * action menu. Companies with multiple contacts get a "+N more" link
+ * below that opens a dropdown listing every other contact as a
+ * DropdownMenuSub — sub-trigger shows the same identity row, sub-content
+ * carries the same action menu. The row never expands inline.
+ */
+function CompanyRowView({
+  row,
+  onOpenContactDetails,
+  onContactAction,
+}: {
+  row: SalesCompanyRow
+  onOpenContactDetails: (prospectId: string) => void
+  onContactAction: ContactActionRunner
+}) {
+  const claimed = row.claimedCompany
+  const companyInitials = (row.companyName ?? "")
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => t[0]?.toUpperCase())
+    .slice(0, 2)
+    .join("") || "?"
+
+  const subtitle = [claimed?.primaryService, claimed?.city ?? row.city].filter(Boolean).join(" · ")
+
+  // Email rate display — clamp delivered up so we never show delivered <
+  // opened (Resend webhook latency between event types). Cap at sent so
+  // duplicate webhook events can't push the rate past 100%.
+  const ratePct = row.emailsSent > 0 ? {
+    delivered: Math.round(
+      Math.min(Math.max(row.emailsDelivered, row.emailsOpened, row.emailsClicked), row.emailsSent) /
+        row.emailsSent * 100,
+    ),
+    opened: Math.round(Math.min(row.emailsOpened, row.emailsSent) / row.emailsSent * 100),
+    clicked: Math.round(Math.min(row.emailsClicked, row.emailsSent) / row.emailsSent * 100),
+  } : null
+
+  const statusCfg = STATUS_CONFIG[row.status] ?? STATUS_CONFIG.prospect
+  const sequenceCfg = SEQUENCE_CONFIG[row.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
+
+  return (
+    <tr>
+      {/* Company */}
+      <td>
+        <div className="flex items-center gap-3">
+          {claimed?.logoUrl ? (
+            <div className="arco-table-avatar">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={claimed.logoUrl} alt={row.companyName} />
+            </div>
+          ) : (
+            <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
+              {companyInitials}
+            </div>
+          )}
+          <div className="flex flex-col min-w-0">
+            {claimed?.slug ? (
+              <a
+                href={`/professionals/${claimed.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="arco-table-primary hover:underline"
+              >
+                {row.companyName}
+              </a>
+            ) : (
+              <span className="arco-table-primary">{row.companyName}</span>
+            )}
+            {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
+          </div>
+        </div>
+      </td>
+
+      {/* Contacts */}
+      <td>
+        <ContactsCell
+          row={row}
+          onOpenContactDetails={onOpenContactDetails}
+          onContactAction={onContactAction}
+        />
+      </td>
+
+      {/* Status (aggregated) */}
+      <td>
+        <div className="flex items-center gap-1.5">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
+          <span className="arco-table-primary" style={{ whiteSpace: "nowrap" }}>{statusCfg.label}</span>
+        </div>
+      </td>
+
+      {/* Sequence (aggregated single value) */}
+      <td>
+        <div className="flex items-center gap-1.5">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sequenceCfg.dot}`} />
+          <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>{sequenceCfg.label}</span>
+        </div>
+      </td>
+
+      {/* Source (multi-pill) */}
+      <td>
+        <div className="flex flex-wrap items-center gap-1">
+          {row.sources.map((s) => (
+            <span key={s} className="status-pill">{sourceLabel(s)}</span>
+          ))}
+        </div>
+      </td>
+
+      <td style={{ textAlign: "center" }}>{row.emailsSent || "—"}</td>
+      <td style={{ textAlign: "center" }}>
+        {ratePct ? <span className={deliveredRateColor(ratePct.delivered, row.emailsSent)}>{ratePct.delivered}%</span> : <span className="text-[#a1a1a0] font-normal">—</span>}
+      </td>
+      <td style={{ textAlign: "center" }}>
+        {ratePct ? <span className={openedRateColor(ratePct.opened, row.emailsSent)}>{ratePct.opened}%</span> : <span className="text-[#a1a1a0] font-normal">—</span>}
+      </td>
+      <td style={{ textAlign: "center" }}>
+        {ratePct ? <span className={clickedRateColor(ratePct.clicked, row.emailsSent)}>{ratePct.clicked}%</span> : <span className="text-[#a1a1a0] font-normal">—</span>}
+      </td>
+
+      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>{formatDate(row.createdAt)}</td>
+      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
+        {row.lastContactedAt ? formatDate(row.lastContactedAt) : <span className="text-[#c4c4c2]">—</span>}
+      </td>
+
+      <td onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="arco-table-action">
+              <MoreHorizontal size={14} className="text-[#a1a1a0]" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[160px]">
+            <DropdownMenuItem
+              className="text-xs cursor-pointer"
+              onClick={() => onOpenContactDetails(row.primaryContact.prospectId)}
+            >
+              Details
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </td>
+    </tr>
+  )
+}
+
+/** Contact identity block — avatar + name + email. Used for both the
+ *  primary contact (inline in the row) and each contact in the expanded
+ *  list. */
+function ContactIdentity({ contact }: { contact: SalesContact }) {
+  const rc = contact.resolvedContact
+  const initials = (rc.name ?? "")
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => t[0]?.toUpperCase())
+    .slice(0, 2)
+    .join("") || (rc.email?.charAt(0).toUpperCase() ?? "?")
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68", overflow: "hidden", flexShrink: 0 }}>
+        {rc.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={rc.avatarUrl} alt={rc.name ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          initials
+        )}
+      </div>
+      <div className="flex flex-col min-w-0">
+        {rc.name && <span className="arco-table-primary truncate">{rc.name}</span>}
+        <span className={(rc.name ? "arco-table-secondary" : "arco-table-primary") + " truncate"}>
+          {rc.email ?? contact.email ?? "—"}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Contacts cell — Projects-column pattern.
+ *
+ *   Layout:
+ *     ● <name>  [● Status]  [● Sequence]
+ *     +N more
+ *
+ *   The primary row is itself the trigger of a DropdownMenu carrying the
+ *   per-contact action menu; "+N more" opens a dropdown listing the
+ *   remaining contacts as DropdownMenuSub items, each with the same
+ *   action menu in their sub-content. The row never expands inline. */
+function ContactsCell({
+  row,
+  onOpenContactDetails,
+  onContactAction,
+}: {
+  row: SalesCompanyRow
+  onOpenContactDetails: (prospectId: string) => void
+  onContactAction: ContactActionRunner
+}) {
+  const primary = row.primaryContact
+  const overflow = row.contacts.length - 1
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {/* Primary contact — clickable opens its action menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
+          >
+            <ContactInline contact={primary} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[180px]">
+          {renderContactMenuItems({
+            contact: primary,
+            onOpenDetails: () => onOpenContactDetails(primary.prospectId),
+            onAction: onContactAction,
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Overflow — opens a dropdown listing remaining contacts as
+          DropdownMenuSub items so each carries its own action menu. */}
+      {overflow > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="arco-table-secondary hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit"
+              style={{ marginTop: 0 }}
+            >
+              +{overflow} more
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[280px]">
+            {row.contacts.slice(1).map((c) => (
+              <DropdownMenuSub key={c.prospectId}>
+                <DropdownMenuSubTrigger className="text-xs">
+                  <ContactInline contact={c} />
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-[180px]">
+                  {renderContactMenuItems({
+                    contact: c,
+                    onOpenDetails: () => onOpenContactDetails(c.prospectId),
+                    onAction: onContactAction,
+                  })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  )
+}
+
+/** Inline pill-row representation of a single contact: leading sequence
+ *  dot + name + status pill + source pill. Used as the trigger label
+ *  inside both the primary contact's DropdownMenu and each overflow
+ *  contact's DropdownMenuSub. The leading dot reflects the *sequence*
+ *  state (active / paused / finished / not_started) for at-a-glance
+ *  outreach scanning; status (the funnel stage) sits in its own pill
+ *  alongside the source. Email is intentionally omitted — the popup
+ *  carries the full address.
+ *
+ *  When a contact has clicked List-Unsubscribe their `unsubscribedAt`
+ *  is set — we replace the source pill with a red "Unsubscribed" pill
+ *  so the admin sees the don't-contact warning at a glance and doesn't
+ *  manually re-enrol them. */
+function ContactInline({ contact }: { contact: SalesContact }) {
+  const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
+  const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
+  const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
+  return (
+    <>
+      <span className="arco-table-status">
+        <span className={`arco-table-status-dot ${sequenceCfg.dot}`} />
+        <span className="truncate max-w-[160px]">{displayName}</span>
+      </span>
+      <span className="status-pill">
+        <span className={`status-pill-dot ${statusCfg.dot}`} />
+        {statusCfg.label}
+      </span>
+      {contact.unsubscribedAt ? (
+        <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+          <span className="status-pill-dot bg-red-500" />
+          Unsubscribed
+        </span>
+      ) : (
+        <span className="status-pill">{sourceLabel(contact.source)}</span>
+      )}
+    </>
+  )
+}
+
+/** Action menu items for a single contact — Details + sequence
+ *  transitions + Remove. Returns a Fragment so the same set can be
+ *  used inside both a top-level DropdownMenuContent and a nested
+ *  DropdownMenuSubContent. */
+function renderContactMenuItems({
+  contact,
+  onOpenDetails,
+  onAction,
+}: {
+  contact: SalesContact
+  onOpenDetails: () => void
+  onAction: ContactActionRunner
+}) {
+  const canDripFromArco = contact.source === "arco" || contact.source === "invites"
+  return (
+    <>
+      <DropdownMenuItem className="text-xs cursor-pointer" onClick={onOpenDetails}>
+        Details
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+
+      {canDripFromArco && contact.sequenceStatus === "not_started" && (
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={() =>
+            onAction(
+              () => startProspectSequence(contact.prospectId),
+              "Sequence started — email sent",
+              "Failed to start sequence",
+            )
+          }
+        >
+          Start sequence
+        </DropdownMenuItem>
+      )}
+
+      {canDripFromArco && contact.sequenceStatus === "active" && (
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={() =>
+            onAction(
+              () => pauseProspectSequence(contact.prospectId),
+              "Sequence paused",
+              "Failed to pause",
+            )
+          }
+        >
+          Pause sequence
+        </DropdownMenuItem>
+      )}
+
+      {canDripFromArco && contact.sequenceStatus === "paused" && (
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={() =>
+            onAction(
+              () => resumeProspectSequence(contact.prospectId),
+              "Sequence resumed",
+              "Failed to resume",
+            )
+          }
+        >
+          Continue sequence
+        </DropdownMenuItem>
+      )}
+
+      {canDripFromArco && contact.sequenceStatus === "finished" && (
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={() =>
+            onAction(
+              () => restartProspectSequence(contact.prospectId),
+              "Sequence restarted",
+              "Failed to restart",
+            )
+          }
+        >
+          Restart sequence
+        </DropdownMenuItem>
+      )}
+
+      {canDripFromArco && contact.sequenceStatus === "active" && (
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={() =>
+            onAction(
+              () => finishProspectSequence(contact.prospectId),
+              "Sequence finished",
+              "Failed to finish sequence",
+            )
+          }
+        >
+          Finish sequence
+        </DropdownMenuItem>
+      )}
+
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        className="text-xs cursor-pointer text-red-600"
+        onClick={() =>
+          onAction(
+            () => removeProspectFromFunnel(contact.prospectId),
+            "Contact removed",
+            "Failed to remove contact",
+          )
+        }
+      >
+        Remove from funnel
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+/**
+ * One contact section inside the company-scoped details popup.
+ *
+ * Header row is always visible: identity + status/sequence/source pills
+ * + chevron. Expanded view renders the per-contact lifecycle, Apollo
+ * IDs (if applicable), notes, the outreach sequence (with email-preview
+ * links), and the event history. While the per-contact data is still
+ * loading, the body collapses to a "Loading…" placeholder so the popup
+ * doesn't pop into existence empty and rebuild as data arrives.
+ */
+function ContactDetailCard({
+  contact,
+  details,
+  expanded,
+  onToggleExpand,
+  onPreviewEmail,
+}: {
+  contact: SalesContact
+  details: ContactDetailBundle | null
+  expanded: boolean
+  onToggleExpand: () => void
+  onPreviewEmail: (template: string, lang: "en" | "nl") => void
+}) {
+  const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
+  const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
+
+  return (
+    <div className="border border-[#e5e5e4] rounded-[3px] overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggleExpand}
+        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-[#fafaf9] transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <ContactIdentity contact={contact} />
+        </div>
+        <span className="flex items-center gap-1.5 shrink-0">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
+          <span className="text-[11px] text-[#1c1c1a] whitespace-nowrap">{statusCfg.label}</span>
+        </span>
+        <span className="flex items-center gap-1.5 shrink-0">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sequenceCfg.dot}`} />
+          <span className="text-[11px] text-[#6b6b68] whitespace-nowrap">{sequenceCfg.label}</span>
+        </span>
+        {contact.unsubscribedAt ? (
+          <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
+            <span className="status-pill-dot bg-red-500" />
+            Unsubscribed
+          </span>
+        ) : (
+          <span className="status-pill shrink-0">{sourceLabel(contact.source)}</span>
+        )}
+        <span
+          className={`text-[#a1a1a0] inline-block transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
+          style={{ width: 8, fontSize: 10 }}
+        >
+          ▶
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-[#e5e5e4] px-3 py-3">
+          {!details ? (
+            <p className="text-xs text-[#a1a1a0]">Loading…</p>
+          ) : (
+            <ContactDetailBody
+              contact={contact}
+              details={details}
+              onPreviewEmail={onPreviewEmail}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Inner body of a contact section once its data has loaded — lifecycle,
+ *  Apollo, notes, sequence, events. Split out so the loading shell stays
+ *  readable. */
+function ContactDetailBody({
+  contact,
+  details,
+  onPreviewEmail,
+}: {
+  contact: SalesContact
+  details: ContactDetailBundle
+  onPreviewEmail: (template: string, lang: "en" | "nl") => void
+}) {
+  const prospect = details.prospect
+  const isInvite = contact.source === "invites"
+  const initial = (isInvite ? "contacted" : "prospect") as ProspectStatus
+
+  // Lifecycle uses the prospect-level timestamps when we have them; falls
+  // back to whatever's on SalesContact for a graceful render.
+  const lifecycle: Array<{ label: string; ts: string | null; status: ProspectStatus }> = (() => {
+    if (!prospect) {
+      return [
+        { label: isInvite ? "Invited" : "Prospect", ts: contact.createdAt, status: initial },
+        { label: "Contacted", ts: contact.lastEmailSentAt, status: "contacted" },
+      ].filter((s) => s.ts) as Array<{ label: string; ts: string; status: ProspectStatus }>
+    }
+    return [
+      { label: isInvite ? "Invited" : "Prospect", ts: prospect.created_at, status: initial },
+      { label: "Contacted", ts: prospect.last_email_sent_at, status: "contacted" },
+      { label: "Visitor", ts: prospect.landing_visited_at, status: "visitor" },
+      { label: "Signup", ts: prospect.signed_up_at, status: "signup" },
+      { label: "Draft", ts: prospect.company_created_at, status: "company" },
+      { label: "Listed", ts: prospect.converted_at, status: "active" },
+    ].filter((s) => s.ts) as Array<{ label: string; ts: string; status: ProspectStatus }>
+  })()
+
+  const guessedLang: "en" | "nl" = details.locale
+    ?? ((prospect as any)?.country?.toLowerCase().startsWith("nl") || (prospect as any)?.country?.toLowerCase().startsWith("be") ||
+        contact.email?.toLowerCase().endsWith(".nl") || contact.email?.toLowerCase().endsWith(".be")
+      ? "nl"
+      : "en")
+
+  const inviteEvent: ProspectEvent | null =
+    isInvite && details.inviteContext && (details.inviteContext.project || details.inviteContext.inviter)
+      ? {
+          id: `synthetic-company-invited-${contact.prospectId}`,
+          prospect_id: contact.prospectId,
+          event_type: "company_invited",
+          created_at: prospect?.created_at ?? contact.createdAt,
+          metadata: {
+            project: details.inviteContext.project,
+            inviter: details.inviteContext.inviter,
+          } as Record<string, unknown>,
+        }
+      : null
+  const allEvents = inviteEvent ? [...details.events, inviteEvent] : details.events
+
+  return (
+    <div className="space-y-4">
+      {lifecycle.length > 0 && (
+        <div>
+          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Lifecycle</span>
+          <div className="mt-1.5 space-y-1">
+            {lifecycle.map((s) => (
+              <div key={s.label} className="flex items-center gap-2 text-xs">
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s.status].dot}`} />
+                <span className="font-medium text-[#1c1c1a] w-32 shrink-0">{s.label}</span>
+                <span className="text-[#6b6b68]">{formatDateShort(s.ts)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {contact.source === "apollo" && prospect && (
+        <div>
+          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Apollo</span>
+          <div className="mt-1.5 space-y-1">
+            {[
+              { label: "Contact ID", value: (prospect as any).apollo_contact_id },
+              { label: "Sequence ID", value: (prospect as any).apollo_sequence_id },
+              { label: "List ID", value: (prospect as any).apollo_list_id },
+            ]
+              .filter((r) => r.value)
+              .map((r) => (
+                <div key={r.label} className="flex items-center gap-2 text-xs">
+                  <span className="font-medium text-[#1c1c1a] w-32 shrink-0">{r.label}</span>
+                  <span className="text-[#6b6b68] break-all">{r.value}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {prospect?.notes && (
+        <div>
+          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Notes</span>
+          <p className="text-xs text-[#6b6b68] mt-0.5">{prospect.notes}</p>
+        </div>
+      )}
+
+      {details.sequence.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Outreach Sequence</span>
+            <span className="status-pill">{sourceLabel(contact.source)}</span>
+          </div>
+          <div className="mt-1.5 space-y-1">
+            {details.sequence.map((step) => {
+              const statusPill: Record<ProspectSequenceStep["status"], { variant: string; label: string }> = {
+                sent:      { variant: "status-pill--green",  label: "Sent" },
+                queued:    { variant: "status-pill--blue",   label: "Queued" },
+                paused:    { variant: "status-pill--orange", label: "Paused" },
+                finished:  { variant: "",                    label: "Finished" },
+                cancelled: { variant: "",                    label: "Cancelled" },
+                failed:    { variant: "status-pill--orange", label: "Retrying" },
+                missing:   { variant: "",                    label: "Not queued" },
+              }
+              const sc = statusPill[step.status]
+              const engagement: { dot: string; label: string } | null = (() => {
+                if (step.clickedAt || step.lastEvent === "clicked") return { dot: "bg-purple-500", label: "Clicked" }
+                if (step.openedAt || step.lastEvent === "opened") return { dot: "bg-blue-500", label: "Opened" }
+                if (step.lastEvent === "delivered") return { dot: "bg-emerald-500", label: "Delivered" }
+                if (step.lastEvent === "bounced") return { dot: "bg-red-500", label: "Bounced" }
+                if (step.lastEvent === "complained") return { dot: "bg-red-500", label: "Complained" }
+                return null
+              })()
+              return (
+                <div key={step.template} className="text-xs">
+                  <div
+                    className="grid items-center gap-2"
+                    style={{ gridTemplateColumns: "minmax(180px, 1fr) minmax(80px, auto) minmax(120px, auto) minmax(100px, auto)" }}
+                  >
+                    <span className="inline-flex items-center gap-2 min-w-0">
+                      {step.template.startsWith("apollo-step-") ? (
+                        <span className="text-[#1c1c1a] truncate text-left">
+                          {step.label || templateDisplayName(step.template)}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-[#016D75] hover:underline truncate cursor-pointer text-left"
+                          onClick={() => onPreviewEmail(step.template, guessedLang)}
+                        >
+                          {templateDisplayName(step.template)}
+                        </button>
+                      )}
+                      <span className="status-pill">{guessedLang.toUpperCase()}</span>
+                    </span>
+                    <span className={`status-pill ${sc.variant} justify-self-start`}>{sc.label}</span>
+                    <span className="text-[#6b6b68] whitespace-nowrap">
+                      {step.timestamp ? formatDateShort(step.timestamp) : ""}
+                    </span>
+                    {engagement ? (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap">
+                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${engagement.dot}`} />
+                        <span className="text-[#6b6b68]">{engagement.label}</span>
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                  </div>
+                  {(() => {
+                    const showReason = step.cancelledReason && step.status === "cancelled"
+                    const showError = step.lastError && step.status === "failed"
+                    if (!showReason && !showError) return null
+                    return (
+                      <div className="mt-0.5 ml-1 text-[#a1a1a0]">
+                        {showReason && <span>· {step.cancelledReason}</span>}
+                        {showError && <span className="text-amber-600 break-all"> · {step.lastError}</span>}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Event History</span>
+        {allEvents.length === 0 ? (
+          <p className="mt-1 text-xs text-[#a1a1a0]">No events yet.</p>
+        ) : (
+          <div className="mt-1.5 space-y-1" style={{ maxHeight: 240, overflowY: "auto" }}>
+            {allEvents.map((ev) => (
+              <EventHistoryRow key={ev.id} event={ev} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function EmailTemplate({ step, delay, subject, body }: { step: number; delay: string; subject: string; body: string }) {
   const [copied, setCopied] = useState(false)
@@ -1915,3 +2193,6 @@ function EmailTemplate({ step, delay, subject, body }: { step: number; delay: st
   )
 }
 
+// CompanyInfo type kept for backwards compat with any external imports —
+// the new aggregator bakes this directly into SalesCompanyRow.claimedCompany.
+export type CompanyInfo = { logoUrl: string | null; services: string[]; city: string | null }

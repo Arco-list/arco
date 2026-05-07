@@ -1,5 +1,7 @@
 'use server'
 
+import { buildUnsubscribeUrl } from './unsubscribe-token'
+
 // Lazy-initialize Resend to avoid crashing at module load if RESEND_API_KEY is missing
 let _resend: import('resend').Resend | null = null
 function getResend() {
@@ -142,6 +144,9 @@ export type EmailTemplate =
   | 'new-professional-invite'
   | 'new-professional-followup'
   | 'new-professional-final'
+  | 'outreach-intro'
+  | 'outreach-followup'
+  | 'outreach-final'
   | 'auth-confirm-signup'
   | 'auth-magic-link'
   | 'auth-recovery'
@@ -185,11 +190,26 @@ interface EmailResponse {
 
 const DEFAULT_LOGO_BASE = 'https://www.arcolist.com'
 
-function baseLayout(content: string, logoBaseUrl?: string, locale: EmailLocale = 'en'): string {
+function baseLayout(
+  content: string,
+  logoBaseUrl?: string,
+  locale: EmailLocale = 'en',
+  unsubscribeUrl?: string,
+): string {
   const base = logoBaseUrl || DEFAULT_LOGO_BASE
   const tagline = locale === 'nl'
     ? 'Het professionele netwerk dat architecten vertrouwen.'
     : 'The professional network architects trust.'
+  // Visible footer link is only rendered for marketing/sales sends that
+  // pass an unsubscribeUrl. Transactional emails (auth, lifecycle, project
+  // status) intentionally omit it — they're not bulk marketing and would
+  // confuse the recipient. The List-Unsubscribe inbox-client link is also
+  // gated on the same condition (set in sendTransactionalEmail).
+  const unsubLine = unsubscribeUrl
+    ? `<p style="margin:10px 0 0;font-size:10px;color:#a1a1a0;line-height:1.4;">
+<a href="${unsubscribeUrl}" style="color:#a1a1a0;text-decoration:underline;">${locale === 'nl' ? 'Uitschrijven' : 'Unsubscribe'}</a>
+</p>`
+    : ''
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -218,6 +238,7 @@ ${content}
 <p style="margin:10px 0 0;font-size:10px;color:#c4c4c2;line-height:1.4;">
 Arco Global BV · KvK 94568189 · Amsterdam, Netherlands
 </p>
+${unsubLine}
 </td></tr>
 </table>
 </td></tr>
@@ -415,7 +436,10 @@ ${subtitle ? `<p style="margin:0;font-size:14px;font-weight:400;color:#a1a1a0;">
 // ─── Template renderers ──────────────────────────────────────────────────────
 
 function lb(vars: EmailVariables, content: string, locale: EmailLocale = 'en'): string {
-  return baseLayout(content, vars._logoBaseUrl, locale)
+  // _unsubscribeUrl is injected by sendTransactionalEmail for marketing/
+  // sales templates. When set, baseLayout adds the visible footer link
+  // (the inbox-client link is wired separately via List-Unsubscribe headers).
+  return baseLayout(content, vars._logoBaseUrl, locale, vars._unsubscribeUrl)
 }
 
 function renderProjectLive(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
@@ -1027,6 +1051,186 @@ function renderProspectFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
   }
 }
 
+// ─── Outreach Series ─────────────────────────────────────────────────────
+//
+// Cold outbound to companies we have NO prior relationship with — no
+// company page on Arco, no project published, no peer invite. Three-
+// email drip mirroring the Showcase series (intro now via Resend, then
+// followup + final via email_drip_queue). This series replaces the
+// equivalent Apollo campaign — same cadence, owned by Arco so we can
+// thread replies, dedupe with email_events, and cut sending without an
+// external dependency.
+//
+// Sender: Niek's mailbox + reply_to Niek (treated as a "personal series"
+// in sendTransactionalEmail), same as Showcase. Cold pitch reads as a
+// 1:1 founder note, not a marketing email.
+//
+// Expected variables:
+//   firstname     — recipient first name
+//   company_name  — recipient's company name
+//   ref_url       — CTA URL (admin builds this with ?ref=<email> for
+//                   landing-page attribution); falls back to a generic
+//                   architect landing page with ?ref=<email> appended.
+
+function buildOutreachRefUrl(vars: EmailVariables): string {
+  if (vars.ref_url) return String(vars.ref_url)
+  const base = 'https://www.arcolist.com/businesses/architects'
+  const ref = vars.email ? `?ref=${encodeURIComponent(String(vars.email))}` : ''
+  return `${base}${ref}`
+}
+
+function renderOutreachIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const firstname = vars.firstname || (locale === 'nl' ? 'daar' : 'there')
+  const companyName = vars.company_name || (locale === 'nl' ? 'jullie bureau' : 'your firm')
+  const refUrl = buildOutreachRefUrl(vars)
+
+  const copy = locale === 'en'
+    ? {
+        subject: `${firstname}, ${companyName} is a fit for Arco`,
+        h1: `A network for serious architects`,
+        intro: `I'm Niek, founder of Arco — a new professional network where leading architects publish their best work and recommend the craftspeople they work with.`,
+        diff: `On Arco we showcase completed projects with every contributing party — architect, builder, interior designer — linked together. No bidding, no reviews, no self-published portfolios. Only exceptional work, editorially reviewed.`,
+        bullets: [
+          `Publish unlimited projects — completely free, forever`,
+          `Feature every party that contributed to the project`,
+          `Get discovered by serious clients in your region`,
+        ],
+        howItStarts: `Setting up your studio page and first project takes a few minutes — paste a link to your website and we extract everything automatically.`,
+        button: `See how it works`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `${firstname}, ${companyName} past bij Arco`,
+        h1: `Een netwerk voor serieuze architecten`,
+        intro: `Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`,
+        diff: `Op Arco tonen we gerealiseerde projecten met alle betrokken partijen — architect, aannemer, interieurontwerper — gekoppeld. Geen biedingen, geen reviews, geen zelf-gepubliceerde portfolio's. Alleen uitzonderlijk werk, redactioneel beoordeeld.`,
+        bullets: [
+          `Publiceer onbeperkt projecten — volledig gratis, voor altijd`,
+          `Vermeld alle partijen die hebben bijgedragen aan de realisatie`,
+          `Word gevonden door serieuze opdrachtgevers in jouw regio`,
+        ],
+        howItStarts: `Het aanmaken van jullie studiopagina en eerste project kost een paar minuten — plak een link naar jullie website en wij halen alles automatisch op.`,
+        button: `Bekijk hoe het werkt`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  const bulletList = `<ul style="margin:0 0 16px;padding:0 0 0 18px;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+${copy.bullets.map((b) => `<li style="margin:0 0 6px;">${b}</li>`).join('')}
+</ul>`
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.diff)}
+      ${bulletList}
+      ${body(copy.howItStarts)}
+      ${button(copy.button, refUrl)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
+function renderOutreachFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'jullie bureau' : 'your firm')
+  const refUrl = buildOutreachRefUrl(vars)
+
+  const copy = locale === 'en'
+    ? {
+        subject: `How architects get found on Arco`,
+        h1: `How it works on Arco`,
+        intro: `A quick follow-up — here's how Arco works in practice:`,
+        steps: [
+          `Paste a link to your website or a finished project — we extract everything`,
+          `Our editorial team reviews it for quality`,
+          `Once published, ${companyName} is visible to clients in your region`,
+          `Clients reach out directly — no middlemen, no lead fees`,
+        ],
+        social: `The architects already on Arco value two things most: the quality of the presentation and the fact that clients who reach out are serious.`,
+        close: `Your projects would be a great fit. Set up your studio page and publish your first project →`,
+        button: `Set up your studio page`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `Hoe architecten op Arco gevonden worden`,
+        h1: `Hoe het werkt op Arco`,
+        intro: `Een korte follow-up — zo werkt Arco in de praktijk:`,
+        steps: [
+          `Plak een link naar jullie website of een gerealiseerd project — wij halen alles op`,
+          `Ons redactieteam beoordeelt het op kwaliteit`,
+          `Na publicatie is ${companyName} zichtbaar voor opdrachtgevers in jullie regio`,
+          `Opdrachtgevers nemen direct contact op — geen tussenpersonen, geen leadkosten`,
+        ],
+        social: `De architecten die al op Arco staan waarderen vooral de kwaliteit van de presentatie en het feit dat opdrachtgevers die contact opnemen serieus zijn.`,
+        close: `Jullie projecten zouden er goed bij passen. Maak jullie studiopagina aan en publiceer jullie eerste project →`,
+        button: `Maak jullie studiopagina aan`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  const stepsList = `<ol style="margin:0 0 16px;padding:0 0 0 22px;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+${copy.steps.map((s) => `<li style="margin:0 0 6px;">${s}</li>`).join('')}
+</ol>`
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${stepsList}
+      ${body(copy.social)}
+      ${body(copy.close)}
+      ${button(copy.button, refUrl)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
+function renderOutreachFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const refUrl = buildOutreachRefUrl(vars)
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Last note — your invitation to Arco is still open`,
+        h1: `Your invitation is still open`,
+        intro: `One last note — your invitation to publish on Arco is still open.`,
+        howItStarts: `Paste a link to a project on your website, and we'll extract the photos, details, and description automatically. You review, adjust if needed, and publish. No commitment, no cost.`,
+        button: `Set up your studio page`,
+        opt_out: `If Arco isn't the right fit, no worries at all — reply to this email and I'll stop reaching out.`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `Laatste bericht — jullie uitnodiging op Arco staat nog open`,
+        h1: `Jullie uitnodiging staat nog open`,
+        intro: `Nog een laatste bericht — jullie uitnodiging om op Arco te publiceren staat nog open.`,
+        howItStarts: `Plak een link naar een project op jullie website, en wij halen de foto's, details en beschrijving automatisch op. Je bekijkt het, past aan waar nodig, en publiceert. Geen verplichting, geen kosten.`,
+        button: `Maak jullie studiopagina aan`,
+        opt_out: `Als Arco niet de juiste match is, helemaal geen probleem — reageer op deze email en ik stop met berichten sturen.`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.howItStarts)}
+      ${button(copy.button, refUrl)}
+      ${body(copy.opt_out)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
 // ─── New Professional Invite Series ──────────────────────────────────────
 //
 // Three-email drip for invites to unclaimed companies — fires when an
@@ -1356,6 +1560,9 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'prospect-intro': renderProspectIntro,
   'prospect-followup': renderProspectFollowup,
   'prospect-final': renderProspectFinal,
+  'outreach-intro': renderOutreachIntro,
+  'outreach-followup': renderOutreachFollowup,
+  'outreach-final': renderOutreachFinal,
   'new-professional-invite': renderNewProfessionalInvite,
   'new-professional-followup': renderNewProfessionalFollowup,
   'new-professional-final': renderNewProfessionalFinal,
@@ -1433,13 +1640,31 @@ export async function sendTransactionalEmail(
       email,
     }))
 
-  const { subject, html } = renderer(dataVariables || {}, locale)
+  // Marketing/sales sends — the three drip series (Showcase / Invite /
+  // Outreach) — get a signed unsubscribe URL injected so the visible
+  // footer link + the List-Unsubscribe headers point at /api/unsubscribe.
+  // Auth + transactional sends skip this entirely; they're not bulk
+  // marketing and Gmail's bulk-sender rules don't apply.
+  const isMarketingSeries =
+    template.startsWith('prospect-')
+    || template.startsWith('outreach-')
+    || template === 'professional-invite'
+    || template.startsWith('new-professional-')
+  const unsubscribeUrl = isMarketingSeries ? buildUnsubscribeUrl(email) : null
 
-  // Prospect outreach is the only person-to-person series — it comes from
-  // Niek's mailbox and replies route to him. Everything else (including the
-  // new-professional invite series, which is automated and brand-voiced) is
-  // sent from the generic Arco address.
-  const isPersonalSeries = template.startsWith('prospect-')
+  const { subject, html } = renderer(
+    {
+      ...(dataVariables || {}),
+      ...(unsubscribeUrl ? { _unsubscribeUrl: unsubscribeUrl } : {}),
+    },
+    locale,
+  )
+
+  // Showcase + Outreach are the two person-to-person series — they come
+  // from Niek's mailbox and replies route to him so he can answer
+  // personally. The Invite series (new-professional-*) is automated and
+  // brand-voiced, so it goes from the generic Arco address.
+  const isPersonalSeries = template.startsWith('prospect-') || template.startsWith('outreach-')
 
   try {
     const { data, error } = await getResend().emails.send({
@@ -1456,6 +1681,18 @@ export async function sendTransactionalEmail(
         { name: 'locale', value: locale },
       ],
       ...(isPersonalSeries ? { reply_to: 'niek@arcolist.com' } : {}),
+      // RFC 2369 + 8058 unsubscribe headers for marketing/sales sends.
+      // Gmail/Apple Mail render their own one-click unsubscribe button
+      // from these; the body footer link covers clients that don't.
+      // Required by Gmail/Yahoo bulk-sender rules (Feb 2024).
+      ...(unsubscribeUrl
+        ? {
+            headers: {
+              'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:unsubscribe@arcolist.com?subject=unsubscribe>`,
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
+          }
+        : {}),
     })
 
     if (error) {
@@ -1477,7 +1714,9 @@ export async function sendTransactionalEmail(
         const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
         const supabase = createServiceRoleSupabaseClient()
         // Granular categorization matters for downstream analytics:
-        //   sales_outbound — cold prospect outreach (prospect-* sequence)
+        //   sales_outbound — Showcase (prospect-*) + Outreach (outreach-*).
+        //                    Both are sales motions — only the leverage
+        //                    differs (a built page vs. cold pitch).
         //   invite         — pro-discovery invites: professional-invite +
         //                    new-professional-* invite sequence. team-invite
         //                    is internal team-member onboarding (a different
@@ -1485,7 +1724,7 @@ export async function sendTransactionalEmail(
         //   transactional  — everything else (auth, lifecycle, project status,
         //                    domain verification, team onboarding, marketing).
         let campaignKind: 'sales_outbound' | 'invite' | 'transactional'
-        if (template.startsWith('prospect-')) {
+        if (template.startsWith('prospect-') || template.startsWith('outreach-')) {
           campaignKind = 'sales_outbound'
         } else if (
           template === 'professional-invite' ||

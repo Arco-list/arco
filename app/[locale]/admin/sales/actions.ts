@@ -11,6 +11,7 @@ export type ProspectStatus =
   | "signup"
   | "company"
   | "active"
+  | "removed"
 
 export type SequenceStatus = "not_started" | "active" | "paused" | "finished"
 
@@ -58,6 +59,7 @@ export type Prospect = {
   company_created_at: string | null
   project_published_at: string | null
   converted_at: string | null
+  unsubscribed_at: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -116,6 +118,10 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
   let query = supabase
     .from("prospects")
     .select("*")
+    // Soft-removed contacts sit on the row but never render in the funnel.
+    // Cast: 'removed' was added in migration 152 but lib/supabase/types.ts
+    // hasn't been regenerated yet — the enum is correct in Postgres.
+    .neq("status", "removed" as never)
     // nullsFirst:false so prospects with no contact date sink to the bottom
     // when sorting by last_email_sent_at — desc would otherwise float every
     // never-contacted row to the top, which is the opposite of useful.
@@ -123,7 +129,7 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
     .range(offset, offset + limit - 1)
 
   if (statuses && statuses.length > 0) {
-    query = query.in("status", statuses)
+    query = query.in("status", statuses as never[])
   }
 
   if (source && source !== "all") {
@@ -331,6 +337,552 @@ export async function fetchFunnel(source?: string) {
   return { funnel }
 }
 
+// ─── One-row-per-company aggregation ────────────────────────────────────────
+//
+// /admin/sales rendered one row per `prospects` record, which collapsed
+// company-level signal whenever a single company sat in multiple sources
+// (Apollo prospect → Arco invite). The new shape is one row per company,
+// with a `contacts` array carrying every prospect linked to that company
+// — primary contact rendered inline, the rest stacked behind a "+N more"
+// expand. Status is `max(contact.status)`; sequence is single-valued
+// with priority active > paused > finished > not_started; source is the
+// distinct set so a row pills both `arco` and `invites` when applicable.
+
+export type SalesContact = {
+  prospectId: string
+  email: string
+  contactName: string | null
+  source: string
+  status: ProspectStatus
+  sequenceStatus: SequenceStatus
+  emailsSent: number
+  emailsDelivered: number
+  emailsOpened: number
+  emailsClicked: number
+  lastEmailSentAt: string | null
+  lastEmailOpenedAt: string | null
+  lastEmailClickedAt: string | null
+  /** Set when this recipient clicked List-Unsubscribe. Renders as a
+   *  red "Unsubscribed" pill alongside the inline contact row so the
+   *  admin sees at a glance not to manually re-enrol them. */
+  unsubscribedAt: string | null
+  createdAt: string
+  updatedAt: string
+  refCode: string
+  /** Display name + avatar for this individual contact (Owner profile when
+   *  the company has been claimed and this prospect is past signup, else
+   *  the outreach contact name). */
+  resolvedContact: ProspectResolvedContact
+}
+
+export type SalesClaimedCompany = {
+  id: string
+  name: string
+  slug: string | null
+  logoUrl: string | null
+  city: string | null
+  primaryService: string | null
+  status: string | null
+  ownerUserId: string | null
+  ownerName: string | null
+  ownerEmail: string | null
+  ownerAvatarUrl: string | null
+}
+
+export type SalesCompanyRow = {
+  /** Stable id for the row. `companyId` when present, else `name:<lower>`. */
+  rowId: string
+  companyId: string | null
+  companyName: string
+  city: string | null
+  /** Highest-priority contact (most-recently contacted, then most-recently created). */
+  primaryContact: SalesContact
+  /** All contacts including the primary, sorted desc by lastEmailSentAt then createdAt. */
+  contacts: SalesContact[]
+  /** Company-level info when companyId resolves; null for prospect-only rows. */
+  claimedCompany: SalesClaimedCompany | null
+  /** max(contacts.status) using the funnel rank below. */
+  status: ProspectStatus
+  /** Single sequence value: active beats paused beats finished beats not_started. */
+  sequenceStatus: SequenceStatus
+  /** Distinct contact sources, sorted alphabetically for stable rendering. */
+  sources: string[]
+  emailsSent: number
+  emailsDelivered: number
+  emailsOpened: number
+  emailsClicked: number
+  /** Number of contacts on this company who have unsubscribed — surfaced
+   *  as a row-level "Unsubscribed" badge so the admin doesn't need to
+   *  expand the contacts dropdown to see the warning. */
+  unsubscribedContactCount: number
+  /** Max lastEmailSentAt across contacts, null if nobody's been contacted. */
+  lastContactedAt: string | null
+  /** Earliest createdAt across contacts (when this company entered the funnel). */
+  createdAt: string
+}
+
+export type SalesFunnel = {
+  total: number
+  prospect: number
+  contacted: number
+  visitor: number
+  signup: number
+  company: number
+  active: number
+}
+
+const PROSPECT_STATUS_RANK: Record<ProspectStatus, number> = {
+  removed: -1,
+  prospect: 0,
+  contacted: 1,
+  visitor: 2,
+  signup: 3,
+  company: 4,
+  active: 5,
+}
+
+const SEQUENCE_RANK: Record<SequenceStatus, number> = {
+  not_started: 0,
+  finished: 1,
+  paused: 2,
+  active: 3,
+}
+
+export type SalesSortBy = "created_at" | "last_contacted_at"
+export type SalesSortDir = "asc" | "desc"
+
+type FetchSalesCompaniesFilters = {
+  /** Empty / undefined = no status filter (all statuses except 'removed'). */
+  statuses?: ProspectStatus[]
+  /** "all" / undefined = no source filter. Matches any contact's source. */
+  source?: string
+  /** "all" / undefined = no sequence filter. Matches the row's aggregated sequence. */
+  sequence?: SequenceStatus | "all"
+  search?: string
+  offset?: number
+  limit?: number
+  sortBy?: SalesSortBy
+  sortDir?: SalesSortDir
+}
+
+type SalesGroupShape = {
+  contacts: SalesContact[]
+  companyId: string | null
+  companyName: string
+  city: string | null
+}
+
+type EmailEventRow = {
+  provider: string
+  provider_event_id: string
+  recipient_email: string | null
+  recipient_company_id: string | null
+  event_type: string
+}
+
+/**
+ * Per-row email metrics from the unified email_events table. Resolves
+ * each event to a row group by recipient_company_id (preferred) or
+ * recipient_email (when the event was logged before company linking).
+ *
+ * Dedupe by `(provider, provider_event_id)` — the unique key on
+ * email_events — so an event reachable through both joins is only
+ * counted once.
+ */
+async function loadEmailEventCounts(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  groups: Map<string, SalesGroupShape>,
+): Promise<Map<string, { sent: number; delivered: number; opened: number; clicked: number }>> {
+  const emailToRowKeys = new Map<string, Set<string>>()
+  const cidToRowKey = new Map<string, string>()
+  for (const [rowKey, g] of groups.entries()) {
+    if (g.companyId) cidToRowKey.set(g.companyId, rowKey)
+    for (const c of g.contacts) {
+      const lower = c.email.toLowerCase()
+      if (!emailToRowKeys.has(lower)) emailToRowKeys.set(lower, new Set())
+      emailToRowKeys.get(lower)!.add(rowKey)
+    }
+  }
+
+  const emailList = Array.from(emailToRowKeys.keys()).filter(Boolean)
+  const cidList = Array.from(cidToRowKey.keys())
+
+  if (emailList.length === 0 && cidList.length === 0) return new Map()
+
+  // Two queries (instead of one .or()) so each can use its index cleanly.
+  // 50k cap is well above current sales volume; if we exceed that the
+  // counts will silently undercount, which is preferable to timing out.
+  const queries: Promise<{ data: EmailEventRow[] | null }>[] = []
+  if (emailList.length > 0) {
+    queries.push(
+      (supabase as any)
+        .from("email_events")
+        .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
+        .in("recipient_email", emailList)
+        .limit(50000),
+    )
+  }
+  if (cidList.length > 0) {
+    queries.push(
+      (supabase as any)
+        .from("email_events")
+        .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
+        .in("recipient_company_id", cidList)
+        .limit(50000),
+    )
+  }
+
+  const results = await Promise.all(queries)
+  const evRows: EmailEventRow[] = []
+  for (const r of results) {
+    if (r.data) evRows.push(...r.data)
+  }
+
+  const counts = new Map<string, { sent: number; delivered: number; opened: number; clicked: number }>()
+  const seenIds = new Set<string>()
+
+  for (const ev of evRows) {
+    const dedupeKey = `${ev.provider}:${ev.provider_event_id}`
+    if (seenIds.has(dedupeKey)) continue
+    seenIds.add(dedupeKey)
+
+    let rowKey: string | undefined
+    if (ev.recipient_company_id && cidToRowKey.has(ev.recipient_company_id)) {
+      rowKey = cidToRowKey.get(ev.recipient_company_id)
+    } else if (ev.recipient_email) {
+      // Only attribute by email when exactly one row owns that email —
+      // ambiguous cross-row matches are dropped to keep counts honest.
+      const set = emailToRowKeys.get(ev.recipient_email.toLowerCase())
+      if (set && set.size === 1) rowKey = set.values().next().value
+    }
+    if (!rowKey) continue
+
+    const c = counts.get(rowKey) ?? { sent: 0, delivered: 0, opened: 0, clicked: 0 }
+    if (ev.event_type === "sent") c.sent++
+    else if (ev.event_type === "delivered") c.delivered++
+    else if (ev.event_type === "opened") c.opened++
+    else if (ev.event_type === "clicked") c.clicked++
+    counts.set(rowKey, c)
+  }
+
+  return counts
+}
+
+/**
+ * Server data for /admin/sales. Returns one row per company with all
+ * contacts aggregated, plus a per-company funnel count and the total
+ * row count for pagination.
+ *
+ * Filters apply post-aggregation — pre-filtering at SQL would drop
+ * contacts before grouping and skew the per-company status/sequence
+ * derivations. Cap of 5k prospects is enough for current scale; if we
+ * cross that, push aggregation into a SQL function.
+ */
+export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = {}): Promise<{
+  companies: SalesCompanyRow[]
+  totalCompanies: number
+  funnel: SalesFunnel
+  error?: string
+}> {
+  const supabase = createServiceRoleSupabaseClient()
+  const {
+    statuses,
+    source,
+    sequence,
+    search,
+    offset = 0,
+    limit = 50,
+    sortBy = "last_contacted_at",
+    sortDir = "desc",
+  } = filters
+
+  const { data, error } = await supabase
+    .from("prospects")
+    .select("*")
+    // Cast — 'removed' is in the live enum (migration 152) but the auto-
+    // generated types lag behind.
+    .neq("status", "removed" as never)
+    .order("created_at", { ascending: false })
+    .limit(5000)
+
+  if (error) {
+    console.error("Failed to fetch prospects for sales aggregation", error)
+    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, error: error.message }
+  }
+
+  const rawRows = (data ?? []) as Omit<Prospect, "resolvedContact">[]
+  const prospectsWithContact = await attachResolvedContacts(supabase, rawRows)
+
+  // Convert prospect rows to flat SalesContact objects.
+  const contacts: SalesContact[] = prospectsWithContact.map((p): SalesContact => ({
+    prospectId: p.id,
+    email: p.email,
+    contactName: p.contact_name,
+    source: p.source,
+    status: p.status,
+    sequenceStatus: p.sequence_status,
+    emailsSent: p.emails_sent ?? 0,
+    emailsDelivered: p.emails_delivered ?? 0,
+    emailsOpened: p.emails_opened ?? 0,
+    emailsClicked: p.emails_clicked ?? 0,
+    lastEmailSentAt: p.last_email_sent_at,
+    lastEmailOpenedAt: p.last_email_opened_at,
+    lastEmailClickedAt: p.last_email_clicked_at,
+    unsubscribedAt: (p as any).unsubscribed_at ?? null,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+    refCode: p.ref_code,
+    resolvedContact: p.resolvedContact,
+  }))
+
+  // Group key: company_id when present, else lower(trim(company_name)).
+  // Prospects with neither become singleton rows keyed by their email.
+  const groupKey = (
+    c: SalesContact,
+    p: Omit<Prospect, "resolvedContact">,
+  ): string => {
+    if (p.company_id) return `cid:${p.company_id}`
+    const name = (p.company_name ?? "").trim().toLowerCase()
+    if (name) return `name:${name}`
+    return `email:${c.email.toLowerCase()}`
+  }
+
+  const groups = new Map<
+    string,
+    { contacts: SalesContact[]; companyId: string | null; companyName: string; city: string | null }
+  >()
+  for (let i = 0; i < contacts.length; i++) {
+    const c = contacts[i]
+    const p = rawRows[i]
+    const key = groupKey(c, p)
+    const existing = groups.get(key)
+    if (existing) {
+      existing.contacts.push(c)
+      // Backfill missing company metadata from any contact in the group.
+      if (!existing.companyId && p.company_id) existing.companyId = p.company_id
+      if (!existing.city && p.city) existing.city = p.city
+    } else {
+      groups.set(key, {
+        contacts: [c],
+        companyId: p.company_id ?? null,
+        companyName: p.company_name?.trim() || c.email.split("@")[1] || "Unknown",
+        city: p.city ?? null,
+      })
+    }
+  }
+
+  // Resolve claimed-company metadata for distinct companyIds.
+  const companyIds = Array.from(
+    new Set(
+      Array.from(groups.values())
+        .map((g) => g.companyId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  )
+  const claimedById = new Map<string, SalesClaimedCompany>()
+  if (companyIds.length > 0) {
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, name, slug, logo_url, city, owner_id, status, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .in("id", companyIds)
+
+    const ownerIds = Array.from(
+      new Set((companies ?? []).map((c: any) => c.owner_id).filter((id: unknown): id is string => Boolean(id))),
+    )
+
+    const ownerProfileById = new Map<string, { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null }>()
+    if (ownerIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name, avatar_url")
+        .in("id", ownerIds)
+      for (const pf of profiles ?? []) ownerProfileById.set(pf.id, pf as any)
+    }
+    const ownerEmailById = new Map<string, string>()
+    for (const id of ownerIds) {
+      const { data } = await supabase.auth.admin.getUserById(id)
+      if (data?.user?.email) ownerEmailById.set(id, data.user.email)
+    }
+
+    for (const c of companies ?? []) {
+      const cc = c as any
+      const ownerProfile = cc.owner_id ? ownerProfileById.get(cc.owner_id) : null
+      const ownerName = ownerProfile
+        ? [ownerProfile.first_name, ownerProfile.last_name].filter(Boolean).join(" ").trim() || null
+        : null
+      claimedById.set(cc.id, {
+        id: cc.id,
+        name: cc.name,
+        slug: cc.slug ?? null,
+        logoUrl: cc.logo_url ?? null,
+        city: cc.city ?? null,
+        primaryService: cc.primary_service?.name ?? null,
+        status: cc.status ?? null,
+        ownerUserId: cc.owner_id ?? null,
+        ownerName,
+        ownerEmail: cc.owner_id ? ownerEmailById.get(cc.owner_id) ?? null : null,
+        ownerAvatarUrl: ownerProfile?.avatar_url ?? null,
+      })
+    }
+  }
+
+  // Build aggregated rows.
+  const aggregateContacts = (cs: SalesContact[]): {
+    status: ProspectStatus
+    sequenceStatus: SequenceStatus
+    sources: string[]
+    emailsSent: number
+    emailsDelivered: number
+    emailsOpened: number
+    emailsClicked: number
+    lastContactedAt: string | null
+    createdAt: string
+  } => {
+    let status: ProspectStatus = "prospect"
+    let statusRank = -1
+    let sequenceStatus: SequenceStatus = "not_started"
+    let sequenceRank = -1
+    const sourceSet = new Set<string>()
+    let emailsSent = 0
+    let emailsDelivered = 0
+    let emailsOpened = 0
+    let emailsClicked = 0
+    let lastContactedAt: string | null = null
+    let createdAt: string = cs[0]?.createdAt ?? new Date().toISOString()
+
+    for (const c of cs) {
+      sourceSet.add(c.source)
+      const sRank = PROSPECT_STATUS_RANK[c.status] ?? 0
+      if (sRank > statusRank) {
+        statusRank = sRank
+        status = c.status
+      }
+      const qRank = SEQUENCE_RANK[c.sequenceStatus] ?? 0
+      if (qRank > sequenceRank) {
+        sequenceRank = qRank
+        sequenceStatus = c.sequenceStatus
+      }
+      emailsSent += c.emailsSent
+      emailsDelivered += c.emailsDelivered
+      emailsOpened += c.emailsOpened
+      emailsClicked += c.emailsClicked
+      if (c.lastEmailSentAt && (!lastContactedAt || c.lastEmailSentAt > lastContactedAt)) {
+        lastContactedAt = c.lastEmailSentAt
+      }
+      if (c.createdAt < createdAt) createdAt = c.createdAt
+    }
+
+    return {
+      status,
+      sequenceStatus,
+      sources: Array.from(sourceSet).sort(),
+      emailsSent,
+      emailsDelivered,
+      emailsOpened,
+      emailsClicked,
+      lastContactedAt,
+      createdAt,
+    }
+  }
+
+  const sortContactsByRecency = (cs: SalesContact[]): SalesContact[] =>
+    cs.slice().sort((a, b) => {
+      const at = a.lastEmailSentAt ?? ""
+      const bt = b.lastEmailSentAt ?? ""
+      if (at !== bt) return bt.localeCompare(at)
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+
+  // Per-row email counts sourced from email_events — the unified events
+  // table is the source of truth post-migration 151. Falls back to the
+  // per-prospect counters from aggregateContacts() when email_events
+  // returns nothing for a row (e.g. Apollo rows whose email_events
+  // backfill hasn't run yet).
+  const emailEventCounts = await loadEmailEventCounts(supabase, groups)
+
+  let rows: SalesCompanyRow[] = Array.from(groups.entries()).map(([key, g]): SalesCompanyRow => {
+    const sortedContacts = sortContactsByRecency(g.contacts)
+    const agg = aggregateContacts(sortedContacts)
+    const claimed = g.companyId ? claimedById.get(g.companyId) ?? null : null
+    const events = emailEventCounts.get(key)
+    // Use email_events when present (any event_type seen) — otherwise
+    // fall back to the prospect-derived counts so older rows still
+    // render their historical metrics until the backfill catches up.
+    const hasEventCoverage = events && (events.sent + events.delivered + events.opened + events.clicked) > 0
+    return {
+      rowId: key,
+      companyId: g.companyId,
+      companyName: claimed?.name ?? g.companyName,
+      city: claimed?.city ?? g.city,
+      primaryContact: sortedContacts[0],
+      contacts: sortedContacts,
+      claimedCompany: claimed,
+      status: agg.status,
+      sequenceStatus: agg.sequenceStatus,
+      sources: agg.sources,
+      emailsSent: hasEventCoverage ? events.sent : agg.emailsSent,
+      emailsDelivered: hasEventCoverage ? events.delivered : agg.emailsDelivered,
+      emailsOpened: hasEventCoverage ? events.opened : agg.emailsOpened,
+      emailsClicked: hasEventCoverage ? events.clicked : agg.emailsClicked,
+      unsubscribedContactCount: sortedContacts.filter((c) => c.unsubscribedAt).length,
+      lastContactedAt: agg.lastContactedAt,
+      createdAt: agg.createdAt,
+    }
+  })
+
+  // Per-company funnel — counted across the full (unfiltered) row set so
+  // the cards stay stable when the user narrows the table.
+  const funnel: SalesFunnel = { ...EMPTY_SALES_FUNNEL }
+  for (const r of rows) {
+    funnel.total++
+    if (r.status in funnel) (funnel as any)[r.status]++
+  }
+
+  // Apply filters post-aggregation.
+  if (statuses && statuses.length > 0) {
+    const set = new Set<ProspectStatus>(statuses)
+    rows = rows.filter((r) => set.has(r.status))
+  }
+  if (source && source !== "all") {
+    rows = rows.filter((r) => r.sources.includes(source))
+  }
+  if (sequence && sequence !== "all") {
+    rows = rows.filter((r) => r.sequenceStatus === sequence)
+  }
+  if (search) {
+    const needle = search.toLowerCase()
+    rows = rows.filter((r) => {
+      if (r.companyName.toLowerCase().includes(needle)) return true
+      for (const c of r.contacts) {
+        if (c.email.toLowerCase().includes(needle)) return true
+        if (c.contactName?.toLowerCase().includes(needle)) return true
+      }
+      return false
+    })
+  }
+
+  // Sort. nulls go to the bottom regardless of direction so empty values
+  // never float to the top of either ascending or descending sort.
+  const dir = sortDir === "asc" ? 1 : -1
+  rows.sort((a, b) => {
+    const av = sortBy === "created_at" ? a.createdAt : a.lastContactedAt
+    const bv = sortBy === "created_at" ? b.createdAt : b.lastContactedAt
+    if (!av && !bv) return 0
+    if (!av) return 1
+    if (!bv) return -1
+    return av < bv ? -1 * dir : av > bv ? 1 * dir : 0
+  })
+
+  const totalCompanies = rows.length
+  const paged = rows.slice(offset, offset + limit)
+
+  return { companies: paged, totalCompanies, funnel }
+}
+
+const EMPTY_SALES_FUNNEL: SalesFunnel = {
+  total: 0, prospect: 0, contacted: 0, visitor: 0, signup: 0, company: 0, active: 0,
+}
+
 const STATUS_TO_APOLLO_STAGE: Record<string, string> = {
   prospect: "Prospect",
   contacted: "Contacted",
@@ -398,6 +950,29 @@ export async function updateProspectStatus(id: string, newStatus: ProspectStatus
   return { success: true }
 }
 
+/**
+ * Fetch a single prospect with the resolvedContact join. Used by the
+ * /admin/sales popup when an admin clicks "Details" on a contact in
+ * the expanded contacts list — we already have a SalesContact row
+ * but the popup needs the full Prospect shape (notes, country,
+ * apollo_list_id, etc.).
+ */
+export async function fetchProspectById(prospectId: string): Promise<Prospect | null> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data, error } = await supabase
+    .from("prospects")
+    .select("*")
+    .eq("id", prospectId)
+    .maybeSingle()
+
+  if (error || !data) {
+    if (error) console.error("Failed to fetch prospect by id", error)
+    return null
+  }
+  const [withContact] = await attachResolvedContacts(supabase, [data] as Omit<Prospect, "resolvedContact">[])
+  return withContact ?? null
+}
+
 export async function fetchProspectEvents(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
 
@@ -427,6 +1002,57 @@ export async function deleteProspect(id: string) {
     console.error("Failed to delete prospect", error)
     return { success: false, error: error.message }
   }
+
+  return { success: true }
+}
+
+/**
+ * Soft-remove a prospect from the funnel. Sets status='removed' and
+ * cancels any pending drip rows so a removed contact doesn't keep
+ * receiving follow-ups. The underlying row is kept so re-imports
+ * (Apollo cron, invite resync) can resurface the same email without
+ * losing engagement history.
+ */
+export async function removeProspectFromFunnel(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, company_id, status")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+
+  const { error } = await supabase
+    .from("prospects")
+    // Cast — 'removed' is in the live enum (migration 152) but the auto-
+    // generated types lag behind.
+    .update({ status: "removed", sequence_status: "finished" } as never)
+    .eq("id", prospectId)
+
+  if (error) {
+    console.error("Failed to remove prospect from funnel", error)
+    return { success: false, error: error.message }
+  }
+
+  if (prospect.company_id) {
+    try {
+      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+      await cancelPendingDripRows(supabase, {
+        companyId: prospect.company_id,
+        reason: "manual",
+      })
+    } catch (err) {
+      console.error("[removeProspectFromFunnel] Failed to cancel pending drip rows", err)
+    }
+  }
+
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "removed_from_funnel",
+    metadata: { previous_status: prospect.status },
+  })
 
   return { success: true }
 }

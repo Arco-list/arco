@@ -52,6 +52,7 @@ export type CancellationReason =
                           //  outreach series no longer applies
   | "bounced"             // Resend bounce event
   | "complained"          // Resend complaint event
+  | "unsubscribed"        // recipient clicked the List-Unsubscribe link
   | "user_deleted"        // user account deleted
   | "paused"              // admin clicked Pause — resume will re-enqueue
   | "manual"              // admin clicked Finish sequence (hard stop)
