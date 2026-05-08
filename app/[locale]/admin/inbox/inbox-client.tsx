@@ -306,23 +306,42 @@ export function InboxClient({
                     </div>
                   </td>
 
-                  {/* Company — only populated when the sender resolves to a
-                      prospect (with or without a claimed company row). */}
+                  {/* Company — populated either via the prospect path or
+                      the domain fallback (sender's email domain matches a
+                      companies.domain). Status dot + sequence/channel pills
+                      only render when there's a prospect, so a domain-only
+                      match shows just the company name without funnel
+                      pills (accurate signal — there's no funnel state). */}
                   <td>
-                    {row.prospectId && row.prospectCompanyName ? (
+                    {row.prospectCompanyName ? (
                       <div className="flex flex-col gap-0.5 min-w-0">
                         <span className="arco-table-status">
                           <span className={`arco-table-status-dot ${statusDot}`} />
-                          <span
-                            className="truncate max-w-[180px]"
-                            title={row.prospectStatus
-                              ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
-                              : "Not in funnel"}
-                          >
-                            {row.prospectCompanyName}
-                          </span>
+                          {row.companySlug ? (
+                            <a
+                              href={`/professionals/${row.companySlug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="truncate max-w-[180px] hover:underline"
+                              title={row.prospectStatus
+                                ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
+                                : "Linked by email domain"}
+                            >
+                              {row.prospectCompanyName}
+                            </a>
+                          ) : (
+                            <span
+                              className="truncate max-w-[180px]"
+                              title={row.prospectStatus
+                                ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
+                                : "Linked by email domain"}
+                            >
+                              {row.prospectCompanyName}
+                            </span>
+                          )}
                         </span>
-                        {(row.prospectSequence || row.prospectChannel) && (
+                        {row.prospectId && (row.prospectSequence || row.prospectChannel) && (
                           <div className="flex flex-wrap items-center gap-1 mt-0.5">
                             {row.prospectSequence && (
                               <span className="status-pill">
@@ -433,11 +452,11 @@ export function InboxClient({
 
             {openDetail && (
               <>
-                {/* Prospect context strip — same status-dot + sequence-pill +
-                    channel-pill pattern as the inbox row, plus a deep link
-                    to the public company page (when claimed + slug exists)
-                    or a fallback "View on Sales" filter. */}
-                {openDetail.prospectId && openDetail.prospectStatus ? (
+                {/* Company context strip — fires for prospect matches
+                    (full pill set) AND domain-only matches (just company
+                    name + slug link, no funnel pills). Falls through to
+                    the "doesn't match" hint when neither path resolved. */}
+                {openDetail.prospectCompanyName ? (
                   <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
                     <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
                       Company
@@ -445,7 +464,9 @@ export function InboxClient({
                     <span className="arco-table-status">
                       <span
                         className={`arco-table-status-dot ${
-                          PROSPECT_STATUS_DOT[openDetail.prospectStatus] ?? "bg-[#a1a1a0]"
+                          openDetail.prospectStatus
+                            ? PROSPECT_STATUS_DOT[openDetail.prospectStatus] ?? "bg-[#a1a1a0]"
+                            : "bg-[#d4d4d3]"
                         }`}
                       />
                       {openDetail.companySlug ? (
@@ -455,13 +476,13 @@ export function InboxClient({
                           rel="noopener noreferrer"
                           className="hover:underline"
                         >
-                          {openDetail.prospectCompanyName ?? openDetail.fromEmail}
+                          {openDetail.prospectCompanyName}
                         </a>
                       ) : (
-                        <span>{openDetail.prospectCompanyName ?? openDetail.fromEmail}</span>
+                        <span>{openDetail.prospectCompanyName}</span>
                       )}
                     </span>
-                    {openDetail.prospectSequence && (
+                    {openDetail.prospectId && openDetail.prospectSequence && (
                       <span className="status-pill">
                         <span
                           className={`status-pill-dot ${
@@ -471,7 +492,12 @@ export function InboxClient({
                         {SEQUENCE_LABEL[openDetail.prospectSequence] ?? openDetail.prospectSequence}
                       </span>
                     )}
-                    <span className="status-pill">{channelLabel(openDetail.prospectChannel)}</span>
+                    {openDetail.prospectId && openDetail.prospectChannel && (
+                      <span className="status-pill">{channelLabel(openDetail.prospectChannel)}</span>
+                    )}
+                    {!openDetail.prospectId && (
+                      <span className="text-[10px] text-[#a1a1a0]">linked by email domain</span>
+                    )}
                     <Link
                       href={`/admin/sales?search=${encodeURIComponent(openDetail.fromEmail)}`}
                       className="text-[#016D75] hover:underline ml-auto"
@@ -481,7 +507,7 @@ export function InboxClient({
                   </div>
                 ) : (
                   <p className="mb-3 text-[11px] text-[#a1a1a0]">
-                    Sender doesn't match a known prospect.
+                    Sender doesn't match a known prospect or company.
                   </p>
                 )}
 
