@@ -1752,7 +1752,13 @@ export async function sendTransactionalEmail(
         { name: 'template', value: template },
         { name: 'locale', value: locale },
       ],
-      ...(isPersonalSeries ? { reply_to: 'niek@arcolist.com' } : {}),
+      // Reply-to routes inbound replies to the shared sales inbox (hello@)
+      // rather than Niek's personal mailbox. Recipients still see "From:
+      // Niek van Leeuwen <niek@arcolist.com>" so the founder-voice tone of
+      // the Showcase / Outreach series stays intact — only the reply
+      // landing zone changes. hello@ is the mailbox connected to
+      // /admin/inbox so admins read replies on the platform.
+      ...(isPersonalSeries ? { reply_to: 'hello@arcolist.com' } : {}),
       // RFC 2369 + 8058 unsubscribe headers for marketing/sales sends.
       // Gmail/Apple Mail render their own one-click unsubscribe button
       // from these; the body footer link covers clients that don't.

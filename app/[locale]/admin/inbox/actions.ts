@@ -226,6 +226,56 @@ export async function unarchiveInboundEmail(id: string): Promise<{ success: bool
   return { success: true }
 }
 
+/**
+ * Drop a connected Gmail mailbox from /admin/inbox. Deletes the
+ * gmail_connections row and best-effort revokes the refresh token at
+ * Google so a stale browser session can't keep using it.
+ *
+ * inbound_emails rows previously synced through this mailbox stay
+ * around — they're keyed on provider_message_id, not the connection,
+ * and represent real history we don't want to lose. They'll continue
+ * to show up under Archived / All on the inbox tabs.
+ */
+export async function disconnectGmailConnection(
+  gmailAddress: string,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  // Pull the encrypted refresh token first so we can revoke at Google
+  // before the row is gone. Best-effort — a failure here doesn't block
+  // the local disconnect (the worst case is a stale token that no
+  // longer maps to anything in our DB).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: row } = await (supabase as any)
+    .from("gmail_connections")
+    .select("refresh_token")
+    .eq("gmail_address", gmailAddress)
+    .maybeSingle()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: deleteErr } = await (supabase as any)
+    .from("gmail_connections")
+    .delete()
+    .eq("gmail_address", gmailAddress)
+
+  if (deleteErr) return { success: false, error: deleteErr.message }
+
+  if (row && (row as { refresh_token: string }).refresh_token) {
+    try {
+      const { decryptRefreshToken } = await import("@/lib/gmail/oauth")
+      const refresh = decryptRefreshToken((row as { refresh_token: string }).refresh_token)
+      await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(refresh)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      })
+    } catch (err) {
+      console.error("[inbox] revoke after disconnect failed (non-fatal)", err)
+    }
+  }
+
+  return { success: true }
+}
+
 export async function markInboundEmailUnread(id: string): Promise<{ success: boolean; error?: string }> {
   const supabase = createServiceRoleSupabaseClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

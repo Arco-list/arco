@@ -2,6 +2,7 @@ import Link from "next/link"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { fetchInboundEmails, type InboundTab } from "./actions"
 import { InboxClient } from "./inbox-client"
+import { DisconnectButton } from "./disconnect-button"
 
 export const dynamic = "force-dynamic"
 
@@ -166,6 +167,7 @@ function ConnectionRow({
       {connection.last_sync_error && (
         <span className="text-red-700 break-all">· {connection.last_sync_error}</span>
       )}
+      <DisconnectButton gmailAddress={connection.gmail_address} />
     </div>
   )
 }
