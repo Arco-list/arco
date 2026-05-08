@@ -307,39 +307,54 @@ export function InboxClient({
                   </td>
 
                   {/* Company — populated either via the prospect path or
-                      the domain fallback (sender's email domain matches a
-                      companies.domain). Status dot + sequence/channel pills
-                      only render when there's a prospect, so a domain-only
-                      match shows just the company name without funnel
-                      pills (accurate signal — there's no funnel state). */}
+                      the domain fallback. Three link targets depending on
+                      what the company actually is:
+                        - Claimed company (companySlug present) →
+                          /professionals/<slug> (public page)
+                        - Sales company (prospect with company_name but
+                          no claimed companies row) → /admin/sales?search=<email>
+                          so admin can jump to the funnel row.
+                        - Domain-only marketplace company (prospect
+                          missing) → /professionals/<slug> when slug exists.
+                      Status dot + sequence/channel pills only render when
+                      there's a prospect; domain-only matches show just
+                      the company name (no funnel state to surface). */}
                   <td>
                     {row.prospectCompanyName ? (
                       <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                         <span className="arco-table-status">
                           <span className={`arco-table-status-dot ${statusDot}`} />
-                          {row.companySlug ? (
-                            <a
-                              href={`/professionals/${row.companySlug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="truncate max-w-[160px] hover:underline"
-                              title={row.prospectStatus
-                                ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
-                                : "Linked by email domain"}
-                            >
-                              {row.prospectCompanyName}
-                            </a>
-                          ) : (
-                            <span
-                              className="truncate max-w-[160px]"
-                              title={row.prospectStatus
-                                ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
-                                : "Linked by email domain"}
-                            >
-                              {row.prospectCompanyName}
-                            </span>
-                          )}
+                          {(() => {
+                            const linkTarget = row.companySlug
+                              ? `/professionals/${row.companySlug}`
+                              : row.prospectId
+                                ? `/admin/sales?search=${encodeURIComponent(row.fromEmail)}`
+                                : null
+                            const titleText = row.prospectStatus
+                              ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
+                              : "Linked by email domain"
+                            if (linkTarget) {
+                              const isExternalProfessional = Boolean(row.companySlug)
+                              return (
+                                <a
+                                  href={linkTarget}
+                                  {...(isExternalProfessional
+                                    ? { target: "_blank", rel: "noopener noreferrer" }
+                                    : {})}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="truncate max-w-[160px] hover:underline"
+                                  title={titleText}
+                                >
+                                  {row.prospectCompanyName}
+                                </a>
+                              )
+                            }
+                            return (
+                              <span className="truncate max-w-[160px]" title={titleText}>
+                                {row.prospectCompanyName}
+                              </span>
+                            )
+                          })()}
                         </span>
                         {row.prospectId && row.prospectSequence && (
                           <span className="status-pill">
@@ -474,6 +489,13 @@ export function InboxClient({
                         >
                           {openDetail.prospectCompanyName}
                         </a>
+                      ) : openDetail.prospectId ? (
+                        <Link
+                          href={`/admin/sales?search=${encodeURIComponent(openDetail.fromEmail)}`}
+                          className="hover:underline"
+                        >
+                          {openDetail.prospectCompanyName}
+                        </Link>
                       ) : (
                         <span>{openDetail.prospectCompanyName}</span>
                       )}
