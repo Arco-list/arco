@@ -603,7 +603,17 @@ export async function disconnectGmailConnection(
 export async function generateReplyDraft(
   id: string,
   opts: { force?: boolean } = {},
-): Promise<{ success: boolean; draft?: string; locale?: "nl" | "en"; error?: string }> {
+): Promise<{
+  success: boolean
+  draft?: string
+  locale?: "nl" | "en"
+  /** Full plain-text body of the original email so the Respond popup
+   *  can render it under the "Show original" disclosure without a
+   *  second roundtrip. Falls back to a stripped body_html when the
+   *  text part is empty. */
+  originalBody?: string
+  error?: string
+}> {
   const supabase = createServiceRoleSupabaseClient()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -617,11 +627,21 @@ export async function generateReplyDraft(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = data as any
 
+  // Plain-text body for the popup's "Show original" disclosure.
+  // body_text is already parsed at sync time; if empty, fall back to
+  // a tag-stripped body_html so we still surface something readable.
+  const originalBody: string =
+    (row.body_text as string | null)?.trim()
+    || stripHtml((row.body_html as string | null) ?? "")
+    || (row.snippet as string | null)
+    || ""
+
   if (!opts.force && row.ai_draft_text) {
     return {
       success: true,
       draft: row.ai_draft_text,
       locale: detectLocale(row.subject, row.body_text),
+      originalBody,
     }
   }
 
@@ -654,7 +674,7 @@ export async function generateReplyDraft(
   }
 
   const locale = detectLocale(row.subject, row.body_text)
-  const originalBody = (row.body_text || row.snippet || "").trim()
+  const promptBody = (row.body_text || row.snippet || "").trim()
   const fromLabel = row.from_name?.trim() ? `${row.from_name} <${row.from_email}>` : row.from_email
 
   const systemPrompt = [
@@ -674,7 +694,7 @@ export async function generateReplyDraft(
     `Subject: ${row.subject ?? "(no subject)"}`,
     "",
     "Original email:",
-    originalBody || "(empty body — likely an auto-reply or read-receipt)",
+    promptBody || "(empty body — likely an auto-reply or read-receipt)",
   ]
     .filter((s) => s !== null)
     .join("\n")
@@ -704,13 +724,35 @@ export async function generateReplyDraft(
       .update({ ai_draft_text: draft, updated_at: new Date().toISOString() })
       .eq("id", id)
 
-    return { success: true, draft, locale }
+    return { success: true, draft, locale, originalBody }
   } catch (err) {
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to generate draft",
     }
   }
+}
+
+/** Strip HTML tags + collapse whitespace so a body_html-only email
+ *  still renders as readable plain text in the Respond popup's
+ *  "Show original" disclosure. Doesn't try to be smart about tables
+ *  or styles — first-pass is just remove tags + decode common entities. */
+function stripHtml(html: string): string {
+  if (!html) return ""
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 /**

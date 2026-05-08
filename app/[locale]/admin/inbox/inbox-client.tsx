@@ -111,6 +111,7 @@ export function InboxClient({
   // is in flight without flickering between two states.
   const [respondTarget, setRespondTarget] = useState<InboundEmailRow | null>(null)
   const [respondDraft, setRespondDraft] = useState("")
+  const [respondOriginal, setRespondOriginal] = useState<string>("")
   const [respondGenerating, setRespondGenerating] = useState(false)
   const [respondSending, setRespondSending] = useState(false)
   const [respondError, setRespondError] = useState<string | null>(null)
@@ -198,6 +199,7 @@ export function InboxClient({
     setDetailLoading(false)
     setRespondTarget(row)
     setRespondDraft("")
+    setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(true)
     startTransition(async () => {
@@ -205,6 +207,7 @@ export function InboxClient({
       setRespondGenerating(false)
       if (result.success && result.draft) {
         setRespondDraft(result.draft)
+        setRespondOriginal(result.originalBody ?? "")
       } else {
         setRespondError(result.error ?? "Could not generate draft")
       }
@@ -215,6 +218,7 @@ export function InboxClient({
     if (respondSending) return
     setRespondTarget(null)
     setRespondDraft("")
+    setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(false)
   }
@@ -240,6 +244,7 @@ export function InboxClient({
   const closeRespondForce = () => {
     setRespondTarget(null)
     setRespondDraft("")
+    setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(false)
     setRespondSending(false)
@@ -254,6 +259,7 @@ export function InboxClient({
       setRespondGenerating(false)
       if (result.success && result.draft) {
         setRespondDraft(result.draft)
+        if (result.originalBody) setRespondOriginal(result.originalBody)
       } else {
         setRespondError(result.error ?? "Could not regenerate draft")
       }
@@ -553,12 +559,20 @@ export function InboxClient({
               <button type="button" className="popup-close" onClick={closeRespond} aria-label="Close" disabled={respondSending}>✕</button>
             </div>
 
-            {respondTarget.snippet && (
+            {(respondOriginal || respondTarget.snippet) && (
               <details className="mb-3 text-xs text-[#6b6b68]">
-                <summary className="cursor-pointer text-[#016D75] hover:underline">Show original snippet</summary>
-                <p className="mt-1.5 p-2 bg-[#fafaf9] border border-[#e5e5e4] rounded-[3px] whitespace-pre-wrap">
-                  {respondTarget.snippet}
-                </p>
+                <summary className="cursor-pointer text-[#016D75] hover:underline">
+                  Show original
+                </summary>
+                {/* Capped height + scroll so a long thread doesn't blow up
+                    the popup. whitespace-pre-wrap preserves line breaks
+                    from the parsed plain-text body. */}
+                <div
+                  className="mt-1.5 p-3 bg-[#fafaf9] border border-[#e5e5e4] rounded-[3px] whitespace-pre-wrap"
+                  style={{ maxHeight: 200, overflowY: "auto", lineHeight: 1.55 }}
+                >
+                  {respondOriginal || respondTarget.snippet}
+                </div>
               </details>
             )}
 
