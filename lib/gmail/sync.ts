@@ -172,10 +172,18 @@ async function syncConnection(
  * Returns a non-expired Gmail access token, refreshing via the stored
  * refresh token when needed and persisting the new access token to the
  * gmail_connections row.
+ *
+ * Exported for /lib/gmail/send.ts so the reply path doesn't have to
+ * re-implement the refresh dance.
  */
-async function getValidAccessToken(
+export async function getValidAccessToken(
   supabase: SupabaseClient<any, any, any>,
-  conn: GmailConnectionRow,
+  conn: {
+    id: string
+    refresh_token: string
+    access_token: string | null
+    access_token_expires_at: string | null
+  },
 ): Promise<string> {
   // 60-second buffer so we don't hand out a token that's about to expire
   // mid-sync (a minute is comfortably longer than any single API call).

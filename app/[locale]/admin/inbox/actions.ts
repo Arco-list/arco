@@ -588,6 +588,211 @@ export async function disconnectGmailConnection(
   return { success: true }
 }
 
+/**
+ * Generate (or return cached) AI draft reply for an inbound email.
+ *
+ * Uses Anthropic's API (claude-sonnet-4-6) with a system prompt
+ * styled in Niek's voice — short, direct, founder-tone, language-
+ * matched to the original email. Drafts are cached on
+ * inbound_emails.ai_draft_text so re-opening the Respond popup
+ * doesn't re-bill the model. Pass force=true to regenerate.
+ *
+ * Returns the draft text and the resolved reply locale ('nl' | 'en')
+ * so the UI can show a small language indicator.
+ */
+export async function generateReplyDraft(
+  id: string,
+  opts: { force?: boolean } = {},
+): Promise<{ success: boolean; draft?: string; locale?: "nl" | "en"; error?: string }> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("inbound_emails")
+    .select("id, from_email, from_name, subject, body_text, body_html, snippet, ai_draft_text, prospect_id")
+    .eq("id", id)
+    .maybeSingle()
+  if (error || !data) return { success: false, error: error?.message ?? "Email not found" }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as any
+
+  if (!opts.force && row.ai_draft_text) {
+    return {
+      success: true,
+      draft: row.ai_draft_text,
+      locale: detectLocale(row.subject, row.body_text),
+    }
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { success: false, error: "ANTHROPIC_API_KEY not set" }
+  }
+
+  // Resolve a tiny prospect context block — helps the model write a
+  // reply that's relevant to where they sit in the funnel.
+  let prospectContext = ""
+  if (row.prospect_id) {
+    const { data: p } = await supabase
+      .from("prospects")
+      .select("company_name, status, source, sequence_status, last_email_sent_at")
+      .eq("id", row.prospect_id)
+      .maybeSingle()
+    if (p) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pr = p as any
+      prospectContext = [
+        pr.company_name ? `Company: ${pr.company_name}` : null,
+        pr.status ? `Funnel stage: ${pr.status}` : null,
+        pr.source ? `Channel: ${pr.source} (arco=Showcase, invites=Invite, apollo=Outreach)` : null,
+        pr.sequence_status ? `Drip sequence: ${pr.sequence_status}` : null,
+        pr.last_email_sent_at ? `Last contacted: ${pr.last_email_sent_at}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    }
+  }
+
+  const locale = detectLocale(row.subject, row.body_text)
+  const originalBody = (row.body_text || row.snippet || "").trim()
+  const fromLabel = row.from_name?.trim() ? `${row.from_name} <${row.from_email}>` : row.from_email
+
+  const systemPrompt = [
+    "You are Niek van Leeuwen, founder of Arco — a curated professional network for architects in the Netherlands.",
+    "You're drafting a reply to an inbound email. Voice: friendly, direct, brief, founder-style. Short paragraphs. First person ('ik' or 'I').",
+    "Sign off with just 'Niek' on its own line — no full name, no title.",
+    `MATCH THE LANGUAGE OF THE ORIGINAL EMAIL. The detected language is ${locale === "nl" ? "Dutch (write in Dutch)" : "English (write in English)"}.`,
+    "Don't include a subject line. Don't include greetings beyond the opener (e.g. 'Hi Marieke,'). Return only the reply body.",
+    "If the email asks to be removed / unsubscribed, confirm warmly and offer no further pitch.",
+    "If the email is positive interest, propose a clear next step (e.g. 'Hop on a 15-min call?' / 'Stuur ik je een uitnodiging?').",
+    "If the email asks how Arco works, give a 2-3 sentence pitch then ask one focused follow-up question.",
+  ].join("\n")
+
+  const userMessage = [
+    prospectContext ? `Sender context:\n${prospectContext}\n` : null,
+    `From: ${fromLabel}`,
+    `Subject: ${row.subject ?? "(no subject)"}`,
+    "",
+    "Original email:",
+    originalBody || "(empty body — likely an auto-reply or read-receipt)",
+  ]
+    .filter((s) => s !== null)
+    .join("\n")
+
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 800,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+    })
+
+    const draft = response.content
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { text: string }).text)
+      .join("")
+      .trim()
+
+    if (!draft) return { success: false, error: "Model returned empty draft" }
+
+    // Cache it so re-opening the popup doesn't re-bill.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("inbound_emails")
+      .update({ ai_draft_text: draft, updated_at: new Date().toISOString() })
+      .eq("id", id)
+
+    return { success: true, draft, locale }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to generate draft",
+    }
+  }
+}
+
+/**
+ * Send a reply via Gmail and mark the inbound email as 'replied'.
+ * Subject defaults to "Re: <original>" (no double-prefix). Threading
+ * uses the original Message-ID + threadId so the recipient's inbox
+ * client groups the reply under the same conversation.
+ */
+export async function sendReply(
+  id: string,
+  bodyText: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!bodyText.trim()) {
+    return { success: false, error: "Reply body is empty" }
+  }
+  const supabase = createServiceRoleSupabaseClient()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("inbound_emails")
+    .select("id, from_email, subject, thread_id, metadata, prospect_id")
+    .eq("id", id)
+    .maybeSingle()
+  if (error || !data) return { success: false, error: error?.message ?? "Email not found" }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as any
+  const replySubject = row.subject?.match(/^re:\s/i)
+    ? row.subject
+    : `Re: ${row.subject ?? ""}`
+
+  const meta = (row.metadata ?? {}) as Record<string, unknown>
+  const inReplyTo = (meta.messageId as string | null) ?? null
+  const references = (meta.references as string | null) ?? inReplyTo
+
+  try {
+    const { sendGmailReply } = await import("@/lib/gmail/send")
+    await sendGmailReply(supabase, {
+      to: row.from_email,
+      subject: replySubject,
+      bodyText,
+      threadId: row.thread_id ?? null,
+      inReplyTo,
+      references,
+    })
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Send failed" }
+  }
+
+  const now = new Date().toISOString()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from("inbound_emails")
+    .update({ status: "replied", replied_at: now, updated_at: now })
+    .eq("id", id)
+
+  // Log a prospect_events row when matched so the /admin/sales popup
+  // timeline picks it up. Replies don't automatically cancel drips on
+  // the *outbound* side because the recipient hasn't replied to *us* —
+  // we replied to *them*. Their next reply will trigger the existing
+  // sync-side cancellation path.
+  if (row.prospect_id) {
+    await supabase.from("prospect_events").insert({
+      prospect_id: row.prospect_id,
+      event_type: "admin_replied",
+      metadata: { inbound_email_id: id, sent_at: now },
+    })
+  }
+
+  return { success: true }
+}
+
+/** Heuristic language detection for AI draft + Send threading. */
+function detectLocale(subject: string | null, body: string | null): "nl" | "en" {
+  const text = `${subject ?? ""} ${body ?? ""}`.toLowerCase()
+  // Common Dutch giveaways. Cheap regex, errs toward NL since most
+  // outbound is to NL recipients — false-EN would feel more wrong.
+  const dutch = /\b(de|het|een|niet|met|naar|voor|jouw|jullie|hartelijk|groet|bedankt|graag|even|maar|gaat|ben|heb|kan|zijn|maandag|dinsdag|woensdag|donderdag|vrijdag)\b/
+  if (dutch.test(text)) return "nl"
+  return "en"
+}
+
 export async function markInboundEmailUnread(id: string): Promise<{ success: boolean; error?: string }> {
   const supabase = createServiceRoleSupabaseClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

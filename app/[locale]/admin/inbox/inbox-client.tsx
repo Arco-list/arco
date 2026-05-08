@@ -7,7 +7,9 @@ import {
   archiveInboundEmail,
   fetchInboundEmailDetail,
   fetchInboundEmails,
+  generateReplyDraft,
   markInboundEmailUnread,
+  sendReply,
   unarchiveInboundEmail,
   type FetchInboundResult,
   type InboundEmailDetail,
@@ -103,6 +105,15 @@ export function InboxClient({
   const [search, setSearch] = useState("")
   const [openDetail, setOpenDetail] = useState<InboundEmailDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  // Respond popup state. Holds the row being replied to + the editable
+  // draft text. Loading flag covers both AI generation and the send
+  // call so the Send button can show "Sending…" while the request
+  // is in flight without flickering between two states.
+  const [respondTarget, setRespondTarget] = useState<InboundEmailRow | null>(null)
+  const [respondDraft, setRespondDraft] = useState("")
+  const [respondGenerating, setRespondGenerating] = useState(false)
+  const [respondSending, setRespondSending] = useState(false)
+  const [respondError, setRespondError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   const reload = useCallback(
@@ -179,6 +190,76 @@ export function InboxClient({
     }
   }
 
+  /** Open the Respond popup for a row. Loads (or re-uses cached) AI
+   *  draft from the server; user can edit before sending. Detail popup
+   *  is closed if open so the two popups don't stack. */
+  const openRespond = (row: InboundEmailRow) => {
+    setOpenDetail(null)
+    setDetailLoading(false)
+    setRespondTarget(row)
+    setRespondDraft("")
+    setRespondError(null)
+    setRespondGenerating(true)
+    startTransition(async () => {
+      const result = await generateReplyDraft(row.id)
+      setRespondGenerating(false)
+      if (result.success && result.draft) {
+        setRespondDraft(result.draft)
+      } else {
+        setRespondError(result.error ?? "Could not generate draft")
+      }
+    })
+  }
+
+  const closeRespond = () => {
+    if (respondSending) return
+    setRespondTarget(null)
+    setRespondDraft("")
+    setRespondError(null)
+    setRespondGenerating(false)
+  }
+
+  const handleSendReply = async () => {
+    if (!respondTarget || !respondDraft.trim()) return
+    setRespondSending(true)
+    setRespondError(null)
+    const result = await sendReply(respondTarget.id, respondDraft)
+    setRespondSending(false)
+    if (result.success) {
+      toast.success("Reply sent")
+      closeRespondForce()
+      reload()
+    } else {
+      setRespondError(result.error ?? "Failed to send")
+    }
+  }
+
+  /** Force-close that bypasses the in-flight guard. Used after a
+   *  successful send (when respondSending has just flipped back to false
+   *  but we want to dismiss the popup anyway). */
+  const closeRespondForce = () => {
+    setRespondTarget(null)
+    setRespondDraft("")
+    setRespondError(null)
+    setRespondGenerating(false)
+    setRespondSending(false)
+  }
+
+  const handleRegenerateDraft = () => {
+    if (!respondTarget) return
+    setRespondGenerating(true)
+    setRespondError(null)
+    startTransition(async () => {
+      const result = await generateReplyDraft(respondTarget.id, { force: true })
+      setRespondGenerating(false)
+      if (result.success && result.draft) {
+        setRespondDraft(result.draft)
+      } else {
+        setRespondError(result.error ?? "Could not regenerate draft")
+      }
+    })
+  }
+
   return (
     <>
       {/* Tabs */}
@@ -252,19 +333,20 @@ export function InboxClient({
 
       {/* List */}
       <div className="arco-table-wrap">
-        <table className="arco-table" style={{ minWidth: 1000 }}>
+        <table className="arco-table" style={{ minWidth: 1100 }}>
           <thead>
             <tr>
               <th>From</th>
               <th>Company</th>
               <th>Subject</th>
               <th style={{ textAlign: "right" }}>Received</th>
+              <th style={{ textAlign: "right", width: 180 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {emails.length === 0 && (
               <tr>
-                <td colSpan={4} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={5} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   {search ? "No emails match your search." : "No emails yet."}
                 </td>
               </tr>
@@ -407,6 +489,32 @@ export function InboxClient({
                       <span title={formatAbsolute(row.receivedAt)}>{formatRelative(row.receivedAt)}</span>
                     </div>
                   </td>
+
+                  {/* Actions — Archive + Respond. Buttons stop propagation so
+                      they don't also fire the row's open-popup handler. */}
+                  <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          row.status === "archived"
+                            ? handleUnarchive(row.id)
+                            : handleArchive(row.id)
+                        }
+                        className="h-8 px-2.5 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                      >
+                        {row.status === "archived" ? "Move back" : "Archive"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openRespond(row)}
+                        className="h-8 px-3 text-xs font-medium rounded-[3px] text-white transition-colors"
+                        style={{ background: "var(--primary, #016D75)" }}
+                      >
+                        Respond
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               )
             })}
@@ -418,6 +526,107 @@ export function InboxClient({
         <p className="mt-3 text-xs text-[#a1a1a0] text-center">
           Showing {emails.length} of {total}. Pagination ships in slice 5 polish.
         </p>
+      )}
+
+      {/* Respond popup — AI-drafted reply that the admin reviews before
+          sending. Generates on open (cached on inbound_emails.ai_draft_text
+          so re-opens don't re-bill the model). Sending posts via the
+          Gmail API to the original sender, threaded via Message-ID + threadId.
+          On success, the row's status flips to 'replied' so it leaves
+          the active inbox tab and shows up under Replied. */}
+      {respondTarget && (
+        <div className="popup-overlay" onClick={closeRespond}>
+          <div
+            className="popup-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 640, width: "calc(100vw - 48px)", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+          >
+            <div className="popup-header">
+              <div className="min-w-0 flex-1">
+                <h3 className="arco-section-title">Respond to {respondTarget.fromName?.trim() || respondTarget.fromEmail}</h3>
+                <p className="text-xs text-[#6b6b68] mt-0.5 truncate">
+                  Re: {respondTarget.subject || <span className="text-[#a1a1a0]">(no subject)</span>}
+                  {" · "}
+                  <span className="text-[#a1a1a0]">{respondTarget.fromEmail}</span>
+                </p>
+              </div>
+              <button type="button" className="popup-close" onClick={closeRespond} aria-label="Close" disabled={respondSending}>✕</button>
+            </div>
+
+            {respondTarget.snippet && (
+              <details className="mb-3 text-xs text-[#6b6b68]">
+                <summary className="cursor-pointer text-[#016D75] hover:underline">Show original snippet</summary>
+                <p className="mt-1.5 p-2 bg-[#fafaf9] border border-[#e5e5e4] rounded-[3px] whitespace-pre-wrap">
+                  {respondTarget.snippet}
+                </p>
+              </details>
+            )}
+
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
+                Your reply {respondGenerating ? "(generating…)" : "(AI-drafted, edit before sending)"}
+              </span>
+              <button
+                type="button"
+                onClick={handleRegenerateDraft}
+                disabled={respondGenerating || respondSending}
+                className="text-[11px] text-[#016D75] hover:underline disabled:opacity-50"
+              >
+                {respondGenerating ? "Generating…" : "Regenerate"}
+              </button>
+            </div>
+
+            <textarea
+              value={respondDraft}
+              onChange={(e) => setRespondDraft(e.target.value)}
+              disabled={respondGenerating || respondSending}
+              placeholder={respondGenerating ? "Drafting reply in Niek's voice…" : "Write your reply…"}
+              style={{
+                flex: 1,
+                minHeight: 240,
+                width: "100%",
+                padding: 12,
+                fontSize: 13,
+                lineHeight: 1.6,
+                fontFamily: "var(--font-sans)",
+                color: "#1c1c1a",
+                border: "1px solid var(--arco-rule, #e5e5e4)",
+                borderRadius: 3,
+                resize: "vertical",
+                outline: "none",
+              }}
+            />
+
+            {respondError && (
+              <p className="mt-2 text-xs text-red-700 break-all">{respondError}</p>
+            )}
+
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <p className="text-[10px] text-[#a1a1a0]">
+                Sends from <code className="text-[10px]">hello@arcolist.com</code> via Gmail. Threaded to the original conversation.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closeRespond}
+                  disabled={respondSending}
+                  className="h-9 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendReply}
+                  disabled={respondGenerating || respondSending || !respondDraft.trim()}
+                  className="h-9 px-4 text-xs font-medium rounded-[3px] text-white transition-colors disabled:opacity-50"
+                  style={{ background: "var(--primary, #016D75)" }}
+                >
+                  {respondSending ? "Sending…" : "Send"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Detail popup */}
