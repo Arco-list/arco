@@ -677,6 +677,45 @@ export async function generateReplyDraft(
   const promptBody = (row.body_text || row.snippet || "").trim()
   const fromLabel = row.from_name?.trim() ? `${row.from_name} <${row.from_email}>` : row.from_email
 
+  // Few-shot examples: the last N inbound emails Niek has personally
+  // replied to. Pair each (original body) with (admin's actual reply
+  // text) so the model picks up real voice, real tone, real formatting
+  // from edited sends — not just the static system-prompt instructions.
+  // Cheaper than RAG and updates organically every time Niek sends.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: examples } = await (supabase as any)
+    .from("inbound_emails")
+    .select("subject, from_name, from_email, body_text, snippet, replied_text")
+    .not("replied_text", "is", null)
+    .neq("id", id)
+    .order("replied_at", { ascending: false })
+    .limit(5)
+
+  type FewShotExample = { userMsg: string; assistantMsg: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fewShot: FewShotExample[] = ((examples ?? []) as any[])
+    .map((ex) => {
+      const exFrom = ex.from_name?.trim() ? `${ex.from_name} <${ex.from_email}>` : ex.from_email
+      const exBody = (ex.body_text || ex.snippet || "").toString().trim()
+      const exReply = (ex.replied_text || "").toString().trim()
+      if (!exBody || !exReply) return null
+      // Cap each side to keep token usage bounded — replies are usually
+      // short, but bodies can be long. ~2k chars ≈ 500 tokens.
+      const cappedBody = exBody.length > 2000 ? exBody.slice(0, 2000) + "…" : exBody
+      const cappedReply = exReply.length > 2000 ? exReply.slice(0, 2000) + "…" : exReply
+      return {
+        userMsg: [
+          `From: ${exFrom}`,
+          `Subject: ${ex.subject ?? "(no subject)"}`,
+          "",
+          "Original email:",
+          cappedBody,
+        ].join("\n"),
+        assistantMsg: cappedReply,
+      } as FewShotExample
+    })
+    .filter((x): x is FewShotExample => x !== null)
+
   const systemPrompt = [
     "You are Niek van Leeuwen, founder of Arco — a curated professional network for architects in the Netherlands.",
     "You're drafting a reply to an inbound email. Voice: friendly, direct, brief, founder-style. Short paragraphs. First person ('ik' or 'I').",
@@ -686,7 +725,12 @@ export async function generateReplyDraft(
     "If the email asks to be removed / unsubscribed, confirm warmly and offer no further pitch.",
     "If the email is positive interest, propose a clear next step (e.g. 'Hop on a 15-min call?' / 'Stuur ik je een uitnodiging?').",
     "If the email asks how Arco works, give a 2-3 sentence pitch then ask one focused follow-up question.",
-  ].join("\n")
+    fewShot.length > 0
+      ? `\nThe assistant turns below are real Niek-edited replies (newest first). Use them to ground the voice — don't copy phrasing verbatim, but match tone, length, and how Niek opens/closes.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
 
   const userMessage = [
     prospectContext ? `Sender context:\n${prospectContext}\n` : null,
@@ -702,11 +746,23 @@ export async function generateReplyDraft(
   try {
     const Anthropic = (await import("@anthropic-ai/sdk")).default
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    // Compose the messages array as [user, assistant, user, assistant,
+    // ..., user(current)] so Claude sees the few-shot pairs as a
+    // conversational pattern and continues with an assistant turn.
+    // Reverse fewShot so oldest examples come first — gives the model
+    // a chronological sense of how recently they happened.
+    const messages: { role: "user" | "assistant"; content: string }[] = []
+    for (const ex of [...fewShot].reverse()) {
+      messages.push({ role: "user", content: ex.userMsg })
+      messages.push({ role: "assistant", content: ex.assistantMsg })
+    }
+    messages.push({ role: "user", content: userMessage })
+
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 800,
       system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      messages,
     })
 
     const draft = response.content
@@ -803,10 +859,19 @@ export async function sendReply(
   }
 
   const now = new Date().toISOString()
+  // Persist the actually-sent body (post any admin edits) so future
+  // generateReplyDraft calls can include it as a few-shot example —
+  // the model learns Niek's voice from real edited replies, not just
+  // the static system prompt.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any)
     .from("inbound_emails")
-    .update({ status: "replied", replied_at: now, updated_at: now })
+    .update({
+      status: "replied",
+      replied_at: now,
+      replied_text: bodyText,
+      updated_at: now,
+    })
     .eq("id", id)
 
   // Log a prospect_events row when matched so the /admin/sales popup
