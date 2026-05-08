@@ -147,14 +147,25 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   }
 }
 
+/**
+ * Resolve the connected mailbox's email address.
+ *
+ * Uses Gmail's own /users/me/profile rather than Google's userinfo
+ * endpoint — userinfo requires the openid/email/profile scope, which
+ * we don't request (we only need Gmail). The Gmail profile endpoint
+ * returns emailAddress and is already authorized by gmail.readonly.
+ */
 async function fetchUserEmail(accessToken: string): Promise<string> {
-  const r = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+  const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
-  if (!r.ok) throw new Error(`Failed to fetch Google userinfo: ${r.status}`)
-  const json = (await r.json()) as { email?: string }
-  if (!json.email) throw new Error("Google userinfo response missing email")
-  return json.email
+  if (!r.ok) {
+    const text = await r.text()
+    throw new Error(`Failed to fetch Gmail profile: ${r.status} ${text}`)
+  }
+  const json = (await r.json()) as { emailAddress?: string }
+  if (!json.emailAddress) throw new Error("Gmail profile response missing emailAddress")
+  return json.emailAddress
 }
 
 // ─── Refresh-token encryption ────────────────────────────────────────────
