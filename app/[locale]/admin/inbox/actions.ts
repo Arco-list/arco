@@ -25,7 +25,14 @@ export type InboundEmailRow = {
   prospectId: string | null
   prospectCompanyName: string | null
   prospectStatus: string | null
+  prospectSequence: string | null
   prospectChannel: string | null
+  /** Slug of the linked company when prospects.company_id resolves to a
+   *  companies row — drives the deep-link from the From cell to the
+   *  public professional page. Null when the prospect is unlinked
+   *  (Apollo contacts pre-domain-match) or matched company has no slug. */
+  companyId: string | null
+  companySlug: string | null
 }
 
 export type InboundEmailDetail = InboundEmailRow & {
@@ -95,14 +102,18 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
   const prospectIds = Array.from(
     new Set(rows.map((r) => r.prospect_id).filter((id): id is string => Boolean(id))),
   )
-  const prospectMap = new Map<
-    string,
-    { company_name: string | null; status: string; source: string }
-  >()
+  type ProspectRow = {
+    company_name: string | null
+    status: string
+    source: string
+    sequence_status: string
+    company_id: string | null
+  }
+  const prospectMap = new Map<string, ProspectRow>()
   if (prospectIds.length > 0) {
     const { data: prospects } = await supabase
       .from("prospects")
-      .select("id, company_name, status, source")
+      .select("id, company_name, status, source, sequence_status, company_id")
       .in("id", prospectIds)
     for (const p of prospects ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,7 +122,32 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
         company_name: row.company_name,
         status: row.status,
         source: row.source,
+        sequence_status: row.sequence_status,
+        company_id: row.company_id,
       })
+    }
+  }
+
+  // Companies — fetch claimed-company info for prospects that have a
+  // company_id so the From cell can render the canonical company name
+  // + slug instead of the (possibly stale) prospects.company_name string.
+  const companyIds = Array.from(
+    new Set(
+      Array.from(prospectMap.values())
+        .map((p) => p.company_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  )
+  const companyMap = new Map<string, { name: string; slug: string | null }>()
+  if (companyIds.length > 0) {
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, name, slug")
+      .in("id", companyIds)
+    for (const c of companies ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row = c as any
+      companyMap.set(row.id, { name: row.name, slug: row.slug ?? null })
     }
   }
 
@@ -123,6 +159,7 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
 
   const emails: InboundEmailRow[] = rows.map((r) => {
     const p = r.prospect_id ? prospectMap.get(r.prospect_id) : null
+    const linkedCompany = p?.company_id ? companyMap.get(p.company_id) : null
     return {
       id: r.id,
       fromEmail: r.from_email,
@@ -132,9 +169,12 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
       receivedAt: r.received_at,
       status: r.status,
       prospectId: r.prospect_id,
-      prospectCompanyName: p?.company_name ?? null,
+      prospectCompanyName: linkedCompany?.name ?? p?.company_name ?? null,
       prospectStatus: p?.status ?? null,
+      prospectSequence: p?.sequence_status ?? null,
       prospectChannel: p?.source ?? null,
+      companyId: p?.company_id ?? null,
+      companySlug: linkedCompany?.slug ?? null,
     }
   })
 
@@ -158,17 +198,42 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = data as any
-  let prospect: { company_name: string | null; status: string; source: string } | null = null
+  let prospect: {
+    company_name: string | null
+    status: string
+    source: string
+    sequence_status: string
+    company_id: string | null
+  } | null = null
+  let linkedCompany: { name: string; slug: string | null } | null = null
   if (row.prospect_id) {
     const { data: p } = await supabase
       .from("prospects")
-      .select("id, company_name, status, source")
+      .select("id, company_name, status, source, sequence_status, company_id")
       .eq("id", row.prospect_id)
       .maybeSingle()
     if (p) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pr = p as any
-      prospect = { company_name: pr.company_name, status: pr.status, source: pr.source }
+      prospect = {
+        company_name: pr.company_name,
+        status: pr.status,
+        source: pr.source,
+        sequence_status: pr.sequence_status,
+        company_id: pr.company_id,
+      }
+      if (pr.company_id) {
+        const { data: c } = await supabase
+          .from("companies")
+          .select("name, slug")
+          .eq("id", pr.company_id)
+          .maybeSingle()
+        if (c) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const co = c as any
+          linkedCompany = { name: co.name, slug: co.slug ?? null }
+        }
+      }
     }
   }
 
@@ -193,9 +258,12 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
     receivedAt: row.received_at,
     status: row.status === "unread" ? "read" : row.status,
     prospectId: row.prospect_id,
-    prospectCompanyName: prospect?.company_name ?? null,
+    prospectCompanyName: linkedCompany?.name ?? prospect?.company_name ?? null,
     prospectStatus: prospect?.status ?? null,
+    prospectSequence: prospect?.sequence_status ?? null,
     prospectChannel: prospect?.source ?? null,
+    companyId: prospect?.company_id ?? null,
+    companySlug: linkedCompany?.slug ?? null,
     threadId: row.thread_id,
     toEmails: row.to_emails ?? [],
     bodyHtml: row.body_html,
