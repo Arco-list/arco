@@ -252,10 +252,11 @@ export function InboxClient({
 
       {/* List */}
       <div className="arco-table-wrap">
-        <table className="arco-table" style={{ minWidth: 800 }}>
+        <table className="arco-table" style={{ minWidth: 1000 }}>
           <thead>
             <tr>
               <th>From</th>
+              <th>Company</th>
               <th>Subject</th>
               <th style={{ textAlign: "right" }}>Received</th>
             </tr>
@@ -263,7 +264,7 @@ export function InboxClient({
           <tbody>
             {emails.length === 0 && (
               <tr>
-                <td colSpan={3} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={4} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   {search ? "No emails match your search." : "No emails yet."}
                 </td>
               </tr>
@@ -271,16 +272,7 @@ export function InboxClient({
             {emails.map((row) => {
               const unread = row.status === "unread"
               const replied = row.status === "replied"
-              // Primary identity in the From cell: company name when the
-              // sender resolves to a known prospect with a linked company,
-              // else the sender's display name, else the bare email. The
-              // sender email always shows on the second line so the admin
-              // can verify who actually sent.
-              const primary =
-                row.prospectCompanyName?.trim()
-                || row.fromName?.trim()
-                || row.fromEmail
-              const showSecondary = primary !== row.fromEmail
+              const personName = row.fromName?.trim() || null
               const statusDot = row.prospectStatus
                 ? PROSPECT_STATUS_DOT[row.prospectStatus] ?? "bg-[#a1a1a0]"
                 : "bg-[#d4d4d3]"
@@ -291,59 +283,85 @@ export function InboxClient({
                   style={{ cursor: "pointer" }}
                   className="hover:bg-[#fafaf9]"
                 >
+                  {/* From — sender's person identity, regardless of match */}
                   <td>
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="arco-table-status">
-                        <span className={`arco-table-status-dot ${statusDot}`} />
+                    <div className="flex flex-col min-w-0">
+                      {personName && (
                         <span
-                          className="truncate max-w-[200px]"
+                          className="arco-table-primary truncate max-w-[200px]"
                           style={{ fontWeight: unread ? 600 : 400 }}
-                          title={row.prospectStatus
-                            ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
-                            : "Not in funnel"}
                         >
-                          {primary}
+                          {personName}
                         </span>
+                      )}
+                      <span
+                        className={
+                          (personName ? "arco-table-secondary" : "arco-table-primary")
+                          + " truncate max-w-[200px]"
+                        }
+                        style={{ fontWeight: !personName && unread ? 600 : undefined }}
+                      >
+                        {row.fromEmail}
                       </span>
-                      {showSecondary && (
-                        <span className="arco-table-secondary truncate max-w-[200px]">
-                          {row.fromEmail}
-                        </span>
-                      )}
-                      {row.prospectId && (row.prospectSequence || row.prospectChannel) && (
-                        <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                          {row.prospectSequence && (
-                            <span className="status-pill">
-                              <span
-                                className={`status-pill-dot ${
-                                  SEQUENCE_DOT[row.prospectSequence] ?? "bg-[#a1a1a0]"
-                                }`}
-                              />
-                              {SEQUENCE_LABEL[row.prospectSequence] ?? row.prospectSequence}
-                            </span>
-                          )}
-                          {row.prospectChannel && (
-                            <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </td>
+
+                  {/* Company — only populated when the sender resolves to a
+                      prospect (with or without a claimed company row). */}
+                  <td>
+                    {row.prospectId && row.prospectCompanyName ? (
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="arco-table-status">
+                          <span className={`arco-table-status-dot ${statusDot}`} />
+                          <span
+                            className="truncate max-w-[180px]"
+                            title={row.prospectStatus
+                              ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
+                              : "Not in funnel"}
+                          >
+                            {row.prospectCompanyName}
+                          </span>
+                        </span>
+                        {(row.prospectSequence || row.prospectChannel) && (
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {row.prospectSequence && (
+                              <span className="status-pill">
+                                <span
+                                  className={`status-pill-dot ${
+                                    SEQUENCE_DOT[row.prospectSequence] ?? "bg-[#a1a1a0]"
+                                  }`}
+                                />
+                                {SEQUENCE_LABEL[row.prospectSequence] ?? row.prospectSequence}
+                              </span>
+                            )}
+                            {row.prospectChannel && (
+                              <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="arco-table-secondary">—</span>
+                    )}
+                  </td>
+
+                  {/* Subject + snippet */}
                   <td>
                     <div className="flex flex-col min-w-0">
                       <span
                         className="arco-table-primary truncate"
-                        style={{ fontWeight: unread ? 600 : 400, maxWidth: 460 }}
+                        style={{ fontWeight: unread ? 600 : 400, maxWidth: 380 }}
                       >
                         {row.subject || <span className="text-[#a1a1a0]">(no subject)</span>}
                       </span>
                       {row.snippet && (
-                        <span className="arco-table-secondary truncate" style={{ maxWidth: 460 }}>
+                        <span className="arco-table-secondary truncate" style={{ maxWidth: 380 }}>
                           {row.snippet}
                         </span>
                       )}
                     </div>
                   </td>
+
                   <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
                     <div className="flex items-center justify-end gap-2">
                       {replied && (
