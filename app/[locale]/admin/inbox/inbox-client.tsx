@@ -314,7 +314,7 @@ export function InboxClient({
                       pills (accurate signal — there's no funnel state). */}
                   <td>
                     {row.prospectCompanyName ? (
-                      <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                         <span className="arco-table-status">
                           <span className={`arco-table-status-dot ${statusDot}`} />
                           {row.companySlug ? (
@@ -323,7 +323,7 @@ export function InboxClient({
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="truncate max-w-[180px] hover:underline"
+                              className="truncate max-w-[160px] hover:underline"
                               title={row.prospectStatus
                                 ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
                                 : "Linked by email domain"}
@@ -332,7 +332,7 @@ export function InboxClient({
                             </a>
                           ) : (
                             <span
-                              className="truncate max-w-[180px]"
+                              className="truncate max-w-[160px]"
                               title={row.prospectStatus
                                 ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
                                 : "Linked by email domain"}
@@ -341,22 +341,18 @@ export function InboxClient({
                             </span>
                           )}
                         </span>
-                        {row.prospectId && (row.prospectSequence || row.prospectChannel) && (
-                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                            {row.prospectSequence && (
-                              <span className="status-pill">
-                                <span
-                                  className={`status-pill-dot ${
-                                    SEQUENCE_DOT[row.prospectSequence] ?? "bg-[#a1a1a0]"
-                                  }`}
-                                />
-                                {SEQUENCE_LABEL[row.prospectSequence] ?? row.prospectSequence}
-                              </span>
-                            )}
-                            {row.prospectChannel && (
-                              <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
-                            )}
-                          </div>
+                        {row.prospectId && row.prospectSequence && (
+                          <span className="status-pill">
+                            <span
+                              className={`status-pill-dot ${
+                                SEQUENCE_DOT[row.prospectSequence] ?? "bg-[#a1a1a0]"
+                              }`}
+                            />
+                            {SEQUENCE_LABEL[row.prospectSequence] ?? row.prospectSequence}
+                          </span>
+                        )}
+                        {row.prospectId && row.prospectChannel && (
+                          <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
                         )}
                       </div>
                     ) : (
