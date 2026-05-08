@@ -182,21 +182,92 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
     }
   }
 
-  // Domain-based company fallback. When a row has no prospect, OR has
-  // a prospect but no linked company_id, try to resolve the company
-  // from the sender's email domain (skipping free-mail providers so a
-  // gmail.com sender doesn't match the first gmail.com company by
-  // accident). One extra companies query, runs only if any row needs it.
+  // Domain-based company fallback. Two passes for rows that didn't
+  // resolve a company via direct prospect match:
+  //
+  //   Pass A (sales side): query prospects for any with an email at the
+  //   same domain. Surfaces /admin/sales companies — sales-funnel
+  //   entries that don't have a companies row yet but share a domain
+  //   with the inbound sender. Carries the full funnel context (status,
+  //   sequence, channel) so the inbox cell behaves like a real prospect
+  //   match — just resolved by domain instead of exact email.
+  //
+  //   Pass B (marketplace side): for domains still unresolved after A,
+  //   query companies.domain directly. Catches claimed marketplace
+  //   companies that aren't in the sales funnel at all.
+  //
+  // Free-mail providers (gmail, outlook, etc.) are skipped so a
+  // gmail.com sender doesn't accidentally pin to the first gmail.com
+  // company in the DB.
   const unmatchedDomains = new Set<string>()
   for (const r of rows) {
     const p = r.prospect_id ? prospectMap.get(r.prospect_id) : null
-    if (p?.company_id) continue
+    if (p?.company_id || p?.company_name) continue
     const dom = emailDomain(r.from_email)
     if (!dom || FREE_EMAIL_DOMAINS.has(dom)) continue
     unmatchedDomains.add(dom)
   }
-  const domainCompanyMap = new Map<string, { id: string; name: string; slug: string | null }>()
+
+  // Pass A — sales-side domain match via prospects
+  type DomainProspectMatch = {
+    company_name: string
+    status: string
+    source: string
+    sequence_status: string
+    company_id: string | null
+  }
+  const prospectsByDomain = new Map<string, DomainProspectMatch>()
   if (unmatchedDomains.size > 0) {
+    const orFilter = Array.from(unmatchedDomains)
+      .map((d) => `email.ilike.%@${d}`)
+      .join(",")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: domainProspects } = await (supabase as any)
+      .from("prospects")
+      .select("email, company_name, status, source, sequence_status, company_id")
+      .not("company_name", "is", null)
+      .or(orFilter)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of (domainProspects ?? []) as any[]) {
+      const dom = emailDomain(p.email)
+      // First-seen wins — multiple prospects per domain just pick one
+      // representative. company_id-linked prospects are preferred since
+      // they pull richer info from the companies table; otherwise any
+      // prospect with company_name does.
+      if (!dom || prospectsByDomain.has(dom)) continue
+      prospectsByDomain.set(dom, {
+        company_name: p.company_name,
+        status: p.status,
+        source: p.source,
+        sequence_status: p.sequence_status,
+        company_id: p.company_id,
+      })
+    }
+
+    // Pull additional companies for domain-prospect matches that have
+    // company_id set (so we get slug + canonical name) — extends the
+    // existing companyMap rather than a parallel structure.
+    const extraCompanyIds = Array.from(prospectsByDomain.values())
+      .map((p) => p.company_id)
+      .filter((id): id is string => Boolean(id) && !companyMap.has(id as string))
+    if (extraCompanyIds.length > 0) {
+      const { data: extras } = await supabase
+        .from("companies")
+        .select("id, name, slug")
+        .in("id", extraCompanyIds)
+      for (const c of extras ?? []) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row = c as any
+        companyMap.set(row.id, { name: row.name, slug: row.slug ?? null })
+      }
+    }
+  }
+
+  // Pass B — marketplace-side companies.domain for domains still
+  // unmatched after A.
+  const stillUnmatched = Array.from(unmatchedDomains).filter((d) => !prospectsByDomain.has(d))
+  const domainCompanyMap = new Map<string, { id: string; name: string; slug: string | null }>()
+  if (stillUnmatched.length > 0) {
     const { data: companies } = await supabase
       .from("companies")
       .select("id, name, slug, domain")
@@ -205,10 +276,7 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row = c as any
       const dom = normaliseDomain(row.domain)
-      if (!dom || !unmatchedDomains.has(dom)) continue
-      // Take the first hit per domain; multiple companies with the same
-      // domain is rare but possible (scraper noise). Don't overwrite —
-      // first-seen wins.
+      if (!dom || !stillUnmatched.includes(dom)) continue
       if (!domainCompanyMap.has(dom)) {
         domainCompanyMap.set(dom, { id: row.id, name: row.name, slug: row.slug ?? null })
       }
@@ -224,16 +292,38 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
   const emails: InboundEmailRow[] = rows.map((r) => {
     const p = r.prospect_id ? prospectMap.get(r.prospect_id) : null
     const linkedCompany = p?.company_id ? companyMap.get(p.company_id) : null
-    // Domain fallback: applies only when the prospect path didn't
-    // resolve a company. Pills (sequence/channel) stay gated on
-    // prospectId in the UI, so a domain-only match shows just the
-    // company name without a sequence/channel pill — accurate signal.
+
+    // Resolution priority for unmatched-prospect rows:
+    //   pass A: prospect-by-domain (sales funnel — full pills)
+    //   pass B: companies-by-domain (claimed marketplace — name + slug only)
     const dom = emailDomain(r.from_email)
-    const domainMatch =
+    const needsFallback =
       !linkedCompany && !p?.company_name && dom && !FREE_EMAIL_DOMAINS.has(dom)
-        ? domainCompanyMap.get(dom) ?? null
+    const prospectDomainMatch = needsFallback ? prospectsByDomain.get(dom!) ?? null : null
+    const companyDomainMatch =
+      needsFallback && !prospectDomainMatch
+        ? domainCompanyMap.get(dom!) ?? null
         : null
-    const resolvedCompany = linkedCompany ?? domainMatch
+
+    // Resolve the displayed company name, slug and id — prefer the
+    // canonical companies row (linked or domain-matched) over free-text
+    // prospect.company_name.
+    const claimedFromProspectDomain = prospectDomainMatch?.company_id
+      ? companyMap.get(prospectDomainMatch.company_id) ?? null
+      : null
+    const resolvedClaimedCompany =
+      linkedCompany ?? claimedFromProspectDomain ?? companyDomainMatch
+    const resolvedCompanyName =
+      resolvedClaimedCompany?.name
+      ?? p?.company_name
+      ?? prospectDomainMatch?.company_name
+      ?? null
+    const resolvedCompanyId =
+      p?.company_id
+      ?? prospectDomainMatch?.company_id
+      ?? companyDomainMatch?.id
+      ?? null
+
     return {
       id: r.id,
       fromEmail: r.from_email,
@@ -243,12 +333,15 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
       receivedAt: r.received_at,
       status: r.status,
       prospectId: r.prospect_id,
-      prospectCompanyName: resolvedCompany?.name ?? p?.company_name ?? null,
-      prospectStatus: p?.status ?? null,
-      prospectSequence: p?.sequence_status ?? null,
-      prospectChannel: p?.source ?? null,
-      companyId: p?.company_id ?? domainMatch?.id ?? null,
-      companySlug: resolvedCompany?.slug ?? null,
+      prospectCompanyName: resolvedCompanyName,
+      // Funnel context — direct prospect first, then domain-matched
+      // prospect. companies-only matches stay null (no funnel context
+      // to surface, which the UI uses to hide the pills).
+      prospectStatus: p?.status ?? prospectDomainMatch?.status ?? null,
+      prospectSequence: p?.sequence_status ?? prospectDomainMatch?.sequence_status ?? null,
+      prospectChannel: p?.source ?? prospectDomainMatch?.source ?? null,
+      companyId: resolvedCompanyId,
+      companySlug: resolvedClaimedCompany?.slug ?? null,
     }
   })
 
@@ -311,27 +404,74 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
     }
   }
 
-  // Domain fallback (same shape as fetchInboundEmails). Only fires
-  // when the prospect path didn't resolve a company.
+  // Domain fallback — same two-pass shape as fetchInboundEmails:
+  //   A. prospect-by-domain (sales funnel context, full pills)
+  //   B. companies-by-domain (claimed marketplace, name + slug only)
+  let domainProspect: {
+    company_name: string
+    status: string
+    source: string
+    sequence_status: string
+    company_id: string | null
+  } | null = null
+  let claimedFromDomainProspect: { id: string; name: string; slug: string | null } | null = null
   let domainCompany: { id: string; name: string; slug: string | null } | null = null
   if (!linkedCompany && !prospect?.company_name) {
     const dom = emailDomain(row.from_email)
     if (dom && !FREE_EMAIL_DOMAINS.has(dom)) {
-      const { data: candidates } = await supabase
-        .from("companies")
-        .select("id, name, slug, domain")
-        .not("domain", "is", null)
-      for (const c of candidates ?? []) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const co = c as any
-        if (normaliseDomain(co.domain) === dom) {
-          domainCompany = { id: co.id, name: co.name, slug: co.slug ?? null }
-          break
+      // Pass A — any prospect with email at this domain that has a
+      // company_name. Take the first hit; prefer ones with company_id
+      // when there are multiple by sorting nulls last.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: domainProspects } = await (supabase as any)
+        .from("prospects")
+        .select("email, company_name, status, source, sequence_status, company_id")
+        .ilike("email", `%@${dom}`)
+        .not("company_name", "is", null)
+        .order("company_id", { ascending: false, nullsFirst: false })
+        .limit(1)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dp = ((domainProspects ?? []) as any[])[0]
+      if (dp) {
+        domainProspect = {
+          company_name: dp.company_name,
+          status: dp.status,
+          source: dp.source,
+          sequence_status: dp.sequence_status,
+          company_id: dp.company_id,
+        }
+        if (dp.company_id) {
+          const { data: c } = await supabase
+            .from("companies")
+            .select("id, name, slug")
+            .eq("id", dp.company_id)
+            .maybeSingle()
+          if (c) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const co = c as any
+            claimedFromDomainProspect = { id: co.id, name: co.name, slug: co.slug ?? null }
+          }
+        }
+      }
+
+      // Pass B — only if A didn't resolve. Match against companies.domain.
+      if (!domainProspect) {
+        const { data: candidates } = await supabase
+          .from("companies")
+          .select("id, name, slug, domain")
+          .not("domain", "is", null)
+        for (const c of candidates ?? []) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const co = c as any
+          if (normaliseDomain(co.domain) === dom) {
+            domainCompany = { id: co.id, name: co.name, slug: co.slug ?? null }
+            break
+          }
         }
       }
     }
   }
-  const resolvedCompany = linkedCompany ?? domainCompany
+  const resolvedCompany = linkedCompany ?? claimedFromDomainProspect ?? domainCompany
 
   // Mark as read — fire and forget. The eq("status", "unread") guard
   // makes this idempotent so re-opening already-read emails is a no-op.
@@ -354,11 +494,19 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
     receivedAt: row.received_at,
     status: row.status === "unread" ? "read" : row.status,
     prospectId: row.prospect_id,
-    prospectCompanyName: resolvedCompany?.name ?? prospect?.company_name ?? null,
-    prospectStatus: prospect?.status ?? null,
-    prospectSequence: prospect?.sequence_status ?? null,
-    prospectChannel: prospect?.source ?? null,
-    companyId: prospect?.company_id ?? domainCompany?.id ?? null,
+    prospectCompanyName:
+      resolvedCompany?.name
+      ?? prospect?.company_name
+      ?? domainProspect?.company_name
+      ?? null,
+    prospectStatus: prospect?.status ?? domainProspect?.status ?? null,
+    prospectSequence: prospect?.sequence_status ?? domainProspect?.sequence_status ?? null,
+    prospectChannel: prospect?.source ?? domainProspect?.source ?? null,
+    companyId:
+      prospect?.company_id
+      ?? domainProspect?.company_id
+      ?? domainCompany?.id
+      ?? null,
     companySlug: resolvedCompany?.slug ?? null,
     threadId: row.thread_id,
     toEmails: row.to_emails ?? [],

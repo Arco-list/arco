@@ -325,9 +325,13 @@ export function InboxClient({
                         <span className="arco-table-status">
                           <span className={`arco-table-status-dot ${statusDot}`} />
                           {(() => {
+                            // Has funnel context if EITHER directly matched
+                            // a prospect OR domain-matched a prospect (status
+                            // gets carried over in the latter case).
+                            const hasFunnelContext = Boolean(row.prospectStatus)
                             const linkTarget = row.companySlug
                               ? `/professionals/${row.companySlug}`
-                              : row.prospectId
+                              : hasFunnelContext
                                 ? `/admin/sales?search=${encodeURIComponent(row.fromEmail)}`
                                 : null
                             const titleText = row.prospectStatus
@@ -356,7 +360,7 @@ export function InboxClient({
                             )
                           })()}
                         </span>
-                        {row.prospectId && row.prospectSequence && (
+                        {row.prospectSequence && (
                           <span className="status-pill">
                             <span
                               className={`status-pill-dot ${
@@ -366,7 +370,7 @@ export function InboxClient({
                             {SEQUENCE_LABEL[row.prospectSequence] ?? row.prospectSequence}
                           </span>
                         )}
-                        {row.prospectId && row.prospectChannel && (
+                        {row.prospectChannel && (
                           <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
                         )}
                       </div>
@@ -500,7 +504,7 @@ export function InboxClient({
                         <span>{openDetail.prospectCompanyName}</span>
                       )}
                     </span>
-                    {openDetail.prospectId && openDetail.prospectSequence && (
+                    {openDetail.prospectSequence && (
                       <span className="status-pill">
                         <span
                           className={`status-pill-dot ${
@@ -510,7 +514,7 @@ export function InboxClient({
                         {SEQUENCE_LABEL[openDetail.prospectSequence] ?? openDetail.prospectSequence}
                       </span>
                     )}
-                    {openDetail.prospectId && openDetail.prospectChannel && (
+                    {openDetail.prospectChannel && (
                       <span className="status-pill">{channelLabel(openDetail.prospectChannel)}</span>
                     )}
                     {!openDetail.prospectId && (
