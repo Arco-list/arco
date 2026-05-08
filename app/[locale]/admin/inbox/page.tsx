@@ -1,23 +1,25 @@
-import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import Link from "next/link"
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { fetchInboundEmails, type InboundTab } from "./actions"
+import { InboxClient } from "./inbox-client"
 
 export const dynamic = "force-dynamic"
 
 /**
- * /admin/inbox — slice 1+2 minimal landing page.
+ * /admin/inbox — slice 3 list + detail view.
  *
- * If no Gmail mailbox is connected: a Connect button that kicks off
- * /api/auth/gmail. If a connection exists: a small status block (which
- * mailbox + last sync + how many inbound emails ingested + reply
- * matching count). The full list/detail UI ships in slice 3.
+ *   - Server-fetches the initial page of inbound emails (default tab:
+ *     "active" = unread + read) plus the connection-status row(s).
+ *   - Renders a compact connection header so the admin sees at a glance
+ *     which mailbox is wired and when it last synced.
+ *   - The client component (InboxClient) handles tabs, search, the row
+ *     popup, mark-as-archived/unread, and re-fetches via the same
+ *     server action when filters change.
  *
- * Sequences already auto-cancel on reply at this point — the cron
- * (/api/cron/sync-gmail every 5 min) ingests new mail, matches
- * prospects, stamps replied_at, cancels pending drips. No UI required
- * for that loop.
+ * Reply composer is slice 4; AI draft is slice 5.
  */
 export default async function AdminInboxPage(props: {
-  searchParams?: Promise<{ connected?: string; error?: string }>
+  searchParams?: Promise<{ connected?: string; error?: string; tab?: string }>
 }) {
   const params = props.searchParams ? await props.searchParams : {}
   const supabase = createServiceRoleSupabaseClient()
@@ -34,14 +36,12 @@ export default async function AdminInboxPage(props: {
     last_sync_error: string | null
   }>
 
-  const { count: inboundCount } = await (supabase as any)
-    .from("inbound_emails")
-    .select("id", { count: "exact", head: true })
+  const initialTab: InboundTab =
+    params.tab === "replied" || params.tab === "archived" || params.tab === "all"
+      ? params.tab
+      : "active"
 
-  const { count: matchedCount } = await (supabase as any)
-    .from("inbound_emails")
-    .select("id", { count: "exact", head: true })
-    .not("prospect_id", "is", null)
+  const initial = await fetchInboundEmails({ tab: initialTab })
 
   return (
     <div className="min-h-screen bg-white">
@@ -54,6 +54,7 @@ export default async function AdminInboxPage(props: {
                 Inbound replies to outbound sales mail. Replies auto-cancel pending drip sequences.
               </p>
             </div>
+            <ConnectionBadge conns={conns} />
           </div>
 
           {params.connected === "1" && (
@@ -68,53 +69,84 @@ export default async function AdminInboxPage(props: {
           )}
 
           {conns.length === 0 ? (
-            <ConnectCard />
-          ) : (
-            <div className="space-y-4">
-              {conns.map((c) => (
-                <ConnectionStatus key={c.gmail_address} connection={c} />
-              ))}
-              <ConnectCard label="Connect another mailbox" />
+            <div className="rounded-[3px] border border-[#e5e5e4] bg-white p-5 max-w-md">
+              <p className="text-sm font-medium text-[#1c1c1a]">Connect a mailbox</p>
+              <p className="mt-1 text-xs text-[#6b6b68] leading-relaxed">
+                Authorise Arco to read and send replies from your Gmail. Tokens are
+                stored encrypted server-side; nothing leaves the cron job.
+              </p>
+              <Link
+                href="/api/auth/gmail"
+                className="mt-3 inline-flex h-9 px-4 items-center text-xs font-medium rounded-[3px] text-white"
+                style={{ background: "var(--primary, #016D75)" }}
+              >
+                Connect Gmail
+              </Link>
             </div>
+          ) : (
+            <InboxClient initial={initial} initialTab={initialTab} />
           )}
 
-          <div className="mt-8 grid grid-cols-2 gap-4 max-w-md">
-            <Stat label="Inbound emails synced" value={inboundCount ?? 0} />
-            <Stat label="Matched to a prospect" value={matchedCount ?? 0} />
-          </div>
-
-          <p className="mt-8 text-xs text-[#a1a1a0] max-w-xl leading-relaxed">
-            The inbox list + detail view ship in the next slice. For now,
-            replies are detected and the matching prospects' pending drip
-            rows are cancelled automatically — visible on /admin/sales as
-            a Replied event in the contact's timeline.
-          </p>
+          {conns.length > 0 && (
+            <div className="mt-10 pt-6 border-t border-[#e5e5e4]">
+              <h4 className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider mb-3">
+                Connected mailboxes
+              </h4>
+              <div className="space-y-2">
+                {conns.map((c) => (
+                  <ConnectionRow key={c.gmail_address} connection={c} />
+                ))}
+                <Link
+                  href="/api/auth/gmail"
+                  className="text-xs text-[#016D75] hover:underline"
+                >
+                  + Connect another mailbox
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-function ConnectCard({ label = "Connect Gmail" }: { label?: string }) {
+function ConnectionBadge({
+  conns,
+}: {
+  conns: Array<{ gmail_address: string; last_sync_at: string | null; last_sync_error: string | null }>
+}) {
+  if (conns.length === 0) return null
+  const anyError = conns.some((c) => c.last_sync_error)
+  const lastSyncAt = conns
+    .map((c) => c.last_sync_at)
+    .filter((s): s is string => Boolean(s))
+    .sort()
+    .at(-1)
+  const lastSyncLabel = lastSyncAt
+    ? formatRelative(lastSyncAt)
+    : "awaiting first sync"
   return (
-    <div className="rounded-[3px] border border-[#e5e5e4] bg-white p-5 max-w-md">
-      <p className="text-sm font-medium text-[#1c1c1a]">Connect a mailbox</p>
-      <p className="mt-1 text-xs text-[#6b6b68] leading-relaxed">
-        Authorise Arco to read and send replies from your Gmail. Tokens
-        are stored encrypted server-side; nothing leaves the cron job.
-      </p>
-      <Link
-        href="/api/auth/gmail"
-        className="mt-3 inline-flex h-9 px-4 items-center text-xs font-medium rounded-[3px] text-white"
-        style={{ background: "var(--primary, #016D75)" }}
+    <div className="flex items-center gap-2">
+      <span
+        className="status-pill"
+        style={{
+          borderColor: anyError ? "#fecaca" : "#bbf7d0",
+          color: anyError ? "#b91c1c" : "#166534",
+        }}
       >
-        {label}
-      </Link>
+        <span className={`status-pill-dot ${anyError ? "bg-red-500" : "bg-emerald-500"}`} />
+        {anyError ? "Sync error" : "Connected"}
+      </span>
+      <span className="text-[11px] text-[#a1a1a0]">
+        {conns.length === 1 ? conns[0].gmail_address : `${conns.length} mailboxes`}
+        {" · "}last sync {lastSyncLabel}
+      </span>
     </div>
   )
 }
 
-function ConnectionStatus({
+function ConnectionRow({
   connection,
 }: {
   connection: {
@@ -124,46 +156,32 @@ function ConnectionStatus({
     last_sync_error: string | null
   }
 }) {
-  const lastSync = connection.last_sync_at
-    ? new Date(connection.last_sync_at).toLocaleString()
-    : "never"
   return (
-    <div className="rounded-[3px] border border-[#e5e5e4] bg-white p-4 max-w-xl">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-medium text-[#1c1c1a]">{connection.gmail_address}</p>
-        <span
-          className="status-pill"
-          style={{
-            borderColor: connection.last_sync_error ? "#fecaca" : "#bbf7d0",
-            color: connection.last_sync_error ? "#b91c1c" : "#166534",
-          }}
-        >
-          <span
-            className={`status-pill-dot ${connection.last_sync_error ? "bg-red-500" : "bg-emerald-500"}`}
-          />
-          {connection.last_sync_error ? "Error" : "Connected"}
-        </span>
-      </div>
-      <div className="mt-2 text-xs text-[#6b6b68] space-y-0.5">
-        <p>Last sync: {lastSync}</p>
-        {connection.last_history_id ? (
-          <p className="text-[10px] text-[#a1a1a0]">historyId: {connection.last_history_id}</p>
-        ) : (
-          <p className="text-[10px] text-amber-700">Awaiting first sync run.</p>
-        )}
-        {connection.last_sync_error && (
-          <p className="text-[11px] text-red-700 break-all">Last error: {connection.last_sync_error}</p>
-        )}
-      </div>
+    <div className="flex items-baseline gap-3 text-xs text-[#6b6b68]">
+      <span className="font-medium text-[#1c1c1a]">{connection.gmail_address}</span>
+      <span>
+        last sync{" "}
+        {connection.last_sync_at ? formatRelative(connection.last_sync_at) : "never"}
+      </span>
+      {connection.last_sync_error && (
+        <span className="text-red-700 break-all">· {connection.last_sync_error}</span>
+      )}
     </div>
   )
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[3px] border border-[#e5e5e4] bg-white p-3">
-      <p className="text-[10px] uppercase tracking-wider text-[#a1a1a0]">{label}</p>
-      <p className="mt-1 text-xl font-medium text-[#1c1c1a]">{value.toLocaleString()}</p>
-    </div>
-  )
+function formatRelative(ts: string): string {
+  try {
+    const ms = Date.now() - new Date(ts).getTime()
+    if (ms < 60_000) return "just now"
+    const m = Math.floor(ms / 60_000)
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.floor(h / 24)
+    if (d < 7) return `${d}d ago`
+    return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  } catch {
+    return ts
+  }
 }
