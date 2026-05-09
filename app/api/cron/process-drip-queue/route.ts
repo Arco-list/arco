@@ -229,6 +229,16 @@ async function sendOne(
     "prospect-intro",
     "new-professional-invite",
   ])
+  // Subset that flips sequence_status='active' → 'finished' once the
+  // last email of the series goes out — manual Pause / Finish / Restart
+  // continue to override this since they update sequence_status
+  // themselves and cancel any pending rows in the queue (so a -final
+  // template only fires when the sequence actually ran to completion).
+  const FINAL_TEMPLATES = new Set([
+    "prospect-final",
+    "new-professional-final",
+    "outreach-final",
+  ])
   let recipient = row.email
   if (COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
     // Re-lookup current email on the prospect row in case the admin
@@ -294,7 +304,7 @@ async function sendOne(
     if (COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
       let prospectQuery = supabase
         .from("prospects")
-        .select("id, status, emails_sent, emails_delivered")
+        .select("id, status, emails_sent, emails_delivered, sequence_status")
         .limit(1)
       prospectQuery = row.company_id
         ? prospectQuery.eq("company_id", row.company_id)
@@ -308,6 +318,17 @@ async function sendOne(
         }
         if (INTRO_TEMPLATES.has(row.template) && prospect.status === "prospect") {
           updates.status = "contacted"
+        }
+        // The last email of the series just went out — flip the
+        // sequence to 'finished' so the row leaves the active filter
+        // on /admin/sales without admin needing to click Finish.
+        // Skip when the sequence is already paused/finished/cancelled
+        // (manual override beats auto-finish).
+        if (
+          FINAL_TEMPLATES.has(row.template)
+          && prospect.sequence_status === "active"
+        ) {
+          updates.sequence_status = "finished"
         }
         await supabase
           .from("prospects")

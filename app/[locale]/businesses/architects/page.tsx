@@ -80,6 +80,17 @@ export default async function ArchitectsPage({ params: paramsPromise, searchPara
           status: "visitor",
           landing_visited_at: new Date().toISOString(),
         }).eq("id", prospect.id)
+        // Log a prospect_events row so the /admin/sales popup
+        // timeline surfaces the visit alongside email sends + status
+        // changes. Best-effort; tracking shouldn't block page render.
+        await serviceClient.from("prospect_events").insert({
+          prospect_id: prospect.id,
+          event_type: "prospect.landing_visited",
+          metadata: {
+            landed_via: "businesses/architects",
+            previous_status: prospect.status,
+          },
+        })
       }
     } catch {}
   }

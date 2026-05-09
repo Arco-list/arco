@@ -2039,18 +2039,30 @@ function ContactDetailBody({
   const isInvite = contact.source === "invites"
   const initial = (isInvite ? "contacted" : "prospect") as ProspectStatus
 
+  // Earliest sent timestamp across the loaded sequence steps — this is
+  // when the contact actually entered the Contacted stage. We can't use
+  // prospect.last_email_sent_at (which gets bumped on every send and
+  // would mislabel the stage as "started after the most recent email").
+  const firstSentAt: string | null = (() => {
+    const sentTimestamps = details.sequence
+      .filter((step) => step.status === "sent" && step.timestamp)
+      .map((step) => step.timestamp as string)
+      .sort()
+    return sentTimestamps[0] ?? null
+  })()
+
   // Lifecycle uses the prospect-level timestamps when we have them; falls
   // back to whatever's on SalesContact for a graceful render.
   const lifecycle: Array<{ label: string; ts: string | null; status: ProspectStatus }> = (() => {
     if (!prospect) {
       return [
         { label: isInvite ? "Invited" : "Prospect", ts: contact.createdAt, status: initial },
-        { label: "Contacted", ts: contact.lastEmailSentAt, status: "contacted" },
+        { label: "Contacted", ts: firstSentAt ?? contact.lastEmailSentAt, status: "contacted" },
       ].filter((s) => s.ts) as Array<{ label: string; ts: string; status: ProspectStatus }>
     }
     return [
       { label: isInvite ? "Invited" : "Prospect", ts: prospect.created_at, status: initial },
-      { label: "Contacted", ts: prospect.last_email_sent_at, status: "contacted" },
+      { label: "Contacted", ts: firstSentAt ?? prospect.last_email_sent_at, status: "contacted" },
       { label: "Visitor", ts: prospect.landing_visited_at, status: "visitor" },
       { label: "Signup", ts: prospect.signed_up_at, status: "signup" },
       { label: "Draft", ts: prospect.company_created_at, status: "company" },
