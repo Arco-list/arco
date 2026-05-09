@@ -206,7 +206,7 @@ const Faq12 = () => {
       ))}
 
       {/* Contact CTA */}
-      <section style={{ padding: "96px 0", background: C.surface, textAlign: "center" }}>
+      <section style={{ padding: "96px 0", background: C.white, textAlign: "center" }}>
         <div className="wrap">
           <span
             className="arco-eyebrow"
