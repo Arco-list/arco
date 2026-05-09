@@ -677,6 +677,36 @@ export async function generateReplyDraft(
   const promptBody = (row.body_text || row.snippet || "").trim()
   const fromLabel = row.from_name?.trim() ? `${row.from_name} <${row.from_email}>` : row.from_email
 
+  // RAG: pull the most relevant Help/FAQ chunks for this email so
+  // the draft can answer product questions from real copy instead
+  // of inventing answers. Filtered to the detected language so a
+  // Dutch reply sees Dutch FAQ. Silently degrades to no context
+  // when OPENAI_API_KEY isn't set or kb_chunks is empty.
+  let kbContext = ""
+  try {
+    const { retrieveKbChunks } = await import("@/lib/kb/retrieve")
+    // Build retrieval query from subject + first ~500 chars of body —
+    // most reply-worthy emails ask their question in the opening.
+    const queryText = [row.subject ?? "", promptBody.slice(0, 500)].filter(Boolean).join("\n").trim()
+    if (queryText) {
+      const chunks = await retrieveKbChunks(queryText, {
+        topK: 4,
+        language: locale,
+        source: "faq",
+        // Loose threshold — the prompt instructs the model to ignore
+        // irrelevant chunks so we'd rather over-include than miss.
+        maxDistance: 0.85,
+      })
+      if (chunks.length > 0) {
+        kbContext = chunks
+          .map((c, i) => `[${i + 1}] ${c.title ? c.title + "\n" : ""}${c.content}`)
+          .join("\n\n---\n\n")
+      }
+    }
+  } catch (err) {
+    console.error("[generateReplyDraft] KB retrieval failed (non-fatal)", err)
+  }
+
   // Few-shot examples: the last N inbound emails Niek has personally
   // replied to. Pair each (original body) with (admin's actual reply
   // text) so the model picks up real voice, real tone, real formatting
@@ -725,6 +755,9 @@ export async function generateReplyDraft(
     "If the email asks to be removed / unsubscribed, confirm warmly and offer no further pitch.",
     "If the email is positive interest, propose a clear next step (e.g. 'Hop on a 15-min call?' / 'Stuur ik je een uitnodiging?').",
     "If the email asks how Arco works, give a 2-3 sentence pitch then ask one focused follow-up question.",
+    kbContext
+      ? `\nReference info from Arco's Help Center (use to ground product answers; quote naturally, don't paste verbatim; ignore chunks that aren't relevant):\n\n${kbContext}`
+      : "",
     fewShot.length > 0
       ? `\nThe assistant turns below are real Niek-edited replies (newest first). Use them to ground the voice — don't copy phrasing verbatim, but match tone, length, and how Niek opens/closes.`
       : "",
