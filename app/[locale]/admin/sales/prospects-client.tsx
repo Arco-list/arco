@@ -1526,7 +1526,11 @@ function CompanyRowView({
   const sequenceCfg = SEQUENCE_CONFIG[row.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
 
   return (
-    <tr>
+    <tr
+      onClick={() => onOpenContactDetails(row.primaryContact.prospectId)}
+      style={{ cursor: "pointer" }}
+      className="hover:bg-[#fafaf9]"
+    >
       {/* Company */}
       <td>
         <div className="flex items-center gap-3">
@@ -1546,6 +1550,7 @@ function CompanyRowView({
                 href={`/professionals/${claimed.slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="arco-table-primary hover:underline"
               >
                 {row.companyName}
@@ -1558,8 +1563,10 @@ function CompanyRowView({
         </div>
       </td>
 
-      {/* Contacts */}
-      <td>
+      {/* Contacts — own onClick handler stops the row's click bubble so
+          the contact dropdown / +N more popover open without the row's
+          Details popup also firing on top. */}
+      <td onClick={(e) => e.stopPropagation()}>
         <ContactsCell
           row={row}
           onOpenContactDetails={onOpenContactDetails}
