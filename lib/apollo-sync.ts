@@ -133,6 +133,8 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
             firstName,
             companyName,
             companyId: row.company_id,
+            apolloContactId: contact.id,
+            apolloListId: listId,
           })
           if (!result.success) {
             logger.error("[apollo-sync] auto-enrol failed", { email: row.email, error: result.error })

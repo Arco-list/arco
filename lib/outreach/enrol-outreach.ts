@@ -37,6 +37,12 @@ export type EnrolOutreachArgs = {
   companyName: string
   companyId?: string | null
   refUrl?: string | null
+  /** Apollo contact id of the imported contact — surfaced under the
+   *  Sequence Enroled event metadata so the popup timeline shows
+   *  "Source: Apollo / Contact ID / List ID" instead of the bare
+   *  template_set + scheduled blob. */
+  apolloContactId?: string | null
+  apolloListId?: string | null
 }
 
 export type EnrolOutreachResult = {
@@ -54,7 +60,7 @@ export async function enrolOutreachContact(
   supabase: SupabaseClient<any, any, any>,
   args: EnrolOutreachArgs,
 ): Promise<EnrolOutreachResult> {
-  const { prospectId, email, firstName, companyName, companyId, refUrl } = args
+  const { prospectId, email, firstName, companyName, companyId, refUrl, apolloContactId, apolloListId } = args
 
   const variables = {
     firstname: firstName,
@@ -111,9 +117,13 @@ export async function enrolOutreachContact(
     prospect_id: prospectId,
     event_type: "sequence_enroled",
     metadata: {
+      // Capitalised so the popup timeline renders "Source: Apollo"
+      // straight from the metadata without a value-side display map.
+      source: "Apollo",
+      ...(apolloContactId ? { apollo_contact_id: apolloContactId } : {}),
+      ...(apolloListId ? { apollo_list_id: apolloListId } : {}),
       template_set: "outreach",
       scheduled: { intro: introAt, followup: followupAt, final: finalAt },
-      source: "auto_enrol",
     },
   })
 

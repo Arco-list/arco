@@ -196,7 +196,20 @@ const EVENT_LABELS: Record<string, string> = {
   "prospect.landing_visited": "Visited landing page",
 }
 
-function formatEventLabel(type: string): string {
+function formatEventLabel(type: string, metadata?: Record<string, unknown> | null): string {
+  // Email send events get specialised when metadata.template is present:
+  // "Showcase Intro sent" / "Outreach Follow-up resent" reads better
+  // than the generic "Email sent" / "Email resent".
+  if (type === "email_sent" || type === "email_resent") {
+    const rawTemplate = typeof metadata?.template === "string" ? metadata.template : null
+    if (rawTemplate) {
+      const friendly =
+        TEMPLATE_NAMES[rawTemplate]
+        ?? TEMPLATE_NAMES[rawTemplate.replace(/_/g, "-")]
+        ?? templateDisplayName(rawTemplate.replace(/_/g, "-"))
+      return `${friendly} ${type === "email_resent" ? "resent" : "sent"}`
+    }
+  }
   if (EVENT_LABELS[type]) return EVENT_LABELS[type]
   if (type.startsWith("status_changed_to_")) {
     const to = type.slice("status_changed_to_".length).replace(/_/g, " ")
@@ -218,6 +231,9 @@ const METADATA_KEY_LABELS: Record<string, string> = {
   status: "Status",
   previous_status: "Previous status",
   new_status: "New status",
+  apollo_contact_id: "Contact ID",
+  apollo_list_id: "List ID",
+  template_set: "Template set",
 }
 
 function formatMetadataKey(key: string): string {
@@ -256,7 +272,7 @@ function EventHistoryRow({ event }: { event: ProspectEvent }) {
           {hasMeta ? "▶" : ""}
         </span>
         <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
-        <span className="font-medium text-[#1c1c1a]">{formatEventLabel(event.event_type)}</span>
+        <span className="font-medium text-[#1c1c1a]">{formatEventLabel(event.event_type, event.metadata as Record<string, unknown> | null)}</span>
       </button>
       {open && hasMeta && (
         isCompanyInvited
@@ -1005,23 +1021,6 @@ export function ProspectsClient({
                   ) : (
                     <h3 className="arco-section-title">{detailCompany.companyName}</h3>
                   )}
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    {[detailCompany.claimedCompany?.primaryService, detailCompany.claimedCompany?.city ?? detailCompany.city]
-                      .filter(Boolean)
-                      .map((label, i, arr) => (
-                        <Fragment key={String(label)}>
-                          <span className="text-xs text-[#6b6b68]">{label}</span>
-                          {i < arr.length - 1 && <span className="text-[#c4c4c2] text-xs">·</span>}
-                        </Fragment>
-                      ))}
-                    {detailCompany.sources.length > 0 && (
-                      <span className="flex items-center gap-1 ml-1">
-                        {detailCompany.sources.map((s) => (
-                          <span key={s} className="status-pill">{sourceLabel(s)}</span>
-                        ))}
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
               <button type="button" className="popup-close" onClick={closeDetails} aria-label="Close">✕</button>
@@ -2097,26 +2096,6 @@ function ContactDetailBody({
         </div>
       )}
 
-      {contact.source === "apollo" && prospect && (
-        <div>
-          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Apollo</span>
-          <div className="mt-1.5 space-y-1">
-            {[
-              { label: "Contact ID", value: (prospect as any).apollo_contact_id },
-              { label: "Sequence ID", value: (prospect as any).apollo_sequence_id },
-              { label: "List ID", value: (prospect as any).apollo_list_id },
-            ]
-              .filter((r) => r.value)
-              .map((r) => (
-                <div key={r.label} className="flex items-center gap-2 text-xs">
-                  <span className="font-medium text-[#1c1c1a] w-32 shrink-0">{r.label}</span>
-                  <span className="text-[#6b6b68] break-all">{r.value}</span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
       {prospect?.notes && (
         <div>
           <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Notes</span>
@@ -2126,10 +2105,7 @@ function ContactDetailBody({
 
       {details.sequence.length > 0 && (
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Outreach Sequence</span>
-            <span className="status-pill">{sourceLabel(contact.source)}</span>
-          </div>
+          <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Outreach Sequence</span>
           <div className="mt-1.5 space-y-1">
             {details.sequence.map((step) => {
               const statusPill: Record<ProspectSequenceStep["status"], { variant: string; label: string }> = {
