@@ -2,7 +2,6 @@ import Link from "next/link"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { fetchInboundEmails, type InboundTab } from "./actions"
 import { InboxClient } from "./inbox-client"
-import { DisconnectButton } from "./disconnect-button"
 
 export const dynamic = "force-dynamic"
 
@@ -88,24 +87,6 @@ export default async function AdminInboxPage(props: {
             <InboxClient initial={initial} initialTab={initialTab} />
           )}
 
-          {conns.length > 0 && (
-            <div className="mt-10 pt-6 border-t border-[#e5e5e4]">
-              <h4 className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider mb-3">
-                Connected mailboxes
-              </h4>
-              <div className="space-y-2">
-                {conns.map((c) => (
-                  <ConnectionRow key={c.gmail_address} connection={c} />
-                ))}
-                <Link
-                  href="/api/auth/gmail"
-                  className="text-xs text-[#016D75] hover:underline"
-                >
-                  + Connect another mailbox
-                </Link>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -143,31 +124,6 @@ function ConnectionBadge({
         {conns.length === 1 ? conns[0].gmail_address : `${conns.length} mailboxes`}
         {" · "}last sync {lastSyncLabel}
       </span>
-    </div>
-  )
-}
-
-function ConnectionRow({
-  connection,
-}: {
-  connection: {
-    gmail_address: string
-    last_sync_at: string | null
-    last_history_id: string | null
-    last_sync_error: string | null
-  }
-}) {
-  return (
-    <div className="flex items-baseline gap-3 text-xs text-[#6b6b68]">
-      <span className="font-medium text-[#1c1c1a]">{connection.gmail_address}</span>
-      <span>
-        last sync{" "}
-        {connection.last_sync_at ? formatRelative(connection.last_sync_at) : "never"}
-      </span>
-      {connection.last_sync_error && (
-        <span className="text-red-700 break-all">· {connection.last_sync_error}</span>
-      )}
-      <DisconnectButton gmailAddress={connection.gmail_address} />
     </div>
   )
 }

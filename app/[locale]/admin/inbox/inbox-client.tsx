@@ -1,21 +1,24 @@
 "use client"
 
 import { useCallback, useEffect, useState, useTransition } from "react"
-import Link from "next/link"
 import { toast } from "sonner"
 import {
   archiveInboundEmail,
-  fetchInboundEmailDetail,
   fetchInboundEmails,
   generateReplyDraft,
-  markInboundEmailUnread,
   sendReply,
   unarchiveInboundEmail,
   type FetchInboundResult,
-  type InboundEmailDetail,
   type InboundEmailRow,
   type InboundTab,
 } from "./actions"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { generateCompanyLoginLinkAction } from "@/app/admin/professionals/actions"
 
 // Mirrors the funnel-stage colours used on /admin/sales so the
 // prospect badge in the inbox row matches the same contact's pill in
@@ -103,8 +106,6 @@ export function InboxClient({
   const [unreadCount, setUnreadCount] = useState(initial.unreadCount)
   const [tab, setTab] = useState<InboundTab>(initialTab)
   const [search, setSearch] = useState("")
-  const [openDetail, setOpenDetail] = useState<InboundEmailDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
   // Respond popup state. Holds the row being replied to + the editable
   // draft text. Loading flag covers both AI generation and the send
   // call so the Send button can show "Sending…" while the request
@@ -141,33 +142,10 @@ export function InboxClient({
     reload({ tab: next })
   }
 
-  const handleOpen = (row: InboundEmailRow) => {
-    setOpenDetail(null)
-    setDetailLoading(true)
-    startTransition(async () => {
-      const detail = await fetchInboundEmailDetail(row.id)
-      setDetailLoading(false)
-      if (!detail) {
-        toast.error("Could not load email")
-        return
-      }
-      setOpenDetail(detail)
-      // Optimistically reflect read state in the list — fetchDetail
-      // marks unread→read server-side as a side effect.
-      if (row.status === "unread") {
-        setEmails((prev) =>
-          prev.map((r) => (r.id === row.id ? { ...r, status: "read" } : r)),
-        )
-        setUnreadCount((c) => Math.max(0, c - 1))
-      }
-    })
-  }
-
   const handleArchive = async (id: string) => {
     const result = await archiveInboundEmail(id)
     if (result.success) {
       toast.success("Archived")
-      setOpenDetail(null)
       reload()
     } else {
       toast.error(result.error ?? "Failed to archive")
@@ -178,30 +156,26 @@ export function InboxClient({
     const result = await unarchiveInboundEmail(id)
     if (result.success) {
       toast.success("Moved back to inbox")
-      setOpenDetail(null)
       reload()
     } else {
       toast.error(result.error ?? "Failed to move back")
     }
   }
 
-  const handleMarkUnread = async (id: string) => {
-    const result = await markInboundEmailUnread(id)
-    if (result.success) {
-      toast.success("Marked unread")
-      setOpenDetail(null)
-      reload()
-    } else {
-      toast.error(result.error ?? "Failed to mark unread")
-    }
-  }
-
   /** Open the Respond popup for a row. Loads (or re-uses cached) AI
-   *  draft from the server; user can edit before sending. Detail popup
-   *  is closed if open so the two popups don't stack. */
+   *  draft from the server; user can edit before sending. Marks the
+   *  row read on open so the unread badge stays accurate. */
   const openRespond = (row: InboundEmailRow) => {
-    setOpenDetail(null)
-    setDetailLoading(false)
+    // Optimistically flip unread → read in the list. The send action
+    // also writes status='replied' on success so the row leaves the
+    // active inbox tab altogether — this just keeps the badge honest
+    // if the admin opens then cancels.
+    if (row.status === "unread") {
+      setEmails((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, status: "read" } : r)),
+      )
+      setUnreadCount((c) => Math.max(0, c - 1))
+    }
     setRespondTarget(row)
     setRespondDraft("")
     setRespondAIDraft("")
@@ -388,7 +362,7 @@ export function InboxClient({
               return (
                 <tr
                   key={row.id}
-                  onClick={() => handleOpen(row)}
+                  onClick={() => openRespond(row)}
                   style={{ cursor: "pointer" }}
                   className="hover:bg-[#fafaf9]"
                 >
@@ -416,44 +390,87 @@ export function InboxClient({
                   </td>
 
                   {/* Company — populated either via the prospect path or
-                      the domain fallback. Three link targets depending on
-                      what the company actually is:
-                        - Claimed company (companySlug present) →
-                          /professionals/<slug> (public page)
-                        - Sales company (prospect with company_name but
-                          no claimed companies row) → /admin/sales?search=<email>
-                          so admin can jump to the funnel row.
-                        - Domain-only marketplace company (prospect
-                          missing) → /professionals/<slug> when slug exists.
-                      Status dot + sequence/channel pills only render when
-                      there's a prospect; domain-only matches show just
-                      the company name (no funnel state to surface). */}
+                      the domain fallback. When a claimed companies row is
+                      resolved (companyId present), the name becomes a
+                      dropdown trigger with View / Copy login link / Edit
+                      — same pattern as /admin/projects. Sales-only matches
+                      (prospect with company_name but no companyId) link
+                      to /admin/sales filtered by sender email. Pills only
+                      render when there's funnel context (direct or
+                      domain-matched prospect). */}
                   <td>
                     {row.prospectCompanyName ? (
                       <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                         <span className="arco-table-status">
                           <span className={`arco-table-status-dot ${statusDot}`} />
                           {(() => {
-                            // Has funnel context if EITHER directly matched
-                            // a prospect OR domain-matched a prospect (status
-                            // gets carried over in the latter case).
-                            const hasFunnelContext = Boolean(row.prospectStatus)
-                            const linkTarget = row.companySlug
-                              ? `/professionals/${row.companySlug}`
-                              : hasFunnelContext
-                                ? `/admin/sales?search=${encodeURIComponent(row.fromEmail)}`
-                                : null
                             const titleText = row.prospectStatus
                               ? PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus
                               : "Linked by email domain"
-                            if (linkTarget) {
-                              const isExternalProfessional = Boolean(row.companySlug)
+
+                            // Claimed marketplace company → dropdown menu
+                            // mirroring /admin/projects' company column.
+                            if (row.companyId) {
+                              return (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="truncate max-w-[160px] text-left hover:text-[#016D75] transition-colors cursor-pointer"
+                                      title={titleText}
+                                    >
+                                      {row.prospectCompanyName}
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="min-w-[180px]">
+                                    {row.companySlug && (
+                                      <DropdownMenuItem asChild>
+                                        <a
+                                          href={`/professionals/${row.companySlug}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs cursor-pointer"
+                                        >
+                                          View company
+                                        </a>
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem
+                                      className="text-xs cursor-pointer"
+                                      onClick={async () => {
+                                        const result = await generateCompanyLoginLinkAction({ companyId: row.companyId! })
+                                        if (result.success && result.loginUrl) {
+                                          await navigator.clipboard.writeText(result.loginUrl)
+                                          toast.success("Login link copied — paste in an incognito window")
+                                        } else {
+                                          toast.error(result.error ?? "Failed to generate login link")
+                                        }
+                                      }}
+                                    >
+                                      Copy login link
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                      <a
+                                        href={`/dashboard/company?company_id=${row.companyId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs cursor-pointer"
+                                      >
+                                        Edit company
+                                      </a>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )
+                            }
+
+                            // Sales-only company (prospect with name but no
+                            // companies row) → link to /admin/sales filter.
+                            if (row.prospectId) {
                               return (
                                 <a
-                                  href={linkTarget}
-                                  {...(isExternalProfessional
-                                    ? { target: "_blank", rel: "noopener noreferrer" }
-                                    : {})}
+                                  href={`/admin/sales?search=${encodeURIComponent(row.fromEmail)}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className="truncate max-w-[160px] hover:underline"
                                   title={titleText}
@@ -462,6 +479,8 @@ export function InboxClient({
                                 </a>
                               )
                             }
+
+                            // No prospect, no companyId — name only.
                             return (
                               <span className="truncate max-w-[160px]" title={titleText}>
                                 {row.prospectCompanyName}
@@ -570,7 +589,18 @@ export function InboxClient({
           >
             <div className="popup-header">
               <div className="min-w-0 flex-1">
-                <h3 className="arco-section-title">Respond to {respondTarget.fromName?.trim() || respondTarget.fromEmail}</h3>
+                {(() => {
+                  // Extract first-name only for the popup title — drops
+                  // last names + email addresses so the heading reads
+                  // friendly ("Respond to Marieke") instead of formal.
+                  // Falls back to the email's local part when no display
+                  // name is on the inbound message.
+                  const firstName = (respondTarget.fromName?.trim().split(/\s+/)[0])
+                    ?? respondTarget.fromEmail.split("@")[0]
+                  return (
+                    <h3 className="arco-section-title">Respond to {firstName}</h3>
+                  )
+                })()}
                 <p className="text-xs text-[#6b6b68] mt-0.5 truncate">
                   Re: {respondTarget.subject || <span className="text-[#a1a1a0]">(no subject)</span>}
                   {" · "}
@@ -684,207 +714,6 @@ export function InboxClient({
         </div>
       )}
 
-      {/* Detail popup */}
-      {(openDetail || detailLoading) && (
-        <div
-          className="popup-overlay"
-          onClick={() => {
-            setOpenDetail(null)
-            setDetailLoading(false)
-          }}
-        >
-          <div
-            className="popup-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 760, width: "calc(100vw - 48px)", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
-          >
-            <div className="popup-header">
-              <div className="min-w-0 flex-1">
-                <h3 className="arco-section-title truncate">
-                  {openDetail?.subject || (detailLoading ? "Loading…" : "(no subject)")}
-                </h3>
-                {openDetail && (
-                  <p className="text-xs text-[#6b6b68] mt-0.5 truncate">
-                    {openDetail.fromName ? `${openDetail.fromName} · ` : ""}
-                    {openDetail.fromEmail}
-                    {" · "}
-                    <span className="text-[#a1a1a0]">{formatAbsolute(openDetail.receivedAt)}</span>
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                className="popup-close"
-                onClick={() => {
-                  setOpenDetail(null)
-                  setDetailLoading(false)
-                }}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            {detailLoading && !openDetail && (
-              <p className="text-xs text-[#a1a1a0]">Loading email…</p>
-            )}
-
-            {openDetail && (
-              <>
-                {/* Company context strip — fires for prospect matches
-                    (full pill set) AND domain-only matches (just company
-                    name + slug link, no funnel pills). Falls through to
-                    the "doesn't match" hint when neither path resolved. */}
-                {openDetail.prospectCompanyName ? (
-                  <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
-                      Company
-                    </span>
-                    <span className="arco-table-status">
-                      <span
-                        className={`arco-table-status-dot ${
-                          openDetail.prospectStatus
-                            ? PROSPECT_STATUS_DOT[openDetail.prospectStatus] ?? "bg-[#a1a1a0]"
-                            : "bg-[#d4d4d3]"
-                        }`}
-                      />
-                      {openDetail.companySlug ? (
-                        <a
-                          href={`/professionals/${openDetail.companySlug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:underline"
-                        >
-                          {openDetail.prospectCompanyName}
-                        </a>
-                      ) : openDetail.prospectId ? (
-                        <Link
-                          href={`/admin/sales?search=${encodeURIComponent(openDetail.fromEmail)}`}
-                          className="hover:underline"
-                        >
-                          {openDetail.prospectCompanyName}
-                        </Link>
-                      ) : (
-                        <span>{openDetail.prospectCompanyName}</span>
-                      )}
-                    </span>
-                    {openDetail.prospectSequence && (
-                      <span className="status-pill">
-                        <span
-                          className={`status-pill-dot ${
-                            SEQUENCE_DOT[openDetail.prospectSequence] ?? "bg-[#a1a1a0]"
-                          }`}
-                        />
-                        {SEQUENCE_LABEL[openDetail.prospectSequence] ?? openDetail.prospectSequence}
-                      </span>
-                    )}
-                    {openDetail.prospectChannel && (
-                      <span className="status-pill">{channelLabel(openDetail.prospectChannel)}</span>
-                    )}
-                    {!openDetail.prospectId && (
-                      <span className="text-[10px] text-[#a1a1a0]">linked by email domain</span>
-                    )}
-                    <Link
-                      href={`/admin/sales?search=${encodeURIComponent(openDetail.fromEmail)}`}
-                      className="text-[#016D75] hover:underline ml-auto"
-                    >
-                      View on Sales →
-                    </Link>
-                  </div>
-                ) : (
-                  <p className="mb-3 text-[11px] text-[#a1a1a0]">
-                    Sender doesn't match a known prospect or company.
-                  </p>
-                )}
-
-                {/* Body — sandboxed iframe so any inline JS can't run.
-                    sandbox="" with no allowances still loads images +
-                    CSS, which is what email needs. Falls back to
-                    plaintext when no HTML is available. */}
-                <div
-                  style={{
-                    flex: 1,
-                    minHeight: 320,
-                    border: "1px solid var(--arco-rule, #e5e5e4)",
-                    borderRadius: 3,
-                    overflow: "hidden",
-                    background: "#fafaf9",
-                  }}
-                >
-                  {openDetail.bodyHtml ? (
-                    <iframe
-                      sandbox=""
-                      srcDoc={openDetail.bodyHtml}
-                      style={{ width: "100%", height: "100%", minHeight: 320, border: "none", background: "#fff" }}
-                      title="Email body"
-                    />
-                  ) : (
-                    <pre
-                      style={{
-                        margin: 0,
-                        padding: 16,
-                        background: "#fff",
-                        fontFamily: "var(--font-sans)",
-                        fontSize: 13,
-                        lineHeight: 1.6,
-                        whiteSpace: "pre-wrap",
-                        color: "#1c1c1a",
-                      }}
-                    >
-                      {openDetail.bodyText ?? "(empty body)"}
-                    </pre>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleMarkUnread(openDetail.id)}
-                    className="h-9 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-                  >
-                    Mark unread
-                  </button>
-                  {openDetail.status === "archived" ? (
-                    <button
-                      type="button"
-                      onClick={() => handleUnarchive(openDetail.id)}
-                      className="h-9 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#1c1c1a] hover:bg-[#fafaf9] transition-colors"
-                    >
-                      Move to inbox
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleArchive(openDetail.id)}
-                      className="h-9 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#1c1c1a] hover:bg-[#fafaf9] transition-colors"
-                    >
-                      Archive
-                    </button>
-                  )}
-                  <a
-                    href={`https://mail.google.com/mail/u/0/#inbox/${
-                      openDetail.metadata && (openDetail.metadata as Record<string, unknown>).gmail_message_id
-                        ? String((openDetail.metadata as Record<string, unknown>).gmail_message_id)
-                        : openDetail.id
-                    }`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="h-9 px-4 text-xs font-medium rounded-[3px] text-white inline-flex items-center"
-                    style={{ background: "var(--primary, #016D75)" }}
-                  >
-                    Open in Gmail
-                  </a>
-                </div>
-                <p className="mt-2 text-[10px] text-[#a1a1a0] text-right">
-                  Reply composer ships in slice 4. For now use Gmail to respond — replies
-                  to the same thread are detected on the next sync run.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </>
   )
 }
