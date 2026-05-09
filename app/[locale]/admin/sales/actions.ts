@@ -1303,18 +1303,21 @@ export async function startProspectSequence(prospectId: string) {
 
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, email, company_id, source, emails_sent, emails_delivered, project_id")
+    .select("id, email, company_id, company_name, contact_name, source, emails_sent, emails_delivered, project_id")
     .eq("id", prospectId)
     .single()
 
   if (!prospect) return { success: false, error: "Prospect not found" }
-  if (!prospect.company_id) return { success: false, error: "No linked company" }
 
   // Set sequence to active up front; rolled back to not_started if the send fails.
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
   // ── Invite-source prospects: fire the new-professional sequence ──
   if (prospect.source === "invites") {
+    if (!prospect.company_id) {
+      await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+      return { success: false, error: "No linked company" }
+    }
     if (!prospect.project_id) {
       await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
       return { success: false, error: "Invite prospect has no linked project" }
@@ -1340,7 +1343,45 @@ export async function startProspectSequence(prospectId: string) {
     return { success: true }
   }
 
-  // ── Arco-source prospects: fire the original prospect outreach ──
+  // ── Apollo-source prospects: fire the Outreach (cold) drip ──
+  // Unlike arco/invites, company_id is OPTIONAL here — Apollo cold
+  // contacts often aren't linked to a marketplace companies row yet.
+  if (prospect.source === "apollo") {
+    const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
+    const firstName =
+      (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]
+      || prospect.email.split("@")[0]
+    const companyName = (prospect.company_name as string | null)?.trim() || prospect.email.split("@")[1] || "your firm"
+    const result = await dispatchOutreachIntro(supabase, {
+      email: prospect.email,
+      firstName,
+      companyName,
+      companyId: prospect.company_id,
+    })
+    if (!result.success) {
+      await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+      return { success: false, error: result.error }
+    }
+    await supabase.from("prospects").update({
+      sequence_status: "active",
+      emails_sent: (prospect.emails_sent ?? 0) + 1,
+      emails_delivered: (prospect.emails_delivered ?? 0) + 1,
+      last_email_sent_at: new Date().toISOString(),
+      status: "contacted",
+    }).eq("id", prospectId)
+    await supabase.from("prospect_events").insert({
+      prospect_id: prospectId,
+      event_type: "email_sent",
+      metadata: { template: "outreach_intro", email: prospect.email },
+    })
+    return { success: true, warning: result.warning }
+  }
+
+  // ── Arco-source prospects: fire the original Showcase outreach ──
+  if (!prospect.company_id) {
+    await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+    return { success: false, error: "No linked company" }
+  }
   const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
   const result = await sendProspectEmailAction({
     companyId: prospect.company_id,
@@ -1414,7 +1455,7 @@ export async function pauseProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, company_id, sequence_status")
+    .select("id, email, company_id, sequence_status")
     .eq("id", prospectId)
     .single()
 
@@ -1425,16 +1466,20 @@ export async function pauseProspectSequence(prospectId: string) {
 
   await supabase.from("prospects").update({ sequence_status: "paused" }).eq("id", prospectId)
 
-  if (prospect.company_id) {
-    try {
-      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
-      await cancelPendingDripRows(supabase, {
-        companyId: prospect.company_id,
-        reason: "paused",
-      })
-    } catch (err) {
-      console.error("[pauseProspectSequence] Failed to cancel pending drip rows", err)
-    }
+  // Cancel by both selectors so Apollo/Outreach prospects without a
+  // company_id (cold contacts not yet linked to a marketplace company)
+  // still get their pending drips paused. cancelPendingDripRows OR's
+  // the selectors and dedupes already-cancelled rows, so passing both
+  // is safe for the common case where company_id is set.
+  try {
+    const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+    await cancelPendingDripRows(supabase, {
+      companyId: prospect.company_id ?? undefined,
+      email: prospect.email,
+      reason: "paused",
+    })
+  } catch (err) {
+    console.error("[pauseProspectSequence] Failed to cancel pending drip rows", err)
   }
 
   return { success: true }
@@ -1947,65 +1992,79 @@ export async function resumeProspectSequence(prospectId: string) {
     return { success: false, error: "Sequence is not paused" }
   }
 
-  if (prospect.company_id) {
-    try {
-      const { nextBusinessSlot } = await import("@/lib/date-utils")
-      // Pick the right template trio + sequence label for this prospect's
-      // source. 'arco' → original prospect outreach; 'invites' → the new
-      // professional-invite sequence.
-      const isInviteSeries = prospect.source === "invites"
-      const sequenceName = isInviteSeries ? "new-professional-invite" : "prospect-outreach"
-      const stepConfig = (isInviteSeries
-        ? [
-            { template: "new-professional-followup" as const, step: 1, sendAt: nextBusinessSlot(3).toISOString() },
-            { template: "new-professional-final" as const, step: 2, sendAt: nextBusinessSlot(7).toISOString() },
-          ]
-        : [
-            { template: "prospect-followup" as const, step: 1, sendAt: nextBusinessSlot(3).toISOString() },
-            { template: "prospect-final" as const, step: 2, sendAt: nextBusinessSlot(7).toISOString() },
-          ])
-
-      // Skip pro-audience companies (photographers). Their entry to Arco is
-      // via architect credit, not outbound prospect outreach — re-enqueuing
-      // a sequence on resume would spam them. One audience check up front
-      // saves an extra read per step.
-      const { isProAudienceCompany } = await import("@/lib/drip-queue")
-      const skipResumeDrip = await isProAudienceCompany(supabase, prospect.company_id)
-
-      for (const { template, step, sendAt } of stepConfig) {
-        // Most recent row for (company, template) — carries the variables
-        // payload and tells us whether the step already went out.
-        const { data: lastRow } = await supabase
-          .from("email_drip_queue")
-          .select("variables, sent_at, email")
-          .eq("company_id", prospect.company_id)
-          .eq("template", template)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-
-        if (lastRow?.sent_at) continue
-        if (skipResumeDrip) continue
-
-        const { error: insertError } = await supabase
-          .from("email_drip_queue")
-          .insert({
-            company_id: prospect.company_id,
-            email: lastRow?.email ?? prospect.email,
-            template,
-            sequence: sequenceName,
-            step,
-            variables: (lastRow?.variables as Record<string, unknown> | null) ?? {},
-            send_at: sendAt,
-          } as never)
-
-        if (insertError && (insertError as { code?: string }).code !== "23505") {
-          console.error("[resumeProspectSequence] Failed to re-enqueue", template, insertError)
-        }
-      }
-    } catch (err) {
-      console.error("[resumeProspectSequence] Re-enqueue loop threw", err)
+  try {
+    const { nextBusinessSlot } = await import("@/lib/date-utils")
+    // Pick the right template trio + sequence label for this prospect's
+    // source. apollo (Outreach) cadence is Day 3 / Day 10 to match the
+    // dispatcher; arco + invites stay on Day 3 / Day 7 as before.
+    let sequenceName: string
+    let stepConfig: Array<{ template: string; step: number; sendAt: string }>
+    if (prospect.source === "invites") {
+      sequenceName = "new-professional-invite"
+      stepConfig = [
+        { template: "new-professional-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
+        { template: "new-professional-final", step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+      ]
+    } else if (prospect.source === "apollo") {
+      sequenceName = "outreach"
+      stepConfig = [
+        { template: "outreach-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
+        { template: "outreach-final", step: 2, sendAt: nextBusinessSlot(10).toISOString() },
+      ]
+    } else {
+      sequenceName = "prospect-outreach"
+      stepConfig = [
+        { template: "prospect-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
+        { template: "prospect-final", step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+      ]
     }
+
+    // Skip pro-audience companies (photographers). Their entry to Arco is
+    // via architect credit, not outbound prospect outreach — re-enqueuing
+    // a sequence on resume would spam them. Only meaningful when company_id
+    // is set; Outreach without a linked company skips this guard.
+    let skipResumeDrip = false
+    if (prospect.company_id) {
+      const { isProAudienceCompany } = await import("@/lib/drip-queue")
+      skipResumeDrip = await isProAudienceCompany(supabase, prospect.company_id)
+    }
+
+    for (const { template, step, sendAt } of stepConfig) {
+      // Most recent row for this (company OR email, template) — carries
+      // the variables payload and tells us whether the step already
+      // went out. Apollo prospects without a company_id key on email.
+      let lastRowQuery = supabase
+        .from("email_drip_queue")
+        .select("variables, sent_at, email")
+        .eq("template", template)
+        .order("created_at", { ascending: false })
+        .limit(1)
+      lastRowQuery = prospect.company_id
+        ? lastRowQuery.eq("company_id", prospect.company_id)
+        : lastRowQuery.ilike("email", prospect.email)
+      const { data: lastRow } = await lastRowQuery.maybeSingle()
+
+      if (lastRow?.sent_at) continue
+      if (skipResumeDrip) continue
+
+      const { error: insertError } = await supabase
+        .from("email_drip_queue")
+        .insert({
+          company_id: prospect.company_id ?? null,
+          email: lastRow?.email ?? prospect.email,
+          template,
+          sequence: sequenceName,
+          step,
+          variables: (lastRow?.variables as Record<string, unknown> | null) ?? {},
+          send_at: sendAt,
+        } as never)
+
+      if (insertError && (insertError as { code?: string }).code !== "23505") {
+        console.error("[resumeProspectSequence] Failed to re-enqueue", template, insertError)
+      }
+    }
+  } catch (err) {
+    console.error("[resumeProspectSequence] Re-enqueue loop threw", err)
   }
 
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
@@ -2027,7 +2086,7 @@ export async function finishProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, company_id, sequence_status")
+    .select("id, email, company_id, sequence_status")
     .eq("id", prospectId)
     .single()
 
@@ -2036,16 +2095,17 @@ export async function finishProspectSequence(prospectId: string) {
     return { success: false, error: "Sequence is already finished" }
   }
 
-  if (prospect.company_id) {
-    try {
-      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
-      await cancelPendingDripRows(supabase, {
-        companyId: prospect.company_id,
-        reason: "manual",
-      })
-    } catch (err) {
-      console.error("[finishProspectSequence] Failed to cancel pending drip rows", err)
-    }
+  // Cancel by both selectors so Apollo/Outreach prospects without a
+  // company_id still get their pending drips finished.
+  try {
+    const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+    await cancelPendingDripRows(supabase, {
+      companyId: prospect.company_id ?? undefined,
+      email: prospect.email,
+      reason: "manual",
+    })
+  } catch (err) {
+    console.error("[finishProspectSequence] Failed to cancel pending drip rows", err)
   }
 
   await supabase.from("prospects").update({ sequence_status: "finished" }).eq("id", prospectId)
@@ -2069,18 +2129,21 @@ export async function restartProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, email, company_id, source, emails_sent, emails_delivered, sequence_status, project_id")
+    .select("id, email, company_id, company_name, contact_name, source, emails_sent, emails_delivered, sequence_status, project_id")
     .eq("id", prospectId)
     .single()
 
   if (!prospect) return { success: false, error: "Prospect not found" }
-  if (!prospect.company_id) return { success: false, error: "No linked company" }
 
   const previousStatus = prospect.sequence_status ?? "not_started"
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
   // ── Invite-source restart: dispatcher with project context ──
   if (prospect.source === "invites") {
+    if (!prospect.company_id) {
+      await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
+      return { success: false, error: "No linked company" }
+    }
     if (!prospect.project_id) {
       await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
       return { success: false, error: "Invite prospect has no linked project" }
@@ -2104,7 +2167,42 @@ export async function restartProspectSequence(prospectId: string) {
     return { success: true }
   }
 
+  // ── Apollo-source restart: re-fire the Outreach intro + drip ──
+  if (prospect.source === "apollo") {
+    const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
+    const firstName =
+      (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]
+      || prospect.email.split("@")[0]
+    const companyName = (prospect.company_name as string | null)?.trim() || prospect.email.split("@")[1] || "your firm"
+    const result = await dispatchOutreachIntro(supabase, {
+      email: prospect.email,
+      firstName,
+      companyName,
+      companyId: prospect.company_id,
+    })
+    if (!result.success) {
+      await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
+      return { success: false, error: result.error }
+    }
+    await supabase.from("prospects").update({
+      sequence_status: "active",
+      emails_sent: (prospect.emails_sent ?? 0) + 1,
+      emails_delivered: (prospect.emails_delivered ?? 0) + 1,
+      last_email_sent_at: new Date().toISOString(),
+    }).eq("id", prospectId)
+    await supabase.from("prospect_events").insert({
+      prospect_id: prospectId,
+      event_type: "email_resent",
+      metadata: { template: "outreach_intro", email: prospect.email },
+    })
+    return { success: true, warning: result.warning }
+  }
+
   // ── Arco-source restart ──
+  if (!prospect.company_id) {
+    await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
+    return { success: false, error: "No linked company" }
+  }
   const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
   const result = await sendProspectEmailAction({
     companyId: prospect.company_id,

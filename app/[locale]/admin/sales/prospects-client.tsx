@@ -1814,7 +1814,14 @@ function renderContactMenuItems({
   onOpenDetails: () => void
   onAction: ContactActionRunner
 }) {
-  const canDripFromArco = contact.source === "arco" || contact.source === "invites"
+  // All three sales-source prospects can be enrolled in / managed via
+  // an Arco-controlled drip now: arco (Showcase), invites (Invite),
+  // apollo (Outreach). Renamed for clarity but kept as the same gate
+  // so the rest of the menu stays untouched.
+  const canDripFromArco =
+    contact.source === "arco"
+    || contact.source === "invites"
+    || contact.source === "apollo"
   return (
     <>
       <DropdownMenuItem className="text-xs cursor-pointer" onClick={onOpenDetails}>
