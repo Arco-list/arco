@@ -1821,6 +1821,75 @@ async function getApolloSequence(prospect: {
   return { success: true, steps }
 }
 
+/** Shape of an email_drip_queue row as fetched by the popup-sequence
+ *  loaders. Kept inline rather than imported from supabase types so
+ *  type drift in the auto-generated schema doesn't break this view. */
+type DripQueueRow = {
+  template: string
+  send_at: string | null
+  sent_at: string | null
+  cancelled_at: string | null
+  cancelled_reason: string | null
+  attempt_count: number | null
+  last_error: string | null
+  opened_at: string | null
+  clicked_at: string | null
+  last_event_cached: string | null
+}
+
+/** Convert an email_drip_queue row into the popup's ProspectSequenceStep
+ *  shape. Used by both the arco / invites branch (followup + final from
+ *  the queue) and the apollo branch (intro + followup + final all
+ *  queued via auto-enrol). */
+function queueRowToProspectStep(
+  template: ProspectSequenceStep["template"],
+  label: string,
+  row: DripQueueRow | undefined,
+): ProspectSequenceStep {
+  if (!row) {
+    return {
+      template,
+      label,
+      status: "missing",
+      timestamp: null,
+      cancelledReason: null,
+      attemptCount: 0,
+      lastError: null,
+      lastEvent: null,
+      openedAt: null,
+      clickedAt: null,
+    }
+  }
+  let status: ProspectSequenceStep["status"]
+  if (row.sent_at) {
+    status = "sent"
+  } else if (row.cancelled_at) {
+    // Distinguish pause (resumable) from finish (terminal) from other
+    // cancellations (bounce, complaint, max_attempts) so the popup can
+    // render the right badge.
+    const reason = row.cancelled_reason
+    if (reason === "paused") status = "paused"
+    else if (reason === "status_change" || reason === "manual") status = "finished"
+    else status = "cancelled"
+  } else if (row.last_error && (row.attempt_count ?? 0) >= 1) {
+    status = "failed"
+  } else {
+    status = "queued"
+  }
+  return {
+    template,
+    label,
+    status,
+    timestamp: row.sent_at ?? row.cancelled_at ?? row.send_at ?? null,
+    cancelledReason: row.cancelled_reason ?? null,
+    attemptCount: row.attempt_count ?? 0,
+    lastError: row.last_error ?? null,
+    lastEvent: row.last_event_cached ?? null,
+    openedAt: row.opened_at ?? null,
+    clickedAt: row.clicked_at ?? null,
+  }
+}
+
 export async function getProspectSequence(prospectId: string): Promise<{
   success: boolean
   steps?: ProspectSequenceStep[]
@@ -1840,10 +1909,42 @@ export async function getProspectSequence(prospectId: string): Promise<{
 
   if (!prospect) return { success: false, error: "Prospect not found" }
 
-  // Apollo: synthesise sequence steps from the contact's campaign on Apollo,
-  // not from our own email_drip_queue (Apollo runs the sequence externally).
+  // Outreach (Apollo source): all three steps live in email_drip_queue
+  // (auto-enrol queues the intro alongside followup/final instead of
+  // firing live). When the queue has no outreach-* rows we fall back
+  // to getApolloSequence — handles legacy Apollo prospects added
+  // before auto-enrol existed.
   if ((prospect as any).source === "apollo") {
-    return getApolloSequence(prospect as any)
+    const { data: outreachQueueRows } = await supabase
+      .from("email_drip_queue")
+      .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
+      .ilike("email", prospect.email)
+      .in("template", ["outreach-intro", "outreach-followup", "outreach-final"])
+      .order("created_at", { ascending: false })
+
+    const hasOutreachRows = (outreachQueueRows ?? []).length > 0
+    if (!hasOutreachRows) {
+      return getApolloSequence(prospect as any)
+    }
+
+    const { resolveRecipientLanguage } = await import("@/lib/email-service")
+    const outreachLocale = await resolveRecipientLanguage({
+      email: prospect.email,
+      companyId: prospect.company_id,
+    })
+
+    const outreachByTemplate = new Map<string, NonNullable<typeof outreachQueueRows>[number]>()
+    for (const row of outreachQueueRows ?? []) {
+      if (!outreachByTemplate.has(row.template)) outreachByTemplate.set(row.template, row)
+    }
+
+    const outreachSteps: ProspectSequenceStep[] = [
+      queueRowToProspectStep("outreach-intro", "Intro", outreachByTemplate.get("outreach-intro")),
+      queueRowToProspectStep("outreach-followup", "Follow-up", outreachByTemplate.get("outreach-followup")),
+      queueRowToProspectStep("outreach-final", "Final", outreachByTemplate.get("outreach-final")),
+    ]
+
+    return { success: true, steps: outreachSteps, locale: outreachLocale }
   }
 
   if (!prospect.company_id) {
@@ -1896,54 +1997,6 @@ export async function getProspectSequence(prospectId: string): Promise<{
   const followupRow = queueByTemplate.get(followupTemplate)
   const finalRow = queueByTemplate.get(finalTemplate)
 
-  const queueRowToStep = (
-    template: ProspectSequenceStep["template"],
-    label: string,
-    row: NonNullable<typeof queueRows>[number] | undefined,
-  ): ProspectSequenceStep => {
-    if (!row) {
-      return {
-        template,
-        label,
-        status: "missing",
-        timestamp: null,
-        cancelledReason: null,
-        attemptCount: 0,
-        lastError: null,
-        lastEvent: null,
-        openedAt: null,
-        clickedAt: null,
-      }
-    }
-    let status: ProspectSequenceStep["status"]
-    if (row.sent_at) {
-      status = "sent"
-    } else if (row.cancelled_at) {
-      // Distinguish pause (resumable) from finish (terminal) from other
-      // cancellations (bounce, complaint, max_attempts) so the popup can
-      // render the right badge.
-      const reason = row.cancelled_reason
-      if (reason === "paused") status = "paused"
-      else if (reason === "status_change" || reason === "manual") status = "finished"
-      else status = "cancelled"
-    } else if (row.last_error && row.attempt_count >= 1) {
-      status = "failed"
-    } else {
-      status = "queued"
-    }
-    return {
-      template,
-      label,
-      status,
-      timestamp: row.sent_at ?? row.cancelled_at ?? row.send_at ?? null,
-      cancelledReason: row.cancelled_reason ?? null,
-      attemptCount: row.attempt_count ?? 0,
-      lastError: row.last_error ?? null,
-      lastEvent: (row as any).last_event_cached ?? null,
-      openedAt: (row as any).opened_at ?? null,
-      clickedAt: (row as any).clicked_at ?? null,
-    }
-  }
 
   const introStepTemplate: ProspectSequenceStep["template"] =
     isInviteSeries ? "new-professional-invite" : "prospect-intro"
@@ -1960,8 +2013,8 @@ export async function getProspectSequence(prospectId: string): Promise<{
       openedAt: introRow?.opened_at ?? null,
       clickedAt: introRow?.clicked_at ?? null,
     },
-    queueRowToStep(followupTemplate, "Follow-up", followupRow),
-    queueRowToStep(finalTemplate, "Final", finalRow),
+    queueRowToProspectStep(followupTemplate, "Follow-up", followupRow),
+    queueRowToProspectStep(finalTemplate, "Final", finalRow),
   ]
 
   return { success: true, steps, locale }
