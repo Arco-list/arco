@@ -65,8 +65,8 @@ export async function dispatchOutreachIntro(
   //    recipients) + List-Unsubscribe headers + email_events logging.
   const { sendTransactionalEmail } = await import("@/lib/email-service")
   const introResult = await sendTransactionalEmail(
-    "outreach-intro" satisfies EmailTemplate,
     email,
+    "outreach-intro" satisfies EmailTemplate,
     variables,
     { companyId: companyId ?? undefined },
   )

@@ -79,7 +79,7 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
         .join(" ")
         .trim() || null
 
-      const { error } = await supabase
+      const { data: upserted, error } = await supabase
         .from("prospects")
         .upsert(
           {
@@ -99,13 +99,47 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
           // and invites source rows that legitimately share the email.
           { onConflict: "email,source" }
         )
+        .select("id, sequence_status, status, company_id, contact_name, company_name, email")
+        .maybeSingle()
 
       if (error) {
         errorCount++
         lastError = error.message ?? String(error)
         logger.error("Failed to upsert prospect from Apollo", { email: contact.email, error })
-      } else {
-        totalSynced++
+        continue
+      }
+
+      totalSynced++
+
+      // Auto-enrol freshly-imported (or never-enrolled) Apollo contacts
+      // into the Outreach drip. Gate on sequence_status='not_started'
+      // so existing contacts who've already been started, paused,
+      // finished or removed don't get re-enrolled on a re-sync.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row = upserted as any
+      if (row && row.sequence_status === "not_started" && row.status !== "removed") {
+        try {
+          const { enrolOutreachContact } = await import("@/lib/outreach/enrol-outreach")
+          const firstName =
+            (row.contact_name as string | null)?.trim().split(/\s+/)[0]
+            || row.email.split("@")[0]
+          const companyName =
+            (row.company_name as string | null)?.trim()
+            || row.email.split("@")[1]
+            || "your firm"
+          const result = await enrolOutreachContact(supabase, {
+            prospectId: row.id,
+            email: row.email,
+            firstName,
+            companyName,
+            companyId: row.company_id,
+          })
+          if (!result.success) {
+            logger.error("[apollo-sync] auto-enrol failed", { email: row.email, error: result.error })
+          }
+        } catch (err) {
+          logger.error("[apollo-sync] auto-enrol threw", { email: row.email, error: err })
+        }
       }
     }
 

@@ -205,19 +205,44 @@ async function sendOne(
   // prospect's email was later corrected (admin edit, Apollo sync), we want
   // the current address. Homeowner-series untouched — the user_id already
   // anchors the recipient there.
+  // Templates whose post-send book-keeping flips prospect counters
+  // (emails_sent / delivered / last_email_sent_at) and writes a
+  // prospect_events row. Includes the cron-fired Outreach intro
+  // (auto-enrolled Apollo contacts) plus the existing followup/final
+  // steps for every series.
   const COMPANY_SEQUENCE_TEMPLATES = new Set([
     "prospect-followup",
     "prospect-final",
     "new-professional-followup",
     "new-professional-final",
+    "outreach-intro",
+    "outreach-followup",
+    "outreach-final",
+  ])
+  // Subset that triggers a status='prospect' → 'contacted' flip.
+  // Currently only the Outreach intro fires through this cron (the
+  // other intros are sent live by their start actions), but we keep
+  // the set extensible so e.g. a future enqueued prospect-intro
+  // path naturally advances status too.
+  const INTRO_TEMPLATES = new Set([
+    "outreach-intro",
+    "prospect-intro",
+    "new-professional-invite",
   ])
   let recipient = row.email
-  if (row.company_id && COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
-    const { data: prospect } = await supabase
+  if (COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
+    // Re-lookup current email on the prospect row in case the admin
+    // edited it after the drip was enqueued. company_id resolves
+    // arco/invites prospects; Apollo (Outreach) often has company_id=null
+    // so we fall back to email match for those.
+    let lookup = supabase
       .from("prospects")
       .select("email")
-      .eq("company_id", row.company_id)
-      .maybeSingle()
+      .limit(1)
+    lookup = row.company_id
+      ? lookup.eq("company_id", row.company_id)
+      : lookup.ilike("email", row.email)
+    const { data: prospect } = await lookup.maybeSingle()
     if (prospect?.email) recipient = prospect.email
   }
 
@@ -256,25 +281,37 @@ async function sendOne(
       logger.error("cron-drip-queue: Failed to mark row sent", { rowId: row.id, supabaseError: error })
     }
 
-    // Increment emails_sent + emails_delivered on the prospect row for any
-    // company-targeted sequence (prospect-* + new-professional-*), and log
-    // a prospect_events row so the Sales details popup shows the send in
-    // Event History — mirrors the event written by startProspectSequence
-    // for the intro.
-    if (row.company_id && COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
-      const { data: prospect } = await supabase
+    // Increment emails_sent + emails_delivered on the prospect row for
+    // any sequence template, and log a prospect_events row so the
+    // Sales details popup shows the send in Event History. Resolve by
+    // company_id when set (arco / invites) or by email (Apollo /
+    // Outreach contacts whose domain didn't match a companies row).
+    //
+    // Intro templates also flip prospects.status from 'prospect' to
+    // 'contacted' on first send — this is the moment the contact has
+    // actually been reached (auto-enrolled Apollo contacts sit at
+    // 'prospect' until the cron fires their intro).
+    if (COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
+      let prospectQuery = supabase
         .from("prospects")
-        .select("id, emails_sent, emails_delivered")
-        .eq("company_id", row.company_id)
-        .maybeSingle()
+        .select("id, status, emails_sent, emails_delivered")
+        .limit(1)
+      prospectQuery = row.company_id
+        ? prospectQuery.eq("company_id", row.company_id)
+        : prospectQuery.ilike("email", recipient)
+      const { data: prospect } = await prospectQuery.maybeSingle()
       if (prospect) {
+        const updates: Record<string, unknown> = {
+          emails_sent: (prospect.emails_sent ?? 0) + 1,
+          emails_delivered: (prospect.emails_delivered ?? 0) + 1,
+          last_email_sent_at: new Date().toISOString(),
+        }
+        if (INTRO_TEMPLATES.has(row.template) && prospect.status === "prospect") {
+          updates.status = "contacted"
+        }
         await supabase
           .from("prospects")
-          .update({
-            emails_sent: (prospect.emails_sent ?? 0) + 1,
-            emails_delivered: (prospect.emails_delivered ?? 0) + 1,
-            last_email_sent_at: new Date().toISOString(),
-          })
+          .update(updates)
           .eq("id", prospect.id)
         await supabase.from("prospect_events").insert({
           prospect_id: prospect.id,
