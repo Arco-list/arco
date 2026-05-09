@@ -602,7 +602,7 @@ export async function disconnectGmailConnection(
  */
 export async function generateReplyDraft(
   id: string,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; userEdit?: string } = {},
 ): Promise<{
   success: boolean
   draft?: string
@@ -765,6 +765,18 @@ export async function generateReplyDraft(
     .filter(Boolean)
     .join("\n")
 
+  // User-edit signal: when the admin has been editing the textarea
+  // and clicks Regenerate, we receive their current draft. If it
+  // differs meaningfully from the AI draft we previously cached, we
+  // shift mode from "fresh draft" to "refine the user's direction" —
+  // the model sees their edit as ground truth for tone/content choices
+  // and tightens it rather than starting over.
+  const cachedAIDraft = (row.ai_draft_text as string | null)?.trim() ?? ""
+  const userEditTrimmed = opts.userEdit?.trim() ?? ""
+  const isRefineMode =
+    userEditTrimmed.length > 0
+    && (cachedAIDraft === "" || userEditTrimmed !== cachedAIDraft)
+
   const userMessage = [
     prospectContext ? `Sender context:\n${prospectContext}\n` : null,
     `From: ${fromLabel}`,
@@ -772,6 +784,19 @@ export async function generateReplyDraft(
     "",
     "Original email:",
     promptBody || "(empty body — likely an auto-reply or read-receipt)",
+    isRefineMode
+      ? [
+          "",
+          "---",
+          "I've been refining the previous AI draft. My current version is below.",
+          "Generate an improved draft that KEEPS my direction (opener, key points I added,",
+          "tone choices, sign-off) but tightens phrasing and applies the voice/style guidance",
+          "above. Don't start over from scratch.",
+          "",
+          "My current draft:",
+          userEditTrimmed,
+        ].join("\n")
+      : null,
   ]
     .filter((s) => s !== null)
     .join("\n")

@@ -111,6 +111,11 @@ export function InboxClient({
   // is in flight without flickering between two states.
   const [respondTarget, setRespondTarget] = useState<InboundEmailRow | null>(null)
   const [respondDraft, setRespondDraft] = useState("")
+  // Snapshot of whatever the AI most recently returned, separate from
+  // the user-editable draft. Used to detect "user has edited" so the
+  // Regenerate button can switch into Refine mode (server gets the
+  // edit + refines instead of regenerating from scratch).
+  const [respondAIDraft, setRespondAIDraft] = useState("")
   const [respondOriginal, setRespondOriginal] = useState<string>("")
   const [respondGenerating, setRespondGenerating] = useState(false)
   const [respondSending, setRespondSending] = useState(false)
@@ -199,6 +204,7 @@ export function InboxClient({
     setDetailLoading(false)
     setRespondTarget(row)
     setRespondDraft("")
+    setRespondAIDraft("")
     setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(true)
@@ -207,6 +213,7 @@ export function InboxClient({
       setRespondGenerating(false)
       if (result.success && result.draft) {
         setRespondDraft(result.draft)
+        setRespondAIDraft(result.draft)
         setRespondOriginal(result.originalBody ?? "")
       } else {
         setRespondError(result.error ?? "Could not generate draft")
@@ -218,6 +225,7 @@ export function InboxClient({
     if (respondSending) return
     setRespondTarget(null)
     setRespondDraft("")
+    setRespondAIDraft("")
     setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(false)
@@ -244,6 +252,7 @@ export function InboxClient({
   const closeRespondForce = () => {
     setRespondTarget(null)
     setRespondDraft("")
+    setRespondAIDraft("")
     setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(false)
@@ -252,13 +261,25 @@ export function InboxClient({
 
   const handleRegenerateDraft = () => {
     if (!respondTarget) return
+    // If the textarea differs from the last AI draft, the admin has
+    // edited — pass the current text up so the server flips into
+    // refine mode (keeps their direction, polishes phrasing). Pure
+    // unedited Regenerate falls through to a fresh-from-scratch draft.
+    const userEdit =
+      respondDraft.trim() !== respondAIDraft.trim() && respondDraft.trim().length > 0
+        ? respondDraft
+        : undefined
     setRespondGenerating(true)
     setRespondError(null)
     startTransition(async () => {
-      const result = await generateReplyDraft(respondTarget.id, { force: true })
+      const result = await generateReplyDraft(respondTarget.id, {
+        force: true,
+        userEdit,
+      })
       setRespondGenerating(false)
       if (result.success && result.draft) {
         setRespondDraft(result.draft)
+        setRespondAIDraft(result.draft)
         if (result.originalBody) setRespondOriginal(result.originalBody)
       } else {
         setRespondError(result.error ?? "Could not regenerate draft")
@@ -576,19 +597,39 @@ export function InboxClient({
               </details>
             )}
 
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
-                Your reply {respondGenerating ? "(generating…)" : "(AI-drafted, edit before sending)"}
-              </span>
-              <button
-                type="button"
-                onClick={handleRegenerateDraft}
-                disabled={respondGenerating || respondSending}
-                className="text-[11px] text-[#016D75] hover:underline disabled:opacity-50"
-              >
-                {respondGenerating ? "Generating…" : "Regenerate"}
-              </button>
-            </div>
+            {(() => {
+              // hasEdited drives both the label and the Regenerate vs
+              // Refine button copy, so the admin sees what'll happen.
+              const hasEdited =
+                respondDraft.trim().length > 0
+                && respondDraft.trim() !== respondAIDraft.trim()
+              const buttonLabel = respondGenerating
+                ? hasEdited
+                  ? "Refining…"
+                  : "Generating…"
+                : hasEdited
+                  ? "Refine with my edits"
+                  : "Regenerate"
+              return (
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
+                    Your reply {respondGenerating
+                      ? "(generating…)"
+                      : hasEdited
+                        ? "(edited — refine will incorporate your changes)"
+                        : "(AI-drafted, edit before sending)"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateDraft}
+                    disabled={respondGenerating || respondSending}
+                    className="text-[11px] text-[#016D75] hover:underline disabled:opacity-50"
+                  >
+                    {buttonLabel}
+                  </button>
+                </div>
+              )
+            })()}
 
             <textarea
               value={respondDraft}
