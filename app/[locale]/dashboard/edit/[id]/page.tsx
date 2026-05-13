@@ -4935,7 +4935,12 @@ export default function ListingEditorPage() {
                                   }}
                                 >
                                   <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                                  <span className="tier-badge arco">{c.owner_id ? tTeam("tier_on_arco") : tTeam("tier_invited")}</span>
+                                  {/* Only claimed Arco accounts get the "On Arco"
+                                      badge. Unclaimed (invited but not yet
+                                      activated) rows render with no badge. */}
+                                  {c.owner_id && (
+                                    <span className="tier-badge arco">{tTeam("tier_on_arco")}</span>
+                                  )}
                                 </button>
                               ))}
                               {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
@@ -4946,7 +4951,6 @@ export default function ListingEditorPage() {
                                   onClick={e => { e.stopPropagation(); handleSelectTier23Company(inv.id, g.name, g.placeId, g.city) }}
                                 >
                                   <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
-                                  <span className="tier-badge google">{tTeam("tier_google")}</span>
                                 </button>
                               ))}
                               {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (
@@ -5294,7 +5298,9 @@ export default function ListingEditorPage() {
                                 onClick={e => { e.stopPropagation(); void saveDraftCardWithCompany(c.id, c.email, !!c.owner_id) }}
                               >
                                 <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                                <span className="tier-badge arco">{c.owner_id ? tTeam("tier_on_arco") : tTeam("tier_invited")}</span>
+                                {c.owner_id && (
+                                  <span className="tier-badge arco">{tTeam("tier_on_arco")}</span>
+                                )}
                               </button>
                             ))}
                             {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
@@ -5305,7 +5311,6 @@ export default function ListingEditorPage() {
                                 onClick={e => { e.stopPropagation(); setDraftCard(d => d ? { ...d, companyName: g.name } : d); handleSelectTier23Company("__draft__", g.name, g.placeId, g.city) }}
                               >
                                 <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
-                                <span className="tier-badge google">{tTeam("tier_google")}</span>
                               </button>
                             ))}
                             {companySearchQuery.trim().length >= 2 && !isSearchingCompanies && !companySearchResults.some(c => c.name.toLowerCase() === companySearchQuery.trim().toLowerCase()) && (

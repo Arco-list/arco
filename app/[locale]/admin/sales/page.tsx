@@ -1,10 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProspectsClient } from "./prospects-client"
-import {
-  fetchLatestApolloSyncRuns,
-  fetchSalesCompanies,
-  syncPlatformProspects,
-} from "./actions"
+import { fetchSalesCompanies, syncPlatformProspects } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -20,8 +16,8 @@ export default async function ProspectsPage() {
   const { companies, totalCompanies, funnel } = await fetchSalesCompanies({ limit: 50 })
   const totalEmailsSent = companies.reduce((sum, c) => sum + c.emailsSent, 0)
 
-  // Most recently used Apollo list ID — surfaced in the Apollo Sync
-  // popup so the admin can see at a glance which list feeds sales.
+  // Most recently used Apollo list ID — pre-fills the Import Contacts
+  // popup so the admin can re-import the same list with one click.
   const { data: lastListRow } = await supabase
     .from("prospects")
     .select("apollo_list_id")
@@ -31,10 +27,6 @@ export default async function ProspectsPage() {
     .maybeSingle()
   const currentApolloListId = (lastListRow as any)?.apollo_list_id ?? null
 
-  // Latest sync runs (list import + activity refresh) for the Apollo Sync popup
-  const apolloSyncRuns = await fetchLatestApolloSyncRuns()
-
-  // Total Apollo prospects — surfaced as "X contacts synced" in the popup
   const { count: apolloProspectsCount } = await supabase
     .from("prospects")
     .select("id", { count: "exact", head: true })
@@ -50,7 +42,6 @@ export default async function ProspectsPage() {
             initialFunnel={funnel}
             initialEmailsSent={totalEmailsSent}
             currentApolloListId={currentApolloListId}
-            apolloSyncRuns={apolloSyncRuns}
             apolloProspectsCount={apolloProspectsCount ?? 0}
           />
         </div>

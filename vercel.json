@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/sync-gmail",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-growth-metrics",
+      "schedule": "0 3 * * *"
     }
   ]
 }

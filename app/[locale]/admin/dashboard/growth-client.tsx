@@ -546,7 +546,7 @@ export function GrowthClient({ initialMetrics }: Props) {
   // Caveats:
   //   - Visitor totals are timeframe-bound (PostHog returns a window), but
   //     signup/draft totals from Supabase are all-time. The ratio is
-  //     therefore approximate. Visitor windows on /admin/growth typically
+  //     therefore approximate. Visitor windows on /admin/dashboard typically
   //     cover the same window the user is reading, so the bias is small in
   //     practice.
   //   - PostHog uniq(person_id) for sharer/contacter events includes
@@ -578,9 +578,14 @@ export function GrowthClient({ initialMetrics }: Props) {
       )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h3 className="arco-section-title">Growth</h3>
+          <h3 className="arco-section-title">Growth dashboard</h3>
           <p className="text-xs text-[#a1a1a0] mt-0.5">
-            Lifecycle model and key metrics · <a href="/admin/growth/events" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Tracking events</a>
+            Lifecycle model and key metrics · {" "}
+            <a href="/admin/dashboard/table" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Table view</a>
+            {" · "}
+            <a href="/admin/model" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Model</a>
+            {" · "}
+            <a href="/admin/dashboard/events" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Tracking events</a>
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

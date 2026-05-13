@@ -91,11 +91,24 @@ export type ProspectFunnel = {
 export type ProspectSortBy = "created_at" | "last_email_sent_at"
 export type ProspectSortDir = "asc" | "desc"
 
+/**
+ * Sequence-filter values surfaced in the /admin/sales sequence dropdown.
+ * Real sequence_status values plus the three suppression states (which
+ * override the row's Sequence display when set on the primary contact).
+ */
+export type SequenceFilterValue =
+  | SequenceStatus
+  | "bounced"
+  | "complained"
+  | "unsubscribed"
+
 type FetchProspectsFilters = {
   /** Empty / undefined = no status filter (all statuses). Multi-select. */
   statuses?: ProspectStatus[]
-  source?: string
-  sequence?: SequenceStatus | "all"
+  /** Empty / undefined = no source filter. Multi-select. */
+  sources?: string[]
+  /** Empty / undefined = no sequence filter. Multi-select. */
+  sequences?: SequenceFilterValue[]
   search?: string
   offset?: number
   limit?: number
@@ -108,8 +121,8 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
   const supabase = createServiceRoleSupabaseClient()
   const {
     statuses,
-    source,
-    sequence,
+    sources,
+    sequences,
     search,
     offset = 0,
     limit = 50,
@@ -134,12 +147,31 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
     query = query.in("status", statuses as never[])
   }
 
-  if (source && source !== "all") {
-    query = query.eq("source", source)
+  if (sources && sources.length > 0) {
+    query = query.in("source", sources as never[])
   }
 
-  if (sequence && sequence !== "all") {
-    query = query.eq("sequence_status", sequence)
+  if (sequences && sequences.length > 0) {
+    // Suppression states are derived columns, not sequence_status values —
+    // so build an OR clause that mixes both. Real sequence_status filters
+    // exclude suppressed prospects (a 'finished' contact that bounced
+    // displays as 'Bounced', so filtering 'finished' shouldn't match it).
+    const realStatuses = sequences.filter(
+      (s): s is SequenceStatus =>
+        s === "not_started" || s === "active" || s === "paused" || s === "finished",
+    )
+    const orParts: string[] = []
+    if (realStatuses.length > 0) {
+      const list = realStatuses.map((s) => `"${s}"`).join(",")
+      // sequence_status in (...) AND not suppressed
+      orParts.push(`and(sequence_status.in.(${list}),bounced_at.is.null,complained_at.is.null,unsubscribed_at.is.null)`)
+    }
+    if (sequences.includes("bounced")) orParts.push("bounced_at.not.is.null")
+    if (sequences.includes("complained")) orParts.push("complained_at.not.is.null")
+    if (sequences.includes("unsubscribed")) orParts.push("unsubscribed_at.not.is.null")
+    if (orParts.length > 0) {
+      query = query.or(orParts.join(","))
+    }
   }
 
   if (search) {
@@ -257,55 +289,6 @@ const EMPTY_FUNNEL: ProspectFunnel = {
   total: 0, prospect: 0, contacted: 0, visitor: 0,
   signup: 0, company: 0, publisher: 0, active: 0,
   total_emails_sent: 0,
-}
-
-export type ApolloSyncRun = {
-  id: string
-  kind: "list" | "activity"
-  triggeredBy: "manual" | "cron"
-  startedAt: string
-  finishedAt: string | null
-  syncedCount: number | null
-  totalCount: number | null
-  errorCount: number
-  lastError: string | null
-  listId: string | null
-}
-
-/**
- * Latest sync run per kind (list / activity) for the Apollo Sync popup
- * on /admin/sales. Returns null per kind when no run exists yet.
- */
-export async function fetchLatestApolloSyncRuns(): Promise<{
-  list: ApolloSyncRun | null
-  activity: ApolloSyncRun | null
-}> {
-  const supabase = createServiceRoleSupabaseClient()
-  const { data } = await supabase
-    .from("apollo_sync_runs")
-    .select("id, kind, triggered_by, started_at, finished_at, synced_count, total_count, error_count, last_error, list_id")
-    .order("started_at", { ascending: false })
-    .limit(20)
-
-  const rows = (data ?? []) as any[]
-  const find = (kind: "list" | "activity") => {
-    const row = rows.find((r) => r.kind === kind)
-    if (!row) return null
-    return {
-      id: row.id,
-      kind: row.kind,
-      triggeredBy: row.triggered_by,
-      startedAt: row.started_at,
-      finishedAt: row.finished_at,
-      syncedCount: row.synced_count,
-      totalCount: row.total_count,
-      errorCount: row.error_count ?? 0,
-      lastError: row.last_error,
-      listId: row.list_id,
-    } as ApolloSyncRun
-  }
-
-  return { list: find("list"), activity: find("activity") }
 }
 
 export async function fetchFunnel(source?: string) {
@@ -427,6 +410,11 @@ export type SalesCompanyRow = {
   unsubscribedContactCount: number
   /** Max lastEmailSentAt across contacts, null if nobody's been contacted. */
   lastContactedAt: string | null
+  /** Earliest pending send_at across all contacts on this row, sourced
+   *  from email_drip_queue. Null when no future sends are queued. Lets
+   *  admins scan "what's hitting whose inbox tomorrow" without expanding
+   *  every popup. */
+  nextScheduledAt: string | null
   /** Earliest createdAt across contacts (when this company entered the funnel). */
   createdAt: string
 }
@@ -458,16 +446,20 @@ const SEQUENCE_RANK: Record<SequenceStatus, number> = {
   active: 3,
 }
 
-export type SalesSortBy = "created_at" | "last_contacted_at"
+export type SalesSortBy = "created_at" | "last_contacted_at" | "next_scheduled_at"
 export type SalesSortDir = "asc" | "desc"
 
 type FetchSalesCompaniesFilters = {
   /** Empty / undefined = no status filter (all statuses except 'removed'). */
   statuses?: ProspectStatus[]
-  /** "all" / undefined = no source filter. Matches any contact's source. */
-  source?: string
-  /** "all" / undefined = no sequence filter. Matches the row's aggregated sequence. */
-  sequence?: SequenceStatus | "all"
+  /** Empty / undefined = no source filter. Multi-select; matches any
+   *  contact's source within the row. */
+  sources?: string[]
+  /** Empty / undefined = no sequence filter. Multi-select; values may
+   *  be real sequence_status (active/paused/finished/not_started) or
+   *  suppression states (bounced/complained/unsubscribed) which match
+   *  the row's primary contact's suppression flags. */
+  sequences?: SequenceFilterValue[]
   search?: string
   offset?: number
   limit?: number
@@ -579,6 +571,73 @@ async function loadEmailEventCounts(
 }
 
 /**
+ * For each row in `groups`, return the earliest pending email_drip_queue
+ * send_at across any of the row's contact emails. Pending = not sent, not
+ * cancelled, send_at in the future (past-due rows are about to fire and
+ * carry no useful "next contact" signal).
+ *
+ * Email-keyed: drip queue rows always carry recipient email, and the same
+ * email may legitimately have queued sends across multiple companies (e.g.
+ * an architect listed against two firms). When that happens the same
+ * email's min(send_at) shows up under both groups — accurate for "what's
+ * the next time we'll email this person from this row's perspective."
+ *
+ * Sales-templates only: a contact who signed up as a homeowner gets
+ * enrolled in the homeowner-welcome series (welcome-homeowner →
+ * discover-projects → find-professionals). Those are onboarding sends,
+ * not sales touches, so the "Next contact" column on /admin/sales
+ * filters them out.
+ */
+const SALES_TEMPLATE_PREFIXES = ["prospect-", "outreach-", "new-professional-"]
+const SALES_TEMPLATES_EXACT = ["professional-invite"]
+
+async function loadNextScheduledByGroup(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  groups: Map<string, SalesGroupShape>,
+): Promise<Map<string, string>> {
+  const emailToRowKeys = new Map<string, Set<string>>()
+  for (const [rowKey, g] of groups.entries()) {
+    for (const c of g.contacts) {
+      const lower = c.email.toLowerCase()
+      if (!emailToRowKeys.has(lower)) emailToRowKeys.set(lower, new Set())
+      emailToRowKeys.get(lower)!.add(rowKey)
+    }
+  }
+
+  const emailList = Array.from(emailToRowKeys.keys()).filter(Boolean)
+  if (emailList.length === 0) return new Map()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (supabase as any)
+    .from("email_drip_queue")
+    .select("email, send_at, template")
+    .in("email", emailList)
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+    .gte("send_at", new Date().toISOString())
+    .order("send_at", { ascending: true })
+    .limit(50000)
+
+  const rows = (data ?? []) as Array<{ email: string; send_at: string; template: string }>
+  const isSalesTemplate = (tpl: string): boolean =>
+    SALES_TEMPLATE_PREFIXES.some((p) => tpl.startsWith(p))
+    || SALES_TEMPLATES_EXACT.includes(tpl)
+  const minByRow = new Map<string, string>()
+  for (const r of rows) {
+    if (!isSalesTemplate(r.template)) continue
+    const rowKeys = emailToRowKeys.get(r.email.toLowerCase())
+    if (!rowKeys) continue
+    for (const rowKey of rowKeys) {
+      const existing = minByRow.get(rowKey)
+      if (!existing || r.send_at < existing) {
+        minByRow.set(rowKey, r.send_at)
+      }
+    }
+  }
+  return minByRow
+}
+
+/**
  * Server data for /admin/sales. Returns one row per company with all
  * contacts aggregated, plus a per-company funnel count and the total
  * row count for pagination.
@@ -597,8 +656,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const supabase = createServiceRoleSupabaseClient()
   const {
     statuses,
-    source,
-    sequence,
+    sources,
+    sequences,
     search,
     offset = 0,
     limit = 50,
@@ -811,6 +870,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // returns nothing for a row (e.g. Apollo rows whose email_events
   // backfill hasn't run yet).
   const emailEventCounts = await loadEmailEventCounts(supabase, groups)
+  const nextScheduledByGroup = await loadNextScheduledByGroup(supabase, groups)
 
   let rows: SalesCompanyRow[] = Array.from(groups.entries()).map(([key, g]): SalesCompanyRow => {
     const sortedContacts = sortContactsByRecency(g.contacts)
@@ -838,28 +898,50 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       emailsClicked: hasEventCoverage ? events.clicked : agg.emailsClicked,
       unsubscribedContactCount: sortedContacts.filter((c) => c.unsubscribedAt).length,
       lastContactedAt: agg.lastContactedAt,
+      nextScheduledAt: nextScheduledByGroup.get(key) ?? null,
       createdAt: agg.createdAt,
     }
   })
 
-  // Per-company funnel — counted across the full (unfiltered) row set so
-  // the cards stay stable when the user narrows the table.
+  // Filter ordering matters for the funnel:
+  //   - Source + sequence narrow the funnel (the user wants to see
+  //     conversion for just the selected channel / sequence).
+  //   - Status narrows only the table (filtering by "Contacted"
+  //     mustn't zero out every other funnel card).
+  // So we apply source + sequence first, compute the funnel against
+  // that narrowed set, then apply status as a table-only filter.
+  if (sources && sources.length > 0) {
+    const set = new Set(sources)
+    rows = rows.filter((r) => r.sources.some((s) => set.has(s)))
+  }
+  if (sequences && sequences.length > 0) {
+    // Suppression beats real sequence_status for display, so mirror that
+    // here: a 'finished' contact who bounced shows up only under the
+    // "Bounced" filter, not "Finished". Priority complained > bounced >
+    // unsubscribed (matches getSuppressionState in the popup renderer).
+    const set = new Set<SequenceFilterValue>(sequences)
+    rows = rows.filter((r) => {
+      const c = r.primaryContact
+      if (c.complainedAt) return set.has("complained")
+      if (c.bouncedAt) return set.has("bounced")
+      if (c.unsubscribedAt) return set.has("unsubscribed")
+      return set.has(r.sequenceStatus)
+    })
+  }
+
+  // Per-company funnel — counted AFTER source + sequence filters so
+  // the cards reflect "conversion for the selected channel/sequence".
+  // Status is applied below this, so the cards stay stable when the
+  // admin clicks a funnel stage to narrow the table.
   const funnel: SalesFunnel = { ...EMPTY_SALES_FUNNEL }
   for (const r of rows) {
     funnel.total++
     if (r.status in funnel) (funnel as any)[r.status]++
   }
 
-  // Apply filters post-aggregation.
   if (statuses && statuses.length > 0) {
     const set = new Set<ProspectStatus>(statuses)
     rows = rows.filter((r) => set.has(r.status))
-  }
-  if (source && source !== "all") {
-    rows = rows.filter((r) => r.sources.includes(source))
-  }
-  if (sequence && sequence !== "all") {
-    rows = rows.filter((r) => r.sequenceStatus === sequence)
   }
   if (search) {
     const needle = search.toLowerCase()
@@ -876,9 +958,14 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // Sort. nulls go to the bottom regardless of direction so empty values
   // never float to the top of either ascending or descending sort.
   const dir = sortDir === "asc" ? 1 : -1
+  const pickSortValue = (r: SalesCompanyRow): string | null => {
+    if (sortBy === "created_at") return r.createdAt
+    if (sortBy === "next_scheduled_at") return r.nextScheduledAt
+    return r.lastContactedAt
+  }
   rows.sort((a, b) => {
-    const av = sortBy === "created_at" ? a.createdAt : a.lastContactedAt
-    const bv = sortBy === "created_at" ? b.createdAt : b.lastContactedAt
+    const av = pickSortValue(a)
+    const bv = pickSortValue(b)
     if (!av && !bv) return 0
     if (!av) return 1
     if (!bv) return -1
@@ -1890,6 +1977,100 @@ function queueRowToProspectStep(
   }
 }
 
+type TemplateEventSummary = {
+  sentAt: string | null
+  lastEvent: string | null
+  openedAt: string | null
+  clickedAt: string | null
+}
+
+/** Per-template summary of sent + engagement events for a recipient.
+ *  Used to overlay live-fired sends (Apollo intro via dispatcher) onto
+ *  the queue-derived sequence — without this, a live intro that bounced
+ *  shows as "Not queued" with no bounce indicator.
+ *
+ *  Schema quirk: the Resend webhook writes engagement rows (delivered /
+ *  opened / clicked / bounced / complained) with template=NULL — only
+ *  the 'sent' row carries the template. Both sides share the messageId
+ *  (sent.provider_event_id = messageId; engagement.metadata.resend_message_id
+ *  = messageId), so we resolve template by messageId in JS. lastEvent
+ *  picks the most-recent terminal/engagement event, mirroring the cadence
+ *  of the queue's last_event_cached. */
+async function fetchOutreachEventsByTemplate(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  recipientEmail: string,
+): Promise<Map<string, TemplateEventSummary>> {
+  const { data: events } = await supabase
+    .from("email_events")
+    .select("template, event_type, occurred_at, provider_event_id, metadata")
+    .ilike("recipient_email", recipientEmail)
+    .order("occurred_at", { ascending: false })
+
+  type RawEvent = {
+    template: string | null
+    event_type: string
+    occurred_at: string
+    provider_event_id: string
+    metadata: { resend_message_id?: string } | null
+  }
+  const rows = (events ?? []) as RawEvent[]
+
+  // First pass: map messageId → template via the 'sent' rows. The
+  // outreach-* filter happens here instead of in the SQL so the
+  // template-less engagement rows are still in `rows` to be linked.
+  const messageIdToTemplate = new Map<string, string>()
+  for (const ev of rows) {
+    if (
+      ev.event_type === "sent"
+      && ev.template
+      && ["outreach-intro", "outreach-followup", "outreach-final"].includes(ev.template)
+    ) {
+      messageIdToTemplate.set(ev.provider_event_id, ev.template)
+    }
+  }
+
+  // Second pass: attribute every event to its template via the messageId.
+  const byTemplate = new Map<string, TemplateEventSummary>()
+  for (const ev of rows) {
+    const messageId =
+      ev.event_type === "sent"
+        ? ev.provider_event_id
+        : (ev.metadata?.resend_message_id ?? null)
+    if (!messageId) continue
+    const template = messageIdToTemplate.get(messageId)
+    if (!template) continue
+
+    const slot = byTemplate.get(template) ?? { sentAt: null, lastEvent: null, openedAt: null, clickedAt: null }
+    if (ev.event_type === "sent" && !slot.sentAt) slot.sentAt = ev.occurred_at
+    if (ev.event_type === "opened" && !slot.openedAt) slot.openedAt = ev.occurred_at
+    if (ev.event_type === "clicked" && !slot.clickedAt) slot.clickedAt = ev.occurred_at
+    if (!slot.lastEvent && ev.event_type !== "sent") slot.lastEvent = ev.event_type
+    byTemplate.set(template, slot)
+  }
+  return byTemplate
+}
+
+/** Merge an event summary into a queue-derived step. Promotes a "missing"
+ *  step to "sent" when email_events show a live send happened, and
+ *  carries the lastEvent up so the bounce indicator surfaces on the
+ *  right row regardless of whether the send went through the queue. */
+function mergeStepWithEvents(
+  step: ProspectSequenceStep,
+  events: TemplateEventSummary | undefined,
+): ProspectSequenceStep {
+  if (!events) return step
+  const promotedFromMissing = step.status === "missing" && events.sentAt
+  return {
+    ...step,
+    status: promotedFromMissing ? "sent" : step.status,
+    timestamp: step.timestamp ?? events.sentAt,
+    lastEvent: step.lastEvent ?? events.lastEvent,
+    openedAt: step.openedAt ?? events.openedAt,
+    clickedAt: step.clickedAt ?? events.clickedAt,
+  }
+}
+
 export async function getProspectSequence(prospectId: string): Promise<{
   success: boolean
   steps?: ProspectSequenceStep[]
@@ -1938,10 +2119,27 @@ export async function getProspectSequence(prospectId: string): Promise<{
       if (!outreachByTemplate.has(row.template)) outreachByTemplate.set(row.template, row)
     }
 
+    // Layer email_events on top of the queue rows. dispatchOutreachIntro
+    // fires the intro live via Resend (no queue row), so the queue map
+    // alone misses live-fired sends and their bounce/open/click events.
+    // email_events is the single source of truth for outbound mail —
+    // joined per template here, the bounced engagement label lands on
+    // the step that actually got the bounce instead of disappearing.
+    const outreachEventsByTemplate = await fetchOutreachEventsByTemplate(supabase, prospect.email)
+
     const outreachSteps: ProspectSequenceStep[] = [
-      queueRowToProspectStep("outreach-intro", "Intro", outreachByTemplate.get("outreach-intro")),
-      queueRowToProspectStep("outreach-followup", "Follow-up", outreachByTemplate.get("outreach-followup")),
-      queueRowToProspectStep("outreach-final", "Final", outreachByTemplate.get("outreach-final")),
+      mergeStepWithEvents(
+        queueRowToProspectStep("outreach-intro", "Intro", outreachByTemplate.get("outreach-intro")),
+        outreachEventsByTemplate.get("outreach-intro"),
+      ),
+      mergeStepWithEvents(
+        queueRowToProspectStep("outreach-followup", "Follow-up", outreachByTemplate.get("outreach-followup")),
+        outreachEventsByTemplate.get("outreach-followup"),
+      ),
+      mergeStepWithEvents(
+        queueRowToProspectStep("outreach-final", "Final", outreachByTemplate.get("outreach-final")),
+        outreachEventsByTemplate.get("outreach-final"),
+      ),
     ]
 
     return { success: true, steps: outreachSteps, locale: outreachLocale }
@@ -2047,28 +2245,32 @@ export async function resumeProspectSequence(prospectId: string) {
 
   try {
     const { nextBusinessSlot } = await import("@/lib/date-utils")
+    const { claimNextSendSlot } = await import("@/lib/drip-queue")
     // Pick the right template trio + sequence label for this prospect's
     // source. apollo (Outreach) cadence is Day 3 / Day 10 to match the
     // dispatcher; arco + invites stay on Day 3 / Day 7 as before.
+    // claimNextSendSlot picks the next free 5-min slot on the target
+    // day so resume doesn't pile rows at 09:00 sharp alongside the
+    // morning's other queued sends.
     let sequenceName: string
     let stepConfig: Array<{ template: string; step: number; sendAt: string }>
     if (prospect.source === "invites") {
       sequenceName = "new-professional-invite"
       stepConfig = [
-        { template: "new-professional-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
-        { template: "new-professional-final", step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+        { template: "new-professional-followup", step: 1, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString() },
+        { template: "new-professional-final", step: 2, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(7))).toISOString() },
       ]
     } else if (prospect.source === "apollo") {
       sequenceName = "outreach"
       stepConfig = [
-        { template: "outreach-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
-        { template: "outreach-final", step: 2, sendAt: nextBusinessSlot(10).toISOString() },
+        { template: "outreach-followup", step: 1, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString() },
+        { template: "outreach-final", step: 2, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(10))).toISOString() },
       ]
     } else {
       sequenceName = "prospect-outreach"
       stepConfig = [
-        { template: "prospect-followup", step: 1, sendAt: nextBusinessSlot(3).toISOString() },
-        { template: "prospect-final", step: 2, sendAt: nextBusinessSlot(7).toISOString() },
+        { template: "prospect-followup", step: 1, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString() },
+        { template: "prospect-final", step: 2, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(7))).toISOString() },
       ]
     }
 

@@ -167,7 +167,10 @@ export function GrowthTableClient({ initialMetrics }: Props) {
         <div>
           <h3 className="arco-section-title">Growth — Table View</h3>
           <p className="text-xs text-[#a1a1a0] mt-0.5">
-            All lifecycle metrics over time · <a href="/admin/growth" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Lifecycle view</a>
+            All lifecycle metrics over time · {" "}
+            <a href="/admin/dashboard" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Lifecycle view</a>
+            {" · "}
+            <a href="/admin/model" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Model</a>
           </p>
         </div>
         <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">

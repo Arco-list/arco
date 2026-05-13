@@ -33,6 +33,9 @@ const ICONS = {
   growth: (
     <svg {...iconProps}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
   ),
+  growthModel: (
+    <svg {...iconProps}><path d="M3 3v18h18" /><path d="M7 14l4-4 4 4 5-5" /></svg>
+  ),
   emails: (
     <svg {...iconProps}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
   ),
@@ -66,10 +69,11 @@ const ADMIN_NAV_LINKS: NavItem[] = [
   {
     label: "Growth",
     children: [
+      { href: "/admin/dashboard", label: "Dashboard", icon: ICONS.growth },
       { href: "/admin/sales", label: "Sales", icon: ICONS.sales },
       { href: "/admin/inbox", label: "Inbox", icon: ICONS.inbox },
-      { href: "/admin/growth", label: "Growth", icon: ICONS.growth },
       { href: "/admin/emails", label: "Emails", icon: ICONS.emails },
+      { href: "/admin/model", label: "Model", icon: ICONS.growthModel },
     ],
   },
   {

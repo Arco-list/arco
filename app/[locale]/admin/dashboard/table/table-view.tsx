@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useState } from "react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { MetricRow } from "./table-actions"
 
 const DRIVER_COLORS: Record<string, string> = {
@@ -8,6 +9,36 @@ const DRIVER_COLORS: Record<string, string> = {
   retention: "#7c3aed",
   monetization: "#0f766e",
   churn: "#dc2626",
+}
+
+// Small ⓘ icon revealing the metric definition on hover. Matches the
+// Model page so users see the same affordance across views. Stops click
+// propagation so opening the tooltip on an expandable row doesn't also
+// toggle its expansion.
+function InfoIcon({ definition }: { definition?: string }) {
+  if (!definition) return null
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Definition"
+          className="inline-flex shrink-0 items-center justify-center text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+          style={{ marginLeft: 4, cursor: "help" }}
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1" fill="none" />
+            <circle cx="6" cy="3.6" r="0.6" fill="currentColor" />
+            <path d="M6 5.4v3.4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="max-w-xs text-left">
+        {definition}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 // ─── Trendline with labels spanning all 6 columns ─────────────────────────────
@@ -152,15 +183,8 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
             ) : <div style={{ width: 10 }} />}
             <span className="status-pill-dot shrink-0" style={{ background: color }} />
             <span className="text-[12px] font-medium text-[#1c1c1a]">{row.label}</span>
+            <InfoIcon definition={row.definition} />
           </div>
-        </td>
-        <td>
-          <span className="text-[11px] text-[#a1a1a0]">{row.definition ?? ""}</span>
-          {row.source && (
-            <span className="status-pill" style={{ marginLeft: 6 }}>
-              {row.source === "posthog" ? "PostHog" : "Supabase"}
-            </span>
-          )}
         </td>
         <td>
           <TrendlineCell datapoints={row.datapoints} labels={labels} color={color} />
@@ -171,7 +195,7 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
         className={`md:hidden ${hasSubs ? "cursor-pointer" : ""}`}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
-        <td colSpan={3}>
+        <td colSpan={2}>
           <div className="flex items-center gap-1.5 mb-1">
             {hasSubs ? (
               <svg width="8" height="8" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}>
@@ -193,15 +217,8 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
             <td>
               <div className="flex items-center gap-2 pl-7">
                 <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
+                <InfoIcon definition={sub.definition} />
               </div>
-            </td>
-            <td>
-              <span className="text-[10px] text-[#c4c4c2]">{sub.definition ?? ""}</span>
-              {sub.source && (
-                <span className={`ml-1 text-[8px] font-medium px-1 py-0.5 rounded ${sub.source === "posthog" ? "bg-blue-50 text-blue-500" : "bg-emerald-50 text-emerald-500"}`}>
-                  {sub.source === "posthog" ? "PostHog" : "Supabase"}
-                </span>
-              )}
             </td>
             <td>
               <SubTrendlineCell datapoints={sub.datapoints} />
@@ -209,7 +226,7 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
           </tr>
           {/* Mobile sub-row */}
           <tr className="md:hidden">
-            <td colSpan={3}>
+            <td colSpan={2}>
               <div className="flex items-center gap-1.5 mb-0.5 pl-3">
                 <span className="text-[10px] text-[#6b6b68]">{sub.label}</span>
               </div>
@@ -365,14 +382,12 @@ export function GrowthTableView({
       </div>
       <table className="arco-table md:table-fixed" style={{ minWidth: 0 }}>
         <colgroup className="hidden md:table-column-group">
-          <col style={{ width: "16%" }} />
-          <col style={{ width: "24%" }} />
+          <col style={{ width: "30%" }} />
           <col />
         </colgroup>
         <thead className="hidden md:table-header-group">
           <tr>
             <th style={{ textAlign: "left" }}><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
-            <th style={{ textAlign: "left" }}><span className="arco-eyebrow text-[#a1a1a0]">Definition</span></th>
             <th>
               <div className="relative" style={{ height: 16 }}>
                 {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => {
@@ -389,7 +404,7 @@ export function GrowthTableView({
         <tbody>
           {/* Clients */}
           <tr>
-            <td colSpan={3} style={{ background: "white" }}>
+            <td colSpan={2} style={{ background: "white" }}>
               <p className="arco-eyebrow text-[#a1a1a0]">Clients</p>
             </td>
           </tr>
@@ -397,7 +412,7 @@ export function GrowthTableView({
 
           {/* Professionals */}
           <tr>
-            <td colSpan={3} style={{ background: "white" }}>
+            <td colSpan={2} style={{ background: "white" }}>
               <p className="arco-eyebrow text-[#a1a1a0]">Professionals</p>
             </td>
           </tr>

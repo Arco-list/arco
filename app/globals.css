@@ -6302,6 +6302,19 @@ body.no-scroll {
   background: var(--arco-white);
 }
 
+/* Used by the Growth Model page to visually attach a CR row to the
+   absolute row immediately above it. .arco-cr-row tightens the CR
+   row's top padding; .arco-cr-attached tightens the bottom padding
+   of the row that precedes it. Combined they replace ~24px of
+   inter-row whitespace with ~8px so the pair reads as a single
+   unit while still being two distinct table rows. */
+.arco-table tbody tr.arco-cr-attached > td {
+  padding-bottom: 4px;
+}
+.arco-table tbody tr.arco-cr-row > td {
+  padding-top: 2px;
+}
+
 .arco-table-sort {
   display: inline-flex;
   align-items: center;

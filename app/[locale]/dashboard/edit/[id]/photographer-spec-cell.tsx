@@ -22,6 +22,12 @@ type GooglePrediction = {
   city: string | null
 }
 
+type ArcoPhotographerHit = {
+  id: string
+  name: string
+  city: string | null
+}
+
 const SEARCH_DEBOUNCE_MS = 300
 const MIN_QUERY_LENGTH = 2
 
@@ -29,10 +35,18 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const t = useTranslations("project_edit.photographer")
   const tBadge = useTranslations("project_edit")
+  // tier_on_arco lives under project_edit.team (used by the company
+  // search dropdowns elsewhere). Scoped separately so we don't have
+  // to dot-path through tBadge.
+  const tTeam = useTranslations("project_edit.team")
   const [photographer, setPhotographer] = useState<{ companyId: string; name: string } | null>(initial ?? null)
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [predictions, setPredictions] = useState<GooglePrediction[]>([])
+  // Arco-side photographer hits (audience='pro' companies) — shown
+  // above Google predictions with an "On Arco" badge so re-using an
+  // existing photographer record doesn't require duplicating it.
+  const [arcoHits, setArcoHits] = useState<ArcoPhotographerHit[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isSelecting, setIsSelecting] = useState(false)
   const [isRemoving, startRemoveTransition] = useTransition()
@@ -73,6 +87,7 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
     }
     setQuery("")
     setPredictions([])
+    setArcoHits([])
   }, [isOpen])
 
   const runSearch = useCallback((q: string) => {
@@ -80,52 +95,73 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (q.trim().length < MIN_QUERY_LENGTH) {
       setPredictions([])
+      setArcoHits([])
       return
     }
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const g = (window as any).google
-        if (!g?.maps) {
-          setPredictions([])
-          return
-        }
-        if (!autocompleteServiceRef.current) {
-          const placesLib = await g.maps.importLibrary("places")
-          if (!placesLib?.AutocompleteService) {
-            setPredictions([])
-            return
-          }
-          autocompleteServiceRef.current = new placesLib.AutocompleteService()
-        }
-        const response: any[] = await new Promise((resolve) => {
-          autocompleteServiceRef.current.getPlacePredictions(
-            { input: q.trim(), types: ["establishment"], componentRestrictions: { country: "nl" } },
-            (preds: any, status: string) => {
-              if (status === "OK" && Array.isArray(preds)) resolve(preds)
-              else resolve([])
-            },
-          )
-        })
-        setPredictions(
-          response.slice(0, 6).map((p) => ({
-            placeId: p.place_id,
-            name: p.structured_formatting?.main_text ?? p.description ?? "",
-            city: (() => {
-              const parts = (p.structured_formatting?.secondary_text ?? "")
-                .split(",")
-                .map((s: string) => s.trim())
-              return parts.length >= 2 ? parts[parts.length - 2] : parts[0] || null
-            })(),
-          })),
-        )
+        // Run Arco-side and Google-side lookups in parallel. Arco
+        // includes every photographer in the DB (claimed or not) so
+        // the user can pick an existing record instead of creating
+        // a duplicate.
+        const [arco, gPreds] = await Promise.all([
+          (async (): Promise<ArcoPhotographerHit[]> => {
+            const { data } = await supabase
+              .from("companies")
+              .select("id, name, city")
+              .eq("audience", "pro")
+              .ilike("name", `%${q.trim()}%`)
+              .limit(6)
+            return (data ?? []).map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              city: r.city ?? null,
+            }))
+          })(),
+          (async (): Promise<GooglePrediction[]> => {
+            const g = (window as any).google
+            if (!g?.maps) return []
+            if (!autocompleteServiceRef.current) {
+              const placesLib = await g.maps.importLibrary("places")
+              if (!placesLib?.AutocompleteService) return []
+              autocompleteServiceRef.current = new placesLib.AutocompleteService()
+            }
+            const response: any[] = await new Promise((resolve) => {
+              autocompleteServiceRef.current.getPlacePredictions(
+                { input: q.trim(), types: ["establishment"], componentRestrictions: { country: "nl" } },
+                (preds: any, status: string) => {
+                  if (status === "OK" && Array.isArray(preds)) resolve(preds)
+                  else resolve([])
+                },
+              )
+            })
+            return response.slice(0, 6).map((p) => ({
+              placeId: p.place_id,
+              name: p.structured_formatting?.main_text ?? p.description ?? "",
+              city: (() => {
+                const parts = (p.structured_formatting?.secondary_text ?? "")
+                  .split(",")
+                  .map((s: string) => s.trim())
+                return parts.length >= 2 ? parts[parts.length - 2] : parts[0] || null
+              })(),
+            }))
+          })(),
+        ])
+        setArcoHits(arco)
+        // Drop Google predictions whose name matches an Arco hit so
+        // we don't render the same business twice (once with "On
+        // Arco", once without).
+        const arcoNameSet = new Set(arco.map((a) => a.name.toLowerCase()))
+        setPredictions(gPreds.filter((p) => !arcoNameSet.has(p.name.toLowerCase())))
       } catch {
         setPredictions([])
+        setArcoHits([])
       } finally {
         setIsSearching(false)
       }
     }, SEARCH_DEBOUNCE_MS)
-  }, [])
+  }, [supabase])
 
   // Fetch full place details so we can enrich the company row with website,
   // address, and phone before handing off to the server action.
@@ -220,6 +256,37 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
     }
   }, [projectId, fetchPlaceDetails, t])
 
+  // Re-use an existing Arco photographer record — no Google enrichment
+  // needed because the company already has its details. The server
+  // action's `placeId` path that creates a new company is skipped via
+  // a separate code branch keyed on the company_id.
+  const handleSelectArco = useCallback(async (hit: ArcoPhotographerHit) => {
+    setIsSelecting(true)
+    try {
+      const result = await addPhotographerToProject(projectId, {
+        name: hit.name,
+        placeId: null,
+        formattedAddress: null,
+        city: hit.city,
+        country: null,
+        stateRegion: null,
+        phone: null,
+        website: null,
+        domain: null,
+        existingCompanyId: hit.id,
+      } as any)
+      if (!result.success) {
+        toast.error(result.error ?? t("could_not_add"))
+        return
+      }
+      setPhotographer({ companyId: result.companyId!, name: hit.name })
+      setIsOpen(false)
+      toast.success(t("credited_success", { name: hit.name }))
+    } finally {
+      setIsSelecting(false)
+    }
+  }, [projectId, t])
+
   const handleRemove = useCallback(() => {
     startRemoveTransition(async () => {
       const result = await removePhotographerFromProject(projectId)
@@ -264,7 +331,8 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
   const showAddRow =
     !isSearching &&
     trimmedQuery.length >= MIN_QUERY_LENGTH &&
-    !predictions.some((p) => p.name.toLowerCase() === trimmedQuery.toLowerCase())
+    !predictions.some((p) => p.name.toLowerCase() === trimmedQuery.toLowerCase()) &&
+    !arcoHits.some((a) => a.name.toLowerCase() === trimmedQuery.toLowerCase())
 
   return (
     <div
@@ -307,8 +375,23 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
               setTimeout(() => setIsOpen((prev) => prev && !document.activeElement?.closest('.company-search-menu') ? false : prev), 150)
             }}
           />
-          {(predictions.length > 0 || isSearching || showAddRow) && (
+          {(arcoHits.length > 0 || predictions.length > 0 || isSearching || showAddRow) && (
             <div className="company-search-menu">
+              {arcoHits.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className="company-search-row"
+                  onMouseDown={(e) => { e.preventDefault(); if (!isSelecting) void handleSelectArco(a) }}
+                  style={{ opacity: isSelecting ? 0.6 : 1 }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {a.name}{a.city ? ` · ${a.city}` : ""}
+                  </span>
+                  <span className="tier-badge arco">{tTeam("tier_on_arco")}</span>
+                </button>
+              ))}
+              {arcoHits.length > 0 && predictions.length > 0 && <div className="company-search-divider" />}
               {predictions.map((p) => (
                 <button
                   key={p.placeId}
@@ -320,7 +403,6 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                     {p.name}{p.city ? ` · ${p.city}` : ""}
                   </span>
-                  <span className="tier-badge google">Google</span>
                 </button>
               ))}
               {showAddRow && (

@@ -62,7 +62,7 @@ export function EventsOverview() {
             {wiredCount} of {totalCount} events wired · PostHog autocapture is disabled
           </p>
         </div>
-        <a href="/admin/growth" className="text-xs text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
+        <a href="/admin/dashboard" className="text-xs text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
           ← Back to Growth
         </a>
       </div>

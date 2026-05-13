@@ -7,8 +7,18 @@
  */
 
 const AMSTERDAM_TZ = "Europe/Amsterdam"
-const BUSINESS_START_HOUR = 9 // 09:00 local
-const BUSINESS_END_HOUR = 17 // 17:00 local (exclusive — last valid send minute is 16:59)
+// Send window: 09:00–11:00 Europe/Amsterdam. Tight on purpose — receiving
+// servers (Gmail/Outlook spam filters) score sender reputation on burst
+// rate from low-volume domains, and morning-only sends give the strongest
+// open rates for B2B cold outreach. Combined with SLOT_INTERVAL_MIN this
+// also caps daily volume implicitly: (END-START)*60/INTERVAL = 24/day.
+export const BUSINESS_START_HOUR = 9
+export const BUSINESS_END_HOUR = 11 // exclusive — last valid send minute is 10:59
+// Minimum gap between consecutive sends in the same day's window. Slot
+// allocation in claimNextSendSlot enforces this — receiving servers
+// throttle burst rates from one sender, so a 5-min cadence keeps us
+// well below any reasonable rate-limit trigger.
+export const SLOT_INTERVAL_MIN = 5
 
 /**
  * Returns a UTC `Date` representing the next valid "business slot" `days`

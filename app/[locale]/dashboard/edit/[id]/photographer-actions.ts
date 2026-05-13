@@ -37,6 +37,10 @@ export type PhotographerLookupInput = {
   website: string | null
   /** Hostname only (no protocol, no www). Used for de-duplication. */
   domain: string | null
+  /** When the user picked an existing Arco photographer from the
+   *  search dropdown we already know the company_id — skip all
+   *  de-dupe / create steps and link the existing row directly. */
+  existingCompanyId?: string | null
 }
 
 export type AddPhotographerResult = {
@@ -84,7 +88,23 @@ export async function addPhotographerToProject(
   // De-dupe: google_place_id first (strongest signal), then domain.
   let companyId: string | null = null
 
-  if (input.placeId) {
+  // User picked an existing Arco photographer from the dropdown —
+  // skip all de-dupe / create steps and link the row directly. Trust
+  // the caller's id but verify it points at a real photographer row
+  // (audience='pro') so this can't be abused to link arbitrary
+  // companies as photographer credits.
+  if (input.existingCompanyId) {
+    const { data: existing } = await serviceSupabase
+      .from("companies")
+      .select("id, audience")
+      .eq("id", input.existingCompanyId)
+      .maybeSingle()
+    if (existing?.id && (existing as any).audience === "pro") {
+      companyId = existing.id as string
+    }
+  }
+
+  if (!companyId && input.placeId) {
     const { data: byPlace } = await serviceSupabase
       .from("companies")
       .select("id")

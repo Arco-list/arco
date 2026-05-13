@@ -60,6 +60,26 @@ export default async function ProfessionalsPage({ searchParams }: PageProps) {
     } catch (e) {
       console.error("[ProfessionalsPage] Prospect tracking failed:", e)
     }
+
+    // Track invite-side landing visit: stamp landing_visited_at on
+    // every project_professionals row matching this email that hasn't
+    // been visited yet. Email-keyed and server-side, so the Growth
+    // Model's "Pro visitors from Invites" sub can reconcile against
+    // the email-keyed invite-contacted denominator without
+    // link-scanner noise. Best-effort; never blocks render.
+    try {
+      const serviceClient = createServiceRoleSupabaseClient()
+      // Cast through `any` until lib/supabase/types.ts is regenerated
+      // to include the new landing_visited_at column on
+      // project_professionals (added in migration 161).
+      await (serviceClient as any)
+        .from("project_professionals")
+        .update({ landing_visited_at: new Date().toISOString() })
+        .eq("invited_email", inviteEmail)
+        .is("landing_visited_at", null)
+    } catch (e) {
+      console.error("[ProfessionalsPage] Invite tracking failed:", e)
+    }
   }
 
   // Fetch recently added professionals

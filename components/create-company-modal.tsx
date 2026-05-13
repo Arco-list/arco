@@ -509,7 +509,6 @@ export function CreateCompanyModal() {
                         onClick={() => handleSelectGoogleResult(g)}
                       >
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
-                        <span className="ccm-badge google">Google</span>
                       </button>
                     ))}
 

@@ -14,10 +14,20 @@ import { LoginModalProvider } from "@/contexts/login-modal-context";
 import { LoginModal } from "@/components/auth/login-modal";
 import { CreateCompanyModalProvider } from "@/contexts/create-company-modal-context";
 import { CreateCompanyModal } from "@/components/create-company-modal";
+import { useFirstTouchStamp } from "@/lib/use-first-touch-stamp";
 
 export interface RootProvidersProps {
   children: ReactNode;
   initialSession: Session | null;
+}
+
+// Stamps profiles.first_touch_source once per page-load for signed-in
+// users. Idempotent — the server endpoint skips when the column is
+// already set, so this is cheap and self-healing if a profile was
+// created before the column existed.
+function FirstTouchStamper({ session }: { session: Session | null }) {
+  useFirstTouchStamp({ enabled: !!session?.user })
+  return null
 }
 
 export const RootProviders = ({ children, initialSession }: RootProvidersProps) => {
@@ -30,6 +40,7 @@ export const RootProviders = ({ children, initialSession }: RootProvidersProps) 
               <SavedProjectsProvider>
                 <SavedProfessionalsProvider>
                   <ScrollToTop />
+                  <FirstTouchStamper session={initialSession} />
                   {children}
                   <LoginModal />
                   <CreateCompanyModal />

@@ -83,11 +83,23 @@ export async function dispatchOutreachIntro(
   // 2. Enqueue followup + final. Sequence label 'outreach' lets the
   //    drip cron + cancellation hooks recognise this as one logical
   //    series. nextBusinessSlot skips weekends so a Friday intro
-  //    schedules the followup for Wednesday, not Monday.
+  //    schedules the followup for Wednesday, not Monday;
+  //    claimNextSendSlot then picks the next free 5-min slot in
+  //    the day's window so the followup doesn't collide with other
+  //    sends already scheduled at 09:00 sharp.
   const { nextBusinessSlot } = await import("@/lib/date-utils")
+  const { claimNextSendSlot } = await import("@/lib/drip-queue")
   const stepConfig = [
-    { template: "outreach-followup" as const, step: 1, sendAt: nextBusinessSlot(FOLLOWUP_DAYS).toISOString() },
-    { template: "outreach-final" as const, step: 2, sendAt: nextBusinessSlot(FINAL_DAYS).toISOString() },
+    {
+      template: "outreach-followup" as const,
+      step: 1,
+      sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(FOLLOWUP_DAYS))).toISOString(),
+    },
+    {
+      template: "outreach-final" as const,
+      step: 2,
+      sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(FINAL_DAYS))).toISOString(),
+    },
   ]
 
   for (const { template, step, sendAt } of stepConfig) {

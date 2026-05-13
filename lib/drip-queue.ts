@@ -2,6 +2,12 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { logger } from "@/lib/logger"
+import {
+  BUSINESS_END_HOUR,
+  BUSINESS_START_HOUR,
+  SLOT_INTERVAL_MIN,
+  nextBusinessSlot,
+} from "@/lib/date-utils"
 
 /**
  * Drip-queue cancellation helper.
@@ -163,4 +169,87 @@ export async function isProAudienceCompany(
     return false
   }
   return (data as any)?.audience === "pro"
+}
+
+/**
+ * Allocate the next available send slot in the day's BUSINESS_START_HOUR–
+ * BUSINESS_END_HOUR Europe/Amsterdam window, rolling forward to the next
+ * business day if the day's slots are full.
+ *
+ * Why slot-allocation instead of a fixed time: a single-tick burst of N
+ * sends from a low-volume domain is the worst signal we can give to spam
+ * filters. Spreading consecutive sends 5 minutes apart caps the burst rate
+ * at ~1/min and makes the daily volume cap ((END-START)*60/INTERVAL = 24)
+ * implicit — no counter table needed.
+ *
+ * Algorithm:
+ *   1. Snap baseDate forward to the next valid business slot (skip
+ *      weekends + clamp to BUSINESS_START_HOUR if before the window).
+ *      Defensive — most callers pass nextBusinessSlot() output already.
+ *   2. Query the queue for the latest non-final send_at on baseDate's
+ *      Amsterdam day within the window.
+ *   3. Next slot = max(baseDate, lastUsed + SLOT_INTERVAL_MIN).
+ *   4. If that slot is past BUSINESS_END_HOUR, roll to next business day
+ *      and recurse. Capped at 30 days lookahead so we never loop forever.
+ *
+ * Concurrency note: two enqueues racing can both claim the same slot.
+ * Acceptable in single-admin scope — collisions surface as "two sends in
+ * one cron tick" which is bounded by the tick interval anyway. If we
+ * grow to multi-admin enqueueing, add SELECT FOR UPDATE here.
+ */
+export async function claimNextSendSlot(
+  supabase: SupabaseClient,
+  baseDate: Date,
+  lookaheadDays: number = 0,
+): Promise<Date> {
+  if (lookaheadDays > 30) {
+    // Defensive ceiling — should be unreachable. Fall back to the bare
+    // baseDate so the caller doesn't crash.
+    logger.warn("claimNextSendSlot: 30-day lookahead exhausted; falling back", {
+      baseDate: baseDate.toISOString(),
+    })
+    return baseDate
+  }
+
+  // Snap baseDate to the next valid window start. nextBusinessSlot(0)
+  // handles weekend + before-9 cases. Note: we pass `baseDate` as the
+  // "now" reference so the snap is relative to the requested day.
+  const snapped = nextBusinessSlot(0, baseDate)
+
+  // Compute the day's window bounds in UTC. snapped is already at
+  // BUSINESS_START_HOUR Amsterdam — the window length in real time is
+  // (END_HOUR - START_HOUR) hours.
+  const windowStart = snapped
+  const windowEnd = new Date(
+    windowStart.getTime() + (BUSINESS_END_HOUR - BUSINESS_START_HOUR) * 60 * 60 * 1000,
+  )
+
+  // Latest existing send_at in this day's window for any pending row
+  // (across templates / sequences — slot allocation is global, not
+  // per-template, since the burst rate is what receiving servers see).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("email_drip_queue")
+    .select("send_at")
+    .gte("send_at", windowStart.toISOString())
+    .lt("send_at", windowEnd.toISOString())
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+    .order("send_at", { ascending: false })
+    .limit(1)
+
+  const lastUsedIso = (existing as Array<{ send_at: string }> | null)?.[0]?.send_at ?? null
+  const lastUsed = lastUsedIso ? new Date(lastUsedIso) : null
+  const candidate = lastUsed
+    ? new Date(Math.max(windowStart.getTime(), lastUsed.getTime() + SLOT_INTERVAL_MIN * 60 * 1000))
+    : windowStart
+
+  // If the candidate slot is past the window's end, roll to next
+  // business day. Recursion bottom-outs once we find a day with room.
+  if (candidate.getTime() >= windowEnd.getTime()) {
+    const nextDay = nextBusinessSlot(1, snapped)
+    return claimNextSendSlot(supabase, nextDay, lookaheadDays + 1)
+  }
+
+  return candidate
 }

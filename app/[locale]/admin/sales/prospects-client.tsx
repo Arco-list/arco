@@ -6,7 +6,6 @@ import {
   fetchSalesCompanies,
   fetchProspectById,
   fetchProspectEvents,
-  fetchLatestApolloSyncRuns,
   startProspectSequence,
   pauseProspectSequence,
   resumeProspectSequence,
@@ -28,14 +27,8 @@ import {
   type SalesSortBy,
   type SalesSortDir,
   type SequenceStatus,
+  type SequenceFilterValue,
 } from "./actions"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -76,6 +69,46 @@ const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = 
   active: { label: "Active", dot: "bg-[#2563eb]" },
   paused: { label: "Paused", dot: "bg-amber-400" },
   finished: { label: "Finished", dot: "bg-emerald-500" },
+}
+
+// Sequence-filter dropdown options. Real sequence_status values plus
+// the three suppression states that override the row's Sequence
+// display (all three render with a red dot).
+const SEQUENCE_FILTER_OPTIONS: { value: SequenceFilterValue; label: string; dot: string }[] = [
+  { value: "not_started", label: "Not started", dot: "bg-[#a1a1a0]" },
+  { value: "active", label: "Active", dot: "bg-[#2563eb]" },
+  { value: "paused", label: "Paused", dot: "bg-amber-400" },
+  { value: "finished", label: "Finished", dot: "bg-emerald-500" },
+  { value: "bounced", label: "Bounced", dot: "bg-red-500" },
+  { value: "complained", label: "Complained", dot: "bg-red-500" },
+  { value: "unsubscribed", label: "Unsubscribed", dot: "bg-red-500" },
+]
+const SEQUENCE_FILTER_LABEL: Record<SequenceFilterValue, { label: string; dot: string }> = Object.fromEntries(
+  SEQUENCE_FILTER_OPTIONS.map((o) => [o.value, { label: o.label, dot: o.dot }]),
+) as Record<SequenceFilterValue, { label: string; dot: string }>
+
+// Channel-filter dropdown options. DB still stores the historical source
+// codes; sourceLabel renders them post-Apollo-cutover names.
+const CHANNEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "arco", label: "Showcase" },
+  { value: "invites", label: "Invite" },
+  { value: "apollo", label: "Outreach" },
+]
+
+// Recipient-suppression states from the Resend webhook + List-Unsubscribe.
+// All three terminate the sequence — surfaced as a red override in the
+// row's Sequence column. Priority complained > bounced > unsubscribed
+// (most reputation-damaging first); only one ever renders. Cancellation
+// reasons echoing these states are suppressed in the per-email step list
+// (the override is enough; we don't need to repeat "bounced" on every
+// cancelled row).
+const SUPPRESSED_CANCEL_REASONS = new Set(["bounced", "complained", "unsubscribed"])
+function getSuppressionState(contact: { bouncedAt: string | null; complainedAt: string | null; unsubscribedAt: string | null }):
+  { label: "Bounced" | "Complained" | "Unsubscribed" } | null {
+  if (contact.complainedAt) return { label: "Complained" }
+  if (contact.bouncedAt) return { label: "Bounced" }
+  if (contact.unsubscribedAt) return { label: "Unsubscribed" }
+  return null
 }
 
 // Funnel stages aligned with Growth lifecycle model
@@ -403,26 +436,12 @@ type ContactDetailBundle = {
   inviteContext: ProspectInviteContext | null
 }
 
-type ApolloSyncRunSummary = {
-  id: string
-  kind: "list" | "activity"
-  triggeredBy: "manual" | "cron"
-  startedAt: string
-  finishedAt: string | null
-  syncedCount: number | null
-  totalCount: number | null
-  errorCount: number
-  lastError: string | null
-  listId: string | null
-}
-
 type Props = {
   initialCompanies: SalesCompanyRow[]
   initialTotalCompanies: number
   initialFunnel: SalesFunnel
   initialEmailsSent: number
   currentApolloListId?: string | null
-  apolloSyncRuns?: { list: ApolloSyncRunSummary | null; activity: ApolloSyncRunSummary | null }
   apolloProspectsCount?: number
 }
 
@@ -432,7 +451,6 @@ export function ProspectsClient({
   initialFunnel,
   initialEmailsSent,
   currentApolloListId = null,
-  apolloSyncRuns = { list: null, activity: null },
   apolloProspectsCount = 0,
 }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
@@ -440,8 +458,8 @@ export function ProspectsClient({
   const [funnel, setFunnel] = useState(initialFunnel)
   const [totalEmailsSent, setTotalEmailsSent] = useState(initialEmailsSent)
   const [statusFilter, setStatusFilter] = useState<ProspectStatus[]>([])
-  const [sourceFilter, setSourceFilter] = useState("all")
-  const [sequenceFilter, setSequenceFilter] = useState<SequenceStatus | "all">("all")
+  const [sourceFilter, setSourceFilter] = useState<string[]>([])
+  const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
   const [search, setSearch] = useState("")
   // Company-scoped details popup. Holds the row the admin clicked, plus
   // a per-contact map of fetched details (events + sequence + invite ctx +
@@ -459,11 +477,8 @@ export function ProspectsClient({
   const [showApolloSync, setShowApolloSync] = useState(false)
   const [syncListId, setSyncListId] = useState("")
   const [editingListId, setEditingListId] = useState(false)
-  const [latestRuns, setLatestRuns] = useState(apolloSyncRuns)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<string | null>(null)
-  const [showEmailsModal, setShowEmailsModal] = useState(false)
-  const [emailLang, setEmailLang] = useState<"en" | "nl">("nl")
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(initialTotalCompanies > 50)
   const [isPending, startTransition] = useTransition()
@@ -478,8 +493,8 @@ export function ProspectsClient({
     startTransition(async () => {
       const result = await fetchSalesCompanies({
         statuses: statusFilter,
-        source: sourceFilter,
-        sequence: sequenceFilter,
+        sources: sourceFilter,
+        sequences: sequenceFilter,
         search,
         offset: off,
         limit: 50,
@@ -514,16 +529,20 @@ export function ProspectsClient({
     })
   }, [reload])
 
-  const handleFilterChange = useCallback((newStatuses?: ProspectStatus[], newSource?: string, newSequence?: SequenceStatus | "all") => {
-    if (newStatuses !== undefined) setStatusFilter(newStatuses)
-    if (newSource !== undefined) setSourceFilter(newSource)
-    if (newSequence !== undefined) setSequenceFilter(newSequence)
-    const s = newStatuses ?? statusFilter
-    const src = newSource ?? sourceFilter
-    const seq = newSequence ?? sequenceFilter
+  const handleFilterChange = useCallback((opts: {
+    statuses?: ProspectStatus[]
+    sources?: string[]
+    sequences?: SequenceFilterValue[]
+  }) => {
+    if (opts.statuses !== undefined) setStatusFilter(opts.statuses)
+    if (opts.sources !== undefined) setSourceFilter(opts.sources)
+    if (opts.sequences !== undefined) setSequenceFilter(opts.sequences)
+    const s = opts.statuses ?? statusFilter
+    const src = opts.sources ?? sourceFilter
+    const seq = opts.sequences ?? sequenceFilter
     startTransition(async () => {
       const result = await fetchSalesCompanies({
-        statuses: s, source: src, sequence: seq, search,
+        statuses: s, sources: src, sequences: seq, search,
         offset: 0, limit: 50, sortBy, sortDir,
       })
       setCompanies(result.companies)
@@ -539,8 +558,22 @@ export function ProspectsClient({
     const next = statusFilter.includes(status)
       ? statusFilter.filter((s) => s !== status)
       : [...statusFilter, status]
-    handleFilterChange(next)
+    handleFilterChange({ statuses: next })
   }, [statusFilter, handleFilterChange])
+
+  const toggleSource = useCallback((src: string) => {
+    const next = sourceFilter.includes(src)
+      ? sourceFilter.filter((s) => s !== src)
+      : [...sourceFilter, src]
+    handleFilterChange({ sources: next })
+  }, [sourceFilter, handleFilterChange])
+
+  const toggleSequence = useCallback((seq: SequenceFilterValue) => {
+    const next = sequenceFilter.includes(seq)
+      ? sequenceFilter.filter((s) => s !== seq)
+      : [...sequenceFilter, seq]
+    handleFilterChange({ sequences: next })
+  }, [sequenceFilter, handleFilterChange])
 
   const handleSearch = useCallback(() => {
     reload({ offset: 0 })
@@ -551,12 +584,16 @@ export function ProspectsClient({
   }, [reload, offset])
 
   const toggleSort = useCallback((field: SalesSortBy) => {
-    const nextDir: SalesSortDir = sortBy === field ? (sortDir === "desc" ? "asc" : "desc") : "desc"
+    // Default first-click direction is "desc" for date columns (most recent
+    // first) — except next_scheduled_at, where the natural reading is
+    // "soonest pending send first" (asc).
+    const defaultDir: SalesSortDir = field === "next_scheduled_at" ? "asc" : "desc"
+    const nextDir: SalesSortDir = sortBy === field ? (sortDir === "desc" ? "asc" : "desc") : defaultDir
     setSortBy(field)
     setSortDir(nextDir)
     startTransition(async () => {
       const result = await fetchSalesCompanies({
-        statuses: statusFilter, source: sourceFilter, sequence: sequenceFilter, search,
+        statuses: statusFilter, sources: sourceFilter, sequences: sequenceFilter, search,
         offset: 0, limit: 50, sortBy: field, sortDir: nextDir,
       })
       setCompanies(result.companies)
@@ -638,13 +675,6 @@ export function ProspectsClient({
     }
   }, [reload, offset])
 
-  const refreshSyncRuns = async () => {
-    try {
-      const runs = await fetchLatestApolloSyncRuns()
-      setLatestRuns(runs)
-    } catch { /* keep state */ }
-  }
-
   const handleSyncList = async () => {
     if (!syncListId.trim()) return
     setIsSyncing(true)
@@ -657,38 +687,13 @@ export function ProspectsClient({
       })
       const data = await res.json()
       if (res.ok) {
-        setSyncResult(`Synced ${data.synced} contacts from Apollo`)
-        await refreshSyncRuns()
+        setSyncResult(`Imported ${data.synced} contacts`)
         reload({ offset: 0 })
       } else {
         setSyncResult(`Error: ${data.error}`)
       }
     } catch {
-      setSyncResult("Failed to connect to Apollo")
-    } finally {
-      setIsSyncing(false)
-    }
-  }
-
-  const handleSyncActivity = async () => {
-    setIsSyncing(true)
-    setSyncResult(null)
-    try {
-      const res = await fetch("/api/apollo-sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync_activity" }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setSyncResult(`Updated ${data.updated} of ${data.total} prospects`)
-        await refreshSyncRuns()
-        reload({ offset: 0 })
-      } else {
-        setSyncResult(`Error: ${data.error}`)
-      }
-    } catch {
-      setSyncResult("Failed to connect to Apollo")
+      setSyncResult("Failed to import contacts")
     } finally {
       setIsSyncing(false)
     }
@@ -716,19 +721,13 @@ export function ProspectsClient({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setShowEmailsModal(true)}
-            className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-          >
-            Email Templates
-          </button>
-          <button
             onClick={() => {
               setSyncListId(currentApolloListId ?? "")
               setShowApolloSync(true)
             }}
             className="h-8 px-3 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
           >
-            Apollo Sync
+            Import contacts
           </button>
         </div>
       </div>
@@ -840,7 +839,7 @@ export function ProspectsClient({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.preventDefault()
-                  if (statusFilter.length > 0) handleFilterChange([])
+                  if (statusFilter.length > 0) handleFilterChange({ statuses: [] })
                 }}
                 className="text-xs"
               >
@@ -863,40 +862,103 @@ export function ProspectsClient({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Select value={sequenceFilter} onValueChange={(v) => handleFilterChange(undefined, undefined, v as SequenceStatus | "all")}>
-            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All sequences">
-                {sequenceFilter === "all" ? "All sequences" : (
+          {/* Multi-select sequence filter — empty selection = all sequences. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-[170px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {sequenceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All sequences</span>
+                  ) : sequenceFilter.length === 1 ? (
+                    <>
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_FILTER_LABEL[sequenceFilter[0]].dot}`} />
+                      <span className="truncate">{SEQUENCE_FILTER_LABEL[sequenceFilter[0]].label}</span>
+                    </>
+                  ) : (
+                    <span>{sequenceFilter.length} sequences</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[200px]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (sequenceFilter.length > 0) handleFilterChange({ sequences: [] })
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {SEQUENCE_FILTER_OPTIONS.map((o) => (
+                <DropdownMenuCheckboxItem
+                  key={o.value}
+                  checked={sequenceFilter.includes(o.value)}
+                  onCheckedChange={() => toggleSequence(o.value)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
                   <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_CONFIG[sequenceFilter as SequenceStatus].dot}`} />
-                    {SEQUENCE_CONFIG[sequenceFilter as SequenceStatus].label}
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${o.dot}`} />
+                    {o.label}
                   </span>
-                )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All sequences</SelectItem>
-              {(["not_started", "active", "paused", "finished"] as SequenceStatus[]).map((s) => (
-                <SelectItem key={s} value={s}>
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_CONFIG[s].dot}`} />
-                    {SEQUENCE_CONFIG[s].label}
-                  </span>
-                </SelectItem>
+                </DropdownMenuCheckboxItem>
               ))}
-            </SelectContent>
-          </Select>
-          <Select value={sourceFilter} onValueChange={(v) => handleFilterChange(undefined, v)}>
-            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All channels" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All channels</SelectItem>
-              <SelectItem value="arco">Showcase</SelectItem>
-              <SelectItem value="invites">Invite</SelectItem>
-              <SelectItem value="apollo">Outreach</SelectItem>
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select channel filter — empty selection = all channels. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-[150px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {sourceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All channels</span>
+                  ) : sourceFilter.length === 1 ? (
+                    <span className="truncate">{sourceLabel(sourceFilter[0])}</span>
+                  ) : (
+                    <span>{sourceFilter.length} channels</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (sourceFilter.length > 0) handleFilterChange({ sources: [] })
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {CHANNEL_OPTIONS.map((o) => (
+                <DropdownMenuCheckboxItem
+                  key={o.value}
+                  checked={sourceFilter.includes(o.value)}
+                  onCheckedChange={() => toggleSource(o.value)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  {o.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -938,13 +1000,25 @@ export function ProspectsClient({
                   )}
                 </span>
               </th>
+              <th
+                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("next_scheduled_at")}
+                title="Sort by next contact"
+              >
+                <span className="inline-flex items-center justify-end gap-1">
+                  Next contact
+                  {sortBy === "next_scheduled_at" && (
+                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </span>
+              </th>
               <th className="w-[40px]"></th>
             </tr>
           </thead>
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={12} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={13} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found.
                 </td>
               </tr>
@@ -1138,335 +1212,77 @@ export function ProspectsClient({
         </div>
       )}
 
-      {/* Apollo Sync popup */}
+      {/* Import contacts popup. Imports a Apollo list of contacts into
+          prospects + auto-enrols them on the Outreach drip. List ID is
+          stored on each row so we can re-import a list later. */}
       {showApolloSync && (
         <div className="popup-overlay" onClick={() => setShowApolloSync(false)}>
           <div className="popup-card" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Apollo Sync</h3>
+              <h3 className="arco-section-title">Import contacts</h3>
               <button type="button" className="popup-close" onClick={() => setShowApolloSync(false)} aria-label="Close">✕</button>
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Import contacts from a list</h4>
-              <p style={{ margin: "0 0 10px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
-                The list ID feeds prospects into the sales funnel. Find it in Apollo → Lists → click a list → the ID is in the URL.
-              </p>
+            <p style={{ margin: "0 0 12px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
+              Pulls contacts from an Apollo list into prospects and auto-enrols them on the Outreach sequence. Find the list ID in Apollo → Lists → click a list → the ID is in the URL.
+            </p>
 
-              <label className="text-xs font-medium text-[#6b6b68] block mb-1">Current list ID</label>
-              {editingListId || !currentApolloListId ? (
-                <input
-                  type="text"
-                  value={syncListId}
-                  onChange={(e) => setSyncListId(e.target.value)}
-                  className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-                  placeholder={currentApolloListId ?? "e.g. 6501a2b3c4d5e6f7..."}
-                  autoFocus={editingListId}
-                />
-              ) : (
-                <div className="flex items-center justify-between gap-2 h-9 px-3 border border-[#e5e5e4] rounded-[3px] bg-[#fafaf9]">
-                  <code className="text-xs text-[#1c1c1a] truncate">{currentApolloListId}</code>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSyncListId(currentApolloListId ?? "")
-                      setEditingListId(true)
-                    }}
-                    className="text-xs font-medium text-[#016D75] hover:underline shrink-0"
-                  >
-                    Change
-                  </button>
-                </div>
-              )}
-
-              <p style={{ margin: "10px 0 12px", fontSize: 11, color: "#6b6b68" }}>
-                {apolloProspectsCount} contact{apolloProspectsCount === 1 ? "" : "s"} in the prospects table from Apollo.
-                {latestRuns.list?.startedAt && (
-                  <>
-                    {" · "}
-                    Last import {formatRelativeTime(latestRuns.list.startedAt)}
-                    {latestRuns.list.syncedCount !== null && ` (synced ${latestRuns.list.syncedCount})`}
-                    {latestRuns.list.errorCount > 0 && ` · ${latestRuns.list.errorCount} error${latestRuns.list.errorCount === 1 ? "" : "s"}`}
-                  </>
-                )}
-              </p>
-
-              <div className="flex justify-end">
+            <label className="text-xs font-medium text-[#6b6b68] block mb-1">List ID</label>
+            {editingListId || !currentApolloListId ? (
+              <input
+                type="text"
+                value={syncListId}
+                onChange={(e) => setSyncListId(e.target.value)}
+                className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+                placeholder={currentApolloListId ?? "e.g. 6501a2b3c4d5e6f7..."}
+                autoFocus={editingListId}
+              />
+            ) : (
+              <div className="flex items-center justify-between gap-2 h-9 px-3 border border-[#e5e5e4] rounded-[3px] bg-[#fafaf9]">
+                <code className="text-xs text-[#1c1c1a] truncate">{currentApolloListId}</code>
                 <button
-                  onClick={handleSyncList}
-                  disabled={isSyncing || !syncListId.trim()}
-                  className="h-9 px-4 text-xs font-medium rounded-[3px] text-white transition-colors disabled:opacity-50"
-                  style={{ background: "var(--primary, #016D75)" }}
+                  type="button"
+                  onClick={() => {
+                    setSyncListId(currentApolloListId ?? "")
+                    setEditingListId(true)
+                  }}
+                  className="text-xs font-medium text-[#016D75] hover:underline shrink-0"
                 >
-                  {isSyncing ? "Syncing…" : "Import Contacts"}
+                  Change
                 </button>
               </div>
-            </div>
+            )}
 
-            <div style={{ paddingTop: 20, borderTop: "1px solid #e5e5e4" }}>
-              <h4 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>Refresh prospect activity</h4>
-              <p style={{ margin: "0 0 12px", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
-                Re-reads campaign status from Apollo for every active prospect. Runs automatically every 6 hours; the manual button is for "I just sent emails, refresh now" cases.
+            <p style={{ margin: "10px 0 12px", fontSize: 11, color: "#6b6b68" }}>
+              {apolloProspectsCount} contact{apolloProspectsCount === 1 ? "" : "s"} imported so far.
+            </p>
+
+            {syncResult && (
+              <p className={`text-xs mb-3 ${syncResult.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>
+                {syncResult}
               </p>
+            )}
 
-              <div style={{ background: "#fafaf9", border: "1px solid #e5e5e4", borderRadius: 3, padding: "10px 12px", marginBottom: 12, fontSize: 11, lineHeight: 1.6, color: "#1c1c1a" }}>
-                {latestRuns.activity ? (
-                  <>
-                    <div>
-                      <strong style={{ fontWeight: 500 }}>Last sync:</strong>{" "}
-                      <span style={{ color: "#6b6b68" }}>
-                        {formatRelativeTime(latestRuns.activity.startedAt)}
-                        {" "}({latestRuns.activity.triggeredBy})
-                      </span>
-                    </div>
-                    <div>
-                      <strong style={{ fontWeight: 500 }}>Result:</strong>{" "}
-                      <span style={{ color: latestRuns.activity.errorCount > 0 ? "#dc2626" : "#059669" }}>
-                        {latestRuns.activity.finishedAt
-                          ? `${latestRuns.activity.syncedCount ?? 0} of ${latestRuns.activity.totalCount ?? 0} prospects refreshed${latestRuns.activity.errorCount > 0 ? ` · ${latestRuns.activity.errorCount} error${latestRuns.activity.errorCount === 1 ? "" : "s"}` : ""}`
-                          : "Running…"}
-                      </span>
-                    </div>
-                    {latestRuns.activity.lastError && (
-                      <div style={{ marginTop: 4, color: "#dc2626", fontSize: 10 }}>
-                        Last error: {latestRuns.activity.lastError}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ color: "#a1a1a0" }}>No syncs run yet.</span>
-                )}
-              </div>
-
-              {syncResult && (
-                <p className={`text-xs mb-3 ${syncResult.startsWith("Error") ? "text-red-600" : "text-emerald-600"}`}>
-                  {syncResult}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowApolloSync(false)}
-                  className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={handleSyncActivity}
-                  disabled={isSyncing}
-                  className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#1c1c1a] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
-                >
-                  {isSyncing ? "Refreshing…" : "Refresh now"}
-                </button>
-              </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowApolloSync(false)}
+                className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSyncList}
+                disabled={isSyncing || !syncListId.trim()}
+                className="h-9 px-4 text-xs font-medium rounded-[3px] text-white transition-colors disabled:opacity-50"
+                style={{ background: "var(--primary, #016D75)" }}
+              >
+                {isSyncing ? "Importing…" : "Import"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Email templates modal */}
-      {showEmailsModal && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40" onClick={() => setShowEmailsModal(false)}>
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-[#e5e5e4] px-6 py-4 flex items-center justify-between z-10">
-              <span className="text-sm font-medium text-[#1c1c1a]">Apollo Email Sequence — Architect Outreach</span>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center border border-[#e5e5e4] rounded-[3px] overflow-hidden">
-                  <button
-                    onClick={() => setEmailLang("nl")}
-                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${emailLang === "nl" ? "bg-[#1c1c1a] text-white" : "text-[#6b6b68] hover:bg-[#fafaf9]"}`}
-                  >
-                    NL
-                  </button>
-                  <button
-                    onClick={() => setEmailLang("en")}
-                    className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${emailLang === "en" ? "bg-[#1c1c1a] text-white" : "text-[#6b6b68] hover:bg-[#fafaf9]"}`}
-                  >
-                    EN
-                  </button>
-                </div>
-                <button className="text-[#a1a1a0] hover:text-[#1c1c1a]" onClick={() => setShowEmailsModal(false)}>✕</button>
-              </div>
-            </div>
-            <div className="px-6 py-5 space-y-8">
-              <p className="text-xs text-[#a1a1a0]">
-                {emailLang === "nl"
-                  ? <>Kopieer deze e-mails naar je Apollo-sequence. {'{{first_name}}'}, {'{{account.name}}'} en {'{{email}}'} worden automatisch ingevuld door Apollo.</>
-                  : <>Copy these into your Apollo sequence. {'{{first_name}}'}, {'{{account.name}}'}, and {'{{email}}'} are Apollo variables that auto-fill per prospect.</>
-                }
-              </p>
-
-              {emailLang === "nl" ? (
-                <>
-                  <EmailTemplate
-                    step={1}
-                    delay="Dag 1"
-                    subject="{{first_name}}, {{account.name}} past bij Arco"
-                    body={`Beste {{first_name}},
-
-Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.
-
-Op Arco tonen we gerealiseerde projecten met alle betrokken partijen — architect, aannemer, interieurontwerper — gekoppeld. Geen biedingen, geen reviews, geen zelf-gepubliceerde portfolio's. Alleen uitzonderlijk werk, redactioneel beoordeeld.
-
-Wat Arco biedt:
-• Publiceer onbeperkt projecten — volledig gratis, voor altijd
-• Vermeld alle partijen die hebben bijgedragen aan de realisatie
-• Word gevonden door serieuze opdrachtgevers in jouw regio
-
-Het aanmaken van jullie studiopagina en eerste project kost een paar minuten — plak een link naar jullie website en wij halen alles automatisch op.
-
-Bekijk hoe het werkt → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Groet,
-Niek van Leeuwen
-Oprichter, Arco`}
-                  />
-                  <EmailTemplate
-                    step={2}
-                    delay="Dag 4"
-                    subject="Hoe architecten op Arco gevonden worden"
-                    body={`Beste {{first_name}},
-
-Een korte follow-up — ik wilde laten zien hoe Arco werkt:
-
-1. Plak een link naar jullie website of project — wij halen alles op
-2. Ons redactieteam beoordeelt het op kwaliteit
-3. Na publicatie is {{account.name}} zichtbaar voor opdrachtgevers in jullie regio
-4. Opdrachtgevers nemen direct contact op — geen tussenpersonen, geen leadkosten
-
-De architecten die al op Arco staan waarderen vooral de kwaliteit van de presentatie en het feit dat opdrachtgevers die contact opnemen serieus zijn.
-
-Jullie projecten zouden er goed bij passen. Maak jullie studiopagina aan en publiceer jullie eerste project → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Groet,
-Niek`}
-                  />
-                  <EmailTemplate
-                    step={3}
-                    delay="Dag 8"
-                    subject="De eerste bureaus publiceren al op Arco"
-                    body={`Beste {{first_name}},
-
-De eerste architectenbureaus publiceren hun werk al op Arco en worden gevonden door opdrachtgevers die actief zoeken naar een architect.
-
-Wat Arco anders maakt:
-• Elk project wordt redactioneel beoordeeld — kwaliteit is het filter, niet advertentiebudget
-• Alle betrokken partijen worden vermeld bij het project
-• Opdrachtgevers zien eerst het gerealiseerde werk, dan ontdekken ze het team erachter
-
-Het platform is gratis voor architecten. Geen addertje — onze inkomsten komen van premium functies voor andere partijen, niet van jullie.
-
-Ik zou {{account.name}} graag verwelkomen. Het aanmaken van jullie studiopagina kost een paar minuten → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Groet,
-Niek`}
-                  />
-                  <EmailTemplate
-                    step={4}
-                    delay="Dag 14"
-                    subject="Laatste bericht — uitnodiging staat nog open"
-                    body={`Beste {{first_name}},
-
-Nog een laatste bericht — jullie uitnodiging om op Arco te publiceren staat nog open.
-
-Plak een link naar een project op jullie website, en wij halen de foto's, details en beschrijving automatisch op. Je bekijkt het, past aan waar nodig, en publiceert. Geen verplichting, geen kosten.
-
-Maak jullie studiopagina aan → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Als Arco niet de juiste match is, helemaal geen probleem. Bedankt voor je tijd.
-
-Groet,
-Niek`}
-                  />
-                </>
-              ) : (
-                <>
-                  <EmailTemplate
-                    step={1}
-                    delay="Day 1"
-                    subject="{{first_name}}, {{account.name}} is a fit for Arco"
-                    body={`Dear {{first_name}},
-
-I'm Niek, founder of Arco — a new professional network where leading architects publish their best work and recommend the craftspeople they work with.
-
-On Arco, we showcase completed projects with all contributing parties — architect, builder, interior designer — linked together. No bidding, no reviews, no self-published portfolios. Only exceptional work, editorially reviewed.
-
-What Arco offers:
-• Publish unlimited projects — completely free, forever
-• Feature every party that contributed to the project
-• Get discovered by serious clients in your region
-
-Setting up your studio page and first project takes just a few minutes — paste a link to your website and we extract everything automatically.
-
-See how it works → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Best,
-Niek van Leeuwen
-Founder, Arco`}
-                  />
-                  <EmailTemplate
-                    step={2}
-                    delay="Day 4"
-                    subject="How architects get found on Arco"
-                    body={`Dear {{first_name}},
-
-A quick follow-up — here's how Arco works:
-
-1. Paste a link to your website or project — we extract everything
-2. Our editorial team reviews it for quality
-3. Once published, {{account.name}} is visible to clients in your region
-4. Clients reach out directly — no middlemen, no lead fees
-
-The architects already on Arco value two things most: the quality of the presentation and the fact that clients who reach out are serious.
-
-Your projects would be a great fit. Set up your studio page and publish your first project → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Best,
-Niek`}
-                  />
-                  <EmailTemplate
-                    step={3}
-                    delay="Day 8"
-                    subject="The first firms are already publishing on Arco"
-                    body={`Dear {{first_name}},
-
-The first architecture firms are already publishing their work on Arco and getting found by clients actively looking for an architect.
-
-What makes Arco different:
-• Every project is editorially reviewed — quality is the filter, not ad spend
-• All contributing parties are featured on the project
-• Clients see the built work first, then discover the team behind it
-
-The platform is free for architects. No catch — our revenue comes from premium features for other parties, not from you.
-
-I'd love to welcome {{account.name}}. Setting up your studio page takes just a few minutes → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-Best,
-Niek`}
-                  />
-                  <EmailTemplate
-                    step={4}
-                    delay="Day 14"
-                    subject="Last note — your invitation is still open"
-                    body={`Dear {{first_name}},
-
-One last note — your invitation to publish on Arco is still open.
-
-Paste a link to a project on your website, and we'll extract the photos, details, and description automatically. You review, adjust if needed, and publish. No commitment, no cost.
-
-Set up your studio page → ← hyperlink this text to: https://arcolist.com/businesses/architects?ref={{email}}
-
-If Arco isn't the right fit, no worries at all. Thanks for your time.
-
-Best,
-Niek`}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }
@@ -1523,6 +1339,12 @@ function CompanyRowView({
 
   const statusCfg = STATUS_CONFIG[row.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[row.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
+  // Suppression overrides the underlying sequence pill — when the
+  // primary contact has bounced / complained / unsubscribed the
+  // sequence is effectively over, so we surface that as the row's
+  // Sequence display. Multi-contact rows use the primary contact's
+  // state since the row click also opens the primary's popup.
+  const suppression = getSuppressionState(row.primaryContact)
 
   return (
     <tr
@@ -1581,11 +1403,13 @@ function CompanyRowView({
         </div>
       </td>
 
-      {/* Sequence (aggregated single value) */}
+      {/* Sequence (aggregated single value, or suppression override) */}
       <td>
         <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sequenceCfg.dot}`} />
-          <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>{sequenceCfg.label}</span>
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
+          <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>
+            {suppression ? suppression.label : sequenceCfg.label}
+          </span>
         </div>
       </td>
 
@@ -1612,6 +1436,9 @@ function CompanyRowView({
       <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>{formatDate(row.createdAt)}</td>
       <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
         {row.lastContactedAt ? formatDate(row.lastContactedAt) : <span className="text-[#c4c4c2]">—</span>}
+      </td>
+      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
+        {row.nextScheduledAt ? formatDate(row.nextScheduledAt) : <span className="text-[#c4c4c2]">—</span>}
       </td>
 
       <td onClick={(e) => e.stopPropagation()}>
@@ -1753,56 +1580,25 @@ function ContactsCell({
  *  alongside the source. Email is intentionally omitted — the popup
  *  carries the full address.
  *
- *  When a contact has clicked List-Unsubscribe their `unsubscribedAt`
- *  is set — we replace the source pill with a red "Unsubscribed" pill
- *  so the admin sees the don't-contact warning at a glance and doesn't
- *  manually re-enrol them. */
+ *  Suppression states (bounced / complained / unsubscribed) override
+ *  the row's Sequence column instead — keeping the source pill stable
+ *  here so the admin can still identify the channel at a glance. */
 function ContactInline({ contact }: { contact: SalesContact }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
+  const suppression = getSuppressionState(contact)
   const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
   return (
     <>
       <span className="arco-table-status">
-        <span className={`arco-table-status-dot ${sequenceCfg.dot}`} />
+        <span className={`arco-table-status-dot ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
         <span className="truncate max-w-[160px]">{displayName}</span>
       </span>
       <span className="status-pill">
         <span className={`status-pill-dot ${statusCfg.dot}`} />
         {statusCfg.label}
       </span>
-      {(() => {
-        // Suppression states outrank the channel pill — show why we
-        // can't email this contact at a glance. Priority:
-        //   complained > bounced > unsubscribed > (channel pill)
-        // Spam complaints are the most reputation-damaging signal,
-        // bounces are next, recipient unsubscribe is the friendliest.
-        if (contact.complainedAt) {
-          return (
-            <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-              <span className="status-pill-dot bg-red-500" />
-              Spam
-            </span>
-          )
-        }
-        if (contact.bouncedAt) {
-          return (
-            <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-              <span className="status-pill-dot bg-red-500" />
-              Bounced
-            </span>
-          )
-        }
-        if (contact.unsubscribedAt) {
-          return (
-            <span className="status-pill" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-              <span className="status-pill-dot bg-red-500" />
-              Unsubscribed
-            </span>
-          )
-        }
-        return <span className="status-pill">{sourceLabel(contact.source)}</span>
-      })()}
+      <span className="status-pill">{sourceLabel(contact.source)}</span>
     </>
   )
 }
@@ -1828,6 +1624,12 @@ function renderContactMenuItems({
     contact.source === "arco"
     || contact.source === "invites"
     || contact.source === "apollo"
+  // Suppression states (bounced / complained / unsubscribed) terminate
+  // the sequence — Resend's auto-stop short-circuits any new send to
+  // this address before it leaves Arco, so the send-action items get
+  // greyed out instead of hidden. Kept visible to signal "this menu
+  // exists, just not for this contact" rather than disappearing.
+  const isSuppressed = !!getSuppressionState(contact)
   return (
     <>
       <DropdownMenuItem className="text-xs cursor-pointer" onClick={onOpenDetails}>
@@ -1837,6 +1639,7 @@ function renderContactMenuItems({
 
       {canDripFromArco && contact.sequenceStatus === "not_started" && (
         <DropdownMenuItem
+          disabled={isSuppressed}
           className="text-xs cursor-pointer"
           onClick={() =>
             onAction(
@@ -1852,6 +1655,7 @@ function renderContactMenuItems({
 
       {canDripFromArco && contact.sequenceStatus === "active" && (
         <DropdownMenuItem
+          disabled={isSuppressed}
           className="text-xs cursor-pointer"
           onClick={() =>
             onAction(
@@ -1867,6 +1671,7 @@ function renderContactMenuItems({
 
       {canDripFromArco && contact.sequenceStatus === "paused" && (
         <DropdownMenuItem
+          disabled={isSuppressed}
           className="text-xs cursor-pointer"
           onClick={() =>
             onAction(
@@ -1882,6 +1687,7 @@ function renderContactMenuItems({
 
       {canDripFromArco && contact.sequenceStatus === "finished" && (
         <DropdownMenuItem
+          disabled={isSuppressed}
           className="text-xs cursor-pointer"
           onClick={() =>
             onAction(
@@ -1897,6 +1703,7 @@ function renderContactMenuItems({
 
       {canDripFromArco && contact.sequenceStatus === "active" && (
         <DropdownMenuItem
+          disabled={isSuppressed}
           className="text-xs cursor-pointer"
           onClick={() =>
             onAction(
@@ -1952,6 +1759,7 @@ function ContactDetailCard({
 }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
+  const suppression = getSuppressionState(contact)
 
   return (
     <div className="border border-[#e5e5e4] rounded-[3px] overflow-hidden">
@@ -1968,36 +1776,12 @@ function ContactDetailCard({
           <span className="text-[11px] text-[#1c1c1a] whitespace-nowrap">{statusCfg.label}</span>
         </span>
         <span className="flex items-center gap-1.5 shrink-0">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sequenceCfg.dot}`} />
-          <span className="text-[11px] text-[#6b6b68] whitespace-nowrap">{sequenceCfg.label}</span>
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
+          <span className="text-[11px] text-[#6b6b68] whitespace-nowrap">
+            {suppression ? suppression.label : sequenceCfg.label}
+          </span>
         </span>
-        {(() => {
-          if (contact.complainedAt) {
-            return (
-              <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-                <span className="status-pill-dot bg-red-500" />
-                Spam
-              </span>
-            )
-          }
-          if (contact.bouncedAt) {
-            return (
-              <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-                <span className="status-pill-dot bg-red-500" />
-                Bounced
-              </span>
-            )
-          }
-          if (contact.unsubscribedAt) {
-            return (
-              <span className="status-pill shrink-0" style={{ borderColor: "#fecaca", color: "#b91c1c" }}>
-                <span className="status-pill-dot bg-red-500" />
-                Unsubscribed
-              </span>
-            )
-          }
-          return <span className="status-pill shrink-0">{sourceLabel(contact.source)}</span>
-        })()}
+        <span className="status-pill shrink-0">{sourceLabel(contact.source)}</span>
         <span
           className={`text-[#a1a1a0] inline-block transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
           style={{ width: 8, fontSize: 10 }}
@@ -2174,7 +1958,16 @@ function ContactDetailBody({
                     )}
                   </div>
                   {(() => {
-                    const showReason = step.cancelledReason && step.status === "cancelled"
+                    // Suppress reasons that are already surfaced as the
+                    // contact's row-level Sequence override (bounced /
+                    // complained / unsubscribed) — the override carries
+                    // the signal once, no need to repeat it on every
+                    // cancelled step beneath the actual triggering send.
+                    const reason = step.cancelledReason?.trim().toLowerCase() ?? ""
+                    const showReason =
+                      step.cancelledReason
+                      && step.status === "cancelled"
+                      && !SUPPRESSED_CANCEL_REASONS.has(reason)
                     const showError = step.lastError && step.status === "failed"
                     if (!showReason && !showError) return null
                     return (
@@ -2202,39 +1995,6 @@ function ContactDetailBody({
             ))}
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-function EmailTemplate({ step, delay, subject, body }: { step: number; delay: string; subject: string; body: string }) {
-  const [copied, setCopied] = useState(false)
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <div className="border border-[#e5e5e4] rounded-lg overflow-hidden">
-      <div className="bg-[#fafaf9] px-4 py-2.5 flex items-center justify-between border-b border-[#e5e5e4]">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-medium text-white px-1.5 py-0.5 rounded" style={{ background: "var(--primary, #016D75)" }}>
-            Step {step}
-          </span>
-          <span className="text-[11px] text-[#a1a1a0]">{delay}</span>
-        </div>
-        <button
-          onClick={() => copyToClipboard(`Subject: ${subject}\n\n${body}`)}
-          className="text-[11px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors"
-        >
-          {copied ? "Copied!" : "Copy email"}
-        </button>
-      </div>
-      <div className="px-4 py-3">
-        <p className="text-xs font-medium text-[#1c1c1a] mb-2">Subject: {subject}</p>
-        <pre className="text-xs text-[#6b6b68] whitespace-pre-wrap font-sans leading-relaxed">{body}</pre>
       </div>
     </div>
   )

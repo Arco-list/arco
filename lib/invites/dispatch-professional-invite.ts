@@ -324,11 +324,11 @@ export async function dispatchProfessionalInvite(
   // Skip for pro-audience companies (photographers): they reach Arco via
   // architect credit, not via the new-professional invite sequence — and
   // shouldn't get followups even if dispatch is somehow triggered for them.
-  const { isProAudienceCompany } = await import("@/lib/drip-queue")
+  const { isProAudienceCompany, claimNextSendSlot } = await import("@/lib/drip-queue")
   if (!(await isProAudienceCompany(supabase, recipient.id))) {
     const { nextBusinessSlot } = await import("@/lib/date-utils")
-    const followupSendAt = nextBusinessSlot(3).toISOString()
-    const finalSendAt = nextBusinessSlot(7).toISOString()
+    const followupSendAt = (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString()
+    const finalSendAt = (await claimNextSendSlot(supabase, nextBusinessSlot(7))).toISOString()
     await supabase
       .from("email_drip_queue")
       .insert([

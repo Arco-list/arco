@@ -8,6 +8,31 @@ import { sanitizeImageUrl } from "@/lib/image-security"
 import { useTranslations } from "next-intl"
 import { trackProjectShared, trackProfessionalShared } from "@/lib/tracking"
 
+/**
+ * Tag the shared URL with utm_source=share + utm_medium=<channel>
+ * so PostHog can attribute the recipient's pageview back to a share
+ * (regardless of which messenger / mail client delivered it).
+ *
+ * Without this, share-driven visits get bucketed by the recipient's
+ * arrival channel — WhatsApp's mobile webview reads as Direct, Gmail
+ * web reads as Email, an Apple Mail link reads as Direct again —
+ * making it impossible to measure shares as a growth loop. The cache
+ * key `client_visitors_share` reads $current_url for these UTMs.
+ *
+ * Preserves any existing query params on the URL.
+ */
+function withShareUtm(url: string, channel: string): string {
+  try {
+    const u = new URL(url)
+    u.searchParams.set("utm_source", "share")
+    u.searchParams.set("utm_medium", channel)
+    return u.toString()
+  } catch {
+    // Malformed URL — fall back to the original so sharing doesn't break.
+    return url
+  }
+}
+
 interface ShareModalProps {
   isOpen: boolean
   onClose: () => void
@@ -40,16 +65,17 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
   }, [shareUrl])
 
   const handleCopy = async () => {
+    const taggedUrl = withShareUtm(resolvedShareUrl, "link")
     try {
       if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(resolvedShareUrl)
+        await navigator.clipboard.writeText(taggedUrl)
       } else {
         if (typeof document === "undefined") {
           throw new Error("Clipboard API unavailable")
         }
 
         const textarea = document.createElement("textarea")
-        textarea.value = resolvedShareUrl
+        textarea.value = taggedUrl
         textarea.style.position = "fixed"
         textarea.style.opacity = "0"
         document.body.appendChild(textarea)
@@ -89,7 +115,7 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
       await navigator.share({
         title,
         text: subtitle || title,
-        url: resolvedShareUrl,
+        url: withShareUtm(resolvedShareUrl, "system"),
       })
       trackShare("system")
     } catch (error) {
@@ -101,33 +127,35 @@ export function ShareModal({ isOpen, onClose, title, subtitle, imageUrl, shareUr
   }
 
   const handleEmailShare = () => {
+    const taggedUrl = withShareUtm(resolvedShareUrl, "email")
     const subject = encodeURIComponent(`Check out: ${title}`)
-    const body = encodeURIComponent(`I thought you might be interested in this:\n${resolvedShareUrl}`)
+    const body = encodeURIComponent(`I thought you might be interested in this:\n${taggedUrl}`)
     trackShare("email")
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
   const handleWhatsAppShare = () => {
-    const text = encodeURIComponent(`Check out: ${title}\n${resolvedShareUrl}`)
+    const taggedUrl = withShareUtm(resolvedShareUrl, "whatsapp")
+    const text = encodeURIComponent(`Check out: ${title}\n${taggedUrl}`)
     trackShare("whatsapp")
     window.open(`https://wa.me/?text=${text}`, "_blank", "noopener,noreferrer")
   }
 
   const handleMessengerShare = () => {
-    const url = encodeURIComponent(resolvedShareUrl)
+    const url = encodeURIComponent(withShareUtm(resolvedShareUrl, "messenger"))
     trackShare("messenger")
     window.open(`https://www.messenger.com/new?link=${url}`, "_blank", "noopener,noreferrer")
   }
 
   const handleFacebookShare = () => {
-    const url = encodeURIComponent(resolvedShareUrl)
+    const url = encodeURIComponent(withShareUtm(resolvedShareUrl, "facebook"))
     trackShare("facebook")
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, "_blank", "noopener,noreferrer")
   }
 
   const handleTwitterShare = () => {
     const text = encodeURIComponent(`Check out: ${title}`)
-    const url = encodeURIComponent(resolvedShareUrl)
+    const url = encodeURIComponent(withShareUtm(resolvedShareUrl, "x"))
     trackShare("x")
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank", "noopener,noreferrer")
   }

@@ -1072,6 +1072,7 @@ export async function sendProspectEmailAction(input: {
   // whole action. The intro itself was already sent via Resend at this
   // point — the duplicate followup just no-ops.
   const { nextBusinessSlot } = await import("@/lib/date-utils")
+  const { claimNextSendSlot, isProAudienceCompany } = await import("@/lib/drip-queue")
   const dripVariables = {
     company_name: company.name,
     company_page_url: companyPageUrl,
@@ -1080,13 +1081,12 @@ export async function sendProspectEmailAction(input: {
     logo_url: company.logo_url ?? undefined,
     hero_image_url: heroImageUrl ?? undefined,
   }
-  const followupSendAt = nextBusinessSlot(3).toISOString()
-  const finalSendAt = nextBusinessSlot(7).toISOString()
+  const followupSendAt = (await claimNextSendSlot(serviceClient, nextBusinessSlot(3))).toISOString()
+  const finalSendAt = (await claimNextSendSlot(serviceClient, nextBusinessSlot(7))).toISOString()
   // Skip pro-audience companies (photographers). Their entry to Arco is via
   // architect credit on a project, not outbound prospect outreach — running
   // them through the prospect drip would spam an info@ address with
   // architect-flavoured templates.
-  const { isProAudienceCompany } = await import("@/lib/drip-queue")
   const skipDrip = await isProAudienceCompany(serviceClient, company.id)
   const dripInsertError = skipDrip
     ? null

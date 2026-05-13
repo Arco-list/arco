@@ -213,6 +213,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const [companies, setCompanies] = useState<Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }>>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Which admin groups are expanded in the account (avatar) menu.
+  // Same shape as expandedMobileGroups but tracked separately so the
+  // two menus don't share open state. Auto-expands the group of the
+  // current route on first render.
+  const [expandedAccountAdminGroups, setExpandedAccountAdminGroups] = useState<Set<string>>(new Set());
 
   const [showCompanySwitcher, setShowCompanySwitcher] = useState(false);
 
@@ -745,50 +750,89 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       <div className="px-4 py-2">
                         {isLoggedIn ? (
                           <>
-                            {hasAdminRole && (
-                              <>
-                                <Link href="/admin/users" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/users" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>
-                                  {t("admin_users")}
-                                </Link>
-                                <Link href="/admin/professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
-                                  {t("admin_companies")}
-                                </Link>
-                                <Link href="/admin/projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/projects" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>
-                                  {t("admin_projects")}
-                                </Link>
-                                <Link href="/admin/brands" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/brands" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
-                                  {t("admin_brands")}
-                                </Link>
-                                <Link href="/admin/products" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/products" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>
-                                  {t("admin_products")}
-                                </Link>
-                                <Link href="/admin/sales" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/sales" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>
-                                  {t("admin_sales")}
-                                </Link>
-                                <Link href="/admin/growth" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/growth" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
-                                  {t("admin_growth")}
-                                </Link>
-                                <Link href="/admin/emails" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/emails" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-                                  {t("admin_emails")}
-                                </Link>
-                                <Link href="/admin/categories" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/categories" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
-                                  {t("admin_categories")}
-                                </Link>
-                                <Link href="/admin/design" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/admin/design" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>
-                                  {t("admin_design")}
-                                </Link>
-                              </>
-                            )}
+                            {hasAdminRole && (() => {
+                              // Collapsible admin groups — mirror the
+                              // header desktop dropdowns and the hamburger
+                              // sections so the same 4 groupings show up
+                              // everywhere admins navigate.
+                              const adminIcons = {
+                                users: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>,
+                                companies: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>,
+                                projects: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>,
+                                brands: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
+                                products: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>,
+                                dashboard: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>,
+                                sales: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>,
+                                inbox: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>,
+                                emails: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>,
+                                growthModel: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M7 14l4-4 4 4 5-5" /></svg>,
+                                categories: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>,
+                                design: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>,
+                              }
+                              const adminGroups: { key: string; label: string; items: { href: string; label: string; icon: React.ReactNode }[] }[] = [
+                                { key: "marketplace", label: t("admin_marketplace"), items: [
+                                  { href: "/admin/users", label: t("admin_users"), icon: adminIcons.users },
+                                  { href: "/admin/professionals", label: t("admin_companies"), icon: adminIcons.companies },
+                                  { href: "/admin/projects", label: t("admin_projects"), icon: adminIcons.projects },
+                                ]},
+                                { key: "catalog", label: t("admin_catalog"), items: [
+                                  { href: "/admin/brands", label: t("admin_brands"), icon: adminIcons.brands },
+                                  { href: "/admin/products", label: t("admin_products"), icon: adminIcons.products },
+                                ]},
+                                { key: "growth", label: t("admin_growth"), items: [
+                                  { href: "/admin/dashboard", label: t("admin_dashboard"), icon: adminIcons.dashboard },
+                                  { href: "/admin/sales", label: t("admin_sales"), icon: adminIcons.sales },
+                                  { href: "/admin/inbox", label: t("admin_inbox"), icon: adminIcons.inbox },
+                                  { href: "/admin/emails", label: t("admin_emails"), icon: adminIcons.emails },
+                                  { href: "/admin/model", label: t("admin_growth_model"), icon: adminIcons.growthModel },
+                                ]},
+                                { key: "platform", label: t("admin_platform"), items: [
+                                  { href: "/admin/categories", label: t("admin_categories"), icon: adminIcons.categories },
+                                  { href: "/admin/design", label: t("admin_design"), icon: adminIcons.design },
+                                ]},
+                              ]
+                              return (
+                                <>
+                                  {adminGroups.map((group) => {
+                                    const containsActive = group.items.some((i) => pathname === i.href)
+                                    const isOpen = expandedAccountAdminGroups.has(group.key) || containsActive
+                                    return (
+                                      <div key={group.key}>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setExpandedAccountAdminGroups((prev) => {
+                                              const next = new Set(prev)
+                                              if (next.has(group.key)) next.delete(group.key)
+                                              else next.add(group.key)
+                                              return next
+                                            })
+                                          }}
+                                          className="flex w-full items-center justify-between px-1 py-1.5 text-sm font-normal text-[#1c1c1a] hover:text-primary transition-colors"
+                                        >
+                                          <span>{group.label}</span>
+                                          {/* Down when collapsed, up when expanded — same chevron + rotation as the header desktop dropdowns. */}
+                                          <svg width="8" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}>
+                                            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                          </svg>
+                                        </button>
+                                        {isOpen && group.items.map((item) => (
+                                          <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === item.href ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
+                                            onClick={() => setIsAccountMenuOpen(false)}
+                                          >
+                                            {item.icon}
+                                            {item.label}
+                                          </Link>
+                                        ))}
+                                      </div>
+                                    )
+                                  })}
+                                </>
+                              )
+                            })()}
                             {hasAdminRole && <div className="border-t border-border my-2 -mx-1" />}
                             <Link href="/homeowner?tab=account" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && searchParams.get("tab") === "account" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>

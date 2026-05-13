@@ -2,6 +2,7 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { nextBusinessSlot } from "@/lib/date-utils"
+import { claimNextSendSlot } from "@/lib/drip-queue"
 import { logger } from "@/lib/logger"
 
 /**
@@ -69,9 +70,14 @@ export async function enrolOutreachContact(
     email,
   }
 
-  const introAt = nextBusinessSlot(0).toISOString()
-  const followupAt = nextBusinessSlot(FOLLOWUP_DAYS).toISOString()
-  const finalAt = nextBusinessSlot(FINAL_DAYS).toISOString()
+  // Slot-allocate per step inside the day's window. claimNextSendSlot
+  // serialises sends across the whole queue (any template) so a 50-
+  // contact import doesn't blast in one cron tick — each enrolment
+  // grabs the next free 5-min slot in 09:00–11:00 Amsterdam, rolling
+  // to the next business day when full.
+  const introAt = (await claimNextSendSlot(supabase, nextBusinessSlot(0))).toISOString()
+  const followupAt = (await claimNextSendSlot(supabase, nextBusinessSlot(FOLLOWUP_DAYS))).toISOString()
+  const finalAt = (await claimNextSendSlot(supabase, nextBusinessSlot(FINAL_DAYS))).toISOString()
 
   const stepConfig = [
     { template: "outreach-intro", step: 0, sendAt: introAt },

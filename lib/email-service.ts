@@ -32,10 +32,14 @@ const DEFAULT_LOCALE: EmailLocale = 'en'
  *      still get a country-based guess if a company is linked.
  *   2. If we can discover a user by `email` (transactional sends where
  *      the recipient is already an Arco account) → same as (1).
- *   3. If `companyId` is known → companies.country (NL/BE → nl, else
- *      fall through to TLD).
- *   4. Email TLD (.nl/.be → nl, else en).
- *   5. Default → en.
+ *   3. If `email` matches a `prospects` row → prospects.country. Apollo
+ *      enriches every imported contact with a country, so cold outreach
+ *      contacts (no userId, no companyId) still resolve correctly even
+ *      with international-style domains (.com, .eu).
+ *   4. If `companyId` is known → companies.country (NL/BE → nl, else
+ *      non-Dutch country is authoritative for 'en').
+ *   5. Email TLD (.nl/.be → nl, else en).
+ *   6. Default → en.
  *
  * Returns DEFAULT_LOCALE if nothing resolves. Never throws — on DB
  * errors we log and fall through to the default so a temporary Supabase
@@ -51,6 +55,25 @@ export async function resolveRecipientLanguage(opts: {
 
   const asLocale = (v: unknown): EmailLocale | null =>
     v === 'nl' || v === 'en' ? v : null
+
+  // Country → locale. The country column on prospects, profiles, and
+  // companies is free-form user input — collapses 'België' / 'belgie'
+  // / 'BELGIË' to the same key. Returns null when the field is empty
+  // (caller falls through to the next resolver step).
+  const DUTCH_COUNTRIES = new Set([
+    'NL', 'NETHERLANDS', 'NEDERLAND', 'THE NETHERLANDS',
+    'BE', 'BELGIUM', 'BELGIE',
+  ])
+  const localeFromCountry = (raw: string | null | undefined): EmailLocale | null => {
+    const country = (raw ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim()
+    if (DUTCH_COUNTRIES.has(country)) return 'nl'
+    if (country.length > 0) return DEFAULT_LOCALE
+    return null
+  }
 
   // (1) Direct user id
   if (opts.userId) {
@@ -90,7 +113,31 @@ export async function resolveRecipientLanguage(opts: {
     }
   }
 
-  // (3) Company country
+  // (3) Prospect-by-email country. Apollo writes country on every
+  // imported contact (Netherlands / Belgium / etc.), and the cron's
+  // outreach sends carry only userId=null + companyId=null + email
+  // for cold contacts — without this step a Dutch architect with a
+  // .com address falls straight through to the TLD heuristic and
+  // lands on 'en'. Most-recently-created prospect wins on duplicate
+  // email rows (rare; happens when the same address shows up under
+  // different sources).
+  if (opts.email) {
+    try {
+      const { data } = await supabase
+        .from('prospects')
+        .select('country')
+        .ilike('email', opts.email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const hit = localeFromCountry((data as { country?: string | null } | null)?.country ?? null)
+      if (hit) return hit
+    } catch (err) {
+      console.warn('[resolveRecipientLanguage] prospect country lookup failed', err)
+    }
+  }
+
+  // (4) Linked company country
   if (opts.companyId) {
     try {
       const { data } = await supabase
@@ -98,28 +145,14 @@ export async function resolveRecipientLanguage(opts: {
         .select('country')
         .eq('id', opts.companyId)
         .maybeSingle()
-      // Normalise so 'België' / 'belgie' / 'BELGIË' all collapse to the
-      // same key — the country column is free-form user input and may be
-      // stored in English or Dutch spelling, with or without diacritics.
-      const country = (data?.country ?? '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toUpperCase()
-        .trim()
-      const DUTCH_COUNTRIES = new Set([
-        'NL', 'NETHERLANDS', 'NEDERLAND', 'THE NETHERLANDS',
-        'BE', 'BELGIUM', 'BELGIE',
-      ])
-      if (DUTCH_COUNTRIES.has(country)) return 'nl'
-      // Non-Dutch country — fall through to TLD only if TLD adds signal,
-      // otherwise the country is authoritative (German company → 'en').
-      if (country.length > 0) return DEFAULT_LOCALE
+      const hit = localeFromCountry((data as { country?: string | null } | null)?.country ?? null)
+      if (hit) return hit
     } catch (err) {
       console.warn('[resolveRecipientLanguage] company country lookup failed', err)
     }
   }
 
-  // (4) Email TLD — only signal left
+  // (5) Email TLD — only signal left
   if (opts.email) {
     const domain = opts.email.split('@')[1]?.toLowerCase() ?? ''
     if (domain.endsWith('.nl') || domain.endsWith('.be')) return 'nl'
@@ -152,6 +185,96 @@ export type EmailTemplate =
   | 'auth-recovery'
   | 'auth-email-change'
   | 'auth-invite'
+
+/**
+ * Per-template audience used to choose the utm_source on outbound link
+ * tagging. Three values:
+ *
+ *   - 'pro'     → utm_source=arco_pro    Transactional emails sent to
+ *                                        existing professionals (project-live,
+ *                                        team-invite, domain-verification,
+ *                                        etc.). Visits power the "Email"
+ *                                        sub of pro_visitors.
+ *   - 'client'  → utm_source=arco_client Lifecycle / marketing emails to
+ *                                        clients (welcome-homeowner,
+ *                                        discover-projects, find-pro).
+ *                                        Visits power the "Email" sub of
+ *                                        client_visitors.
+ *   - 'neutral' → utm_source=arco        Emails that already have their
+ *                                        own URL-path-based attribution
+ *                                        (Sales / Invites), or audience
+ *                                        is unclear (auth flows). Tagged
+ *                                        so we know it was an Arco email,
+ *                                        but not folded into the per-audience
+ *                                        "Email" buckets.
+ */
+type EmailAudience = 'pro' | 'client' | 'neutral'
+const TEMPLATE_AUDIENCE: Record<EmailTemplate, EmailAudience> = {
+  // Sales — path-based attribution via apollo_visitors / showcase_visitors
+  'prospect-intro': 'neutral',
+  'prospect-followup': 'neutral',
+  'prospect-final': 'neutral',
+  'outreach-intro': 'neutral',
+  'outreach-followup': 'neutral',
+  'outreach-final': 'neutral',
+  // Invites — path-based attribution via invite_visitors
+  'new-professional-invite': 'neutral',
+  'new-professional-followup': 'neutral',
+  'new-professional-final': 'neutral',
+  'professional-invite': 'neutral',
+  // Pro transactional
+  'project-live': 'pro',
+  'project-rejected': 'pro',
+  'team-invite': 'pro',
+  'domain-verification': 'pro',
+  // Client transactional / marketing
+  'welcome-homeowner': 'client',
+  'discover-projects': 'client',
+  'find-professionals': 'client',
+  'introduction-request': 'client',
+  // Auth — could be either user type; stays neutral
+  'auth-confirm-signup': 'neutral',
+  'auth-magic-link': 'neutral',
+  'auth-recovery': 'neutral',
+  'auth-email-change': 'neutral',
+  'auth-invite': 'neutral',
+}
+
+/**
+ * Tag every Arco-domain CTA in the rendered HTML with utm_source /
+ * utm_medium / utm_campaign params so the recipient's pageview can be
+ * attributed back to this email by the metric_cache.
+ *
+ * Implementation note — regex-on-HTML rather than threading template
+ * names through ~23 renderers. Constraints:
+ *   - Only rewrites href= URLs containing arcolist.com.
+ *   - Skips URLs that already have a utm_source param (preserves any
+ *     manually-set UTMs and avoids double-tagging on re-renders).
+ *   - Preserves any existing query params.
+ *   - Treats malformed URLs as no-op (return original href).
+ *
+ * Server routes (/api/unsubscribe, etc.) don't fire pageviews so the
+ * UTM is harmless on them. Same for redirect endpoints.
+ */
+function tagArcoEmailLinks(html: string, template: EmailTemplate): string {
+  const audience = TEMPLATE_AUDIENCE[template]
+  const utmSource =
+    audience === 'pro' ? 'arco_pro'
+    : audience === 'client' ? 'arco_client'
+    : 'arco'
+  return html.replace(/href="(https?:\/\/[^"]*arcolist\.com[^"]*)"/g, (match, rawUrl) => {
+    try {
+      const u = new URL(rawUrl)
+      if (u.searchParams.has('utm_source')) return match
+      u.searchParams.set('utm_source', utmSource)
+      u.searchParams.set('utm_medium', 'email')
+      u.searchParams.set('utm_campaign', template)
+      return `href="${u.toString()}"`
+    } catch {
+      return match
+    }
+  })
+}
 
 export interface EmailVariables {
   firstname?: string
@@ -1138,30 +1261,30 @@ function renderOutreachIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): 
 
   const copy = locale === 'en'
     ? {
-        subject: `${firstname}, ${companyName} is a fit for Arco`,
-        h1: `A network for serious architects`,
+        subject: `A stage for ${companyName}`,
+        h1: `A stage for ${companyName}`,
         intro: `I'm Niek, founder of Arco — a new professional network where leading architects publish their best work and recommend the craftspeople they work with.`,
-        diff: `On Arco we showcase completed projects with every contributing party — architect, builder, interior designer — linked together. No bidding, no reviews, no self-published portfolios. Only exceptional work, editorially reviewed.`,
+        diff: `Arco is editorially curated — every project is reviewed before publishing, with credit shared across the team behind it.`,
         bullets: [
           `Publish unlimited projects — completely free, forever`,
           `Feature every party that contributed to the project`,
           `Get discovered by serious clients in your region`,
         ],
-        howItStarts: `Setting up your studio page and first project takes a few minutes — paste a link to your website and we extract everything automatically.`,
+        howItStarts: `Setting up your company page and first project takes a few minutes — paste a link to a project on your website and we extract everything automatically.`,
         button: `See how it works`,
         signoffRole: 'Founder, Arco',
       }
     : {
-        subject: `${firstname}, ${companyName} past bij Arco`,
-        h1: `Een netwerk voor serieuze architecten`,
+        subject: `Een podium voor ${companyName}`,
+        h1: `Een podium voor ${companyName}`,
         intro: `Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`,
-        diff: `Op Arco tonen we gerealiseerde projecten met alle betrokken partijen — architect, aannemer, interieurontwerper — gekoppeld. Geen biedingen, geen reviews, geen zelf-gepubliceerde portfolio's. Alleen uitzonderlijk werk, redactioneel beoordeeld.`,
+        diff: `Arco is redactioneel gecureerd — elk project wordt beoordeeld voor publicatie, met credit voor het hele team.`,
         bullets: [
           `Publiceer onbeperkt projecten — volledig gratis, voor altijd`,
           `Vermeld alle partijen die hebben bijgedragen aan de realisatie`,
           `Word gevonden door serieuze opdrachtgevers in jouw regio`,
         ],
-        howItStarts: `Het aanmaken van jullie studiopagina en eerste project kost een paar minuten — plak een link naar jullie website en wij halen alles automatisch op.`,
+        howItStarts: `Het aanmaken van jullie bedrijfspagina en eerste project kost een paar minuten — plak een link naar een project op jullie website en wij halen alles automatisch op.`,
         button: `Bekijk hoe het werkt`,
         signoffRole: 'Oprichter, Arco',
       }
@@ -1193,33 +1316,31 @@ function renderOutreachFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'
 
   const copy = locale === 'en'
     ? {
-        subject: `How architects get found on Arco`,
-        h1: `How it works on Arco`,
-        intro: `A quick follow-up — here's how Arco works in practice:`,
+        subject: `${companyName} on Arco`,
+        h1: `${companyName} on Arco`,
+        intro: `A few days ago I reached out about adding ${companyName} to Arco. Just checking in to see if you saw it.`,
+        stepsIntro: `Creating a company page and listing a project is easy:`,
         steps: [
-          `Paste a link to your website or a finished project — we extract everything`,
-          `Our editorial team reviews it for quality`,
-          `Once published, ${companyName} is visible to clients in your region`,
-          `Clients reach out directly — no middlemen, no lead fees`,
+          `Paste a link to a project — we extract everything`,
+          `Adjust where needed`,
+          `Our editorial team reviews it`,
+          `Your company and project are visible — clients can reach out directly`,
         ],
-        social: `The architects already on Arco value two things most: the quality of the presentation and the fact that clients who reach out are serious.`,
-        close: `Your projects would be a great fit. Set up your studio page and publish your first project →`,
-        button: `Set up your studio page`,
+        button: `Create your company`,
         signoffRole: 'Founder, Arco',
       }
     : {
-        subject: `Hoe architecten op Arco gevonden worden`,
-        h1: `Hoe het werkt op Arco`,
-        intro: `Een korte follow-up — zo werkt Arco in de praktijk:`,
+        subject: `${companyName} op Arco`,
+        h1: `${companyName} op Arco`,
+        intro: `Een paar dagen geleden stuurde ik je een bericht over ${companyName} op Arco. Ik wilde even checken of je het gezien hebt.`,
+        stepsIntro: `Een bedrijfspagina maken en een project tonen is makkelijk:`,
         steps: [
-          `Plak een link naar jullie website of een gerealiseerd project — wij halen alles op`,
-          `Ons redactieteam beoordeelt het op kwaliteit`,
-          `Na publicatie is ${companyName} zichtbaar voor opdrachtgevers in jullie regio`,
-          `Opdrachtgevers nemen direct contact op — geen tussenpersonen, geen leadkosten`,
+          `Plak een link naar een project — we halen alles op`,
+          `Pas aan waar nodig`,
+          `Ons redactieteam beoordeelt het`,
+          `Jullie bedrijf en project zijn zichtbaar — opdrachtgevers kunnen direct contact opnemen`,
         ],
-        social: `De architecten die al op Arco staan waarderen vooral de kwaliteit van de presentatie en het feit dat opdrachtgevers die contact opnemen serieus zijn.`,
-        close: `Jullie projecten zouden er goed bij passen. Maak jullie studiopagina aan en publiceer jullie eerste project →`,
-        button: `Maak jullie studiopagina aan`,
+        button: `Maak jullie bedrijf aan`,
         signoffRole: 'Oprichter, Arco',
       }
 
@@ -1232,9 +1353,8 @@ ${copy.steps.map((s) => `<li style="margin:0 0 6px;">${s}</li>`).join('')}
     html: lb(vars, `
       ${heading(copy.h1)}
       ${body(copy.intro)}
+      ${body(copy.stepsIntro)}
       ${stepsList}
-      ${body(copy.social)}
-      ${body(copy.close)}
       ${button(copy.button, refUrl)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
@@ -1245,24 +1365,25 @@ ${copy.steps.map((s) => `<li style="margin:0 0 6px;">${s}</li>`).join('')}
 }
 
 function renderOutreachFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'jullie bureau' : 'your firm')
   const refUrl = buildOutreachRefUrl(vars)
 
   const copy = locale === 'en'
     ? {
-        subject: `Last note — your invitation to Arco is still open`,
-        h1: `Your invitation is still open`,
+        subject: `Create ${companyName} on Arco`,
+        h1: `Create ${companyName} on Arco`,
         intro: `One last note — your invitation to publish on Arco is still open.`,
         howItStarts: `Paste a link to a project on your website, and we'll extract the photos, details, and description automatically. You review, adjust if needed, and publish. No commitment, no cost.`,
-        button: `Set up your studio page`,
+        button: `Set up your company page`,
         opt_out: `If Arco isn't the right fit, no worries at all — reply to this email and I'll stop reaching out.`,
         signoffRole: 'Founder, Arco',
       }
     : {
-        subject: `Laatste bericht — jullie uitnodiging op Arco staat nog open`,
-        h1: `Jullie uitnodiging staat nog open`,
+        subject: `Maak ${companyName} aan op Arco`,
+        h1: `Maak ${companyName} aan op Arco`,
         intro: `Nog een laatste bericht — jullie uitnodiging om op Arco te publiceren staat nog open.`,
         howItStarts: `Plak een link naar een project op jullie website, en wij halen de foto's, details en beschrijving automatisch op. Je bekijkt het, past aan waar nodig, en publiceert. Geen verplichting, geen kosten.`,
-        button: `Maak jullie studiopagina aan`,
+        button: `Maak jullie bedrijfspagina aan`,
         opt_out: `Als Arco niet de juiste match is, helemaal geen probleem — reageer op deze email en ik stop met berichten sturen.`,
         signoffRole: 'Oprichter, Arco',
       }
@@ -1724,13 +1845,18 @@ export async function sendTransactionalEmail(
 
   const unsubscribeUrl = isMarketingSeries ? buildUnsubscribeUrl(email) : null
 
-  const { subject, html } = renderer(
+  const { subject, html: rawHtml } = renderer(
     {
       ...(dataVariables || {}),
       ...(unsubscribeUrl ? { _unsubscribeUrl: unsubscribeUrl } : {}),
     },
     locale,
   )
+  // Tag every arcolist.com CTA with utm_source/medium/campaign so the
+  // recipient's pageview attributes back to this email in PostHog.
+  // Audience drives the utm_source variant (arco_pro vs arco_client
+  // vs neutral arco); see TEMPLATE_AUDIENCE for the mapping.
+  const html = tagArcoEmailLinks(rawHtml, template)
 
   // Showcase + Outreach are the two person-to-person series — they come
   // from Niek's mailbox and replies route to him so he can answer
