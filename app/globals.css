@@ -2025,6 +2025,122 @@ a.arco-nav-text.nav-transparent:hover {
   margin-bottom: 80px;
 }
 
+/* Editorial photo grid — 6-col internal grid that reads as 3 visual
+   columns (each visual col = 2 grid cols). Fixed `grid-auto-rows`
+   keeps every row at the same height; cells span 1-6 cols / 1-2 rows
+   based on the photo's orientation + position-in-run (see photoSpans
+   in photo-tour.tsx). Portraits get 2 rows of height so they keep
+   their tall shape; landscapes vary between 2 / 3 / 6 col widths so
+   the layout doesn't flatten into uniform tiles.
+   `grid-auto-flow: dense` packs items so portraits fill the gaps
+   next to landscapes — no row-by-row chunking. Tight gaps (8/6/4 px)
+   versus the broader `--grid-gap` so the gallery reads as one image
+   wall rather than separate tiles. */
+.photo-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  /* `row` (not dense) so the pair-aware span assignment in
+     assignSpans() holds — dense would shuffle items to fill gaps and
+     break the L+P / P+L combinations we computed. The algorithm
+     already pairs items so no gaps are left. */
+  grid-auto-flow: row;
+  /* `inline-size` containment so the mobile breakpoint can size rows
+     with cqw (= 1% of the gallery's own width). Desktop still uses
+     vw clamps below. */
+  container-type: inline-size;
+  /* Row unit = half a grid-col-width. With a 1200px container and
+     5 × 8px gaps, grid-col-width ≈ 193px so the row unit ≈ 96px.
+     viewport-based clamp approximates: 7.5% of 1280-viewport ≈ 96px.
+     This makes:
+       portrait default (2 cols × 6 rows) = 2W × 3W = aspect 2:3 (no crop)
+       landscape full (6 cols × 6 rows)   = 6W × 3W = aspect 2:1 (cropped). */
+  --row-unit: clamp(60px, 7.5vw, 100px);
+  --grid-gap: 8px;
+  grid-auto-rows: var(--row-unit);
+  gap: var(--grid-gap);
+  margin-bottom: 80px;
+}
+/* Collapsed (initial) state caps visual height at exactly 3 user rows,
+   regardless of how many blocks the algorithm packed in. Mel's
+   [Pair, Pair, PLL-pair+single] runs 4 visual rows total — the
+   trailing-L sits in user-row 3 and gets hidden behind overflow.
+   `is-expanded` (set when "More photos" is clicked) removes the cap.
+   Height of 3 user rows = 18 row-tracks + 17 inter-track gaps
+                       = 18*row-unit + 17*gap. */
+.photo-gallery-grid:not(.is-expanded) {
+  max-height: calc(18 * var(--row-unit) + 17 * var(--grid-gap));
+  overflow: hidden;
+}
+@media (max-width: 1024px) {
+  .photo-gallery-grid {
+    /* iPad: scale row unit + gap proportionally with viewport so cell
+       aspect ratios match desktop. 6.25vw at 1024 ≈ 64px keeps the
+       row-unit ≈ half col-width like desktop does. */
+    --row-unit: clamp(48px, 6.25vw, 80px);
+    --grid-gap: 6px;
+  }
+}
+@media (max-width: 640px) {
+  .photo-gallery-grid {
+    /* Phone: 2-column grid with dense placement. Spans + order are
+       set per cell by `mobileAssignSpans()` and surfaced through the
+       `--m-col`, `--m-row`, `--m-order` CSS variables (inline style).
+         row-unit = col_w / 2 (col_w = (100cqw - gap) / 2)
+                  = (100cqw - gap) / 4
+       Allowed cell shapes:
+         Pano    2 col × 2 rows = 2:1 wide
+         L       1 col × 2 rows = 1:1 square
+         P       1 col × 3 rows = 2:3 portrait
+       4-photo runs with 2 Ls + 2 Ps reorder via `--m-order` so the
+       visual layout interlocks (L+P / P+L per column = 5 row-units).
+       PLL / LLP / tall P are not used on mobile. */
+    grid-template-columns: 1fr 1fr;
+    grid-auto-flow: dense;
+    --m-gap: 4px;
+    grid-auto-rows: calc((100cqw - var(--m-gap)) / 4);
+    gap: var(--m-gap);
+    margin-bottom: 24px;
+  }
+  .photo-gallery-grid .photo-cell {
+    grid-column: span var(--m-col) !important;
+    grid-row: span var(--m-row) !important;
+    order: var(--m-order) !important;
+  }
+  /* Mobile uses container-query sized row tracks (cqw-based); the
+     3-row max-height calc designed for desktop doesn't translate
+     cleanly here. Let the grid expand naturally on mobile and rely
+     on the slice cutoff alone. */
+  .photo-gallery-grid:not(.is-expanded) {
+    max-height: none;
+    overflow: visible;
+  }
+}
+.photo-cell {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}
+.photo-cell-img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.photo-cell:hover .photo-cell-img {
+  transform: scale(1.02);
+}
+.photo-gallery-grid .hidden-photo {
+  display: none;
+}
+.photo-gallery-grid .hidden-photo.revealed {
+  display: block;
+}
+
 .gallery-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -2350,16 +2466,19 @@ a.arco-nav-text.nav-transparent:hover {
 }
 
 .lightbox-image-container {
-  max-width: 90vw;
-  max-height: 80vh;
+  /* Fixed viewport-relative size so small natural images scale up
+     to fill the available space. The image inside uses object-fit:
+     contain to preserve aspect (letterbox if needed). Without a
+     defined width/height here, `max-*` rules only clamp natural
+     dimensions down — a 1380×780 photo would render at 1380×780. */
+  width: 90vw;
+  height: 80vh;
   position: relative;
 }
 
 .lightbox-image {
-  max-width: 100%;
-  max-height: 80vh;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
@@ -2421,6 +2540,21 @@ a.arco-nav-text.nav-transparent:hover {
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
+  /* Leave 72px clear on each side so the centred pill row never
+     overlaps the close button (24px from the right edge + 48px
+     button width). On narrow screens the inner row scrolls
+     horizontally rather than wrapping into a second line. */
+  max-width: calc(100% - 144px);
+}
+
+.lightbox-categories .category-tags {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+}
+
+.lightbox-categories .category-tags::-webkit-scrollbar {
+  display: none;
 }
 
 .lightbox-caption {
@@ -2475,20 +2609,12 @@ a.arco-nav-text.nav-transparent:hover {
     right: 12px;
   }
 
-  .lightbox-close {
-    top: 12px;
-    right: 12px;
-  }
-
-  .lightbox-categories {
-    top: 70px;
-    max-width: 90%;
-    left: 5%;
-    transform: translateX(0);
-  }
-
+  /* `.lightbox-close` stays at top:24px right:24px across all
+     viewports (set in the base rule). `.lightbox-categories` also
+     stays at top:24px and shares horizontal centering — its
+     max-width keeps the row clear of the close button, and the
+     inner pill strip scrolls horizontally on small screens. */
   .lightbox-categories .category-tags {
-    justify-content: flex-start;
     gap: 6px;
     margin-bottom: 0;
   }

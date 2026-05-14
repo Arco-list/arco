@@ -899,6 +899,10 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     setCoverPickerOpen(false)
     setCoverPickerProject(null)
     handleSetHero(project, photoUrl)
+    // Reopen the search-preview pop-up so the user can see the new
+    // cover applied immediately. Only fires on an actual selection —
+    // dismissing the picker (X / overlay click) doesn't reopen.
+    setSearchPreviewOpen(true)
   }, [handleSetHero])
 
   const clearCoverFromPreview = useCallback(() => {

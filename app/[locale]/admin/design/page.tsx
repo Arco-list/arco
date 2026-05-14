@@ -2,6 +2,71 @@ import { FAQPreview } from "./faq-preview"
 
 export const dynamic = "force-dynamic"
 
+type GalleryCell = { kind: "L" | "P" | "Pano"; col: number; row: number; order?: number }
+type GalleryCombo = { name: string; desc?: string; cells: GalleryCell[] }
+
+const photoGalleryDesktopCombos: GalleryCombo[] = [
+  { name: "Pano · 6×6", desc: "Full-width strip (aspect 2:1).", cells: [{ kind: "Pano", col: 6, row: 6 }] },
+  // Pair patterns first — these fire ~75% of the time. PLL / LLP
+  // triplets below are the ~25% variation for P+L+L / L+L+P runs.
+  { name: "LP · 4×6 + 2×6", desc: "Wide L + portrait. Default visual order in alternation.", cells: [{ kind: "L", col: 4, row: 6 }, { kind: "P", col: 2, row: 6 }] },
+  { name: "PL · 2×6 + 4×6", desc: "Same dims as LP, visual order flipped via CSS order. Alternates per pair.", cells: [{ kind: "P", col: 2, row: 6 }, { kind: "L", col: 4, row: 6 }] },
+  { name: "LL · two 3×6", desc: "Two near-square cells, one row.", cells: [{ kind: "L", col: 3, row: 6 }, { kind: "L", col: 3, row: 6 }] },
+  { name: "PP cropped · two 3×6", desc: "Mid-sequence P+P pair. Each P is cropped to a 1:1 square so the row fills cleanly (no mid-gap). Final-pair P+P keeps native 2×6 and accepts an end-gap.", cells: [{ kind: "P", col: 3, row: 6 }, { kind: "P", col: 3, row: 6 }] },
+  { name: "PPLL · 2×6 + 4×6 (×2 rows)", desc: "[P, P, L, L] run packs as 2 interleaved LP pairs across 2 rows — P+L on row 1, P+L on row 2 — so the first P is not orphaned. Aspects preserved.", cells: [{ kind: "P", col: 2, row: 6 }, { kind: "L", col: 4, row: 6 }, { kind: "P", col: 2, row: 6 }, { kind: "L", col: 4, row: 6 }] },
+  { name: "PPP · three 2×6", desc: "Three portraits side-by-side in one row.", cells: [{ kind: "P", col: 2, row: 6 }, { kind: "P", col: 2, row: 6 }, { kind: "P", col: 2, row: 6 }] },
+  { name: "PLL · 3×12 + 3×6 + 3×6", desc: "25% chance: tall P + 2 stacked L. Otherwise renders as LP pair + full-width L.", cells: [{ kind: "P", col: 3, row: 12 }, { kind: "L", col: 3, row: 6 }, { kind: "L", col: 3, row: 6 }] },
+  { name: "LLP · 3×6 + 3×6 + 3×12", desc: "25% chance: 2 stacked L + tall P (P rendered first via CSS order). Otherwise full-width L + LP pair.", cells: [{ kind: "L", col: 3, row: 6 }, { kind: "L", col: 3, row: 6 }, { kind: "P", col: 3, row: 12, order: -1 }] },
+  { name: "Trailing L · 6×6", desc: "Stand-alone landscape becomes a full-width hero. Same cell as a Pano (aspect > 2.2). Also the mid-orphan P fallback (rare; trades 2:3 → 2:1 to avoid mid-gap).", cells: [{ kind: "L", col: 6, row: 6 }] },
+  { name: "End-orphan P · 2×6", desc: "Only fires when the very last photo is a stand-alone P. Aspect preserved; end-gap to the right is acceptable per the no-mid-gap rule.", cells: [{ kind: "P", col: 2, row: 6 }] },
+]
+
+const photoGalleryMobileCombos: GalleryCombo[] = [
+  { name: "Pano · 2×2", desc: "Panoramic spans the full row — preferred whenever a wide image is present (aspect > 2.2). Also fires for the gallery's first photo when it's a landscape and the next 4 photos form an LPPL interlock — opens the gallery with a statement hero.", cells: [{ kind: "Pano", col: 2, row: 2 }] },
+  { name: "LL pair", desc: "Two square Ls side-by-side. 1 stripe = 2 row-units tall.", cells: [{ kind: "L", col: 1, row: 2 }, { kind: "L", col: 1, row: 2 }] },
+  { name: "PP pair", desc: "Two portraits side-by-side. 1.5 stripes = 3 row-units tall.", cells: [{ kind: "P", col: 1, row: 3 }, { kind: "P", col: 1, row: 3 }] },
+  { name: "LLL · LL pair + 2×2 hero", desc: "Long landscape runs break up with a Pano-style full-row L every 3rd photo (LL pair on the first stripe, 2×2 hero on the second). Skipped when the 4th photo is a P so the hero doesn't orphan it.", cells: [{ kind: "L", col: 1, row: 2 }, { kind: "L", col: 1, row: 2 }, { kind: "L", col: 2, row: 2 }] },
+  { name: "L + P + P + L · 5 row-units", desc: "4 cells, 2 Ls + 2 Ps. Visual layout: L top-left, P top-right, P middle-left, L bottom-right. Each column = L (2) + P (3) = 5 row-units — clean interlock. Source order [L, P, L, P] also fires this via CSS order swap.", cells: [{ kind: "L", col: 1, row: 2 }, { kind: "P", col: 1, row: 3 }, { kind: "P", col: 1, row: 3 }, { kind: "L", col: 1, row: 2 }] },
+  { name: "End single L · 2×2 hero", desc: "Stand-alone landscape at the gallery's tail goes full-row (Pano-style) so it doesn't sit lonely beside a column gap.", cells: [{ kind: "L", col: 2, row: 2 }] },
+  { name: "End single P · 1×3", desc: "Portrait fallback for a stand-alone P at the tail.", cells: [{ kind: "P", col: 1, row: 3 }] },
+]
+
+function PhotoComboPreview({ combo, cols, unit, gap, autoFlow = "row" }: { combo: GalleryCombo; cols: number; unit: number; gap: number; autoFlow?: "row" | "dense" }) {
+  const cellBg = (kind: GalleryCell["kind"]) => kind === "L" ? "#e8e8e6" : kind === "P" ? "#c4c4c2" : "#8b8b89"
+  return (
+    <div>
+      <div className="arco-eyebrow" style={{ marginBottom: 10 }}>{combo.name}</div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${cols}, ${unit * 2}px)`,
+        gridAutoRows: `${unit}px`,
+        gridAutoFlow: autoFlow,
+        gap: `${gap}px`,
+        width: "fit-content",
+        marginBottom: 10,
+      }}>
+        {combo.cells.map((cell, i) => (
+          <div key={i} style={{
+            gridColumn: `span ${cell.col}`,
+            gridRow: `span ${cell.row}`,
+            order: cell.order,
+            background: cellBg(cell.kind),
+            border: "1px solid #1c1c1a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 10,
+            fontWeight: 500,
+            color: "#1c1c1a",
+            fontFamily: "monospace",
+          }}>{cell.kind}</div>
+        ))}
+      </div>
+      {combo.desc && <div className="arco-small-text" style={{ fontSize: 12 }}>{combo.desc}</div>}
+    </div>
+  )
+}
+
 export default function DesignPage() {
   const colors = [
     { name: "White", hex: "#FAFAF9", desc: "Main background for pages, cards, and content areas", border: true },
@@ -783,6 +848,42 @@ export default function DesignPage() {
                 <code>{`<div class="spec-item-edit [editing]">`}</code> with <code>.ec-badge</code>,{" "}
                 <code>.spec-eyebrow</code>, and either a value <code>{`<div>`}</code> or a{" "}
                 <code>.spec-inp</code>.
+              </p>
+            </div>
+          </div>
+
+          {/* PHOTO GALLERY LAYOUTS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Photo gallery layouts</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The project photo tour assigns grid spans based on photo orientation —
+              <strong> L</strong> = landscape (aspect 0.9–2.2), <strong> P</strong> = portrait (aspect &lt; 0.9),
+              <strong> Pano</strong> = panoramic (aspect &gt; 2.2). Desktop / iPad share a 6-col grid where the
+              row-unit equals ½ a col-width (1 user row = 6 row-units = 3W tall). Mobile switches to a 2-col
+              grid with <code>grid-auto-flow: dense</code>. Source: <code>assignSpans()</code> in <code>components/project/photo-tour.tsx</code>.
+            </p>
+
+            <h4 className="arco-label" style={{ marginBottom: 20 }}>Desktop / iPad (6-col)</h4>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 32 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 36 }}>
+                {photoGalleryDesktopCombos.map((combo) => (
+                  <PhotoComboPreview key={combo.name} combo={combo} cols={6} unit={12} gap={3} />
+                ))}
+              </div>
+            </div>
+
+            <h4 className="arco-label" style={{ marginBottom: 20 }}>Mobile (2-col, dense flow)</h4>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 36 }}>
+                {photoGalleryMobileCombos.map((combo) => (
+                  <PhotoComboPreview key={combo.name} combo={combo} cols={2} unit={22} gap={3} autoFlow="dense" />
+                ))}
+              </div>
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Desktop row-unit: <code>clamp(60px, 7.5vw, 100px)</code>, 8px gap. iPad: <code>clamp(48px, 6.25vw, 80px)</code>, 6px gap — vw factor tuned so cell aspect ratios match desktop as the viewport narrows.
+                Mobile row-unit: <code>(100cqw − gap) / 4</code>, 4px gap — anchored to the gallery's own width via <code>container-type: inline-size</code> so L stays square and P stays 2:3 at any viewport.
               </p>
             </div>
           </div>

@@ -988,8 +988,22 @@ export async function setCompanyHeroPhotoAction(input: { projectId: string; phot
   })
 
   if (rpcError) {
-    logger.db("rpc", "set_company_hero_photo", "Failed to set hero photo", { companyId: company!.id }, rpcError)
-    return { success: false, error: "Could not set hero photo." }
+    logger.db("rpc", "set_company_hero_photo", "Failed to set hero photo", {
+      companyId: company!.id,
+      projectId: input.projectId,
+      photoUrl: input.photoUrl,
+      // PG raises RAISE EXCEPTION '<msg>' for each guard in the RPC
+      // (Not authorized / Project not linked / Photo not found). Log
+      // the full message so we can see which one fires.
+      pgMessage: (rpcError as any)?.message,
+      pgCode: (rpcError as any)?.code,
+      pgDetails: (rpcError as any)?.details,
+    }, rpcError)
+    // Surface the underlying RAISE message to the toast so the cause
+    // is visible without digging through logs. Falls back to the
+    // generic phrasing if PG didn't return a message.
+    const detail = (rpcError as any)?.message
+    return { success: false, error: detail ? `Could not set hero photo: ${detail}` : "Could not set hero photo." }
   }
 
   revalidatePath("/dashboard/company")

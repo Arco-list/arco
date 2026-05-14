@@ -15,6 +15,10 @@ const nextConfig = {
       { protocol: "https", hostname: "ogvobdcrectqsegqrquz.supabase.co" },
       { protocol: "https", hostname: "**.supabase.co" },
       { protocol: "https", hostname: "**" },
+      // Some imported photo sources (e.g. squarespace static hosts on
+      // older portfolios) still serve over http. Mirror the https
+      // wildcard so next/image accepts those URLs too.
+      { protocol: "http", hostname: "**" },
     ],
   },
   // Note: the apex→www redirect is handled by Vercel domain config

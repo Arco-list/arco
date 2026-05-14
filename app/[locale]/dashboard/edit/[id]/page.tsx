@@ -1734,10 +1734,17 @@ export default function ListingEditorPage() {
   const handleShowSubmitReview = () => {
     if (!projectId || isSubmittingForReview) return
 
-    // Check for low-resolution photos
-    const lowResPhotos = uploadedPhotos.filter(
-      (p) => p.width != null && p.height != null && (p.width < 1600 || p.height < 800)
-    )
+    // Check for low-resolution photos. Compare the LONG / SHORT side
+    // rather than width / height so portrait images aren't flagged
+    // just because their "width" is the short side — a 1067×1600
+    // portrait has the same pixel count (and rendered sharpness) as a
+    // 1600×1067 landscape and should pass the same threshold.
+    const lowResPhotos = uploadedPhotos.filter((p) => {
+      if (p.width == null || p.height == null) return false
+      const longSide = Math.max(p.width, p.height)
+      const shortSide = Math.min(p.width, p.height)
+      return longSide < 1600 || shortSide < 800
+    })
     if (lowResPhotos.length > 0) {
       setLowResCount(lowResPhotos.length)
       setShowLowResWarning(true)
@@ -3729,7 +3736,12 @@ export default function ListingEditorPage() {
               void reorderFeaturePhotos(activeEditFeature, reordered)
             }
 
-            const isLowRes = photo.width != null && photo.height != null && (photo.width < 1600 || photo.height < 800)
+            // Compare long/short side so portrait photos with the
+            // same pixel count as landscape don't get flagged.
+            const isLowRes = photo.width != null && photo.height != null && (
+              Math.max(photo.width, photo.height) < 1600
+              || Math.min(photo.width, photo.height) < 800
+            )
 
             return (
               <div key={photo.id} className="photo-edit-thumb">
