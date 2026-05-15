@@ -1374,20 +1374,32 @@ Return ONLY this JSON:
     "living_room": "living",
   }
 
-  // Group photos by space slug
+  // Group photos by space slug. Claude vision occasionally returns
+  // `"index"` as a quoted string instead of a number — coerce to Number
+  // before the strict-equality lookup so neither shape silently
+  // strands photos. Diagnostic logs flag the three drop reasons so a
+  // production-only regression is obvious from the logs.
+  let droppedNoPhotoMatch = 0
+  let droppedNoSlugMatch = 0
   const photosBySpace = new Map<string, string[]>()
   for (const c of classifications) {
-    const photo = photos.find((p) => p.order_index === c.index)
-    if (!photo) continue
-    // Resolve Claude's slug to a DB slug
-    const rawSlug = c.space
+    const rawIndex = (c as any).index
+    const idx = typeof rawIndex === "number" ? rawIndex : Number(rawIndex)
+    const photo = Number.isFinite(idx)
+      ? photos.find((p) => p.order_index === idx)
+      : undefined
+    if (!photo) { droppedNoPhotoMatch++; continue }
+    // Resolve Claude's slug to a DB slug. Normalise common variants
+    // (case, underscores) so a slightly-different shape from Claude
+    // still matches the canonical SPACE_SLUGS in the DB.
+    const rawSlug = typeof c.space === "string" ? c.space.trim().toLowerCase().replace(/_/g, "-") : ""
     const dbSlug = claudeToDbSlug[rawSlug] ?? rawSlug
-    // Only use if the DB slug exists in spaceMap
     const finalSlug = spaceMap.has(dbSlug) ? dbSlug : null
-    if (!finalSlug) continue
+    if (!finalSlug) { droppedNoSlugMatch++; continue }
     if (!photosBySpace.has(finalSlug)) photosBySpace.set(finalSlug, [])
     photosBySpace.get(finalSlug)!.push(photo.id)
   }
+  console.log(`[autoTag] photosBySpace built: ${photosBySpace.size} slug(s), ${Array.from(photosBySpace.values()).reduce((n, v) => n + v.length, 0)} photo(s) linked. Drops: noPhotoMatch=${droppedNoPhotoMatch}, noSlugMatch=${droppedNoSlugMatch}. Classifications received: ${classifications.length}`)
 
   // Fetch existing project_features so we can reuse them instead of creating duplicates
   const { data: existingFeatures } = await serviceSupabase
