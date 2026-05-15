@@ -4592,26 +4592,34 @@ export default function ListingEditorPage() {
                 <div className="dd-panel" style={{ maxHeight: 320, overflowY: "auto" }}>
                   {categoryOptions.map(cat => {
                     const subtypes = projectTypeOptionsByCategory[cat.value] ?? []
+                    // Translate the raw English label from the DB to the
+                    // current locale. translateCategoryName falls back to
+                    // null when the slug isn't in our known set, so we
+                    // keep the original DB string as a safety net.
+                    const catLabel = translateCategoryName(cat.label, locale) ?? cat.label
                     return (
                       <div key={cat.value}>
                         {subtypes.length > 0 ? (
                           <>
-                            <div className="dd-group-label">{cat.label}</div>
-                            {subtypes.map(opt => (
-                              <div
-                                key={opt.value}
-                                className={`dd-row${opt.value === detailsForm.projectType ? " sel" : ""}`}
-                                onClick={e => {
-                                  e.stopPropagation()
-                                  setDetailsForm(prev => ({ ...prev, projectType: opt.value, category: cat.value }))
-                                  setEditingSpecBar(null)
-                                  void saveFieldDirect({ project_type_category_id: opt.value })
-                                }}
-                              >
-                                <span>{opt.label}</span>
-                                {opt.value === detailsForm.projectType && <span className="dd-check">✓</span>}
-                              </div>
-                            ))}
+                            <div className="dd-group-label">{catLabel}</div>
+                            {subtypes.map(opt => {
+                              const optLabel = translateCategoryName(opt.label, locale) ?? opt.label
+                              return (
+                                <div
+                                  key={opt.value}
+                                  className={`dd-row${opt.value === detailsForm.projectType ? " sel" : ""}`}
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    setDetailsForm(prev => ({ ...prev, projectType: opt.value, category: cat.value }))
+                                    setEditingSpecBar(null)
+                                    void saveFieldDirect({ project_type_category_id: opt.value })
+                                  }}
+                                >
+                                  <span>{optLabel}</span>
+                                  {opt.value === detailsForm.projectType && <span className="dd-check">✓</span>}
+                                </div>
+                              )
+                            })}
                           </>
                         ) : (
                           <div
@@ -4623,7 +4631,7 @@ export default function ListingEditorPage() {
                               void saveFieldDirect({ project_type_category_id: cat.value })
                             }}
                           >
-                            <span>{cat.label}</span>
+                            <span>{catLabel}</span>
                             {cat.value === detailsForm.projectType && <span className="dd-check">✓</span>}
                           </div>
                         )}

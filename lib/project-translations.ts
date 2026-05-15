@@ -206,6 +206,7 @@ const CATEGORY_NAME_LABELS: Record<string, Record<ScopeLocale, string>> = {
   chalet: { en: "Chalet", nl: "Chalet" },
   farm: { en: "Farm", nl: "Boerderij" },
   "garden-house": { en: "Garden house", nl: "Tuinhuis" },
+  "garden-design": { en: "Garden design", nl: "Tuinontwerp" },
   extension: { en: "Extension", nl: "Uitbouw" },
   other: { en: "Other", nl: "Anders" },
 }
