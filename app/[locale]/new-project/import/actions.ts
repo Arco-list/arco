@@ -1021,6 +1021,12 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
 
     // 10. Auto-tag photos with spaces using Claude vision (best-effort)
+    // Always log the gate state so a silent skip in production is
+    // diagnosable. The three conditions that govern entry: did the
+    // post-insert SELECT return rows (RLS can drop them silently),
+    // is the Anthropic key present in this runtime, and did Firecrawl
+    // give us any images to tag in the first place.
+    console.log(`[autoTag-gate] insertedPhotos=${insertedPhotos?.length ?? "null"} hasAnthropicKey=${!!process.env.ANTHROPIC_API_KEY} imageUrlsCount=${imageUrls.length}`)
     if (insertedPhotos && insertedPhotos.length > 0 && process.env.ANTHROPIC_API_KEY) {
       try {
         console.log(`[autoTag] Starting auto-tag for ${insertedPhotos.length} photos, project ${project.id}`)
