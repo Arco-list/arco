@@ -59,6 +59,7 @@ import {
   getProjectTranslation,
   translateBuildingType,
   translateBuildingTypeInput,
+  translateCategoryName,
   translateProjectStyle,
   translateScopeInput,
 } from "@/lib/project-translations"
@@ -4109,17 +4110,20 @@ export default function ListingEditorPage() {
     detailsForm.buildingType ??
     ""
 
-  // Combined project type label: prefer category subtype, fall back to building type
+  // Combined project type label: prefer category subtype, fall back to building type.
+  // Category labels come from the DB unchanged (raw English `name` column) — we
+  // run them through translateCategoryName so the NL dashboard sees "Stadswoning"
+  // instead of "Townhouse" for a townhouse category, and so on.
   const projectTypeLabel = (() => {
     if (detailsForm.projectType) {
       // Check child types across all categories
       for (const catId of Object.keys(projectTypeOptionsByCategory)) {
         const match = projectTypeOptionsByCategory[catId]?.find(o => o.value === detailsForm.projectType)
-        if (match) return match.label
+        if (match) return translateCategoryName(match.label, locale) ?? match.label
       }
       // Check parent categories
       const catMatch = categoryOptions.find(o => o.value === detailsForm.projectType)
-      if (catMatch) return catMatch.label
+      if (catMatch) return translateCategoryName(catMatch.label, locale) ?? catMatch.label
     }
     return buildingTypeLabel
   })()
