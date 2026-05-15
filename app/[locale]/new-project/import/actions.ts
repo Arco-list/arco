@@ -991,12 +991,35 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       is_primary: i === 0,
       order_index: i,
     }))
-    const { data: insertedPhotos, error: photoError } = await supabase
+    const { data: insertedPhotosFromUserClient, error: photoError } = await supabase
       .from("project_photos")
       .insert(photoRows)
       .select("id, url, order_index")
     if (photoError) {
       logger.error("Scrape photo insert failed", { projectId: project.id }, photoError as Error)
+    }
+
+    // If RLS on project_photos depends on a relation whose policy is
+    // currently broken (we've seen company_members hit "infinite
+    // recursion" in production), the INSERT can succeed while the
+    // returning SELECT silently strips the rows. That collapses
+    // `insertedPhotos` to an empty array and the autoTag gate skips.
+    // Re-fetch the just-inserted rows via service-role so the rest of
+    // the pipeline (dimension probing + autoTag) has the IDs to work
+    // with regardless of user-side RLS.
+    let insertedPhotos = insertedPhotosFromUserClient
+    if ((!insertedPhotos || insertedPhotos.length === 0) && !photoError) {
+      const { createServiceRoleSupabaseClient } = await import("@/lib/supabase/server")
+      const svc = createServiceRoleSupabaseClient()
+      const { data: refetched } = await svc
+        .from("project_photos")
+        .select("id, url, order_index")
+        .eq("project_id", project.id)
+        .order("order_index", { ascending: true })
+      if (refetched && refetched.length > 0) {
+        console.log(`[scrape] Post-insert SELECT returned empty (likely RLS) — refetched ${refetched.length} photos via service role`)
+        insertedPhotos = refetched
+      }
     }
 
     // 9b. Probe image dimensions (best-effort, non-blocking)
