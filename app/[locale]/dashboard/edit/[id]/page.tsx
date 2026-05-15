@@ -6020,10 +6020,13 @@ export default function ListingEditorPage() {
               </div>
             </div>
 
-            <p
-              className="body-small text-text-secondary mb-3"
-              dangerouslySetInnerHTML={{ __html: tDelete("type_to_confirm") }}
-            />
+            <p className="body-small text-text-secondary mb-3">
+              {/* next-intl rejects plain t() on messages that contain
+                  tags — the rich-tag API is required so the rendered
+                  output is a React node tree, not a raw HTML string.
+                  Without this the message falls back to its key. */}
+              {tDelete.rich("type_to_confirm", { strong: (chunks) => <strong>{chunks}</strong> })}
+            </p>
             <input
               type="text"
               value={deleteConfirmText}

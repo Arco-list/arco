@@ -1247,6 +1247,8 @@ Rules: outdoor photo with building visible = always "exterior". Tag every photo.
 
 Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/house/apartment/townhouse/penthouse/bungalow/chalet/farm/garden-house/other). Always pick one for each.
 
+For building_type, classify by ARCHITECTURE not current use — a restaurant inside a converted villa is "villa"; a café in a row of townhouses is "townhouse"; a hotel in a former mansion is "villa". Only fall back to "other" if no residential archetype fits (e.g. a purpose-built modern office block).
+
 Return ONLY this JSON:
 {"photos":[{"index":0,"space":"exterior"}],"style":"modern","scope":"new-build","building_type":"villa"}`,
           },

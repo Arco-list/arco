@@ -10,6 +10,14 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Keep `sharp` external so its native `.node` binary survives the
+  // Vercel serverless bundle. Without this, dynamic `await import("sharp")`
+  // inside server actions (autoTagPhotosWithSpaces) can fail to load the
+  // architecture-specific binary on the function runtime — sharp works
+  // locally because the host has the right binary on disk, but Vercel's
+  // Linux runtime needs the package required at runtime rather than
+  // bundled by webpack. Same flag the Vercel + sharp docs recommend.
+  serverExternalPackages: ["sharp"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "ogvobdcrectqsegqrquz.supabase.co" },
