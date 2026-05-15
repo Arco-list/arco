@@ -6440,6 +6440,16 @@ body.no-scroll {
 .arco-table tbody tr.arco-cr-row > td {
   padding-top: 2px;
 }
+/* When a CR row is followed by another CR row (consecutive extraCRs or
+   valueRows), also tighten its bottom padding so the inter-CR gap
+   matches the sub→first-CR gap above. Without this the first pair
+   reads as 6px (4+2) while subsequent pairs read as ~18px because the
+   middle CR rows fall back to default padding-bottom. The final CR row
+   in a block doesn't match this selector and keeps its default
+   padding-bottom — preserves the visual break before the next section. */
+.arco-table tbody tr.arco-cr-row:has(+ tr.arco-cr-row) > td {
+  padding-bottom: 4px;
+}
 
 .arco-table-sort {
   display: inline-flex;

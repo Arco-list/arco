@@ -467,7 +467,7 @@ Given the text content of a web page, extract the following fields as JSON.
 Only return a valid JSON object — no prose, no markdown, no code fences.
 
 Fields:
-- is_relevant_project (boolean): true ONLY if this page is about a specific architecture, interior design, construction, or real estate project (e.g. a villa renovation, a new build, an interior redesign). Return false for: company about pages, blog posts, contact pages, service descriptions, team pages, portfolios/galleries without a single project focus, product pages, or any page that is not a dedicated project showcase.
+- is_relevant_project (boolean): true if this page is a single, specific project showcase — residential (villa, house, apartment, townhouse, bungalow, chalet, garden), commercial (restaurant, café, hotel, bar, retail, office, gallery, gym, spa, salon), or institutional (school, museum, healthcare). Any architecture, interior design, construction, real estate, or fit-out project on a single page counts. Return false ONLY for clearly non-project pages: company about / contact / team / careers pages, blog index, general service descriptions, product catalogues, portfolio index pages that list many projects without focusing on one, or pages without any photos or design content. When unsure, default to true.
 - title (string, max 120 chars): The project name ONLY — strip the location, city, company/studio name, and any separators (e.g. " - ", " | ") from the page title. For example, "Moderne villa met horizontale belijning - Diepenveen - Atelier 3" should become "Modern villa with horizontal lines". If no clear project name exists, derive one from the content. ALWAYS translate to English.
 - description (string | null, max 300 chars): Exactly 2 sentences in third-person professional prose in English. Capture the project's essence and a key design decision. ALWAYS translate to English. Return null if there is not enough content.
 - building_year (number | null): The year the project was completed or built (4-digit integer). Return null if not found.
@@ -824,9 +824,18 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
   }
 
-  // 5. Content relevance check
-  if (!extracted.is_relevant_project) {
+  // 5. Content relevance check — only block when the page truly has
+  // nothing project-shaped on it (no images at all). Claude's
+  // `is_relevant_project` flag stays advisory: it's useful for guiding
+  // metadata extraction but biased toward residential examples in the
+  // prompt, so commercial / restaurant / hotel pages get false-negatived
+  // too often. The user explicitly submitted this URL — if we managed
+  // to pull at least one image off it, let the import proceed.
+  if (!extracted.is_relevant_project && imageUrls.length === 0) {
     return { error: "This page doesn't appear to be a project. Please link to a specific project page (e.g. a villa, renovation, or interior design project)." }
+  }
+  if (!extracted.is_relevant_project) {
+    console.log("[scrape] is_relevant_project=false but images present — proceeding anyway.", { url: url.toString(), imageCount: imageUrls.length })
   }
 
   const { title, description, building_year, scope, location, building_type, style } = extracted

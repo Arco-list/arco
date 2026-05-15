@@ -120,6 +120,12 @@ export type MetricRow = {
      *  denominator isn't `datapoints` and the row isn't a funnel
      *  conversion. */
     customCR?: { label: string; numerator: number[]; denominator: number[] }
+    /** Optional set of absolute-value rows rendered underneath this sub
+     *  at CR-row size (10px). Each row carries its own label, per-bucket
+     *  values and a tone — "muted" reads as grey, "accent" as teal. Use
+     *  for supporting absolute metrics that aren't conversion rates
+     *  (e.g. SEO impressions / clicks alongside CTR under Ranked pros). */
+    valueRows?: Array<{ label: string; values: number[]; tone?: "muted" | "accent"; format?: "integer" | "percent" }>
   }>
 }
 
@@ -222,8 +228,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     publishableCategoriesResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at, first_touch_source"),
-    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id"),
-    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed"),
+    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id, seo_impressions_28d, seo_clicks_28d"),
+    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed, seo_impressions_28d, seo_clicks_28d"),
     supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at, invited_email, invited_at, landing_visited_at"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
@@ -617,6 +623,32 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       && new Date(c.seo_indexed_at) <= bucketEnd,
     ).length,
   )
+  const totalIndexedListedSnapshot = indexedListedSnapshotSeries[indexedListedSnapshotSeries.length - 1] ?? 0
+
+  // SEO supporting metrics — current 28-day rolling totals aggregated
+  // across listed + indexed pros. `seo_impressions_28d` / `seo_clicks_28d`
+  // are refreshed nightly per company by /api/cron/sync-gsc-indexation;
+  // we only have the latest 28d window stored, not per-bucket history,
+  // so these only populate the *last* bucket — earlier columns render
+  // as dots (formatNumber(0) → "·"). CTR is recomputed from the summed
+  // clicks ÷ impressions so it weights by traffic, not a flat average.
+  const rankedPros = companies.filter((c: any) =>
+    c.status === "listed" && claimedCompanies(c) && c.seo_indexed === true,
+  )
+  const totalSeoImpressions = rankedPros.reduce(
+    (sum: number, c: any) => sum + (Number(c.seo_impressions_28d) || 0), 0,
+  )
+  const totalSeoClicks = rankedPros.reduce(
+    (sum: number, c: any) => sum + (Number(c.seo_clicks_28d) || 0), 0,
+  )
+  const aggregateCtrPct = totalSeoImpressions > 0
+    ? Math.round((totalSeoClicks / totalSeoImpressions) * 100)
+    : 0
+  const lastBucketOnly = (value: number) =>
+    buckets.ends.map((_, i) => (i === buckets.ends.length - 1 ? value : 0))
+  const seoImpressionsSeries = lastBucketOnly(totalSeoImpressions)
+  const seoClicksSeries = lastBucketOnly(totalSeoClicks)
+  const seoCtrSeries = lastBucketOnly(aggregateCtrPct)
 
   // Total published projects (published_at falls in the period). Different
   // from the Publishers metric, which counts unique COMPANIES.
@@ -648,6 +680,27 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       && new Date(p.published_at) <= bucketEnd,
     ).length,
   )
+  const totalIndexedPublishedSnapshot = indexedPublishedSnapshotSeries[indexedPublishedSnapshotSeries.length - 1] ?? 0
+
+  // SEO supporting metrics for projects — current 28-day rolling totals
+  // aggregated across published + indexed projects. Same caveat as the
+  // pros version: GSC data is a rolling-window snapshot per project, so
+  // values only populate the last bucket.
+  const rankedProjects = projects.filter((p: any) =>
+    p.status === "published" && p.seo_indexed === true,
+  )
+  const totalProjectImpressions = rankedProjects.reduce(
+    (sum: number, p: any) => sum + (Number(p.seo_impressions_28d) || 0), 0,
+  )
+  const totalProjectClicks = rankedProjects.reduce(
+    (sum: number, p: any) => sum + (Number(p.seo_clicks_28d) || 0), 0,
+  )
+  const projectAggregateCtrPct = totalProjectImpressions > 0
+    ? Math.round((totalProjectClicks / totalProjectImpressions) * 100)
+    : 0
+  const projectImpressionsSeries = lastBucketOnly(totalProjectImpressions)
+  const projectClicksSeries = lastBucketOnly(totalProjectClicks)
+  const projectCtrSeries = lastBucketOnly(projectAggregateCtrPct)
 
   // Inviters: unique project-owner companies whose projects received any
   // non-owner project_professionals row created in the bucket window. The
@@ -1472,6 +1525,24 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           },
         },
         { key: "unlisted_pros", label: "Unlisted pros", definition: "Pros currently in unlisted state", source: "supabase" as MetricSource, total: totalUnlistedSnapshot, datapoints: unlistedSnapshotSeries },
+        {
+          // Ranked pros — listed pros that Google has actually indexed.
+          // Same cumulative snapshot series used by the parent-level
+          // % Ranked Pros CR, surfaced here as an absolute count with
+          // the supporting SEO metrics (Impressions / CTR / Clicks)
+          // rendered underneath as value rows.
+          key: "ranked_pros",
+          label: "Ranked pros",
+          definition: "Listed pros currently indexed by Google (cumulative snapshot at each bucket end). Numerator for the % Ranked Pros CR shown under Listed Pros.",
+          source: "supabase" as MetricSource,
+          total: totalIndexedListedSnapshot,
+          datapoints: indexedListedSnapshotSeries,
+          valueRows: [
+            { label: "Impressions", values: seoImpressionsSeries, tone: "muted", format: "integer" },
+            { label: "CTR",         values: seoCtrSeries,         tone: "accent", format: "percent" },
+            { label: "Clicks",      values: seoClicksSeries,      tone: "muted", format: "integer" },
+          ],
+        },
       ],
     },
     {
@@ -1515,6 +1586,24 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
             numerator: indexedPublishedSnapshotSeries,
             denominator: totalPublishedSnapshotSeries,
           },
+        },
+        {
+          // Ranked projects — published projects that Google has indexed.
+          // Same cumulative series used by % Ranked Projects under Total
+          // Projects, exposed as an absolute count with supporting SEO
+          // metrics (Impressions / CTR / Clicks) underneath. Mirrors the
+          // Ranked pros sub under Listed Pros.
+          key: "ranked_projects",
+          label: "Ranked projects",
+          definition: "Published projects currently indexed by Google (cumulative snapshot at each bucket end). Numerator for the % Ranked Projects CR shown under Total Projects.",
+          source: "supabase" as MetricSource,
+          total: totalIndexedPublishedSnapshot,
+          datapoints: indexedPublishedSnapshotSeries,
+          valueRows: [
+            { label: "Impressions", values: projectImpressionsSeries, tone: "muted", format: "integer" },
+            { label: "CTR",         values: projectCtrSeries,         tone: "accent", format: "percent" },
+            { label: "Clicks",      values: projectClicksSeries,      tone: "muted", format: "integer" },
+          ],
         },
       ],
     },

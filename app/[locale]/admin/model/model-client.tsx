@@ -267,6 +267,61 @@ function CustomCRRow({
   )
 }
 
+// Absolute-value row rendered at CR-row size (10px) underneath a sub.
+// Same layout as CustomCRRow but shows raw values formatted via
+// formatNumber (or a "N%" string when format = "percent"). `tone`
+// controls the text color — "accent" reads as the teal primary,
+// "muted" as the secondary grey. Used today by Ranked pros to surface
+// SEO Impressions / CTR / Clicks alongside the conversion rate above.
+function ValueRow({
+  label,
+  values,
+  columnCount,
+  tone = "muted",
+  format = "integer",
+  isLast,
+}: {
+  label: string
+  values: number[]
+  columnCount: number
+  tone?: "muted" | "accent"
+  format?: "integer" | "percent"
+  isLast?: boolean
+}) {
+  const color = tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
+  return (
+    <tr
+      className="arco-cr-row"
+      style={{ borderTop: "none", borderBottom: isLast ? undefined : "none" }}
+    >
+      <td>
+        <div className="flex items-center gap-2 pl-7">
+          <span className="text-[10px] font-medium" style={{ color }}>
+            {label}
+          </span>
+        </div>
+      </td>
+      {values.map((v, i) => {
+        const display = format === "percent"
+          ? (v > 0 ? `${v}%` : "·")
+          : formatNumber(v)
+        return (
+          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right" }}>
+            <span className="text-[10px] font-medium" style={{ color }}>
+              {display}
+            </span>
+            <GrowthGutter growth={null} />
+          </td>
+        )
+      })}
+      {values.length < columnCount
+        && Array.from({ length: columnCount - values.length }).map((_, i) => (
+          <td key={`pad-${i}`} />
+        ))}
+    </tr>
+  )
+}
+
 // Slim per-source CR row rendered under a source sub-row inside an
 // expanded metric. Mirrors ConversionRowComponent's inline styling
 // (subtle left-border + italic muted text) but takes raw numerator/
@@ -443,7 +498,9 @@ function MetricRowComponent({
           {row.subs.map((sub) => {
             const hasPerSourceCR = !!sub.crNumerator && !!inlineCRTo
             const hasCustomCR = !!sub.customCR
-            const hasAttachedCR = hasPerSourceCR || hasCustomCR
+            const valueRows = sub.valueRows ?? []
+            const hasValueRows = valueRows.length > 0
+            const hasAttachedCR = hasPerSourceCR || hasCustomCR || hasValueRows
             return (
               <Fragment key={sub.key}>
                 <tr
@@ -498,9 +555,20 @@ function MetricRowComponent({
                     numerator={sub.customCR!.numerator}
                     denominator={sub.customCR!.denominator}
                     columnCount={columnCount}
-                    isLast
+                    isLast={!hasValueRows}
                   />
                 )}
+                {hasValueRows && valueRows.map((vr, idx) => (
+                  <ValueRow
+                    key={vr.label}
+                    label={vr.label}
+                    values={vr.values}
+                    columnCount={columnCount}
+                    tone={vr.tone}
+                    format={vr.format}
+                    isLast={idx === valueRows.length - 1}
+                  />
+                ))}
               </Fragment>
             )
           })}
