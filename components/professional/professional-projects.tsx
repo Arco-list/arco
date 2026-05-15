@@ -1,6 +1,7 @@
 import Link from "next/link"
-import Image from "next/image"
 import { getTranslations } from "next-intl/server"
+
+import { ProfessionalProjectCard } from "./professional-project-card"
 
 // Match the actual ProfessionalProjectSummary type
 interface Project {
@@ -41,37 +42,10 @@ export async function ProfessionalProjects({ projects, heading }: ProfessionalPr
         </div>
 
         {hasImages ? (
-          <div className="projects-grid">
-            {displayProjects.map((project) => {
-              const href = project.slug ? `/projects/${project.slug}` : '#'
-              const subtitle = [project.projectType, project.location]
-                .filter(Boolean)
-                .join(' · ')
-
-              return (
-                <Link
-                  key={project.id}
-                  href={href}
-                  className="project-card"
-                >
-                  <div className="project-image-container">
-                    {project.image ? (
-                      <Image
-                        src={project.image}
-                        alt={project.title}
-                        width={600}
-                        height={450}
-                        className="project-image"
-                      />
-                    ) : (
-                      <div className="project-image-placeholder" />
-                    )}
-                  </div>
-                  <h3 className="project-title">{project.title}</h3>
-                  {subtitle && <p className="project-subtitle">{subtitle}</p>}
-                </Link>
-              )
-            })}
+          <div className="discover-grid">
+            {displayProjects.map((project) => (
+              <ProfessionalProjectCard key={project.id} project={project} />
+            ))}
           </div>
         ) : (
           <div className="projects-list">

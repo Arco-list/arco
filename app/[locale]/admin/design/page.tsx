@@ -1,4 +1,5 @@
 import { FAQPreview } from "./faq-preview"
+import { DiscoverCardPreview } from "./discover-card-preview"
 
 export const dynamic = "force-dynamic"
 
@@ -412,24 +413,12 @@ export default function DesignPage() {
             <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Discover Grid</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 28 }}>
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="discover-card" style={{ pointerEvents: "none" }}>
-                      <div className="discover-card-image-wrap">
-                        <div className="discover-card-image-layer" style={{ background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span className="arco-small-text">4:3 image</span>
-                        </div>
-                      </div>
-                      <h3 className="discover-card-title">Contemporary Villa {i}</h3>
-                      <p className="discover-card-sub">House · Amsterdam</p>
-                    </div>
-                  ))}
-                </div>
+                <DiscoverCardPreview />
               </div>
               <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
-                  Title uses <strong>Standard</strong>. Subtitle uses <strong>XS</strong> (Mid Gray). Image: 4:3, overflow hidden, 3px radius.<br />
-                  .discover-grid — repeat(3, 1fr), 20px gap → 16px (iPad) → 12px (mobile). Result count uses <strong>Small</strong>.
+                  Live render of <code>.discover-card</code> — hover any card to see the photo nav arrows + dots and the save / share buttons. Both arrows and the heart toggle are fully wired in the preview so the scroll UX is verifiable, not just visual.<br />
+                  Spacing uses <code>--grid-gap</code> (20px desktop · 16px iPad · 12px mobile), matching <code>/projects</code> exactly. Title <strong>Standard</strong>, subtitle <strong>XS</strong>. Image 4:3, 3px radius. Save fills red on toggle.
                 </p>
               </div>
             </div>

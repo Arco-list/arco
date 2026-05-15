@@ -20,17 +20,28 @@ interface RelatedProject {
 interface RelatedProjectsProps {
   projects: RelatedProject[]
   architectName: string
+  /** Slug of the owning company — used by the "View all →" link to
+   *  deep-link into the company's portfolio. */
+  architectSlug?: string | null
+  /** Whether the owner has more projects than the ones rendered here.
+   *  Controls visibility of the "View all →" link. */
+  hasMore?: boolean
 }
 
-export function RelatedProjects({ projects, architectName }: RelatedProjectsProps) {
+export function RelatedProjects({ projects, architectName, architectSlug, hasMore }: RelatedProjectsProps) {
   const t = useTranslations("project_detail")
   if (projects.length === 0) return null
 
   return (
     <section className="related-projects">
       <div className="wrap">
-        <div className="related-header">
+        <div className="related-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <h2 className="arco-section-title">{t("more_from", { name: architectName })}</h2>
+          {hasMore && architectSlug && (
+            <Link href={`/professionals/${architectSlug}`} className="view-all-link">
+              {t("view_all_projects")}
+            </Link>
+          )}
         </div>
 
         <div className="discover-grid">
@@ -44,6 +55,7 @@ export function RelatedProjects({ projects, architectName }: RelatedProjectsProp
 }
 
 function RelatedProjectCard({ project }: { project: RelatedProject }) {
+  const t = useTranslations("common")
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const [shareOpen, setShareOpen] = useState(false)
 
@@ -54,21 +66,23 @@ function RelatedProjectCard({ project }: { project: RelatedProject }) {
 
   return (
     <>
-      <Link href={href} className="related-card">
-        <div className="related-image-container">
-          {project.imageUrl ? (
-            <Image
-              src={project.imageUrl}
-              alt={project.title}
-              width={600}
-              height={450}
-              className="related-image"
-            />
-          ) : (
-            <div className="w-full h-full bg-surface" />
-          )}
+      <Link href={href} className="discover-card">
+        <div className="discover-card-image-wrap">
+          <div className="discover-card-image-layer">
+            {project.imageUrl ? (
+              <Image
+                src={project.imageUrl}
+                alt={project.title}
+                width={600}
+                height={450}
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <div style={{ width: "100%", height: "100%", background: "var(--arco-surface)" }} />
+            )}
+          </div>
 
-          {/* Save + Share */}
           <div className="discover-card-actions" data-saved={isSaved}>
             <button
               className="discover-card-action-btn"
@@ -103,17 +117,17 @@ function RelatedProjectCard({ project }: { project: RelatedProject }) {
           </div>
         </div>
 
-        <h3 className="related-title">{project.title}</h3>
-        {subtitle && <p className="related-subtitle">{subtitle}</p>}
+        <h3 className="discover-card-title">{project.title}</h3>
+        {subtitle && <p className="discover-card-sub">{subtitle}</p>}
       </Link>
 
       <ShareModal
         isOpen={shareOpen}
         onClose={() => setShareOpen(false)}
-        title={project.title}
+        title={project.title || t("project")}
         subtitle={subtitle}
         imageUrl={project.imageUrl ?? ""}
-        shareUrl={`/projects/${project.slug}`}
+        shareUrl={project.slug ? `/projects/${project.slug}` : "/"}
       />
     </>
   )

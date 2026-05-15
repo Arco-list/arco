@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { notFound, permanentRedirect } from "next/navigation"
-import { getTranslations } from "next-intl/server"
+import { getTranslations, setRequestLocale } from "next-intl/server"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -26,7 +26,8 @@ type PageParams = {
 export const revalidate = 300
 
 export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
-  const { slug: requestedSlug } = await params
+  const { slug: requestedSlug, locale } = await params
+  setRequestLocale(locale)
   const t = await getTranslations("professional_detail")
   // Resolve through company_redirects so metadata for renamed companies
   // points at the canonical URL, even if the visitor arrived via the old
@@ -73,6 +74,10 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
 
 export default async function ProfessionalDetailPage({ params }: { params: Promise<PageParams> }) {
   const { slug: requestedSlug, locale } = await params
+  // Required for next-intl on a page with `revalidate` set — without
+  // this, getTranslations() in nested server components falls back to
+  // the default locale (nl) and the page renders mixed languages.
+  setRequestLocale(locale)
   const t = await getTranslations("professional_detail")
 
   // Resolve through company_redirects. If the company has been renamed,

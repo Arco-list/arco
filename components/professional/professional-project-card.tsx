@@ -8,69 +8,48 @@ import { useTranslations } from "next-intl"
 import { ShareModal } from "@/components/share-modal"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 
-interface SimilarProject {
+interface Project {
   id: string
   slug: string | null
   title: string
   location: string | null
   projectType: string | null
-  imageUrl: string | null
+  image: string | null
 }
 
-interface SimilarProjectsProps {
-  projects: SimilarProject[]
+interface ProfessionalProjectCardProps {
+  project: Project
 }
 
-export function SimilarProjects({ projects }: SimilarProjectsProps) {
-  const t = useTranslations("project_detail")
-  if (projects.length === 0) return null
-
-  return (
-    <section className="related-projects">
-      <div className="wrap">
-        <div className="related-header">
-          <h2 className="arco-section-title">{t("similar_projects")}</h2>
-        </div>
-
-        <div className="discover-grid">
-          {projects.map((project) => (
-            <SimilarProjectCard key={project.id} project={project} />
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function SimilarProjectCard({ project }: { project: SimilarProject }) {
+export function ProfessionalProjectCard({ project }: ProfessionalProjectCardProps) {
   const t = useTranslations("common")
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const [shareOpen, setShareOpen] = useState(false)
 
   const href = project.slug ? `/projects/${project.slug}` : "#"
+  const subtitle = [project.projectType, project.location].filter(Boolean).join(" · ")
   const isSaved = savedProjectIds.has(project.id)
   const isMutating = mutatingProjectIds.has(project.id)
-  const subtitle = [project.projectType, project.location].filter(Boolean).join(" · ")
+  const imgSrc = project.image ?? "/placeholder.svg"
 
   return (
     <>
       <Link href={href} className="discover-card">
         <div className="discover-card-image-wrap">
           <div className="discover-card-image-layer">
-            {project.imageUrl ? (
-              <Image
-                src={project.imageUrl}
-                alt={project.title}
-                width={600}
-                height={450}
-                loading="lazy"
-                decoding="async"
-              />
-            ) : (
-              <div style={{ width: "100%", height: "100%", background: "var(--arco-surface)" }} />
-            )}
+            <Image
+              src={imgSrc}
+              alt={project.title}
+              width={600}
+              height={450}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
 
+          {/* Save + share — same hover-reveal pattern as /projects cards.
+              Photo nav arrows / dots intentionally omitted: this card
+              shows a single hero image, not a scrollable photo set. */}
           <div className="discover-card-actions" data-saved={isSaved}>
             <button
               className="discover-card-action-btn"
@@ -99,7 +78,9 @@ function SimilarProjectCard({ project }: { project: SimilarProject }) {
               aria-label="Share project"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" />
+                <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
               </svg>
             </button>
           </div>
@@ -114,7 +95,7 @@ function SimilarProjectCard({ project }: { project: SimilarProject }) {
         onClose={() => setShareOpen(false)}
         title={project.title || t("project")}
         subtitle={subtitle}
-        imageUrl={project.imageUrl ?? ""}
+        imageUrl={imgSrc}
         shareUrl={project.slug ? `/projects/${project.slug}` : "/"}
       />
     </>

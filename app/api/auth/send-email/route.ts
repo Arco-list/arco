@@ -65,7 +65,23 @@ export async function POST(req: NextRequest) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
     const finalDestination = email_data.redirect_to || siteUrl
-    const tokenHash = email_data.token_hash as string | undefined
+
+    // For email_change events the hook payload carries the new email as
+    // `user.new_email` (or `email_data.new_email`) and a separate
+    // `token_hash_new` for the new-address confirmation link. Default
+    // `user.email` would route the confirmation to the *old* address —
+    // wrong target for the new-email confirmation. Route the email to
+    // `new_email` and use `token_hash_new` whenever they're present.
+    const newEmail = (user as any)?.new_email
+      ?? (email_data as any)?.new_email
+      ?? null
+    const isEmailChangeNewRecipient = actionType === "email_change" && !!newEmail
+    const recipientEmail: string = isEmailChangeNewRecipient ? newEmail : user.email
+    const tokenHash = (
+      isEmailChangeNewRecipient
+        ? (email_data.token_hash_new as string | undefined) ?? (email_data.token_hash as string | undefined)
+        : (email_data.token_hash as string | undefined)
+    )
 
     // Build the callback URL with the final destination and type for recovery detection
     const callbackUrl = new URL("/auth/callback", siteUrl)
@@ -87,7 +103,7 @@ export async function POST(req: NextRequest) {
     // Resolve the recipient's preferred language
     const locale = await resolveRecipientLanguage({
       userId: user.id,
-      email: user.email,
+      email: recipientEmail,
     })
 
     // Extract first name from user metadata
@@ -104,16 +120,16 @@ export async function POST(req: NextRequest) {
       : undefined
 
     const result = await sendTransactionalEmail(
-      user.email,
+      recipientEmail,
       template,
       { firstname, confirmUrl, code },
       { locale },
     )
 
     if (!result.success) {
-      console.error(`[auth-hook] Failed to send ${template} to ${user.email}:`, result.message)
+      console.error(`[auth-hook] Failed to send ${template} to ${recipientEmail}:`, result.message)
     } else {
-      console.log(`[auth-hook] Sent ${template} to ${user.email} [${locale}]`)
+      console.log(`[auth-hook] Sent ${template} to ${recipientEmail} [${locale}]${isEmailChangeNewRecipient ? " (new-email recipient)" : ""}`)
     }
 
     // Always return 200 so Supabase doesn't retry or block the auth flow.

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { canonicalizeScope, getProjectTranslation, translateCategoryName, translateProjectStyle, translateScope } from "@/lib/project-translations"
 import type { Metadata } from "next"
-import { getTranslations } from "next-intl/server"
+import { getTranslations, setRequestLocale } from "next-intl/server"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -59,6 +59,7 @@ type PageProps = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const resolvedParams = await params
+  setRequestLocale(resolvedParams.locale)
   const supabase = await createServerSupabaseClient()
 
   const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
@@ -135,8 +136,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ProjectDetailPage({ params, searchParams }: PageProps) {
-  const t = await getTranslations("project_detail")
   const resolvedParams = await params
+  // Required for next-intl on a page with `revalidate` set — without this,
+  // getTranslations() in nested server components (RelatedProjects,
+  // SimilarProjects, etc.) silently falls back to the default locale (nl)
+  // and section headers render in Dutch on /en/ URLs.
+  setRequestLocale(resolvedParams.locale)
+  const t = await getTranslations("project_detail")
   const resolvedSearchParams = await searchParams
   const supabase = await createServerSupabaseClient()
 
@@ -435,8 +441,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const projectOwner =
     formattedProfessionals.find((p) => p.isProjectOwner) ?? formattedProfessionals[0]
 
-  // "More from this owner": up to 6 other published projects from the same owning company.
-  const { data: relatedProjects } = projectOwner?.companyId
+  // "More from this owner": up to 3 other published projects from the same owning company.
+  // `count: 'exact'` returns the total matching rows so we can show the
+  // "View all →" link only when there are more than the 3 rendered here.
+  const { data: relatedProjects, count: relatedProjectsTotal } = projectOwner?.companyId
     ? await supabase
         .from("project_professionals")
         .select(`
@@ -450,12 +458,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             project_year,
             project_type_category_id
           )
-        `)
+        `, { count: "exact" })
         .eq("company_id", projectOwner.companyId)
         .eq("projects.status", "published")
         .neq("project_id", project.id)
-        .limit(6)
-    : { data: [] }
+        .limit(3)
+    : { data: [], count: 0 }
 
   // "Similar projects from other studios": same building type when known,
   // same country, by a *different* owning company. Cap at 6 and dedupe
@@ -724,6 +732,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <RelatedProjects
             projects={formattedRelatedProjects}
             architectName={projectOwner?.companyName ?? t("this_architect")}
+            architectSlug={projectOwner?.companySlug ?? null}
+            // Only surface the "View all →" link when the owner has
+            // more projects than the 3 we render here.
+            hasMore={(relatedProjectsTotal ?? 0) > formattedRelatedProjects.length}
           />
         )}
 
