@@ -21,8 +21,15 @@ export type ScrapeResult =
   | { error: string }
 
 interface ExtractedProject {
+  /** Primary title — same string as title_en, kept for callers that
+   *  pre-date bilingual extraction. New callers should use title_en
+   *  / title_nl directly. */
   title: string
   description: string | null
+  title_en: string
+  title_nl: string
+  description_en: string | null
+  description_nl: string | null
   building_year: number | null
   scope: string | null
   location: string | null
@@ -461,15 +468,18 @@ async function extractWithClaude(pageText: string, pageUrl: string): Promise<Ext
 
   const message = await client.messages.create({
     model: "claude-haiku-4-5",
-    max_tokens: 512,
+    // Bumped from 512 — bilingual title + description + the metadata
+    // fields fit comfortably in ~1500 tokens of JSON.
+    max_tokens: 1024,
     system: `You are an expert at extracting structured data from architecture and interior design project pages.
 Given the text content of a web page, extract the following fields as JSON.
 Only return a valid JSON object — no prose, no markdown, no code fences.
 
 Fields:
 - is_relevant_project (boolean): true if this page is a single, specific project showcase — residential (villa, house, apartment, townhouse, bungalow, chalet, garden), commercial (restaurant, café, hotel, bar, retail, office, gallery, gym, spa, salon), or institutional (school, museum, healthcare). Any architecture, interior design, construction, real estate, or fit-out project on a single page counts. Return false ONLY for clearly non-project pages: company about / contact / team / careers pages, blog index, general service descriptions, product catalogues, portfolio index pages that list many projects without focusing on one, or pages without any photos or design content. When unsure, default to true.
-- title (string, max 120 chars): The project name ONLY — strip the location, city, company/studio name, and any separators (e.g. " - ", " | ") from the page title. For example, "Moderne villa met horizontale belijning - Diepenveen - Atelier 3" should become "Modern villa with horizontal lines". If no clear project name exists, derive one from the content. ALWAYS translate to English.
-- description (string | null, max 300 chars): Exactly 2 sentences in third-person professional prose in English. Capture the project's essence and a key design decision. ALWAYS translate to English. Return null if there is not enough content.
+- translations (object): bilingual title + description, in both English (en) and Dutch (nl). Required shape: { "en": { "title": string, "description": string }, "nl": { "title": string, "description": string } }. Rules:
+  - title (max 120 chars each language): The project name ONLY — strip location, city, company/studio name, and separators (e.g. " - ", " | "). For example, "Moderne villa met horizontale belijning - Diepenveen - Atelier 3" should become "Modern villa with horizontal lines" (en) / "Moderne villa met horizontale belijning" (nl). If no clear project name exists, derive one from the content.
+  - description (3-4 sentences, 60-100 words, max 700 chars each language): Third-person professional prose. Capture the project's essence and one or two key design decisions. Write each language NATIVELY — don't translate word-for-word; produce idiomatic prose that reads naturally in that language. If there is not enough content to write a meaningful description, set description to null in BOTH languages.
 - building_year (number | null): The year the project was completed or built (4-digit integer). Return null if not found.
 - scope (string | null): The project scope. MUST be one of: "New Build", "Renovation", "Interior Design". Return null if unclear.
 - location (string | null): City and/or country, e.g. "Amsterdam, Netherlands". Return null if not found.
@@ -503,13 +513,33 @@ Fields:
   const rawBuildingType = typeof parsed.building_type === "string" ? parsed.building_type.trim().toLowerCase() : null
   const rawStyle = typeof parsed.style === "string" ? parsed.style.trim().toLowerCase() : null
 
+  // Parse the bilingual title + description block. Falls back to legacy
+  // flat shape ({ title, description }) when Claude returns the old
+  // format — keeps the function backwards-compatible for any caller
+  // that hasn't been updated.
+  const trText = (v: any, max: number): string =>
+    typeof v === "string" && v.trim() ? v.trim().slice(0, max) : ""
+  const trDesc = (v: any): string | null => {
+    const t = trText(v, 700)
+    return t || null
+  }
+
+  const trBlock = (parsed.translations && typeof parsed.translations === "object") ? parsed.translations : null
+  const flatTitle = trText(parsed.title, 120)
+  const flatDesc = trDesc(parsed.description)
+
+  const title_en = trText(trBlock?.en?.title, 120) || flatTitle || "Untitled Project"
+  const title_nl = trText(trBlock?.nl?.title, 120) || title_en
+  const description_en = trDesc(trBlock?.en?.description) ?? flatDesc
+  const description_nl = trDesc(trBlock?.nl?.description) ?? description_en
+
   return {
-    title: typeof parsed.title === "string" && parsed.title.trim()
-      ? parsed.title.trim().slice(0, 120)
-      : "Untitled Project",
-    description: typeof parsed.description === "string" && parsed.description.trim()
-      ? parsed.description.trim().slice(0, 320)
-      : null,
+    title: title_en,
+    description: description_en,
+    title_en,
+    title_nl,
+    description_en,
+    description_nl,
     building_year: !isNaN(year) && year >= 1800 && year <= currentYear + 1 ? year : null,
     scope: rawScope, // already canonicalised above; null if Claude returned something unknown
     location: typeof parsed.location === "string" && parsed.location.trim()
@@ -556,7 +586,20 @@ function extractWithJsdom(doc: Document): ExtractedProject {
     }
   } catch { /* ignore malformed JSON-LD */ }
 
-  return { title, description, building_year, scope: null, location: null, building_type: null, style: null, is_relevant_project: true }
+  return {
+    title,
+    description,
+    title_en: title,
+    title_nl: title,
+    description_en: description,
+    description_nl: description,
+    building_year,
+    scope: null,
+    location: null,
+    building_type: null,
+    style: null,
+    is_relevant_project: true,
+  }
 }
 
 // ─── Main scrape action ──────────────────────────────────────────────────────
@@ -736,9 +779,15 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
           // Basic fallback from Firecrawl metadata. The user explicitly
           // submitted this URL as a project, so trust them and let the
           // import proceed even though we couldn't classify the page.
+          const fbTitle = cleanPageTitle(result.metadata?.title ?? result.metadata?.ogTitle ?? "Untitled Project")
+          const fbDesc = (result.metadata?.description ?? result.metadata?.ogDescription ?? null)?.slice(0, 700) ?? null
           extracted = {
-            title: cleanPageTitle(result.metadata?.title ?? result.metadata?.ogTitle ?? "Untitled Project"),
-            description: (result.metadata?.description ?? result.metadata?.ogDescription ?? null)?.slice(0, 320) ?? null,
+            title: fbTitle,
+            description: fbDesc,
+            title_en: fbTitle,
+            title_nl: fbTitle,
+            description_en: fbDesc,
+            description_nl: fbDesc,
             building_year: null,
             scope: null,
             location: null,
@@ -750,9 +799,15 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       } else {
         // No Claude key available (or page text too short) — same trust
         // rule applies; without classification we accept the URL.
+        const fbTitle = (result.metadata?.title ?? result.metadata?.ogTitle ?? "Untitled Project").slice(0, 120)
+        const fbDesc = (result.metadata?.description ?? result.metadata?.ogDescription ?? null)?.slice(0, 700) ?? null
         extracted = {
-          title: (result.metadata?.title ?? result.metadata?.ogTitle ?? "Untitled Project").slice(0, 120),
-          description: (result.metadata?.description ?? result.metadata?.ogDescription ?? null)?.slice(0, 320) ?? null,
+          title: fbTitle,
+          description: fbDesc,
+          title_en: fbTitle,
+          title_nl: fbTitle,
+          description_en: fbDesc,
+          description_nl: fbDesc,
           building_year: null,
           scope: null,
           location: null,
@@ -838,8 +893,16 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     console.log("[scrape] is_relevant_project=false but images present — proceeding anyway.", { url: url.toString(), imageCount: imageUrls.length })
   }
 
-  const { title, description, building_year, scope, location, building_type, style } = extracted
-  console.log("[scrape] Extracted:", { title, scope, building_type, style, location, building_year })
+  const { building_year, scope, location, building_type, style, title_en, title_nl, description_en, description_nl } = extracted
+  // Pick the locale to populate the primary title / description columns
+  // with — falls back to English when the cookie's missing. The other
+  // language always lives under translations.<locale>, so getProjectTranslation
+  // can resolve it on the render side.
+  const userLocaleName = await getDescriptionLocale()
+  const isNlUser = userLocaleName === "Dutch"
+  const title = (isNlUser ? title_nl : title_en) || title_en
+  const description = (isNlUser ? description_nl : description_en) ?? description_en
+  console.log("[scrape] Extracted:", { title, scope, building_type, style, location, building_year, primaryLocale: isNlUser ? "nl" : "en" })
 
   // 6b. Resolve building_type slug to category UUID (for Type field)
   let buildingTypeCategoryId: string | null = null
@@ -913,12 +976,20 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
   }
 
-  // Store initial title + description in translations (AI extraction always returns English)
+  // Store initial title + description in translations for BOTH locales.
+  // Claude now extracts each language natively in a single call, so we
+  // can persist both up-front and getProjectTranslation will hand the
+  // right one to the render layer based on the request locale.
   const initialTranslations: Record<string, any> = {}
-  if (title || description) {
+  if (title_en || description_en) {
     initialTranslations.en = {}
-    if (title) initialTranslations.en.title = title
-    if (description) initialTranslations.en.description = description
+    if (title_en) initialTranslations.en.title = title_en
+    if (description_en) initialTranslations.en.description = description_en
+  }
+  if (title_nl || description_nl) {
+    initialTranslations.nl = {}
+    if (title_nl) initialTranslations.nl.title = title_nl
+    if (description_nl) initialTranslations.nl.description = description_nl
   }
 
   const projectData = {
@@ -1137,40 +1208,10 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
   }
 
-  // Translate title and description to Dutch in the background
-  if ((title || description) && process.env.ANTHROPIC_API_KEY) {
-    (async () => {
-      try {
-        const Anthropic = (await import("@anthropic-ai/sdk")).default
-        const client = new Anthropic()
-        const parts: string[] = []
-        if (title) parts.push(`Title: ${title}`)
-        if (description) parts.push(`Description: ${description}`)
-
-        const msg = await client.messages.create({
-          model: "claude-haiku-4-5",
-          max_tokens: 400,
-          messages: [{
-            role: "user",
-            content: `Translate the following to Dutch. Return a JSON object with "title" and "description" keys (only include keys that were provided). Keep the same tone and style. Return only JSON, no markdown.\n\n${parts.join("\n")}`,
-          }],
-        })
-        const rawText = msg.content.find((b) => b.type === "text")?.text?.trim() ?? ""
-        const cleaned = rawText.replace(/```json\s*|```\s*/g, "").trim()
-        const parsed = JSON.parse(cleaned)
-
-        const { data: existing } = await supabase.from("projects").select("translations").eq("id", project!.id).single()
-        const translations = (existing?.translations as Record<string, any>) ?? {}
-        if (!translations.nl) translations.nl = {}
-        if (parsed.title) translations.nl.title = String(parsed.title).slice(0, 120)
-        if (parsed.description) translations.nl.description = String(parsed.description).slice(0, 750)
-
-        await supabase.from("projects").update({ translations }).eq("id", project!.id)
-      } catch {
-        // Non-fatal — Dutch translation will be generated later via regenerateDescription
-      }
-    })()
-  }
+  // Background Dutch translation removed — extractWithClaude now
+  // returns both EN and NL natively in one call and we persist both
+  // into translations at insert time. regenerateDescription still
+  // exists for re-runs / manual regeneration from the UI.
 
   return { projectId: project.id, title }
 }
