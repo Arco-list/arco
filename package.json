@@ -67,8 +67,9 @@
   },
   "engines": {
     "node": ">=22.0.0",
-    "pnpm": ">=8.0.0"
+    "pnpm": ">=8.6.0"
   },
+  "packageManager": "pnpm@9.15.0",
   "pnpm": {
     "onlyBuiltDependencies": ["sharp"],
     "supportedArchitectures": {
