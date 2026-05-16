@@ -1234,32 +1234,69 @@ async function autoTagPhotosWithSpaces(
     } catch { return false }
   })
 
-  // Tag up to 40 photos per import. Photos are now referenced by URL
-  // rather than downloaded + resized locally, so the previous size
-  // calculus (sharp 768px → ~50-150KB base64) no longer applies —
-  // Anthropic fetches each URL directly and handles resize on their
-  // side. Kept the 40 cap for response-token budget headroom (every
-  // classification adds ~10 tokens to the JSON response).
+  // Tag up to 40 photos per import. With the 768px jimp downscale
+  // each image is ~50-150KB base64 → 40 photos comfortably under the
+  // ~32MB Anthropic request limit, and ~20K vision-input tokens (well
+  // inside Haiku's window).
   const photosToTag = validPhotos.slice(0, 40)
   console.log(`[autoTag] Tagging ${photosToTag.length} of ${photos.length} photos (${photos.length - validPhotos.length} skipped as invalid)`)
 
   if (photosToTag.length === 0) return
 
-  // Build image content blocks using Anthropic's URL-source mode.
-  // Replaces the previous fetch → sharp-resize → base64 pipeline,
-  // which kept breaking on Vercel because pnpm wouldn't extract the
-  // @img/sharp-linux-x64 binary at install time. With URL-source,
-  // Anthropic downloads each photo themselves — no native module
-  // dependency, no request-size limit on our end, no WordPress
-  // hot-link-protection workaround needed (Anthropic's IPs have
-  // good reputation). Trade-off: Claude has to fetch each photo, so
-  // total response time goes up by a few seconds per import.
+  // Build image content blocks — download then downscale to a small
+  // JPEG before base64-encoding. Anthropic enforces a request-size
+  // limit (~32MB); full-resolution architectural photos at 40-per-batch
+  // easily blow through it. 768px on the long side is more than enough
+  // resolution for Claude vision to classify a room, and it cuts each
+  // photo from ~1-3MB down to ~50-150KB.
+  // Uses jimp (pure-JS) rather than sharp because sharp's native libvips
+  // binary doesn't survive Next 15's server-action webpack bundle on
+  // either Vercel or localhost. Jimp is slower (~50-100ms per image vs
+  // sharp's ~5-10ms) but autoTag is async relative to the user redirect,
+  // so the added latency is invisible.
+  const { Jimp } = await import("jimp")
   const imageBlocks: any[] = []
   for (const photo of photosToTag) {
-    imageBlocks.push(
-      { type: "image", source: { type: "url", url: photo.url } },
-      { type: "text", text: `#${photo.order_index}` }
-    )
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10000)
+      // Some WordPress / CDN setups (jouwnest.nl etc.) return 403 to
+      // requests without a Referer matching the photo's own origin —
+      // hot-link protection. Setting Referer to the origin avoids this.
+      const photoOrigin = (() => {
+        try { return new URL(photo.url).origin + "/" } catch { return undefined }
+      })()
+      const imgRes = await fetch(photo.url, {
+        signal: controller.signal,
+        headers: {
+          // Browser-style UA — bot UAs are sometimes blocked outright.
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+          ...(photoOrigin ? { Referer: photoOrigin } : {}),
+          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+      })
+      clearTimeout(timeout)
+      if (!imgRes.ok) {
+        console.log(`[autoTag] Failed to download photo #${photo.order_index}: HTTP ${imgRes.status} ${imgRes.statusText} (${photo.url})`)
+        continue
+      }
+      const rawBuffer = Buffer.from(await imgRes.arrayBuffer())
+      const image = await Jimp.read(rawBuffer)
+      image.scaleToFit({ w: 768, h: 768 })
+      const thumb = await image.getBuffer("image/jpeg", { quality: 75 })
+      const base64 = thumb.toString("base64")
+      imageBlocks.push(
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
+        { type: "text", text: `#${photo.order_index}` }
+      )
+    } catch (err) {
+      console.log(`[autoTag] Failed to download photo #${photo.order_index}:`, err)
+    }
+  }
+
+  if (imageBlocks.length === 0) {
+    console.log(`[autoTag] No photos could be downloaded, skipping auto-tag`)
+    return
   }
 
   console.log(`[autoTag] Calling Claude vision...`)
