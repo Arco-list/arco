@@ -181,7 +181,6 @@ export function useProfessionalsQuery(
           city_filters: selectedCities.length > 0 ? selectedCities : null,
           category_filters: validCategories.length > 0 ? validCategories : null,
           service_filters: validServices.length > 0 ? validServices : null,
-          min_rating: null,
           max_hourly_rate: null,
           verified_only: false,
         }
