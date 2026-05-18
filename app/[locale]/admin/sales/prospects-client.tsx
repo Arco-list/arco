@@ -40,8 +40,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal } from "lucide-react"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
+import { LogOutboundModal } from "./log-outbound-modal"
 
 // -- Status config -----------------------------------------------------------
 
@@ -261,13 +261,89 @@ function formatEventLabel(type: string, metadata?: Record<string, unknown> | nul
 
 // -- Event history row -------------------------------------------------------
 
+const MANUAL_KIND_ICON: Record<string, string> = {
+  call: "☎",
+  meeting: "📅",
+  email: "✉",
+  linkedin: "🔗",
+  note: "📝",
+}
+
+const MANUAL_OUTCOME_LABEL: Record<string, string> = {
+  positive: "Positive",
+  neutral: "Neutral",
+  negative: "Negative",
+  no_answer: "No answer",
+}
+
+const MANUAL_OUTCOME_DOT: Record<string, string> = {
+  positive: "bg-emerald-500",
+  neutral: "bg-[#a1a1a0]",
+  negative: "bg-red-500",
+  no_answer: "bg-amber-400",
+}
+
 function EventHistoryRow({ event }: { event: ProspectEvent }) {
   const [open, setOpen] = useState(false)
-  // Only company_invited carries data that's worth expanding (project +
-  // inviter links). All other events fold their differentiating bits
-  // into the label via formatEventLabel, so no chevron is needed.
+  const isManual = event.event_type.startsWith("manual.")
+  // Only company_invited carries auto-event data that's worth expanding
+  // (project + inviter links). All other auto-events fold their
+  // differentiating bits into the label via formatEventLabel.
   const isCompanyInvited = event.event_type === "company_invited"
-  const expandable = isCompanyInvited && Object.keys(event.metadata ?? {}).length > 0
+  const manualBody = isManual
+    ? typeof event.metadata?.body === "string" && event.metadata.body.trim()
+      ? (event.metadata.body as string)
+      : null
+    : null
+  const expandable =
+    (isCompanyInvited && Object.keys(event.metadata ?? {}).length > 0) || Boolean(manualBody)
+
+  if (isManual) {
+    const kind = event.event_type.slice("manual.".length)
+    const outcome = typeof event.metadata?.outcome === "string" ? (event.metadata.outcome as string) : null
+    const author = typeof event.metadata?.author === "string" ? (event.metadata.author as string) : null
+    const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1)
+    const icon = MANUAL_KIND_ICON[kind] ?? "•"
+
+    return (
+      <div className="text-xs">
+        <button
+          type="button"
+          onClick={() => expandable && setOpen((v) => !v)}
+          className={`w-full grid items-baseline gap-2 text-left py-0.5 ${expandable ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
+          style={{ gridTemplateColumns: "90px 1fr" }}
+          disabled={!expandable}
+        >
+          <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+          <span className="text-[#1c1c1a] inline-flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1">
+              <span className="text-[10px] text-[#6b6b68] w-3 inline-block text-center">{icon}</span>
+              <span>{kindLabel}</span>
+            </span>
+            {outcome && MANUAL_OUTCOME_LABEL[outcome] && (
+              <span className="inline-flex items-center gap-1 text-[#6b6b68]">
+                <span className={`h-1.5 w-1.5 rounded-full ${MANUAL_OUTCOME_DOT[outcome] ?? "bg-[#a1a1a0]"}`} />
+                {MANUAL_OUTCOME_LABEL[outcome]}
+              </span>
+            )}
+            {author && <span className="text-[#a1a1a0]">· {author}</span>}
+            {expandable && (
+              <span
+                className={`text-[#a1a1a0] transition-transform ${open ? "rotate-90" : ""}`}
+                style={{ fontSize: 10 }}
+              >
+                ▶
+              </span>
+            )}
+          </span>
+        </button>
+        {open && manualBody && (
+          <p className="mt-1 pl-[98px] text-[#6b6b68] whitespace-pre-wrap">{manualBody}</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="text-xs">
       <button
@@ -290,7 +366,7 @@ function EventHistoryRow({ event }: { event: ProspectEvent }) {
           )}
         </span>
       </button>
-      {open && expandable && <CompanyInvitedDetails metadata={event.metadata} />}
+      {open && expandable && isCompanyInvited && <CompanyInvitedDetails metadata={event.metadata} />}
     </div>
   )
 }
@@ -443,6 +519,9 @@ export function ProspectsClient({
   >(new Map())
   const [expandedContacts, setExpandedContacts] = useState<Set<string>>(new Set())
   const [previewEmail, setPreviewEmail] = useState<{ template: string; lang: string } | null>(null)
+  const [logOutboundTarget, setLogOutboundTarget] = useState<
+    { prospectId: string; contactLabel: string; companyLabel: string } | null
+  >(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [showApolloSync, setShowApolloSync] = useState(false)
   const [syncListId, setSyncListId] = useState("")
@@ -961,10 +1040,10 @@ export function ProspectsClient({
               <th
                 style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
                 onClick={() => toggleSort("last_contacted_at")}
-                title="Sort by last contacted"
+                title="Sort by last email sent"
               >
                 <span className="inline-flex items-center justify-end gap-1">
-                  Last contacted
+                  Last email
                   {sortBy === "last_contacted_at" && (
                     <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
                   )}
@@ -973,22 +1052,45 @@ export function ProspectsClient({
               <th
                 style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
                 onClick={() => toggleSort("next_scheduled_at")}
-                title="Sort by next contact"
+                title="Sort by next email scheduled"
               >
                 <span className="inline-flex items-center justify-end gap-1">
-                  Next contact
+                  Next email
                   {sortBy === "next_scheduled_at" && (
                     <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
                   )}
                 </span>
               </th>
-              <th className="w-[40px]"></th>
+              <th
+                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("last_outbound_at")}
+                title="Sort by last manual outbound touch"
+              >
+                <span className="inline-flex items-center justify-end gap-1">
+                  Last outbound
+                  {sortBy === "last_outbound_at" && (
+                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </span>
+              </th>
+              <th
+                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                onClick={() => toggleSort("next_outbound_at")}
+                title="Sort by next outbound follow-up"
+              >
+                <span className="inline-flex items-center justify-end gap-1">
+                  Next outbound
+                  {sortBy === "next_outbound_at" && (
+                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={13} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={14} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found.
                 </td>
               </tr>
@@ -999,6 +1101,14 @@ export function ProspectsClient({
                 row={row}
                 onOpenContactDetails={openContactDetails}
                 onContactAction={runContactAction}
+                onLogOutbound={(contact, companyName) =>
+                  setLogOutboundTarget({
+                    prospectId: contact.prospectId,
+                    contactLabel:
+                      contact.resolvedContact.name?.trim() || contact.email || "Unnamed contact",
+                    companyLabel: companyName,
+                  })
+                }
               />
             ))}
           </tbody>
@@ -1089,6 +1199,27 @@ export function ProspectsClient({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Log outbound modal — opens from the contact dropdown in any row */}
+      {logOutboundTarget && (
+        <LogOutboundModal
+          open
+          onOpenChange={(open) => {
+            if (!open) setLogOutboundTarget(null)
+          }}
+          prospectId={logOutboundTarget.prospectId}
+          contactLabel={logOutboundTarget.contactLabel}
+          companyLabel={logOutboundTarget.companyLabel}
+          onLogged={() => {
+            // The trigger updates prospects.last_outbound_at; refresh the
+            // table + popup so the new entry surfaces immediately.
+            reload({ offset, append: false })
+            // If the popup is open for this contact, re-fetch its events so
+            // the new manual entry shows in Activity.
+            if (detailCompany) openCompanyDetails(detailCompany)
+          }}
+        />
       )}
 
       {/* Email preview popup */}
@@ -1280,10 +1411,12 @@ function CompanyRowView({
   row,
   onOpenContactDetails,
   onContactAction,
+  onLogOutbound,
 }: {
   row: SalesCompanyRow
   onOpenContactDetails: (prospectId: string) => void
   onContactAction: ContactActionRunner
+  onLogOutbound: (contact: SalesContact, companyName: string) => void
 }) {
   const claimed = row.claimedCompany
   const companyInitials = (row.companyName ?? "")
@@ -1362,6 +1495,7 @@ function CompanyRowView({
           row={row}
           onOpenContactDetails={onOpenContactDetails}
           onContactAction={onContactAction}
+          onLogOutbound={onLogOutbound}
         />
       </td>
 
@@ -1410,23 +1544,20 @@ function CompanyRowView({
       <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
         {row.nextScheduledAt ? formatDate(row.nextScheduledAt) : <span className="text-[#c4c4c2]">—</span>}
       </td>
-
-      <td onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="arco-table-action">
-              <MoreHorizontal size={14} className="text-[#a1a1a0]" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[160px]">
-            <DropdownMenuItem
-              className="text-xs cursor-pointer"
-              onClick={() => onOpenContactDetails(row.primaryContact.prospectId)}
-            >
-              Details
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
+        {row.lastOutboundAt ? formatDate(row.lastOutboundAt) : <span className="text-[#c4c4c2]">—</span>}
+      </td>
+      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
+        {row.nextOutboundAt ? (
+          <span className="inline-flex items-center gap-1.5">
+            {new Date(row.nextOutboundAt) < new Date() && (
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" title="Overdue" />
+            )}
+            {formatDate(row.nextOutboundAt)}
+          </span>
+        ) : (
+          <span className="text-[#c4c4c2]">—</span>
+        )}
       </td>
     </tr>
   )
@@ -1477,10 +1608,12 @@ function ContactsCell({
   row,
   onOpenContactDetails,
   onContactAction,
+  onLogOutbound,
 }: {
   row: SalesCompanyRow
   onOpenContactDetails: (prospectId: string) => void
   onContactAction: ContactActionRunner
+  onLogOutbound: (contact: SalesContact, companyName: string) => void
 }) {
   const primary = row.primaryContact
   const overflow = row.contacts.length - 1
@@ -1502,6 +1635,7 @@ function ContactsCell({
             contact: primary,
             onOpenDetails: () => onOpenContactDetails(primary.prospectId),
             onAction: onContactAction,
+            onLogOutbound: () => onLogOutbound(primary, row.companyName),
           })}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1530,6 +1664,7 @@ function ContactsCell({
                     contact: c,
                     onOpenDetails: () => onOpenContactDetails(c.prospectId),
                     onAction: onContactAction,
+                    onLogOutbound: () => onLogOutbound(c, row.companyName),
                   })}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -1581,10 +1716,12 @@ function renderContactMenuItems({
   contact,
   onOpenDetails,
   onAction,
+  onLogOutbound,
 }: {
   contact: SalesContact
   onOpenDetails: () => void
   onAction: ContactActionRunner
+  onLogOutbound: () => void
 }) {
   // All three sales-source prospects can be enrolled in / managed via
   // an Arco-controlled drip now: arco (Showcase), invites (Invite),
@@ -1602,6 +1739,9 @@ function renderContactMenuItems({
   const isSuppressed = !!getSuppressionState(contact)
   return (
     <>
+      <DropdownMenuItem className="text-xs cursor-pointer" onClick={onLogOutbound}>
+        Log outbound
+      </DropdownMenuItem>
       <DropdownMenuItem className="text-xs cursor-pointer" onClick={onOpenDetails}>
         Details
       </DropdownMenuItem>
@@ -1963,7 +2103,7 @@ function ContactDetailBody({
       )}
 
       <div>
-        <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Event History</span>
+        <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Activity</span>
         {allEvents.length === 0 ? (
           <p className="mt-1 text-xs text-[#a1a1a0]">No events yet.</p>
         ) : (
