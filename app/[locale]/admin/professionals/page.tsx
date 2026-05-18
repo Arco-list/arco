@@ -14,8 +14,6 @@ type AdminCompanyMetricsRow = {
   company_id: string
   professional_count: number
   projects_linked: number
-  average_rating: number | null
-  total_reviews: number
 }
 
 async function loadAdminCompaniesData() {
@@ -31,7 +29,7 @@ async function loadAdminCompaniesData() {
         ),
       supabase
         .from("company_metrics")
-        .select("company_id, professional_count, projects_linked, average_rating, total_reviews"),
+        .select("company_id, professional_count, projects_linked"),
       supabase.from("categories").select("id, name, can_publish_projects").eq("is_active", true).order("name", { ascending: true }),
       // All project_professionals with a company_id — get status + invited services + project details
       supabase
@@ -97,9 +95,6 @@ async function loadAdminCompaniesData() {
         company_id: row.company_id,
         professional_count: typeof row.professional_count === "number" ? row.professional_count : 0,
         projects_linked: typeof row.projects_linked === "number" ? row.projects_linked : 0,
-        total_reviews: typeof row.total_reviews === "number" ? row.total_reviews : 0,
-        average_rating:
-          typeof row.average_rating === "number" ? Number(Number(row.average_rating).toFixed(2)) : null,
       })
     }
   }

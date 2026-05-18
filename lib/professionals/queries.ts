@@ -377,7 +377,6 @@ export const fetchDiscoverProfessionals = async (
     city_filters: null,
     category_filters: null,
     service_filters: null,
-    min_rating: null,
     max_hourly_rate: null,
     verified_only: false,
   }
