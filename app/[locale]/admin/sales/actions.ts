@@ -366,6 +366,13 @@ export type SalesContact = {
    *  the company has been claimed and this prospect is past signup, else
    *  the outreach contact name). */
   resolvedContact: ProspectResolvedContact
+  /** Most recent manual outbound touch (call/meeting/email/linkedin) —
+   *  excludes notes. Read from prospects.last_outbound_at which is
+   *  trigger-maintained on outbound_contact_log inserts. */
+  lastOutboundAt: string | null
+  /** Rep-set follow-up reminder for this contact. Written by the
+   *  Log outbound modal. */
+  nextFollowUpAt: string | null
 }
 
 export type SalesClaimedCompany = {
@@ -415,6 +422,14 @@ export type SalesCompanyRow = {
    *  admins scan "what's hitting whose inbox tomorrow" without expanding
    *  every popup. */
   nextScheduledAt: string | null
+  /** Max prospects.last_outbound_at across all contacts on this row —
+   *  the most recent manual outbound touch (call/meeting/email/linkedin),
+   *  excluding notes. Null until something is logged via the
+   *  Log outbound modal. */
+  lastOutboundAt: string | null
+  /** Earliest prospects.next_follow_up_at in the future across contacts.
+   *  Null when nothing is scheduled. */
+  nextOutboundAt: string | null
   /** Earliest createdAt across contacts (when this company entered the funnel). */
   createdAt: string
 }
@@ -446,7 +461,12 @@ const SEQUENCE_RANK: Record<SequenceStatus, number> = {
   active: 3,
 }
 
-export type SalesSortBy = "created_at" | "last_contacted_at" | "next_scheduled_at"
+export type SalesSortBy =
+  | "created_at"
+  | "last_contacted_at"
+  | "next_scheduled_at"
+  | "last_outbound_at"
+  | "next_outbound_at"
 export type SalesSortDir = "asc" | "desc"
 
 type FetchSalesCompaniesFilters = {
@@ -704,6 +724,10 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     updatedAt: p.updated_at,
     refCode: p.ref_code,
     resolvedContact: p.resolvedContact,
+    // Cast — outbound columns added by the outbound_contact_log migration;
+    // generated types lag behind.
+    lastOutboundAt: (p as any).last_outbound_at ?? null,
+    nextFollowUpAt: (p as any).next_follow_up_at ?? null,
   }))
 
   // Group key: company_id when present, else lower(trim(company_name)).
@@ -899,6 +923,17 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       unsubscribedContactCount: sortedContacts.filter((c) => c.unsubscribedAt).length,
       lastContactedAt: agg.lastContactedAt,
       nextScheduledAt: nextScheduledByGroup.get(key) ?? null,
+      lastOutboundAt: sortedContacts.reduce<string | null>((acc, c) => {
+        if (!c.lastOutboundAt) return acc
+        return !acc || c.lastOutboundAt > acc ? c.lastOutboundAt : acc
+      }, null),
+      nextOutboundAt: sortedContacts.reduce<string | null>((acc, c) => {
+        // Future-only: ignore overdue follow-ups for sorting purposes, but
+        // still keep the soonest. Overdue handling is purely cosmetic in
+        // the table — we show a red dot if the date is past now().
+        if (!c.nextFollowUpAt) return acc
+        return !acc || c.nextFollowUpAt < acc ? c.nextFollowUpAt : acc
+      }, null),
       createdAt: agg.createdAt,
     }
   })
@@ -961,6 +996,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const pickSortValue = (r: SalesCompanyRow): string | null => {
     if (sortBy === "created_at") return r.createdAt
     if (sortBy === "next_scheduled_at") return r.nextScheduledAt
+    if (sortBy === "last_outbound_at") return r.lastOutboundAt
+    if (sortBy === "next_outbound_at") return r.nextOutboundAt
     return r.lastContactedAt
   }
   rows.sort((a, b) => {
@@ -1075,18 +1112,68 @@ export async function fetchProspectById(prospectId: string): Promise<Prospect | 
 export async function fetchProspectEvents(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
 
-  const { data, error } = await supabase
-    .from("prospect_events")
-    .select("*")
-    .eq("prospect_id", prospectId)
-    .order("created_at", { ascending: false })
+  // Pull automated events from prospect_events and manual outbound rows
+  // from outbound_contact_log in parallel; merge into a single timeline
+  // sorted by created_at DESC. Manual rows surface under event_type
+  // "manual." + kind so the popup renderer can branch on it.
+  const [eventsRes, logRes] = await Promise.all([
+    supabase
+      .from("prospect_events")
+      .select("*")
+      .eq("prospect_id", prospectId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("outbound_contact_log")
+      .select("id, prospect_id, kind, outcome, body, created_at, created_by, profiles:profiles!created_by(first_name, last_name)")
+      .eq("prospect_id", prospectId)
+      .order("created_at", { ascending: false }),
+  ])
 
-  if (error) {
-    console.error("Failed to fetch prospect events", error)
-    return { events: [] as ProspectEvent[], error: error.message }
+  if (eventsRes.error) {
+    console.error("Failed to fetch prospect events", eventsRes.error)
+    return { events: [] as ProspectEvent[], error: eventsRes.error.message }
+  }
+  if (logRes.error) {
+    console.error("Failed to fetch outbound contact log", logRes.error)
   }
 
-  return { events: (data ?? []) as ProspectEvent[] }
+  const autoEvents = (eventsRes.data ?? []) as ProspectEvent[]
+  const logRows = (logRes.data ?? []) as Array<{
+    id: string
+    prospect_id: string
+    kind: string
+    outcome: string | null
+    body: string | null
+    created_at: string
+    created_by: string | null
+    profiles: { first_name: string | null; last_name: string | null } | Array<{ first_name: string | null; last_name: string | null }> | null
+  }>
+
+  const manualEvents: ProspectEvent[] = logRows.map((r) => {
+    const prof = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles
+    const author =
+      prof
+        ? [prof.first_name, prof.last_name].filter(Boolean).join(" ").trim() || null
+        : null
+    return {
+      id: `outbound-${r.id}`,
+      prospect_id: r.prospect_id,
+      event_type: `manual.${r.kind}`,
+      metadata: {
+        log_id: r.id,
+        outcome: r.outcome,
+        body: r.body,
+        author,
+      } as Record<string, unknown>,
+      created_at: r.created_at,
+    }
+  })
+
+  const merged = [...autoEvents, ...manualEvents].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  )
+
+  return { events: merged }
 }
 
 export async function deleteProspect(id: string) {
