@@ -161,10 +161,10 @@ function formatDate(dateStr: string | null) {
 function formatDateShort(dateStr: string | null) {
   if (!dateStr) return "—"
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    })
+    const d = new Date(dateStr)
+    const datePart = d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    const timePart = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+    return `${datePart} · ${timePart}`
   } catch { return dateStr }
 }
 
@@ -243,6 +243,12 @@ function formatEventLabel(type: string, metadata?: Record<string, unknown> | nul
       return `${friendly} ${type === "email_resent" ? "resent" : "sent"}`
     }
   }
+  // Surface the differentiating bit of metadata inline so the row tells
+  // the whole story without an expansion drawer.
+  if (type === "removed_from_funnel") {
+    const prev = typeof metadata?.previous_status === "string" ? metadata.previous_status : null
+    return prev ? `Removed from funnel · was ${prev}` : "Removed from funnel"
+  }
   if (EVENT_LABELS[type]) return EVENT_LABELS[type]
   if (type.startsWith("status_changed_to_")) {
     const to = type.slice("status_changed_to_".length).replace(/_/g, " ")
@@ -253,74 +259,38 @@ function formatEventLabel(type: string, metadata?: Record<string, unknown> | nul
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-const METADATA_KEY_LABELS: Record<string, string> = {
-  template: "Template",
-  email: "Email",
-  trigger: "Trigger",
-  from: "From",
-  to: "To",
-  reason: "Reason",
-  source: "Source",
-  status: "Status",
-  previous_status: "Previous status",
-  new_status: "New status",
-  apollo_contact_id: "Contact ID",
-  apollo_list_id: "List ID",
-  template_set: "Template set",
-}
-
-function formatMetadataKey(key: string): string {
-  if (METADATA_KEY_LABELS[key]) return METADATA_KEY_LABELS[key]
-  return key
-    .replace(/[._]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function formatMetadataValue(value: unknown): string {
-  if (value === null || value === undefined) return "—"
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return String(value)
-  }
-  return JSON.stringify(value)
-}
-
 // -- Event history row -------------------------------------------------------
 
 function EventHistoryRow({ event }: { event: ProspectEvent }) {
   const [open, setOpen] = useState(false)
-  const hasMeta = Object.keys(event.metadata ?? {}).length > 0
+  // Only company_invited carries data that's worth expanding (project +
+  // inviter links). All other events fold their differentiating bits
+  // into the label via formatEventLabel, so no chevron is needed.
   const isCompanyInvited = event.event_type === "company_invited"
+  const expandable = isCompanyInvited && Object.keys(event.metadata ?? {}).length > 0
   return (
     <div className="text-xs">
       <button
         type="button"
-        onClick={() => hasMeta && setOpen((v) => !v)}
-        className={`w-full flex items-center gap-2 text-left py-0.5 ${hasMeta ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
-        disabled={!hasMeta}
+        onClick={() => expandable && setOpen((v) => !v)}
+        className={`w-full grid items-baseline gap-2 text-left py-0.5 ${expandable ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
+        style={{ gridTemplateColumns: "90px 1fr" }}
+        disabled={!expandable}
       >
-        <span
-          className={`text-[#a1a1a0] inline-block transition-transform ${open ? "rotate-90" : ""}`}
-          style={{ width: 8, fontSize: 10 }}
-        >
-          {hasMeta ? "▶" : ""}
-        </span>
         <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
-        <span className="font-medium text-[#1c1c1a]">{formatEventLabel(event.event_type, event.metadata as Record<string, unknown> | null)}</span>
+        <span className="text-[#1c1c1a] inline-flex items-center gap-1.5">
+          {formatEventLabel(event.event_type, event.metadata as Record<string, unknown> | null)}
+          {expandable && (
+            <span
+              className={`text-[#a1a1a0] transition-transform ${open ? "rotate-90" : ""}`}
+              style={{ fontSize: 10 }}
+            >
+              ▶
+            </span>
+          )}
+        </span>
       </button>
-      {open && hasMeta && (
-        isCompanyInvited
-          ? <CompanyInvitedDetails metadata={event.metadata} />
-          : (
-            <div className="mt-1 ml-4 flex flex-col gap-0.5 pb-1">
-              {Object.entries(event.metadata).map(([key, value]) => (
-                <div key={key} className="flex items-baseline gap-2">
-                  <span className="text-[#a1a1a0] w-24 shrink-0">{formatMetadataKey(key)}</span>
-                  <span className="text-[#6b6b68] break-all">{formatMetadataValue(value)}</span>
-                </div>
-              ))}
-            </div>
-          )
-      )}
+      {open && expandable && <CompanyInvitedDetails metadata={event.metadata} />}
     </div>
   )
 }
@@ -1836,7 +1806,9 @@ function ContactDetailBody({
   })()
 
   // Lifecycle uses the prospect-level timestamps when we have them; falls
-  // back to whatever's on SalesContact for a graceful render.
+  // back to whatever's on SalesContact for a graceful render. Stages
+  // that haven't been reached yet are filtered out so the list stays
+  // tight to actual history.
   const lifecycle: Array<{ label: string; ts: string | null; status: ProspectStatus }> = (() => {
     if (!prospect) {
       return [
@@ -1882,10 +1854,16 @@ function ContactDetailBody({
           <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Lifecycle</span>
           <div className="mt-1.5 space-y-1">
             {lifecycle.map((s) => (
-              <div key={s.label} className="flex items-center gap-2 text-xs">
-                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s.status].dot}`} />
-                <span className="font-medium text-[#1c1c1a] w-32 shrink-0">{s.label}</span>
-                <span className="text-[#6b6b68]">{formatDateShort(s.ts)}</span>
+              <div
+                key={s.label}
+                className="grid items-center gap-2 text-xs"
+                style={{ gridTemplateColumns: "90px 1fr" }}
+              >
+                <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(s.ts)}</span>
+                <span className="inline-flex items-center gap-2">
+                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s.status].dot}`} />
+                  <span className="text-[#1c1c1a]">{s.label}</span>
+                </span>
               </div>
             ))}
           </div>
@@ -1926,8 +1904,11 @@ function ContactDetailBody({
                 <div key={step.template} className="text-xs">
                   <div
                     className="grid items-center gap-2"
-                    style={{ gridTemplateColumns: "minmax(180px, 1fr) minmax(80px, auto) minmax(120px, auto) minmax(100px, auto)" }}
+                    style={{ gridTemplateColumns: "90px 210px auto" }}
                   >
+                    <span className="text-[#a1a1a0] whitespace-nowrap">
+                      {step.timestamp ? formatDateShort(step.timestamp) : "—"}
+                    </span>
                     <span className="inline-flex items-center gap-2 min-w-0">
                       {step.template.startsWith("apollo-step-") ? (
                         <span className="text-[#1c1c1a] truncate text-left">
@@ -1943,10 +1924,7 @@ function ContactDetailBody({
                         </button>
                       )}
                       <span className="status-pill">{guessedLang.toUpperCase()}</span>
-                    </span>
-                    <span className={`status-pill ${sc.variant} justify-self-start`}>{sc.label}</span>
-                    <span className="text-[#6b6b68] whitespace-nowrap">
-                      {step.timestamp ? formatDateShort(step.timestamp) : ""}
+                      <span className={`status-pill ${sc.variant}`}>{sc.label}</span>
                     </span>
                     {engagement ? (
                       <span className="flex items-center gap-1.5 whitespace-nowrap">
