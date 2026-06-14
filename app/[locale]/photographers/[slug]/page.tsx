@@ -94,11 +94,17 @@ export default async function PhotographerDetailPage({ params }: { params: Promi
           const isOwner = (company as any).owner_id === user.id
           let isMember = false
           if (!isOwner) {
-            const [memberResult, professionalResult] = await Promise.all([
-              serviceClient.from("company_members").select("id").eq("company_id", (company as any).id).eq("user_id", user.id).maybeSingle(),
+            const [contactResult, professionalResult] = await Promise.all([
+              serviceClient
+                .from("company_contacts")
+                .select("id, person:persons!inner(auth_user_id)")
+                .eq("company_id", (company as any).id)
+                .eq("person.auth_user_id", user.id)
+                .in("role", ["owner", "admin", "member"])
+                .maybeSingle(),
               serviceClient.from("professionals").select("id").eq("company_id", (company as any).id).eq("user_id", user.id).maybeSingle(),
             ])
-            isMember = !!memberResult.data || !!professionalResult.data
+            isMember = !!contactResult.data || !!professionalResult.data
           }
           if (isOwner || isMember) {
             photographer = await fetchPhotographerDetail(slug, { allowUnlisted: true })

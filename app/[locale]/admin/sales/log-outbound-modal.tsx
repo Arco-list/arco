@@ -20,6 +20,9 @@ type Props = {
   prospectId: string
   contactLabel: string
   companyLabel: string
+  contactEmail?: string | null
+  contactPhone?: string | null
+  contactAvatarUrl?: string | null
   onLogged?: () => void
 }
 
@@ -76,6 +79,9 @@ export function LogOutboundModal({
   prospectId,
   contactLabel,
   companyLabel,
+  contactEmail,
+  contactPhone,
+  contactAvatarUrl,
   onLogged,
 }: Props) {
   const [kind, setKind] = useState<OutboundKind>("call")
@@ -149,20 +155,50 @@ export function LogOutboundModal({
     })
   }
 
+  const initials = (contactLabel || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t[0]?.toUpperCase())
+    .slice(0, 2)
+    .join("") || "?"
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Log outbound</DialogTitle>
-          <p className="text-xs text-[#6b6b68]">
-            {contactLabel} · {companyLabel}
-          </p>
         </DialogHeader>
+
+        {/* Contact card — avatar + identity + email/phone */}
+        <div className="flex items-center gap-3 pb-1">
+          <div
+            className="arco-table-avatar shrink-0"
+            style={{ width: 44, height: 44, fontSize: 14, background: "#f5f5f4", color: "#6b6b68", overflow: "hidden" }}
+          >
+            {contactAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={contactAvatarUrl} alt={contactLabel} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              initials
+            )}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="arco-table-primary truncate" style={{ fontSize: 13, fontWeight: 500 }}>
+              {contactLabel}
+              <span className="text-[#a1a1a0]"> · {companyLabel}</span>
+            </span>
+            <div className="flex items-center gap-2 text-xs text-[#6b6b68] truncate">
+              {contactEmail && <span className="truncate">{contactEmail}</span>}
+              {contactEmail && contactPhone && <span className="text-[#d4d4d3]">·</span>}
+              {contactPhone && <span className="truncate">{contactPhone}</span>}
+            </div>
+          </div>
+        </div>
 
         <div className="flex flex-col gap-4">
           {/* Type — pill row */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-[#6b6b68]">Type</label>
+            <label className="arco-eyebrow">Type</label>
             <div className="flex flex-wrap gap-1.5">
               {KIND_OPTIONS.map((o) => (
                 <button
@@ -180,7 +216,7 @@ export function LogOutboundModal({
           {/* Outcome — pill row, hidden for notes */}
           {showOutcome && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-[#6b6b68]">Outcome</label>
+              <label className="arco-eyebrow">Outcome</label>
               <div className="flex flex-wrap gap-1.5">
                 {OUTCOME_OPTIONS.map((o) => (
                   <button
@@ -198,7 +234,7 @@ export function LogOutboundModal({
 
           {/* When */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-[#6b6b68]">When</label>
+            <label className="arco-eyebrow">When</label>
             <div className="flex items-center gap-2">
               <input
                 type="datetime-local"
@@ -226,7 +262,7 @@ export function LogOutboundModal({
 
           {/* Notes */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-[#6b6b68]">Notes</label>
+            <label className="arco-eyebrow">Notes</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -236,9 +272,9 @@ export function LogOutboundModal({
             />
           </div>
 
-          {/* Next follow-up — preset pills + custom date */}
+          {/* Follow-up — preset pills + custom date */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-[#6b6b68]">Next follow-up</label>
+            <label className="arco-eyebrow">Follow-up</label>
             <div className="flex flex-wrap items-center gap-1.5">
               {FOLLOW_UP_PRESETS.map((p) => (
                 <button
@@ -274,10 +310,10 @@ export function LogOutboundModal({
           {error && <p className="text-xs text-[#c0392b]">{error}</p>}
         </div>
 
-        <DialogFooter>
+        <DialogFooter style={{ marginTop: 16 }}>
           <button
             type="button"
-            className="arco-nav-text px-[18px] py-[7px] rounded-[3px] border border-[#e5e5e4] hover:bg-[#f5f5f4] transition-colors disabled:opacity-50"
+            className="btn-secondary"
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
@@ -285,7 +321,7 @@ export function LogOutboundModal({
           </button>
           <button
             type="button"
-            className="arco-nav-text px-[18px] py-[7px] rounded-[3px] btn-scrolled disabled:opacity-50"
+            className="btn-primary"
             onClick={onSubmit}
             disabled={isPending}
           >

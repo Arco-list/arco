@@ -20,6 +20,10 @@ export interface NavLink {
   href: string;
   label: string;
   icon?: React.ReactNode;
+  /** Optional numeric badge rendered next to the label inside group
+   *  dropdowns. Hidden when 0 / undefined. Used by the admin nav for
+   *  the Sales "Outbound due" count. */
+  badge?: number;
 }
 
 export interface NavGroup {
@@ -395,7 +399,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                   {child.icon && <span className="flex h-4 w-4 items-center justify-center shrink-0">{child.icon}</span>}
-                                  {child.label}
+                                  <span className="flex-1">{child.label}</span>
+                                  {child.badge != null && child.badge > 0 && (
+                                    <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                                      {child.badge}
+                                    </span>
+                                  )}
                                 </Link>
                               )
                             })}
@@ -489,7 +498,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                     className={`flex items-center gap-2.5 px-5 py-2 text-sm font-normal transition-colors ${childActive ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
                                   >
                                     {child.icon && <span className="flex h-4 w-4 items-center justify-center shrink-0">{child.icon}</span>}
-                                    {child.label}
+                                    <span className="flex-1">{child.label}</span>
+                                    {child.badge != null && child.badge > 0 && (
+                                      <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                                        {child.badge}
+                                      </span>
+                                    )}
                                   </Link>
                                 )
                               })}
@@ -772,7 +786,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               const adminGroups: { key: string; label: string; items: { href: string; label: string; icon: React.ReactNode }[] }[] = [
                                 { key: "marketplace", label: t("admin_marketplace"), items: [
                                   { href: "/admin/users", label: t("admin_users"), icon: adminIcons.users },
-                                  { href: "/admin/professionals", label: t("admin_companies"), icon: adminIcons.companies },
+                                  { href: "/admin/companies", label: t("admin_companies"), icon: adminIcons.companies },
                                   { href: "/admin/projects", label: t("admin_projects"), icon: adminIcons.projects },
                                 ]},
                                 { key: "catalog", label: t("admin_catalog"), items: [

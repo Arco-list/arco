@@ -236,6 +236,7 @@ export type Database = {
           description: string | null
           domain: string | null
           email: string | null
+          first_touch_source: string | null
           founded_year: number | null
           google_place_id: string | null
           hero_photo_project_id: string | null
@@ -245,17 +246,27 @@ export type Database = {
           is_verified: boolean | null
           languages: string[] | null
           latitude: number | null
+          listed_at: string | null
           logo_url: string | null
           longitude: number | null
           name: string
+          onboarded_at: string | null
           owner_id: string | null
           phone: string | null
-          plan_expires_at: string | null
-          plan_tier: Database["public"]["Enums"]["company_plan_tier"]
           primary_service_id: string | null
+          seo_canonical_chosen: string | null
+          seo_clicks_28d: number | null
+          seo_ctr_28d: number | null
+          seo_impressions_28d: number | null
+          seo_indexation_state: string | null
+          seo_indexed: boolean | null
+          seo_indexed_at: string | null
+          seo_position_28d: number | null
+          seo_synced_at: string | null
           services_offered: string[] | null
           setup_completed: boolean
           slug: string | null
+          source: Database["public"]["Enums"]["company_source"]
           specialties: string[]
           state_region: string | null
           status: Database["public"]["Enums"]["company_status"]
@@ -263,7 +274,6 @@ export type Database = {
           team_size_min: number | null
           translations: Json | null
           updated_at: string | null
-          upgrade_eligible: boolean
           views_count: number
           website: string | null
         }
@@ -279,6 +289,7 @@ export type Database = {
           description?: string | null
           domain?: string | null
           email?: string | null
+          first_touch_source?: string | null
           founded_year?: number | null
           google_place_id?: string | null
           hero_photo_project_id?: string | null
@@ -288,17 +299,27 @@ export type Database = {
           is_verified?: boolean | null
           languages?: string[] | null
           latitude?: number | null
+          listed_at?: string | null
           logo_url?: string | null
           longitude?: number | null
           name: string
+          onboarded_at?: string | null
           owner_id?: string | null
           phone?: string | null
-          plan_expires_at?: string | null
-          plan_tier?: Database["public"]["Enums"]["company_plan_tier"]
           primary_service_id?: string | null
+          seo_canonical_chosen?: string | null
+          seo_clicks_28d?: number | null
+          seo_ctr_28d?: number | null
+          seo_impressions_28d?: number | null
+          seo_indexation_state?: string | null
+          seo_indexed?: boolean | null
+          seo_indexed_at?: string | null
+          seo_position_28d?: number | null
+          seo_synced_at?: string | null
           services_offered?: string[] | null
           setup_completed?: boolean
           slug?: string | null
+          source?: Database["public"]["Enums"]["company_source"]
           specialties?: string[]
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
@@ -306,7 +327,6 @@ export type Database = {
           team_size_min?: number | null
           translations?: Json | null
           updated_at?: string | null
-          upgrade_eligible?: boolean
           views_count?: number
           website?: string | null
         }
@@ -322,6 +342,7 @@ export type Database = {
           description?: string | null
           domain?: string | null
           email?: string | null
+          first_touch_source?: string | null
           founded_year?: number | null
           google_place_id?: string | null
           hero_photo_project_id?: string | null
@@ -331,17 +352,27 @@ export type Database = {
           is_verified?: boolean | null
           languages?: string[] | null
           latitude?: number | null
+          listed_at?: string | null
           logo_url?: string | null
           longitude?: number | null
           name?: string
+          onboarded_at?: string | null
           owner_id?: string | null
           phone?: string | null
-          plan_expires_at?: string | null
-          plan_tier?: Database["public"]["Enums"]["company_plan_tier"]
           primary_service_id?: string | null
+          seo_canonical_chosen?: string | null
+          seo_clicks_28d?: number | null
+          seo_ctr_28d?: number | null
+          seo_impressions_28d?: number | null
+          seo_indexation_state?: string | null
+          seo_indexed?: boolean | null
+          seo_indexed_at?: string | null
+          seo_position_28d?: number | null
+          seo_synced_at?: string | null
           services_offered?: string[] | null
           setup_completed?: boolean
           slug?: string | null
+          source?: Database["public"]["Enums"]["company_source"]
           specialties?: string[]
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
@@ -349,7 +380,6 @@ export type Database = {
           team_size_min?: number | null
           translations?: Json | null
           updated_at?: string | null
-          upgrade_eligible?: boolean
           views_count?: number
           website?: string | null
         }
@@ -391,87 +421,93 @@ export type Database = {
           },
         ]
       }
-      company_members: {
+      company_contacts: {
         Row: {
           company_id: string
           created_at: string
-          email: string
           id: string
-          invited_at: string
+          invited_at: string | null
           invited_by: string | null
           joined_at: string | null
-          role: string
-          status: string
+          last_contacted_at: string | null
+          next_follow_up_at: string | null
+          notes: string | null
+          person_id: string
+          role: Database["public"]["Enums"]["company_contact_role"]
+          status: string | null
           updated_at: string
-          user_id: string | null
         }
         Insert: {
           company_id: string
           created_at?: string
-          email: string
           id?: string
-          invited_at?: string
+          invited_at?: string | null
           invited_by?: string | null
           joined_at?: string | null
-          role?: string
-          status?: string
+          last_contacted_at?: string | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          person_id: string
+          role?: Database["public"]["Enums"]["company_contact_role"]
+          status?: string | null
           updated_at?: string
-          user_id?: string | null
         }
         Update: {
           company_id?: string
           created_at?: string
-          email?: string
           id?: string
-          invited_at?: string
+          invited_at?: string | null
           invited_by?: string | null
           joined_at?: string | null
-          role?: string
-          status?: string
+          last_contacted_at?: string | null
+          next_follow_up_at?: string | null
+          notes?: string | null
+          person_id?: string
+          role?: Database["public"]["Enums"]["company_contact_role"]
+          status?: string | null
           updated_at?: string
-          user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "company_members_company_id_fkey"
+            foreignKeyName: "company_contacts_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "company_members_company_id_fkey"
+            foreignKeyName: "company_contacts_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "company_metrics"
             referencedColumns: ["company_id"]
           },
           {
-            foreignKeyName: "company_members_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "company_members_company_id_fkey"
+            foreignKeyName: "company_contacts_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
             referencedColumns: ["company_id_full"]
           },
           {
-            foreignKeyName: "company_members_invited_by_fkey"
-            columns: ["invited_by"]
+            foreignKeyName: "company_contacts_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "company_members_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "company_contacts_person_id_fkey"
+            columns: ["person_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "persons"
             referencedColumns: ["id"]
           },
         ]
@@ -538,15 +574,22 @@ export type Database = {
             foreignKeyName: "company_outreach_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "company_outreach_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_outreach_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -615,80 +658,82 @@ export type Database = {
             foreignKeyName: "company_photos_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "company_photos_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_photos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
         ]
       }
-      company_ratings: {
+      company_redirects: {
         Row: {
-          communication_rating: number | null
           company_id: string
-          created_at: string | null
-          last_review_at: string | null
-          overall_rating: number | null
-          quality_rating: number | null
-          reliability_rating: number | null
-          total_reviews: number | null
-          updated_at: string | null
+          created_at: string
+          id: string
+          new_slug: string
+          old_slug: string
         }
         Insert: {
-          communication_rating?: number | null
           company_id: string
-          created_at?: string | null
-          last_review_at?: string | null
-          overall_rating?: number | null
-          quality_rating?: number | null
-          reliability_rating?: number | null
-          total_reviews?: number | null
-          updated_at?: string | null
+          created_at?: string
+          id?: string
+          new_slug: string
+          old_slug: string
         }
         Update: {
-          communication_rating?: number | null
           company_id?: string
-          created_at?: string | null
-          last_review_at?: string | null
-          overall_rating?: number | null
-          quality_rating?: number | null
-          reliability_rating?: number | null
-          total_reviews?: number | null
-          updated_at?: string | null
+          created_at?: string
+          id?: string
+          new_slug?: string
+          old_slug?: string
         }
         Relationships: [
           {
-            foreignKeyName: "company_ratings_company_id_fkey"
+            foreignKeyName: "company_redirects_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "company_ratings_company_id_fkey"
+            foreignKeyName: "company_redirects_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "company_metrics"
             referencedColumns: ["company_id"]
           },
           {
-            foreignKeyName: "company_ratings_company_id_fkey"
+            foreignKeyName: "company_redirects_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: true
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "company_ratings_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "mv_professional_summary"
             referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "company_redirects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_redirects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -736,15 +781,22 @@ export type Database = {
             foreignKeyName: "company_social_links_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "company_social_links_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_social_links_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -861,15 +913,132 @@ export type Database = {
             foreignKeyName: "email_drip_queue_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "email_drip_queue_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "email_drip_queue_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_events: {
+        Row: {
+          campaign_id: string | null
+          campaign_kind: string | null
+          campaign_position: number | null
+          created_at: string
+          event_type: string
+          id: string
+          locale: string | null
+          metadata: Json | null
+          occurred_at: string
+          prospect_id: string | null
+          provider: string
+          provider_event_id: string
+          recipient_company_id: string | null
+          recipient_email: string
+          recipient_user_id: string | null
+          subject: string | null
+          template: string | null
+        }
+        Insert: {
+          campaign_id?: string | null
+          campaign_kind?: string | null
+          campaign_position?: number | null
+          created_at?: string
+          event_type: string
+          id?: string
+          locale?: string | null
+          metadata?: Json | null
+          occurred_at: string
+          prospect_id?: string | null
+          provider: string
+          provider_event_id: string
+          recipient_company_id?: string | null
+          recipient_email: string
+          recipient_user_id?: string | null
+          subject?: string | null
+          template?: string | null
+        }
+        Update: {
+          campaign_id?: string | null
+          campaign_kind?: string | null
+          campaign_position?: number | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          locale?: string | null
+          metadata?: Json | null
+          occurred_at?: string
+          prospect_id?: string | null
+          provider?: string
+          provider_event_id?: string
+          recipient_company_id?: string | null
+          recipient_email?: string
+          recipient_user_id?: string | null
+          subject?: string | null
+          template?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_recipient_company_id_fkey"
+            columns: ["recipient_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_recipient_company_id_fkey"
+            columns: ["recipient_company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "email_events_recipient_company_id_fkey"
+            columns: ["recipient_company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
             referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "email_events_recipient_company_id_fkey"
+            columns: ["recipient_company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "email_events_recipient_company_id_fkey"
+            columns: ["recipient_company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_recipient_user_id_fkey"
+            columns: ["recipient_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -900,6 +1069,87 @@ export type Database = {
           opened?: number
           sends?: number
           template_id?: string
+        }
+        Relationships: []
+      }
+      gmail_connections: {
+        Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
+          created_at: string
+          gmail_address: string
+          id: string
+          last_history_id: string | null
+          last_sync_at: string | null
+          last_sync_error: string | null
+          refresh_token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          created_at?: string
+          gmail_address: string
+          id?: string
+          last_history_id?: string | null
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          refresh_token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          created_at?: string
+          gmail_address?: string
+          id?: string
+          last_history_id?: string | null
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          refresh_token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gsc_sync_runs: {
+        Row: {
+          companies_synced: number | null
+          created_at: string
+          error_count: number
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          projects_synced: number | null
+          started_at: string
+          total_count: number | null
+          triggered_by: string
+        }
+        Insert: {
+          companies_synced?: number | null
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          projects_synced?: number | null
+          started_at?: string
+          total_count?: number | null
+          triggered_by: string
+        }
+        Update: {
+          companies_synced?: number | null
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          projects_synced?: number | null
+          started_at?: string
+          total_count?: number | null
+          triggered_by?: string
         }
         Relationships: []
       }
@@ -954,6 +1204,122 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      inbound_emails: {
+        Row: {
+          ai_draft_text: string | null
+          body_html: string | null
+          body_text: string | null
+          created_at: string
+          from_email: string
+          from_name: string | null
+          id: string
+          metadata: Json | null
+          prospect_id: string | null
+          provider: string
+          provider_message_id: string
+          received_at: string
+          replied_at: string | null
+          replied_text: string | null
+          snippet: string | null
+          status: string
+          subject: string | null
+          thread_id: string | null
+          to_emails: string[]
+          updated_at: string
+        }
+        Insert: {
+          ai_draft_text?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          from_email: string
+          from_name?: string | null
+          id?: string
+          metadata?: Json | null
+          prospect_id?: string | null
+          provider?: string
+          provider_message_id: string
+          received_at: string
+          replied_at?: string | null
+          replied_text?: string | null
+          snippet?: string | null
+          status?: string
+          subject?: string | null
+          thread_id?: string | null
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Update: {
+          ai_draft_text?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          from_email?: string
+          from_name?: string | null
+          id?: string
+          metadata?: Json | null
+          prospect_id?: string | null
+          provider?: string
+          provider_message_id?: string
+          received_at?: string
+          replied_at?: string | null
+          replied_text?: string | null
+          snippet?: string | null
+          status?: string
+          subject?: string | null
+          thread_id?: string | null
+          to_emails?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbound_emails_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kb_chunks: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string
+          id: string
+          language: string
+          metadata: Json | null
+          source: string
+          source_key: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding: string
+          id?: string
+          language: string
+          metadata?: Json | null
+          source: string
+          source_key: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string
+          id?: string
+          language?: string
+          metadata?: Json | null
+          source?: string
+          source_key?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -1035,15 +1401,22 @@ export type Database = {
             foreignKeyName: "messages_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "messages_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "messages_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "messages_project_id_fkey"
@@ -1081,6 +1454,169 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      metric_cache: {
+        Row: {
+          granularity: string
+          metric_key: string
+          period_start: string
+          synced_at: string
+          value: number
+        }
+        Insert: {
+          granularity: string
+          metric_key: string
+          period_start: string
+          synced_at?: string
+          value: number
+        }
+        Update: {
+          granularity?: string
+          metric_key?: string
+          period_start?: string
+          synced_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      outbound_contact_log: {
+        Row: {
+          body: string | null
+          company_contact_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: Database["public"]["Enums"]["outbound_kind"]
+          outcome: Database["public"]["Enums"]["outbound_outcome"] | null
+          prospect_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          company_contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["outbound_kind"]
+          outcome?: Database["public"]["Enums"]["outbound_outcome"] | null
+          prospect_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          company_contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["outbound_kind"]
+          outcome?: Database["public"]["Enums"]["outbound_outcome"] | null
+          prospect_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_contact_log_company_contact_id_fkey"
+            columns: ["company_contact_id"]
+            isOneToOne: false
+            referencedRelation: "company_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_contact_log_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_contact_log_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      persons: {
+        Row: {
+          auth_user_id: string | null
+          bounced_at: string | null
+          complained_at: string | null
+          created_at: string
+          email: string
+          email_status: string | null
+          emails_clicked: number
+          emails_delivered: number
+          emails_opened: number
+          emails_sent: number
+          first_name: string | null
+          id: string
+          last_email_clicked_at: string | null
+          last_email_opened_at: string | null
+          last_email_sent_at: string | null
+          last_name: string | null
+          notes: string | null
+          phone: string | null
+          phone_country_code: string | null
+          preferred_language: string | null
+          replied_at: string | null
+          sequence_status: string | null
+          source: Database["public"]["Enums"]["person_source"]
+          unsubscribed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id?: string | null
+          bounced_at?: string | null
+          complained_at?: string | null
+          created_at?: string
+          email: string
+          email_status?: string | null
+          emails_clicked?: number
+          emails_delivered?: number
+          emails_opened?: number
+          emails_sent?: number
+          first_name?: string | null
+          id?: string
+          last_email_clicked_at?: string | null
+          last_email_opened_at?: string | null
+          last_email_sent_at?: string | null
+          last_name?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_country_code?: string | null
+          preferred_language?: string | null
+          replied_at?: string | null
+          sequence_status?: string | null
+          source?: Database["public"]["Enums"]["person_source"]
+          unsubscribed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string | null
+          bounced_at?: string | null
+          complained_at?: string | null
+          created_at?: string
+          email?: string
+          email_status?: string | null
+          emails_clicked?: number
+          emails_delivered?: number
+          emails_opened?: number
+          emails_sent?: number
+          first_name?: string | null
+          id?: string
+          last_email_clicked_at?: string | null
+          last_email_opened_at?: string | null
+          last_email_sent_at?: string | null
+          last_name?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_country_code?: string | null
+          preferred_language?: string | null
+          replied_at?: string | null
+          sequence_status?: string | null
+          source?: Database["public"]["Enums"]["person_source"]
+          unsubscribed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       posthog_cache: {
         Row: {
@@ -1305,52 +1841,6 @@ export type Database = {
           },
         ]
       }
-      professional_specialties: {
-        Row: {
-          category_id: string
-          created_at: string | null
-          is_primary: boolean | null
-          professional_id: string
-          years_experience: number | null
-        }
-        Insert: {
-          category_id: string
-          created_at?: string | null
-          is_primary?: boolean | null
-          professional_id: string
-          years_experience?: number | null
-        }
-        Update: {
-          category_id?: string
-          created_at?: string | null
-          is_primary?: boolean | null
-          professional_id?: string
-          years_experience?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "professional_specialties_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "professional_specialties_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "mv_professional_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "professional_specialties_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "professionals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       professionals: {
         Row: {
           bio: string | null
@@ -1425,15 +1915,22 @@ export type Database = {
             foreignKeyName: "professionals_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "professionals_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "professionals_user_id_fkey"
@@ -1452,6 +1949,7 @@ export type Database = {
           bio: string | null
           created_at: string | null
           first_name: string | null
+          first_touch_source: string | null
           id: string
           invited_at: string | null
           invited_by: string | null
@@ -1459,6 +1957,7 @@ export type Database = {
           is_verified: boolean | null
           last_name: string | null
           location: string | null
+          notification_preferences: Json
           phone: string | null
           preferred_language: string | null
           updated_at: string | null
@@ -1472,6 +1971,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
+          first_touch_source?: string | null
           id: string
           invited_at?: string | null
           invited_by?: string | null
@@ -1479,6 +1979,7 @@ export type Database = {
           is_verified?: boolean | null
           last_name?: string | null
           location?: string | null
+          notification_preferences?: Json
           phone?: string | null
           preferred_language?: string | null
           updated_at?: string | null
@@ -1492,6 +1993,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           first_name?: string | null
+          first_touch_source?: string | null
           id?: string
           invited_at?: string | null
           invited_by?: string | null
@@ -1499,6 +2001,7 @@ export type Database = {
           is_verified?: boolean | null
           last_name?: string | null
           location?: string | null
+          notification_preferences?: Json
           phone?: string | null
           preferred_language?: string | null
           updated_at?: string | null
@@ -1957,6 +2460,7 @@ export type Database = {
           invited_email: string
           invited_service_category_ids: string[] | null
           is_project_owner: boolean
+          landing_visited_at: string | null
           professional_id: string | null
           project_id: string
           responded_at: string | null
@@ -1972,6 +2476,7 @@ export type Database = {
           invited_email: string
           invited_service_category_ids?: string[] | null
           is_project_owner?: boolean
+          landing_visited_at?: string | null
           professional_id?: string | null
           project_id: string
           responded_at?: string | null
@@ -1987,6 +2492,7 @@ export type Database = {
           invited_email?: string
           invited_service_category_ids?: string[] | null
           is_project_owner?: boolean
+          landing_visited_at?: string | null
           professional_id?: string | null
           project_id?: string
           responded_at?: string | null
@@ -2012,28 +2518,28 @@ export type Database = {
             foreignKeyName: "project_professionals_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "project_professionals_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "project_professionals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "project_professionals_cover_photo_id_fkey"
             columns: ["cover_photo_id"]
             isOneToOne: false
             referencedRelation: "project_photos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_professionals_professional_id_fkey"
-            columns: ["professional_id"]
-            isOneToOne: false
-            referencedRelation: "mv_professional_summary"
             referencedColumns: ["id"]
           },
           {
@@ -2260,7 +2766,15 @@ export type Database = {
           project_year: number | null
           published_at: string | null
           rejection_reason: string | null
+          seo_canonical_chosen: string | null
+          seo_clicks_28d: number | null
+          seo_ctr_28d: number | null
           seo_description: string | null
+          seo_impressions_28d: number | null
+          seo_indexation_state: string | null
+          seo_indexed: boolean | null
+          seo_position_28d: number | null
+          seo_synced_at: string | null
           seo_title: string | null
           share_exact_location: boolean
           slug: string | null
@@ -2306,7 +2820,15 @@ export type Database = {
           project_year?: number | null
           published_at?: string | null
           rejection_reason?: string | null
+          seo_canonical_chosen?: string | null
+          seo_clicks_28d?: number | null
+          seo_ctr_28d?: number | null
           seo_description?: string | null
+          seo_impressions_28d?: number | null
+          seo_indexation_state?: string | null
+          seo_indexed?: boolean | null
+          seo_position_28d?: number | null
+          seo_synced_at?: string | null
           seo_title?: string | null
           share_exact_location?: boolean
           slug?: string | null
@@ -2352,7 +2874,15 @@ export type Database = {
           project_year?: number | null
           published_at?: string | null
           rejection_reason?: string | null
+          seo_canonical_chosen?: string | null
+          seo_clicks_28d?: number | null
+          seo_ctr_28d?: number | null
           seo_description?: string | null
+          seo_impressions_28d?: number | null
+          seo_indexation_state?: string | null
+          seo_indexed?: boolean | null
+          seo_position_28d?: number | null
+          seo_synced_at?: string | null
           seo_title?: string | null
           share_exact_location?: boolean
           slug?: string | null
@@ -2437,10 +2967,12 @@ export type Database = {
           apollo_contact_id: string | null
           apollo_list_id: string | null
           apollo_sequence_id: string | null
+          bounced_at: string | null
           city: string | null
           company_created_at: string | null
           company_id: string | null
           company_name: string | null
+          complained_at: string | null
           contact_name: string | null
           converted_at: string | null
           country: string | null
@@ -2456,13 +2988,16 @@ export type Database = {
           last_email_clicked_at: string | null
           last_email_opened_at: string | null
           last_email_sent_at: string | null
+          last_outbound_at: string | null
           metadata: Json | null
+          next_follow_up_at: string | null
           notes: string | null
           phone: string | null
           project_id: string | null
           project_published_at: string | null
           project_started_at: string | null
           ref_code: string | null
+          replied_at: string | null
           sequence_status: string | null
           signed_up_at: string | null
           source: string | null
@@ -2477,10 +3012,12 @@ export type Database = {
           apollo_contact_id?: string | null
           apollo_list_id?: string | null
           apollo_sequence_id?: string | null
+          bounced_at?: string | null
           city?: string | null
           company_created_at?: string | null
           company_id?: string | null
           company_name?: string | null
+          complained_at?: string | null
           contact_name?: string | null
           converted_at?: string | null
           country?: string | null
@@ -2496,13 +3033,16 @@ export type Database = {
           last_email_clicked_at?: string | null
           last_email_opened_at?: string | null
           last_email_sent_at?: string | null
+          last_outbound_at?: string | null
           metadata?: Json | null
+          next_follow_up_at?: string | null
           notes?: string | null
           phone?: string | null
           project_id?: string | null
           project_published_at?: string | null
           project_started_at?: string | null
           ref_code?: string | null
+          replied_at?: string | null
           sequence_status?: string | null
           signed_up_at?: string | null
           source?: string | null
@@ -2517,10 +3057,12 @@ export type Database = {
           apollo_contact_id?: string | null
           apollo_list_id?: string | null
           apollo_sequence_id?: string | null
+          bounced_at?: string | null
           city?: string | null
           company_created_at?: string | null
           company_id?: string | null
           company_name?: string | null
+          complained_at?: string | null
           contact_name?: string | null
           converted_at?: string | null
           country?: string | null
@@ -2536,13 +3078,16 @@ export type Database = {
           last_email_clicked_at?: string | null
           last_email_opened_at?: string | null
           last_email_sent_at?: string | null
+          last_outbound_at?: string | null
           metadata?: Json | null
+          next_follow_up_at?: string | null
           notes?: string | null
           phone?: string | null
           project_id?: string | null
           project_published_at?: string | null
           project_started_at?: string | null
           ref_code?: string | null
+          replied_at?: string | null
           sequence_status?: string | null
           signed_up_at?: string | null
           source?: string | null
@@ -2572,15 +3117,22 @@ export type Database = {
             foreignKeyName: "prospects_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "prospects_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "prospects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "prospects_project_id_fkey"
@@ -2656,145 +3208,6 @@ export type Database = {
         }
         Relationships: []
       }
-      reviews: {
-        Row: {
-          comment: string | null
-          communication_rating: number | null
-          company_id: string
-          created_at: string | null
-          id: string
-          is_published: boolean | null
-          is_verified: boolean | null
-          moderated_at: string | null
-          moderated_by: string | null
-          moderation_notes: string | null
-          moderation_status: Database["public"]["Enums"]["review_moderation_status"]
-          overall_rating: number
-          project_id: string | null
-          quality_rating: number | null
-          reliability_rating: number | null
-          response_date: string | null
-          response_text: string | null
-          reviewer_id: string
-          title: string | null
-          updated_at: string | null
-          work_completed: boolean | null
-          would_recommend: boolean | null
-        }
-        Insert: {
-          comment?: string | null
-          communication_rating?: number | null
-          company_id: string
-          created_at?: string | null
-          id?: string
-          is_published?: boolean | null
-          is_verified?: boolean | null
-          moderated_at?: string | null
-          moderated_by?: string | null
-          moderation_notes?: string | null
-          moderation_status?: Database["public"]["Enums"]["review_moderation_status"]
-          overall_rating: number
-          project_id?: string | null
-          quality_rating?: number | null
-          reliability_rating?: number | null
-          response_date?: string | null
-          response_text?: string | null
-          reviewer_id: string
-          title?: string | null
-          updated_at?: string | null
-          work_completed?: boolean | null
-          would_recommend?: boolean | null
-        }
-        Update: {
-          comment?: string | null
-          communication_rating?: number | null
-          company_id?: string
-          created_at?: string | null
-          id?: string
-          is_published?: boolean | null
-          is_verified?: boolean | null
-          moderated_at?: string | null
-          moderated_by?: string | null
-          moderation_notes?: string | null
-          moderation_status?: Database["public"]["Enums"]["review_moderation_status"]
-          overall_rating?: number
-          project_id?: string | null
-          quality_rating?: number | null
-          reliability_rating?: number | null
-          response_date?: string | null
-          response_text?: string | null
-          reviewer_id?: string
-          title?: string | null
-          updated_at?: string | null
-          work_completed?: boolean | null
-          would_recommend?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reviews_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_metrics"
-            referencedColumns: ["company_id"]
-          },
-          {
-            foreignKeyName: "reviews_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
-          },
-          {
-            foreignKeyName: "reviews_moderated_by_fkey"
-            columns: ["moderated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "mv_project_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "project_search_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reviews_reviewer_id_fkey"
-            columns: ["reviewer_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       saved_companies: {
         Row: {
           company_id: string
@@ -2833,15 +3246,22 @@ export type Database = {
             foreignKeyName: "saved_companies_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
           },
           {
             foreignKeyName: "saved_companies_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "saved_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "saved_companies_user_id_fkey"
@@ -2968,73 +3388,14 @@ export type Database = {
     Views: {
       company_metrics: {
         Row: {
-          average_rating: number | null
           company_id: string | null
           professional_count: number | null
           projects_linked: number | null
-          total_reviews: number | null
         }
         Relationships: []
       }
-      mv_company_listings: {
-        Row: {
-          avatar_url: string | null
-          city: string | null
-          communication_rating: number | null
-          country: string | null
-          cover_photo_url: string | null
-          created_at: string | null
-          description: string | null
-          display_rating: number | null
-          domain: string | null
-          first_name: string | null
-          founded_year: number | null
-          has_available_professionals: boolean | null
-          id: string | null
-          is_featured: boolean | null
-          is_verified: boolean | null
-          languages: string[] | null
-          last_name: string | null
-          last_review_at: string | null
-          logo_url: string | null
-          name: string | null
-          plan_expires_at: string | null
-          plan_tier: Database["public"]["Enums"]["company_plan_tier"] | null
-          primary_service: string | null
-          primary_service_name: string | null
-          professional_title: string | null
-          quality_rating: number | null
-          reliability_rating: number | null
-          searchable_city: string | null
-          searchable_country: string | null
-          searchable_state_region: string | null
-          services_offered: string[] | null
-          slug: string | null
-          specialty_ids: string[] | null
-          specialty_parent_ids: string[] | null
-          state_region: string | null
-          status: Database["public"]["Enums"]["company_status"] | null
-          team_size_max: number | null
-          team_size_min: number | null
-          total_reviews: number | null
-          updated_at: string | null
-          user_location: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "companies_primary_service_id_fkey"
-            columns: ["primary_service"]
-            isOneToOne: false
-            referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       mv_professional_summary: {
         Row: {
-          avatar_url: string | null
-          bio: string | null
-          communication_rating: number | null
           company_audience: string | null
           company_city: string | null
           company_country: string | null
@@ -3046,83 +3407,29 @@ export type Database = {
           company_logo: string | null
           company_longitude: number | null
           company_name: string | null
-          company_plan_expires_at: string | null
-          company_plan_tier:
-            | Database["public"]["Enums"]["company_plan_tier"]
-            | null
           company_slug: string | null
           company_state_region: string | null
           company_status: Database["public"]["Enums"]["company_status"] | null
           cover_photo_url: string | null
           created_at: string | null
-          display_rating: number | null
           first_name: string | null
-          hourly_rate_display: string | null
-          hourly_rate_max: number | null
-          hourly_rate_min: number | null
           id: string | null
-          is_available: boolean | null
           is_verified: boolean | null
-          languages_spoken: string[] | null
           last_name: string | null
-          last_review_at: string | null
-          portfolio_url: string | null
           primary_service_name: string | null
           primary_service_name_nl: string | null
           primary_specialty: string | null
           primary_specialty_slug: string | null
-          quality_rating: number | null
-          reliability_rating: number | null
           searchable_city: string | null
           searchable_country: string | null
           searchable_state_region: string | null
           services_offered: string[] | null
           specialty_ids: string[] | null
           specialty_parent_ids: string[] | null
-          title: string | null
-          total_reviews: number | null
           updated_at: string | null
           user_id: string | null
-          user_location: string | null
-          years_experience: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "professionals_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "professionals_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_metrics"
-            referencedColumns: ["company_id"]
-          },
-          {
-            foreignKeyName: "professionals_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "mv_company_listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "professionals_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "mv_professional_summary"
-            referencedColumns: ["company_id_full"]
-          },
-          {
-            foreignKeyName: "professionals_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       mv_project_summary: {
         Row: {
@@ -3227,6 +3534,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      backfill_companies_first_touch_source: { Args: never; Returns: number }
       check_redirect_chain: {
         Args: {
           max_depth?: number
@@ -3249,7 +3557,6 @@ export type Database = {
           city_filters?: string[]
           country_filter?: string
           max_hourly_rate?: number
-          min_rating?: number
           search_query?: string
           service_filters?: string[]
           state_filter?: string
@@ -3260,11 +3567,9 @@ export type Database = {
       get_platform_stats: {
         Args: never
         Returns: {
-          average_rating: number
           published_projects: number
           total_professionals: number
           total_projects: number
-          total_reviews: number
           total_users: number
           verified_professionals: number
         }[]
@@ -3313,7 +3618,6 @@ export type Database = {
           company_slug: string
           company_state_region: string
           cover_url: string
-          display_rating: number
           first_name: string
           is_verified: boolean
           last_name: string
@@ -3324,26 +3628,6 @@ export type Database = {
           saved_at: string
           services_offered: string[]
           title: string
-          total_reviews: number
-          user_location: string
-        }[]
-      }
-      get_user_saved_professionals_with_summary: {
-        Args: never
-        Returns: {
-          company_domain: string
-          company_id: string
-          company_name: string
-          cover_url: string
-          display_rating: number
-          is_verified: boolean
-          logo_url: string
-          primary_specialty: string
-          professional_id: string
-          saved_at: string
-          services_offered: string[]
-          title: string
-          total_reviews: number
           user_location: string
         }[]
       }
@@ -3407,8 +3691,16 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      is_active_company_member: {
+        Args: { _company_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
       is_admin_user: { Args: never; Returns: boolean }
+      is_company_contact_for_current_user: {
+        Args: { _company_id: string }
+        Returns: boolean
+      }
       is_own_profile_avatar_path: { Args: { _path: string }; Returns: boolean }
       is_professional: { Args: never; Returns: boolean }
       is_project_photo_owner: {
@@ -3417,6 +3709,10 @@ export type Database = {
       }
       is_project_photo_owner_by_path: {
         Args: { _path: string }
+        Returns: boolean
+      }
+      person_visible_to_current_user: {
+        Args: { _person_id: string }
         Returns: boolean
       }
       refresh_all_materialized_views: { Args: never; Returns: undefined }
@@ -3434,7 +3730,6 @@ export type Database = {
           country_filter?: string
           limit_count?: number
           max_hourly_rate?: number
-          min_rating?: number
           offset_count?: number
           search_query?: string
           service_filters?: string[]
@@ -3443,7 +3738,6 @@ export type Database = {
           verified_only?: boolean
         }
         Returns: {
-          avatar_url: string
           company_city: string
           company_country: string
           company_domain: string
@@ -3456,9 +3750,7 @@ export type Database = {
           company_state_region: string
           cover_photo_url: string
           credited_sum: number
-          display_rating: number
           first_name: string
-          hourly_rate_display: string
           id: string
           is_featured: boolean
           is_verified: boolean
@@ -3468,49 +3760,8 @@ export type Database = {
           services_offered: string[]
           specialty_ids: string[]
           specialty_parent_ids: string[]
-          title: string
-          total_reviews: number
           user_id: string
-          user_location: string
           views_count: number
-        }[]
-      }
-      search_professionals_optimized: {
-        Args: {
-          available_only?: boolean
-          category_filter?: string
-          limit_count?: number
-          location_filter?: string
-          min_rating?: number
-          offset_count?: number
-          search_query?: string
-          sort_by?: string
-          verified_only?: boolean
-        }
-        Returns: {
-          avatar_url: string
-          bio: string
-          company_city: string
-          company_country: string
-          company_domain: string
-          company_id: string
-          company_logo_url: string
-          company_name: string
-          company_slug: string
-          first_name: string
-          hourly_rate_max: number
-          hourly_rate_min: number
-          id: string
-          is_available: boolean
-          is_verified: boolean
-          last_name: string
-          overall_rating: number
-          profile_location: string
-          specialties: string[]
-          title: string
-          total_reviews: number
-          user_id: string
-          years_experience: number
         }[]
       }
       search_projects: {
@@ -3583,12 +3834,13 @@ export type Database = {
         | "unlisted"
         | "listed"
         | "deactivated"
-      company_plan_tier: "basic" | "plus"
+      company_contact_role: "contact" | "member" | "admin" | "owner"
       company_social_platform:
         | "facebook"
         | "instagram"
         | "linkedin"
         | "pinterest"
+      company_source: "apollo" | "direct" | "manual" | "invited"
       company_status:
         | "draft"
         | "unlisted"
@@ -3597,6 +3849,9 @@ export type Database = {
         | "prospected"
         | "added"
         | "unclaimed"
+      outbound_kind: "call" | "meeting" | "email" | "linkedin" | "note"
+      outbound_outcome: "positive" | "neutral" | "negative" | "no_answer"
+      person_source: "apollo" | "direct" | "manual" | "invited"
       product_link_source:
         | "ai"
         | "brand_suggest"
@@ -3633,6 +3888,7 @@ export type Database = {
         | "signup"
         | "company"
         | "active"
+        | "removed"
       review_moderation_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -3770,13 +4026,14 @@ export const Constants = {
         "listed",
         "deactivated",
       ],
-      company_plan_tier: ["basic", "plus"],
+      company_contact_role: ["contact", "member", "admin", "owner"],
       company_social_platform: [
         "facebook",
         "instagram",
         "linkedin",
         "pinterest",
       ],
+      company_source: ["apollo", "direct", "manual", "invited"],
       company_status: [
         "draft",
         "unlisted",
@@ -3786,6 +4043,9 @@ export const Constants = {
         "added",
         "unclaimed",
       ],
+      outbound_kind: ["call", "meeting", "email", "linkedin", "note"],
+      outbound_outcome: ["positive", "neutral", "negative", "no_answer"],
+      person_source: ["apollo", "direct", "manual", "invited"],
       product_link_source: [
         "ai",
         "brand_suggest",
@@ -3826,8 +4086,10 @@ export const Constants = {
         "signup",
         "company",
         "active",
+        "removed",
       ],
       review_moderation_status: ["pending", "approved", "rejected"],
     },
   },
 } as const
+

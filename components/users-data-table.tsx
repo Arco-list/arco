@@ -36,7 +36,7 @@ import {
   generateLoginAsLinkAction,
   toggleAdminStatusAction,
 } from "@/app/admin/users/actions"
-import { generateCompanyLoginLinkAction } from "@/app/admin/professionals/actions"
+import { generateCompanyLoginLinkAction } from "@/app/admin/companies/actions"
 import {
   DropdownMenu,
   DropdownMenuContent,

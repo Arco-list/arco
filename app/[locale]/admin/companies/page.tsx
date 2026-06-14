@@ -20,12 +20,12 @@ async function loadAdminCompaniesData() {
   const supabase = await createServerSupabaseClient()
 
   // Parallel queries
-  const [companiesQuery, metricsQuery, servicesQuery, projectProfessionalsQuery, unclaimedInvitesQuery, companyMembersQuery] =
+  const [companiesQuery, metricsQuery, servicesQuery, projectProfessionalsQuery, unclaimedInvitesQuery, companyMembersQuery, companyContactsQuery] =
     await Promise.all([
       supabase
         .from("companies")
         .select(
-          "id, name, slug, status, plan_tier, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, plan_expires_at, owner_id, created_at, auto_approve_projects, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
+          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         ),
       supabase
         .from("company_metrics")
@@ -42,11 +42,18 @@ async function loadAdminCompaniesData() {
         .select("id, invited_email, invited_at, status, project:projects(title, status)")
         .is("professional_id", null)
         .is("company_id", null),
-      // Company members — to identify which companies have been claimed
+      // Company members — to identify which companies have been claimed.
+      // Filter to team roles so sales leads (role='contact') don't count.
       supabase
-        .from("company_members")
+        .from("company_contacts")
         .select("company_id")
+        .in("role", ["owner", "admin", "member"])
         .eq("status", "active"),
+      // All contacts (owners / admins / members / leads) across companies,
+      // joined to persons for name + email + phone + source + auth status.
+      supabase
+        .from("company_contacts")
+        .select("id, company_id, role, status, last_contacted_at, next_follow_up_at, notes, person:persons(id, first_name, last_name, email, phone, phone_country_code, source, auth_user_id)"),
     ])
 
   if (companiesQuery.error) {
@@ -67,6 +74,9 @@ async function loadAdminCompaniesData() {
   }
   if (companyMembersQuery.error) {
     logger.error("Failed to load company members", { table: "company_members" }, companyMembersQuery.error)
+  }
+  if (companyContactsQuery.error) {
+    logger.error("Failed to load company contacts", { table: "company_contacts" }, companyContactsQuery.error)
   }
 
   const companies = (companiesQuery.data ?? []).filter(
@@ -153,6 +163,75 @@ async function loadAdminCompaniesData() {
     if (row?.company_id) {
       claimedCompanyIds.add(row.company_id as string)
     }
+  }
+
+  // Bucket company_contacts by company_id, role-sorted (owner → admin →
+  // member → contact). Joined-in persons rows surface name/email/auth state.
+  const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, member: 2, contact: 3 }
+  type RawContactRow = {
+    id: string
+    company_id: string
+    role: string
+    status: string | null
+    last_contacted_at: string | null
+    next_follow_up_at: string | null
+    notes: string | null
+    person: {
+      id: string
+      first_name: string | null
+      last_name: string | null
+      email: string
+      phone: string | null
+      phone_country_code: string | null
+      source: string | null
+      auth_user_id: string | null
+    } | null
+  }
+  const contactsByCompany = new Map<string, Array<{
+    id: string
+    personId: string
+    name: string | null
+    email: string
+    phone: string | null
+    phoneCountryCode: string | null
+    source: string | null
+    role: "owner" | "admin" | "member" | "contact"
+    status: string | null
+    authUserId: string | null
+    lastContactedAt: string | null
+    nextFollowUpAt: string | null
+    notes: string | null
+  }>>()
+  for (const row of (companyContactsQuery.data ?? []) as RawContactRow[]) {
+    if (!row?.company_id || !row.person) continue
+    const fullName = [row.person.first_name, row.person.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || null
+    const list = contactsByCompany.get(row.company_id) ?? []
+    list.push({
+      id: row.id,
+      personId: row.person.id,
+      name: fullName,
+      email: row.person.email,
+      phone: row.person.phone,
+      phoneCountryCode: row.person.phone_country_code,
+      source: row.person.source,
+      role: row.role as "owner" | "admin" | "member" | "contact",
+      status: row.status,
+      authUserId: row.person.auth_user_id,
+      lastContactedAt: row.last_contacted_at,
+      nextFollowUpAt: row.next_follow_up_at,
+      notes: row.notes,
+    })
+    contactsByCompany.set(row.company_id, list)
+  }
+  for (const list of contactsByCompany.values()) {
+    list.sort((a, b) => {
+      const roleDiff = (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99)
+      if (roleDiff !== 0) return roleDiff
+      return (a.name ?? a.email).localeCompare(b.name ?? b.email)
+    })
   }
 
   // Fetch owner profiles
@@ -248,8 +327,6 @@ async function loadAdminCompaniesData() {
       logoUrl: company.logo_url ?? null,
       isVerified: Boolean(company.is_verified),
       isFeatured: Boolean(company.is_featured),
-      planTier: company.plan_tier,
-      planExpiresAt: company.plan_expires_at ?? null,
       contactEmail: company.email ?? null,
       website: company.website ?? null,
       servicesOffered: serviceIds,
@@ -261,6 +338,8 @@ async function loadAdminCompaniesData() {
       ),
       canPublishProjects: serviceIds.some((id) => publishableCategoryIds.has(id)),
       autoApproveProjects: Boolean((company as any).auto_approve_projects),
+      source: company.source ?? null,
+      contacts: contactsByCompany.get(company.id) ?? [],
       seoIndexed: (company as any).seo_indexed ?? null,
       seoIndexationState: (company as any).seo_indexation_state ?? null,
       seoImpressions28d: (company as any).seo_impressions_28d ?? null,
@@ -316,8 +395,6 @@ async function loadAdminCompaniesData() {
         logoUrl: null,
         isVerified: false,
         isFeatured: false,
-        planTier: "basic" as const,
-        planExpiresAt: null,
         contactEmail: null,
         website: null,
         servicesOffered: [],
@@ -327,6 +404,8 @@ async function loadAdminCompaniesData() {
         hasPublishedProjects: false,
         canPublishProjects: false,
         autoApproveProjects: false,
+        source: null,
+        contacts: [],
         seoIndexed: null,
         seoIndexationState: null,
         seoImpressions28d: null,

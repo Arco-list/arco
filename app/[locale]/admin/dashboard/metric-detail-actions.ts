@@ -68,7 +68,8 @@ export async function fetchMetricTimeSeries(
     case "savers":
       return query("saved_projects", "created_at")
     case "subscribers":
-      return query("companies", "created_at, plan_tier", (c) => c.plan_tier != null)
+      // Subscription concept retired with plan_tier removal.
+      return { timeSeries: [], total: 0 }
     default:
       return { timeSeries: [], total: 0 }
   }

@@ -58,6 +58,20 @@ async function assertAdmin() {
   return { supabase, user, error: null }
 }
 
+/**
+ * Count of projects awaiting admin review (status = 'in_progress').
+ * Powers the Projects badge in the admin header — same predicate the
+ * /admin/projects table uses to surface its "Review (N)" CTA.
+ */
+export async function countProjectsToReview(): Promise<number> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { count } = await supabase
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "in_progress")
+  return count ?? 0
+}
+
 export async function setProjectFeaturedAction(
   input: { projectId: string; featured: boolean }
 ): Promise<ActionResult> {
@@ -998,7 +1012,7 @@ export async function updateProjectProfessionalStatusAction(input: {
   await syncCompanyListedStatus(companyIdResult.data)
 
   revalidatePath("/admin/projects")
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
 }
 

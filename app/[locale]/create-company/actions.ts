@@ -12,6 +12,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { generateVerificationCode, storeVerificationCode, validateVerificationCode } from "@/lib/verification";
 import { sendDomainVerificationEmail } from "@/lib/email-service";
 import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions";
+import { ensureCompanyOwnerContact } from "@/lib/company-ownership";
 
 const createCompanySchema = z.object({
   companyName: z.string().trim().min(2, "Company name is required"),
@@ -339,6 +340,12 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
     })
   }
 
+  // Mirror ownership into the new company_contacts model. companyId is
+  // set on every success path that reaches here (claim, update, insert).
+  if (companyId) {
+    await ensureCompanyOwnerContact(supabase, companyId, user.id)
+  }
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/listings");
   revalidatePath("/homeowner");
@@ -466,6 +473,9 @@ export async function claimCompanyAction(input: {
   } catch (err) {
     logger.warn("create-company", "Failed to cancel drip rows after claim", { userId: user.id, companyId, error: err instanceof Error ? err.message : String(err) })
   }
+
+  // Mirror ownership into the new company_contacts model.
+  await ensureCompanyOwnerContact(supabase, companyId, user.id)
 
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/company")
@@ -793,6 +803,11 @@ export async function createCompanyFromPlacesAction(
     }).catch((e) => {
       logger.warn("Failed to enrich company", { scope: "create-company-places", companyId, error: getErrorMessage(e) })
     })
+  }
+
+  // Mirror ownership into the new company_contacts model.
+  if (companyId) {
+    await ensureCompanyOwnerContact(supabase, companyId, user.id)
   }
 
   revalidatePath("/dashboard")

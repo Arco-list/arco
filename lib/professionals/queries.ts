@@ -48,8 +48,6 @@ type ProfessionalRow = {
     slug: NullableString
     logo_url: NullableString
     status: NullableString
-    plan_tier: NullableString
-    plan_expires_at: NullableString
     city: NullableString
     country: NullableString
     domain: NullableString
@@ -209,29 +207,6 @@ const buildInitials = (firstName: NullableString, lastName: NullableString) => {
 const isRlsDenied = (error: PostgrestError | null) =>
   Boolean(error?.code === "42501" || error?.code === "PGRST301" || error?.message?.toLowerCase().includes("row-level security"))
 
-const isPlusPlanActive = (row: ProfessionalRow) => {
-  const company = row.company
-  if (!company) {
-    return false
-  }
-
-  if (company.plan_tier !== "plus") {
-    return false
-  }
-
-  if (company.status !== "listed" && company.status !== "prospected") {
-    return false
-  }
-
-  if (!company.plan_expires_at) {
-    return true
-  }
-
-  const expiresAt = new Date(company.plan_expires_at).getTime()
-  const now = Date.now()
-  return expiresAt > now
-}
-
 const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
   if (!row.company_id || !row.company || !row.id) {
     return null
@@ -284,10 +259,8 @@ const sortProfessionals = (professionals: ProfessionalCard[]) => {
 
 type SearchProfessionalsRpcRow = {
   id: string
-  title: string | null
   first_name: string | null
   last_name: string | null
-  user_location: string | null
   company_id: string | null
   company_name: string | null
   company_slug: string | null
@@ -303,7 +276,6 @@ type SearchProfessionalsRpcRow = {
   services_offered: string[] | null
   is_verified: boolean | null
   cover_photo_url: string | null
-  avatar_url: string | null
   specialty_ids: string[] | null
   specialty_parent_ids: string[] | null
   credited_sum?: number
@@ -343,7 +315,7 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
     name,
     profession,
     location,
-    image: row.cover_photo_url ?? row.company_logo ?? row.avatar_url ?? PLACEHOLDER_IMAGE,
+    image: row.cover_photo_url ?? row.company_logo ?? PLACEHOLDER_IMAGE,
     logoUrl: row.company_logo ?? null,
     specialties,
     isVerified: Boolean(row.is_verified),
@@ -429,68 +401,27 @@ export const fetchProfessionalMetadata = async (
 } | null> => {
   const supabase = await createServerSupabaseClient()
 
-  // Query companies table first (company-centric approach)
+  // Joins through `company_contacts` (role='owner') and `persons` for the
+  // owner's name. The legacy `professionals` → `profiles` path is gone.
+  const select = `
+    id,
+    name,
+    slug,
+    description,
+    logo_url,
+    city,
+    country,
+    status,
+    primary_service_id,
+    primary_service:categories!companies_primary_service_id_fkey(name, name_nl, parent_id),
+    owner_contact:company_contacts!company_contacts_company_id_fkey (
+      role,
+      person:persons (first_name, last_name)
+    )
+  `
   const companyResult = isUuid(slugOrId)
-    ? await supabase
-        .from("companies")
-        .select(`
-          id,
-          name,
-          slug,
-          description,
-          logo_url,
-          city,
-          country,
-          plan_tier,
-          plan_expires_at,
-          status,
-          primary_service_id,
-          primary_service:categories!companies_primary_service_id_fkey(name, name_nl, parent_id),
-          professionals (
-            id,
-            title,
-            bio,
-            is_verified,
-            is_available,
-            profiles:profiles!professionals_user_id_fkey (
-              first_name,
-              last_name,
-              location
-            )
-          )
-        `)
-        .eq("id", slugOrId)
-        .maybeSingle()
-    : await supabase
-        .from("companies")
-        .select(`
-          id,
-          name,
-          slug,
-          description,
-          logo_url,
-          city,
-          country,
-          plan_tier,
-          plan_expires_at,
-          status,
-          primary_service_id,
-          primary_service:categories!companies_primary_service_id_fkey(name, name_nl, parent_id),
-          professionals (
-            id,
-            title,
-            bio,
-            is_verified,
-            is_available,
-            profiles:profiles!professionals_user_id_fkey (
-              first_name,
-              last_name,
-              location
-            )
-          )
-        `)
-        .eq("slug", slugOrId)
-        .maybeSingle()
+    ? await supabase.from("companies").select(select).eq("id", slugOrId).maybeSingle()
+    : await supabase.from("companies").select(select).eq("slug", slugOrId).maybeSingle()
 
   if (companyResult.error) {
     logger.error("Failed to fetch company metadata", { slugOrId, supabaseError: companyResult.error })
@@ -502,31 +433,27 @@ export const fetchProfessionalMetadata = async (
     return null
   }
 
-  // Get the first active professional for this company
-  const professionals = Array.isArray(company.professionals) ? company.professionals : []
-  const activeProfessional = professionals.find((p: any) => p.is_available === true) || professionals[0]
-
-  if (!activeProfessional) {
-    return null
-  }
-
-  // Only require listed status
+  // Public-listable status only.
   if (company.status !== "listed" && company.status !== "prospected") {
     return null
   }
 
   const photosResult = await supabase.rpc("get_public_company_photos", { p_company_id: company.id })
 
-  const profile = activeProfessional.profiles
+  // Pick the owner contact (there's at most one per company by the partial
+  // unique index on company_contacts). Used only for the name fallback.
+  const ownerContact = Array.isArray(company.owner_contact)
+    ? company.owner_contact.find((c: any) => c?.role === "owner") ?? null
+    : null
+  const ownerPerson = (ownerContact?.person ?? null) as { first_name: string | null; last_name: string | null } | null
 
   const name = company.name?.trim() ||
-    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
-    activeProfessional.title ||
+    [ownerPerson?.first_name, ownerPerson?.last_name].filter(Boolean).join(" ").trim() ||
     "Professional"
 
-  const description = company.description || activeProfessional.bio
+  const description = company.description
 
-  const location = formatLocation([company.city, company.country], profile?.location ?? null)
+  const location = formatLocation([company.city, company.country], null)
 
   let coverImageUrl: string | null = null
   if (!photosResult.error && Array.isArray(photosResult.data)) {
@@ -621,87 +548,82 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
   const companyId = company.id
 
-  // Fetch professionals for this company
-  const professionalsResult = await supabase
-    .from("professionals")
+  // Owner contact (if any) — gives us the person identity for the
+  // detail page. `company_contacts` partial unique index guarantees at
+  // most one owner row per company.
+  const ownerContactResult = await supabase
+    .from("company_contacts")
     .select(`
       id,
-      title,
-      bio,
-      years_experience,
-      services_offered,
-      languages_spoken,
-      hourly_rate_min,
-      hourly_rate_max,
-      is_verified,
-      is_available,
-      portfolio_url,
-      company_id,
-      profiles:profiles!professionals_user_id_fkey (
+      role,
+      status,
+      person:persons (
+        id,
         first_name,
         last_name,
-        avatar_url,
-        location,
-        created_at
-      ),
-      specialties:professional_specialties (
-        is_primary,
-        category:categories (
-          name
-        )
+        email,
+        auth_user_id
       )
     `)
     .eq("company_id", companyId)
+    .eq("role", "owner")
+    .maybeSingle()
 
-  if (professionalsResult.error) {
-    logger.error("Failed to fetch professionals for company", { companyId, supabaseError: professionalsResult.error })
-    return null
+  if (ownerContactResult.error) {
+    logger.warn("Failed to fetch owner contact for company detail", { companyId, supabaseError: ownerContactResult.error })
   }
 
-  const professionals = professionalsResult.data || []
+  const ownerContact = ownerContactResult.data
+  const ownerPerson = (ownerContact?.person ?? null) as {
+    id: string
+    first_name: string | null
+    last_name: string | null
+    email: string
+    auth_user_id: string | null
+  } | null
 
-  // Get the first available professional or just the first one
-  const detailRow = professionals.find((p: any) => p.is_available === true) || professionals[0]
-
-  // Companies without professionals (unclaimed) are still valid — use company data directly
-  const professionalId = detailRow?.id ?? null
-
-  const projectLinksQuery = professionalId
-    ? supabase
-        .from("project_professionals")
-        .select("project_id, status, cover_photo_id")
-        .or(`professional_id.eq.${professionalId},company_id.eq.${companyId}`)
-        .limit(50)
-    : supabase
-        .from("project_professionals")
-        .select("project_id, status, cover_photo_id")
-        .eq("company_id", companyId)
-        .limit(50)
+  // Hydrate the owner's profile (avatar + joinedAt). Persons doesn't
+  // carry an avatar — that stays on profiles for signed-up users.
+  let ownerProfile: { avatar_url: string | null; created_at: string | null } | null = null
+  if (ownerPerson?.auth_user_id) {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("avatar_url, created_at")
+      .eq("id", ownerPerson.auth_user_id)
+      .maybeSingle()
+    if (profileRow) {
+      ownerProfile = { avatar_url: profileRow.avatar_url ?? null, created_at: profileRow.created_at ?? null }
+    }
+  }
 
   const [photosResult, socialLinksResult, projectLinksResult] = await Promise.all([
     supabase.rpc("get_public_company_photos", { p_company_id: companyId }),
     supabase.from("company_social_links").select("platform, url").eq("company_id", companyId),
-    projectLinksQuery,
+    supabase
+      .from("project_professionals")
+      .select("project_id, status, cover_photo_id")
+      .eq("company_id", companyId)
+      .limit(50),
   ])
 
   if (photosResult.error) {
-    logger.warn("Failed to load company photos for professional detail", { slugOrId, professionalId, supabaseError: photosResult.error })
+    logger.warn("Failed to load company photos for professional detail", { slugOrId, companyId, supabaseError: photosResult.error })
   }
 
   if (socialLinksResult.error) {
     if (isRlsDenied(socialLinksResult.error)) {
-      logger.debug("RLS prevented loading company social links for anonymous viewer", { slugOrId, professionalId })
+      logger.debug("RLS prevented loading company social links for anonymous viewer", { slugOrId, companyId })
     } else {
       logger.warn("Failed to load company social links for professional detail", {
         slugOrId,
-        professionalId,
+        companyId,
         supabaseError: socialLinksResult.error,
       })
     }
   }
 
   if (projectLinksResult.error) {
-    logger.warn("Failed to load project links for professional detail", { slugOrId, professionalId, supabaseError: projectLinksResult.error })
+    logger.warn("Failed to load project links for professional detail", { slugOrId, companyId, supabaseError: projectLinksResult.error })
   }
 
   const galleryRows = Array.isArray(photosResult.data) ? (photosResult.data as CompanyPhotoRow[]) : []
@@ -765,7 +687,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
     if (projectSummariesResult.error) {
       logger.warn("Failed to load project summaries for professional detail", {
-        professionalId,
+        companyId,
         supabaseError: projectSummariesResult.error,
       })
     } else {
@@ -906,18 +828,9 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     }
   }
 
-  const profile = detailRow?.profiles ?? {
-    first_name: null,
-    last_name: null,
-    avatar_url: null,
-    location: null,
-    created_at: null,
-  }
-
   const name =
     (company.name && company.name.trim().length > 0 ? company.name.trim() : null) ??
-    ([profile.first_name, profile.last_name].filter(Boolean).join(" ").trim() ||
-      detailRow?.title ||
+    ([ownerPerson?.first_name, ownerPerson?.last_name].filter(Boolean).join(" ").trim() ||
       "Professional")
 
   const detailLocale = options?.locale ?? "en"
@@ -926,18 +839,14 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     return translateProfessionalService(name, detailLocale) ?? name
   }
 
-  const location = formatLocation([company.city, company.country], profile.location ?? null)
-  const specialties =
-    detailRow?.specialties
-      ?.map((entry) => {
-        const raw = entry?.category?.name?.trim()
-        if (!raw) return null
-        return localizeServiceName(raw)
-      })
-      .filter((value): value is string => typeof value === "string" && value.length > 0) ?? []
+  const location = formatLocation([company.city, company.country], null)
+  // Specialty list previously came from `professional_specialties` (now
+  // empty / scheduled for drop). The UI falls back to the company's
+  // services list when this array is empty.
+  const specialties: string[] = []
 
   const companyServicesRaw = toNonEmptyStrings(company.services_offered)
-  const rawServices = mergeUniqueStrings(company.services_offered, detailRow?.services_offered ?? null)
+  const rawServices = mergeUniqueStrings(company.services_offered)
   const serviceIds = rawServices.filter((value) => isUuid(value))
   let serviceNameMap = new Map<string, string>()
 
@@ -949,7 +858,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
     if (serviceCategoryError) {
       logger.warn("Failed to load service category names for professional detail", {
-        professionalId,
+        companyId,
         serviceIds,
         supabaseError: serviceCategoryError,
       })
@@ -990,7 +899,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   const services = resolveServiceLabels(rawServices)
   const companyServices = resolveServiceLabels(companyServicesRaw)
   const companyLanguages = toNonEmptyStrings(company.languages)
-  const languages = mergeUniqueStrings(company.languages, detailRow?.languages_spoken ?? null)
+  const languages = companyLanguages
 
   const primaryServiceRow = company.primary_service as { name: string; name_nl?: string | null } | null
   const rawPrimaryServiceName = primaryServiceRow?.name ?? null
@@ -1003,29 +912,29 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     id: company.id,
     slug: company.slug || company.id,
     name,
-    title: detailRow?.title ?? "Professional",
+    title: "Professional",
     description: (() => {
       const locale = options?.locale ?? "en"
       const translations = company.translations as Record<string, any> | null
       const localeDesc = translations?.[locale]?.description
       if (localeDesc && typeof localeDesc === "string" && localeDesc.trim()) return localeDesc
-      return company.description ?? detailRow?.bio ?? null
+      return company.description ?? null
     })(),
-    bio: detailRow?.bio ?? null,
+    bio: null,
     location,
     specialties,
     services,
     languages,
-    yearsExperience: detailRow?.years_experience ?? null,
-    hourlyRateDisplay: formatHourlyRate(detailRow?.hourly_rate_min ?? null, detailRow?.hourly_rate_max ?? null),
-    isVerified: Boolean(company.is_verified ?? detailRow?.is_verified),
-    isAvailable: Boolean(detailRow?.is_available),
-    portfolioUrl: detailRow?.portfolio_url ?? null,
+    yearsExperience: null,
+    hourlyRateDisplay: null,
+    isVerified: Boolean(company.is_verified),
+    isAvailable: true,
+    portfolioUrl: null,
     profile: {
-      firstName: profile.first_name ?? null,
-      lastName: profile.last_name ?? null,
-      avatarUrl: profile.avatar_url ?? null,
-      joinedAt: profile.created_at ?? null,
+      firstName: ownerPerson?.first_name ?? null,
+      lastName: ownerPerson?.last_name ?? null,
+      avatarUrl: ownerProfile?.avatar_url ?? null,
+      joinedAt: ownerProfile?.created_at ?? null,
     },
     company: {
       id: company.id,
@@ -1051,8 +960,6 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       teamSizeMin: company.team_size_min ?? null,
       teamSizeMax: company.team_size_max ?? null,
       foundedYear: company.founded_year ?? null,
-      planTier: company.plan_tier ?? null,
-      planExpiresAt: company.plan_expires_at ?? null,
       status: company.status ?? null,
     },
     gallery,

@@ -36,8 +36,8 @@ export default async function CompanySettingsPage({
   }
 
   const companySelect = `
-    id, slug, name, description, website, status, plan_tier, plan_expires_at,
-    upgrade_eligible, logo_url, email, phone, domain, is_verified, address, city, country,
+    id, slug, name, description, website, status,
+    logo_url, email, phone, domain, is_verified, address, city, country,
     services_offered, languages, certificates, specialties, primary_service_id, founded_year,
     team_size_min, team_size_max, hero_photo_url, hero_photo_project_id, owner_id,
     setup_completed, translations, audience
@@ -56,7 +56,14 @@ export default async function CompanySettingsPage({
     // Check if user has access to this company (owner, member, or professional)
     const [{ data: isOwner }, { data: isMember }, { data: isProfessional }] = await Promise.all([
       serviceSupabase.from("companies").select("id").eq("id", companyIdParam).eq("owner_id", user.id).maybeSingle(),
-      serviceSupabase.from("company_members").select("id").eq("company_id", companyIdParam).eq("user_id", user.id).eq("status", "active").maybeSingle(),
+      serviceSupabase
+        .from("company_contacts")
+        .select("id, person:persons!inner(auth_user_id)")
+        .eq("company_id", companyIdParam)
+        .eq("person.auth_user_id", user.id)
+        .in("role", ["owner", "admin", "member"])
+        .eq("status", "active")
+        .maybeSingle(),
       serviceSupabase.from("professionals").select("id").eq("company_id", companyIdParam).eq("user_id", user.id).maybeSingle(),
     ])
 
@@ -104,10 +111,11 @@ export default async function CompanySettingsPage({
 
       if (activeCompany) {
         const { data: isMember } = await supabase
-          .from("company_members")
-          .select("id")
+          .from("company_contacts")
+          .select("id, person:persons!inner(auth_user_id)")
           .eq("company_id", activeId)
-          .eq("user_id", user.id)
+          .eq("person.auth_user_id", user.id)
+          .in("role", ["owner", "admin", "member"])
           .eq("status", "active")
           .maybeSingle()
 
@@ -121,9 +129,10 @@ export default async function CompanySettingsPage({
   // 3. Fallback: first team membership (oldest first)
   if (!company) {
     const { data: membership } = await supabase
-      .from("company_members")
-      .select("company_id")
-      .eq("user_id", user.id)
+      .from("company_contacts")
+      .select("company_id, person:persons!inner(auth_user_id)")
+      .eq("person.auth_user_id", user.id)
+      .in("role", ["owner", "admin", "member"])
       .eq("status", "active")
       .order("created_at", { ascending: true })
       .limit(1)

@@ -151,8 +151,7 @@ export default function DashboardListingsPage() {
   })
   const MAX_CACHE_SIZE = 100 // Reasonable limit for taxonomy options
   const router = useRouter()
-  const { planTier, isPlus, canPublishProjects, error: entitlementsError } = useCompanyEntitlements()
-  const companyPlan: "basic" | "plus" = planTier ?? "basic"
+  const { canPublishProjects, error: entitlementsError } = useCompanyEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [professionalId, setProfessionalId] = useState<string | null>(null)
@@ -242,9 +241,10 @@ export default function DashboardListingsPage() {
       // Fallback: if no company resolved yet, check team membership
       if (!resolvedCompanyId) {
         const { data: membership } = await supabase
-          .from("company_members")
-          .select("company_id")
-          .eq("user_id", authData.user.id)
+          .from("company_contacts")
+          .select("company_id, person:persons!inner(auth_user_id)")
+          .eq("person.auth_user_id", authData.user.id)
+          .in("role", ["owner", "admin", "member"])
           .eq("status", "active")
           .limit(1)
           .maybeSingle()
@@ -1452,7 +1452,6 @@ export default function DashboardListingsPage() {
               }
             : null
         }
-        companyPlan={companyPlan}
         selectedStatus={selectedContributorStatus}
         onStatusChange={setSelectedContributorStatus}
         statusOptions={selectedProject?.role === "owner" ? ownerStatusOptions : contributorStatusOptions}

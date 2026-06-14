@@ -32,13 +32,9 @@ import { toast } from "sonner"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 import {
-  updateCompanyDetailsAction,
   updateCompanyStatusAction,
-  updateCompanyPlanTierAction,
-  updateCompanyPlanExpirationAction,
   updateCompanyFeaturedAction,
   updateCompanyAutoApproveAction,
-  updateProfessionalFeaturedAction,
   adminDeleteCompanyAction,
   adminDeleteInviteAction,
   generateCompanyLoginLinkAction,
@@ -46,7 +42,10 @@ import {
   changeCompanyOwnerAction,
   removeCompanyOwnerAction,
   updateCompanyEmailAction,
-} from "@/app/admin/professionals/actions"
+  updateCompanyContactRoleAction,
+  removeCompanyContactAction,
+  logOutboundForCompanyContactAction,
+} from "@/app/admin/companies/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import {
@@ -84,7 +83,15 @@ import { cn } from "@/lib/utils"
 import type { Database } from "@/lib/supabase/types"
 
 type CompanyStatus = Database["public"]["Enums"]["company_status"]
-type PlanTier = Database["public"]["Enums"]["company_plan_tier"]
+type CompanySource = Database["public"]["Enums"]["company_source"]
+
+const SOURCE_VALUES: CompanySource[] = ["apollo", "direct", "manual", "invited"]
+const SOURCE_LABEL: Record<CompanySource, string> = {
+  apollo: "Apollo",
+  direct: "Direct",
+  manual: "Manual",
+  invited: "Invited",
+}
 
 function ServiceDropdown({ services, extraCount }: { services: string[]; extraCount: number }) {
   const [open, setOpen] = useState(false)
@@ -160,6 +167,22 @@ export type AdminLinkedProject = {
   isProjectOwner: boolean
 }
 
+export type AdminCompanyContact = {
+  id: string                  // company_contacts.id
+  personId: string
+  name: string | null
+  email: string
+  phone: string | null
+  phoneCountryCode: string | null
+  source: string | null       // persons.source — apollo | direct | manual | invited
+  role: "owner" | "admin" | "member" | "contact"
+  status: string | null       // active | invited | inactive | deactivated | null
+  authUserId: string | null
+  lastContactedAt: string | null
+  nextFollowUpAt: string | null
+  notes: string | null
+}
+
 export type AdminCompanyRow = {
   id: string
   type: "company" | "invite"
@@ -171,6 +194,7 @@ export type AdminCompanyRow = {
   ownerName: string | null
   ownerEmail: string | null
   ownerAvatarUrl: string | null
+  contacts: AdminCompanyContact[]
   projectsAccepted: number
   projectsPending: number
   projects: AdminLinkedProject[]
@@ -178,8 +202,6 @@ export type AdminCompanyRow = {
   logoUrl: string | null
   isVerified: boolean
   isFeatured: boolean
-  planTier: PlanTier
-  planExpiresAt: string | null
   contactEmail: string | null
   website: string | null
   servicesOffered: string[]
@@ -189,6 +211,7 @@ export type AdminCompanyRow = {
   hasPublishedProjects: boolean
   canPublishProjects: boolean
   autoApproveProjects: boolean
+  source: CompanySource | null
   seoIndexed: boolean | null
   seoIndexationState: string | null
   seoImpressions28d: number | null
@@ -238,34 +261,10 @@ function validateProspectEligibility(company: AdminCompanyRow): ProspectCandidat
   return { company, eligible: reasons.length === 0, reasons }
 }
 
-type EditFormState = {
-  name: string
-  slug: string
-  logoUrl: string
-  website: string
-  email: string
-  services: string[]
-  primaryServiceId: string
-  isFeatured: boolean
-  autoApproveProjects: boolean
-  status: CompanyStatus
-  planTier: PlanTier
-  planExpiresAt: string
-  professionals: CompanyProfessional[]
-}
-
-type CompanyProfessional = {
-  id: string
-  first_name: string | null
-  last_name: string | null
-  title: string | null
-  primary_specialty: string | null
-  is_featured: boolean
-  avatar_url: string | null
-}
 
 const STATUS_DOT: Record<string, string> = {
-  unclaimed: "bg-[#ea580c]",
+  added: "bg-[#dc2626]",
+  unclaimed: "bg-[#dc2626]",
   draft: "bg-[#2563eb]",
   listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
@@ -275,6 +274,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  added: "Added",
   unclaimed: "Unclaimed",
   draft: "Draft",
   listed: "Listed",
@@ -289,14 +289,9 @@ const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "prospected" as any, label: "Prospected", description: "Contacted by platform, not yet claimed", dotColor: "bg-[#f59e0b]" },
-  { value: "unclaimed" as any, label: "Unclaimed", description: "No owner — added by admin or orphaned after account deletion. Waiting to be claimed.", dotColor: "bg-[#ea580c]" },
+  { value: "added" as any, label: "Added", description: "Catalogued (Apollo bulk import, manual add, or photographer import). Awaiting promotion to a sequence or claim.", dotColor: "bg-[#dc2626]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-[#dc2626]" },
 ]
-
-const planLabels: Record<PlanTier, string> = {
-  basic: "Basic",
-  plus: "Plus",
-}
 
 function OwnerEmailCell({ company, onRefresh }: { company: AdminCompanyRow; onRefresh: () => void }) {
   const [editing, setEditing] = useState(false)
@@ -352,6 +347,463 @@ function ensureHttp(url: string | null): string | null {
     return url
   }
   return `https://${url}`
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Contacts column components. Mirrors the Sales page's ContactsCell:
+// primary contact inline (with a click-menu), overflow contacts in a "+N
+// more" dropdown each carrying its own sub-menu.
+// ────────────────────────────────────────────────────────────────────────
+
+const CONTACT_STATUS_DOT: Record<string, string> = {
+  active: "bg-green-500",
+  invited: "bg-amber-500",
+  inactive: "bg-gray-400",
+  deactivated: "bg-red-500",
+}
+const CONTACT_STATUS_LABEL: Record<string, string> = {
+  active: "Active",
+  invited: "Invited",
+  inactive: "Inactive",
+  deactivated: "Deactivated",
+}
+
+const CONTACT_ROLE_LABEL: Record<AdminCompanyContact["role"], string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
+  contact: "Contact",
+}
+
+function ContactInline({ contact }: { contact: AdminCompanyContact }) {
+  const displayName = contact.name?.trim() || contact.email
+  const statusKey = contact.status ?? ""
+  const dotClass = CONTACT_STATUS_DOT[statusKey] ?? "bg-gray-300"
+  return (
+    <>
+      <span className="arco-table-status">
+        <span className={`arco-table-status-dot ${dotClass}`} />
+        <span className="truncate max-w-[180px]">{displayName}</span>
+      </span>
+      <span className="status-pill">{CONTACT_ROLE_LABEL[contact.role]}</span>
+    </>
+  )
+}
+
+function ContactActionMenuItems({
+  contact,
+  companyId,
+  companyName,
+  onChangeOwner,
+  onDetails,
+  onRefresh,
+  onLogOutbound,
+}: {
+  contact: AdminCompanyContact
+  companyId: string
+  companyName: string
+  onChangeOwner: () => void
+  onDetails: (contact: AdminCompanyContact) => void
+  onRefresh: () => void
+  onLogOutbound: (contact: AdminCompanyContact) => void
+}) {
+  const changeRole = async (role: AdminCompanyContact["role"]) => {
+    if (role === contact.role) return
+    const result = await updateCompanyContactRoleAction({ contactId: contact.id, role })
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to update role")
+      return
+    }
+    toast.success(`Role changed to ${CONTACT_ROLE_LABEL[role]}`)
+    onRefresh()
+  }
+  const remove = async () => {
+    if (!confirm(`Remove ${contact.name ?? contact.email} from ${companyName}?`)) return
+    const result = await removeCompanyContactAction({ contactId: contact.id })
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to remove contact")
+      return
+    }
+    toast.success("Contact removed")
+    onRefresh()
+  }
+  return (
+    <>
+      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onDetails(contact)}>
+        Details
+      </DropdownMenuItem>
+      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onLogOutbound(contact)}>
+        Log outbound
+      </DropdownMenuItem>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="text-xs">Change role</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {(["owner", "admin", "member", "contact"] as const).map((r) => (
+            <DropdownMenuItem
+              key={r}
+              className="text-xs cursor-pointer"
+              disabled={r === contact.role}
+              onClick={() => changeRole(r)}
+            >
+              {CONTACT_ROLE_LABEL[r]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      {contact.role === "owner" && (
+        <DropdownMenuItem className="text-xs cursor-pointer" onClick={onChangeOwner}>
+          Change owner
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        className="text-xs cursor-pointer text-red-600 focus:text-red-700"
+        onClick={remove}
+      >
+        Remove from company
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+function ContactsCell({
+  contacts,
+  companyId,
+  companyName,
+  onChangeOwner,
+  onRefresh,
+}: {
+  contacts: AdminCompanyContact[]
+  companyId: string
+  companyName: string
+  onChangeOwner: () => void
+  onRefresh: () => void
+}) {
+  const [logOutboundTarget, setLogOutboundTarget] = useState<AdminCompanyContact | null>(null)
+  const [detailsTarget, setDetailsTarget] = useState<AdminCompanyContact | null>(null)
+  const primary = contacts[0]
+  const overflow = contacts.slice(1)
+  if (!primary) return null
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
+          >
+            <ContactInline contact={primary} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[200px]">
+          <ContactActionMenuItems
+            contact={primary}
+            companyId={companyId}
+            companyName={companyName}
+            onChangeOwner={onChangeOwner}
+            onDetails={(c) => setDetailsTarget(c)}
+            onRefresh={onRefresh}
+            onLogOutbound={(c) => setLogOutboundTarget(c)}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {overflow.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="arco-table-secondary hover:text-[#016D75] transition-colors text-left cursor-pointer w-fit"
+            >
+              +{overflow.length} more
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[280px]">
+            {overflow.map((c) => (
+              <DropdownMenuSub key={c.id}>
+                <DropdownMenuSubTrigger className="text-xs">
+                  <ContactInline contact={c} />
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-[200px]">
+                  <ContactActionMenuItems
+                    contact={c}
+                    companyId={companyId}
+                    companyName={companyName}
+                    onChangeOwner={onChangeOwner}
+                    onDetails={(target) => setDetailsTarget(target)}
+                    onRefresh={onRefresh}
+                    onLogOutbound={(target) => setLogOutboundTarget(target)}
+                  />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      <ContactDetailsDialog
+        target={detailsTarget}
+        companyName={companyName}
+        onOpenChange={(open) => {
+          if (!open) setDetailsTarget(null)
+        }}
+      />
+
+      <LogOutboundForContactDialog
+        target={logOutboundTarget}
+        companyName={companyName}
+        onOpenChange={(open) => {
+          if (!open) setLogOutboundTarget(null)
+        }}
+        onLogged={() => {
+          setLogOutboundTarget(null)
+          onRefresh()
+        }}
+      />
+    </div>
+  )
+}
+
+// Minimal outbound-log dialog scoped to a single company_contact. Mirrors
+// the Sales LogOutboundModal shape but trimmed — no auto-prefill, no
+// suppression handling, no preset follow-up pills. Easy to extend later.
+function formatRelativeDate(iso: string | null): string {
+  if (!iso) return "—"
+  try {
+    return format(new Date(iso), "d MMM yyyy")
+  } catch {
+    return iso
+  }
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  apollo: "Apollo",
+  direct: "Direct",
+  manual: "Manual",
+  invited: "Invited",
+}
+
+// Read-only details popup for a single company_contact. Surfaces person
+// identity (name + email + phone), source attribution, role + status, and
+// per-deal rolling state. Editing happens via the row's action menu, not
+// inside this dialog.
+function ContactDetailsDialog({
+  target,
+  companyName,
+  onOpenChange,
+}: {
+  target: AdminCompanyContact | null
+  companyName: string
+  onOpenChange: (open: boolean) => void
+}) {
+  const open = target !== null
+  if (!target) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent />
+      </Dialog>
+    )
+  }
+  const displayName = target.name?.trim() || target.email
+  const initials = (target.name ?? target.email)
+    .split(/\s|@/)
+    .filter(Boolean)
+    .map((t) => t[0]?.toUpperCase())
+    .slice(0, 2)
+    .join("") || "?"
+  const phoneDisplay = target.phone
+    ? `${target.phoneCountryCode ? `+${target.phoneCountryCode} ` : ""}${target.phone}`
+    : null
+  const sourceLabel = target.source ? SOURCE_LABELS[target.source] ?? target.source : null
+  const statusLabel = target.status ? CONTACT_STATUS_LABEL[target.status] ?? target.status : null
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Contact details</DialogTitle>
+          <DialogDescription>{companyName}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="arco-table-avatar"
+              style={{ background: "#f5f5f4", color: "#6b6b68", width: 48, height: 48, fontSize: 16 }}
+            >
+              {initials}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="arco-table-primary" style={{ fontSize: 14, fontWeight: 500 }}>
+                {displayName}
+              </span>
+              <span className="arco-table-secondary truncate">{target.email}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            <ContactDetailRow label="Role" value={CONTACT_ROLE_LABEL[target.role]} />
+            <ContactDetailRow
+              label="Status"
+              value={
+                statusLabel ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                        CONTACT_STATUS_DOT[target.status ?? ""] ?? "bg-gray-300"
+                      }`}
+                    />
+                    {statusLabel}
+                  </span>
+                ) : (
+                  "—"
+                )
+              }
+            />
+            <ContactDetailRow label="Phone" value={phoneDisplay ?? "—"} />
+            <ContactDetailRow label="Source" value={sourceLabel ?? "—"} />
+            <ContactDetailRow
+              label="Account"
+              value={target.authUserId ? "Signed up" : "Not signed up"}
+            />
+            <ContactDetailRow label="Last contacted" value={formatRelativeDate(target.lastContactedAt)} />
+            <ContactDetailRow label="Next follow-up" value={formatRelativeDate(target.nextFollowUpAt)} />
+          </div>
+
+          {target.notes && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-[#6b6b68]">Notes</span>
+              <p className="text-xs whitespace-pre-wrap text-[#1c1c1a]">{target.notes}</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ContactDetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] uppercase tracking-wide text-[#a1a1a0]">{label}</span>
+      <span className="text-[#1c1c1a]">{value}</span>
+    </div>
+  )
+}
+
+function LogOutboundForContactDialog({
+  target,
+  companyName,
+  onOpenChange,
+  onLogged,
+}: {
+  target: AdminCompanyContact | null
+  companyName: string
+  onOpenChange: (open: boolean) => void
+  onLogged: () => void
+}) {
+  const [kind, setKind] = useState<"call" | "meeting" | "email" | "linkedin" | "note">("call")
+  const [outcome, setOutcome] = useState<"positive" | "neutral" | "negative" | "no_answer">("positive")
+  const [body, setBody] = useState("")
+  const [nextFollowUp, setNextFollowUp] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const open = target !== null
+
+  useEffect(() => {
+    if (open) {
+      setKind("call")
+      setOutcome("positive")
+      setBody("")
+      setNextFollowUp("")
+    }
+  }, [open])
+
+  const submit = async () => {
+    if (!target) return
+    setIsSubmitting(true)
+    const result = await logOutboundForCompanyContactAction({
+      companyContactId: target.id,
+      kind,
+      outcome: kind === "note" ? null : outcome,
+      body: body || null,
+      nextFollowUpAt: nextFollowUp || null,
+    })
+    setIsSubmitting(false)
+    if (!result.success) {
+      toast.error(result.error ?? "Failed to log")
+      return
+    }
+    toast.success("Outbound logged")
+    onLogged()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Log outbound</DialogTitle>
+          <DialogDescription>
+            {target ? `${target.name ?? target.email} · ${companyName}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div>
+            <Label className="text-xs">Kind</Label>
+            <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="call">Call</SelectItem>
+                <SelectItem value="meeting">Meeting</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="linkedin">LinkedIn</SelectItem>
+                <SelectItem value="note">Note</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {kind !== "note" && (
+            <div>
+              <Label className="text-xs">Outcome</Label>
+              <Select value={outcome} onValueChange={(v) => setOutcome(v as typeof outcome)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="positive">Positive</SelectItem>
+                  <SelectItem value="neutral">Neutral</SelectItem>
+                  <SelectItem value="negative">Negative</SelectItem>
+                  <SelectItem value="no_answer">No answer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">Notes</Label>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={3}
+              className="w-full text-xs border border-[#e5e5e4] rounded-[3px] p-2"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Next follow-up (optional)</Label>
+            <Input type="date" value={nextFollowUp} onChange={(e) => setNextFollowUp(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={isSubmitting}>
+            {isSubmitting ? "Saving…" : "Log"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow; onVerify: () => void; onRefresh: () => void }) {
@@ -437,6 +889,17 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // checkbox items.
   type CompanyStatusFilterValue = CompanyStatus | "invited" | "prospected"
   const [statusFilter, setStatusFilter] = useState<CompanyStatusFilterValue[]>([])
+  // Multi-select source filter. Same semantics as status: empty array =
+  // no filter. Filters company-type rows by `source`; invite-type rows
+  // (synthetic, no company) are excluded when any source is selected.
+  const [sourceFilter, setSourceFilter] = useState<CompanySource[]>([])
+  const toggleSource = useCallback((s: CompanySource) => {
+    setSourceFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }, [])
+  const filteredData = useMemo(() => {
+    if (sourceFilter.length === 0) return data
+    return data.filter((row) => row.source !== null && sourceFilter.includes(row.source))
+  }, [data, sourceFilter])
 
   /** Pushes the array into TanStack Table's column filter. Empty = clear. */
   const applyStatusFilter = useCallback((next: CompanyStatusFilterValue[]) => {
@@ -459,8 +922,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [removeOwnerCompany, setRemoveOwnerCompany] = useState<AdminCompanyRow | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingStatusAction | null>(null)
   const [statusChange, setStatusChange] = useState<StatusChangeState | null>(null)
-  const [editingCompany, setEditingCompany] = useState<AdminCompanyRow | null>(null)
-  const [editForm, setEditForm] = useState<EditFormState | null>(null)
   const [deleteCompany, setDeleteCompany] = useState<AdminCompanyRow | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [changeOwnerCompany, setChangeOwnerCompany] = useState<AdminCompanyRow | null>(null)
@@ -469,68 +930,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [prospectConfirm, setProspectConfirm] = useState<ProspectConfirmState | null>(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [isPending, startTransition] = useTransition()
-
-  // Load professionals when editing a company
-  useEffect(() => {
-    if (!editingCompany || editingCompany.type !== "company") {
-      setEditForm(null)
-      return
-    }
-
-    let cancelled = false
-    const loadCompanyProfessionals = async () => {
-      const supabase = getBrowserSupabaseClient()
-      const { data: professionals } = await supabase
-        .from("mv_professional_summary")
-        .select("id, first_name, last_name, title, primary_specialty, is_featured, avatar_url")
-        .eq("company_id", editingCompany.id)
-
-      if (!cancelled) {
-        setEditForm({
-          name: editingCompany.name,
-          slug: editingCompany.slug ?? "",
-          logoUrl: editingCompany.logoUrl ?? "",
-          website: editingCompany.website ?? "",
-          email: editingCompany.contactEmail ?? "",
-          services: editingCompany.servicesOffered ?? [],
-          primaryServiceId: editingCompany.primaryServiceId ?? "",
-          isFeatured: editingCompany.isFeatured,
-          autoApproveProjects: editingCompany.autoApproveProjects,
-          status: editingCompany.status === "invited" ? "unlisted" : editingCompany.status,
-          planTier: editingCompany.planTier,
-          planExpiresAt: editingCompany.planExpiresAt ?? "",
-          professionals: professionals ?? [],
-        })
-      }
-    }
-
-    loadCompanyProfessionals()
-    return () => { cancelled = true }
-  }, [editingCompany])
-
-  const toggleService = (serviceId: string, checked: boolean) => {
-    setEditForm((prev) => {
-      if (!prev) return prev
-      if (checked) {
-        return { ...prev, services: Array.from(new Set([...prev.services, serviceId])) }
-      }
-      return { ...prev, services: prev.services.filter((id) => id !== serviceId) }
-    })
-  }
-
-  const toggleCompanyFeatured = async (checked: boolean) => {
-    if (!editingCompany) return
-    const result = await updateCompanyFeaturedAction({
-      companyId: editingCompany.id,
-      isFeatured: checked,
-    })
-    if (!result.success) {
-      toast.error(result.error)
-      return
-    }
-    setEditForm((prev) => (prev ? { ...prev, isFeatured: checked } : prev))
-    toast.success(`Company ${checked ? "featured" : "unfeatured"} successfully`)
-  }
 
   const toggleAutoApproveProjects = async (companyId: string, checked: boolean) => {
     const result = await updateCompanyAutoApproveAction({
@@ -543,22 +942,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     }
     router.refresh()
     toast.success(`Auto-approve ${checked ? "enabled" : "disabled"}`)
-  }
-
-  const toggleProfessionalFeatured = async (professionalId: string, checked: boolean) => {
-    const result = await updateProfessionalFeaturedAction({ professionalId, isFeatured: checked })
-    if (!result.success) {
-      toast.error(result.error)
-      return
-    }
-    setEditForm((prev) => {
-      if (!prev) return prev
-      const updatedProfessionals = prev.professionals.map((prof) =>
-        prof.id === professionalId ? { ...prof, is_featured: checked } : prof
-      )
-      return { ...prev, professionals: updatedProfessionals }
-    })
-    toast.success(`Professional ${checked ? "featured" : "unfeatured"} successfully`)
   }
 
   const confirmStatusChange = () => {
@@ -659,65 +1042,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         router.refresh()
       } catch {
         toast.error("Unexpected error while deleting company.")
-      }
-    })
-  }
-
-  const handleEditSubmit = () => {
-    if (!editingCompany || !editForm) return
-    startTransition(async () => {
-      try {
-        const detailsResult = await updateCompanyDetailsAction({
-          companyId: editingCompany.id,
-          name: editForm.name.trim(),
-          slug: editForm.slug.trim() || null,
-          logoUrl: editForm.logoUrl.trim() || null,
-          website: editForm.website.trim() || null,
-          contactEmail: editForm.email.trim() || null,
-          services: editForm.services,
-          primaryServiceId: editForm.primaryServiceId || null,
-        })
-        if (!detailsResult.success) {
-          toast.error(detailsResult.error ?? "Failed to update company")
-          return
-        }
-        if (editForm.status !== editingCompany.status && editingCompany.status !== "invited") {
-          const statusResult = await updateCompanyStatusAction({
-            companyId: editingCompany.id,
-            status: editForm.status,
-          })
-          if (!statusResult.success) {
-            toast.error(statusResult.error ?? "Failed to update company status")
-            return
-          }
-        }
-        if (editForm.planTier !== editingCompany.planTier) {
-          const planTierResult = await updateCompanyPlanTierAction({
-            companyId: editingCompany.id,
-            planTier: editForm.planTier,
-          })
-          if (!planTierResult.success) {
-            toast.error(planTierResult.error ?? "Failed to update plan tier")
-            return
-          }
-        }
-        if (editForm.planExpiresAt !== editingCompany.planExpiresAt) {
-          const planExpirationResult = await updateCompanyPlanExpirationAction({
-            companyId: editingCompany.id,
-            planExpiresAt: editForm.planExpiresAt || null,
-          })
-          if (!planExpirationResult.success) {
-            toast.error(planExpirationResult.error ?? "Failed to update plan expiration")
-            return
-          }
-        }
-        toast.success(`${editingCompany.name} updated`)
-        router.refresh()
-      } catch (error) {
-        console.error("Failed to update company", error)
-        toast.error("Failed to update company")
-      } finally {
-        setEditingCompany(null)
       }
     })
   }
@@ -875,43 +1199,26 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         },
       },
       {
-        id: "owner",
-        header: "Owner",
+        id: "contacts",
+        header: "Contacts",
         cell: ({ row }) => {
           const company = row.original
-
-          // Claimed company with owner — show avatar + name + email
-          if (company.ownerName) {
-            const initials = company.ownerName
-              .split(" ")
-              .filter(Boolean)
-              .map((t) => t[0]?.toUpperCase())
-              .slice(0, 2)
-              .join("") || "?"
-
-            return (
-              <div className="flex items-center gap-3">
-                {company.ownerAvatarUrl ? (
-                  <div className="arco-table-avatar">
-                    <img src={company.ownerAvatarUrl} alt={company.ownerName} />
-                  </div>
-                ) : (
-                  <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>
-                    {initials}
-                  </div>
-                )}
-                <div className="flex flex-col min-w-0">
-                  <span className="arco-table-primary">{company.ownerName}</span>
-                  {company.ownerEmail && (
-                    <span className="arco-table-secondary">{company.ownerEmail}</span>
-                  )}
-                </div>
-              </div>
-            )
+          // Synthetic invite rows + companies with no contacts at all fall
+          // back to the editable email cell (preserves existing behaviour).
+          if (company.contacts.length === 0) {
+            return <OwnerEmailCell company={company} onRefresh={() => router.refresh()} />
           }
-
-          // Not claimed — show editable email
-          return <OwnerEmailCell company={company} onRefresh={() => router.refresh()} />
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ContactsCell
+                contacts={company.contacts}
+                companyId={company.id}
+                companyName={company.name}
+                onChangeOwner={() => setChangeOwnerCompany(company)}
+                onRefresh={() => router.refresh()}
+              />
+            </div>
+          )
         },
       },
       {
@@ -1133,6 +1440,16 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         },
       },
       {
+        accessorKey: "source",
+        header: "Source",
+        enableSorting: true,
+        cell: ({ row }) => {
+          const value = row.original.source
+          if (!value) return <span className="text-[#a1a1a0]">—</span>
+          return <span>{SOURCE_LABEL[value] ?? value}</span>
+        },
+      },
+      {
         accessorKey: "seoImpressions28d",
         header: "Impressions",
         sortingFn: (rowA, rowB) =>
@@ -1253,7 +1570,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   }, [isPending])
 
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     state: {
       sorting,
@@ -1283,30 +1600,59 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
   // Status funnel: Added → Prospected → Draft → Listed → Unlisted, with
   // Deactivated as the off-path leak (analogous to Rejected on the projects
-  // funnel). Invited is excluded — invited companies come in via project
-  // credits, not the sales funnel, so mixing them in would muddy the
-  // conversion math. Mirrors the visual pattern from /admin/projects.
+  // funnel). Invited is excluded from CR math — invited companies come in
+  // via project credits, not the sales funnel.
+  //
+  // Counts come from the currently-visible cohort, narrowed by every
+  // filter EXCEPT status. Status is excluded because the funnel cards
+  // are themselves the status filter; counting only the active stage
+  // would zero out every other card and make the funnel unusable as a
+  // toggle. Source + search apply here so the cards reflect "conversion
+  // for the currently-selected slice."
+  const funnelData = filteredData.filter((row) => {
+    if (!searchTerm) return true
+    const lowered = searchTerm.toLowerCase()
+    const haystack = [
+      row.name,
+      row.domain ?? "",
+      row.ownerEmail ?? "",
+      ...row.services,
+    ].join(" ").toLowerCase()
+    return haystack.includes(lowered)
+  })
   const companyStatusCounts: Record<string, number> = {}
-  for (const c of data) {
+  for (const c of funnelData) {
     companyStatusCounts[c.status] = (companyStatusCounts[c.status] ?? 0) + 1
   }
-  const COMPANY_FUNNEL: { status: CompanyStatus | "invited"; dotColor: string }[] = [
-    { status: "unclaimed" as CompanyStatus, dotColor: "#ea580c" },
-    { status: "prospected" as CompanyStatus, dotColor: "#f59e0b" },
-    { status: "invited", dotColor: "#f59e0b" },
-    { status: "draft", dotColor: "#2563eb" },
-    { status: "listed", dotColor: "#7c3aed" },
-    { status: "unlisted", dotColor: "#a1a1a0" },
-    { status: "deactivated", dotColor: "#dc2626" },
+  type Driver = "prospect" | "acquisition" | "retention" | null
+  const COMPANY_FUNNEL: { status: CompanyStatus | "invited"; dotColor: string; driver: Driver }[] = [
+    { status: "added" as CompanyStatus,       dotColor: "#dc2626", driver: "prospect" },
+    { status: "prospected" as CompanyStatus,  dotColor: "#f59e0b", driver: "prospect" },
+    { status: "invited",                       dotColor: "#f59e0b", driver: "prospect" },
+    { status: "draft",                         dotColor: "#2563eb", driver: "acquisition" },
+    { status: "listed",                        dotColor: "#7c3aed", driver: "retention" },
+    { status: "unlisted",                      dotColor: "#a1a1a0", driver: null },
+    { status: "deactivated",                   dotColor: "#dc2626", driver: null },
   ]
+  // Display label appears above the first card of each driver group.
+  const DRIVER_LABEL_AT: Record<string, string> = {
+    prospect: "added",
+    acquisition: "draft",
+    retention: "listed",
+  }
+  const DRIVER_COLORS: Record<string, string> = {
+    prospect: "#f59e0b",
+    acquisition: "#2563eb",
+    retention: "#7c3aed",
+  }
   const companyCountAt = (status: string) => companyStatusCounts[status] ?? 0
   // Each cohort represents "everything currently in or past this stage on
   // the linear flow". Deactivated is a terminal leak so it doesn't
   // accumulate forward.
   const companyCohortFor = (status: string): number => {
     switch (status) {
-      case "unclaimed":
-        return companyCountAt("unclaimed") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "added":
+        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
       case "prospected":
         return companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
       case "invited":
@@ -1357,7 +1703,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         <button
           type="button"
           className="btn-primary"
-          style={{ fontSize: 14, padding: "10px 20px" }}
           onClick={() => setShowAddModal(true)}
         >
           Add company
@@ -1379,7 +1724,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 { dot: "bg-[#2563eb]", label: "Draft", desc: "Company has been claimed. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
                 { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
                 { dot: "bg-[#f59e0b]", label: "Prospected", desc: "Added by admin and contacted via the sales funnel. Visible on the platform while unclaimed.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
-                { dot: "bg-[#ea580c]", label: "Unclaimed", desc: "No owner. Either added by admin (awaiting outreach) or orphaned when the previous owner deleted their account. Can be claimed by the next verified domain holder.", specs: "No owner · Not visible · Waiting to be claimed" },
+                { dot: "bg-[#dc2626]", label: "Added", desc: "Catalogued — Apollo bulk import, manual add, or photographer import. No outreach yet. Awaiting promotion to a sequence (→ Prospected) or claim (→ Draft).", specs: "No owner · Not visible · Awaiting outreach or claim" },
                 { dot: "bg-[#dc2626]", label: "Deactivated", desc: "Suspended and hidden from the platform.", specs: "Hidden · No access" },
               ].map((s) => (
                 <div key={s.label} style={{ display: "flex", gap: 12 }}>
@@ -1393,9 +1738,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               ))}
             </div>
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-              <strong>Flow:</strong> Unclaimed → Prospected (sales emails) → Draft (claimed) → Listed (live)
+              <strong>Flow:</strong> Added → Prospected (sales emails) → Draft (claimed) → Listed (live)
               <br />
-              <strong>Constraints:</strong> Companies without an owner cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Prospected or Unclaimed.
+              <strong>Constraints:</strong> Companies without an owner cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Prospected or Added.
             </div>
           </div>
         </div>
@@ -1432,48 +1777,76 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 alignItems: "start",
               }}
             >
-              {/* Bypass arc — Prospected → Draft (row 1), spans cols 3 → 8 */}
+              {/* Bypass arc — Prospected → Draft (row 3, below cards),
+                  spans cols 3 → 8. */}
               <div
                 style={{
-                  gridRow: 1,
+                  gridRow: 3,
                   gridColumn: "3 / 8",
                   position: "relative",
                   height: 32,
                 }}
               >
+                <div style={{ position: "absolute", left: CARD_WIDTH / 2, top: 0, height: "50%", borderLeft: "1px solid #d4d4d3" }} />
+                <div style={{ position: "absolute", right: CARD_WIDTH / 2, top: 0, height: "50%", borderLeft: "1px solid #d4d4d3" }} />
                 <div style={{ position: "absolute", left: CARD_WIDTH / 2, right: CARD_WIDTH / 2, top: "50%", borderTop: "1px solid #d4d4d3" }} />
-                <div style={{ position: "absolute", left: CARD_WIDTH / 2, top: "50%", bottom: 0, borderLeft: "1px solid #d4d4d3" }} />
-                <div style={{ position: "absolute", right: CARD_WIDTH / 2, top: "50%", bottom: 0, borderLeft: "1px solid #d4d4d3" }} />
                 {prospectedToDraft && (
                   <span
                     className="absolute text-[10px] font-medium text-[#6b6b68]"
-                    style={{ top: 0, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "#fff", padding: "0 6px" }}
+                    style={{ bottom: 0, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "#fff", padding: "0 6px" }}
                   >
                     {prospectedToDraft}
                   </span>
                 )}
               </div>
 
-              {/* Cards + inline connectors — row 3 */}
+              {/* Driver labels — row 1, one per driver group at its first card */}
+              {COMPANY_FUNNEL.map((stage, i) => {
+                if (!stage.driver) return null
+                if (DRIVER_LABEL_AT[stage.driver] !== stage.status) return null
+                // Card columns are odd-indexed in the grid (1-based):
+                // card 0 sits at col 1, card 1 at col 3, etc.
+                const cardCol = i * 2 + 1
+                return (
+                  <p
+                    key={`driver-${stage.status}`}
+                    className="arco-eyebrow"
+                    style={{
+                      gridRow: 1,
+                      gridColumn: cardCol,
+                      color: DRIVER_COLORS[stage.driver],
+                      marginBottom: 8,
+                    }}
+                  >
+                    {stage.driver.charAt(0).toUpperCase() + stage.driver.slice(1)}
+                  </p>
+                )
+              })}
+
+              {/* Cards + inline connectors — row 2 */}
               {COMPANY_FUNNEL.map((stage, i) => {
                 const count = companyCountAt(stage.status)
                 const label = stage.status === "invited" ? "Invited" : companyStatusLabel(stage.status)
 
-                // Inline connector rate before this card. Only shown for
-                // the meaningful sequential hops: Unclaimed→Prospected,
-                // Invited→Draft, and Draft→Listed. Prospected→Invited is
-                // a parallel-entry hop (bypass arc above covers
-                // Prospected→Draft); Listed→Unlisted and Unlisted→
+                // Inline connector rate before this card. Sequential hops:
+                // Added→Prospected, Invited→Draft, Draft→Listed.
+                // Prospected→Invited is a parallel-entry hop (rendered as
+                // a plain line, no rate); the bypass arc covers
+                // Prospected→Draft. Listed→Unlisted and Unlisted→
                 // Deactivated are leaks, not conversions.
                 let rate = ""
+                let suppressConnector = false
                 if (i > 0) {
                   const prev = COMPANY_FUNNEL[i - 1].status
                   const show =
-                    (prev === "unclaimed" && stage.status === "prospected") ||
+                    (prev === "added" && stage.status === "prospected") ||
                     (prev === "invited" && stage.status === "draft") ||
                     (prev === "draft" && stage.status === "listed")
                   if (show) {
                     rate = companyConversionRate(companyCohortFor(prev), companyCohortFor(stage.status))
+                  }
+                  if (prev === "prospected" && stage.status === "invited") {
+                    suppressConnector = true
                   }
                 }
 
@@ -1483,9 +1856,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     {i > 0 && (
                       <div
                         className="relative px-1 self-center"
-                        style={{ gridRow: 3, minWidth: 32 }}
+                        style={{ gridRow: 2, minWidth: 32 }}
                       >
-                        <div className="w-full border-t border-[#d4d4d3]" />
+                        {!suppressConnector && <div className="w-full border-t border-[#d4d4d3]" />}
                         {rate && (
                           <span
                             className="absolute text-[10px] font-medium text-[#6b6b68]"
@@ -1496,7 +1869,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                         )}
                       </div>
                     )}
-                    <div style={{ gridRow: 3 }} className="flex flex-col">
+                    <div style={{ gridRow: 2 }} className="flex flex-col">
                       <button
                         type="button"
                         onClick={() => toggleStatus(stage.status as CompanyStatusFilterValue)}
@@ -1520,18 +1893,23 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
       {/* Filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 items-center">
-          <input
-            type="text"
-            placeholder="Search by company, domain, or owner…"
-            className="w-full max-w-sm px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
-            value={searchTerm}
-            onChange={(event) => {
-              const value = event.target.value
-              setSearchTerm(value)
-              table.getColumn("name")?.setFilterValue(value)
-            }}
-          />
+        <div className="flex-1">
+          <div className="relative max-w-xs">
+            <input
+              type="text"
+              placeholder="Search by company, domain, or owner…"
+              value={searchTerm}
+              onChange={(event) => {
+                const value = event.target.value
+                setSearchTerm(value)
+                table.getColumn("name")?.setFilterValue(value)
+              }}
+              className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+            />
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Multi-select status filter — checkbox items in a dropdown menu.
@@ -1571,7 +1949,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {(["listed", "unlisted", "draft", "invited", "prospected", "unclaimed", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
+              {(["listed", "unlisted", "draft", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
                 <DropdownMenuCheckboxItem
                   key={s}
                   checked={statusFilter.includes(s)}
@@ -1583,6 +1961,55 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
                     {STATUS_LABEL[s]}
                   </span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select source filter. Same shape as the status dropdown.
+              Empty selection = all sources (no filter). Excludes synthetic
+              invite-type rows when any source is selected (those have no
+              company.source). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-[160px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {sourceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All sources</span>
+                  ) : sourceFilter.length === 1 ? (
+                    <span className="truncate">{SOURCE_LABEL[sourceFilter[0]]}</span>
+                  ) : (
+                    <span>{sourceFilter.length} sources</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (sourceFilter.length > 0) setSourceFilter([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {SOURCE_VALUES.map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={sourceFilter.includes(s)}
+                  onCheckedChange={() => toggleSource(s)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  {SOURCE_LABEL[s]}
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
@@ -1604,7 +2031,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
-                  {(["listed", "unlisted", "draft", "prospected", "unclaimed", "deactivated"] as const).map((s) => (
+                  {(["listed", "unlisted", "draft", "prospected", "added", "deactivated"] as const).map((s) => (
                     <DropdownMenuItem
                       key={s}
                       className="text-xs cursor-pointer flex items-center gap-1.5"
@@ -2025,7 +2452,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const isSelected = statusChange.selectedStatus === option.value
                 const isClaimed = !!statusChange.company.ownerName
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
-                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("unclaimed" as any) || option.value === ("invited" as any)) && isClaimed
+                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any) || option.value === ("invited" as any)) && isClaimed
                 const needsClaimed = (option.value === "listed" || option.value === "unlisted") && !isClaimed
                 const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed
                 return (
@@ -2048,7 +2475,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                             : needsUnclaimed
                               ? `Company already claimed by ${statusChange.company.ownerName}`
                               : needsClaimed
-                                ? "Company must be claimed first — use Prospected to list unclaimed companies"
+                                ? "Company must be claimed first — use Prospected to list added companies"
                                 : option.description}
                         </span>
                       ) : (
@@ -2150,311 +2577,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         )
       })()}
 
-      {/* Edit Dialog */}
-      <Dialog open={Boolean(editingCompany)} onOpenChange={(open) => !open && setEditingCompany(null)}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit company</DialogTitle>
-            <DialogDescription>
-              Update company metadata used across the professionals directory.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/30">
-              <div className="space-y-0.5">
-                <Label className="heading-6">Featured on homepage</Label>
-                <p className="body-small text-muted-foreground">
-                  Display this company in the featured professionals section
-                </p>
-              </div>
-              <Checkbox
-                checked={editForm?.isFeatured ?? false}
-                onCheckedChange={(checked) => toggleCompanyFeatured(checked === true)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-status">Company status</Label>
-              <Select
-                value={editForm?.status ?? "unlisted"}
-                onValueChange={(value) =>
-                  setEditForm((prev) => prev ? { ...prev, status: value as CompanyStatus } : prev)
-                }
-              >
-                <SelectTrigger id="company-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Draft</span>
-                      <span className="text-xs text-muted-foreground">Setup not yet completed</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="unlisted">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Unlisted</span>
-                      <span className="text-xs text-muted-foreground">Hidden from public directories</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="listed">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Listed</span>
-                      <span className="text-xs text-muted-foreground">Public and visible to homeowners</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="deactivated">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Deactivated</span>
-                      <span className="text-xs text-muted-foreground">Suspended and hidden</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-plan">Plan tier</Label>
-              <Select
-                value={editForm?.planTier ?? "basic"}
-                onValueChange={(value) =>
-                  setEditForm((prev) => prev ? { ...prev, planTier: value as PlanTier } : prev)
-                }
-              >
-                <SelectTrigger id="company-plan">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="basic">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Basic</span>
-                      <span className="text-xs text-muted-foreground">Standard features, not in directory</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="plus">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Plus</span>
-                      <span className="text-xs text-muted-foreground">Listed in professionals directory</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="plan-expires-at">Plan expiration</Label>
-              <Input
-                id="plan-expires-at"
-                type="datetime-local"
-                value={editForm?.planExpiresAt ? new Date(editForm.planExpiresAt).toISOString().slice(0, 16) : ""}
-                onChange={(event) =>
-                  setEditForm((prev) => (prev ? { ...prev, planExpiresAt: event.target.value ? new Date(event.target.value).toISOString() : "" } : prev))
-                }
-              />
-              {editForm?.planExpiresAt && (
-                <p className="text-xs text-muted-foreground">
-                  {new Date(editForm.planExpiresAt) > new Date()
-                    ? `Expires in ${Math.ceil((new Date(editForm.planExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days`
-                    : `Expired ${Math.ceil((Date.now() - new Date(editForm.planExpiresAt).getTime()) / (1000 * 60 * 60 * 24))} days ago`
-                  }
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-name">Company name</Label>
-              <Input
-                id="company-name"
-                value={editForm?.name ?? ""}
-                onChange={(event) =>
-                  setEditForm((prev) => (prev ? { ...prev, name: event.target.value } : prev))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company-slug">URL slug</Label>
-              <Input
-                id="company-slug"
-                placeholder="company-slug"
-                value={editForm?.slug ?? ""}
-                onChange={(event) =>
-                  setEditForm((prev) => (prev ? { ...prev, slug: event.target.value } : prev))
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Used in URL: /professionals/{editForm?.slug || "slug"}
-              </p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="company-logo">Logo URL</Label>
-                <Input
-                  id="company-logo"
-                  placeholder="https://..."
-                  type="url"
-                  value={editForm?.logoUrl ?? ""}
-                  onChange={(event) =>
-                    setEditForm((prev) => (prev ? { ...prev, logoUrl: event.target.value } : prev))
-                  }
-                />
-                {editForm?.logoUrl ? (
-                  <div className="mt-2 flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border bg-muted/40">
-                    <Image
-                      src={sanitizeImageUrl(editForm.logoUrl)}
-                      alt="Company logo preview"
-                      width={IMAGE_SIZES.thumbnail.width}
-                      height={IMAGE_SIZES.thumbnail.height}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company-website">Website</Label>
-                <Input
-                  id="company-website"
-                  placeholder="https://example.com"
-                  type="url"
-                  value={editForm?.website ?? ""}
-                  onChange={(event) =>
-                    setEditForm((prev) => (prev ? { ...prev, website: event.target.value } : prev))
-                  }
-                />
-              </div>
-              <div className="space-y-2 lg:col-span-2">
-                <Label htmlFor="company-email">Contact email</Label>
-                <Input
-                  id="company-email"
-                  type="email"
-                  placeholder="team@example.com"
-                  value={editForm?.email ?? ""}
-                  onChange={(event) =>
-                    setEditForm((prev) => (prev ? { ...prev, email: event.target.value } : prev))
-                  }
-                />
-              </div>
-              <div className="space-y-2 lg:col-span-1">
-                <Label htmlFor="primary-service">Primary service</Label>
-                <Select
-                  value={editForm?.primaryServiceId ?? ""}
-                  onValueChange={(value) =>
-                    setEditForm((prev) => (prev ? { ...prev, primaryServiceId: value } : prev))
-                  }
-                >
-                  <SelectTrigger id="primary-service">
-                    <SelectValue placeholder="Select primary service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {serviceOptions.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2 lg:col-span-2">
-                <Label>Other services</Label>
-                <p className="text-xs text-muted-foreground">Select additional services this company offers.</p>
-                <div className="max-h-56 overflow-y-auto rounded-md border p-3">
-                  {serviceOptions.length === 0 ? (
-                    <p className="body-small text-muted-foreground">No services available.</p>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {serviceOptions.map((service) => {
-                        const checked = editForm?.services.includes(service.id) ?? false
-                        const disabled = service.id === editForm?.primaryServiceId
-                        return (
-                          <label
-                            key={service.id}
-                            className={cn(
-                              "flex items-center gap-2 rounded-md border px-3 py-2 body-small",
-                              disabled ? "opacity-50 cursor-not-allowed" : "",
-                              checked ? "border-primary bg-primary/5" : "border-border hover:border-primary"
-                            )}
-                          >
-                            <Checkbox
-                              checked={checked}
-                              disabled={disabled}
-                              onCheckedChange={(value) =>
-                                toggleService(service.id, value === true)
-                              }
-                            />
-                            <span className="line-clamp-1">{service.name}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2 lg:col-span-2">
-                <Label>Team Professionals</Label>
-                <p className="text-xs text-muted-foreground">Manage which professionals from this company are featured on the homepage.</p>
-                <div className="max-h-64 overflow-y-auto rounded-md border">
-                  {editForm?.professionals?.length === 0 ? (
-                    <div className="p-4 text-center body-small text-muted-foreground">
-                      No professionals found for this company.
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {editForm?.professionals?.map((professional) => {
-                        const name = `${professional.first_name || ""} ${professional.last_name || ""}`.trim() || "Unnamed Professional"
-                        const role = professional.title || professional.primary_specialty || "Professional"
-
-                        return (
-                          <div key={professional.id} className="flex items-center gap-3 p-3 hover:bg-muted/50">
-                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border bg-muted/40">
-                              {professional.avatar_url ? (
-                                <Image
-                                  src={sanitizeImageUrl(professional.avatar_url)}
-                                  alt={name}
-                                  width={IMAGE_SIZES.avatar.width}
-                                  height={IMAGE_SIZES.avatar.height}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-xs font-medium text-muted-foreground">
-                                  {name.charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="body-small font-medium truncate">{name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{role}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                checked={professional.is_featured}
-                                onCheckedChange={(checked) =>
-                                  toggleProfessionalFeatured(professional.id, checked === true)
-                                }
-                              />
-                              <Label className="text-xs text-muted-foreground">Featured</Label>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <button
-              className="arco-nav-text px-[18px] py-[7px] rounded-[3px] border border-[#e5e5e4] hover:bg-[#f5f5f4] transition-colors"
-              onClick={() => setEditingCompany(null)}
-              disabled={isPending}
-            >
-              Cancel
-            </button>
-            <button
-              className="arco-nav-text px-[18px] py-[7px] rounded-[3px] btn-scrolled disabled:opacity-50"
-              onClick={handleEditSubmit}
-              disabled={isPending || !editForm?.name.trim()}
-            >
-              Save changes
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Bulk delete confirmation */}
       {showBulkDeleteConfirm && (() => {

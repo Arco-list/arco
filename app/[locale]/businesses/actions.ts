@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerSupabaseClient, createServerActionSupabaseClient } from "@/lib/supabase/server"
+import { ensureCompanyOwnerContact } from "@/lib/company-ownership"
 
 const stripWww = (h: string) => h.replace(/^www\./, "").toLowerCase()
 
@@ -175,6 +176,9 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
         .eq("id", user.id)
     }
 
+    // Mirror ownership into company_contacts for the new model.
+    await ensureCompanyOwnerContact(supabase, claimableCompanyId, user.id)
+
     return { success: true, companyId: claimableCompanyId, professionalId: newPro.id }
   }
 
@@ -340,6 +344,9 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
       .update({ user_types: [...currentTypes, "professional"] })
       .eq("id", user.id)
   }
+
+  // Mirror ownership into company_contacts for the new model.
+  await ensureCompanyOwnerContact(supabase, newCompany.id, user.id)
 
   return { success: true, companyId: newCompany.id, professionalId: newPro.id }
 }

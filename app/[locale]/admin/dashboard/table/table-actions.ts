@@ -226,15 +226,30 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     savedCompaniesResult,
     prospectsResult,
     publishableCategoriesResult,
+    outboundLogsResult,
+    allContactsResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at, first_touch_source"),
-    supabase.from("companies").select("id, status, plan_tier, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id, seo_impressions_28d, seo_clicks_28d"),
+    supabase.from("companies").select("id, status, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id, seo_impressions_28d, seo_clicks_28d"),
     supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed, seo_impressions_28d, seo_clicks_28d"),
     supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at, invited_email, invited_at, landing_visited_at"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
     supabase.from("saved_companies").select("user_id, company_id, created_at"),
     supabase.from("prospects").select("id, email, company_id, apollo_contact_id"),
     supabase.from("categories").select("id, slug").in("slug", PUBLISHABLE_SERVICE_SLUGS),
+    // Outbound metric inputs — manual logs from admin/companies and the
+    // Sales page. 'note' is excluded (observations, not outbound
+    // activity); 'no_answer' outcomes are excluded too — the metric
+    // measures *successful* contact, not attempts. Each log row carries
+    // EITHER company_contact_id (new admin/companies path) OR
+    // prospect_id (Sales page legacy path); we resolve to person_id
+    // downstream via whichever FK is present.
+    supabase.from("outbound_contact_log")
+      .select("created_at, kind, outcome, company_contact_id, prospect_id")
+      .neq("kind", "note")
+      .or("outcome.is.null,outcome.neq.no_answer")
+      .gte("created_at", from.toISOString()),
+    supabase.from("company_contacts").select("id, person_id, company_id"),
   ])
 
   const profiles = (profilesResult.data ?? []) as any[]
@@ -244,6 +259,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const savedProjects = (savedProjectsResult.data ?? []) as any[]
   const savedCompanies = (savedCompaniesResult.data ?? []) as any[]
   const prospects = (prospectsResult.data ?? []) as any[]
+  const outboundLogs = (outboundLogsResult.data ?? []) as any[]
+  const allContacts = (allContactsResult.data ?? []) as any[]
   const publishableCategoryIds = new Set<string>(
     (publishableCategoriesResult.data ?? []).map((c: any) => c.id as string),
   )
@@ -819,9 +836,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   }
   const totalInvitedSeries = bucketTotalInvited()
 
-  const paidTiers = ["pro", "premium", "enterprise"]
-  const subscribedDates = makeDates(companies, (c) => paidTiers.includes(c.plan_tier))
-  const subscribers = bucket8(subscribedDates, buckets)
+  // Plan tiers retired — no companies pass the subscription filter.
+  const subscribers = bucket8([], buckets)
 
   // ── Client metrics ────────────────────────────────────────────────────
 
@@ -1165,6 +1181,91 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const newProDates = makeDatesByOnboarded(companies, onboardingCompleted)
   const newPros = bucket8(newProDates, buckets)
 
+  // ── Outbound metric ─────────────────────────────────────────────────
+  // Sourced from manual logs in `outbound_contact_log` (the admin
+  // Contacts cell "Log outbound" action). Each log row references a
+  // company_contact; we resolve to person_id, then bucket the FIRST
+  // outbound touch per person per bucket so the same person logged
+  // twice in a week counts once.
+  //
+  // Overlaps with the other Pro visitors channels by design — see the
+  // metric definition for the double-count caveat. Apollo drip emails
+  // are NOT yet logged here; will appear automatically once the drip
+  // queue writes outbound_contact_log rows on send.
+  // Person lookups for outbound resolution. Logs reference EITHER
+  // company_contact_id (new path) OR prospect_id (Sales page legacy
+  // path). One persons fetch covers both: id, email, auth_user_id.
+  const { data: personsForOutbound } = await supabase
+    .from("persons")
+    .select("id, email, auth_user_id")
+  const personIdByEmail = new Map<string, string>()
+  const personIdByAuthUserId = new Map<string, string>()
+  for (const p of personsForOutbound ?? []) {
+    if (p.id && p.email) personIdByEmail.set(p.email.toLowerCase(), p.id)
+    if (p.id && p.auth_user_id) personIdByAuthUserId.set(p.auth_user_id, p.id)
+  }
+  const contactById = new Map<string, { person_id: string; company_id: string }>()
+  for (const cc of allContacts) {
+    if (cc?.id) contactById.set(cc.id, { person_id: cc.person_id, company_id: cc.company_id })
+  }
+  // Resolve a log row → person_id. Tries company_contact first; falls
+  // back to prospect.email → persons.email match.
+  const prospectById = new Map<string, { email: string | null }>()
+  for (const pr of prospects) {
+    if (pr?.id) prospectById.set(pr.id, { email: pr.email ?? null })
+  }
+  const resolvePersonId = (log: any): string | null => {
+    if (log.company_contact_id) {
+      const link = contactById.get(log.company_contact_id)
+      if (link?.person_id) return link.person_id
+    }
+    if (log.prospect_id) {
+      const pr = prospectById.get(log.prospect_id)
+      const email = pr?.email?.toLowerCase()
+      if (email) {
+        const pid = personIdByEmail.get(email)
+        if (pid) return pid
+      }
+    }
+    return null
+  }
+  // Group outbound events by (period, person) — drop duplicates within
+  // the same bucket via a per-bucket Set.
+  const outboundDatesByPerson = new Map<string, Date>()
+  const outboundPersonsByBucket: Set<string>[] = Array.from({ length: 8 }, () => new Set())
+  for (const log of outboundLogs) {
+    const personId = resolvePersonId(log)
+    if (!personId) continue
+    const date = new Date(log.created_at)
+    for (let i = 0; i < 8; i++) {
+      if (date >= buckets.starts[i] && date < buckets.ends[i]) {
+        outboundPersonsByBucket[i].add(personId)
+        // Track earliest outbound touch per person for the new-pros CR.
+        const existing = outboundDatesByPerson.get(personId)
+        if (!existing || date < existing) outboundDatesByPerson.set(personId, date)
+        break
+      }
+    }
+  }
+  const outboundBucketed = {
+    total: outboundPersonsByBucket.reduce((sum, s) => sum + s.size, 0),
+    series: outboundPersonsByBucket.map((s) => s.size),
+  }
+
+  // "New Pros from Outbound" — companies onboarded in the period whose
+  // owner person was contacted via outbound at any prior point.
+  const newProsOutboundDates = companies
+    .filter((c: any) => {
+      if (!onboardingCompleted(c)) return false
+      if (!c.owner_id) return false
+      const personId = personIdByAuthUserId.get(c.owner_id)
+      if (!personId) return false
+      return outboundDatesByPerson.has(personId)
+    })
+    .map((c: any) => new Date(c.onboarded_at ?? c.created_at))
+    .filter((d) => !Number.isNaN(d.getTime()))
+  const newProsOutboundBucketed = bucket8(newProsOutboundDates, buckets)
+
   // Apollo channel: companies whose id is referenced by a prospect with an
   // apollo_contact_id (i.e. they came in via the Apollo outbound sequence).
   const apolloCompanyIds = new Set<string>(
@@ -1461,6 +1562,15 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "shares", label: "Shares", definition: "Pro visitors from a tagged share URL (utm_source=share)",
           total: proVisitorsShareBucketed.total, datapoints: proVisitorsShareBucketed.series,
           crNumerator: { total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares } },
+        // Outbound — distinct pros we touched via manual outbound logs in
+        // the period. Overlaps with other channels by design (a pro
+        // attributed to Sales/Direct can also appear here if a rep
+        // logged a call/email/meeting that week). The CR shows how
+        // many of those contacted became new pros.
+        { key: "outbound", label: "Outbound", definition: "Distinct pros successfully reached via outbound activity (excludes notes and no-answer attempts). Overlaps with other channels.",
+          source: "supabase" as MetricSource,
+          total: outboundBucketed.total, datapoints: outboundBucketed.series,
+          crNumerator: { total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0), datapoints: newProsOutboundBucketed.datapoints } },
       ],
     },
     {
@@ -1494,6 +1604,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           total: newProsBySourceTotals.referral, datapoints: newProsBySource.referral },
         { key: "shares", label: "Shares", definition: "New pros whose first touch was a tagged share URL", source: "supabase" as MetricSource,
           total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares },
+        // Outbound — new pros whose person was contacted via outbound
+        // at any point. Overlaps with the first-touch channels above.
+        { key: "outbound", label: "Outbound", definition: "New pros who were successfully reached via outbound before signup. Overlaps with other channels.",
+          source: "supabase" as MetricSource,
+          total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0), datapoints: newProsOutboundBucketed.datapoints },
         { key: "open_drafts", label: "Open drafts", definition: "Pros currently in draft — onboarding not yet completed", source: "supabase" as MetricSource, total: totalOpenDrafts, datapoints: openDraftsSeries },
       ],
     },
@@ -1631,7 +1746,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     },
     {
       key: "subscribers", label: "Subscribers", definition: "Unique first time subscriptions", source: "supabase" as MetricSource, driver: "monetization",
-      total: subscribedDates.length, ...subscribers,
+      total: 0, ...subscribers,
       subs: [
         { key: "mrr", label: "MRR", definition: "Monthly recurring revenue", total: 0, datapoints: empty8 },
       ],

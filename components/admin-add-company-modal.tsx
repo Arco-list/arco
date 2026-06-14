@@ -4,7 +4,7 @@ import { useCallback, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus } from "lucide-react"
-import { adminAddCompanyAction, type GooglePlaceInput } from "@/app/admin/professionals/add-company-actions"
+import { adminAddCompanyAction, type GooglePlaceInput } from "@/app/admin/companies/add-company-actions"
 
 type GooglePlaceResult = { placeId: string; name: string; city: string | null }
 

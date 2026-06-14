@@ -21,9 +21,6 @@ type SearchProfessionalsRow = {
   user_id: string | null
   first_name: string | null
   last_name: string | null
-  avatar_url: string | null
-  user_location: string | null
-  title: string | null
   company_id: string | null
   company_name: string | null
   company_slug: string | null
@@ -37,7 +34,6 @@ type SearchProfessionalsRow = {
   primary_specialty: string | null
   primary_service_name: string | null
   services_offered: string[] | null
-  hourly_rate_display: string | null
   is_verified: boolean | null
   cover_photo_url: string | null
   specialty_ids: string[] | null
@@ -95,7 +91,7 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
     name,
     profession,
     location,
-    image: row.cover_photo_url || row.company_logo || row.avatar_url || PLACEHOLDER_IMAGE,
+    image: row.cover_photo_url || row.company_logo || PLACEHOLDER_IMAGE,
     logoUrl: row.company_logo ?? null,
     specialties,
     isVerified: Boolean(row.is_verified),

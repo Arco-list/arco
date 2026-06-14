@@ -109,6 +109,121 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
         continue
       }
 
+      // Mirror the prospect into the new `persons` table. Keyed by email
+      // (case-insensitive unique). source='apollo' is preserved across
+      // re-syncs by ON CONFLICT DO NOTHING — once a person exists with
+      // their own source (e.g. 'direct' from signup), Apollo doesn't
+      // overwrite it. phone/first/last get refreshed via a separate
+      // UPDATE that only touches non-source identity fields.
+      const emailLc = contact.email.toLowerCase()
+      const { error: personInsertError } = await supabase
+        .from("persons")
+        .insert({
+          email: emailLc,
+          first_name: contact.first_name || null,
+          last_name: contact.last_name || null,
+          phone: contact.phone_numbers?.[0]?.raw_number || null,
+          source: "apollo",
+        })
+      if (personInsertError && personInsertError.code !== "23505") {
+        // 23505 = unique_violation — expected on re-sync. Anything else
+        // is worth logging.
+        logger.warn("[apollo-sync] failed to insert person", { email: emailLc, error: personInsertError.message })
+      } else if (!personInsertError) {
+        // Newly inserted — done.
+      } else {
+        // Conflict: refresh identity fields without touching source.
+        await supabase
+          .from("persons")
+          .update({
+            first_name: contact.first_name || null,
+            last_name: contact.last_name || null,
+            phone: contact.phone_numbers?.[0]?.raw_number || null,
+          })
+          .eq("email", emailLc)
+      }
+
+      // Reify the contact's organisation into the `companies` table so the
+      // import surfaces on /admin/companies (status='added', source='manual'
+      // until an actual conversion flips it to 'apollo'). Domain comes from
+      // either Apollo's website_url or the email's host. Skip if neither.
+      const rawDomain =
+        contact.website_url?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]?.toLowerCase()
+        || emailLc.split("@")[1]
+      const companyDomain = rawDomain && rawDomain.includes(".") ? rawDomain : null
+
+      let prospectCompanyId: string | null = (upserted as any)?.company_id ?? null
+
+      if (!prospectCompanyId && companyDomain) {
+        // Match by domain first; fall back to insert.
+        const { data: existingCompany } = await supabase
+          .from("companies")
+          .select("id")
+          .eq("domain", companyDomain)
+          .maybeSingle()
+
+        if (existingCompany) {
+          prospectCompanyId = existingCompany.id
+        } else {
+          const slug = companyDomain.replace(/\./g, "-")
+          const { data: newCompany, error: companyInsertError } = await supabase
+            .from("companies")
+            .insert({
+              name: contact.organization_name || companyDomain,
+              slug,
+              domain: companyDomain,
+              status: "added",
+              source: "manual",
+              country: contact.country || "Netherlands",
+              city: contact.city || null,
+            })
+            .select("id")
+            .single()
+          if (companyInsertError) {
+            logger.warn("[apollo-sync] failed to insert company", { domain: companyDomain, error: companyInsertError.message })
+          } else if (newCompany) {
+            prospectCompanyId = newCompany.id
+          }
+        }
+
+        // Link the prospect row back to this company.
+        if (prospectCompanyId && (upserted as any)?.id) {
+          await supabase
+            .from("prospects")
+            .update({ company_id: prospectCompanyId })
+            .eq("id", (upserted as any).id)
+        }
+      }
+
+      // Create a contact-role link between this person and the company.
+      // `company_contacts` is keyed on (company_id, person_id), so this
+      // is idempotent across re-syncs.
+      if (prospectCompanyId) {
+        const { data: personRow } = await supabase
+          .from("persons")
+          .select("id")
+          .eq("email", emailLc)
+          .maybeSingle()
+
+        if (personRow) {
+          const { error: contactInsertError } = await supabase
+            .from("company_contacts")
+            .insert({
+              company_id: prospectCompanyId,
+              person_id: personRow.id,
+              role: "contact",
+              status: null,
+            })
+          if (contactInsertError && contactInsertError.code !== "23505") {
+            logger.warn("[apollo-sync] failed to insert company_contact", {
+              email: emailLc,
+              companyId: prospectCompanyId,
+              error: contactInsertError.message,
+            })
+          }
+        }
+      }
+
       totalSynced++
 
       // Auto-enrol freshly-imported (or never-enrolled) Apollo contacts

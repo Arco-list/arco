@@ -13,7 +13,7 @@ export default async function ProspectsPage() {
   // One-row-per-company aggregation. fetchSalesCompanies bakes the
   // claimed-company metadata (logo, owner, primary service) into each
   // row, so we no longer need a separate companyMap join here.
-  const { companies, totalCompanies, funnel } = await fetchSalesCompanies({ limit: 50 })
+  const { companies, totalCompanies, funnel, outboundDueCount } = await fetchSalesCompanies({ limit: 50 })
   const totalEmailsSent = companies.reduce((sum, c) => sum + c.emailsSent, 0)
 
   // Most recently used Apollo list ID — pre-fills the Import Contacts
@@ -41,6 +41,7 @@ export default async function ProspectsPage() {
             initialTotalCompanies={totalCompanies}
             initialFunnel={funnel}
             initialEmailsSent={totalEmailsSent}
+            initialOutboundDueCount={outboundDueCount}
             currentApolloListId={currentApolloListId}
             apolloProspectsCount={apolloProspectsCount ?? 0}
           />

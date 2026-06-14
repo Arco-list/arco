@@ -35,7 +35,7 @@ import {
   updateProjectProfessionalStatusAction,
   toggleProjectFeaturedAction,
 } from "@/app/admin/projects/actions"
-import { generateCompanyLoginLinkAction } from "@/app/admin/professionals/actions"
+import { generateCompanyLoginLinkAction } from "@/app/admin/companies/actions"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,

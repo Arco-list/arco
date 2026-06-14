@@ -34,6 +34,18 @@ const nextConfig = {
   // Settings → Domains). We deliberately do NOT add a Next.js redirect
   // here — adding one in either direction creates a loop with Vercel's
   // own redirect. The canonical host is www.arcolist.com.
+  async redirects() {
+    return [
+      // /admin/professionals was renamed to /admin/companies during the
+      // company-centric refactor. Permanent redirect so old bookmarks
+      // and external links land on the new route. Matches both the
+      // locale-less form and the [locale] form.
+      { source: "/admin/professionals", destination: "/admin/companies", permanent: true },
+      { source: "/admin/professionals/:path*", destination: "/admin/companies/:path*", permanent: true },
+      { source: "/:locale/admin/professionals", destination: "/:locale/admin/companies", permanent: true },
+      { source: "/:locale/admin/professionals/:path*", destination: "/:locale/admin/companies/:path*", permanent: true },
+    ]
+  },
 }
 
 export default withNextIntl(nextConfig)

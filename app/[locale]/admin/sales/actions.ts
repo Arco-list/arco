@@ -485,6 +485,10 @@ type FetchSalesCompaniesFilters = {
   limit?: number
   sortBy?: SalesSortBy
   sortDir?: SalesSortDir
+  /** When true, only return rows with at least one contact whose
+   *  nextFollowUpAt is on or before end-of-today (the "Outbound due"
+   *  cohort). */
+  outboundDueOnly?: boolean
 }
 
 type SalesGroupShape = {
@@ -671,6 +675,12 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   companies: SalesCompanyRow[]
   totalCompanies: number
   funnel: SalesFunnel
+  /** Total rows currently due for outbound (nextOutboundAt <= EOD today).
+   *  Counted across the full unfiltered dataset so the toolbar button is a
+   *  stable "global" signal — independent of status / source / sequence /
+   *  search narrowing. Powers both the Outbound toggle and the header
+   *  Sales badge. */
+  outboundDueCount: number
   error?: string
 }> {
   const supabase = createServiceRoleSupabaseClient()
@@ -683,6 +693,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     limit = 50,
     sortBy = "last_contacted_at",
     sortDir = "desc",
+    outboundDueOnly = false,
   } = filters
 
   const { data, error } = await supabase
@@ -696,7 +707,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 
   if (error) {
     console.error("Failed to fetch prospects for sales aggregation", error)
-    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, error: error.message }
+    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, outboundDueCount: 0, error: error.message }
   }
 
   const rawRows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
@@ -938,16 +949,43 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     }
   })
 
+  // Global Outbound-due count — computed BEFORE any filter so the
+  // toolbar button + header badge stay stable when the admin narrows by
+  // status / source / sequence / search. End-of-today cutoff (local) so
+  // "today" follow-ups stay due all day. Compared as ISO strings, which
+  // sort lexicographically the same as chronologically for the format
+  // `YYYY-MM-DDTHH:mm:ss.sssZ`.
+  const endOfTodayIso = (() => {
+    const d = new Date()
+    d.setHours(23, 59, 59, 999)
+    return d.toISOString()
+  })()
+  const outboundDueCount = rows.reduce(
+    (n, r) => (r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso ? n + 1 : n),
+    0,
+  )
+
   // Filter ordering matters for the funnel:
-  //   - Source + sequence narrow the funnel (the user wants to see
-  //     conversion for just the selected channel / sequence).
+  //   - Source, sequence and search narrow the funnel (the user wants to
+  //     see conversion for just the selected channel / sequence /
+  //     matching set).
   //   - Status narrows only the table (filtering by "Contacted"
-  //     mustn't zero out every other funnel card).
-  // So we apply source + sequence first, compute the funnel against
-  // that narrowed set, then apply status as a table-only filter.
+  //     mustn't zero out every other funnel card — the cards are also
+  //     the toggle for that filter).
+  // So we apply source + sequence + search first, compute the funnel
+  // against that narrowed set, then apply status as a table-only filter.
   if (sources && sources.length > 0) {
+    // "outbound" is a synthetic channel — keyed off lastOutboundAt rather
+    // than prospects.source. Treat it as an OR alongside the real source
+    // values so the rep can pick "Outreach + Outbound" and see either.
     const set = new Set(sources)
-    rows = rows.filter((r) => r.sources.some((s) => set.has(s)))
+    const wantsOutbound = set.has("outbound")
+    const realSet = new Set([...set].filter((s) => s !== "outbound"))
+    rows = rows.filter((r) => {
+      if (realSet.size > 0 && r.sources.some((s) => realSet.has(s))) return true
+      if (wantsOutbound && r.lastOutboundAt) return true
+      return false
+    })
   }
   if (sequences && sequences.length > 0) {
     // Suppression beats real sequence_status for display, so mirror that
@@ -963,11 +1001,25 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       return set.has(r.sequenceStatus)
     })
   }
+  if (search) {
+    const needle = search.toLowerCase()
+    rows = rows.filter((r) => {
+      if (r.companyName.toLowerCase().includes(needle)) return true
+      if (r.city?.toLowerCase().includes(needle)) return true
+      if (r.country?.toLowerCase().includes(needle)) return true
+      if (r.companyDomain?.toLowerCase().includes(needle)) return true
+      if (r.contacts.some((c) =>
+        c.email.toLowerCase().includes(needle) ||
+        c.contactName?.toLowerCase().includes(needle) ||
+        c.resolvedContact.name?.toLowerCase().includes(needle))) return true
+      return false
+    })
+  }
 
-  // Per-company funnel — counted AFTER source + sequence filters so
-  // the cards reflect "conversion for the selected channel/sequence".
-  // Status is applied below this, so the cards stay stable when the
-  // admin clicks a funnel stage to narrow the table.
+  // Per-company funnel — counted AFTER source + sequence + search filters
+  // so the cards reflect the currently-visible cohort. Status is applied
+  // below this, so the cards stay stable when the admin clicks a funnel
+  // stage to narrow the table.
   const funnel: SalesFunnel = { ...EMPTY_SALES_FUNNEL }
   for (const r of rows) {
     funnel.total++
@@ -978,16 +1030,9 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     const set = new Set<ProspectStatus>(statuses)
     rows = rows.filter((r) => set.has(r.status))
   }
-  if (search) {
-    const needle = search.toLowerCase()
-    rows = rows.filter((r) => {
-      if (r.companyName.toLowerCase().includes(needle)) return true
-      for (const c of r.contacts) {
-        if (c.email.toLowerCase().includes(needle)) return true
-        if (c.contactName?.toLowerCase().includes(needle)) return true
-      }
-      return false
-    })
+
+  if (outboundDueOnly) {
+    rows = rows.filter((r) => r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso)
   }
 
   // Sort. nulls go to the bottom regardless of direction so empty values
@@ -1012,11 +1057,49 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const totalCompanies = rows.length
   const paged = rows.slice(offset, offset + limit)
 
-  return { companies: paged, totalCompanies, funnel }
+  return { companies: paged, totalCompanies, funnel, outboundDueCount }
 }
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
   total: 0, prospect: 0, contacted: 0, visitor: 0, signup: 0, company: 0, active: 0,
+}
+
+/**
+ * Count of distinct companies due for outbound (any contact with
+ * next_follow_up_at <= end-of-today). Powers the Sales badge in the
+ * admin header — kept cheap by counting via `prospects` directly and
+ * de-duping by company group key (company_id || lower(company_name) ||
+ * email) so it matches how fetchSalesCompanies aggregates rows.
+ */
+export async function countOutboundDueCompanies(): Promise<number> {
+  const supabase = createServiceRoleSupabaseClient()
+  const endOfTodayIso = (() => {
+    const d = new Date()
+    d.setHours(23, 59, 59, 999)
+    return d.toISOString()
+  })()
+  const { data, error } = await supabase
+    .from("prospects")
+    .select("email, company_id, company_name, next_follow_up_at")
+    .neq("status", "removed" as never)
+    .not("next_follow_up_at", "is", null)
+    .lte("next_follow_up_at", endOfTodayIso)
+    .limit(5000)
+  if (error) {
+    console.error("countOutboundDueCompanies failed", error)
+    return 0
+  }
+  const keys = new Set<string>()
+  for (const r of (data ?? []) as Array<{
+    email: string
+    company_id: string | null
+    company_name: string | null
+  }>) {
+    if (r.company_id) keys.add(`cid:${r.company_id}`)
+    else if (r.company_name?.trim()) keys.add(`name:${r.company_name.trim().toLowerCase()}`)
+    else keys.add(`email:${r.email.toLowerCase()}`)
+  }
+  return keys.size
 }
 
 const STATUS_TO_APOLLO_STAGE: Record<string, string> = {
@@ -1556,7 +1639,7 @@ export async function startProspectSequence(prospectId: string) {
     await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
     return { success: false, error: "No linked company" }
   }
-  const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
+  const { sendProspectEmailAction } = await import("@/app/admin/companies/actions")
   const result = await sendProspectEmailAction({
     companyId: prospect.company_id,
     emailTo: prospect.email,
@@ -2545,7 +2628,7 @@ export async function restartProspectSequence(prospectId: string) {
     await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
     return { success: false, error: "No linked company" }
   }
-  const { sendProspectEmailAction } = await import("@/app/admin/professionals/actions")
+  const { sendProspectEmailAction } = await import("@/app/admin/companies/actions")
   const result = await sendProspectEmailAction({
     companyId: prospect.company_id,
     emailTo: prospect.email,

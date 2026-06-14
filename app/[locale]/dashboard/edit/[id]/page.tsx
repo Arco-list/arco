@@ -489,8 +489,7 @@ export default function ListingEditorPage() {
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
-  const { planTier, isPlus, error: entitlementsError } = useCompanyEntitlements()
-  const companyPlan: "basic" | "plus" = planTier ?? "basic"
+  const { error: entitlementsError } = useCompanyEntitlements()
   const rawProjectId = params?.id
   const projectId = useMemo(
     () => (Array.isArray(rawProjectId) ? rawProjectId[0] : (rawProjectId as string | undefined) ?? null),
@@ -608,7 +607,6 @@ export default function ListingEditorPage() {
       title: detailsForm.projectTitle?.trim() || t("untitled_project"),
       descriptor: descriptorParts.join(" • ") || "Add project details",
       coverImageUrl: coverPhotoUrl,
-      planBadgeLabel: isPlus ? "Plus plan" : "Basic plan",
     }
   }, [
     detailsForm.city,
@@ -616,7 +614,6 @@ export default function ListingEditorPage() {
     detailsForm.projectTitle,
     detailsForm.region,
     getFeatureCoverPhoto,
-    isPlus,
     uploadedPhotos,
   ])
 
@@ -1993,20 +1990,22 @@ export default function ListingEditorPage() {
       throw invitesError
     }
 
-    const professionalIds = Array.from(
+    // mv_professional_summary.id is now company.id, so the lookup is by
+    // company_id rather than the legacy professional_id.
+    const companyIds = Array.from(
       new Set(
         (inviteRows ?? [])
-          .map((row) => row.professional_id)
+          .map((row) => (row as any).company_id)
           .filter((value): value is string => Boolean(value)),
       ),
     )
 
     let professionalMap = new Map<string, ProfessionalSummaryRow>()
-    if (professionalIds.length) {
+    if (companyIds.length) {
       const { data: professionals, error: professionalError } = await supabase
         .from("mv_professional_summary")
         .select("id, company_id, company_name, company_logo, primary_specialty")
-        .in("id", professionalIds)
+        .in("id", companyIds)
 
       if (professionalError) {
         throw professionalError
@@ -2019,14 +2018,7 @@ export default function ListingEditorPage() {
       )
     }
 
-    // Collect all company IDs across all invites
-    const allCompanyIds = Array.from(
-      new Set(
-        (inviteRows ?? [])
-          .map(row => (row as any).company_id ?? (row.professional_id ? professionalMap.get(row.professional_id)?.company_id : null))
-          .filter((id): id is string => Boolean(id)),
-      ),
-    )
+    const allCompanyIds = companyIds
 
     // Fetch company info for invites that have company_id but no professional_id
     const companyOnlyIds = allCompanyIds.filter(id =>
@@ -2078,8 +2070,10 @@ export default function ListingEditorPage() {
     let ownerInvite: ProfessionalInviteSummary | null = null
 
     ;(inviteRows ?? []).forEach((row) => {
-      const professionalData = row.professional_id ? professionalMap.get(row.professional_id) : null
-      const companyId = (row as any).company_id ?? professionalData?.company_id ?? null
+      const companyId = (row as any).company_id ?? null
+      // professionalMap is now keyed by companies.id (since mv_professional_summary.id
+      // was switched from professionals.id to companies.id in migration 174).
+      const professionalData = companyId ? professionalMap.get(companyId) : null
       // Photographers (audience='pro' companies) are credited via the
       // dedicated spec-bar cell, not the Credited professionals section —
       // skip them here so they don't double up.
@@ -5505,7 +5499,6 @@ export default function ListingEditorPage() {
         onClose={handleCloseStatusModal}
         onSave={handleStatusSave}
         project={statusModalProject}
-        companyPlan={companyPlan}
         selectedStatus={selectedStatus}
         onStatusChange={(value) => setSelectedStatus(value)}
         statusOptions={statusOptions}

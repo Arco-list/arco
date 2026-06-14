@@ -4,6 +4,9 @@ import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { Header, type NavItem } from "@/components/header"
+import { countOutboundDueCompanies } from "./sales/actions"
+import { countUnreadInboundEmails } from "./inbox/actions"
+import { countProjectsToReview } from "./projects/actions"
 
 type AdminLayoutProps = {
   children: ReactNode
@@ -50,40 +53,50 @@ const ICONS = {
   ),
 }
 
-const ADMIN_NAV_LINKS: NavItem[] = [
-  {
-    label: "Marketplace",
-    children: [
-      { href: "/admin/users", label: "Users", icon: ICONS.users },
-      { href: "/admin/professionals", label: "Companies", icon: ICONS.companies },
-      { href: "/admin/projects", label: "Projects", icon: ICONS.projects },
-    ],
-  },
-  {
-    label: "Catalog",
-    children: [
-      { href: "/admin/brands", label: "Brands", icon: ICONS.brands },
-      { href: "/admin/products", label: "Products", icon: ICONS.products },
-    ],
-  },
-  {
-    label: "Growth",
-    children: [
-      { href: "/admin/dashboard", label: "Dashboard", icon: ICONS.growth },
-      { href: "/admin/sales", label: "Sales", icon: ICONS.sales },
-      { href: "/admin/inbox", label: "Inbox", icon: ICONS.inbox },
-      { href: "/admin/emails", label: "Emails", icon: ICONS.emails },
-      { href: "/admin/model", label: "Model", icon: ICONS.growthModel },
-    ],
-  },
-  {
-    label: "Platform",
-    children: [
-      { href: "/admin/categories", label: "Categories", icon: ICONS.categories },
-      { href: "/admin/design", label: "Design", icon: ICONS.design },
-    ],
-  },
-]
+function buildAdminNavLinks({
+  outboundDueCount,
+  inboxUnreadCount,
+  projectsToReviewCount,
+}: {
+  outboundDueCount: number
+  inboxUnreadCount: number
+  projectsToReviewCount: number
+}): NavItem[] {
+  return [
+    {
+      label: "Marketplace",
+      children: [
+        { href: "/admin/users", label: "Users", icon: ICONS.users },
+        { href: "/admin/companies", label: "Companies", icon: ICONS.companies },
+        { href: "/admin/projects", label: "Projects", icon: ICONS.projects, badge: projectsToReviewCount },
+      ],
+    },
+    {
+      label: "Catalog",
+      children: [
+        { href: "/admin/brands", label: "Brands", icon: ICONS.brands },
+        { href: "/admin/products", label: "Products", icon: ICONS.products },
+      ],
+    },
+    {
+      label: "Growth",
+      children: [
+        { href: "/admin/dashboard", label: "Dashboard", icon: ICONS.growth },
+        { href: "/admin/sales", label: "Sales", icon: ICONS.sales, badge: outboundDueCount },
+        { href: "/admin/inbox", label: "Inbox", icon: ICONS.inbox, badge: inboxUnreadCount },
+        { href: "/admin/emails", label: "Emails", icon: ICONS.emails },
+        { href: "/admin/model", label: "Model", icon: ICONS.growthModel },
+      ],
+    },
+    {
+      label: "Platform",
+      children: [
+        { href: "/admin/categories", label: "Categories", icon: ICONS.categories },
+        { href: "/admin/design", label: "Design", icon: ICONS.design },
+      ],
+    },
+  ]
+}
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {
   const supabase = await createServerSupabaseClient()
@@ -115,9 +128,17 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     return redirect(`/dashboard?unauthorized=admin`)
   }
 
+  const [outboundDueCount, inboxUnreadCount, projectsToReviewCount] = await Promise.all([
+    countOutboundDueCompanies(),
+    countUnreadInboundEmails(),
+    countProjectsToReview(),
+  ])
+
   return (
     <div className="min-h-screen">
-      <Header navLinks={ADMIN_NAV_LINKS} />
+      <Header
+        navLinks={buildAdminNavLinks({ outboundDueCount, inboxUnreadCount, projectsToReviewCount })}
+      />
       <main className="pt-[60px]">
         {children}
       </main>

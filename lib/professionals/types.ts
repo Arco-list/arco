@@ -95,8 +95,6 @@ export type ProfessionalDetail = {
     teamSizeMin: number | null
     teamSizeMax: number | null
     foundedYear: number | null
-    planTier: string | null
-    planExpiresAt: string | null
     status: string | null
   }
   gallery: ProfessionalGalleryImage[]

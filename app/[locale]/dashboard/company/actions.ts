@@ -200,10 +200,11 @@ async function getCompanyContext(overrideCompanyId?: string) {
 
     if (activeCompany) {
       const isMember = await supabase
-        .from("company_members")
-        .select("id")
+        .from("company_contacts")
+        .select("id, person:persons!inner(auth_user_id)")
         .eq("company_id", activeId)
-        .eq("user_id", user.id)
+        .eq("person.auth_user_id", user.id)
+        .in("role", ["owner", "admin", "member"])
         .eq("status", "active")
         .maybeSingle()
         .then((r) => !!r.data)
@@ -216,9 +217,10 @@ async function getCompanyContext(overrideCompanyId?: string) {
 
   // 3. Fallback: find first company via team membership
   const { data: membership } = await supabase
-    .from("company_members")
-    .select("company_id")
-    .eq("user_id", user.id)
+    .from("company_contacts")
+    .select("company_id, person:persons!inner(auth_user_id)")
+    .eq("person.auth_user_id", user.id)
+    .in("role", ["owner", "admin", "member"])
     .eq("status", "active")
     .order("created_at", { ascending: true })
     .limit(1)
@@ -1336,11 +1338,12 @@ export async function getUserCompaniesAction(): Promise<{
     }
   }
 
-  // Member companies (via company_members table)
+  // Member companies (via company_contacts, team roles only)
   const { data: memberships } = await supabase
-    .from("company_members")
-    .select("company_id, companies(id, name, logo_url)")
-    .eq("user_id", user.id)
+    .from("company_contacts")
+    .select("company_id, person:persons!inner(auth_user_id), companies(id, name, logo_url)")
+    .eq("person.auth_user_id", user.id)
+    .in("role", ["owner", "admin", "member"])
     .eq("status", "active")
 
   for (const m of memberships ?? []) {
@@ -1391,7 +1394,14 @@ export async function switchCompanyAction(companyId: string): Promise<ActionResu
   // Verify access via any path
   const [{ data: isOwner }, { data: isMember }, { data: isProfessional }] = await Promise.all([
     supabase.from("companies").select("id").eq("id", companyId).eq("owner_id", user.id).maybeSingle(),
-    supabase.from("company_members").select("id").eq("company_id", companyId).eq("user_id", user.id).eq("status", "active").maybeSingle(),
+    supabase
+      .from("company_contacts")
+      .select("id, person:persons!inner(auth_user_id)")
+      .eq("company_id", companyId)
+      .eq("person.auth_user_id", user.id)
+      .in("role", ["owner", "admin", "member"])
+      .eq("status", "active")
+      .maybeSingle(),
     supabase.from("professionals").select("id").eq("company_id", companyId).eq("user_id", user.id).maybeSingle(),
   ])
 
@@ -1441,12 +1451,13 @@ export async function checkCompanyDeletionAction(): Promise<{ success: true; dat
   const warnings: string[] = []
   const blockers: string[] = []
 
-  // Count team members (excluding owner)
+  // Count team members (excluding the owner themselves)
   const { count: memberCount } = await supabase
-    .from("company_members")
-    .select("id", { count: "exact", head: true })
+    .from("company_contacts")
+    .select("id, person:persons!inner(auth_user_id)", { count: "exact", head: true })
     .eq("company_id", companyId)
-    .neq("user_id", user!.id)
+    .in("role", ["admin", "member"])
+    .neq("person.auth_user_id", user!.id)
 
   if ((memberCount ?? 0) > 0) {
     warnings.push(`${memberCount} team member${memberCount === 1 ? "" : "s"} will be removed`)

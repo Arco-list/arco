@@ -353,6 +353,21 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
  * detail popup. Marks the row as 'read' as a side effect when it was
  * 'unread' — same pattern as Gmail / most inbox UIs.
  */
+/**
+ * Count of unread inbound emails — drives the Inbox badge in the admin
+ * header. Matches the unreadCount computed alongside fetchInboundEmails
+ * so the badge and the in-page tab counter never disagree.
+ */
+export async function countUnreadInboundEmails(): Promise<number> {
+  const supabase = createServiceRoleSupabaseClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (supabase as any)
+    .from("inbound_emails")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "unread")
+  return count ?? 0
+}
+
 export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailDetail | null> {
   const supabase = createServiceRoleSupabaseClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -164,15 +164,17 @@ export default async function UsersPage() {
         .select("id, name, slug, owner_id, status")
         .in("owner_id", allUserIds),
       serviceClient
-        .from("company_members")
-        .select("user_id, company_id, companies(id, name, slug, status)")
-        .in("user_id", allUserIds)
+        .from("company_contacts")
+        .select("company_id, person:persons!inner(auth_user_id), companies(id, name, slug, status)")
+        .in("person.auth_user_id", allUserIds)
+        .in("role", ["owner", "admin", "member"])
         .eq("status", "active"),
     ])
 
-    for (const row of teamMemberRows ?? []) {
-      if (!row.user_id || !row.companies) continue
-      addCompany(row.user_id, row.companies as unknown as { id: string; name: string; slug: string; status: string })
+    for (const row of (teamMemberRows ?? []) as any[]) {
+      const userId = row?.person?.auth_user_id as string | undefined
+      if (!userId || !row.companies) continue
+      addCompany(userId, row.companies as unknown as { id: string; name: string; slug: string; status: string })
     }
 
     for (const row of ownedCompanies ?? []) {

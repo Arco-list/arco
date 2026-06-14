@@ -96,7 +96,7 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     professionalsResult,
   ] = await Promise.all([
     supabase.from("profiles").select("id, user_types, created_at"),
-    supabase.from("companies").select("id, status, plan_tier, created_at, owner_id"),
+    supabase.from("companies").select("id, status, created_at, owner_id"),
     supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at"),
     supabase.from("project_professionals").select("id, professional_id, company_id, project_id, created_at, is_project_owner"),
     supabase.from("saved_projects").select("user_id, project_id, created_at"),
@@ -168,8 +168,10 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     if (owner) publisherCompanyIds.add(owner)
   }
   const publisherCompanies = publisherCompanyIds.size
-  const paidTiers = ["pro", "premium", "enterprise"]
-  const paidCompanies = companies.filter((c: any) => paidTiers.includes(c.plan_tier)).length
+  // Paid-subscription concept retired. Kept on the response shape as 0 so
+  // downstream UIs (cards, conversion arrows) don't crash; remove the
+  // surface entirely when those cards get redesigned.
+  const paidCompanies = 0
 
   const signupsLast30d = allProfiles.filter((p: any) => new Date(p.created_at) > d30).length
   const signupsLast7d = allProfiles.filter((p: any) => new Date(p.created_at) > d7).length
@@ -233,12 +235,8 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     if (companiesWithInvites.has(id)) publishersWhoAlsoInvited.add(id)
   })
 
-  // Active → subscribed: must intersect with listed for a true conversion.
-  // Earlier code used cohortCompanyIds (listed or not) which could exceed
-  // 100% when a paid company never reached "listed".
-  const activeAndSubscribed = allCompanies.filter(
-    (c: any) => cohortActiveIds.has(c.id) && paidTiers.includes(c.plan_tier)
-  ).length
+  // Active → subscribed: paid-tier concept retired. Always 0.
+  const activeAndSubscribed = 0
 
   // Cross-funnel signup → draft. Counts ALL signups (any role) whose user_id
   // maps to a claimed company. Captures the visit → signup → draft path

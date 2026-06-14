@@ -3,7 +3,7 @@
  *
  * Why this exists:
  *   syncCompanyToApollo() fires on status *changes* only (via the server
- *   actions in admin/professionals and create-company). Companies whose
+ *   actions in admin/companies and create-company). Companies whose
  *   status hasn't changed since the last Apollo mapping update sit at a
  *   stale stage in Apollo indefinitely. After renaming `added` → `unclaimed`
  *   in migration 128, any company previously mapped to the "Added" stage

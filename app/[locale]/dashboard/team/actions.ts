@@ -8,6 +8,10 @@ import { sendTransactionalEmail } from "@/lib/email-service"
 import { logger } from "@/lib/logger"
 import { getSiteUrl } from "@/lib/utils"
 
+// Team-page actions operate on `company_contacts` + `persons`. The dual-
+// write to legacy `company_members` was removed once that table was
+// retired (see migration 178).
+
 // ---- Schemas ----
 
 const inviteSchema = z.object({
@@ -30,7 +34,18 @@ type ActionResult = { success: boolean; error?: string }
 
 // ---- Helper ----
 
-async function getCompanyForUser(supabase: ReturnType<typeof createServiceRoleSupabaseClient>, userId: string) {
+type CompanyInfo = {
+  companyId: string
+  companyName: string
+  companyLogoUrl: string | null
+  isOwner: boolean
+  role: "admin" | "member"
+}
+
+async function getCompanyForUser(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  userId: string,
+): Promise<CompanyInfo | null> {
   const { data: ownedCompany } = await supabase
     .from("companies")
     .select("id, name, logo_url")
@@ -39,19 +54,35 @@ async function getCompanyForUser(supabase: ReturnType<typeof createServiceRoleSu
     .limit(1)
     .maybeSingle()
 
-  if (ownedCompany) return { companyId: ownedCompany.id, companyName: ownedCompany.name, companyLogoUrl: ownedCompany.logo_url, isOwner: true, role: "admin" as const }
+  if (ownedCompany) {
+    return {
+      companyId: ownedCompany.id,
+      companyName: ownedCompany.name,
+      companyLogoUrl: ownedCompany.logo_url,
+      isOwner: true,
+      role: "admin",
+    }
+  }
 
-  const { data: membership } = await supabase
-    .from("company_members")
-    .select("company_id, role, companies(id, name, logo_url)")
-    .eq("user_id", userId)
-    .eq("status", "active")
+  // Team membership lookup goes through company_contacts now.
+  const { data: contact } = await supabase
+    .from("company_contacts")
+    .select("role, company:companies(id, name, logo_url), person:persons!inner(auth_user_id)")
+    .eq("person.auth_user_id", userId)
+    .in("role", ["admin", "member"])
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()
 
-  if (membership?.companies) {
-    const company = membership.companies as unknown as { id: string; name: string; logo_url: string | null }
-    return { companyId: company.id, companyName: company.name, companyLogoUrl: company.logo_url, isOwner: false, role: membership.role as "admin" | "member" }
+  const co = contact?.company as unknown as { id: string; name: string; logo_url: string | null } | null
+  if (co) {
+    return {
+      companyId: co.id,
+      companyName: co.name,
+      companyLogoUrl: co.logo_url,
+      isOwner: false,
+      role: (contact?.role === "admin" ? "admin" : "member"),
+    }
   }
 
   return null
@@ -79,50 +110,86 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
 
   const emailLower = email.toLowerCase()
 
-  // Check if already a member
-  const { data: existing } = await serviceClient
-    .from("company_members")
-    .select("id, status")
-    .eq("company_id", companyInfo.companyId)
+  // Resolve / create the person record for this email. Source='invited'
+  // captures how the person entered the system. If the email already
+  // matches a person we reuse it (no second person, no duplicate identity).
+  const { data: existingPerson } = await serviceClient
+    .from("persons")
+    .select("id, auth_user_id")
     .eq("email", emailLower)
     .maybeSingle()
 
-  if (existing) {
+  let personId: string
+  let personAuthUserId: string | null = null
+  if (existingPerson) {
+    personId = existingPerson.id
+    personAuthUserId = existingPerson.auth_user_id
+  } else {
+    const { data: created, error: personError } = await serviceClient
+      .from("persons")
+      .insert({ email: emailLower, source: "invited" })
+      .select("id, auth_user_id")
+      .single()
+    if (personError || !created) {
+      logger.db("insert", "persons", "Failed to create invited person", { email: emailLower }, personError as any)
+      return { success: false, error: "Failed to send invitation." }
+    }
+    personId = created.id
+    personAuthUserId = created.auth_user_id
+  }
+
+  // Reject duplicate team-role link at this company.
+  const { data: existingContact } = await serviceClient
+    .from("company_contacts")
+    .select("id, role, status")
+    .eq("company_id", companyInfo.companyId)
+    .eq("person_id", personId)
+    .maybeSingle()
+
+  if (existingContact && ["owner", "admin", "member"].includes(existingContact.role)) {
     return {
       success: false,
-      error: existing.status === "active"
+      error: existingContact.status === "active"
         ? "This person is already a team member."
         : "This person has already been invited.",
     }
   }
 
-  // Check if invited person already has an Arco account
-  const { data: { users } } = await serviceClient.auth.admin.listUsers()
-  const existingUser = users?.find(u => u.email?.toLowerCase() === emailLower)
-
-  const { error: insertError } = await serviceClient
-    .from("company_members")
-    .insert({
-      company_id: companyInfo.companyId,
-      user_id: existingUser?.id ?? null,
-      email: emailLower,
-      role,
-      status: existingUser ? "active" : "invited",
-      invited_by: user.id,
-      joined_at: existingUser ? new Date().toISOString() : null,
-    })
-
-  if (insertError) {
-    logger.db("insert", "company_members", "Failed to invite team member", { email: emailLower }, insertError as any)
-    return { success: false, error: "Failed to send invitation." }
+  // If a non-team contact (lead) already exists, promote it. Otherwise insert.
+  const status = personAuthUserId ? "active" : "invited"
+  if (existingContact) {
+    const { error: upgradeError } = await serviceClient
+      .from("company_contacts")
+      .update({ role, status, invited_at: new Date().toISOString(), invited_by: user.id })
+      .eq("id", existingContact.id)
+    if (upgradeError) {
+      logger.db("update", "company_contacts", "Failed to promote contact to team", { contactId: existingContact.id }, upgradeError as any)
+      return { success: false, error: "Failed to send invitation." }
+    }
+  } else {
+    const { error: insertError } = await serviceClient
+      .from("company_contacts")
+      .insert({
+        company_id: companyInfo.companyId,
+        person_id: personId,
+        role,
+        status,
+        invited_at: new Date().toISOString(),
+        invited_by: user.id,
+        joined_at: personAuthUserId ? new Date().toISOString() : null,
+      })
+    if (insertError) {
+      logger.db("insert", "company_contacts", "Failed to invite team member", { email: emailLower }, insertError as any)
+      return { success: false, error: "Failed to send invitation." }
+    }
   }
 
-  // If user already exists, ensure they have 'professional' in user_types
-  if (existingUser) {
+  // Ensure existing user has 'professional' in user_types
+  if (personAuthUserId) {
     const { data: profile } = await serviceClient
       .from("profiles")
       .select("user_types")
-      .eq("id", existingUser.id)
+      .eq("id", personAuthUserId)
       .maybeSingle()
 
     const currentTypes = Array.isArray(profile?.user_types) ? profile.user_types : []
@@ -130,13 +197,13 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
       await serviceClient
         .from("profiles")
         .update({ user_types: [...currentTypes, "professional"] })
-        .eq("id", existingUser.id)
+        .eq("id", personAuthUserId)
     }
   }
 
   // Send invite email
   const baseUrl = getSiteUrl()
-  const confirmUrl = existingUser
+  const confirmUrl = personAuthUserId
     ? `${baseUrl}/dashboard/team`
     : `${baseUrl}/signup?redirectTo=${encodeURIComponent("/dashboard/team")}&inviteEmail=${encodeURIComponent(emailLower)}`
 
@@ -149,10 +216,7 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
         company_logo_url: companyInfo.companyLogoUrl ?? undefined,
         confirmUrl,
       },
-      // When the invitee already has an Arco account the resolver picks
-      // up their preferred_language via the email → auth.users lookup.
-      // Otherwise it falls through to the inviting company's country.
-      { userId: existingUser?.id ?? null, companyId: companyInfo.companyId },
+      { userId: personAuthUserId ?? null, companyId: companyInfo.companyId },
     )
   } catch (e) {
     console.error("Failed to send team invite email:", e)
@@ -177,23 +241,27 @@ export async function changeTeamMemberRoleAction(input: z.infer<typeof changeRol
     return { success: false, error: "Only the company owner can change roles." }
   }
 
-  // Prevent changing own role
-  const { data: member } = await serviceClient
-    .from("company_members")
-    .select("user_id")
+  // memberId is a company_contacts.id.
+  const { data: contact } = await serviceClient
+    .from("company_contacts")
+    .select("id, company_id, role, person:persons(id, email, auth_user_id)")
     .eq("id", memberId)
     .eq("company_id", companyInfo.companyId)
     .single()
 
-  if (!member) return { success: false, error: "Member not found." }
-  if (member.user_id === user.id) return { success: false, error: "You cannot change your own role." }
+  if (!contact) return { success: false, error: "Member not found." }
+  if ((contact.person as any)?.auth_user_id === user.id) {
+    return { success: false, error: "You cannot change your own role." }
+  }
+  if (contact.role === "owner") {
+    return { success: false, error: "Cannot change owner role here — transfer ownership instead." }
+  }
 
   const { error } = await serviceClient
-    .from("company_members")
+    .from("company_contacts")
     .update({ role })
     .eq("id", memberId)
     .eq("company_id", companyInfo.companyId)
-
   if (error) return { success: false, error: "Failed to update role." }
 
   revalidatePath("/dashboard/team")
@@ -216,25 +284,29 @@ export async function removeTeamMemberAction(input: z.infer<typeof removeMemberS
     return { success: false, error: "You don't have permission to remove members." }
   }
 
-  const { data: member } = await serviceClient
-    .from("company_members")
-    .select("user_id, role")
+  const { data: contact } = await serviceClient
+    .from("company_contacts")
+    .select("id, role, person:persons(id, email, auth_user_id)")
     .eq("id", memberId)
     .eq("company_id", companyInfo.companyId)
     .single()
 
-  if (!member) return { success: false, error: "Member not found." }
-  if (member.user_id === user.id) return { success: false, error: "You cannot remove yourself." }
-  if (!companyInfo.isOwner && member.role === "admin") {
+  if (!contact) return { success: false, error: "Member not found." }
+  if ((contact.person as any)?.auth_user_id === user.id) {
+    return { success: false, error: "You cannot remove yourself." }
+  }
+  if (contact.role === "owner") {
+    return { success: false, error: "Cannot remove the company owner." }
+  }
+  if (!companyInfo.isOwner && contact.role === "admin") {
     return { success: false, error: "Only the company owner can remove admins." }
   }
 
   const { error } = await serviceClient
-    .from("company_members")
+    .from("company_contacts")
     .delete()
     .eq("id", memberId)
     .eq("company_id", companyInfo.companyId)
-
   if (error) return { success: false, error: "Failed to remove member." }
 
   revalidatePath("/dashboard/team")
@@ -250,31 +322,32 @@ export async function resendTeamInviteAction(memberId: string): Promise<ActionRe
   const companyInfo = await getCompanyForUser(serviceClient, user.id)
   if (!companyInfo) return { success: false, error: "No company found." }
 
-  const { data: member } = await serviceClient
-    .from("company_members")
-    .select("email, status")
+  const { data: contact } = await serviceClient
+    .from("company_contacts")
+    .select("status, person:persons(email)")
     .eq("id", memberId)
     .eq("company_id", companyInfo.companyId)
     .single()
 
-  if (!member || member.status !== "invited") {
+  if (!contact || contact.status !== "invited") {
     return { success: false, error: "No pending invitation found." }
   }
 
+  const personEmail = (contact.person as any)?.email as string | undefined
+  if (!personEmail) return { success: false, error: "Contact has no email." }
+
   const baseUrl = getSiteUrl()
-  const confirmUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent("/dashboard/team")}&inviteEmail=${encodeURIComponent(member.email)}`
+  const confirmUrl = `${baseUrl}/signup?redirectTo=${encodeURIComponent("/dashboard/team")}&inviteEmail=${encodeURIComponent(personEmail)}`
 
   try {
     await sendTransactionalEmail(
-      member.email,
+      personEmail,
       "team-invite" as any,
       {
         company_name: companyInfo.companyName,
         company_logo_url: companyInfo.companyLogoUrl ?? undefined,
         confirmUrl,
       },
-      // Resolver will find an Arco account via email if one exists,
-      // else fall back to the inviting company's country.
       { companyId: companyInfo.companyId },
     )
   } catch (e) {
@@ -293,31 +366,43 @@ export async function claimPendingTeamInvitesAction(userId: string): Promise<{ c
 
   const userEmail = authUser.user.email.toLowerCase()
 
-  const { data: claimed, error } = await serviceClient
-    .from("company_members")
-    .update({
-      user_id: userId,
-      status: "active",
-      joined_at: new Date().toISOString(),
-    })
+  // Link the person row to the auth.users id (if not already linked).
+  const { data: person } = await serviceClient
+    .from("persons")
+    .select("id, auth_user_id")
     .eq("email", userEmail)
+    .maybeSingle()
+
+  if (!person) return { claimedCount: 0 }
+
+  if (!person.auth_user_id) {
+    await serviceClient
+      .from("persons")
+      .update({ auth_user_id: userId })
+      .eq("id", person.id)
+  }
+
+  // Flip pending team invites to active.
+  const { data: claimed, error } = await serviceClient
+    .from("company_contacts")
+    .update({ status: "active", joined_at: new Date().toISOString() })
+    .eq("person_id", person.id)
+    .in("role", ["admin", "member"])
     .eq("status", "invited")
-    .is("user_id", null)
     .select("id, company_id")
 
   if (error) {
-    logger.db("update", "company_members", "Failed to claim team invites", { userId }, error as any)
+    logger.db("update", "company_contacts", "Failed to claim team invites", { userId }, error as any)
     return { claimedCount: 0 }
   }
 
-  // Ensure user has 'professional' in user_types
+  // Ensure 'professional' user_type for the now-active team member.
   if (claimed && claimed.length > 0) {
     const { data: profile } = await serviceClient
       .from("profiles")
       .select("user_types")
       .eq("id", userId)
       .maybeSingle()
-
     const currentTypes = Array.isArray(profile?.user_types) ? profile.user_types : []
     if (!currentTypes.includes("professional")) {
       await serviceClient

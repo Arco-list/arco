@@ -89,10 +89,15 @@ const SEQUENCE_FILTER_LABEL: Record<SequenceFilterValue, { label: string; dot: s
 
 // Channel-filter dropdown options. DB still stores the historical source
 // codes; sourceLabel renders them post-Apollo-cutover names.
+// "outbound" is a synthetic channel: it doesn't correspond to a
+// prospects.source value — it represents any company with at least one
+// manual outbound touch logged (call/meeting/manual email/linkedin,
+// including no-answer attempts). Read off rows.lastOutboundAt.
 const CHANNEL_OPTIONS: { value: string; label: string }[] = [
   { value: "arco", label: "Showcase" },
   { value: "invites", label: "Invite" },
   { value: "apollo", label: "Outreach" },
+  { value: "outbound", label: "Outbound" },
 ]
 
 // Recipient-suppression states from the Resend webhook + List-Unsubscribe.
@@ -144,6 +149,7 @@ const SOURCE_LABELS: Record<string, string> = {
   invites: "Invite",
   apollo: "Outreach",
   manual: "Manual",
+  outbound: "Outbound",
 }
 const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -487,6 +493,7 @@ type Props = {
   initialTotalCompanies: number
   initialFunnel: SalesFunnel
   initialEmailsSent: number
+  initialOutboundDueCount: number
   currentApolloListId?: string | null
   apolloProspectsCount?: number
 }
@@ -496,6 +503,7 @@ export function ProspectsClient({
   initialTotalCompanies,
   initialFunnel,
   initialEmailsSent,
+  initialOutboundDueCount,
   currentApolloListId = null,
   apolloProspectsCount = 0,
 }: Props) {
@@ -506,6 +514,12 @@ export function ProspectsClient({
   const [statusFilter, setStatusFilter] = useState<ProspectStatus[]>([])
   const [sourceFilter, setSourceFilter] = useState<string[]>([])
   const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
+  // Toggle for the Outbound-due button: when true, the table only renders
+  // companies with a next outbound today or in the past. Count next to the
+  // button stays global (initialOutboundDueCount) — it doesn't shrink to
+  // zero when the filter is active.
+  const [outboundDueOnly, setOutboundDueOnly] = useState(false)
+  const [outboundDueCount, setOutboundDueCount] = useState(initialOutboundDueCount)
   const [search, setSearch] = useState("")
   // Company-scoped details popup. Holds the row the admin clicked, plus
   // a per-contact map of fetched details (events + sequence + invite ctx +
@@ -520,7 +534,13 @@ export function ProspectsClient({
   const [expandedContacts, setExpandedContacts] = useState<Set<string>>(new Set())
   const [previewEmail, setPreviewEmail] = useState<{ template: string; lang: string } | null>(null)
   const [logOutboundTarget, setLogOutboundTarget] = useState<
-    { prospectId: string; contactLabel: string; companyLabel: string } | null
+    {
+      prospectId: string
+      contactLabel: string
+      companyLabel: string
+      contactEmail: string | null
+      contactAvatarUrl: string | null
+    } | null
   >(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [showApolloSync, setShowApolloSync] = useState(false)
@@ -545,6 +565,7 @@ export function ProspectsClient({
         sources: sourceFilter,
         sequences: sequenceFilter,
         search,
+        outboundDueOnly,
         offset: off,
         limit: 50,
         sortBy,
@@ -561,10 +582,11 @@ export function ProspectsClient({
       }
       setTotalCompanies(result.totalCompanies)
       setFunnel(result.funnel)
+      setOutboundDueCount(result.outboundDueCount)
       setOffset(off)
       setHasMore(result.totalCompanies > off + result.companies.length)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, outboundDueOnly, sortBy, sortDir])
 
   // Resend email backfill — pulls open/click events the webhook may have
   // missed. Cheap (throttled to once/hour server-side); refresh the table
@@ -582,26 +604,31 @@ export function ProspectsClient({
     statuses?: ProspectStatus[]
     sources?: string[]
     sequences?: SequenceFilterValue[]
+    outboundDueOnly?: boolean
   }) => {
     if (opts.statuses !== undefined) setStatusFilter(opts.statuses)
     if (opts.sources !== undefined) setSourceFilter(opts.sources)
     if (opts.sequences !== undefined) setSequenceFilter(opts.sequences)
+    if (opts.outboundDueOnly !== undefined) setOutboundDueOnly(opts.outboundDueOnly)
     const s = opts.statuses ?? statusFilter
     const src = opts.sources ?? sourceFilter
     const seq = opts.sequences ?? sequenceFilter
+    const due = opts.outboundDueOnly ?? outboundDueOnly
     startTransition(async () => {
       const result = await fetchSalesCompanies({
         statuses: s, sources: src, sequences: seq, search,
+        outboundDueOnly: due,
         offset: 0, limit: 50, sortBy, sortDir,
       })
       setCompanies(result.companies)
       setTotalCompanies(result.totalCompanies)
       setFunnel(result.funnel)
+      setOutboundDueCount(result.outboundDueCount)
       setTotalEmailsSent(result.companies.reduce((sum, c) => sum + c.emailsSent, 0))
       setOffset(0)
       setHasMore(result.totalCompanies > result.companies.length)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, sortBy, sortDir])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, outboundDueOnly, sortBy, sortDir])
 
   const toggleStatus = useCallback((status: ProspectStatus) => {
     const next = statusFilter.includes(status)
@@ -627,6 +654,16 @@ export function ProspectsClient({
   const handleSearch = useCallback(() => {
     reload({ offset: 0 })
   }, [reload])
+
+  // Live search: debounce typed input and re-fetch automatically — matches
+  // the admin/companies search-as-you-type behaviour. Skip on first render.
+  const firstSearchRender = useRef(true)
+  useEffect(() => {
+    if (firstSearchRender.current) { firstSearchRender.current = false; return }
+    const t = setTimeout(() => reload({ offset: 0 }), 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search])
 
   const handleLoadMore = useCallback(() => {
     reload({ offset: offset + 50, append: true })
@@ -818,7 +855,7 @@ export function ProspectsClient({
                       <button
                         onClick={() => toggleStatus(stage.status)}
                         className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${statusFilter.includes(stage.status) ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
-                        style={{ width: 100 }}
+                        style={{ width: 132 }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">
                           <span className="status-pill-dot shrink-0" style={{ background: color }} />
@@ -833,13 +870,6 @@ export function ProspectsClient({
             </div>
           )
         })()}
-        {/* Email stats — sum across the loaded page; cards stay stable when filters narrow. */}
-        <div className="flex items-center gap-3 mt-4 justify-end">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#a1a1a0]">Emails sent</span>
-            <span className="text-[11px] font-medium text-[#1c1c1a]">{totalEmailsSent.toLocaleString()}</span>
-          </div>
-        </div>
       </div>
 
       {/* Filters */}
@@ -851,7 +881,6 @@ export function ProspectsClient({
               placeholder="Search company or contact..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
             />
             <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -860,6 +889,28 @@ export function ProspectsClient({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Outbound-due toggle — accent button sitting left of the Status
+              filter, mirroring the Review CTA on /admin/projects. Always
+              renders when the global count is > 0 so the rep can see how
+              many companies are due for outbound at a glance; clicking
+              toggles the table-level filter. */}
+          {outboundDueCount > 0 && (
+            <button
+              type="button"
+              onClick={() => handleFilterChange({ outboundDueOnly: !outboundDueOnly })}
+              className="btn-primary"
+              style={{
+                fontSize: 13,
+                padding: "6px 16px",
+                borderRadius: 3,
+                opacity: outboundDueOnly ? 1 : 0.92,
+                boxShadow: outboundDueOnly ? "inset 0 0 0 2px rgba(0,0,0,0.18)" : undefined,
+              }}
+              aria-pressed={outboundDueOnly}
+            >
+              Outbound ({outboundDueCount})
+            </button>
+          )}
           {/* Multi-select status filter — empty selection = all statuses. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1107,6 +1158,8 @@ export function ProspectsClient({
                     contactLabel:
                       contact.resolvedContact.name?.trim() || contact.email || "Unnamed contact",
                     companyLabel: companyName,
+                    contactEmail: contact.resolvedContact.email ?? contact.email ?? null,
+                    contactAvatarUrl: contact.resolvedContact.avatarUrl ?? null,
                   })
                 }
               />
@@ -1211,6 +1264,8 @@ export function ProspectsClient({
           prospectId={logOutboundTarget.prospectId}
           contactLabel={logOutboundTarget.contactLabel}
           companyLabel={logOutboundTarget.companyLabel}
+          contactEmail={logOutboundTarget.contactEmail}
+          contactAvatarUrl={logOutboundTarget.contactAvatarUrl}
           onLogged={() => {
             // The trigger updates prospects.last_outbound_at; refresh the
             // table + popup so the new entry surfaces immediately.
@@ -1399,7 +1454,7 @@ type ContactActionRunner = (
 /**
  * One row of the Sales table = one company.
  *
- * Contacts column mirrors the Projects column on /admin/professionals:
+ * Contacts column mirrors the Projects column on /admin/companies:
  * the primary contact is rendered inline with `dot + name + status pill +
  * sequence pill` and is itself a dropdown trigger for the per-contact
  * action menu. Companies with multiple contacts get a "+N more" link
@@ -1517,12 +1572,16 @@ function CompanyRowView({
         </div>
       </td>
 
-      {/* Source (multi-pill) */}
+      {/* Source (multi-pill) — Outbound is appended when any contact has
+          a manual outbound touch logged (attempts included). */}
       <td>
         <div className="flex flex-wrap items-center gap-1">
           {row.sources.map((s) => (
             <span key={s} className="status-pill">{sourceLabel(s)}</span>
           ))}
+          {row.lastOutboundAt && (
+            <span className="status-pill">Outbound</span>
+          )}
         </div>
       </td>
 
@@ -1704,6 +1763,9 @@ function ContactInline({ contact }: { contact: SalesContact }) {
         {statusCfg.label}
       </span>
       <span className="status-pill">{sourceLabel(contact.source)}</span>
+      {contact.lastOutboundAt && (
+        <span className="status-pill">Outbound</span>
+      )}
     </>
   )
 }

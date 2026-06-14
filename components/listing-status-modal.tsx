@@ -21,7 +21,6 @@ type ListingStatusModalProps<TStatus extends string> = {
   onClose: () => void
   onSave: () => void
   project: ListingStatusModalProject | null
-  companyPlan?: string
   selectedStatus: TStatus | ""
   onStatusChange: (status: TStatus) => void
   statusOptions: ReadonlyArray<ListingStatusModalOption<TStatus>>

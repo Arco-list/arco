@@ -759,9 +759,9 @@ a.arco-nav-text.nav-transparent:hover {
     background: var(--primary);
     color: var(--primary-foreground);
     font-family: var(--font-sans);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 400;
-    padding: 12px 24px;
+    padding: 10px 20px;
     border-radius: 3px;
     border: none;
     cursor: pointer;
@@ -786,9 +786,9 @@ a.arco-nav-text.nav-transparent:hover {
     background: var(--secondary);
     color: var(--secondary-foreground);
     font-family: var(--font-sans);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 400;
-    padding: 12px 24px;
+    padding: 10px 20px;
     border-radius: 3px;
     border: none;
     cursor: pointer;

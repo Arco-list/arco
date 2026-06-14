@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { generateCompanyLoginLinkAction } from "@/app/admin/professionals/actions"
+import { generateCompanyLoginLinkAction } from "@/app/admin/companies/actions"
 
 // Mirrors the funnel-stage colours used on /admin/sales so the
 // prospect badge in the inbox row matches the same contact's pill in

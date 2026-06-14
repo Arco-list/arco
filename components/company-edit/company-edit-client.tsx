@@ -403,7 +403,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── Project card handlers ──
   const userId = user?.id ?? null
-  const companyPlan = (company.plan_tier ?? "basic") as "basic" | "plus"
 
   const handleProjectUpdateStatus = useCallback((project: CompanyProject) => {
     setProjectDropdown(null)
@@ -2460,7 +2459,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           descriptor: selectedCardProject.subtitle || t("project_label"),
           coverImageUrl: selectedCardProject.coverImage || "/placeholder.svg",
         } : null}
-        companyPlan={companyPlan}
         selectedStatus={selectedContributorStatus}
         onStatusChange={setSelectedContributorStatus}
         statusOptions={selectedCardProject?.isOwner ? ownerStatusOptions : contributorStatusOptions}

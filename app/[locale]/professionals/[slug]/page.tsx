@@ -123,11 +123,20 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           const isOwner = company.owner_id === user.id
           let isMember = false
           if (!isOwner) {
-            const [memberResult, professionalResult] = await Promise.all([
-              serviceClient.from("company_members").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
+            // Team membership: read from company_contacts (joined to persons
+            // to match the auth user). Keep the legacy professionals fallback
+            // until that table is dropped too.
+            const [contactResult, professionalResult] = await Promise.all([
+              serviceClient
+                .from("company_contacts")
+                .select("id, person:persons!inner(auth_user_id)")
+                .eq("company_id", company.id)
+                .eq("person.auth_user_id", user.id)
+                .in("role", ["owner", "admin", "member"])
+                .maybeSingle(),
               serviceClient.from("professionals").select("id").eq("company_id", company.id).eq("user_id", user.id).maybeSingle(),
             ])
-            isMember = !!memberResult.data || !!professionalResult.data
+            isMember = !!contactResult.data || !!professionalResult.data
           }
 
           if (isOwner || isMember) {

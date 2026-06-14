@@ -208,7 +208,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
   subscribers: {
     key: "subscribers",
     title: "Subscribers",
-    definition: "Companies with an active paid subscription (plan_tier is set).",
+    definition: "Companies with an active paid subscription. Always 0 — plan tiers retired.",
     source: "supabase",
     driver: "monetization",
     user: "professional",

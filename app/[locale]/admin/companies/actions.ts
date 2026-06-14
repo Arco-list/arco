@@ -6,6 +6,7 @@ import { z } from "zod"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
+import { ensureCompanyOwnerContact } from "@/lib/company-ownership"
 
 // Generic UUID schema used for validating all UUID fields (invites, companies, professionals, etc.)
 const uuidSchema = z.string().uuid()
@@ -49,7 +50,6 @@ async function assertAdmin() {
 }
 
 const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "draft", "prospected", "unclaimed"])
-const companyPlanTierSchema = z.enum(["basic", "plus"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
   const idResult = uuidSchema.safeParse(inviteId)
@@ -81,7 +81,7 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
     .eq("id", idResult.data)
 
   if (updateError) {
-    logger.error("admin-professionals", "Failed to resend professional invite", {
+    logger.error("admin-companies", "Failed to resend professional invite", {
       inviteId: idResult.data,
       error: updateError.message,
     })
@@ -141,10 +141,10 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
       { companyId: ownerPP?.company_id ?? null },
     )
   } catch (err) {
-    logger.error("admin-professionals", "Failed to send invite email", { inviteId: idResult.data }, err as Error)
+    logger.error("admin-companies", "Failed to send invite email", { inviteId: idResult.data }, err as Error)
   }
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
 
   return { success: true }
 }
@@ -195,7 +195,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     .eq("id", parsedCompanyId.data)
 
   if (updateError) {
-    logger.error("admin-professionals", "Failed to update company status", {
+    logger.error("admin-companies", "Failed to update company status", {
       companyId: parsedCompanyId.data,
       error: updateError.message,
     })
@@ -207,7 +207,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
     await syncCompanyToApollo(parsedCompanyId.data)
   } catch (err) {
-    logger.error("admin-professionals", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
+    logger.error("admin-companies", "Failed to sync company to Apollo", { companyId: parsedCompanyId.data }, err as Error)
   }
 
   // PR 4 of the drip pipeline: cancel any pending prospect drip rows when
@@ -230,7 +230,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
       })
     } catch (err) {
       logger.error(
-        "admin-professionals",
+        "admin-companies",
         "Failed to cancel drip rows on status change",
         { companyId: parsedCompanyId.data, status: parsedStatus.data },
         err as Error,
@@ -407,120 +407,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     } catch {}
   }
 
-  revalidatePath("/admin/professionals")
-  return { success: true }
-}
-
-export async function updateCompanyPlanTierAction(input: { companyId: string; planTier: z.infer<typeof companyPlanTierSchema> }) {
-  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
-  if (!parsedCompanyId.success) {
-    return { success: false, error: "Invalid company id" }
-  }
-
-  const parsedPlanTier = companyPlanTierSchema.safeParse(input.planTier)
-  if (!parsedPlanTier.success) {
-    return { success: false, error: "Invalid plan tier" }
-  }
-
-  const { supabase, error } = await assertAdmin()
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  const { error: updateError } = await supabase
-    .from("companies")
-    .update({ plan_tier: parsedPlanTier.data })
-    .eq("id", parsedCompanyId.data)
-
-  if (updateError) {
-    logger.error("admin-professionals", "Failed to update company plan tier", {
-      companyId: parsedCompanyId.data,
-      error: updateError.message,
-    })
-    return { success: false, error: updateError.message }
-  }
-
-  revalidatePath("/admin/professionals")
-  return { success: true }
-}
-
-export async function updateCompanyPlanExpirationAction(input: { companyId: string; planExpiresAt: string | null }) {
-  const parsedCompanyId = uuidSchema.safeParse(input.companyId)
-  if (!parsedCompanyId.success) {
-    return { success: false, error: "Invalid company id" }
-  }
-
-  const expirationResult = z
-    .string()
-    .datetime()
-    .nullable()
-    .safeParse(input.planExpiresAt)
-
-  if (!expirationResult.success) {
-    return { success: false, error: "Invalid expiration date" }
-  }
-
-  const { supabase, error } = await assertAdmin()
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  const { error: updateError } = await supabase
-    .from("companies")
-    .update({ plan_expires_at: expirationResult.data })
-    .eq("id", parsedCompanyId.data)
-
-  if (updateError) {
-    logger.error("admin-professionals", "Failed to update company plan expiration", {
-      companyId: parsedCompanyId.data,
-      error: updateError.message,
-    })
-    return { success: false, error: updateError.message }
-  }
-
-  revalidatePath("/admin/professionals")
-  return { success: true }
-}
-
-export async function updateProfessionalFeaturedAction(input: {
-  professionalId: string
-  isFeatured: boolean
-}) {
-  const parsedProfessionalId = uuidSchema.safeParse(input.professionalId)
-  if (!parsedProfessionalId.success) {
-    return { success: false, error: "Invalid professional id" }
-  }
-
-  const featuredResult = z.boolean().safeParse(input.isFeatured)
-  if (!featuredResult.success) {
-    return { success: false, error: "Invalid featured status" }
-  }
-
-  const { supabase, error } = await assertAdmin()
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  const { error: updateError } = await supabase
-    .from("professionals")
-    .update({ is_featured: featuredResult.data })
-    .eq("id", parsedProfessionalId.data)
-
-  if (updateError) {
-    logger.error("admin-professionals", "Failed to update professional featured status", {
-      professionalId: parsedProfessionalId.data,
-      isFeatured: featuredResult.data,
-      error: updateError.message,
-    })
-    return { success: false, error: updateError.message }
-  }
-
-  logger.info("admin-professionals", "Professional featured status updated", {
-    professionalId: parsedProfessionalId.data,
-    isFeatured: featuredResult.data,
-  })
-
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
 }
 
@@ -549,7 +436,7 @@ export async function updateCompanyFeaturedAction(input: {
     .eq("id", parsedCompanyId.data)
 
   if (updateError) {
-    logger.error("admin-professionals", "Failed to update company featured status", {
+    logger.error("admin-companies", "Failed to update company featured status", {
       companyId: parsedCompanyId.data,
       isFeatured: featuredResult.data,
       error: updateError.message,
@@ -557,12 +444,12 @@ export async function updateCompanyFeaturedAction(input: {
     return { success: false, error: updateError.message }
   }
 
-  logger.info("admin-professionals", "Company featured status updated", {
+  logger.info("admin-companies", "Company featured status updated", {
     companyId: parsedCompanyId.data,
     isFeatured: featuredResult.data,
   })
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   revalidatePath("/")
   return { success: true }
 }
@@ -592,7 +479,7 @@ export async function updateCompanyAutoApproveAction(input: {
     .eq("id", parsedCompanyId.data)
 
   if (updateError) {
-    logger.error("admin-professionals", "Failed to update company auto-approve", {
+    logger.error("admin-companies", "Failed to update company auto-approve", {
       companyId: parsedCompanyId.data,
       autoApproveProjects: autoApproveResult.data,
       error: updateError.message,
@@ -600,12 +487,12 @@ export async function updateCompanyAutoApproveAction(input: {
     return { success: false, error: updateError.message }
   }
 
-  logger.info("admin-professionals", "Company auto-approve updated", {
+  logger.info("admin-companies", "Company auto-approve updated", {
     companyId: parsedCompanyId.data,
     autoApproveProjects: autoApproveResult.data,
   })
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
 }
 
@@ -628,7 +515,7 @@ export async function updateCompanyDomainVerifiedAction(input: {
     .eq("id", parsedCompanyId.data)
 
   if (updateError) {
-    logger.error("admin-professionals", "Failed to update domain verification", {
+    logger.error("admin-companies", "Failed to update domain verification", {
       companyId: parsedCompanyId.data,
       isVerified: verifiedResult.data,
       error: updateError.message,
@@ -636,7 +523,7 @@ export async function updateCompanyDomainVerifiedAction(input: {
     return { success: false, error: updateError.message }
   }
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
 }
 
@@ -745,14 +632,14 @@ export async function updateCompanyDetailsAction(input: {
     .eq("id", parsedCompanyId.data)
 
   if (updateError) {
-    logger.error("admin-professionals", "Failed to update company details", {
+    logger.error("admin-companies", "Failed to update company details", {
       companyId: parsedCompanyId.data,
       error: updateError.message,
     })
     return { success: false, error: updateError.message }
   }
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
 }
 
@@ -770,8 +657,7 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
   const companyId = parsedId.data
   const serviceRole = createServiceRoleSupabaseClient()
 
-  // Delete child rows that may not CASCADE or are RLS-restricted
-  await serviceRole.from("professionals").delete().eq("company_id", companyId)
+  // company_contacts cascades on company delete. No legacy cleanup needed.
 
   const { error: ppErr } = await serviceRole
     .from("project_professionals")
@@ -842,7 +728,7 @@ export async function adminDeleteCompanyAction(input: { companyId: string }): Pr
     }
   }
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
 }
 
@@ -949,27 +835,9 @@ export async function changeCompanyOwnerAction(input: {
       .eq("id", targetUser.id)
   }
 
-  // Ensure professional/team member row exists for this company
-  const { data: existingPro } = await serviceClient
-    .from("professionals")
-    .select("id")
-    .eq("user_id", targetUser.id)
-    .eq("company_id", idResult.data)
-    .maybeSingle()
-
-  if (!existingPro) {
-    const { data: company } = await serviceClient
-      .from("companies")
-      .select("name")
-      .eq("id", idResult.data)
-      .maybeSingle()
-
-    await serviceClient.from("professionals").insert({
-      user_id: targetUser.id,
-      company_id: idResult.data,
-      title: company?.name ?? "Team member",
-    })
-  }
+  // Ensure the company_contacts owner row exists for this user. Helper
+  // demotes any prior owner contact and upserts the new one.
+  await ensureCompanyOwnerContact(serviceClient, idResult.data, targetUser.id)
 
   revalidatePath("/", "layout")
   return { success: true }
@@ -1125,12 +993,12 @@ export async function sendProspectEmailAction(input: {
       // 23505 = unique_violation: partial index hit, meaning pending rows
       // already exist for this (company_id, template). Benign — the
       // sequence is already queued. No warning needed.
-      logger.info("admin-professionals", "Drip rows already enqueued for company", {
+      logger.info("admin-companies", "Drip rows already enqueued for company", {
         companyId: company.id,
       })
     } else {
       logger.error(
-        "admin-professionals",
+        "admin-companies",
         "Failed to enqueue prospect drip rows (intro was sent successfully)",
         { companyId: company.id, supabaseError: dripInsertError },
       )
@@ -1168,7 +1036,7 @@ export async function sendProspectEmailAction(input: {
     await serviceClient.from("prospects").update(updates).eq("id", prospectRow.id)
   }
 
-  logger.info("admin-professionals", "Prospect email sent", {
+  logger.info("admin-companies", "Prospect email sent", {
     companyId: company.id,
     emailTo: emailResult.data,
     adminId: user!.id,
@@ -1201,16 +1069,16 @@ export async function cancelProspectSequenceAction(input: {
       companyId: idResult.data,
       reason: "manual",
     })
-    logger.info("admin-professionals", "Manually cancelled prospect sequence", {
+    logger.info("admin-companies", "Manually cancelled prospect sequence", {
       companyId: idResult.data,
       adminId: user!.id,
       cancelled,
     })
-    revalidatePath("/admin/professionals")
+    revalidatePath("/admin/companies")
     return { success: true, cancelled }
   } catch (err) {
     logger.error(
-      "admin-professionals",
+      "admin-companies",
       "Failed to cancel prospect sequence",
       { companyId: idResult.data },
       err as Error,
@@ -1270,14 +1138,16 @@ export async function removeCompanyOwnerAction(input: {
 
   if (updateError) return { success: false, error: updateError.message }
 
-  // Remove company members
-  await serviceClient.from("company_members").delete().eq("company_id", companyId)
-
-  // Unlink professionals from this company so it no longer shows on user profiles
+  // Remove team-role contacts. Sales leads (role='contact') stay so the
+  // outreach history isn't lost when an owner is removed.
   await serviceClient
-    .from("professionals")
-    .update({ company_id: null } as any)
+    .from("company_contacts")
+    .delete()
     .eq("company_id", companyId)
+    .in("role", ["owner", "admin", "member"])
+
+  // company_contacts cascades on the owner deletion handled above; no
+  // legacy unlink needed.
 
   // Unpublish owned projects (set to draft)
   const { data: ownedLinks } = await serviceClient
@@ -1316,6 +1186,135 @@ export async function removeCompanyOwnerAction(input: {
   // Refresh materialized views
   await serviceClient.rpc("refresh_all_materialized_views")
 
-  revalidatePath("/admin/professionals")
+  revalidatePath("/admin/companies")
   return { success: true }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// company_contacts management — used by the Contacts column on
+// /admin/companies. Each function is admin-gated and revalidates the
+// listing page so the UI reflects the change on the next render.
+// ────────────────────────────────────────────────────────────────────────
+
+const companyContactRoleSchema = z.enum(["owner", "admin", "member", "contact"])
+const outboundKindSchema = z.enum(["call", "meeting", "email", "linkedin", "note"])
+const outboundOutcomeSchema = z.enum(["positive", "neutral", "negative", "no_answer"])
+
+export async function updateCompanyContactRoleAction(input: {
+  contactId: string
+  role: z.infer<typeof companyContactRoleSchema>
+}): Promise<{ success: boolean; error?: string }> {
+  const { error: authError } = await assertAdmin()
+  if (authError) return { success: false, error: authError.message }
+
+  const idResult = uuidSchema.safeParse(input.contactId)
+  if (!idResult.success) return { success: false, error: "Invalid contact ID" }
+
+  const roleResult = companyContactRoleSchema.safeParse(input.role)
+  if (!roleResult.success) return { success: false, error: "Invalid role" }
+
+  const service = createServiceRoleSupabaseClient()
+  const { error } = await service
+    .from("company_contacts")
+    .update({ role: roleResult.data })
+    .eq("id", idResult.data)
+
+  if (error) {
+    logger.error("admin-companies", "Failed to update contact role", {
+      contactId: idResult.data,
+      error: error.message,
+    })
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath("/admin/companies")
+  return { success: true }
+}
+
+export async function removeCompanyContactAction(input: {
+  contactId: string
+}): Promise<{ success: boolean; error?: string }> {
+  const { error: authError } = await assertAdmin()
+  if (authError) return { success: false, error: authError.message }
+
+  const idResult = uuidSchema.safeParse(input.contactId)
+  if (!idResult.success) return { success: false, error: "Invalid contact ID" }
+
+  const service = createServiceRoleSupabaseClient()
+  const { error } = await service
+    .from("company_contacts")
+    .delete()
+    .eq("id", idResult.data)
+
+  if (error) {
+    logger.error("admin-companies", "Failed to remove contact", {
+      contactId: idResult.data,
+      error: error.message,
+    })
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath("/admin/companies")
+  return { success: true }
+}
+
+export async function logOutboundForCompanyContactAction(input: {
+  companyContactId: string
+  kind: z.infer<typeof outboundKindSchema>
+  outcome?: z.infer<typeof outboundOutcomeSchema> | null
+  body?: string | null
+  occurredAt?: string | null
+  nextFollowUpAt?: string | null
+}): Promise<{ success: boolean; error?: string; logId?: string }> {
+  const { user, error: authError } = await assertAdmin()
+  if (authError || !user) return { success: false, error: authError?.message ?? "Unauthorized" }
+
+  const idResult = uuidSchema.safeParse(input.companyContactId)
+  if (!idResult.success) return { success: false, error: "Invalid contact ID" }
+
+  const kindResult = outboundKindSchema.safeParse(input.kind)
+  if (!kindResult.success) return { success: false, error: "Invalid kind" }
+
+  // Notes never carry an outcome — strip it.
+  const outcome = kindResult.data === "note" ? null : (input.outcome ?? null)
+  const body = input.body?.trim() || null
+
+  const service = createServiceRoleSupabaseClient()
+  const { data, error } = await service
+    .from("outbound_contact_log")
+    .insert({
+      company_contact_id: idResult.data,
+      created_by: user.id,
+      kind: kindResult.data,
+      outcome,
+      body,
+      ...(input.occurredAt ? { created_at: input.occurredAt } : {}),
+    })
+    .select("id")
+    .single()
+
+  if (error) {
+    logger.error("admin-companies", "Log outbound insert failed", {
+      contactId: idResult.data,
+      error: error.message,
+    })
+    return { success: false, error: error.message }
+  }
+
+  // Write-through to company_contacts rolling state. Skip last_contacted_at
+  // for notes (they're observations, not actual outreach). next_follow_up_at
+  // is set even on notes if the caller passed one.
+  const updates: Record<string, unknown> = {}
+  if (kindResult.data !== "note") {
+    updates.last_contacted_at = input.occurredAt ?? new Date().toISOString()
+  }
+  if (input.nextFollowUpAt !== undefined) {
+    updates.next_follow_up_at = input.nextFollowUpAt
+  }
+  if (Object.keys(updates).length > 0) {
+    await service.from("company_contacts").update(updates).eq("id", idResult.data)
+  }
+
+  revalidatePath("/admin/companies")
+  return { success: true, logId: (data as { id: string }).id }
 }

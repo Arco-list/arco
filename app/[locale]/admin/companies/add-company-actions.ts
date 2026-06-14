@@ -95,7 +95,8 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
   // Derive contact email from domain (info@domain is the most common pattern)
   const contactEmail = input.domain ? `info@${input.domain}` : null
 
-  // Insert company without owner (claimable)
+  // Insert company without owner. `added` is the catch-all status for
+  // catalogued companies (Apollo bulk, manual add, photographer import).
   const { data: newCompany, error: insertError } = await serviceSupabase
     .from("companies")
     .insert({
@@ -113,7 +114,8 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
       latitude,
       longitude,
       is_verified: false,
-      status: "unclaimed" as any,
+      status: "added" as any,
+      source: "manual",
       slug,
     })
     .select("id")
@@ -124,6 +126,49 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
     return { success: false, error: insertError?.message || "Failed to create company." }
   }
 
-  revalidatePath("/admin/professionals")
+  // Seed a person + company_contact for the derived email so the
+  // Contacts cell renders consistently (dot + Contact pill) instead of
+  // falling through to the bare-email fallback.
+  if (contactEmail) {
+    const emailLc = contactEmail.toLowerCase()
+    const { data: insertedPerson, error: personInsertError } = await serviceSupabase
+      .from("persons")
+      .insert({ email: emailLc, source: "manual" })
+      .select("id")
+      .maybeSingle()
+
+    let personId: string | null = insertedPerson?.id ?? null
+    if (personInsertError && personInsertError.code === "23505") {
+      // Already exists — look it up without disturbing its source.
+      const { data: existing } = await serviceSupabase
+        .from("persons")
+        .select("id")
+        .eq("email", emailLc)
+        .maybeSingle()
+      personId = existing?.id ?? null
+    } else if (personInsertError) {
+      logger.warn("[admin-add-company] failed to insert person", { email: emailLc, error: personInsertError.message })
+    }
+
+    if (personId) {
+      const { error: contactInsertError } = await serviceSupabase
+        .from("company_contacts")
+        .insert({
+          company_id: newCompany.id,
+          person_id: personId,
+          role: "contact",
+          status: null,
+        })
+      if (contactInsertError && contactInsertError.code !== "23505") {
+        logger.warn("[admin-add-company] failed to insert company_contact", {
+          companyId: newCompany.id,
+          personId,
+          error: contactInsertError.message,
+        })
+      }
+    }
+  }
+
+  revalidatePath("/admin/companies")
   return { success: true, companyId: newCompany.id }
 }
