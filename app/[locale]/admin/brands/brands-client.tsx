@@ -27,7 +27,7 @@ const STATUS_DOT: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
   unclaimed: "Unclaimed",
-  prospected: "Prospected",
+  prospected: "Showcased",
   unlisted: "Unlisted",
   listed: "Listed",
   deactivated: "Deactivated",

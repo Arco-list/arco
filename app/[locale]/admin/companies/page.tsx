@@ -22,11 +22,18 @@ async function loadAdminCompaniesData() {
   // Parallel queries
   const [companiesQuery, metricsQuery, servicesQuery, projectProfessionalsQuery, unclaimedInvitesQuery, companyMembersQuery, companyContactsQuery] =
     await Promise.all([
+      // Real marketplace entities: anything that entered directly, was
+      // admin-added, or was peer-invited — plus any company that has
+      // reached the claimed lifecycle (Draft onwards) regardless of
+      // source. This lets Apollo cold-imports that later claim (e.g.
+      // ARCHIE, RA STUDIO) surface here while pre-claim Apollo rows
+      // stay confined to /admin/sales.
       supabase
         .from("companies")
         .select(
           "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
-        ),
+        )
+        .or("source.in.(direct,manual,invited),status.in.(draft,listed,unlisted,deactivated)"),
       supabase
         .from("company_metrics")
         .select("company_id, professional_count, projects_linked"),
@@ -204,6 +211,12 @@ async function loadAdminCompaniesData() {
   }>>()
   for (const row of (companyContactsQuery.data ?? []) as RawContactRow[]) {
     if (!row?.company_id || !row.person) continue
+    // /admin/companies shows USERS only — people with an auth account
+    // linked to this company. Sales leads (role='contact') and invited-
+    // but-not-yet-signed-up members live in /admin/sales. An unclaimed
+    // admin-added company just gets an empty Users cell.
+    if (!row.person.auth_user_id) continue
+    if (row.role === "contact") continue
     const fullName = [row.person.first_name, row.person.last_name]
       .filter(Boolean)
       .join(" ")

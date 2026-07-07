@@ -182,20 +182,34 @@ export type SyncResult = {
 export async function syncAllCachedMetrics(
   supabase: SupabaseClient,
 ): Promise<SyncResult[]> {
+  // Bounded-concurrency worker pool over the metric list. Serial-per-
+  // metric wall time was ~2 s * ~32 keys = 64 s which pushed the tail
+  // of CACHED_METRIC_KEYS past the cron's maxDuration ceiling — the
+  // client_visitors_* channel splits (positions 28-32) never landed.
+  // 5 workers keeps us well under PostHog's HogQL rate limits while
+  // shrinking wall time to ~15 s.
+  const CONCURRENCY = 5
   const all: SyncResult[] = []
-  for (const metric of CACHED_METRIC_KEYS) {
-    const perGranularity = await Promise.all(
-      GRANULARITIES.map(async (granularity) => {
-        try {
-          return await syncMetric(supabase, metric, granularity)
-        } catch (err) {
-          logger.error("growth-metric-cache: sync threw", { metric, granularity, error: String(err) })
-          return { metric, granularity, windowPeriods: 0, upserted: 0, error: String(err) } as SyncResult
-        }
-      }),
-    )
-    all.push(...perGranularity)
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const idx = cursor++
+      if (idx >= CACHED_METRIC_KEYS.length) return
+      const metric = CACHED_METRIC_KEYS[idx]
+      const perGranularity = await Promise.all(
+        GRANULARITIES.map(async (granularity) => {
+          try {
+            return await syncMetric(supabase, metric, granularity)
+          } catch (err) {
+            logger.error("growth-metric-cache: sync threw", { metric, granularity, error: String(err) })
+            return { metric, granularity, windowPeriods: 0, upserted: 0, error: String(err) } as SyncResult
+          }
+        }),
+      )
+      all.push(...perGranularity)
+    }
   }
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker))
   return all
 }
 

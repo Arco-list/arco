@@ -41,6 +41,44 @@ interface ApolloContact {
   city?: string
   country?: string
   website_url?: string
+  /** Apollo returns the parent company under either `organization` or
+   *  `account` depending on whether the contact is inside a saved
+   *  Apollo list (account) or a fresh people-search (organization).
+   *  Different fields hold the phone depending on which enrichment
+   *  path filled the record; pickCompanyPhone walks the union in
+   *  priority order. */
+  organization?: {
+    id?: string
+    name?: string
+    phone?: string | null
+    sanitized_phone?: string | null
+    primary_phone?: { number?: string | null; sanitized_number?: string | null } | null
+  }
+  account?: {
+    id?: string
+    name?: string
+    phone?: string | null
+    sanitized_phone?: string | null
+    primary_phone?: { number?: string | null; sanitized_number?: string | null } | null
+    phone_status?: string
+  }
+}
+
+function pickCompanyPhone(contact: ApolloContact): string | null {
+  const candidates = [
+    contact.organization?.sanitized_phone,
+    contact.organization?.primary_phone?.sanitized_number,
+    contact.organization?.phone,
+    contact.organization?.primary_phone?.number,
+    contact.account?.sanitized_phone,
+    contact.account?.primary_phone?.sanitized_number,
+    contact.account?.phone,
+    contact.account?.primary_phone?.number,
+  ]
+  for (const v of candidates) {
+    if (v && typeof v === "string" && v.trim()) return v.trim()
+  }
+  return null
 }
 
 
@@ -65,6 +103,29 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
     })
 
     const contacts: ApolloContact[] = data.contacts ?? []
+
+    // Diagnostic: on the first page of the first request, log the keys
+    // Apollo returned on a sample contact plus the phone fields on both
+    // `organization` and `account` sub-objects. Lets us verify the
+    // picker is reading the right property names on real
+    // /contacts/search responses. Cheap: emits at most one line per sync.
+    if (page === 1 && contacts.length > 0) {
+      const sample = contacts[0] as unknown as Record<string, unknown>
+      const shape = (obj: unknown) =>
+        obj && typeof obj === "object"
+          ? {
+              keys: Object.keys(obj as Record<string, unknown>),
+              phone: (obj as any).phone,
+              sanitized_phone: (obj as any).sanitized_phone,
+              primary_phone: (obj as any).primary_phone,
+            }
+          : null
+      logger.info("[apollo-sync] contact shape sample", {
+        topLevelKeys: Object.keys(sample),
+        organization: shape(sample.organization),
+        account: shape(sample.account),
+      })
+    }
 
     if (contacts.length === 0) {
       hasMore = false
@@ -154,6 +215,8 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
 
       let prospectCompanyId: string | null = (upserted as any)?.company_id ?? null
 
+      const companyPhone = pickCompanyPhone(contact)
+
       if (!prospectCompanyId && companyDomain) {
         // Match by domain first; fall back to insert.
         const { data: existingCompany } = await supabase
@@ -173,9 +236,14 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
               slug,
               domain: companyDomain,
               status: "added",
-              source: "manual",
+              // Apollo-triggered insert → source must be "apollo" so the
+              // company is scoped to /admin/sales and stays out of
+              // /admin/companies. Was "manual" — bug that dropped
+              // James / PUNKT into the wrong admin surface.
+              source: "apollo",
               country: contact.country || "Netherlands",
               city: contact.city || null,
+              phone: companyPhone,
             })
             .select("id")
             .single()
@@ -192,6 +260,25 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
             .from("prospects")
             .update({ company_id: prospectCompanyId })
             .eq("id", (upserted as any).id)
+        }
+      }
+
+      // Backfill companies.phone from Apollo — runs regardless of how the
+      // prospectCompanyId was resolved (freshly inserted, domain-matched,
+      // or already linked via prospects.company_id from a prior sync).
+      // Only writes when the target row's phone is currently empty so an
+      // admin-edited number is never clobbered.
+      if (prospectCompanyId && companyPhone) {
+        const { data: currentCompany } = await supabase
+          .from("companies")
+          .select("phone")
+          .eq("id", prospectCompanyId)
+          .maybeSingle()
+        if (currentCompany && !(currentCompany as { phone?: string | null }).phone) {
+          await supabase
+            .from("companies")
+            .update({ phone: companyPhone })
+            .eq("id", prospectCompanyId)
         }
       }
 

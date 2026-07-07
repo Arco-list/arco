@@ -85,7 +85,11 @@ import type { Database } from "@/lib/supabase/types"
 type CompanyStatus = Database["public"]["Enums"]["company_status"]
 type CompanySource = Database["public"]["Enums"]["company_source"]
 
-const SOURCE_VALUES: CompanySource[] = ["apollo", "direct", "manual", "invited"]
+// Filter dropdown only exposes the sources that /admin/companies actually
+// serves — Apollo cold-imports are scoped out at the page query and
+// live in /admin/sales instead. The `apollo` label is kept so historical
+// rows in other views still render.
+const SOURCE_VALUES: CompanySource[] = ["direct", "manual", "invited"]
 const SOURCE_LABEL: Record<CompanySource, string> = {
   apollo: "Apollo",
   direct: "Direct",
@@ -281,14 +285,14 @@ const STATUS_LABEL: Record<string, string> = {
   unlisted: "Unlisted",
   deactivated: "Deactivated",
   invited: "Invited",
-  prospected: "Prospected",
+  prospected: "Showcased",
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
-  { value: "prospected" as any, label: "Prospected", description: "Contacted by platform, not yet claimed", dotColor: "bg-[#f59e0b]" },
+  { value: "prospected" as any, label: "Showcased", description: "Live showcase page on the marketplace, awaiting claim by the pro.", dotColor: "bg-[#f59e0b]" },
   { value: "added" as any, label: "Added", description: "Catalogued (Apollo bulk import, manual add, or photographer import). Awaiting promotion to a sequence or claim.", dotColor: "bg-[#dc2626]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-[#dc2626]" },
 ]
@@ -1012,7 +1016,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           if (result.success) success++
         }
         if (success > 0) {
-          toast.success(`${success} ${success === 1 ? "company" : "companies"} set to Prospected — prospect emails sent`)
+          toast.success(`${success} ${success === 1 ? "company" : "companies"} set to Showcased — prospect emails sent`)
           setRowSelection({})
           router.refresh()
         }
@@ -1199,14 +1203,15 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         },
       },
       {
-        id: "contacts",
-        header: "Contacts",
+        id: "users",
+        header: "Users",
         cell: ({ row }) => {
           const company = row.original
-          // Synthetic invite rows + companies with no contacts at all fall
-          // back to the editable email cell (preserves existing behaviour).
+          // Empty cell for admin-added-but-unclaimed companies: no user
+          // has an auth account linked yet. Sales leads never populate
+          // this cell — they're filtered out at the page query.
           if (company.contacts.length === 0) {
-            return <OwnerEmailCell company={company} onRefresh={() => router.refresh()} />
+            return <span className="text-[#c4c4c2]">—</span>
           }
           return (
             <div onClick={(e) => e.stopPropagation()}>
@@ -1598,7 +1603,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
   const isFiltered = columnFilters.length > 0 || table.getState().globalFilter
 
-  // Status funnel: Added → Prospected → Draft → Listed → Unlisted, with
+  // Status funnel: Added → Showcased → Draft → Listed → Unlisted, with
   // Deactivated as the off-path leak (analogous to Rejected on the projects
   // funnel). Invited is excluded from CR math — invited companies come in
   // via project credits, not the sales funnel.
@@ -1723,8 +1728,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 { dot: "bg-[#a1a1a0]", label: "Unlisted", desc: "Claimed but hidden from public directories. Only accessible via direct link.", specs: "Owner assigned · Hidden from search" },
                 { dot: "bg-[#2563eb]", label: "Draft", desc: "Company has been claimed. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
                 { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
-                { dot: "bg-[#f59e0b]", label: "Prospected", desc: "Added by admin and contacted via the sales funnel. Visible on the platform while unclaimed.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
-                { dot: "bg-[#dc2626]", label: "Added", desc: "Catalogued — Apollo bulk import, manual add, or photographer import. No outreach yet. Awaiting promotion to a sequence (→ Prospected) or claim (→ Draft).", specs: "No owner · Not visible · Awaiting outreach or claim" },
+                { dot: "bg-[#f59e0b]", label: "Showcased", desc: "Live showcase page on the marketplace, awaiting claim by the pro. Public and in the sales funnel.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
+                { dot: "bg-[#dc2626]", label: "Added", desc: "Catalogued — Apollo bulk import, manual add, or photographer import. No outreach yet. Awaiting promotion to a showcase (→ Showcased) or claim (→ Draft).", specs: "No owner · Not visible · Awaiting outreach or claim" },
                 { dot: "bg-[#dc2626]", label: "Deactivated", desc: "Suspended and hidden from the platform.", specs: "Hidden · No access" },
               ].map((s) => (
                 <div key={s.label} style={{ display: "flex", gap: 12 }}>
@@ -1738,9 +1743,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               ))}
             </div>
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-              <strong>Flow:</strong> Added → Prospected (sales emails) → Draft (claimed) → Listed (live)
+              <strong>Flow:</strong> Added → Showcased (sales emails) → Draft (claimed) → Listed (live)
               <br />
-              <strong>Constraints:</strong> Companies without an owner cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Prospected or Added.
+              <strong>Constraints:</strong> Companies without an owner cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Showcased or Added.
             </div>
           </div>
         </div>
@@ -2475,7 +2480,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                             : needsUnclaimed
                               ? `Company already claimed by ${statusChange.company.ownerName}`
                               : needsClaimed
-                                ? "Company must be claimed first — use Prospected to list added companies"
+                                ? "Company must be claimed first — use Showcased to list added companies"
                                 : option.description}
                         </span>
                       ) : (

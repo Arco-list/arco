@@ -1143,11 +1143,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     return Math.max(0, v - subtract)
   })
   const proVisitorsDirectAdjustedTotal = proVisitorsDirectAdjustedSeries.reduce((a, b) => a + b, 0)
-  // Combined: dedupe across BOTH sources per bucket (a pro contacted via
-  // Sales and Invites in the same period still counts once).
-  const allContactEvents = [...salesContactEvents, ...inviteContactEvents]
-  const prosContactedSeries = bucketUniqueByEmail(allContactEvents)
-  const totalProsContacted = totalUniqueByEmail(allContactEvents)
+  // The combined `allContactEvents` / `prosContactedSeries` /
+  // `totalProsContacted` merge Sales + Invites + Outbound. Outbound
+  // events are only available after the outbound resolution block
+  // below, so those constants are declared there.
 
   // Pros contacted → Pro visitors CR uses ONLY the channels we
   // actually contacted through (Sales + Invites), not the full
@@ -1229,28 +1228,36 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     }
     return null
   }
-  // Group outbound events by (period, person) — drop duplicates within
-  // the same bucket via a per-bucket Set.
+  // Convert each resolvable outbound log into a ContactEvent (email +
+  // date), so Outbound folds into `allContactEvents` cleanly and the
+  // Pros-contacted parent dedups a pro touched via Sales + Invites +
+  // Outbound in the same period to a single count. Also keep the
+  // by-person date map for the New-Pros-from-Outbound CR below.
+  const personEmailById = new Map<string, string>()
+  for (const p of personsForOutbound ?? []) {
+    if (p.id && p.email) personEmailById.set(p.id, p.email.toLowerCase())
+  }
+  const outboundContactEvents: ContactEvent[] = []
   const outboundDatesByPerson = new Map<string, Date>()
-  const outboundPersonsByBucket: Set<string>[] = Array.from({ length: 8 }, () => new Set())
   for (const log of outboundLogs) {
     const personId = resolvePersonId(log)
     if (!personId) continue
+    const email = personEmailById.get(personId)
+    if (!email) continue
     const date = new Date(log.created_at)
-    for (let i = 0; i < 8; i++) {
-      if (date >= buckets.starts[i] && date < buckets.ends[i]) {
-        outboundPersonsByBucket[i].add(personId)
-        // Track earliest outbound touch per person for the new-pros CR.
-        const existing = outboundDatesByPerson.get(personId)
-        if (!existing || date < existing) outboundDatesByPerson.set(personId, date)
-        break
-      }
-    }
+    outboundContactEvents.push({ email, date })
+    const existing = outboundDatesByPerson.get(personId)
+    if (!existing || date < existing) outboundDatesByPerson.set(personId, date)
   }
-  const outboundBucketed = {
-    total: outboundPersonsByBucket.reduce((sum, s) => sum + s.size, 0),
-    series: outboundPersonsByBucket.map((s) => s.size),
-  }
+  const outboundContactedSeries = bucketUniqueByEmail(outboundContactEvents)
+  const totalOutboundContacted = totalUniqueByEmail(outboundContactEvents)
+
+  // Combined: dedupe across ALL three sources per bucket (a pro touched
+  // via Sales + Invites + Outbound in the same period still counts
+  // once). Used as the Pros-contacted parent total + series.
+  const allContactEvents = [...salesContactEvents, ...inviteContactEvents, ...outboundContactEvents]
+  const prosContactedSeries = bucketUniqueByEmail(allContactEvents)
+  const totalProsContacted = totalUniqueByEmail(allContactEvents)
 
   // "New Pros from Outbound" — companies onboarded in the period whose
   // owner person was contacted via outbound at any prior point.
@@ -1459,17 +1466,14 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const rows: MetricRow[] = [
     // ── Professionals ──────────────────────────────────────────────────
     {
-      key: "pros_contacted", label: "Pros contacted", definition: "Unique pros contacted via Sales or Invites", source: "supabase" as MetricSource, driver: "acquisition",
+      key: "pros_contacted", label: "Pros contacted", definition: "Unique pros contacted via Sales, Invites or Outbound", source: "supabase" as MetricSource, driver: "acquisition",
       total: totalProsContacted, datapoints: prosContactedSeries, labels,
-      // Override the auto-inline "to Pro visitors" CR's numerator with
-      // Sales + Invites visitors (email-keyed, deduped across both
-      // sources). The contacted denominator only covers pros we
-      // reached via Sales or Invites, so a fair "what % clicked
-      // through" must compare against the same channels — not Direct /
-      // SEO / Social traffic that wasn't part of the outreach motion.
-      // Keeping the auto-inline CR (vs. an extraCRs entry) preserves
-      // the per-sub CRs underneath ("to Pro visitors from Sales /
-      // Invites") which depend on inlineCRTo being present.
+      // Auto-inline "to Pro visitors" CR compares against Sales + Invites
+      // visitors only (email-keyed, deduped). Outbound touches aren't
+      // wired to server-side visit tracking (no ?ref=outbound landing),
+      // so the CR is a lower bound: the numerator misses any Outbound-
+      // driven visits. Still the most honest signal we can compute
+      // today without adding an outbound-attribution query param.
       inlineCRNumerator: { total: 0, datapoints: contactedVisitorsSeries },
       subs: [
         {
@@ -1493,6 +1497,21 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           // invited-pros denominator and link-scanner traffic can't
           // inflate it past 100%.
           crNumerator: { total: inviteVisitorsTotalDb, datapoints: inviteVisitorsSeriesDb },
+        },
+        {
+          key: "outbound_contacted", label: "Outbound",
+          definition: "Distinct pros reached via manual outbound activity (call, meeting, LinkedIn, manual email — excludes notes and no-answer attempts).",
+          source: "supabase" as MetricSource,
+          total: totalOutboundContacted, datapoints: outboundContactedSeries,
+          // No server-side "outbound visitor" event exists, so the sub-CR
+          // uses New Pros instead of Pro visitors — measures "of the
+          // pros we outbound-touched, how many became New Pros." Same
+          // shape as sales_contacted / invites_contacted's crNumerator,
+          // different target metric.
+          crNumerator: {
+            total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0),
+            datapoints: newProsOutboundBucketed.datapoints,
+          },
         },
       ],
     },
@@ -1562,15 +1581,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "shares", label: "Shares", definition: "Pro visitors from a tagged share URL (utm_source=share)",
           total: proVisitorsShareBucketed.total, datapoints: proVisitorsShareBucketed.series,
           crNumerator: { total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares } },
-        // Outbound — distinct pros we touched via manual outbound logs in
-        // the period. Overlaps with other channels by design (a pro
-        // attributed to Sales/Direct can also appear here if a rep
-        // logged a call/email/meeting that week). The CR shows how
-        // many of those contacted became new pros.
-        { key: "outbound", label: "Outbound", definition: "Distinct pros successfully reached via outbound activity (excludes notes and no-answer attempts). Overlaps with other channels.",
-          source: "supabase" as MetricSource,
-          total: outboundBucketed.total, datapoints: outboundBucketed.series,
-          crNumerator: { total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0), datapoints: newProsOutboundBucketed.datapoints } },
+        // Outbound moved to Pros contacted — it's an outreach signal
+        // (we reached out), not a visit signal (they landed). See the
+        // pros_contacted.subs[].outbound_contacted row above.
       ],
     },
     {

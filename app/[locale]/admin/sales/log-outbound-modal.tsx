@@ -164,35 +164,39 @@ export function LogOutboundModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Log outbound</DialogTitle>
+      {/* Suppress the default shadcn close (top-right XIcon) and use the
+          popup-close ✕ styling to match the contact detail popup. */}
+      <DialogContent className="max-w-md popup-card" showCloseButton={false}>
+        <DialogHeader className="sr-only">
+          <DialogTitle>{contactLabel}</DialogTitle>
         </DialogHeader>
-
-        {/* Contact card — avatar + identity + email/phone */}
-        <div className="flex items-center gap-3 pb-1">
-          <div
-            className="arco-table-avatar shrink-0"
-            style={{ width: 44, height: 44, fontSize: 14, background: "#f5f5f4", color: "#6b6b68", overflow: "hidden" }}
-          >
-            {contactAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={contactAvatarUrl} alt={contactLabel} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              initials
-            )}
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="arco-table-primary truncate" style={{ fontSize: 13, fontWeight: 500 }}>
-              {contactLabel}
-              <span className="text-[#a1a1a0]"> · {companyLabel}</span>
-            </span>
-            <div className="flex items-center gap-2 text-xs text-[#6b6b68] truncate">
-              {contactEmail && <span className="truncate">{contactEmail}</span>}
-              {contactEmail && contactPhone && <span className="text-[#d4d4d3]">·</span>}
-              {contactPhone && <span className="truncate">{contactPhone}</span>}
+        <div className="popup-header">
+          <div className="min-w-0">
+            <h3 className="arco-section-title truncate">{contactLabel}</h3>
+            <div className="text-xs text-[#6b6b68] truncate">
+              {companyLabel}
+              {contactEmail && (
+                <>
+                  <span className="text-[#d4d4d3]"> · </span>
+                  <span>{contactEmail}</span>
+                </>
+              )}
+              {contactPhone && (
+                <>
+                  <span className="text-[#d4d4d3]"> · </span>
+                  <span>{contactPhone}</span>
+                </>
+              )}
             </div>
           </div>
+          <button
+            type="button"
+            className="popup-close"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -313,7 +317,7 @@ export function LogOutboundModal({
         <DialogFooter style={{ marginTop: 16 }}>
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-tertiary"
             onClick={() => onOpenChange(false)}
             disabled={isPending}
           >
@@ -321,7 +325,7 @@ export function LogOutboundModal({
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className="btn-secondary"
             onClick={onSubmit}
             disabled={isPending}
           >

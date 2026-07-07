@@ -40,6 +40,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Checkbox } from "@/components/ui/checkbox"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
 import { LogOutboundModal } from "./log-outbound-modal"
 
@@ -477,8 +478,7 @@ function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRef
 // -- Component ---------------------------------------------------------------
 
 /**
- * Per-contact data fetched lazily when the company popup opens. Keyed by
- * `prospectId` in the parent's contactDetails map.
+ * Per-contact data fetched lazily when the contact popup opens.
  */
 type ContactDetailBundle = {
   prospect: Prospect | null
@@ -520,18 +520,20 @@ export function ProspectsClient({
   // zero when the filter is active.
   const [outboundDueOnly, setOutboundDueOnly] = useState(false)
   const [outboundDueCount, setOutboundDueCount] = useState(initialOutboundDueCount)
+  // Multi-select row state — mirrors the /admin/companies pattern. Keyed
+  // on row.rowId; bulk actions iterate the underlying contacts of every
+  // selected row. Cleared on successful bulk action or filter change.
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
   const [search, setSearch] = useState("")
-  // Company-scoped details popup. Holds the row the admin clicked, plus
-  // a per-contact map of fetched details (events + sequence + invite ctx +
-  // full Prospect snapshot). Expanded contacts render their full timeline;
-  // collapsed contacts show only the identity header. Primary contact (or
-  // the contact the admin clicked from the per-contact menu) is expanded
-  // by default.
-  const [detailCompany, setDetailCompany] = useState<SalesCompanyRow | null>(null)
-  const [contactDetails, setContactDetails] = useState<
-    Map<string, ContactDetailBundle>
-  >(new Map())
-  const [expandedContacts, setExpandedContacts] = useState<Set<string>>(new Set())
+  // Per-contact details popup. One click = one contact = one popup, so
+  // the fetched details bundle is a single value (not a map). The row is
+  // kept alongside the contact so the popup header can still render the
+  // company logo / name context.
+  const [detailContact, setDetailContact] = useState<
+    { contact: SalesContact; row: SalesCompanyRow } | null
+  >(null)
+  const [contactDetail, setContactDetail] = useState<ContactDetailBundle | null>(null)
   const [previewEmail, setPreviewEmail] = useState<{ template: string; lang: string } | null>(null)
   const [logOutboundTarget, setLogOutboundTarget] = useState<
     {
@@ -539,6 +541,7 @@ export function ProspectsClient({
       contactLabel: string
       companyLabel: string
       contactEmail: string | null
+      contactPhone: string | null
       contactAvatarUrl: string | null
     } | null
   >(null)
@@ -627,6 +630,9 @@ export function ProspectsClient({
       setTotalEmailsSent(result.companies.reduce((sum, c) => sum + c.emailsSent, 0))
       setOffset(0)
       setHasMore(result.totalCompanies > result.companies.length)
+      // Any narrowing invalidates the current selection — otherwise a
+      // hidden selected row would still be picked up by bulk actions.
+      setSelectedRowIds(new Set())
     })
   }, [statusFilter, sourceFilter, sequenceFilter, search, outboundDueOnly, sortBy, sortDir])
 
@@ -692,55 +698,41 @@ export function ProspectsClient({
   }, [sortBy, sortDir, statusFilter, sourceFilter, sequenceFilter, search])
 
   // Open the company-scoped details popup. Two entry points:
-  //   1. Row-level "Details" menu → focuses primary contact (no focusId).
-  //   2. Per-contact "Details" → opens with that contact expanded.
-  // Per-contact data (events / sequence / invite context / full Prospect)
-  // is fetched in parallel for every contact in the row, then dropped into
-  // a Map for the popup to read. Multiple contacts × ~4 server calls each
-  // is acceptable here — popups are admin-only and on demand.
-  const openCompanyDetails = useCallback((row: SalesCompanyRow, focusContactId?: string) => {
-    setDetailCompany(row)
-    setExpandedContacts(new Set([focusContactId ?? row.primaryContact.prospectId]))
-    setContactDetails(new Map())
+  // Popup opens for exactly one contact at a time — either the primary
+  // (row-level "Details" click) or a specific contact from the +N-more
+  // menu. Fires the ~4 detail queries for just that one contact.
+  const openContactPopup = useCallback((row: SalesCompanyRow, contact: SalesContact) => {
+    setDetailContact({ contact, row })
+    setContactDetail(null)
     startTransition(async () => {
-      const entries = await Promise.all(row.contacts.map(async (c): Promise<[string, ContactDetailBundle]> => {
-        const [prospect, eventsResult, sequenceResult, inviteResult] = await Promise.all([
-          fetchProspectById(c.prospectId),
-          fetchProspectEvents(c.prospectId),
-          getProspectSequence(c.prospectId),
-          c.source === "invites"
-            ? getProspectInviteContext(c.prospectId)
-            : Promise.resolve({ success: true, context: null } as const),
-        ])
-        return [c.prospectId, {
-          prospect,
-          events: eventsResult.events,
-          sequence: sequenceResult.success ? sequenceResult.steps ?? [] : [],
-          locale: sequenceResult.success ? sequenceResult.locale ?? null : null,
-          inviteContext: inviteResult.success ? inviteResult.context ?? null : null,
-        }]
-      }))
-      setContactDetails(new Map(entries))
+      const [prospect, eventsResult, sequenceResult, inviteResult] = await Promise.all([
+        fetchProspectById(contact.prospectId),
+        fetchProspectEvents(contact.prospectId),
+        getProspectSequence(contact.prospectId),
+        contact.source === "invites"
+          ? getProspectInviteContext(contact.prospectId)
+          : Promise.resolve({ success: true, context: null } as const),
+      ])
+      setContactDetail({
+        prospect,
+        events: eventsResult.events,
+        sequence: sequenceResult.success ? sequenceResult.steps ?? [] : [],
+        locale: sequenceResult.success ? sequenceResult.locale ?? null : null,
+        inviteContext: inviteResult.success ? inviteResult.context ?? null : null,
+      })
     })
   }, [])
 
-  // Find a row by prospect id and open the company popup focused on that
-  // contact. Used by the per-contact chevron menu in the expanded contacts
-  // cell — the menu only knows the prospectId, not the row.
+  // Find the row + contact by prospect id and open the single-contact
+  // popup. Used by both the row-level "Details" action (passes the
+  // primary contact's prospectId) and the +N-more menu.
   const openContactDetails = useCallback((prospectId: string) => {
     const row = companies.find((r) => r.contacts.some((c) => c.prospectId === prospectId))
     if (!row) return
-    openCompanyDetails(row, prospectId)
-  }, [companies, openCompanyDetails])
-
-  const toggleContactExpanded = useCallback((prospectId: string) => {
-    setExpandedContacts((prev) => {
-      const next = new Set(prev)
-      if (next.has(prospectId)) next.delete(prospectId)
-      else next.add(prospectId)
-      return next
-    })
-  }, [])
+    const contact = row.contacts.find((c) => c.prospectId === prospectId)
+    if (!contact) return
+    openContactPopup(row, contact)
+  }, [companies, openContactPopup])
 
   // ── Per-contact actions ────────────────────────────────────────────────
   // Reuse the existing per-prospect server actions; the row aggregator will
@@ -786,10 +778,60 @@ export function ProspectsClient({
   }
 
   const closeDetails = () => {
-    setDetailCompany(null)
-    setContactDetails(new Map())
-    setExpandedContacts(new Set())
+    setDetailContact(null)
+    setContactDetail(null)
   }
+
+  // ── Multi-select helpers ───────────────────────────────────────────────
+  const allVisibleSelected = companies.length > 0 && companies.every((r) => selectedRowIds.has(r.rowId))
+  const someVisibleSelected = companies.some((r) => selectedRowIds.has(r.rowId))
+
+  const toggleAllVisible = useCallback((value: boolean) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      if (value) companies.forEach((r) => next.add(r.rowId))
+      else companies.forEach((r) => next.delete(r.rowId))
+      return next
+    })
+  }, [companies])
+
+  const toggleRow = useCallback((rowId: string, value: boolean) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      if (value) next.add(rowId)
+      else next.delete(rowId)
+      return next
+    })
+  }, [])
+
+  // Fan out a per-prospect action across every contact of every selected
+  // row. Reports the count that succeeded so the toast is honest even if
+  // half of them are already in the target state (e.g. paused).
+  const runBulkContactAction = useCallback(
+    async (
+      actionLabel: string,
+      fn: (prospectId: string) => Promise<{ success: boolean; error?: string }>,
+    ) => {
+      const selectedRows = companies.filter((r) => selectedRowIds.has(r.rowId))
+      if (selectedRows.length === 0) return
+      setIsBulkProcessing(true)
+      let success = 0
+      let failure = 0
+      for (const row of selectedRows) {
+        for (const contact of row.contacts) {
+          const result = await fn(contact.prospectId)
+          if (result.success) success++
+          else failure++
+        }
+      }
+      if (success > 0) toast.success(`${actionLabel} — ${success} ${success === 1 ? "contact" : "contacts"}`)
+      if (failure > 0 && success === 0) toast.error(`${actionLabel} failed`)
+      setSelectedRowIds(new Set())
+      setIsBulkProcessing(false)
+      reload({ offset, append: false })
+    },
+    [companies, selectedRowIds, reload, offset],
+  )
 
   return (
     <>
@@ -1062,11 +1104,61 @@ export function ProspectsClient({
         </div>
       </div>
 
+      {/* Bulk actions bar — mirrors /admin/companies. Appears when any
+          row is selected; iterates every contact of every selected row
+          for prospect-level actions (Pause / Remove). */}
+      {selectedRowIds.size > 0 && (() => {
+        const selectedCount = selectedRowIds.size
+        const selectedContacts = companies
+          .filter((r) => selectedRowIds.has(r.rowId))
+          .reduce((n, r) => n + r.contacts.length, 0)
+        return (
+          <div className="mb-3 flex items-center gap-3 px-4 py-2.5 bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4]">
+            <span className="text-xs text-[#6b6b68]">
+              {selectedCount} {selectedCount === 1 ? "company" : "companies"} selected
+              {selectedContacts !== selectedCount && ` · ${selectedContacts} contacts`}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={() => runBulkContactAction("Sequence paused", pauseProspectSequence)}
+              >
+                Pause sequence
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-red-200 bg-white text-red-600 hover:bg-red-50 transition-colors"
+                disabled={isBulkProcessing}
+                onClick={() => runBulkContactAction("Removed from funnel", removeProspectFromFunnel)}
+              >
+                Remove
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={() => setSelectedRowIds(new Set())}
+              >
+                Clear
+              </button>
+            </div>
+            {isBulkProcessing && <span className="text-xs text-[#a1a1a0]">Processing…</span>}
+          </div>
+        )
+      })()}
+
       {/* Companies table — one row per company, contacts column expands inline. */}
       <div className="arco-table-wrap">
         <table className="arco-table" style={{ minWidth: 1200 }}>
           <thead>
             <tr>
+              <th style={{ width: 32 }}>
+                <Checkbox
+                  checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                  onCheckedChange={(v) => toggleAllVisible(!!v)}
+                  aria-label="Select all"
+                  className="h-3.5 w-3.5"
+                />
+              </th>
               <th>Company</th>
               <th>Contacts</th>
               <th>Status</th>
@@ -1141,7 +1233,7 @@ export function ProspectsClient({
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={14} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={15} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found.
                 </td>
               </tr>
@@ -1150,15 +1242,18 @@ export function ProspectsClient({
               <CompanyRowView
                 key={row.rowId}
                 row={row}
+                selected={selectedRowIds.has(row.rowId)}
+                onToggleSelect={(v) => toggleRow(row.rowId, v)}
                 onOpenContactDetails={openContactDetails}
                 onContactAction={runContactAction}
-                onLogOutbound={(contact, companyName) =>
+                onLogOutbound={(contact, companyName, companyPhone) =>
                   setLogOutboundTarget({
                     prospectId: contact.prospectId,
                     contactLabel:
                       contact.resolvedContact.name?.trim() || contact.email || "Unnamed contact",
                     companyLabel: companyName,
                     contactEmail: contact.resolvedContact.email ?? contact.email ?? null,
+                    contactPhone: companyPhone,
                     contactAvatarUrl: contact.resolvedContact.avatarUrl ?? null,
                   })
                 }
@@ -1185,74 +1280,66 @@ export function ProspectsClient({
           accordion with its own lifecycle / sequence / events history.
           Primary contact (or the per-contact "Details" target) opens
           expanded; the rest collapse to identity headers. */}
-      {detailCompany && (
-        <div className="popup-overlay" onClick={closeDetails}>
-          <div
-            className="popup-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 720, maxHeight: "90vh", overflowY: "auto" }}
-          >
-            <div className="popup-header">
-              <div className="flex items-center gap-3 min-w-0">
-                {detailCompany.claimedCompany?.logoUrl ? (
-                  <div className="arco-table-avatar shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={detailCompany.claimedCompany.logoUrl}
-                      alt={detailCompany.companyName}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    className="arco-table-avatar shrink-0"
-                    style={{ background: "#f5f5f4", color: "#6b6b68" }}
-                  >
-                    {(detailCompany.companyName ?? "")
-                      .split(" ")
-                      .filter(Boolean)
-                      .map((t) => t[0]?.toUpperCase())
-                      .slice(0, 2)
-                      .join("") || "?"}
-                  </div>
-                )}
+      {detailContact && (() => {
+        const { contact, row } = detailContact
+        const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
+        const contactEmail = contact.resolvedContact.email ?? contact.email ?? null
+        const companyPhone = row.claimedCompany?.phone ?? null
+        return (
+          <div className="popup-overlay" onClick={closeDetails}>
+            <div
+              className="popup-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 720, maxHeight: "90vh", overflowY: "auto" }}
+            >
+              <div className="popup-header">
                 <div className="min-w-0">
-                  {detailCompany.claimedCompany?.slug ? (
-                    <a
-                      href={`/professionals/${detailCompany.claimedCompany.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="arco-section-title hover:underline"
-                    >
-                      {detailCompany.companyName}
-                    </a>
-                  ) : (
-                    <h3 className="arco-section-title">{detailCompany.companyName}</h3>
-                  )}
+                  <h3 className="arco-section-title truncate">{displayName}</h3>
+                  <div className="text-xs text-[#6b6b68] truncate">
+                    {row.claimedCompany?.slug ? (
+                      <a
+                        href={`/professionals/${row.claimedCompany.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline"
+                      >
+                        {row.companyName}
+                      </a>
+                    ) : (
+                      row.companyName
+                    )}
+                    {contactEmail && (
+                      <>
+                        <span className="text-[#d4d4d3]"> · </span>
+                        <span>{contactEmail}</span>
+                      </>
+                    )}
+                    {companyPhone && (
+                      <>
+                        <span className="text-[#d4d4d3]"> · </span>
+                        <span>{companyPhone}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
+                <button type="button" className="popup-close" onClick={closeDetails} aria-label="Close">✕</button>
               </div>
-              <button type="button" className="popup-close" onClick={closeDetails} aria-label="Close">✕</button>
-            </div>
 
-            <div className="mb-2 mt-2">
-              <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
-                Contacts ({detailCompany.contacts.length})
-              </span>
-            </div>
-            <div className="space-y-3">
-              {detailCompany.contacts.map((contact) => (
-                <ContactDetailCard
-                  key={contact.prospectId}
-                  contact={contact}
-                  details={contactDetails.get(contact.prospectId) ?? null}
-                  expanded={expandedContacts.has(contact.prospectId)}
-                  onToggleExpand={() => toggleContactExpanded(contact.prospectId)}
-                  onPreviewEmail={(template, lang) => setPreviewEmail({ template, lang })}
-                />
-              ))}
+              <div className="mt-3">
+                {!contactDetail ? (
+                  <p className="text-xs text-[#a1a1a0]">Loading…</p>
+                ) : (
+                  <ContactDetailBody
+                    contact={contact}
+                    details={contactDetail}
+                    onPreviewEmail={(template, lang) => setPreviewEmail({ template, lang })}
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Log outbound modal — opens from the contact dropdown in any row */}
       {logOutboundTarget && (
@@ -1265,14 +1352,15 @@ export function ProspectsClient({
           contactLabel={logOutboundTarget.contactLabel}
           companyLabel={logOutboundTarget.companyLabel}
           contactEmail={logOutboundTarget.contactEmail}
+          contactPhone={logOutboundTarget.contactPhone}
           contactAvatarUrl={logOutboundTarget.contactAvatarUrl}
           onLogged={() => {
             // The trigger updates prospects.last_outbound_at; refresh the
             // table + popup so the new entry surfaces immediately.
             reload({ offset, append: false })
-            // If the popup is open for this contact, re-fetch its events so
+            // If the single-contact popup is open, re-fetch its events so
             // the new manual entry shows in Activity.
-            if (detailCompany) openCompanyDetails(detailCompany)
+            if (detailContact) openContactPopup(detailContact.row, detailContact.contact)
           }}
         />
       )}
@@ -1464,14 +1552,18 @@ type ContactActionRunner = (
  */
 function CompanyRowView({
   row,
+  selected,
+  onToggleSelect,
   onOpenContactDetails,
   onContactAction,
   onLogOutbound,
 }: {
   row: SalesCompanyRow
+  selected: boolean
+  onToggleSelect: (value: boolean) => void
   onOpenContactDetails: (prospectId: string) => void
   onContactAction: ContactActionRunner
-  onLogOutbound: (contact: SalesContact, companyName: string) => void
+  onLogOutbound: (contact: SalesContact, companyName: string, companyPhone: string | null) => void
 }) {
   const claimed = row.claimedCompany
   const companyInitials = (row.companyName ?? "")
@@ -1510,6 +1602,17 @@ function CompanyRowView({
       style={{ cursor: "pointer" }}
       className="hover:bg-[#fafaf9]"
     >
+      {/* Row-select checkbox — stops row-click bubble so ticking a row
+          doesn't also open its details popup. */}
+      <td onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(v) => onToggleSelect(!!v)}
+          aria-label="Select row"
+          className="h-3.5 w-3.5"
+        />
+      </td>
+
       {/* Company */}
       <td>
         <div className="flex items-center gap-3">
@@ -1672,7 +1775,7 @@ function ContactsCell({
   row: SalesCompanyRow
   onOpenContactDetails: (prospectId: string) => void
   onContactAction: ContactActionRunner
-  onLogOutbound: (contact: SalesContact, companyName: string) => void
+  onLogOutbound: (contact: SalesContact, companyName: string, companyPhone: string | null) => void
 }) {
   const primary = row.primaryContact
   const overflow = row.contacts.length - 1
@@ -1694,7 +1797,7 @@ function ContactsCell({
             contact: primary,
             onOpenDetails: () => onOpenContactDetails(primary.prospectId),
             onAction: onContactAction,
-            onLogOutbound: () => onLogOutbound(primary, row.companyName),
+            onLogOutbound: () => onLogOutbound(primary, row.companyName, row.claimedCompany?.phone ?? null),
           })}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1723,7 +1826,7 @@ function ContactsCell({
                     contact: c,
                     onOpenDetails: () => onOpenContactDetails(c.prospectId),
                     onAction: onContactAction,
-                    onLogOutbound: () => onLogOutbound(c, row.companyName),
+                    onLogOutbound: () => onLogOutbound(c, row.companyName, row.claimedCompany?.phone ?? null),
                   })}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
@@ -1801,11 +1904,11 @@ function renderContactMenuItems({
   const isSuppressed = !!getSuppressionState(contact)
   return (
     <>
-      <DropdownMenuItem className="text-xs cursor-pointer" onClick={onLogOutbound}>
-        Log outbound
-      </DropdownMenuItem>
       <DropdownMenuItem className="text-xs cursor-pointer" onClick={onOpenDetails}>
         Details
+      </DropdownMenuItem>
+      <DropdownMenuItem className="text-xs cursor-pointer" onClick={onLogOutbound}>
+        Log outbound
       </DropdownMenuItem>
       <DropdownMenuSeparator />
 
@@ -1906,78 +2009,6 @@ function renderContactMenuItems({
   )
 }
 
-/**
- * One contact section inside the company-scoped details popup.
- *
- * Header row is always visible: identity + status/sequence/source pills
- * + chevron. Expanded view renders the per-contact lifecycle, Apollo
- * IDs (if applicable), notes, the outreach sequence (with email-preview
- * links), and the event history. While the per-contact data is still
- * loading, the body collapses to a "Loading…" placeholder so the popup
- * doesn't pop into existence empty and rebuild as data arrives.
- */
-function ContactDetailCard({
-  contact,
-  details,
-  expanded,
-  onToggleExpand,
-  onPreviewEmail,
-}: {
-  contact: SalesContact
-  details: ContactDetailBundle | null
-  expanded: boolean
-  onToggleExpand: () => void
-  onPreviewEmail: (template: string, lang: "en" | "nl") => void
-}) {
-  const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
-  const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
-  const suppression = getSuppressionState(contact)
-
-  return (
-    <div className="border border-[#e5e5e4] rounded-[3px] overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggleExpand}
-        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-[#fafaf9] transition-colors"
-      >
-        <div className="flex-1 min-w-0">
-          <ContactIdentity contact={contact} />
-        </div>
-        <span className="flex items-center gap-1.5 shrink-0">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
-          <span className="text-[11px] text-[#1c1c1a] whitespace-nowrap">{statusCfg.label}</span>
-        </span>
-        <span className="flex items-center gap-1.5 shrink-0">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
-          <span className="text-[11px] text-[#6b6b68] whitespace-nowrap">
-            {suppression ? suppression.label : sequenceCfg.label}
-          </span>
-        </span>
-        <span className="status-pill shrink-0">{sourceLabel(contact.source)}</span>
-        <span
-          className={`text-[#a1a1a0] inline-block transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
-          style={{ width: 8, fontSize: 10 }}
-        >
-          ▶
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="border-t border-[#e5e5e4] px-3 py-3">
-          {!details ? (
-            <p className="text-xs text-[#a1a1a0]">Loading…</p>
-          ) : (
-            <ContactDetailBody
-              contact={contact}
-              details={details}
-              onPreviewEmail={onPreviewEmail}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /** Inner body of a contact section once its data has loaded — lifecycle,
  *  Apollo, notes, sequence, events. Split out so the loading shell stays

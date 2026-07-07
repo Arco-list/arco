@@ -15,7 +15,12 @@ import { logger } from "@/lib/logger"
  */
 
 export const dynamic = "force-dynamic"
-export const maxDuration = 60
+// Bumped from 60 → 300 (same ceiling as other crons in this repo). At 60
+// the loop ran out of budget around position 27 of CACHED_METRIC_KEYS,
+// leaving the client_visitors_* channel splits + client_signups_*
+// silently unsynced for months. Combined with the concurrency cap in
+// syncAllCachedMetrics, this comfortably fits every key.
+export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
   return handle(req)

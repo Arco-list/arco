@@ -252,6 +252,19 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
     resolvedNavLinks.push({ href: "/products", label: "Products" })
   }
 
+  // Badges by href — used by the account (avatar) dropdown's admin
+  // section, which builds its own item list from translation keys and
+  // can't consume the resolvedNavLinks tree directly. Also lets the
+  // group headers there show a cumulative count.
+  const badgeByHref: Record<string, number> = {}
+  for (const item of resolvedNavLinks) {
+    if (isNavGroup(item)) {
+      for (const child of item.children) {
+        if (child.badge && child.badge > 0) badgeByHref[child.href] = child.badge
+      }
+    }
+  }
+
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   useEffect(() => {
     if (!openGroup) return;
@@ -384,10 +397,16 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                   <div className="py-2">
                     {resolvedNavLinks.map((item) => {
                       if (isNavGroup(item)) {
+                        const groupBadge = item.children.reduce((sum, c) => sum + (c.badge ?? 0), 0)
                         return (
                           <div key={item.label} className="py-1">
-                            <div className="px-5 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-[#8c8c8a]">
-                              {item.label}
+                            <div className="px-5 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-[#8c8c8a] flex items-center gap-1.5">
+                              <span>{item.label}</span>
+                              {groupBadge > 0 && (
+                                <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-medium bg-primary text-white normal-case tracking-normal">
+                                  {groupBadge}
+                                </span>
+                              )}
                             </div>
                             {item.children.map((child) => {
                               const childPath = child.href.split("?")[0]
@@ -468,6 +487,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                   if (isNavGroup(item)) {
                     const isActive = item.children.some((c) => pathname === c.href.split("?")[0])
                     const isOpen = openGroup === item.label
+                    // Cumulative badge = sum of every child's badge in the
+                    // group. Renders next to the group label so the
+                    // dropdown shows unresolved work at a glance without
+                    // needing to open it. Hidden when the sum is 0.
+                    const groupBadge = item.children.reduce((sum, c) => sum + (c.badge ?? 0), 0)
                     return (
                       <div key={item.label} data-nav-group className="relative">
                         <button
@@ -480,6 +504,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           }`}
                         >
                           {item.label}
+                          {groupBadge > 0 && (
+                            <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                              {groupBadge}
+                            </span>
+                          )}
                           <svg width="8" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`transition-transform ${isOpen ? "rotate-180" : ""}`}>
                             <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                           </svg>
@@ -810,6 +839,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   {adminGroups.map((group) => {
                                     const containsActive = group.items.some((i) => pathname === i.href)
                                     const isOpen = expandedAccountAdminGroups.has(group.key) || containsActive
+                                    const groupBadge = group.items.reduce((sum, i) => sum + (badgeByHref[i.href] ?? 0), 0)
                                     return (
                                       <div key={group.key}>
                                         <button
@@ -824,23 +854,38 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                           }}
                                           className="flex w-full items-center justify-between px-1 py-1.5 text-sm font-normal text-[#1c1c1a] hover:text-primary transition-colors"
                                         >
-                                          <span>{group.label}</span>
+                                          <span className="flex items-center gap-1.5">
+                                            {group.label}
+                                            {groupBadge > 0 && (
+                                              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                                                {groupBadge}
+                                              </span>
+                                            )}
+                                          </span>
                                           {/* Down when collapsed, up when expanded — same chevron + rotation as the header desktop dropdowns. */}
                                           <svg width="8" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}>
                                             <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                                           </svg>
                                         </button>
-                                        {isOpen && group.items.map((item) => (
-                                          <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === item.href ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
-                                            onClick={() => setIsAccountMenuOpen(false)}
-                                          >
-                                            {item.icon}
-                                            {item.label}
-                                          </Link>
-                                        ))}
+                                        {isOpen && group.items.map((item) => {
+                                          const itemBadge = badgeByHref[item.href] ?? 0
+                                          return (
+                                            <Link
+                                              key={item.href}
+                                              href={item.href}
+                                              className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === item.href ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
+                                              onClick={() => setIsAccountMenuOpen(false)}
+                                            >
+                                              {item.icon}
+                                              <span className="flex-1">{item.label}</span>
+                                              {itemBadge > 0 && (
+                                                <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                                                  {itemBadge}
+                                                </span>
+                                              )}
+                                            </Link>
+                                          )
+                                        })}
                                       </div>
                                     )
                                   })}

@@ -1056,7 +1056,34 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
 
   // 9. Insert extracted images as project_photos
   if (imageUrls.length > 0) {
-    const photoRows = imageUrls.map((imgUrl, i) => ({
+    // Mirror the source images into Supabase Storage before persisting
+    // the rows. Third-party CDNs (WordPress uploads, Squarespace,
+    // Webflow, per-architect sites) rotate or delete paths without
+    // warning — a hotlinked gallery breaks silently when that happens.
+    // The mirror uses service-role for storage inserts (RLS on
+    // project-photos gates on ownership), returns Supabase URLs for
+    // photos it mirrored, and falls back to the original hotlink for
+    // anything that failed to fetch/upload so we never lose a row.
+    let finalUrls = imageUrls
+    try {
+      const { createServiceRoleSupabaseClient } = await import("@/lib/supabase/server")
+      const { mirrorImagesToStorage } = await import("@/lib/mirror-images-to-storage")
+      const svc = createServiceRoleSupabaseClient()
+      const mirror = await mirrorImagesToStorage(svc as any, project.id, imageUrls)
+      finalUrls = mirror.urls
+      console.log(
+        `[scrape] Mirrored ${mirror.mirroredCount}/${imageUrls.length} images to Supabase Storage (${mirror.failedCount} kept as hotlinks)`,
+      )
+    } catch (err) {
+      // Total failure of the mirror step keeps the fallback (imageUrls
+      // as-is). Never let mirroring block an import.
+      logger.warn("Scrape image mirror step failed — persisting hotlinks", {
+        projectId: project.id,
+        message: (err as Error)?.message ?? String(err),
+      })
+    }
+
+    const photoRows = finalUrls.map((imgUrl, i) => ({
       project_id: project.id,
       url: imgUrl,
       is_primary: i === 0,

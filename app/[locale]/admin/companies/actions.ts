@@ -862,12 +862,19 @@ export async function sendProspectEmailAction(input: {
   const serviceClient = createServiceRoleSupabaseClient()
   const { data: company } = await serviceClient
     .from("companies")
-    .select("id, name, slug, email, hero_photo_url, logo_url, city, country, owner_id, primary_service:categories!companies_primary_service_id_fkey(name)")
+    .select("id, name, slug, email, hero_photo_url, logo_url, city, country, owner_id, source, primary_service:categories!companies_primary_service_id_fkey(name)")
     .eq("id", idResult.data)
     .single()
 
   if (!company) return { success: false, error: "Company not found" }
   if (company.owner_id) return { success: false, error: "Company already has an owner" }
+  // Apollo companies live only in /admin/sales — the Showcase flow is
+  // reserved for admin/invite/direct-signup companies. Enforced by the
+  // companies_apollo_not_showcased CHECK constraint at the DB level too,
+  // but caught here for a clean error message.
+  if ((company as { source?: string }).source === "apollo") {
+    return { success: false, error: "Apollo companies can't be promoted to Showcased — send outbound from the Sales page instead." }
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
   const companyPageUrl = `${siteUrl}/professionals/${company.slug}`

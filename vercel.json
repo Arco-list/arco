@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/sync-growth-metrics",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-platform-prospects",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

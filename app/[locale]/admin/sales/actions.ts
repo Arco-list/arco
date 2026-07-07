@@ -231,11 +231,31 @@ async function attachResolvedContacts(
     for (const p of profiles ?? []) profileById.set(p.id, p)
   }
 
-  // Stage 4: auth emails (one call per unique id; mirrors admin/companies)
+  // Stage 4: auth emails. Batched — paginating listUsers once and
+  // indexing by id is dramatically cheaper than one getUserById per uid
+  // (the prior implementation issued N sequential HTTPS round-trips to
+  // the Auth admin API — dominant cost of the whole /admin/sales
+  // render). Stop paging as soon as we've covered every needed id or
+  // hit the end of the user set.
   const emailByUserId = new Map<string, string>()
-  for (const uid of userIds) {
-    const { data } = await supabase.auth.admin.getUserById(uid)
-    if (data?.user?.email) emailByUserId.set(uid, data.user.email)
+  if (userIds.size > 0) {
+    const needed = new Set(userIds)
+    const perPage = 200
+    let page = 1
+    while (needed.size > 0) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+      if (error) break
+      const users = data?.users ?? []
+      if (users.length === 0) break
+      for (const u of users) {
+        if (needed.has(u.id) && u.email) {
+          emailByUserId.set(u.id, u.email)
+          needed.delete(u.id)
+        }
+      }
+      if (users.length < perPage) break
+      page++
+    }
   }
 
   const nameFromProfile = (
@@ -381,6 +401,7 @@ export type SalesClaimedCompany = {
   slug: string | null
   logoUrl: string | null
   city: string | null
+  phone: string | null
   primaryService: string | null
   status: string | null
   ownerUserId: string | null
@@ -696,9 +717,23 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     outboundDueOnly = false,
   } = filters
 
+  // Explicit column list — SELECT * pulled ~40 columns per prospect
+  // (Apollo blobs, notes, lifecycle timestamps we don't render). Only
+  // the fields consumed by fetchSalesCompanies + attachResolvedContacts
+  // downstream. Shrinks the payload considerably at 5000 rows and keeps
+  // the query index-only where possible.
+  const PROSPECT_COLUMNS = [
+    "id", "email", "contact_name", "company_id", "company_name", "city",
+    "source", "status", "sequence_status",
+    "emails_sent", "emails_delivered", "emails_opened", "emails_clicked",
+    "last_email_sent_at", "last_email_opened_at", "last_email_clicked_at",
+    "created_at", "updated_at", "ref_code", "user_id",
+    "unsubscribed_at", "bounced_at", "complained_at",
+    "last_outbound_at", "next_follow_up_at",
+  ].join(", ")
   const { data, error } = await supabase
     .from("prospects")
-    .select("*")
+    .select(PROSPECT_COLUMNS)
     // Cast — 'removed' is in the live enum (migration 152) but the auto-
     // generated types lag behind.
     .neq("status", "removed" as never)
@@ -789,7 +824,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   if (companyIds.length > 0) {
     const { data: companies } = await supabase
       .from("companies")
-      .select("id, name, slug, logo_url, city, owner_id, status, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .select("id, name, slug, logo_url, city, phone, owner_id, status, primary_service:categories!companies_primary_service_id_fkey(name)")
       .in("id", companyIds)
 
     const ownerIds = Array.from(
@@ -804,10 +839,27 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         .in("id", ownerIds)
       for (const pf of profiles ?? []) ownerProfileById.set(pf.id, pf as any)
     }
+    // Same batched pattern as attachResolvedContacts — one paginated
+    // listUsers pass instead of N per-owner getUserById round-trips.
     const ownerEmailById = new Map<string, string>()
-    for (const id of ownerIds) {
-      const { data } = await supabase.auth.admin.getUserById(id)
-      if (data?.user?.email) ownerEmailById.set(id, data.user.email)
+    if (ownerIds.length > 0) {
+      const needed = new Set(ownerIds)
+      const perPage = 200
+      let page = 1
+      while (needed.size > 0) {
+        const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+        if (error) break
+        const users = data?.users ?? []
+        if (users.length === 0) break
+        for (const u of users) {
+          if (needed.has(u.id) && u.email) {
+            ownerEmailById.set(u.id, u.email)
+            needed.delete(u.id)
+          }
+        }
+        if (users.length < perPage) break
+        page++
+      }
     }
 
     for (const c of companies ?? []) {
@@ -822,6 +874,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         slug: cc.slug ?? null,
         logoUrl: cc.logo_url ?? null,
         city: cc.city ?? null,
+        phone: cc.phone ?? null,
         primaryService: cc.primary_service?.name ?? null,
         status: cc.status ?? null,
         ownerUserId: cc.owner_id ?? null,

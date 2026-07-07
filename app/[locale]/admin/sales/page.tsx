@@ -1,12 +1,13 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProspectsClient } from "./prospects-client"
-import { fetchSalesCompanies, syncPlatformProspects } from "./actions"
+import { fetchSalesCompanies } from "./actions"
 
 export const dynamic = "force-dynamic"
 
 export default async function ProspectsPage() {
-  // Sync prospected/invited companies into prospects table
-  await syncPlatformProspects()
+  // syncPlatformProspects() now runs via /api/cron/sync-platform-prospects
+  // every 15 min. It used to fire on every render — 4 loops with N+1
+  // queries each — which dominated the load time here.
 
   const supabase = createServiceRoleSupabaseClient()
 
