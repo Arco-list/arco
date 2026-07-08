@@ -6,6 +6,8 @@ import {
   fetchSalesCompanies,
   fetchProspectById,
   fetchProspectEvents,
+  fetchProspectInboundEmails,
+  type InboundEmailForProspect,
   startProspectSequence,
   pauseProspectSequence,
   resumeProspectSequence,
@@ -42,7 +44,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
-import { LogOutboundModal } from "./log-outbound-modal"
+import { LogOutboundModal, type LogOutboundInitialValues } from "./log-outbound-modal"
+import { deleteOutboundLog } from "./log-outbound-actions"
 
 // -- Status config -----------------------------------------------------------
 
@@ -90,15 +93,21 @@ const SEQUENCE_FILTER_LABEL: Record<SequenceFilterValue, { label: string; dot: s
 
 // Channel-filter dropdown options. DB still stores the historical source
 // codes; sourceLabel renders them post-Apollo-cutover names.
-// "outbound" is a synthetic channel: it doesn't correspond to a
-// prospects.source value — it represents any company with at least one
-// manual outbound touch logged (call/meeting/manual email/linkedin,
-// including no-answer attempts). Read off rows.lastOutboundAt.
+// "outbound" and "email" are synthetic channels: neither corresponds to
+// a prospects.source value.
+//   - outbound → any manual outbound touch logged (call/meeting/manual
+//     email/linkedin, incl. no-answer attempts). Read off
+//     rows.lastOutboundAt.
+//   - email → an inbound reply has landed (inbound_emails linked to any
+//     of the row's prospects). Outgoing sends alone don't flip this —
+//     the pill signals "they replied", not "we sent". Read off
+//     rows.hasEmailActivity.
 const CHANNEL_OPTIONS: { value: string; label: string }[] = [
   { value: "arco", label: "Showcase" },
   { value: "invites", label: "Invite" },
   { value: "apollo", label: "Outreach" },
   { value: "outbound", label: "Outbound" },
+  { value: "email", label: "Email" },
 ]
 
 // Recipient-suppression states from the Resend webhook + List-Unsubscribe.
@@ -151,6 +160,7 @@ const SOURCE_LABELS: Record<string, string> = {
   apollo: "Outreach",
   manual: "Manual",
   outbound: "Outbound",
+  email: "Email",
 }
 const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -215,6 +225,49 @@ function templateDisplayName(template: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/** Derive the campaign channel label ("Showcase" / "Outreach" /
+ *  "Invite") from an email template id. Used to append a channel pill
+ *  to automated email rows in the Activity feed so the rep sees which
+ *  sequence a given send belongs to at a glance. Apollo-legacy step
+ *  ids (apollo-step-*) roll up to Outreach. Returns null for anything
+ *  unclassified. */
+function templateChannelLabel(template: string | null | undefined): string | null {
+  if (!template) return null
+  if (template.startsWith("prospect-")) return "Showcase"
+  if (template.startsWith("new-professional-")) return "Invite"
+  if (template.startsWith("outreach-")) return "Outreach"
+  if (template.startsWith("apollo-")) return "Outreach"
+  return null
+}
+
+/** Coalesce every campaign hint on an event's metadata down to a
+ *  single label. Reads (in priority order):
+ *    - metadata.template     — set on email_sent / email_resent
+ *    - metadata.template_set — set on sequence_enroled + friends
+ *    - metadata.source       — "Apollo" (rolls up to Outreach)
+ *  Returns null when none of the three yields a match. */
+function eventCampaignLabel(event: ProspectEvent): string | null {
+  const template = typeof event.metadata?.template === "string"
+    ? (event.metadata.template as string).replace(/_/g, "-")
+    : null
+  const fromTemplate = templateChannelLabel(template)
+  if (fromTemplate) return fromTemplate
+
+  const set = typeof event.metadata?.template_set === "string"
+    ? (event.metadata.template_set as string).toLowerCase()
+    : null
+  if (set === "outreach") return "Outreach"
+  if (set === "showcase" || set === "prospect") return "Showcase"
+  if (set === "invite" || set === "new-professional") return "Invite"
+
+  const source = typeof event.metadata?.source === "string"
+    ? (event.metadata.source as string).toLowerCase()
+    : null
+  if (source === "apollo") return "Outreach"
+
+  return null
+}
+
 function conversionRate(from: number, to: number): string {
   if (from === 0) return "0%"
   return `${Math.round((to / from) * 100)}%`
@@ -224,7 +277,10 @@ const EVENT_LABELS: Record<string, string> = {
   status_changed: "Status changed",
   email_sent: "Email sent",
   email_resent: "Email resent",
+  "email.received": "Email received",
+  admin_replied: "Email replied",
   sequence_started: "Sequence started",
+  sequence_enroled: "Sequence enrolled",
   sequence_paused: "Sequence paused",
   sequence_resumed: "Sequence resumed",
   sequence_finished: "Sequence finished",
@@ -234,9 +290,39 @@ const EVENT_LABELS: Record<string, string> = {
   complained: "Marked as spam",
   company_invited: "Company invited",
   "prospect.landing_visited": "Visited landing page",
+  "prospect.signed_up": "Signed Up",
+  "prospect.company_created": "Company Created",
+  "prospect.listed": "Company Listed",
+  "company.draft": "Company Created",
+  "company.signup": "Company Signup",
+  "company.listed": "Company Listed",
+  "company.unlisted": "Company Unlisted",
+  "company.deactivated": "Company Deactivated",
+  "user.signed_up": "User signed up",
 }
 
 function formatEventLabel(type: string, metadata?: Record<string, unknown> | null): string {
+  // Sequence lifecycle events (enrolled / started / paused / resumed /
+  // finished) get their campaign prefixed when metadata.template_set is
+  // present — "Outreach sequence enrolled" reads more usefully than
+  // the bare "Sequence enrolled" the previous fallback produced.
+  if (type.startsWith("sequence_")) {
+    const set = typeof metadata?.template_set === "string"
+      ? (metadata.template_set as string).toLowerCase()
+      : null
+    const campaign =
+      set === "outreach" ? "Outreach"
+      : set === "showcase" || set === "prospect" ? "Showcase"
+      : set === "invite" || set === "new-professional" ? "Invite"
+      : null
+    const base = EVENT_LABELS[type] ?? type.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    if (campaign) {
+      // "Sequence enrolled" → "Outreach sequence enrolled"
+      const rest = base.replace(/^Sequence /, "sequence ")
+      return `${campaign} ${rest}`
+    }
+    return base
+  }
   // Email send events get specialised when metadata.template is present:
   // "Showcase Intro sent" / "Outreach Follow-up resent" reads better
   // than the generic "Email sent" / "Email resent".
@@ -268,14 +354,6 @@ function formatEventLabel(type: string, metadata?: Record<string, unknown> | nul
 
 // -- Event history row -------------------------------------------------------
 
-const MANUAL_KIND_ICON: Record<string, string> = {
-  call: "☎",
-  meeting: "📅",
-  email: "✉",
-  linkedin: "🔗",
-  note: "📝",
-}
-
 const MANUAL_OUTCOME_LABEL: Record<string, string> = {
   positive: "Positive",
   neutral: "Neutral",
@@ -290,12 +368,71 @@ const MANUAL_OUTCOME_DOT: Record<string, string> = {
   no_answer: "bg-amber-400",
 }
 
-function EventHistoryRow({ event }: { event: ProspectEvent }) {
+/** Trailing channel pill for the row — Email / Call / Meeting / LinkedIn
+ *  / Note. Null for system events (status changes, landing visits,
+ *  sequence lifecycle, etc.) so those rows don't get a pill. */
+function eventChannelLabel(eventType: string): string | null {
+  if (eventType.startsWith("manual.")) {
+    const kind = eventType.slice("manual.".length)
+    if (kind === "call") return "Call"
+    if (kind === "meeting") return "Meeting"
+    if (kind === "email") return "Email"
+    if (kind === "linkedin") return "LinkedIn"
+    if (kind === "note") return "Note"
+    return null
+  }
+  if (
+    eventType === "email.received"
+    || eventType === "email_sent"
+    || eventType === "email_resent"
+    || eventType === "replied"
+    || eventType === "admin_replied"
+    || eventType === "bounced"
+    || eventType === "unsubscribed"
+    || eventType === "complained"
+  ) {
+    return "Email"
+  }
+  return null
+}
+
+/** ▶ chevron shown before the row label; rotates 90° when the row is
+ *  expanded. Absolutely positioned so it hangs to the left of the label
+ *  column *without* nudging the label's start position — that way
+ *  Activity names line up exactly with Lifecycle labels + Outreach
+ *  template names one section up. Hidden entirely (not just invisible)
+ *  when the row isn't expandable. */
+function ExpandChevron({ visible, open }: { visible: boolean; open: boolean }) {
+  if (!visible) return null
+  return (
+    <span
+      aria-hidden="true"
+      className={`text-[#a1a1a0] transition-transform inline-block absolute ${open ? "rotate-90" : ""}`}
+      style={{ left: -12, top: 3, fontSize: 10, lineHeight: 1, width: 8 }}
+    >
+      ▶
+    </span>
+  )
+}
+
+function EventHistoryRow({
+  event,
+  onEditManualLog,
+  onDeleteManualLog,
+}: {
+  event: ProspectEvent
+  /** When provided AND the row is a manual outbound log, an actions
+   *  kebab (⋯) appears on the right with Edit / Delete items. */
+  onEditManualLog?: (logId: string) => void
+  onDeleteManualLog?: (logId: string) => void
+}) {
   const [open, setOpen] = useState(false)
   const isManual = event.event_type.startsWith("manual.")
+  const isInboundEmail = event.event_type === "email.received"
   // Only company_invited carries auto-event data that's worth expanding
   // (project + inviter links). All other auto-events fold their
-  // differentiating bits into the label via formatEventLabel.
+  // differentiating bits into the label via formatEventLabel. Inbound
+  // emails render via their own branch below.
   const isCompanyInvited = event.event_type === "company_invited"
   const manualBody = isManual
     ? typeof event.metadata?.body === "string" && event.metadata.body.trim()
@@ -305,42 +442,152 @@ function EventHistoryRow({ event }: { event: ProspectEvent }) {
   const expandable =
     (isCompanyInvited && Object.keys(event.metadata ?? {}).length > 0) || Boolean(manualBody)
 
+  const channel = eventChannelLabel(event.event_type)
+  const channelPill = channel ? (
+    <span className="status-pill shrink-0">{channel}</span>
+  ) : null
+
+  // "Email replied" (admin_replied) — expandable to show the reply body
+  // hydrated from inbound_emails.replied_text via ContactDetailBody.
+  if (event.event_type === "admin_replied") {
+    const replyText = typeof event.metadata?.replied_text === "string"
+      ? (event.metadata.replied_text as string).trim() || null
+      : null
+    const originalSubject = typeof event.metadata?.original_subject === "string"
+      ? (event.metadata.original_subject as string)
+      : null
+    const canExpand = Boolean(replyText)
+    return (
+      <div className="text-xs">
+        <button
+          type="button"
+          onClick={() => canExpand && setOpen((v) => !v)}
+          className={`w-full grid items-baseline gap-2 text-left ${canExpand ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
+          style={{ gridTemplateColumns: "90px 1fr" }}
+          disabled={!canExpand}
+        >
+          <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+          <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
+            <ExpandChevron visible={canExpand} open={open} />
+            <span>Email replied</span>
+            {originalSubject && (
+              <span className="text-[#6b6b68] truncate" title={originalSubject}>· Re: {originalSubject}</span>
+            )}
+            {channelPill}
+          </span>
+        </button>
+        {open && replyText && (
+          <p className="mt-1 pl-[98px] text-[#6b6b68] whitespace-pre-wrap">{replyText}</p>
+        )}
+      </div>
+    )
+  }
+
+  if (isInboundEmail) {
+    const subject = typeof event.metadata?.subject === "string" ? (event.metadata.subject as string) : null
+    const snippet = typeof event.metadata?.snippet === "string" ? (event.metadata.snippet as string) : null
+    const bodyText = typeof event.metadata?.body_text === "string" ? (event.metadata.body_text as string) : null
+    const preview = bodyText?.trim() || snippet?.trim() || null
+    const canExpand = Boolean(preview)
+    return (
+      <div className="text-xs">
+        <button
+          type="button"
+          onClick={() => canExpand && setOpen((v) => !v)}
+          className={`w-full grid items-baseline gap-2 text-left ${canExpand ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
+          style={{ gridTemplateColumns: "90px 1fr" }}
+          disabled={!canExpand}
+        >
+          <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+          <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
+            <ExpandChevron visible={canExpand} open={open} />
+            <span>Email received</span>
+            {subject && <span className="text-[#6b6b68] truncate" title={subject}>· {subject}</span>}
+            {channelPill}
+          </span>
+        </button>
+        {open && preview && (
+          <p className="mt-1 pl-[98px] text-[#6b6b68] whitespace-pre-wrap">{preview}</p>
+        )}
+      </div>
+    )
+  }
+
   if (isManual) {
     const kind = event.event_type.slice("manual.".length)
     const outcome = typeof event.metadata?.outcome === "string" ? (event.metadata.outcome as string) : null
     const author = typeof event.metadata?.author === "string" ? (event.metadata.author as string) : null
     const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1)
-    const icon = MANUAL_KIND_ICON[kind] ?? "•"
+    const logId = typeof event.metadata?.log_id === "string" ? (event.metadata.log_id as string) : null
+    const canEditOrDelete = Boolean(logId && (onEditManualLog || onDeleteManualLog))
 
     return (
-      <div className="text-xs">
+      <div className="text-xs group relative">
         <button
           type="button"
           onClick={() => expandable && setOpen((v) => !v)}
-          className={`w-full grid items-baseline gap-2 text-left py-0.5 ${expandable ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
+          className={`w-full grid items-baseline gap-2 text-left relative ${expandable ? "cursor-pointer hover:text-[#1c1c1a]" : "cursor-default"}`}
           style={{ gridTemplateColumns: "90px 1fr" }}
           disabled={!expandable}
         >
           <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
-          <span className="text-[#1c1c1a] inline-flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1">
-              <span className="text-[10px] text-[#6b6b68] w-3 inline-block text-center">{icon}</span>
-              <span>{kindLabel}</span>
-            </span>
+          <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
+            <ExpandChevron visible={expandable} open={open} />
+            <span>{kindLabel}</span>
             {outcome && MANUAL_OUTCOME_LABEL[outcome] && (
               <span className="inline-flex items-center gap-1 text-[#6b6b68]">
                 <span className={`h-1.5 w-1.5 rounded-full ${MANUAL_OUTCOME_DOT[outcome] ?? "bg-[#a1a1a0]"}`} />
                 {MANUAL_OUTCOME_LABEL[outcome]}
               </span>
             )}
-            {author && <span className="text-[#a1a1a0]">· {author}</span>}
-            {expandable && (
-              <span
-                className={`text-[#a1a1a0] transition-transform ${open ? "rotate-90" : ""}`}
-                style={{ fontSize: 10 }}
-              >
-                ▶
-              </span>
+            {author && <span className="text-[#a1a1a0] truncate">· {author}</span>}
+            {channelPill}
+            {canEditOrDelete && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="ml-1 shrink-0 h-5 w-5 flex items-center justify-center rounded text-[#a1a1a0] hover:text-[#1c1c1a] hover:bg-[#f5f5f4] transition-colors"
+                    aria-label="Log actions"
+                  >
+                    ⋯
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[120px] z-[600]"
+                >
+                  {/* z-[600] overrides the shadcn z-50 default so this
+                      menu paints above the contact detail popup
+                      (.popup-overlay uses z-500 in globals.css). Without
+                      it, opening Edit/Delete near the bottom of the
+                      Activity list rendered the menu behind the popup
+                      card and got visually clipped. */}
+                  {onEditManualLog && logId && (
+                    <DropdownMenuItem
+                      className="text-xs cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEditManualLog(logId)
+                      }}
+                    >
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {onDeleteManualLog && logId && (
+                    <DropdownMenuItem
+                      className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onDeleteManualLog(logId)
+                      }}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </span>
         </button>
@@ -350,6 +597,18 @@ function EventHistoryRow({ event }: { event: ProspectEvent }) {
       </div>
     )
   }
+
+  // Campaign pill (Showcase / Outreach / Invite) derived from every
+  // hint on the event's metadata — template, template_set, source.
+  // When present, it *replaces* the generic Email channel pill so the
+  // row surfaces only the more specific label. Inbound emails
+  // (email.received) are handled by their own branch above and keep
+  // the plain Email pill.
+  const campaignLabel = eventCampaignLabel(event)
+  const campaignPill = campaignLabel ? (
+    <span className="status-pill shrink-0">{campaignLabel}</span>
+  ) : null
+  const trailingPill = campaignPill ?? channelPill
 
   return (
     <div className="text-xs">
@@ -361,16 +620,10 @@ function EventHistoryRow({ event }: { event: ProspectEvent }) {
         disabled={!expandable}
       >
         <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
-        <span className="text-[#1c1c1a] inline-flex items-center gap-1.5">
-          {formatEventLabel(event.event_type, event.metadata as Record<string, unknown> | null)}
-          {expandable && (
-            <span
-              className={`text-[#a1a1a0] transition-transform ${open ? "rotate-90" : ""}`}
-              style={{ fontSize: 10 }}
-            >
-              ▶
-            </span>
-          )}
+        <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full">
+          <ExpandChevron visible={expandable} open={open} />
+          <span className="truncate">{formatEventLabel(event.event_type, event.metadata as Record<string, unknown> | null)}</span>
+          {trailingPill}
         </span>
       </button>
       {open && expandable && isCompanyInvited && <CompanyInvitedDetails metadata={event.metadata} />}
@@ -480,12 +733,13 @@ function ProspectEmailField({ prospect, onRefresh }: { prospect: Prospect; onRef
 /**
  * Per-contact data fetched lazily when the contact popup opens.
  */
-type ContactDetailBundle = {
+export type ContactDetailBundle = {
   prospect: Prospect | null
   events: ProspectEvent[]
   sequence: ProspectSequenceStep[]
   locale: "en" | "nl" | null
   inviteContext: ProspectInviteContext | null
+  inboundEmails: InboundEmailForProspect[]
 }
 
 type Props = {
@@ -543,6 +797,9 @@ export function ProspectsClient({
       contactEmail: string | null
       contactPhone: string | null
       contactAvatarUrl: string | null
+      /** Presence flips the modal into edit mode; server call routes to
+       *  updateOutboundLog against `initialValues.logId`. */
+      initialValues?: LogOutboundInitialValues | null
     } | null
   >(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
@@ -705,13 +962,14 @@ export function ProspectsClient({
     setDetailContact({ contact, row })
     setContactDetail(null)
     startTransition(async () => {
-      const [prospect, eventsResult, sequenceResult, inviteResult] = await Promise.all([
+      const [prospect, eventsResult, sequenceResult, inviteResult, inboundResult] = await Promise.all([
         fetchProspectById(contact.prospectId),
         fetchProspectEvents(contact.prospectId),
         getProspectSequence(contact.prospectId),
         contact.source === "invites"
           ? getProspectInviteContext(contact.prospectId)
           : Promise.resolve({ success: true, context: null } as const),
+        fetchProspectInboundEmails(contact.prospectId),
       ])
       setContactDetail({
         prospect,
@@ -719,6 +977,7 @@ export function ProspectsClient({
         sequence: sequenceResult.success ? sequenceResult.steps ?? [] : [],
         locale: sequenceResult.success ? sequenceResult.locale ?? null : null,
         inviteContext: inviteResult.success ? inviteResult.context ?? null : null,
+        inboundEmails: inboundResult.emails ?? [],
       })
     })
   }, [])
@@ -958,7 +1217,11 @@ export function ProspectsClient({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-[170px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+                className={`w-[170px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  statusFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {statusFilter.length === 0 ? (
@@ -1009,7 +1272,11 @@ export function ProspectsClient({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-[170px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+                className={`w-[170px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  sequenceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {sequenceFilter.length === 0 ? (
@@ -1061,7 +1328,11 @@ export function ProspectsClient({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-[150px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+                className={`w-[150px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  sourceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {sourceFilter.length === 0 ? (
@@ -1119,6 +1390,40 @@ export function ProspectsClient({
               {selectedContacts !== selectedCount && ` · ${selectedContacts} contacts`}
             </span>
             <div className="flex items-center gap-2">
+              <button
+                className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
+                disabled={isBulkProcessing}
+                onClick={async () => {
+                  // Only kick off contacts whose sequence is currently
+                  // `not_started` — starting an active/paused/finished
+                  // contact would either re-fire the intro or throw. Skip
+                  // silently for those; the toast reports only the count
+                  // we actually started.
+                  const eligible = companies
+                    .filter((r) => selectedRowIds.has(r.rowId))
+                    .flatMap((r) => r.contacts)
+                    .filter((c) => c.sequenceStatus === "not_started")
+                  if (eligible.length === 0) {
+                    toast.info("No eligible contacts — sequences already started or finished")
+                    return
+                  }
+                  setIsBulkProcessing(true)
+                  let success = 0
+                  let failure = 0
+                  for (const c of eligible) {
+                    const r = await startProspectSequence(c.prospectId)
+                    if (r.success) success++
+                    else failure++
+                  }
+                  if (success > 0) toast.success(`Sequence started — ${success} ${success === 1 ? "contact" : "contacts"}`)
+                  if (failure > 0 && success === 0) toast.error("Failed to start sequence")
+                  setSelectedRowIds(new Set())
+                  setIsBulkProcessing(false)
+                  reload({ offset, append: false })
+                }}
+              >
+                Start sequence
+              </button>
               <button
                 className="text-xs px-2.5 py-1 rounded-[3px] border border-[#e5e5e4] bg-white hover:bg-[#f5f5f4] transition-colors"
                 disabled={isBulkProcessing}
@@ -1333,6 +1638,45 @@ export function ProspectsClient({
                     contact={contact}
                     details={contactDetail}
                     onPreviewEmail={(template, lang) => setPreviewEmail({ template, lang })}
+                    onEditManualLog={(logId) => {
+                      const ev = contactDetail.events.find(
+                        (e) => typeof e.metadata?.log_id === "string" && e.metadata.log_id === logId,
+                      )
+                      if (!ev) return
+                      const kind = ev.event_type.slice("manual.".length) as LogOutboundInitialValues["kind"]
+                      const outcome = (typeof ev.metadata?.outcome === "string" ? ev.metadata.outcome : null) as LogOutboundInitialValues["outcome"]
+                      const body = typeof ev.metadata?.body === "string" ? (ev.metadata.body as string) : null
+                      const nextFollowUpAt =
+                        (contactDetail.prospect as { next_follow_up_at?: string | null } | null)?.next_follow_up_at ?? null
+                      setLogOutboundTarget({
+                        prospectId: contact.prospectId,
+                        contactLabel:
+                          contact.resolvedContact.name?.trim() || contact.email || "Unnamed contact",
+                        companyLabel: row.companyName,
+                        contactEmail: contact.resolvedContact.email ?? contact.email ?? null,
+                        contactPhone: row.claimedCompany?.phone ?? null,
+                        contactAvatarUrl: contact.resolvedContact.avatarUrl ?? null,
+                        initialValues: {
+                          logId,
+                          kind,
+                          outcome,
+                          occurredAt: ev.created_at,
+                          body,
+                          nextFollowUpAt,
+                        },
+                      })
+                    }}
+                    onDeleteManualLog={async (logId) => {
+                      if (!window.confirm("Delete this outbound log?")) return
+                      const r = await deleteOutboundLog(logId)
+                      if (!r.ok) {
+                        toast.error("Failed to delete log")
+                        return
+                      }
+                      toast.success("Log deleted")
+                      reload({ offset, append: false })
+                      if (detailContact) openContactPopup(detailContact.row, detailContact.contact)
+                    }}
                   />
                 )}
               </div>
@@ -1354,6 +1698,7 @@ export function ProspectsClient({
           contactEmail={logOutboundTarget.contactEmail}
           contactPhone={logOutboundTarget.contactPhone}
           contactAvatarUrl={logOutboundTarget.contactAvatarUrl}
+          initialValues={logOutboundTarget.initialValues ?? null}
           onLogged={() => {
             // The trigger updates prospects.last_outbound_at; refresh the
             // table + popup so the new entry surfaces immediately.
@@ -1675,15 +2020,20 @@ function CompanyRowView({
         </div>
       </td>
 
-      {/* Source (multi-pill) — Outbound is appended when any contact has
-          a manual outbound touch logged (attempts included). */}
+      {/* Source (multi-pill) — Outbound + Email are appended when the
+          row has that activity (see hasEmailActivity / lastOutboundAt).
+          Single row: no wrap + horizontal-only overflow so long channel
+          lists don't push the row taller than the rest of the table. */}
       <td>
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex items-center gap-1 flex-nowrap overflow-x-auto whitespace-nowrap">
           {row.sources.map((s) => (
-            <span key={s} className="status-pill">{sourceLabel(s)}</span>
+            <span key={s} className="status-pill shrink-0">{sourceLabel(s)}</span>
           ))}
           {row.lastOutboundAt && (
-            <span className="status-pill">Outbound</span>
+            <span className="status-pill shrink-0">Outbound</span>
+          )}
+          {row.hasEmailActivity && (
+            <span className="status-pill shrink-0">Email</span>
           )}
         </div>
       </td>
@@ -1869,6 +2219,9 @@ function ContactInline({ contact }: { contact: SalesContact }) {
       {contact.lastOutboundAt && (
         <span className="status-pill">Outbound</span>
       )}
+      {contact.hasInboundEmail && (
+        <span className="status-pill">Email</span>
+      )}
     </>
   )
 }
@@ -2012,15 +2365,42 @@ function renderContactMenuItems({
 
 /** Inner body of a contact section once its data has loaded — lifecycle,
  *  Apollo, notes, sequence, events. Split out so the loading shell stays
- *  readable. */
-function ContactDetailBody({
+ *  readable.
+ *
+ *  Exported so /admin/companies can render the same rich detail body
+ *  for its Users column (with `showOutreachSequence=false` — the
+ *  Companies context cares about lifecycle + activity, not the drip
+ *  sequence, which is a Sales-specific concern). */
+export type LifecycleStageOverride = {
+  label: string
+  ts: string
+  /** Tailwind class for the leading dot. Use one of the standard
+   *  status colors — bg-[#f59e0b] amber, bg-[#2563eb] blue,
+   *  bg-[#7c3aed] purple, bg-red-500, bg-[#a1a1a0] grey. */
+  dotClass: string
+}
+
+export function ContactDetailBody({
   contact,
   details,
   onPreviewEmail,
+  onEditManualLog,
+  onDeleteManualLog,
+  showOutreachSequence = true,
+  lifecycleOverride,
 }: {
   contact: SalesContact
   details: ContactDetailBundle
   onPreviewEmail: (template: string, lang: "en" | "nl") => void
+  onEditManualLog?: (logId: string) => void
+  onDeleteManualLog?: (logId: string) => void
+  /** Hide the "Outreach Sequence" block. Companies uses this. */
+  showOutreachSequence?: boolean
+  /** When passed, replaces the prospect-derived lifecycle entirely.
+   *  Companies uses this to swap the Prospect / Contacted / Visitor /
+   *  Signup / Draft / Listed prospect stages for a company-scoped set
+   *  (User signup / Draft / Listed / Unlisted / Deactivated). */
+  lifecycleOverride?: LifecycleStageOverride[]
 }) {
   const prospect = details.prospect
   const isInvite = contact.source === "invites"
@@ -2078,15 +2458,129 @@ function ContactDetailBody({
           } as Record<string, unknown>,
         }
       : null
-  const allEvents = inviteEvent ? [...details.events, inviteEvent] : details.events
+  // Inbound emails from admin/inbox — folded into Activity so the rep
+  // sees every reply the prospect sent, not just the coarse `replied`
+  // prospect_event. Synthetic id/prefix keeps the row shape compatible
+  // with EventHistoryRow; the "email.received" event_type triggers the
+  // dedicated expandable renderer.
+  const inboundEventItems: ProspectEvent[] = details.inboundEmails.map((m) => ({
+    id: `inbound-email-${m.id}`,
+    prospect_id: contact.prospectId,
+    event_type: "email.received",
+    created_at: m.received_at,
+    metadata: {
+      from_email: m.from_email,
+      from_name: m.from_name,
+      subject: m.subject,
+      snippet: m.snippet,
+      body_text: m.body_text,
+      inbound_email_id: m.id,
+      status: m.status,
+    } as Record<string, unknown>,
+  }))
+
+  // Enrich `admin_replied` prospect_events with the reply body + subject
+  // pulled off the linked inbound_emails row (already loaded above). Lets
+  // EventHistoryRow expand these rows without a follow-up fetch.
+  //
+  // `replied` is dropped here — it's the coarse "the prospect replied
+  // to us" signal from the Gmail sync, but the full inbound message
+  // already surfaces as an "email.received" row (with subject +
+  // body + expandable), so keeping the bare "Replied" line just
+  // duplicates the same event without any content behind it.
+  const inboundById = new Map(details.inboundEmails.map((m) => [m.id, m]))
+  const enrichedAutoEvents = details.events
+    .filter((ev) => ev.event_type !== "replied")
+    .map((ev) => {
+      if (ev.event_type !== "admin_replied") return ev
+      const inboundEmailId = typeof ev.metadata?.inbound_email_id === "string"
+        ? (ev.metadata.inbound_email_id as string)
+        : null
+      const linked = inboundEmailId ? inboundById.get(inboundEmailId) ?? null : null
+      if (!linked) return ev
+      return {
+        ...ev,
+        metadata: {
+          ...ev.metadata,
+          replied_text: linked.replied_text,
+          original_subject: linked.subject,
+        } as Record<string, unknown>,
+      }
+    })
+
+  // Synthetic "Company Listed" row — prospects don't currently fire a
+  // dedicated `prospect.listed` event, but prospect.converted_at is
+  // stamped when status flips to `active`. Materialise that as an
+  // activity row so the timeline mirrors the Lifecycle section instead
+  // of ending at "Company Created" for listed prospects. Skip when
+  // converted_at is missing.
+  const convertedAt = (prospect as any)?.converted_at as string | null | undefined
+  const listedEvent: ProspectEvent | null = convertedAt
+    ? {
+        id: `synthetic-prospect-listed-${contact.prospectId}`,
+        prospect_id: contact.prospectId,
+        event_type: "prospect.listed",
+        created_at: convertedAt,
+        metadata: {} as Record<string, unknown>,
+      }
+    : null
+
+  // Deduplicate coarse `status_changed` events against the specific
+  // lifecycle events they mirror. Users saw `Prospect Signed Up`
+  // followed by a redundant `Status changed` at the same time — one
+  // row is enough. Drop any bare `status_changed` that fires within
+  // 60 s of a matching `prospect.signed_up` / `prospect.company_created`
+  // / `prospect.listed`. Doesn't touch `status_changed_to_*` events —
+  // those carry the target status in their type and stand on their own.
+  const dedupeSet = new Set<string>()
+  for (const ev of enrichedAutoEvents) {
+    if (
+      ev.event_type === "prospect.signed_up"
+      || ev.event_type === "prospect.company_created"
+    ) {
+      dedupeSet.add(new Date(ev.created_at).getTime().toString())
+    }
+  }
+  if (listedEvent) dedupeSet.add(new Date(listedEvent.created_at).getTime().toString())
+  const isNearLifecycle = (ts: string): boolean => {
+    const t = new Date(ts).getTime()
+    for (const key of dedupeSet) {
+      if (Math.abs(t - Number(key)) < 60_000) return true
+    }
+    return false
+  }
+  const dedupedAutoEvents = enrichedAutoEvents.filter((ev) => {
+    if (ev.event_type === "status_changed" && isNearLifecycle(ev.created_at)) return false
+    return true
+  })
+
+  const allEvents = [
+    ...dedupedAutoEvents,
+    ...(inviteEvent ? [inviteEvent] : []),
+    ...(listedEvent ? [listedEvent] : []),
+    ...inboundEventItems,
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at))
+
+  // Resolved lifecycle stages — when an override is supplied
+  // (Companies popup), that's what renders; otherwise the prospect-
+  // derived set from above.
+  const resolvedLifecycle: Array<{ label: string; ts: string; dotClass: string }> =
+    lifecycleOverride && lifecycleOverride.length > 0
+      ? lifecycleOverride
+          .filter((s) => !!s.ts)
+          .slice()
+          .sort((a, b) => a.ts.localeCompare(b.ts))
+      : lifecycle
+          .filter((s) => !!s.ts)
+          .map((s) => ({ label: s.label, ts: s.ts as string, dotClass: STATUS_CONFIG[s.status].dot }))
 
   return (
     <div className="space-y-4">
-      {lifecycle.length > 0 && (
+      {resolvedLifecycle.length > 0 && (
         <div>
           <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Lifecycle</span>
           <div className="mt-1.5 space-y-1">
-            {lifecycle.map((s) => (
+            {resolvedLifecycle.map((s) => (
               <div
                 key={s.label}
                 className="grid items-center gap-2 text-xs"
@@ -2094,7 +2588,7 @@ function ContactDetailBody({
               >
                 <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(s.ts)}</span>
                 <span className="inline-flex items-center gap-2">
-                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s.status].dot}`} />
+                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${s.dotClass}`} />
                   <span className="text-[#1c1c1a]">{s.label}</span>
                 </span>
               </div>
@@ -2110,7 +2604,7 @@ function ContactDetailBody({
         </div>
       )}
 
-      {details.sequence.length > 0 && (
+      {showOutreachSequence && details.sequence.length > 0 && (
         <div>
           <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Outreach Sequence</span>
           <div className="mt-1.5 space-y-1">
@@ -2202,7 +2696,12 @@ function ContactDetailBody({
         ) : (
           <div className="mt-1.5 space-y-1" style={{ maxHeight: 240, overflowY: "auto" }}>
             {allEvents.map((ev) => (
-              <EventHistoryRow key={ev.id} event={ev} />
+              <EventHistoryRow
+                key={ev.id}
+                event={ev}
+                onEditManualLog={onEditManualLog}
+                onDeleteManualLog={onDeleteManualLog}
+              />
             ))}
           </div>
         )}

@@ -313,38 +313,13 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
 
       totalSynced++
 
-      // Auto-enrol freshly-imported (or never-enrolled) Apollo contacts
-      // into the Outreach drip. Gate on sequence_status='not_started'
-      // so existing contacts who've already been started, paused,
-      // finished or removed don't get re-enrolled on a re-sync.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const row = upserted as any
-      if (row && row.sequence_status === "not_started" && row.status !== "removed") {
-        try {
-          const { enrolOutreachContact } = await import("@/lib/outreach/enrol-outreach")
-          const firstName =
-            (row.contact_name as string | null)?.trim().split(/\s+/)[0]
-            || row.email.split("@")[0]
-          const companyName =
-            (row.company_name as string | null)?.trim()
-            || row.email.split("@")[1]
-            || "your firm"
-          const result = await enrolOutreachContact(supabase, {
-            prospectId: row.id,
-            email: row.email,
-            firstName,
-            companyName,
-            companyId: row.company_id,
-            apolloContactId: contact.id,
-            apolloListId: listId,
-          })
-          if (!result.success) {
-            logger.error("[apollo-sync] auto-enrol failed", { email: row.email, error: result.error })
-          }
-        } catch (err) {
-          logger.error("[apollo-sync] auto-enrol threw", { email: row.email, error: err })
-        }
-      }
+      // Apollo imports land as `status='prospect'` /
+      // `sequence_status='not_started'` and STAY there until a rep
+      // explicitly starts the sequence from /admin/sales (per-contact
+      // menu or the bulk "Start sequence" action). No auto-drip on
+      // sync — earlier behavior fired the Outreach series the moment
+      // a contact appeared in an Apollo list, which was surprising:
+      // reps couldn't stage imports without emails going out.
     }
 
     // Apollo pagination

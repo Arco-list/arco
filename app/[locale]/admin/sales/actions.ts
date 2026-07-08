@@ -393,6 +393,11 @@ export type SalesContact = {
   /** Rep-set follow-up reminder for this contact. Written by the
    *  Log outbound modal. */
   nextFollowUpAt: string | null
+  /** True when at least one inbound_emails row is linked to this
+   *  prospect_id — i.e. this specific contact replied. Drives the
+   *  per-contact "Email" pill in the Contacts column. Set later in
+   *  fetchSalesCompanies once the inbound batch query resolves. */
+  hasInboundEmail: boolean
 }
 
 export type SalesClaimedCompany = {
@@ -451,6 +456,12 @@ export type SalesCompanyRow = {
   /** Earliest prospects.next_follow_up_at in the future across contacts.
    *  Null when nothing is scheduled. */
   nextOutboundAt: string | null
+  /** True when any contact has at least one inbound_emails row linked
+   *  to their prospect_id — i.e. the prospect replied. Drives the
+   *  "Email" channel pill and the synthetic Email filter on
+   *  /admin/sales. Outgoing sends alone don't flip this — the pill is
+   *  a signal that a reply has landed, not that we sent something. */
+  hasEmailActivity: boolean
   /** Earliest createdAt across contacts (when this company entered the funnel). */
   createdAt: string
 }
@@ -748,6 +759,25 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const rawRows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
   const prospectsWithContact = await attachResolvedContacts(supabase, rawRows)
 
+  // Prospect ids with at least one inbound_emails row linked to them —
+  // resolved up-front so per-contact hasInboundEmail is set at
+  // construction time. Powers the per-contact "Email" pill in the
+  // Contacts column and, aggregated at the row level, the synthetic
+  // Email channel filter + pill. Batched as a single IN() query.
+  const allProspectIds = Array.from(new Set(rawRows.map((r) => r.id).filter(Boolean)))
+  const inboundProspectIds = new Set<string>()
+  if (allProspectIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: inboundRows } = await (supabase as any)
+      .from("inbound_emails")
+      .select("prospect_id")
+      .in("prospect_id", allProspectIds)
+      .limit(10000)
+    for (const r of (inboundRows ?? []) as Array<{ prospect_id: string | null }>) {
+      if (r.prospect_id) inboundProspectIds.add(r.prospect_id)
+    }
+  }
+
   // Convert prospect rows to flat SalesContact objects.
   const contacts: SalesContact[] = prospectsWithContact.map((p): SalesContact => ({
     prospectId: p.id,
@@ -774,6 +804,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     // generated types lag behind.
     lastOutboundAt: (p as any).last_outbound_at ?? null,
     nextFollowUpAt: (p as any).next_follow_up_at ?? null,
+    hasInboundEmail: inboundProspectIds.has(p.id),
   }))
 
   // Group key: company_id when present, else lower(trim(company_name)).
@@ -998,6 +1029,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         if (!c.nextFollowUpAt) return acc
         return !acc || c.nextFollowUpAt < acc ? c.nextFollowUpAt : acc
       }, null),
+      hasEmailActivity: sortedContacts.some((c) => c.hasInboundEmail),
       createdAt: agg.createdAt,
     }
   })
@@ -1028,15 +1060,18 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // So we apply source + sequence + search first, compute the funnel
   // against that narrowed set, then apply status as a table-only filter.
   if (sources && sources.length > 0) {
-    // "outbound" is a synthetic channel — keyed off lastOutboundAt rather
-    // than prospects.source. Treat it as an OR alongside the real source
-    // values so the rep can pick "Outreach + Outbound" and see either.
+    // "outbound" + "email" are synthetic channels — keyed off
+    // lastOutboundAt / hasEmailActivity rather than prospects.source.
+    // Both OR alongside real source values so picking "Outreach +
+    // Outbound + Email" returns any of the three.
     const set = new Set(sources)
     const wantsOutbound = set.has("outbound")
-    const realSet = new Set([...set].filter((s) => s !== "outbound"))
+    const wantsEmail = set.has("email")
+    const realSet = new Set([...set].filter((s) => s !== "outbound" && s !== "email"))
     rows = rows.filter((r) => {
       if (realSet.size > 0 && r.sources.some((s) => realSet.has(s))) return true
       if (wantsOutbound && r.lastOutboundAt) return true
+      if (wantsEmail && r.hasEmailActivity) return true
       return false
     })
   }
@@ -1229,6 +1264,169 @@ export async function updateProspectStatus(id: string, newStatus: ProspectStatus
  * but the popup needs the full Prospect shape (notes, country,
  * apollo_list_id, etc.).
  */
+/**
+ * Look up the prospect row for a given email (case-insensitive). Used
+ * by /admin/companies to hydrate the Sales-history popup for a
+ * company_contacts row that may or may not also live in the sales
+ * funnel. Prefers 'arco' > 'invites' > 'apollo' > anything else when
+ * multiple prospects share the same email — Showcase (admin-added)
+ * carries the richest funnel data and matches the user's mental model
+ * of the same person best. Excludes soft-removed rows.
+ */
+export async function findProspectByEmail(email: string): Promise<{ prospectId: string | null }> {
+  if (!email) return { prospectId: null }
+  const supabase = createServiceRoleSupabaseClient()
+  const { data, error } = await supabase
+    .from("prospects")
+    .select("id, source")
+    .ilike("email", email)
+    .neq("status", "removed" as never)
+    .limit(5)
+  if (error || !data || data.length === 0) return { prospectId: null }
+  const order: Record<string, number> = { arco: 0, invites: 1, apollo: 2, manual: 3 }
+  const best = [...data].sort((a: any, b: any) => (order[a.source] ?? 9) - (order[b.source] ?? 9))[0]
+  return { prospectId: (best as { id: string }).id }
+}
+
+/**
+ * Company-level lifecycle events — Draft (created), Signup (onboarded),
+ * Listed (listed_at), plus Unlisted / Deactivated when the row's
+ * current status matches. Returned as synthetic `company.*`
+ * ProspectEvent rows so callers can splice them into the same
+ * `events` list ContactDetailBody already renders.
+ *
+ * Every user at the same company sees an identical set — these are
+ * company events, not per-user events, and are stamped once against
+ * the row. See the Companies-popup docstring for the multi-user
+ * rationale.
+ *
+ * Unlisted / Deactivated use `updated_at` as an approximation for
+ * "when this transition happened" — we don't currently persist a
+ * status history table. If a company flip-flops, the timestamp is
+ * only the most recent transition.
+ */
+export type CompanyLifecycleBundle = {
+  events: ProspectEvent[]
+  /** Timestamps callers may want to slot into a Lifecycle section
+   *  (e.g. Companies popup). Nulls collapse when the stage hasn't
+   *  been reached. */
+  timestamps: {
+    userSignedUp: string | null
+    draft: string | null
+    listed: string | null
+    unlisted: string | null
+    deactivated: string | null
+  }
+}
+
+export async function fetchCompanyLifecycleEvents(
+  companyId: string,
+  authUserId?: string | null,
+): Promise<CompanyLifecycleBundle> {
+  if (!companyId) return { events: [], timestamps: { userSignedUp: null, draft: null, listed: null, unlisted: null, deactivated: null } }
+  const supabase = createServiceRoleSupabaseClient()
+  const [companyRes, userSignedUpAt] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("id, status, created_at, onboarded_at, listed_at, updated_at")
+      .eq("id", companyId)
+      .maybeSingle(),
+    (async () => {
+      if (!authUserId) return null
+      const { data, error } = await supabase.auth.admin.getUserById(authUserId)
+      if (error) return null
+      return data?.user?.created_at ?? null
+    })(),
+  ])
+  if (!companyRes.data) {
+    return { events: [], timestamps: { userSignedUp: userSignedUpAt, draft: null, listed: null, unlisted: null, deactivated: null } }
+  }
+  const c = companyRes.data as {
+    id: string
+    status: string | null
+    created_at: string | null
+    onboarded_at: string | null
+    listed_at: string | null
+    updated_at: string | null
+  }
+  const events: ProspectEvent[] = []
+  const mk = (kind: string, ts: string, idSuffix?: string): ProspectEvent => ({
+    id: `company-${kind}-${idSuffix ?? c.id}`,
+    prospect_id: "",
+    event_type: kind,
+    created_at: ts,
+    metadata: {} as Record<string, unknown>,
+  })
+  if (userSignedUpAt) events.push(mk("user.signed_up", userSignedUpAt, authUserId ?? undefined))
+  if (c.created_at) events.push(mk("company.draft", c.created_at))
+  if (c.onboarded_at) events.push(mk("company.signup", c.onboarded_at))
+  if (c.listed_at) events.push(mk("company.listed", c.listed_at))
+  const unlistedAt = c.status === "unlisted" && c.updated_at ? c.updated_at : null
+  const deactivatedAt = c.status === "deactivated" && c.updated_at ? c.updated_at : null
+  if (unlistedAt) events.push(mk("company.unlisted", unlistedAt))
+  if (deactivatedAt) events.push(mk("company.deactivated", deactivatedAt))
+  return {
+    events,
+    timestamps: {
+      userSignedUp: userSignedUpAt,
+      draft: c.created_at,
+      listed: c.listed_at,
+      unlisted: unlistedAt,
+      deactivated: deactivatedAt,
+    },
+  }
+}
+
+/** Build a SalesContact for a single prospect id. Same shape the
+ *  /admin/sales table renders per contact, useful when /admin/companies
+ *  wants to plug a person into ContactDetailBody without going through
+ *  the full fetchSalesCompanies aggregation. Returns null when the
+ *  prospect doesn't exist or is soft-removed. */
+export async function fetchSalesContactForProspect(prospectId: string): Promise<SalesContact | null> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data } = await supabase
+    .from("prospects")
+    .select("*")
+    .eq("id", prospectId)
+    .neq("status", "removed" as never)
+    .maybeSingle()
+  if (!data) return null
+  const [p] = await attachResolvedContacts(supabase, [data] as unknown as Omit<Prospect, "resolvedContact">[])
+  if (!p) return null
+  // Check inbound_emails for the hasInboundEmail flag ContactDetailBody
+  // downstream users care about (e.g. Contacts-column Email pill).
+  const { data: inbound } = await supabase
+    .from("inbound_emails")
+    .select("id")
+    .eq("prospect_id", prospectId)
+    .limit(1)
+  return {
+    prospectId: p.id,
+    email: p.email,
+    contactName: p.contact_name,
+    source: p.source,
+    status: p.status,
+    sequenceStatus: p.sequence_status,
+    emailsSent: p.emails_sent ?? 0,
+    emailsDelivered: p.emails_delivered ?? 0,
+    emailsOpened: p.emails_opened ?? 0,
+    emailsClicked: p.emails_clicked ?? 0,
+    lastEmailSentAt: p.last_email_sent_at,
+    lastEmailOpenedAt: p.last_email_opened_at,
+    lastEmailClickedAt: p.last_email_clicked_at,
+    unsubscribedAt: (p as any).unsubscribed_at ?? null,
+    bouncedAt: (p as any).bounced_at ?? null,
+    complainedAt: (p as any).complained_at ?? null,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+    refCode: p.ref_code,
+    resolvedContact: p.resolvedContact,
+    lastOutboundAt: (p as any).last_outbound_at ?? null,
+    nextFollowUpAt: (p as any).next_follow_up_at ?? null,
+    hasInboundEmail: (inbound?.length ?? 0) > 0,
+  }
+}
+
 export async function fetchProspectById(prospectId: string): Promise<Prospect | null> {
   const supabase = createServiceRoleSupabaseClient()
   const { data, error } = await supabase
@@ -1310,6 +1508,71 @@ export async function fetchProspectEvents(prospectId: string) {
   )
 
   return { events: merged }
+}
+
+export type InboundEmailForProspect = {
+  id: string
+  from_email: string | null
+  from_name: string | null
+  subject: string | null
+  snippet: string | null
+  body_text: string | null
+  received_at: string
+  status: string | null
+  /** Text of the admin's reply, stamped by inbox/actions.ts when the
+   *  Respond popup is submitted. Used to hydrate the `admin_replied`
+   *  prospect_event's expand body without a second round-trip. */
+  replied_text: string | null
+}
+
+/**
+ * Pull the inbound_emails linked to this prospect. Powers the "email
+ * received" rows in the contact popup's Activity feed so the rep sees
+ * every reply the prospect sent (not just the funnel-level `replied`
+ * prospect_event). Newest first.
+ *
+ * Matcher unions two paths so we don't miss replies the Gmail sync
+ * failed to link:
+ *   - prospect_id = this prospect (the ideal, sync-set path)
+ *   - lower(from_email) = lower(prospect.email) (fallback for
+ *     unlinked-but-clearly-matching rows)
+ * Deduped by id so a row satisfying both conditions counts once.
+ */
+export async function fetchProspectInboundEmails(
+  prospectId: string,
+): Promise<{ emails: InboundEmailForProspect[]; error?: string }> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("email")
+    .eq("id", prospectId)
+    .maybeSingle()
+  const prospectEmail = prospect?.email?.toLowerCase() ?? null
+
+  const filters = [`prospect_id.eq.${prospectId}`]
+  if (prospectEmail) filters.push(`from_email.eq.${prospectEmail}`)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("inbound_emails")
+    .select("id, from_email, from_name, subject, snippet, body_text, received_at, status, replied_text")
+    .or(filters.join(","))
+    .order("received_at", { ascending: false })
+  if (error) {
+    console.error("Failed to fetch inbound emails for prospect", error)
+    return { emails: [], error: error.message }
+  }
+
+  // Dedupe: a row matching both conditions comes back twice from the OR.
+  const seen = new Set<string>()
+  const emails: InboundEmailForProspect[] = []
+  for (const row of (data ?? []) as InboundEmailForProspect[]) {
+    if (seen.has(row.id)) continue
+    seen.add(row.id)
+    emails.push(row)
+  }
+  return { emails }
 }
 
 export async function deleteProspect(id: string) {

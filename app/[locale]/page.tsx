@@ -17,6 +17,7 @@ import { getTranslations } from "next-intl/server"
 import { getLocalizedName } from "@/lib/locale-name"
 import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
 import { TrackPageView } from "@/components/track-view"
+import { getSiteUrl } from "@/lib/utils"
 
 export const revalidate = 300
 
@@ -517,9 +518,40 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     }
   } catch {}
 
+  // Site-wide WebSite + Organization schema so Google displays "Arco"
+  // as the site name in search results next to the favicon instead of
+  // the bare domain "arcolist.com". Per Google's own docs, this markup
+  // must live on the site's HOME page — they read it there once and
+  // use it as the canonical site name across every result.
+  const siteUrl = getSiteUrl()
+  const siteSchema = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${siteUrl}#website`,
+        name: "Arco",
+        alternateName: "arcolist.com",
+        url: siteUrl,
+      },
+      {
+        "@type": "Organization",
+        "@id": `${siteUrl}#organization`,
+        name: "Arco",
+        url: siteUrl,
+        logo: `${siteUrl}/icon.svg`,
+      },
+    ],
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <TrackPageView path="/" />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(siteSchema) }}
+      />
       <Header transparent />
       <main className="pt-0">
 

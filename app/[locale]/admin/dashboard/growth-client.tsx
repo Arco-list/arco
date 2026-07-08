@@ -527,10 +527,20 @@ export function GrowthClient({ initialMetrics }: Props) {
     }
   }
 
-  // Helper to get sparkline datapoints from table rows
+  // Helper to get sparkline datapoints from table rows. Searches
+  // top-level rows first, then falls back to subs — Lifecycle cards
+  // like Drafts / Publishers / Inviters live under parent rows
+  // (`new_pros` / `published_projects` / `invited_pros`) rather than
+  // as standalone top-level keys, so without the sub fallback their
+  // trendlines silently rendered empty.
   const dp = (key: string): number[] | undefined => {
-    const row = tableRows.find((r) => r.key === key)
-    return row?.datapoints
+    const top = tableRows.find((r) => r.key === key)
+    if (top) return top.datapoints
+    for (const row of tableRows) {
+      const sub = row.subs?.find((s) => s.key === key)
+      if (sub) return sub.datapoints
+    }
+    return undefined
   }
 
   const pr = metrics.professionals
@@ -774,7 +784,7 @@ export function GrowthClient({ initialMetrics }: Props) {
               directly to Churners. Churners shifted from col 5 → col 4 so
               the line between them is a single column gap. */}
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
-          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("drafts")} />
+          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("open_drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
           <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Churners" metricKey="churn" onCardClick={openDetail} value="—" driver="churn" timeframe={timeframe} datapoints={dp("churn")} />

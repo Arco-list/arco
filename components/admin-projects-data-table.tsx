@@ -147,7 +147,9 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 })
+  // "Load more" pagination — mirrors /admin/sales; grows by 50 per click.
+  const LOAD_MORE_STEP = 50
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: LOAD_MORE_STEP })
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [isBulkProcessing, setIsBulkProcessing] = useState(false)
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
@@ -962,7 +964,11 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-[160px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  statusFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {statusFilter.length === 0 ? (
@@ -1177,33 +1183,30 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="arco-table-pagination">
-        <span className="arco-table-pagination-count">
-          {table.getFilteredRowModel().rows.length} {table.getFilteredRowModel().rows.length === 1 ? "result" : "results"}
-        </span>
-        <div className="arco-table-pagination-nav">
-          <span className="arco-table-pagination-info">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              className="arco-table-pagination-btn"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              ‹
-            </button>
-            <button
-              className="arco-table-pagination-btn"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              ›
-            </button>
+      {/* Load more — replaces Previous/Next. Hidden when every
+          filtered row is already on screen. */}
+      {(() => {
+        const total = table.getFilteredRowModel().rows.length
+        const visible = Math.min(pagination.pageSize, total)
+        const canLoadMore = visible < total
+        return (
+          <div className="arco-table-pagination">
+            <span className="arco-table-pagination-count">
+              {visible} of {total} {total === 1 ? "result" : "results"}
+            </span>
+            {canLoadMore && (
+              <div className="flex justify-center mt-3 w-full">
+                <button
+                  className="h-9 px-6 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                  onClick={() => setPagination((p) => ({ ...p, pageIndex: 0, pageSize: p.pageSize + LOAD_MORE_STEP }))}
+                >
+                  Load more
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Status Update Dialog */}
       {statusDialogProject && (

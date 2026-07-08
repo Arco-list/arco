@@ -10,19 +10,41 @@ import {
 } from "@/components/ui/dialog"
 import {
   logOutboundContact,
+  updateOutboundLog,
   type OutboundKind,
   type OutboundOutcome,
 } from "./log-outbound-actions"
+import { logOutboundForCompanyContactAction } from "@/app/admin/companies/actions"
+
+export type LogOutboundInitialValues = {
+  logId: string
+  kind: OutboundKind
+  outcome: OutboundOutcome | null
+  occurredAt: string // ISO
+  body: string | null
+  nextFollowUpAt: string | null // ISO
+}
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  prospectId: string
+  /** One of `prospectId` or `companyContactId` must be provided. Sales
+   *  hits the prospects-side path (writes outbound_contact_log with
+   *  prospect_id); Companies passes companyContactId, which routes to
+   *  the company-side action that writes company_contact_id on the
+   *  same table. Both share the outbound_contact_log row shape. */
+  prospectId?: string
+  companyContactId?: string
   contactLabel: string
   companyLabel: string
   contactEmail?: string | null
   contactPhone?: string | null
   contactAvatarUrl?: string | null
+  /** When present, the modal switches to edit mode: title + submit label
+   *  update, form fields prefill from the passed values, and Save calls
+   *  updateOutboundLog against `initialValues.logId` instead of
+   *  logOutboundContact. */
+  initialValues?: LogOutboundInitialValues | null
   onLogged?: () => void
 }
 
@@ -77,13 +99,16 @@ export function LogOutboundModal({
   open,
   onOpenChange,
   prospectId,
+  companyContactId,
   contactLabel,
   companyLabel,
   contactEmail,
   contactPhone,
   contactAvatarUrl,
+  initialValues,
   onLogged,
 }: Props) {
+  const isEdit = !!initialValues
   const [kind, setKind] = useState<OutboundKind>("call")
   const [outcome, setOutcome] = useState<OutboundOutcome>("positive")
   const [whenIsNow, setWhenIsNow] = useState(true)
@@ -99,14 +124,30 @@ export function LogOutboundModal({
 
   useEffect(() => {
     if (!open) return
-    setKind("call")
-    setOutcome("positive")
-    setWhenIsNow(true)
-    setWhenValue(toLocalInputValue(new Date()))
-    setBody("")
-    setNextFollowUp("")
+    if (initialValues) {
+      // Edit mode: prefill from the existing log row + prospects
+      // next_follow_up_at. `whenIsNow` off — otherwise the created_at we
+      // just prefilled would get silently overwritten with the current
+      // time on submit.
+      setKind(initialValues.kind)
+      setOutcome(initialValues.outcome ?? "positive")
+      setWhenIsNow(false)
+      setWhenValue(toLocalInputValue(new Date(initialValues.occurredAt)))
+      setBody(initialValues.body ?? "")
+      setNextFollowUp(initialValues.nextFollowUpAt ? toDateInputValue(new Date(initialValues.nextFollowUpAt)) : "")
+    } else {
+      setKind("call")
+      setOutcome("positive")
+      setWhenIsNow(true)
+      setWhenValue(toLocalInputValue(new Date()))
+      setBody("")
+      setNextFollowUp("")
+    }
     setAutoPrefilled(false)
     setError(null)
+    // initialValues intentionally excluded — the modal is remounted per
+    // target via `open`, so we key off `open` transitioning true.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   // no_answer auto-prefills next follow-up to tomorrow — but only when
@@ -138,19 +179,50 @@ export function LogOutboundModal({
     const nextIso = nextFollowUp ? new Date(`${nextFollowUp}T09:00`).toISOString() : null
 
     startTransition(async () => {
-      const r = await logOutboundContact({
-        prospectId,
-        kind,
-        outcome: kind === "note" ? null : outcome,
-        occurredAt,
-        body: body.trim() || null,
-        nextFollowUpAt: nextIso,
-      })
+      // Route to the right create-side action based on which id we
+      // were given. Sales → outbound_contact_log.prospect_id;
+      // Companies → outbound_contact_log.company_contact_id. Edit
+      // mode uses updateOutboundLog regardless (the log row is the
+      // same table on either side). Normalise return shape so the
+      // downstream `.ok` check works for both.
+      let r: { ok: true } | { ok: false; error: string }
+      if (isEdit && initialValues) {
+        r = await updateOutboundLog({
+          logId: initialValues.logId,
+          kind,
+          outcome: kind === "note" ? null : outcome,
+          occurredAt: occurredAt ?? initialValues.occurredAt,
+          body: body.trim() || null,
+          nextFollowUpAt: nextIso,
+        })
+      } else if (prospectId) {
+        const res = await logOutboundContact({
+          prospectId,
+          kind,
+          outcome: kind === "note" ? null : outcome,
+          occurredAt,
+          body: body.trim() || null,
+          nextFollowUpAt: nextIso,
+        })
+        r = res.ok ? { ok: true } : { ok: false, error: res.error }
+      } else if (companyContactId) {
+        const res = await logOutboundForCompanyContactAction({
+          companyContactId,
+          kind,
+          outcome: kind === "note" ? null : outcome,
+          occurredAt: occurredAt ?? undefined,
+          body: body.trim() || null,
+          nextFollowUpAt: nextIso,
+        })
+        r = res.success ? { ok: true } : { ok: false, error: res.error ?? "Failed to save" }
+      } else {
+        r = { ok: false, error: "Missing target — need prospectId or companyContactId" }
+      }
       if (r.ok) {
         onOpenChange(false)
         onLogged?.()
       } else {
-        setError(r.error)
+        setError("error" in r ? r.error : "Failed to save")
       }
     })
   }
@@ -329,7 +401,7 @@ export function LogOutboundModal({
             onClick={onSubmit}
             disabled={isPending}
           >
-            {isPending ? "Logging…" : "Log outbound"}
+            {isPending ? (isEdit ? "Saving…" : "Logging…") : (isEdit ? "Save" : "Log outbound")}
           </button>
         </DialogFooter>
       </DialogContent>

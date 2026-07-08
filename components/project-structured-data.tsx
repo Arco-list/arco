@@ -198,9 +198,13 @@ export function ProjectStructuredData({
     ...(author ? { author } : {}),
     ...(contributor.length > 0 ? { contributor } : {}),
     ...(hasPart.length > 0 ? { hasPart } : {}),
+    // WebSite `name` intentionally omitted — Google reads this as one of
+    // the brand hints it uses when appending "- Arco" to the SERP title.
+    // The @id/url is enough to establish the site relationship for
+    // structured-data crawlers without giving Google the string to
+    // splice into the title.
     isPartOf: {
       "@type": "WebSite",
-      name: "Arco",
       url: baseUrl,
     },
     mainEntityOfPage: {

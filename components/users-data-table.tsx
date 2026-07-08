@@ -150,9 +150,11 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  // "Load more" pagination — mirrors /admin/sales; grows by 50 per click.
+  const LOAD_MORE_STEP = 50
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 20,
+    pageSize: LOAD_MORE_STEP,
   })
 
   const [roleDialogUser, setRoleDialogUser] = useState<AdminUserRow | null>(null)
@@ -869,33 +871,30 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="arco-table-pagination">
-        <span className="arco-table-pagination-count">
-          {table.getFilteredRowModel().rows.length} user{table.getFilteredRowModel().rows.length === 1 ? "" : "s"}
-        </span>
-        <div className="arco-table-pagination-nav">
-          <span className="arco-table-pagination-info">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <button
-              className="arco-table-pagination-btn"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              ‹
-            </button>
-            <button
-              className="arco-table-pagination-btn"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              ›
-            </button>
+      {/* Load more — replaces Previous/Next. Hidden when we've already
+          rendered every filtered row. */}
+      {(() => {
+        const total = table.getFilteredRowModel().rows.length
+        const visible = Math.min(pagination.pageSize, total)
+        const canLoadMore = visible < total
+        return (
+          <div className="arco-table-pagination">
+            <span className="arco-table-pagination-count">
+              {visible} of {total} user{total === 1 ? "" : "s"}
+            </span>
+            {canLoadMore && (
+              <div className="flex justify-center mt-3 w-full">
+                <button
+                  className="h-9 px-6 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                  onClick={() => setPagination((p) => ({ ...p, pageIndex: 0, pageSize: p.pageSize + LOAD_MORE_STEP }))}
+                >
+                  Load more
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Role Dialog — popup-card design */}
       {roleDialogUser && (

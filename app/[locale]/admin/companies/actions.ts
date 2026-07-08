@@ -328,7 +328,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
         .maybeSingle()
 
       if (!existing) {
-        const { data: newProspect } = await serviceClient.from("prospects").insert({
+        await serviceClient.from("prospects").insert({
           email: company.email ?? "",
           contact_name: null,
           company_name: company.name,
@@ -340,17 +340,13 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
           emails_delivered: 0,
           company_id: company.id,
           ref_code: company.slug ?? company.id,
-        }).select("id").single()
-
-        // Auto-send prospect email if company has an email
-        if (newProspect && company.email) {
-          try {
-            const { startProspectSequence } = await import("@/app/admin/sales/actions")
-            await startProspectSequence(newProspect.id)
-          } catch (err) {
-            console.error("Auto-send prospect email failed:", err)
-          }
-        }
+        })
+        // Prospect lands as `not_started`; the rep starts the Showcase
+        // sequence explicitly from /admin/sales (per-contact menu or
+        // the bulk "Start sequence" action). Earlier behavior auto-
+        // fired the intro email the moment a company was promoted to
+        // Showcased, which was surprising — sales sometimes wants to
+        // stage the promotion before the outreach goes out.
       }
     }
   }

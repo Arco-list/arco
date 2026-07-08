@@ -265,6 +265,38 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
     }
   }
 
+  // The admin layout bakes badge counts into navLinks server-side.
+  // Every other route (homepage, marketplace pages, etc.) renders
+  // Header with the default navLinks — no badges baked in — so we
+  // fetch them lazily via /api/admin-badges when the user has admin
+  // role and no `navLinks` prop was passed. Runs once per mount,
+  // scoped to the account (avatar) dropdown's admin section.
+  const [fetchedAdminBadges, setFetchedAdminBadges] = useState<Record<string, number> | null>(null)
+  useEffect(() => {
+    if (!hasAdminRole || navLinks) return
+    let cancelled = false
+    fetch("/api/admin-badges")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        const map: Record<string, number> = {}
+        if (typeof data.outboundDueCount === "number" && data.outboundDueCount > 0)
+          map["/admin/sales"] = data.outboundDueCount
+        if (typeof data.inboxUnreadCount === "number" && data.inboxUnreadCount > 0)
+          map["/admin/inbox"] = data.inboxUnreadCount
+        if (typeof data.projectsToReviewCount === "number" && data.projectsToReviewCount > 0)
+          map["/admin/projects"] = data.projectsToReviewCount
+        setFetchedAdminBadges(map)
+      })
+      .catch(() => { /* silent — badges are decorative */ })
+    return () => { cancelled = true }
+  }, [hasAdminRole, navLinks])
+  if (fetchedAdminBadges) {
+    for (const [href, count] of Object.entries(fetchedAdminBadges)) {
+      if (badgeByHref[href] === undefined) badgeByHref[href] = count
+    }
+  }
+
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   useEffect(() => {
     if (!openGroup) return;

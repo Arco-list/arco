@@ -104,7 +104,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = project.seo_description?.trim() ||
     (localizedMetaDesc ?
       localizedMetaDesc.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
-      `Discover ${localizedMetaTitle} on Arco`)
+      `Discover ${localizedMetaTitle}`)
 
   const baseUrl = getSiteUrl()
   const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined

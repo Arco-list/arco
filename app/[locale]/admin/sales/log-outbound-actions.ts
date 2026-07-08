@@ -86,6 +86,75 @@ export async function logOutboundContact(input: LogOutboundInput): Promise<LogOu
   return { ok: true, logId: (data as { id: string }).id }
 }
 
+export type UpdateOutboundLogInput = {
+  logId: string
+  kind: OutboundKind
+  outcome?: OutboundOutcome | null
+  occurredAt?: string | null // ISO
+  body?: string | null
+  nextFollowUpAt?: string | null // ISO; null clears, undefined leaves unchanged
+}
+
+export async function updateOutboundLog(
+  input: UpdateOutboundLogInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const gate = await requireAdmin()
+  if (!gate.ok) return { ok: false, error: gate.error }
+
+  const outcome = input.kind === "note" ? null : (input.outcome ?? null)
+  const body = input.body?.trim() || null
+
+  const service = createServiceRoleSupabaseClient()
+
+  const { data: existing, error: fetchErr } = await service
+    .from("outbound_contact_log")
+    .select("prospect_id")
+    .eq("id", input.logId)
+    .maybeSingle()
+  if (fetchErr || !existing) {
+    return { ok: false, error: fetchErr?.message ?? "log not found" }
+  }
+  const prospectId = (existing as { prospect_id: string }).prospect_id
+
+  const { error } = await service
+    .from("outbound_contact_log")
+    .update({
+      kind: input.kind,
+      outcome,
+      body,
+      ...(input.occurredAt ? { created_at: input.occurredAt } : {}),
+    })
+    .eq("id", input.logId)
+  if (error) {
+    logger.error("[log-outbound] update failed", { logId: input.logId, err: error.message })
+    return { ok: false, error: error.message }
+  }
+
+  // Recompute last_outbound_at across surviving non-note rows so the
+  // column doesn't drift when kind flips to/from note or occurredAt
+  // moves. Cheap: one indexed lookup per edit.
+  const { data: latest } = await service
+    .from("outbound_contact_log")
+    .select("created_at")
+    .eq("prospect_id", prospectId)
+    .neq("kind", "note")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const newLast = (latest as { created_at: string } | null)?.created_at ?? null
+  await service.from("prospects").update({ last_outbound_at: newLast }).eq("id", prospectId)
+
+  if (input.nextFollowUpAt !== undefined) {
+    await service
+      .from("prospects")
+      .update({ next_follow_up_at: input.nextFollowUpAt })
+      .eq("id", prospectId)
+  }
+
+  revalidatePath("/[locale]/admin/sales", "page")
+  return { ok: true }
+}
+
 export async function clearNextFollowUp(prospectId: string): Promise<{ ok: boolean }> {
   const gate = await requireAdmin()
   if (!gate.ok) return { ok: false }

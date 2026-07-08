@@ -47,6 +47,23 @@ import {
   logOutboundForCompanyContactAction,
 } from "@/app/admin/companies/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
+import {
+  findProspectByEmail,
+  fetchSalesContactForProspect,
+  fetchProspectById,
+  fetchProspectEvents,
+  fetchProspectInboundEmails,
+  fetchCompanyLifecycleEvents,
+  getProspectSequence,
+  getProspectInviteContext,
+  type SalesContact,
+} from "@/app/admin/sales/actions"
+import {
+  ContactDetailBody,
+  type ContactDetailBundle,
+  type LifecycleStageOverride,
+} from "@/app/admin/sales/prospects-client"
+import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import {
   DropdownMenu,
@@ -548,30 +565,35 @@ function ContactsCell({
 
       <ContactDetailsDialog
         target={detailsTarget}
+        companyId={companyId}
         companyName={companyName}
         onOpenChange={(open) => {
           if (!open) setDetailsTarget(null)
         }}
       />
 
-      <LogOutboundForContactDialog
-        target={logOutboundTarget}
-        companyName={companyName}
-        onOpenChange={(open) => {
-          if (!open) setLogOutboundTarget(null)
-        }}
-        onLogged={() => {
-          setLogOutboundTarget(null)
-          onRefresh()
-        }}
-      />
+      {logOutboundTarget && (
+        <LogOutboundModal
+          open
+          onOpenChange={(open) => {
+            if (!open) setLogOutboundTarget(null)
+          }}
+          companyContactId={logOutboundTarget.id}
+          contactLabel={logOutboundTarget.name?.trim() || logOutboundTarget.email || "Unnamed contact"}
+          companyLabel={companyName}
+          contactEmail={logOutboundTarget.email ?? null}
+          contactPhone={logOutboundTarget.phone ?? null}
+          contactAvatarUrl={null}
+          onLogged={() => {
+            setLogOutboundTarget(null)
+            onRefresh()
+          }}
+        />
+      )}
     </div>
   )
 }
 
-// Minimal outbound-log dialog scoped to a single company_contact. Mirrors
-// the Sales LogOutboundModal shape but trimmed — no auto-prefill, no
-// suppression handling, no preset follow-up pills. Easy to extend later.
 function formatRelativeDate(iso: string | null): string {
   if (!iso) return "—"
   try {
@@ -588,227 +610,203 @@ const SOURCE_LABELS: Record<string, string> = {
   invited: "Invited",
 }
 
-// Read-only details popup for a single company_contact. Surfaces person
-// identity (name + email + phone), source attribution, role + status, and
-// per-deal rolling state. Editing happens via the row's action menu, not
-// inside this dialog.
+// Contact details popup for a single company_contact — same rich
+// layout the /admin/sales popup uses (lifecycle + activity) so the rep
+// sees history across both pages. Outreach Sequence is hidden here on
+// purpose (Companies context; the drip is a Sales concern).
+//
+// Data flow: look up a prospect by the contact's email; if one exists,
+// hydrate the same bundle Sales renders. If nothing lines up (e.g. an
+// owner never went through the funnel), we still show the identity
+// header + a "No sales history" note.
 function ContactDetailsDialog({
   target,
+  companyId,
   companyName,
+  companyPhone,
   onOpenChange,
 }: {
   target: AdminCompanyContact | null
+  companyId: string
   companyName: string
+  companyPhone?: string | null
   onOpenChange: (open: boolean) => void
 }) {
-  const open = target !== null
-  if (!target) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent />
-      </Dialog>
-    )
-  }
+  const [loading, setLoading] = useState(false)
+  const [salesContact, setSalesContact] = useState<SalesContact | null>(null)
+  const [bundle, setBundle] = useState<ContactDetailBundle | null>(null)
+  const [lifecycleOverride, setLifecycleOverride] = useState<LifecycleStageOverride[]>([])
+
+  useEffect(() => {
+    if (!target) {
+      setSalesContact(null)
+      setBundle(null)
+      setLifecycleOverride([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    setSalesContact(null)
+    setBundle(null)
+    setLifecycleOverride([])
+    ;(async () => {
+      // Company lifecycle events (Draft / Signup / Listed / Unlisted /
+      // Deactivated + this user's own user.signed_up) always fetch,
+      // even when the person didn't come through Sales — they're
+      // properties of the company and this specific user's account,
+      // not sales-funnel state. Prospect lookup is independent; both
+      // paths run in parallel.
+      const [{ prospectId }, companyBundle] = await Promise.all([
+        findProspectByEmail(target.email),
+        fetchCompanyLifecycleEvents(companyId, target.authUserId ?? null),
+      ])
+      if (cancelled) return
+
+      // Build the Lifecycle-section override from the fetched company
+      // + user timestamps. Runs in every branch below since it's the
+      // same regardless of whether the person is also a prospect.
+      const ts = companyBundle.timestamps
+      const stages: LifecycleStageOverride[] = []
+      if (ts.userSignedUp) stages.push({ label: "Signup", ts: ts.userSignedUp, dotClass: "bg-[#2563eb]" })
+      if (ts.draft) stages.push({ label: "Draft", ts: ts.draft, dotClass: "bg-[#2563eb]" })
+      if (ts.listed) stages.push({ label: "Listed", ts: ts.listed, dotClass: "bg-[#7c3aed]" })
+      if (ts.unlisted) stages.push({ label: "Unlisted", ts: ts.unlisted, dotClass: "bg-[#a1a1a0]" })
+      if (ts.deactivated) stages.push({ label: "Deactivated", ts: ts.deactivated, dotClass: "bg-red-500" })
+      setLifecycleOverride(stages)
+      const companyEvents = companyBundle.events
+
+      if (!prospectId) {
+        // No Sales history — synthesise a minimal SalesContact so
+        // ContactDetailBody still renders. `prospectId` stays empty
+        // (nothing to LogOutbound against for a non-prospect); the
+        // Activity feed carries only the company-level rows.
+        setSalesContact({
+          prospectId: "",
+          email: target.email,
+          contactName: target.name,
+          source: "direct",
+          status: "prospect",
+          sequenceStatus: "not_started",
+          emailsSent: 0,
+          emailsDelivered: 0,
+          emailsOpened: 0,
+          emailsClicked: 0,
+          lastEmailSentAt: null,
+          lastEmailOpenedAt: null,
+          lastEmailClickedAt: null,
+          unsubscribedAt: null,
+          bouncedAt: null,
+          complainedAt: null,
+          createdAt: target.lastContactedAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          refCode: target.id,
+          resolvedContact: {
+            source: "signup",
+            name: target.name,
+            email: target.email,
+            avatarUrl: null,
+            userId: target.authUserId,
+          },
+          lastOutboundAt: null,
+          nextFollowUpAt: null,
+          hasInboundEmail: false,
+        })
+        setBundle({
+          prospect: null,
+          events: companyEvents,
+          sequence: [],
+          locale: null,
+          inviteContext: null,
+          inboundEmails: [],
+        })
+        setLoading(false)
+        return
+      }
+
+      const [contact, prospect, eventsRes, sequenceRes, inviteRes, inboundRes] = await Promise.all([
+        fetchSalesContactForProspect(prospectId),
+        fetchProspectById(prospectId),
+        fetchProspectEvents(prospectId),
+        getProspectSequence(prospectId),
+        getProspectInviteContext(prospectId),
+        fetchProspectInboundEmails(prospectId),
+      ])
+      if (cancelled) return
+      setSalesContact(contact)
+      setBundle({
+        prospect,
+        // Merge company events with prospect events — both are relevant
+        // and the sort in ContactDetailBody interleaves them by date.
+        events: [...eventsRes.events, ...companyEvents],
+        sequence: sequenceRes.success ? sequenceRes.steps ?? [] : [],
+        locale: sequenceRes.success ? sequenceRes.locale ?? null : null,
+        inviteContext: inviteRes.success ? inviteRes.context ?? null : null,
+        inboundEmails: inboundRes.emails ?? [],
+      })
+      setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [target, companyId])
+
+  if (!target) return null
   const displayName = target.name?.trim() || target.email
-  const initials = (target.name ?? target.email)
-    .split(/\s|@/)
-    .filter(Boolean)
-    .map((t) => t[0]?.toUpperCase())
-    .slice(0, 2)
-    .join("") || "?"
   const phoneDisplay = target.phone
     ? `${target.phoneCountryCode ? `+${target.phoneCountryCode} ` : ""}${target.phone}`
     : null
-  const sourceLabel = target.source ? SOURCE_LABELS[target.source] ?? target.source : null
-  const statusLabel = target.status ? CONTACT_STATUS_LABEL[target.status] ?? target.status : null
+  const subtitleParts = [companyName, target.email, phoneDisplay ?? undefined].filter(Boolean) as string[]
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Contact details</DialogTitle>
-          <DialogDescription>{companyName}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="arco-table-avatar"
-              style={{ background: "#f5f5f4", color: "#6b6b68", width: 48, height: 48, fontSize: 16 }}
-            >
-              {initials}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="arco-table-primary" style={{ fontSize: 14, fontWeight: 500 }}>
-                {displayName}
-              </span>
-              <span className="arco-table-secondary truncate">{target.email}</span>
+    <div
+      className="popup-overlay"
+      onClick={() => onOpenChange(false)}
+    >
+      <div
+        className="popup-card"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 720, maxHeight: "90vh", overflowY: "auto" }}
+      >
+        <div className="popup-header">
+          <div className="min-w-0">
+            <h3 className="arco-section-title truncate">{displayName}</h3>
+            <div className="text-xs text-[#6b6b68] truncate">
+              {subtitleParts.map((part, i) => (
+                <span key={i}>
+                  {i > 0 && <span className="text-[#d4d4d3]"> · </span>}
+                  <span>{part}</span>
+                </span>
+              ))}
             </div>
           </div>
+          <button
+            type="button"
+            className="popup-close"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-            <ContactDetailRow label="Role" value={CONTACT_ROLE_LABEL[target.role]} />
-            <ContactDetailRow
-              label="Status"
-              value={
-                statusLabel ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                        CONTACT_STATUS_DOT[target.status ?? ""] ?? "bg-gray-300"
-                      }`}
-                    />
-                    {statusLabel}
-                  </span>
-                ) : (
-                  "—"
-                )
-              }
+        <div className="mt-3">
+          {loading ? (
+            <p className="text-xs text-[#a1a1a0]">Loading…</p>
+          ) : salesContact && bundle ? (
+            <ContactDetailBody
+              contact={salesContact}
+              details={bundle}
+              onPreviewEmail={() => { /* Companies context has no email preview target */ }}
+              showOutreachSequence={false}
+              lifecycleOverride={lifecycleOverride}
             />
-            <ContactDetailRow label="Phone" value={phoneDisplay ?? "—"} />
-            <ContactDetailRow label="Source" value={sourceLabel ?? "—"} />
-            <ContactDetailRow
-              label="Account"
-              value={target.authUserId ? "Signed up" : "Not signed up"}
-            />
-            <ContactDetailRow label="Last contacted" value={formatRelativeDate(target.lastContactedAt)} />
-            <ContactDetailRow label="Next follow-up" value={formatRelativeDate(target.nextFollowUpAt)} />
-          </div>
-
-          {target.notes && (
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-[#6b6b68]">Notes</span>
-              <p className="text-xs whitespace-pre-wrap text-[#1c1c1a]">{target.notes}</p>
-            </div>
+          ) : (
+            <p className="text-xs text-[#a1a1a0]">Couldn&apos;t load contact history.</p>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function ContactDetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide text-[#a1a1a0]">{label}</span>
-      <span className="text-[#1c1c1a]">{value}</span>
+      </div>
     </div>
   )
 }
 
-function LogOutboundForContactDialog({
-  target,
-  companyName,
-  onOpenChange,
-  onLogged,
-}: {
-  target: AdminCompanyContact | null
-  companyName: string
-  onOpenChange: (open: boolean) => void
-  onLogged: () => void
-}) {
-  const [kind, setKind] = useState<"call" | "meeting" | "email" | "linkedin" | "note">("call")
-  const [outcome, setOutcome] = useState<"positive" | "neutral" | "negative" | "no_answer">("positive")
-  const [body, setBody] = useState("")
-  const [nextFollowUp, setNextFollowUp] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const open = target !== null
-
-  useEffect(() => {
-    if (open) {
-      setKind("call")
-      setOutcome("positive")
-      setBody("")
-      setNextFollowUp("")
-    }
-  }, [open])
-
-  const submit = async () => {
-    if (!target) return
-    setIsSubmitting(true)
-    const result = await logOutboundForCompanyContactAction({
-      companyContactId: target.id,
-      kind,
-      outcome: kind === "note" ? null : outcome,
-      body: body || null,
-      nextFollowUpAt: nextFollowUp || null,
-    })
-    setIsSubmitting(false)
-    if (!result.success) {
-      toast.error(result.error ?? "Failed to log")
-      return
-    }
-    toast.success("Outbound logged")
-    onLogged()
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Log outbound</DialogTitle>
-          <DialogDescription>
-            {target ? `${target.name ?? target.email} · ${companyName}` : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div>
-            <Label className="text-xs">Kind</Label>
-            <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="call">Call</SelectItem>
-                <SelectItem value="meeting">Meeting</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="linkedin">LinkedIn</SelectItem>
-                <SelectItem value="note">Note</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {kind !== "note" && (
-            <div>
-              <Label className="text-xs">Outcome</Label>
-              <Select value={outcome} onValueChange={(v) => setOutcome(v as typeof outcome)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="positive">Positive</SelectItem>
-                  <SelectItem value="neutral">Neutral</SelectItem>
-                  <SelectItem value="negative">Negative</SelectItem>
-                  <SelectItem value="no_answer">No answer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div>
-            <Label className="text-xs">Notes</Label>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={3}
-              className="w-full text-xs border border-[#e5e5e4] rounded-[3px] p-2"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Next follow-up (optional)</Label>
-            <Input type="date" value={nextFollowUp} onChange={(e) => setNextFollowUp(e.target.value)} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={isSubmitting}>
-            {isSubmitting ? "Saving…" : "Log"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow; onVerify: () => void; onRefresh: () => void }) {
   const [editing, setEditing] = useState(false)
@@ -877,9 +875,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  // "Load more" pagination — start at 50, grow by 50 each click.
+  // Mirrors /admin/sales UX; classic Previous/Next buttons removed.
+  const LOAD_MORE_STEP = 50
   const [pagination, setPagination] = useState({
     pageIndex: 0,
-    pageSize: 20,
+    pageSize: LOAD_MORE_STEP,
   })
 
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -1016,7 +1017,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           if (result.success) success++
         }
         if (success > 0) {
-          toast.success(`${success} ${success === 1 ? "company" : "companies"} set to Showcased — prospect emails sent`)
+          toast.success(`${success} ${success === 1 ? "company" : "companies"} set to Showcased — start the sequence from /admin/sales`)
           setRowSelection({})
           router.refresh()
         }
@@ -1924,7 +1925,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-[160px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  statusFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {statusFilter.length === 0 ? (
@@ -1979,7 +1984,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-[160px] h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] bg-white hover:border-[#a1a1a0] transition-colors flex items-center justify-between gap-2"
+                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  sourceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {sourceFilter.length === 0 ? (
@@ -2191,31 +2200,31 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         </table>
       </div>
 
-      {/* Pagination */}
-      <div className="arco-table-pagination">
-        <span className="arco-table-pagination-count">
-          {table.getFilteredRowModel().rows.length} {table.getFilteredRowModel().rows.length === 1 ? "result" : "results"}
-        </span>
-        <div className="arco-table-pagination-nav">
-          <span className="arco-table-pagination-info">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-          </span>
-          <button
-            className="arco-table-pagination-btn"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            ‹
-          </button>
-          <button
-            className="arco-table-pagination-btn"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            ›
-          </button>
-        </div>
-      </div>
+      {/* Load more — replaces the previous Previous/Next pagination.
+          Shows total loaded vs total matched; button hidden when the
+          full result set is already on screen. */}
+      {(() => {
+        const total = table.getFilteredRowModel().rows.length
+        const visible = Math.min(pagination.pageSize, total)
+        const canLoadMore = visible < total
+        return (
+          <div className="arco-table-pagination">
+            <span className="arco-table-pagination-count">
+              {visible} of {total} {total === 1 ? "result" : "results"}
+            </span>
+            {canLoadMore && (
+              <div className="flex justify-center mt-3 w-full">
+                <button
+                  className="h-9 px-6 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                  onClick={() => setPagination((p) => ({ ...p, pageIndex: 0, pageSize: p.pageSize + LOAD_MORE_STEP }))}
+                >
+                  Load more
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Change Owner Modal */}
       {changeOwnerCompany && (
