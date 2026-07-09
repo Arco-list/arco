@@ -1889,6 +1889,18 @@ a.arco-nav-text.nav-transparent:hover {
 .ec.on   .ec-ico,
 .ec.on   .ec-txt { color: var(--primary); }
 
+/* ── Inline chip variant ───────────────────────────────────────────────────
+   For rows where the EDIT chip should sit next to the label instead of
+   above it (e.g. service badge in the company hero). Chip is rendered
+   as an inline sibling — no absolute positioning, no top offset. */
+.ec-badge.ec-badge--inline {
+  position: static;
+  top: auto;
+  left: auto;
+  padding: 0;
+  background: transparent;
+}
+
 /* ── Spec-bar variant ──────────────────────────────────────────────────────
    Centered chip, outline insets match .specifications-bar padding so the
    outline punches through the top/bottom rules. Hover and editing render
@@ -2437,7 +2449,12 @@ a.arco-nav-text.nav-transparent:hover {
   }
 
   .credits-grid {
-    grid-template-columns: 1fr;
+    /* 2-up on mobile for project detail; the project edit page
+       overrides this to 1fr in its own <style jsx global> because
+       the edit card carries an outline overlay that reads better
+       full-width. */
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
   }
 
   .related-grid {

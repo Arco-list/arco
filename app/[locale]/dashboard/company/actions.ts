@@ -1423,10 +1423,14 @@ export async function switchCompanyAction(companyId: string): Promise<ActionResu
 
 // ─── Company Deletion ─────────────────────────────────────────────────────────
 
+export type CompanyDeletionWarning =
+  | { code: "team_members"; count: number }
+  | { code: "projects"; count: number }
+
 export type CompanyDeletionCheck = {
   canDelete: boolean
   companyName: string
-  warnings: string[]
+  warnings: CompanyDeletionWarning[]
   blockers: string[]
 }
 
@@ -1448,7 +1452,7 @@ export async function checkCompanyDeletionAction(): Promise<{ success: true; dat
     return { success: false, error: "Only the company owner can delete the company." }
   }
 
-  const warnings: string[] = []
+  const warnings: CompanyDeletionWarning[] = []
   const blockers: string[] = []
 
   // Count team members (excluding the owner themselves)
@@ -1460,7 +1464,7 @@ export async function checkCompanyDeletionAction(): Promise<{ success: true; dat
     .neq("person.auth_user_id", user!.id)
 
   if ((memberCount ?? 0) > 0) {
-    warnings.push(`${memberCount} team member${memberCount === 1 ? "" : "s"} will be removed`)
+    warnings.push({ code: "team_members", count: memberCount ?? 0 })
   }
 
   // Count project associations
@@ -1470,7 +1474,7 @@ export async function checkCompanyDeletionAction(): Promise<{ success: true; dat
     .eq("company_id", companyId)
 
   if ((projectCount ?? 0) > 0) {
-    warnings.push(`Company will be removed from ${projectCount} project${projectCount === 1 ? "" : "s"}`)
+    warnings.push({ code: "projects", count: projectCount ?? 0 })
   }
 
   return {

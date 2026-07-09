@@ -27,6 +27,7 @@ import {
 } from "@/app/dashboard/company/actions"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { getCompanyTranslation } from "@/lib/company-translations"
+import { translateProfessionalService } from "@/lib/project-translations"
 import { PHOTOGRAPHER_SPECIALTIES } from "@/lib/photographer-specialties"
 import type { Database } from "@/lib/supabase/types"
 import { useAuth } from "@/contexts/auth-context"
@@ -273,7 +274,10 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [deletionCheck, setDeletionCheck] = useState<{
     canDelete: boolean
     companyName: string
-    warnings: string[]
+    warnings: Array<
+      | { code: "team_members"; count: number }
+      | { code: "projects"; count: number }
+    >
     blockers: string[]
   } | null>(null)
 
@@ -541,9 +545,16 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── Derived ──
 
-  // servicesOffered is ordered — first item is the primary service
+  // servicesOffered is ordered — first item is the primary service.
+  // Labels are localised so NL visitors see "Aannemer" instead of
+  // "Builder" in the header pill and the "professional services"
+  // fallback beneath the title.
   const orderedServiceNames = servicesOffered
-    .map((id) => services.find((s) => s.id === id)?.name)
+    .map((id) => {
+      const s = services.find((svc) => svc.id === id)
+      if (!s) return undefined
+      return translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+    })
     .filter(Boolean) as string[]
   const servicesBadge = orderedServiceNames.length > 0
     ? orderedServiceNames.length <= 3
@@ -590,8 +601,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     ) ?? null
   ), [companyProjects])
 
-  type FirstProjectSegment = "invitee" | "complete_draft" | "new_publisher"
+  // Pending credit: an architect credited this company on a published
+  // project but the invite hasn't been accepted yet. Accepting flips
+  // pp.status → live_on_page which the syncCompanyListedStatus caller
+  // then observes and auto-lists the company.
+  const pendingInviteProject = useMemo(() => (
+    companyProjects.find(
+      (p) => p.projectProfessionalStatus === "invited"
+        && (p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"),
+    ) ?? null
+  ), [companyProjects])
+
+  type FirstProjectSegment = "accept_invite" | "invitee" | "complete_draft" | "new_publisher"
+  // Order matters: accept_invite wins over everything else because it
+  // takes the user live in one click — no drafting or waiting.
   const firstProjectSegment: FirstProjectSegment =
+    pendingInviteProject ? "accept_invite" :
     !canPublishProjects ? "invitee" :
     draftProject ? "complete_draft" :
     "new_publisher"
@@ -1237,11 +1262,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <section className="professional-header">
           {/* Logo */}
           <div
-            className="company-icon"
+            className="company-icon ec"
             data-tour="logo"
             onClick={() => logoInputRef.current?.click()}
-            style={{ display: "inline-block", cursor: "pointer" }}
+            style={{ display: "inline-block" }}
           >
+            <EditBadge />
             {logoUrl ? (
               <Image src={logoUrl} alt={name} width={100} height={100} className="company-icon-image" unoptimized />
             ) : (
@@ -1269,18 +1295,49 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
           {/* Services badge — click to open service selection popup. Locked
               for photographers (audience='pro'); the service is fixed by
-              category and shouldn't drift to homeowner-facing categories. */}
-          <p
-            className="professional-badge service-popup-badge"
-            onClick={isPhotographer ? undefined : () => { servicesSnapshotRef.current = [...servicesOffered]; setServicePopupOpen(true) }}
-            data-setup-highlight={highlightMissing && !setupComplete.services ? "true" : undefined}
-            style={{
-              ...(orderedServiceNames.length === 0 ? { color: "var(--primary)" } : undefined),
-              ...(isPhotographer ? { cursor: "default" } : undefined),
-            }}
-          >
-            {servicesBadge}
-          </p>
+              category and shouldn't drift to homeowner-facing categories.
+              Non-photographers get a .ec wrapper with the EDIT chip inline
+              on the right of the service label (instead of the default
+              top-left anchored badge) so the chip doesn't clash with the
+              stacked name outline above it. */}
+          {isPhotographer ? (
+            <p
+              className="professional-badge service-popup-badge"
+              data-setup-highlight={highlightMissing && !setupComplete.services ? "true" : undefined}
+              style={{
+                ...(orderedServiceNames.length === 0 ? { color: "var(--primary)" } : undefined),
+                cursor: "default",
+              }}
+            >
+              {servicesBadge}
+            </p>
+          ) : (
+            <div
+              className={`ec ec--inline${servicePopupOpen ? " on" : ""}`}
+              onClick={() => { servicesSnapshotRef.current = [...servicesOffered]; setServicePopupOpen(true) }}
+              data-setup-highlight={highlightMissing && !setupComplete.services ? "true" : undefined}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 24 }}
+            >
+              <p
+                className="professional-badge service-popup-badge"
+                style={{
+                  ...(orderedServiceNames.length === 0 ? { color: "var(--primary)" } : undefined),
+                  cursor: "pointer",
+                  margin: 0,
+                }}
+              >
+                {servicesBadge}
+              </p>
+              <span className="ec-badge ec-badge--inline">
+                <span className="ec-ico">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                </span>
+                <span className="ec-txt">Edit</span>
+              </span>
+            </div>
+          )}
 
           {/* Description */}
           <div className={`ec${activeEditField === "desc" ? " on" : ""}`} data-setup-highlight={highlightMissing && !setupComplete.description ? "true" : undefined}>
@@ -1908,7 +1965,27 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           await markSetupComplete()
           setFirstProjectPopupOpen(false)
 
-          if (firstProjectSegment === "complete_draft" && draftProject) {
+          if (firstProjectSegment === "accept_invite" && pendingInviteProject) {
+            // Accept the credit: flip pp.status → live_on_page, then
+            // call syncCompanyListedStatus so the company auto-lists
+            // now that it has an active credited project. Same shape
+            // as /dashboard/listings' status modal, so the two paths
+            // stay behaviourally identical.
+            if (pendingInviteProject.projectProfessionalId) {
+              const { error } = await supabaseClient
+                .from("project_professionals")
+                .update({ status: "live_on_page", responded_at: new Date().toISOString() })
+                .eq("id", pendingInviteProject.projectProfessionalId)
+              if (error) {
+                toast.error(tFP("accept_invite_error"))
+                setIsCompletingSetup(false)
+                return
+              }
+              await syncCompanyListedStatus(company.id)
+              toast.success(tFP("accept_invite_success"))
+              router.refresh()
+            }
+          } else if (firstProjectSegment === "complete_draft" && draftProject) {
             router.push(`/dashboard/edit/${draftProject.id}`)
           } else if (firstProjectSegment === "new_publisher") {
             setImportInitialUrl(firstProjectUrl.trim())
@@ -1943,56 +2020,65 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 {tFP(`body_${firstProjectSegment}`)}
               </p>
 
-              {firstProjectSegment === "complete_draft" && draftProject && (
-                // Same layout as the featured-projects grid card so the
-                // draft in the popup reads like the one on the page. The
-                // kebab / status pill / hover-pill are intentionally
-                // omitted here — the popup's primary CTA is the action.
-                <div
-                  className="discover-card"
-                  style={{ marginBottom: 20, cursor: "default" }}
-                >
-                  <div className="discover-card-image-wrap" style={{ position: "relative" }}>
-                    <div className="discover-card-image-layer">
-                      {draftProject.coverImage ? (
-                        <img src={draftProject.coverImage} alt={draftProject.title} />
-                      ) : (
-                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8c8c6", background: "var(--arco-surface)" }}>
-                          <ImageIcon size={32} />
+              {(() => {
+                // Both complete_draft and accept_invite show the same
+                // discover-card layout; only the project source and CTA
+                // differ. Extracting the card here keeps the two paths
+                // in sync visually and avoids ~50 duplicated lines.
+                const cardProject =
+                  firstProjectSegment === "complete_draft" ? draftProject :
+                  firstProjectSegment === "accept_invite" ? pendingInviteProject :
+                  null
+                if (!cardProject) return null
+                return (
+                  <div
+                    className="discover-card"
+                    style={{ marginBottom: 20, cursor: "default" }}
+                  >
+                    <div className="discover-card-image-wrap" style={{ position: "relative" }}>
+                      <div className="discover-card-image-layer">
+                        {cardProject.coverImage ? (
+                          <img src={cardProject.coverImage} alt={cardProject.title} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8c8c6", background: "var(--arco-surface)" }}>
+                            <ImageIcon size={32} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status pill — top-left of the image. Read-only in
+                           this context; the popup CTA is the action. */}
+                      <div style={{ position: "absolute", top: 12, left: 12, zIndex: 2 }}>
+                        <div className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
+                          <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${cardProject.statusDotClass}`} />
+                          <span className="text-xs font-medium">{cardProject.statusLabel}</span>
                         </div>
+                      </div>
+
+                      {/* Owner pill — bottom-left. Only render for the
+                           complete_draft case; on accept_invite the
+                           credit is by definition NOT the owner. */}
+                      {cardProject.isOwner && (
+                        <span
+                          style={{
+                            position: "absolute", bottom: 10, left: 10, zIndex: 2,
+                            display: "inline-flex", alignItems: "center",
+                            fontSize: 11, fontWeight: 500, color: "#fff",
+                            background: "rgba(0,0,0,.45)", borderRadius: 100,
+                            padding: "4px 10px", letterSpacing: ".02em",
+                            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                          }}
+                        >
+                          {t("owner_label")}
+                        </span>
                       )}
                     </div>
 
-                    {/* Status pill — top-left of the image. Read-only in
-                         this context; the popup CTA is the action. */}
-                    <div style={{ position: "absolute", top: 12, left: 12, zIndex: 2 }}>
-                      <div className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
-                        <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${draftProject.statusDotClass}`} />
-                        <span className="text-xs font-medium">{draftProject.statusLabel}</span>
-                      </div>
-                    </div>
-
-                    {/* Owner pill — bottom-left */}
-                    {draftProject.isOwner && (
-                      <span
-                        style={{
-                          position: "absolute", bottom: 10, left: 10, zIndex: 2,
-                          display: "inline-flex", alignItems: "center",
-                          fontSize: 11, fontWeight: 500, color: "#fff",
-                          background: "rgba(0,0,0,.45)", borderRadius: 100,
-                          padding: "4px 10px", letterSpacing: ".02em",
-                          backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                        }}
-                      >
-                        {t("owner_label")}
-                      </span>
-                    )}
+                    <h3 className="discover-card-title">{cardProject.title}</h3>
+                    {cardProject.subtitle && <p className="discover-card-sub">{cardProject.subtitle}</p>}
                   </div>
-
-                  <h3 className="discover-card-title">{draftProject.title}</h3>
-                  {draftProject.subtitle && <p className="discover-card-sub">{draftProject.subtitle}</p>}
-                </div>
-              )}
+                )
+              })()}
 
               {firstProjectSegment === "new_publisher" && (
                 <input
@@ -2097,7 +2183,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14M10 11v6M14 11v6" />
               </svg>
-              Delete company
+              {t("delete_company")}
             </button>
           </div>
         </section>
@@ -2162,7 +2248,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>
                     </span>
                     {idx === 0 && <span className="sp-primary-badge">{t("services_primary")}</span>}
-                    <span className="sp-item-name">{svc.name}</span>
+                    <span className="sp-item-name">{translateProfessionalService(svc.slug ?? svc.name, locale) ?? svc.name}</span>
                     <button
                       className="sp-remove"
                       onClick={() => setServicesOffered((prev) => prev.filter((s) => s !== id))}
@@ -2185,17 +2271,26 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             />
             <div className="sp-categories">
               {serviceCategories.map((group) => {
+                // Search now matches either the DB English name OR the
+                // localised label — otherwise NL visitors typing
+                // "Aannemer" wouldn't find "Builder".
+                const q = serviceSearch.toLowerCase()
                 const filtered = serviceSearch
-                  ? group.services.filter((s) => s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
+                  ? group.services.filter((s) => {
+                      const translated = translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+                      return s.name.toLowerCase().includes(q) || translated.toLowerCase().includes(q)
+                    })
                   : group.services
                 if (filtered.length === 0) return null
                 const atMax = servicesOffered.length >= 12
+                const groupLabel = translateProfessionalService(group.slug, locale) ?? group.name
                 return (
                   <div key={group.slug} className="sp-category-group">
-                    <span className="sp-category-label">{group.name}</span>
+                    <span className="sp-category-label">{groupLabel}</span>
                     <div className="sp-available">
                       {filtered.map((s) => {
                         const isSelected = servicesOffered.includes(s.id)
+                        const label = translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
                         return (
                           <button
                             key={s.id}
@@ -2209,7 +2304,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                               }
                             }}
                           >
-                            {isSelected ? "✓ " : ""}{s.name}
+                            {isSelected ? "✓ " : ""}{label}
                           </button>
                         )
                       })}
@@ -2537,33 +2632,45 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       })()}
 
       {/* ════════════════════ DELETE DIALOG ════════════════════ */}
-      {deleteDialogOpen && (
+      {deleteDialogOpen && (() => {
+        // Confirmation word is the localized placeholder (DELETE / VERWIJDEREN).
+        // Server always expects the sentinel "DELETE", so we forward that
+        // literal once the user has typed the localized word.
+        const confirmWord = t("delete_confirm_placeholder")
+        const confirmMatches = deleteConfirmText === confirmWord
+        return (
         <div className="popup-overlay" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Delete company</h3>
-              <button className="popup-close" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }} aria-label="Close">
+              <h3 className="arco-section-title">{t("delete_company")}</h3>
+              <button className="popup-close" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }} aria-label={tc("close")}>
                 ✕
               </button>
             </div>
             <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
-              Permanently delete your company and all associated data. This action cannot be undone.
+              {t("delete_dialog_body")}
             </p>
 
             {isCheckingDeletion ? (
-              <p className="body-small text-text-secondary">Checking…</p>
+              <p className="body-small text-text-secondary">{t("delete_check_loading")}</p>
             ) : deletionCheck ? (
               <>
                 <div className="arco-alert arco-alert--danger">
                   <AlertTriangle className="arco-alert-icon" />
-                  <span>Your company will be permanently deleted. This cannot be undone.</span>
+                  <span>{t("delete_dialog_danger")}</span>
                 </div>
 
                 {deletionCheck.warnings.length > 0 && (
                   <div className="arco-alert arco-alert--warn">
                     <AlertTriangle className="arco-alert-icon" />
                     <ul className="m-0 p-0 list-none space-y-0.5">
-                      {deletionCheck.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                      {deletionCheck.warnings.map((w, i) => (
+                        <li key={i}>
+                          {w.code === "team_members"
+                            ? t("delete_warn_team_members", { count: w.count })
+                            : t("delete_warn_projects", { count: w.count })}
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}
@@ -2580,13 +2687,17 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 {deletionCheck.canDelete && (
                   <>
                     <p className="body-small text-text-secondary mb-3">
-                      {t("delete_confirm_text")} <strong>{deletionCheck.companyName}</strong>.
+                      {t.rich("delete_confirm_text", {
+                        word: confirmWord,
+                        name: deletionCheck.companyName,
+                        strong: (chunks) => <strong>{chunks}</strong>,
+                      })}
                     </p>
                     <input
                       type="text"
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
-                      placeholder={t("delete_confirm_placeholder")}
+                      placeholder={confirmWord}
                       className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
                     />
                   </>
@@ -2598,23 +2709,27 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }}
                     style={{ flex: 1 }}
                   >
-                    Cancel
+                    {tc("cancel")}
                   </button>
                   <button
-                    disabled={!deletionCheck.canDelete || deleteConfirmText !== "DELETE" || isDeletingCompany}
+                    disabled={!deletionCheck.canDelete || !confirmMatches || isDeletingCompany}
                     onClick={async () => {
                       setIsDeletingCompany(true)
-                      const result = await deleteCompanyAction({ confirmText: deleteConfirmText })
+                      const result = await deleteCompanyAction({ confirmText: "DELETE" })
                       if (result.success) {
                         setDeleteDialogOpen(false)
-                        router.push("/dashboard")
+                        // Deleting the company removes the user's professional
+                        // context — /dashboard would just bounce back to
+                        // create-company. Send them to the marketing home
+                        // instead so they land somewhere useful.
+                        router.push("/")
                       } else {
                         setIsDeletingCompany(false)
                         toast.error(result.error ?? t("delete_failed"))
                       }
                     }}
                     className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
-                      deletionCheck.canDelete && deleteConfirmText === t("delete_confirm_placeholder")
+                      deletionCheck.canDelete && confirmMatches
                         ? "bg-red-600 text-white"
                         : "bg-surface text-text-secondary"
                     } ${isDeletingCompany ? "opacity-60" : ""}`}
@@ -2625,11 +2740,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 </div>
               </>
             ) : (
-              <p className="body-small text-red-600">Failed to check deletion status.</p>
+              <p className="body-small text-red-600">{t("delete_check_failed")}</p>
             )}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       <Footer />
 

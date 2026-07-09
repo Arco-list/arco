@@ -60,6 +60,7 @@ import {
   translateBuildingType,
   translateBuildingTypeInput,
   translateCategoryName,
+  translateProfessionalService,
   translateProjectStyle,
   translateScopeInput,
 } from "@/lib/project-translations"
@@ -3728,7 +3729,9 @@ export default function ListingEditorPage() {
           {filteredPhotos.map((photo, photoIndex) => {
             // Find which space this photo belongs to (excluding building/additional)
             const photoSpace = orderedFeatureOptions.find(opt => (featurePhotos[opt.id] ?? []).includes(photo.id))
-            const roomLabel = photoSpace?.name ?? tPhoto("no_space")
+            const roomLabel = photoSpace
+              ? translateSpaceLabel(photoSpace.slug, photoSpace.name)
+              : tPhoto("no_space")
             const isRoomView = activeEditFeature && activeEditFeature !== "__untagged__"
             const isSpaceCover = isRoomView && photoIndex === 0
             const canMoveLeft = isRoomView && photoIndex > 0
@@ -4152,8 +4155,17 @@ export default function ListingEditorPage() {
     const serviceOrder = new Map(professionalServices.map((s, i) => [s.id, i]))
     const formatServiceName = (ids: string[], fallback?: string | null) => {
       const sorted = ids.slice().sort((a, b) => (serviceOrder.get(a) ?? 999) - (serviceOrder.get(b) ?? 999))
-      const names = sorted.map(sid => serviceMap.get(sid)?.name).filter(Boolean) as string[]
-      if (names.length === 0) return fallback ?? tTeam("select_service")
+      const names = sorted
+        .map((sid) => {
+          const s = serviceMap.get(sid)
+          if (!s) return null
+          return translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+        })
+        .filter(Boolean) as string[]
+      if (names.length === 0) {
+        const localizedFallback = fallback ? translateProfessionalService(fallback, locale) ?? fallback : null
+        return localizedFallback ?? tTeam("select_service")
+      }
       if (names.length === 1) return names[0]
       return `${names[0]} +${names.length - 1}`
     }
@@ -4208,6 +4220,15 @@ export default function ListingEditorPage() {
           .spec-item-edit::before { inset: -36px -8px; }
           .spec-item-edit .ec-badge { top: -44px; }
           .credits-grid { grid-template-columns: 1fr; }
+          /* On mobile the credits grid drops to 1 column and each
+             card stretches to full width. The default ::before
+             overlay uses inset -14px which then pokes 14px into
+             .wrap's 20px padding, making the hover outline / edit
+             badge look wider than the surrounding text margins.
+             Zeroing the horizontal inset keeps everything inside
+             the text column. */
+          .credit-card-edit::before { inset: -10px 0; }
+          .add-pro-tile::before     { inset: -10px 0; }
           .edit-details-header { padding-left: 24px !important; padding-right: 24px !important; padding-top: 48px !important; padding-bottom: 48px !important; }
           .setup-nav-cta { font-size: 12px !important; padding: 6px 12px !important; white-space: nowrap; }
         }
@@ -5286,14 +5307,20 @@ export default function ListingEditorPage() {
                                       const newIds = isSelected ? d.serviceIds.filter(sid => sid !== s.id) : [...d.serviceIds, s.id]
                                       const serviceOrderMap = new Map(serviceOptions.map((ps, i) => [ps.id, i]))
                                       const sorted = newIds.slice().sort((a, b) => (serviceOrderMap.get(a) ?? 999) - (serviceOrderMap.get(b) ?? 999))
-                                      const names = sorted.map(sid => serviceOptions.find(ps => ps.id === sid)?.name).filter(Boolean) as string[]
+                                      const names = sorted
+                                        .map(sid => {
+                                          const ps = serviceOptions.find(o => o.id === sid)
+                                          if (!ps) return null
+                                          return translateProfessionalService(ps.slug ?? ps.name, locale) ?? ps.name
+                                        })
+                                        .filter(Boolean) as string[]
                                       const displayName = names.length <= 1 ? (names[0] ?? tTeam("select_service")) : `${names[0]} +${names.length - 1}`
                                       return { ...d, serviceIds: newIds, serviceName: displayName }
                                     })
                                     setEditingInviteField(null)
                                   }}
                                 >
-                                  <span>{s.name}</span>
+                                  <span>{translateProfessionalService(s.slug ?? s.name, locale) ?? s.name}</span>
                                   {isSelected && (
                                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
                                   )}
@@ -5623,7 +5650,9 @@ export default function ListingEditorPage() {
                         }}
                       >
                         <IconComponent aria-hidden style={{ width: 22, height: 22, marginBottom: 10 }} />
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{service.name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>
+                          {translateProfessionalService(service.slug ?? service.name, locale) ?? service.name}
+                        </span>
                       </button>
                     )
                   })}
@@ -5676,7 +5705,11 @@ export default function ListingEditorPage() {
             <div style={{ padding: "12px 28px 28px" }}>
               {inviteServiceId && (
                 <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 16 }}>
-                  {tTeam("invite_service_label", { name: professionalServices.find(s => s.id === inviteServiceId)?.name ?? "" })}
+                  {tTeam("invite_service_label", { name: (() => {
+                    const s = professionalServices.find(o => o.id === inviteServiceId)
+                    if (!s) return ""
+                    return translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+                  })() })}
                 </p>
               )}
 
@@ -5739,13 +5772,19 @@ export default function ListingEditorPage() {
               <svg className="arco-alert-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M8 1L1 14h14L8 1z" /><path d="M8 6v3" /><circle cx="8" cy="11.5" r="0.5" fill="currentColor" stroke="none" />
               </svg>
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: lowResCount === 1
-                    ? tLowRes("warning_one", { count: lowResCount })
-                    : tLowRes("warning_other", { count: lowResCount }),
-                }}
-              />
+              {/* t.rich (not t + dangerouslySetInnerHTML) because the
+                   messages carry <strong> rich-text tags — next-intl
+                   treats those as ICU markup and needs a handler,
+                   otherwise it silently returns the raw key path. */}
+              <div>
+                {tLowRes.rich(
+                  lowResCount === 1 ? "warning_one" : "warning_other",
+                  {
+                    count: lowResCount,
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  },
+                )}
+              </div>
             </div>
             <div className="popup-actions">
               <button

@@ -941,9 +941,20 @@ export async function syncCompanyListedStatus(companyId: string) {
   if (!company) return
 
   let statusChanged = false
-  if (hasActiveProjects && company.status === "unlisted") {
-    await supabase.from("companies").update({ status: "listed" }).eq("id", companyId)
-    logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId })
+  // Auto-list from both `unlisted` (previously listed, then hidden) and
+  // `draft` (Created — company claimed but never listed). Missing the
+  // draft case left photographers/suppliers stuck in Created after
+  // accepting a credit, which then re-triggered the setup chain on the
+  // company edit page because isSetupMode is derived from `status === "draft"`.
+  if (hasActiveProjects && (company.status === "unlisted" || company.status === "draft")) {
+    // Flip setup_completed when auto-listing from draft — this is the
+    // moment the pro effectively "completed" onboarding without going
+    // through the manual chain, and leaving it false keeps the popup
+    // + tour firing on subsequent loads.
+    const update: Record<string, unknown> = { status: "listed" }
+    if (company.status === "draft") update.setup_completed = true
+    await supabase.from("companies").update(update).eq("id", companyId)
+    logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId, from: company.status })
     statusChanged = true
   } else if (!hasActiveProjects && company.status === "listed") {
     await supabase.from("companies").update({ status: "unlisted" }).eq("id", companyId)
