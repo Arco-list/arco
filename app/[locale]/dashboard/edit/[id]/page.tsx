@@ -4276,7 +4276,9 @@ export default function ListingEditorPage() {
         /* ── Photo edit grid ── */
         .photo-edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
         @media (max-width: 768px) {
-          .photo-edit-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+          /* 2 per row on mobile — 3-up made each tile too small to
+             fit the room-picker pills legibly. */
+          .photo-edit-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
         }
         .photo-edit-thumb { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #f0f0ee; }
         .photo-edit-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -4307,11 +4309,17 @@ export default function ListingEditorPage() {
         .photo-room-trigger { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: rgba(255,255,255,.92); background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 3px; white-space: nowrap; transition: background .12s; }
         .photo-room-trigger:hover { background: rgba(255,255,255,.14); }
         /* Space picker overlay */
-        .photo-space-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; z-index: 10; cursor: pointer; }
+        .photo-space-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; z-index: 10; cursor: pointer; overflow-y: auto; }
         .photo-space-pills { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 16px; max-width: 90%; }
         .photo-space-pill { padding: 5px 13px; font-size: 12px; font-weight: 400; color: rgba(255,255,255,.88); background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.22); border-radius: 100px; cursor: pointer; transition: all .12s; white-space: nowrap; }
         .photo-space-pill:hover { background: rgba(255,255,255,.22); border-color: rgba(255,255,255,.4); color: #fff; }
         .photo-space-pill.active { background: #fff; color: #1c1c1a; border-color: #fff; }
+        /* Shrink pills on mobile so all ~11 rooms fit inside a
+           half-viewport-wide tile without clipping. */
+        @media (max-width: 768px) {
+          .photo-space-pills { gap: 4px; padding: 8px; max-width: 100%; }
+          .photo-space-pill { padding: 3px 8px; font-size: 10.5px; letter-spacing: -0.005em; }
+        }
 
         .photo-add-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; aspect-ratio: 4/3; border: 1px dashed #d4d4d2; cursor: pointer; transition: border-color .15s, background .15s; }
         .photo-add-tile:hover { border-color: #016D75; background: rgba(1,109,117,.03); }

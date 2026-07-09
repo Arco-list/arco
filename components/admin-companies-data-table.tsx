@@ -230,6 +230,11 @@ export type AdminCompanyRow = {
   city: string | null
   country: string | null
   hasPublishedProjects: boolean
+  /** ISO timestamp when the company first transitioned to Listed. NULL
+   *  for companies still in Created. Used to gate the Unlisted status
+   *  option — a Created company can only move to Listed, not directly
+   *  to Unlisted. */
+  listedAt: string | null
   canPublishProjects: boolean
   autoApproveProjects: boolean
   source: CompanySource | null
@@ -297,7 +302,9 @@ const STATUS_DOT: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   added: "Added",
   unclaimed: "Unclaimed",
-  draft: "Draft",
+  // Renamed from "Draft" — the DB enum value stays `draft`, admin UI
+  // presents it as "Created" (company was claimed, never listed).
+  draft: "Created",
   listed: "Listed",
   unlisted: "Unlisted",
   deactivated: "Deactivated",
@@ -308,7 +315,7 @@ const STATUS_LABEL: Record<string, string> = {
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
-  { value: "draft", label: "Draft", description: "Setup not yet completed", dotColor: "bg-[#2563eb]" },
+  { value: "draft", label: "Created", description: "Company claimed but never listed yet", dotColor: "bg-[#2563eb]" },
   { value: "prospected" as any, label: "Showcased", description: "Live showcase page on the marketplace, awaiting claim by the pro.", dotColor: "bg-[#f59e0b]" },
   { value: "added" as any, label: "Added", description: "Catalogued (Apollo bulk import, manual add, or photographer import). Awaiting promotion to a sequence or claim.", dotColor: "bg-[#dc2626]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-[#dc2626]" },
@@ -668,7 +675,7 @@ function ContactDetailsDialog({
       const ts = companyBundle.timestamps
       const stages: LifecycleStageOverride[] = []
       if (ts.userSignedUp) stages.push({ label: "Signup", ts: ts.userSignedUp, dotClass: "bg-[#2563eb]" })
-      if (ts.draft) stages.push({ label: "Draft", ts: ts.draft, dotClass: "bg-[#2563eb]" })
+      if (ts.draft) stages.push({ label: "Created", ts: ts.draft, dotClass: "bg-[#2563eb]" })
       if (ts.listed) stages.push({ label: "Listed", ts: ts.listed, dotClass: "bg-[#7c3aed]" })
       if (ts.unlisted) stages.push({ label: "Unlisted", ts: ts.unlisted, dotClass: "bg-[#a1a1a0]" })
       if (ts.deactivated) stages.push({ label: "Deactivated", ts: ts.deactivated, dotClass: "bg-red-500" })
@@ -2468,7 +2475,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
                 const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any) || option.value === ("invited" as any)) && isClaimed
                 const needsClaimed = (option.value === "listed" || option.value === "unlisted") && !isClaimed
-                const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed
+                // Lifecycle rule: a company that has never been listed
+                // can't move directly to Unlisted — it stays in Created
+                // until its first Listed transition.
+                const needsFirstListing = option.value === "unlisted" && statusChange.company.listedAt == null
+                const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed || needsFirstListing
                 return (
                   <button
                     key={option.value}
@@ -2490,7 +2501,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                               ? `Company already claimed by ${statusChange.company.ownerName}`
                               : needsClaimed
                                 ? "Company must be claimed first — use Showcased to list added companies"
-                                : option.description}
+                                : needsFirstListing
+                                  ? "Company has never been listed — must go Listed first before it can be Unlisted"
+                                  : option.description}
                         </span>
                       ) : (
                         <span className="status-modal-option-desc">{option.description}</span>

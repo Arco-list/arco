@@ -329,11 +329,11 @@ export function GrowthClient({ initialMetrics }: Props) {
         { label: "→ Signup", value: r.visitorToSignup },
       ],
       pro_visitors: [
-        { label: "→ Draft", value: r.proVisitorToDraft },
+        { label: "→ Created", value: r.proVisitorToDraft },
       ],
       client_signups: [
         { label: "← From visitor", value: r.visitorToSignup },
-        { label: "→ Draft (cross-funnel)", value: cr.signupToDraft },
+        { label: "→ Created (cross-funnel)", value: cr.signupToDraft },
         { label: "→ Sharer", value: r.signupToSharer },
         { label: "→ Saver", value: cr.clientSignupToSaver },
         { label: "→ Contacter", value: r.signupToContacter },
@@ -784,7 +784,7 @@ export function GrowthClient({ initialMetrics }: Props) {
               directly to Churners. Churners shifted from col 5 → col 4 so
               the line between them is a single column gap. */}
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
-          <Card label="Drafts" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("open_drafts")} />
+          <Card label="Created" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("open_drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
           <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Churners" metricKey="churn" onCardClick={openDetail} value="—" driver="churn" timeframe={timeframe} datapoints={dp("churn")} />

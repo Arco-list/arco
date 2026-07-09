@@ -189,6 +189,24 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     return { success: false, error: error.message }
   }
 
+  // Lifecycle rule: a company that has never been listed can't be
+  // moved directly to Unlisted — it stays in Created. The only exit
+  // from Created is to Listed (or a terminal state like deactivated).
+  if (parsedStatus.data === "unlisted") {
+    const { data: existing } = await supabase
+      .from("companies")
+      .select("listed_at")
+      .eq("id", parsedCompanyId.data)
+      .maybeSingle()
+
+    if (existing && existing.listed_at == null) {
+      return {
+        success: false,
+        error: "This company has never been listed. It can only move to Listed from Created, not Unlisted.",
+      }
+    }
+  }
+
   const { error: updateError } = await supabase
     .from("companies")
     .update({ status: parsedStatus.data })

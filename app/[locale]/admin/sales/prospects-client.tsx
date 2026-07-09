@@ -54,7 +54,7 @@ const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: s
   contacted: { label: "Contacted", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
   visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   signup: { label: "Signup", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
-  company: { label: "Draft", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  company: { label: "Created", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]" },
   // Removed never renders in the funnel — the row hides any contact with this
   // status, and the company row drops entirely if every contact is removed.
@@ -132,7 +132,7 @@ const FUNNEL_STAGES: { status: ProspectStatus; label: string; driver: "prospect"
   { status: "contacted", label: "Contacted", driver: "prospect" },
   { status: "visitor", label: "Visitor", driver: "acquisition" },
   { status: "signup", label: "Signup", driver: "acquisition" },
-  { status: "company", label: "Draft", driver: "acquisition" },
+  { status: "company", label: "Created", driver: "acquisition" },
   { status: "active", label: "Listed", driver: "retention" },
 ]
 
@@ -1766,7 +1766,7 @@ export function ProspectsClient({
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {[
                 { dot: "bg-[#7c3aed]", label: "Listed", desc: "Owns a Listed company — fully converted.", specs: "Live on platform · Conversion complete" },
-                { dot: "bg-[#2563eb]", label: "Draft", desc: "Owns a company in Draft status — onboarding in progress.", specs: "Company claimed · Profile setup" },
+                { dot: "bg-[#2563eb]", label: "Created", desc: "Owns a company in Created status — claimed but never listed yet.", specs: "Company claimed · Profile setup" },
                 { dot: "bg-[#2563eb]", label: "Signup", desc: "Created an Arco account but has not claimed or created a company yet.", specs: "Account created · No company" },
                 { dot: "bg-[#2563eb]", label: "Visitor", desc: "Clicked a link in an outreach email and visited the site.", specs: "Email engagement · No account yet" },
                 { dot: "bg-[#f59e0b]", label: "Contacted", desc: "At least one intro email has been sent. Advances automatically on send.", specs: "Intro sent · Drip sequence active" },
@@ -2434,7 +2434,7 @@ export function ContactDetailBody({
       { label: "Contacted", ts: firstSentAt ?? prospect.last_email_sent_at, status: "contacted" },
       { label: "Visitor", ts: prospect.landing_visited_at, status: "visitor" },
       { label: "Signup", ts: prospect.signed_up_at, status: "signup" },
-      { label: "Draft", ts: prospect.company_created_at, status: "company" },
+      { label: "Created", ts: prospect.company_created_at, status: "company" },
       { label: "Listed", ts: prospect.converted_at, status: "active" },
     ].filter((s) => s.ts) as Array<{ label: string; ts: string; status: ProspectStatus }>
   })()

@@ -31,7 +31,7 @@ async function loadAdminCompaniesData() {
       supabase
         .from("companies")
         .select(
-          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
+          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         )
         .or("source.in.(direct,manual,invited),status.in.(draft,listed,unlisted,deactivated)"),
       supabase
@@ -349,6 +349,7 @@ async function loadAdminCompaniesData() {
       hasPublishedProjects: (companyProjectsList.get(company.id) ?? []).some(
         (p) => p.projectStatus === "published" && (p.inviteStatus === "listed" || p.inviteStatus === "live_on_page"),
       ),
+      listedAt: (company as { listed_at?: string | null }).listed_at ?? null,
       canPublishProjects: serviceIds.some((id) => publishableCategoryIds.has(id)),
       autoApproveProjects: Boolean((company as any).auto_approve_projects),
       source: company.source ?? null,
@@ -415,6 +416,7 @@ async function loadAdminCompaniesData() {
         city: null,
         country: null,
         hasPublishedProjects: false,
+        listedAt: null,
         canPublishProjects: false,
         autoApproveProjects: false,
         source: null,
@@ -439,7 +441,12 @@ export default async function AdminProfessionalsPage() {
   const { mergedRows, servicesOptions } = await loadAdminCompaniesData()
 
   return (
-    <div className="min-h-screen bg-white">
+    // overflow-x-clip stops the mobile status funnel's negative
+    // horizontal margin (-mx-4 on the row) from letting users scroll
+    // sideways past the viewport. Clip (not hidden) so descendant
+    // fixed/absolute elements — dropdowns, popovers — still overflow
+    // normally.
+    <div className="min-h-screen bg-white overflow-x-clip">
       <div className="discover-page-title">
         <div className="wrap">
           <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} />
