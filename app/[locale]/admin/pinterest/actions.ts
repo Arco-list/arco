@@ -1,0 +1,181 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { createBoard } from "@/lib/pinterest/client"
+
+/** Guard used by every action here. Throws → server action returns 500. */
+async function assertAdmin(): Promise<void> {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error("unauthorized")
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("user_types")
+    .eq("id", user.id)
+    .maybeSingle()
+  const types = Array.isArray(profile?.user_types) ? profile!.user_types : []
+  if (!types.includes("admin")) throw new Error("forbidden")
+}
+
+// ── Board id updates ─────────────────────────────────────────────────────
+// Admin pastes the Pinterest board id after manually creating the board
+// on Pinterest. Empty string clears the mapping (board goes back to
+// "not yet mapped" and won't be resolved by the cron).
+export async function updateBoardIdAction(
+  boardRowId: string,
+  boardId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await assertAdmin()
+  const trimmed = boardId.trim()
+  const supabase = createServiceRoleSupabaseClient()
+  const { error } = await supabase
+    .from("pinterest_boards")
+    .update({ board_id: trimmed.length > 0 ? trimmed : null })
+    .eq("id", boardRowId)
+  if (error) return { success: false, error: error.message }
+  revalidatePath("/[locale]/admin/pinterest", "page")
+  return { success: true }
+}
+
+// ── One-shot backfill ────────────────────────────────────────────────────
+// Enqueue publish rows for every currently-published project + every one
+// of its eligible features. Safe to run repeatedly — the enqueue helper
+// dedupes against pending rows, and re-publishing an already-synced pin
+// just overwrites its stored id.
+export async function enqueueBackfillAction(): Promise<{
+  success: boolean
+  enqueued: number
+  error?: string
+}> {
+  await assertAdmin()
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: projects, error: projErr } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("status", "published")
+  if (projErr) return { success: false, enqueued: 0, error: projErr.message }
+
+  const projectIds = (projects ?? []).map((p) => p.id)
+  if (projectIds.length === 0) return { success: true, enqueued: 0 }
+
+  let enqueued = 0
+  for (const id of projectIds) {
+    const { error } = await supabase.rpc("pinterest_enqueue", {
+      p_target_type: "project",
+      p_target_id: id,
+      p_action: "publish",
+    })
+    if (!error) enqueued++
+  }
+
+  // Fan out to features (non-Exterior, with a cover).
+  const { data: features } = await supabase
+    .from("project_features")
+    .select("id, project_id, space_id, cover_photo_id, spaces(slug)")
+    .in("project_id", projectIds)
+    .not("cover_photo_id", "is", null)
+  for (const f of features ?? []) {
+    // Skip if project didn't select through published projects list.
+    if (!projectIds.includes(f.project_id)) continue
+    // Skip exterior — no board.
+    const slug = (f as { spaces?: { slug?: string | null } | null }).spaces?.slug
+    if (slug === "exterior") continue
+    const { error } = await supabase.rpc("pinterest_enqueue", {
+      p_target_type: "feature",
+      p_target_id: f.id,
+      p_action: "publish",
+    })
+    if (!error) enqueued++
+  }
+
+  revalidatePath("/[locale]/admin/pinterest", "page")
+  return { success: true, enqueued }
+}
+
+// ── Auto-create boards ───────────────────────────────────────────────────
+// Iterates pinterest_boards rows with board_id IS NULL and creates each
+// on Pinterest via POST /boards, using the seeded board_name (which
+// comes from the underlying space or category). Stamps the returned
+// Pinterest board id back on the row. Safe to run repeatedly — rows
+// with a board_id already set are skipped.
+export async function createMissingBoardsAction(): Promise<{
+  success: boolean
+  created: number
+  skipped: number
+  failures: { name: string; reason: string }[]
+  error?: string
+}> {
+  await assertAdmin()
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: rows, error } = await supabase
+    .from("pinterest_boards")
+    .select("id, board_name, spaces(name), categories(name)")
+    .is("board_id", null)
+    .eq("is_active", true)
+    .order("board_name")
+  if (error) return { success: false, created: 0, skipped: 0, failures: [], error: error.message }
+
+  let created = 0
+  let skipped = 0
+  const failures: { name: string; reason: string }[] = []
+  for (const row of rows ?? []) {
+    const displayName = row.board_name
+      ?? (row as { spaces?: { name?: string | null } | null }).spaces?.name
+      ?? (row as { categories?: { name?: string | null } | null }).categories?.name
+    if (!displayName) {
+      skipped++
+      continue
+    }
+    try {
+      const result = await createBoard({
+        name: displayName,
+        description: `Curated ${displayName.toLowerCase()} inspiration from arcolist.com — the platform for exceptional architecture & interior design.`,
+        privacy: "PUBLIC",
+      })
+      const { error: upErr } = await supabase
+        .from("pinterest_boards")
+        .update({ board_id: result.boardId, board_name: result.name })
+        .eq("id", row.id)
+      if (upErr) {
+        failures.push({ name: displayName, reason: upErr.message })
+      } else {
+        created++
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // Pinterest returns 409 when a board with the same name already
+      // exists on this account. Surface as a friendly note rather than a
+      // hard failure so the admin can paste the existing id manually.
+      failures.push({ name: displayName, reason: message })
+    }
+  }
+
+  revalidatePath("/[locale]/admin/pinterest", "page")
+  return { success: true, created, skipped, failures }
+}
+
+// ── Disconnect ───────────────────────────────────────────────────────────
+// Clears the stored tokens. Cron will start failing with "run OAuth
+// bootstrap" errors until the admin reconnects via /oauth/start.
+export async function disconnectPinterestAction(): Promise<{ success: boolean; error?: string }> {
+  await assertAdmin()
+  const supabase = createServiceRoleSupabaseClient()
+  const { error } = await supabase
+    .from("pinterest_auth")
+    .update({
+      access_token: null,
+      refresh_token: null,
+      access_token_expires_at: null,
+      refresh_token_expires_at: null,
+      scope: null,
+    })
+    .eq("id", 1)
+  if (error) return { success: false, error: error.message }
+  revalidatePath("/[locale]/admin/pinterest", "page")
+  return { success: true }
+}

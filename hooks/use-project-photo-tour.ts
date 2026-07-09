@@ -431,6 +431,10 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             description: null,
             is_highlighted: false,
             tagline: null,
+            space_id: null,
+            pinterest_pin_id: null,
+            pinterest_synced_at: null,
+            pinterest_sync_error: null,
           }
 
           const { error: buildingError } = await supabase.from("project_features").insert(newBuilding)
@@ -551,6 +555,10 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           description: null,
           is_highlighted: false,
           tagline: null,
+          space_id: null,
+          pinterest_pin_id: null,
+          pinterest_synced_at: null,
+          pinterest_sync_error: null,
         }
 
         const { error: additionalError } = await supabase.from("project_features").insert(newAdditional)

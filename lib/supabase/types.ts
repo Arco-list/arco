@@ -1618,6 +1618,123 @@ export type Database = {
         }
         Relationships: []
       }
+      pinterest_auth: {
+        Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
+          id: number
+          refresh_token: string | null
+          refresh_token_expires_at: string | null
+          scope: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          id?: number
+          refresh_token?: string | null
+          refresh_token_expires_at?: string | null
+          scope?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          id?: number
+          refresh_token?: string | null
+          refresh_token_expires_at?: string | null
+          scope?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pinterest_boards: {
+        Row: {
+          board_id: string | null
+          board_name: string | null
+          category_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          space_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          board_id?: string | null
+          board_name?: string | null
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          space_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          board_id?: string | null
+          board_name?: string | null
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          space_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pinterest_boards_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pinterest_boards_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pinterest_queue: {
+        Row: {
+          action: string
+          attempts: number
+          cancelled_at: string | null
+          cancelled_reason: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          processed_at: string | null
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          processed_at?: string | null
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          cancelled_at?: string | null
+          cancelled_reason?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          processed_at?: string | null
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: []
+      }
       posthog_cache: {
         Row: {
           data: Json
@@ -2103,6 +2220,9 @@ export type Database = {
           is_highlighted: boolean
           name: string
           order_index: number
+          pinterest_pin_id: string | null
+          pinterest_sync_error: string | null
+          pinterest_synced_at: string | null
           project_id: string
           space_id: string | null
           tagline: string | null
@@ -2118,6 +2238,9 @@ export type Database = {
           is_highlighted?: boolean
           name: string
           order_index?: number
+          pinterest_pin_id?: string | null
+          pinterest_sync_error?: string | null
+          pinterest_synced_at?: string | null
           project_id: string
           space_id?: string | null
           tagline?: string | null
@@ -2133,6 +2256,9 @@ export type Database = {
           is_highlighted?: boolean
           name?: string
           order_index?: number
+          pinterest_pin_id?: string | null
+          pinterest_sync_error?: string | null
+          pinterest_synced_at?: string | null
           project_id?: string
           space_id?: string | null
           tagline?: string | null
@@ -2760,6 +2886,9 @@ export type Database = {
           likes_count: number | null
           location: string | null
           longitude: number | null
+          pinterest_pin_id: string | null
+          pinterest_sync_error: string | null
+          pinterest_synced_at: string | null
           project_size: string | null
           project_type: string | null
           project_type_category_id: string | null
@@ -2814,6 +2943,9 @@ export type Database = {
           likes_count?: number | null
           location?: string | null
           longitude?: number | null
+          pinterest_pin_id?: string | null
+          pinterest_sync_error?: string | null
+          pinterest_synced_at?: string | null
           project_size?: string | null
           project_type?: string | null
           project_type_category_id?: string | null
@@ -2868,6 +3000,9 @@ export type Database = {
           likes_count?: number | null
           location?: string | null
           longitude?: number | null
+          pinterest_pin_id?: string | null
+          pinterest_sync_error?: string | null
+          pinterest_synced_at?: string | null
           project_size?: string | null
           project_type?: string | null
           project_type_category_id?: string | null
@@ -3715,6 +3850,10 @@ export type Database = {
         Args: { _person_id: string }
         Returns: boolean
       }
+      pinterest_enqueue: {
+        Args: { p_action: string; p_target_id: string; p_target_type: string }
+        Returns: undefined
+      }
       refresh_all_materialized_views: { Args: never; Returns: undefined }
       refresh_mv_professional_summary: { Args: never; Returns: undefined }
       refresh_professional_summary: { Args: never; Returns: undefined }
@@ -4092,4 +4231,3 @@ export const Constants = {
     },
   },
 } as const
-

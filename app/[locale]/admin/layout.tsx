@@ -51,6 +51,9 @@ const ICONS = {
   design: (
     <svg {...iconProps}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>
   ),
+  pinterest: (
+    <svg {...iconProps}><circle cx="12" cy="12" r="10" /><path d="M8 20l4-12" /><path d="M8 12a4 4 0 118 0c0 2.5-1.5 4-3.5 4S9 15 9 13" /></svg>
+  ),
 }
 
 function buildAdminNavLinks({
@@ -92,6 +95,7 @@ function buildAdminNavLinks({
       label: "Platform",
       children: [
         { href: "/admin/categories", label: "Categories", icon: ICONS.categories },
+        { href: "/admin/pinterest", label: "Pinterest", icon: ICONS.pinterest },
         { href: "/admin/design", label: "Design", icon: ICONS.design },
       ],
     },

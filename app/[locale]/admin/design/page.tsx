@@ -32,6 +32,75 @@ const photoGalleryMobileCombos: GalleryCombo[] = [
   { name: "End single P · 1×3", desc: "Portrait fallback for a stand-alone P at the tail.", cells: [{ kind: "P", col: 1, row: 3 }] },
 ]
 
+const PHOTO_MOODS: Record<string, string> = {
+  kitchen:
+    "radial-gradient(120% 60% at 30% 20%, rgba(255,245,220,.55), transparent 55%)," +
+    "radial-gradient(80% 60% at 70% 90%, rgba(120,90,60,.35), transparent 60%)," +
+    "linear-gradient(180deg, #e2d7c1 0%, #b39775 55%, #6d4f34 100%)",
+  bath:
+    "radial-gradient(90% 50% at 20% 30%, rgba(220,235,245,.5), transparent 60%)," +
+    "radial-gradient(70% 55% at 80% 85%, rgba(60,90,110,.4), transparent 60%)," +
+    "linear-gradient(180deg, #c9d6dc 0%, #7a8f9b 60%, #3a4b57 100%)",
+  living:
+    "radial-gradient(100% 60% at 50% 15%, rgba(255,235,210,.45), transparent 55%)," +
+    "radial-gradient(70% 50% at 20% 90%, rgba(90,60,40,.38), transparent 60%)," +
+    "linear-gradient(180deg, #e6d9c2 0%, #b09371 55%, #6a4a30 100%)",
+  bedroom:
+    "radial-gradient(90% 50% at 40% 20%, rgba(255,220,220,.4), transparent 55%)," +
+    "radial-gradient(70% 55% at 70% 90%, rgba(80,55,65,.35), transparent 60%)," +
+    "linear-gradient(180deg, #e6cfc7 0%, #a8867a 60%, #4d3a35 100%)",
+  exterior:
+    "radial-gradient(100% 60% at 50% 15%, rgba(220,240,220,.4), transparent 55%)," +
+    "radial-gradient(70% 55% at 30% 90%, rgba(45,65,40,.45), transparent 60%)," +
+    "linear-gradient(180deg, #cee0c0 0%, #7fa06e 55%, #35502b 100%)",
+  office:
+    "radial-gradient(100% 60% at 60% 20%, rgba(230,235,245,.35), transparent 55%)," +
+    "radial-gradient(60% 55% at 20% 90%, rgba(70,75,100,.4), transparent 60%)," +
+    "linear-gradient(180deg, #d7ddea 0%, #6d7ba0 60%, #33395b 100%)",
+}
+
+// Bottom-flush black tile with the arco wordmark. Top corners rounded,
+// bottom flush with the image edge — this is the shape emitted by the
+// jimp compositor for every Pinterest pin and social share card.
+//
+// `pct` sizes the tile as a percentage of the containing card's width,
+// so it stays proportional across viewport widths — pass this when the
+// tile lives inside a responsive/masonry card. `size` gives an absolute
+// pixel fallback for fixed-size demos.
+function BrandedTile({
+  size = 96,
+  pct,
+  radius = 12,
+}: { size?: number; pct?: number; radius?: number }) {
+  const dimensionStyle: React.CSSProperties = pct != null
+    ? { width: `${pct}%`, aspectRatio: "1 / 1" }
+    : { width: size, height: size }
+  const radiusStyle = pct != null
+    ? { borderRadius: "12% 12% 0 0" }
+    : { borderRadius: `${radius}px ${radius}px 0 0` }
+  return (
+    <div style={{
+      position: "absolute",
+      right: "5%",
+      bottom: 0,
+      ...dimensionStyle,
+      ...radiusStyle,
+      background: "#000",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      filter: "drop-shadow(0 -2px 10px rgba(0,0,0,.22))",
+    }}>
+      <svg viewBox="26 90 184 55" xmlns="http://www.w3.org/2000/svg" aria-label="arco" style={{ width: "78%", height: "auto" }}>
+        <path fill="#fff" d="M51.6904 92.6904C37.7704 92.6904 26.4804 104.12 26.6904 118.08C26.8904 131.4 37.7204 142.34 51.0404 142.68C56.1204 142.81 60.8604 141.42 64.8604 138.93V140.59C64.8604 141.34 65.4704 141.95 66.2204 141.95H75.3204C76.0704 141.95 76.6804 141.34 76.6804 140.59V117.69C76.6804 103.91 65.4704 92.6904 51.6804 92.6904H51.6904ZM51.6904 130.86C44.4304 130.86 38.5204 124.95 38.5204 117.69C38.5204 110.43 44.4304 104.52 51.6904 104.52C58.9504 104.52 64.8604 110.43 64.8604 117.69C64.8604 124.95 58.9504 130.86 51.6904 130.86Z" />
+        <path fill="#fff" d="M121.55 98.8004L116.37 106.28C115.95 106.88 115.13 107.05 114.51 106.65C112.32 105.22 109.67 104.42 106.85 104.52C99.7198 104.78 94.1598 110.83 94.1598 117.97V140.59C94.1598 141.34 93.5498 141.95 92.7998 141.95H83.6998C82.9498 141.95 82.3398 141.34 82.3398 140.59V95.1204C82.3398 94.3704 82.9498 93.7604 83.6998 93.7604H92.7998C93.5498 93.7604 94.1598 94.3704 94.1598 95.1204V96.4504C97.9898 94.0704 102.5 92.6904 107.33 92.6904C112.45 92.6904 117.22 94.2404 121.19 96.8904C121.82 97.3104 121.98 98.1804 121.55 98.8004Z" />
+        <path fill="#fff" d="M159.49 120.05C158.88 120.05 158.34 120.46 158.18 121.05C156.65 126.53 151.81 130.68 145.9 130.85C138.01 131.08 131.6 124.33 132.4 116.33C133.01 110.24 138.29 105.07 144.39 104.56C147.46 104.3 150.34 105.11 152.69 106.65C153.3 107.05 154.12 106.87 154.54 106.27L159.71 98.7902C160.14 98.1602 159.98 97.3002 159.35 96.8802C155.38 94.2302 150.62 92.6802 145.51 92.6802C137.86 92.6802 131.01 96.1302 126.42 101.55C125.96 102.09 125.53 102.64 125.12 103.21L124.78 103.71C122.08 107.7 120.5 112.51 120.5 117.67C120.5 123.81 122.72 129.44 126.42 133.8C131.01 139.22 137.86 142.67 145.51 142.67C153.16 142.67 160.01 139.22 164.6 133.8C167.48 130.39 169.47 126.2 170.2 121.6C170.33 120.78 169.68 120.04 168.85 120.04H159.49V120.05Z" />
+        <path fill="#fff" d="M183.689 92.6904C176.049 92.6904 169.189 96.1404 164.599 101.56C161.879 104.77 159.959 108.69 159.139 112.99C158.979 113.82 159.639 114.59 160.479 114.59H169.939C170.529 114.59 171.039 114.21 171.229 113.65C172.959 108.5 177.639 104.67 183.309 104.52C191.199 104.3 197.609 111.06 196.789 119.07C196.169 125.15 190.889 130.31 184.799 130.81C181.739 131.06 178.869 130.26 176.519 128.73C175.909 128.33 175.089 128.51 174.669 129.11L169.489 136.59C169.059 137.22 169.219 138.08 169.849 138.5C174.129 141.35 179.329 142.92 184.909 142.66C197.679 142.05 208.039 131.68 208.649 118.91C209.339 104.57 197.869 92.6904 183.679 92.6904H183.689Z" />
+      </svg>
+    </div>
+  )
+}
+
 function PhotoComboPreview({ combo, cols, unit, gap, autoFlow = "row" }: { combo: GalleryCombo; cols: number; unit: number; gap: number; autoFlow?: "row" | "dense" }) {
   const cellBg = (kind: GalleryCell["kind"]) => kind === "L" ? "#e8e8e6" : kind === "P" ? "#c4c4c2" : "#8b8b89"
   return (
@@ -837,6 +906,117 @@ export default function DesignPage() {
                 <code>{`<div class="spec-item-edit [editing]">`}</code> with <code>.ec-badge</code>,{" "}
                 <code>.spec-eyebrow</code>, and either a value <code>{`<div>`}</code> or a{" "}
                 <code>.spec-inp</code>.
+              </p>
+            </div>
+          </div>
+
+          {/* BRANDED IMAGES */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Branded images</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              Composite images produced once on project publish and reused across channels.
+              The compositor branches on source photo orientation: portrait → 2:3 Pinterest pin,
+              landscape or square → 1:1 Pinterest pin, plus a 1200 × 630 rendition that serves
+              as the project&rsquo;s <code>og:image</code> on Facebook / LinkedIn / iMessage.
+              Same badge geometry on every output — the brand mark reads consistently regardless
+              of where the image lands.
+            </p>
+
+            <h4 className="arco-label" style={{ marginBottom: 20 }}>Aspect ratios</h4>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+                <div>
+                  <div style={{
+                    position: "relative", aspectRatio: "2/3", borderRadius: 4, overflow: "hidden",
+                    background:
+                      "radial-gradient(120% 60% at 30% 20%, rgba(255,245,220,.55), transparent 55%)," +
+                      "radial-gradient(80% 60% at 70% 90%, rgba(120,90,60,.35), transparent 60%)," +
+                      "linear-gradient(180deg, #e2d7c1 0%, #b39775 55%, #6d4f34 100%)",
+                  }}>
+                    <BrandedTile pct={16} />
+                  </div>
+                  <div className="arco-eyebrow" style={{ marginTop: 10 }}>Portrait pin · 1000 × 1500</div>
+                </div>
+                <div>
+                  <div style={{
+                    position: "relative", aspectRatio: "1/1", borderRadius: 4, overflow: "hidden",
+                    background:
+                      "radial-gradient(100% 60% at 50% 15%, rgba(255,235,210,.45), transparent 55%)," +
+                      "radial-gradient(70% 50% at 20% 90%, rgba(90,60,40,.38), transparent 60%)," +
+                      "linear-gradient(180deg, #e6d9c2 0%, #b09371 55%, #6a4a30 100%)",
+                  }}>
+                    <BrandedTile pct={16} />
+                  </div>
+                  <div className="arco-eyebrow" style={{ marginTop: 10 }}>Square pin · 1000 × 1000</div>
+                </div>
+                <div>
+                  <div style={{
+                    position: "relative", aspectRatio: "1200/630", borderRadius: 4, overflow: "hidden",
+                    background:
+                      "radial-gradient(90% 50% at 20% 30%, rgba(220,235,245,.5), transparent 60%)," +
+                      "radial-gradient(70% 55% at 80% 85%, rgba(60,90,110,.4), transparent 60%)," +
+                      "linear-gradient(180deg, #c9d6dc 0%, #7a8f9b 60%, #3a4b57 100%)",
+                  }}>
+                    <BrandedTile pct={16} />
+                  </div>
+                  <div className="arco-eyebrow" style={{ marginTop: 10 }}>Social og:image · 1200 × 630</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6, marginBottom: 48 }}>
+              <p className="arco-small-text">
+                Badge: fixed black tile, ~130px wide in production output, flush to bottom edge,
+                top corners rounded 12px, ~5% right inset. Same absolute pixel width across all
+                three aspect ratios so the mark reads at consistent visual weight. Compositor:
+                <code> lib/pinterest/composeBrandedImage.ts</code> (jimp), output persisted to
+                <code> project-media/pins/type/{"{project_id}"}.jpg</code>,
+                <code> project-media/pins/space/{"{feature_id}"}.jpg</code>,
+                <code> project-media/social/{"{project_id}"}.jpg</code>.
+              </p>
+            </div>
+
+            <h4 className="arco-label" style={{ marginBottom: 20 }}>On a Pinterest board</h4>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 16 }}>
+              <div style={{ columns: 4, columnGap: 12 }}>
+                {[
+                  { aspect: "2/3", grad: "kitchen" },
+                  { aspect: "3/4", grad: "bath" },
+                  { aspect: "1/1", grad: "living" },
+                  { aspect: "1/1", grad: "bedroom" },
+                  { aspect: "2/3", grad: "exterior" },
+                  { aspect: "1/1", grad: "office" },
+                  { aspect: "2/3", grad: "kitchen" },
+                  { aspect: "3/4", grad: "living" },
+                  { aspect: "4/5", grad: "bath" },
+                  { aspect: "2/3", grad: "bedroom" },
+                  { aspect: "1/1", grad: "exterior" },
+                  { aspect: "2/3", grad: "office" },
+                ].map((p, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "block",
+                      breakInside: "avoid",
+                      marginBottom: 12,
+                      position: "relative",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      aspectRatio: p.aspect,
+                      background: PHOTO_MOODS[p.grad],
+                    }}
+                  >
+                    <BrandedTile pct={22} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Portrait 2:3 pins get more feed real estate on Pinterest; square 1:1 pins preserve
+                the composition of landscape source photos where a 2:3 crop would strip 60% of the
+                width. Masonry grid absorbs the mix — the bottom-anchored badge stays at consistent
+                geometry across formats so the board still reads as one cohesive Arco surface.
+                Every pin, regardless of aspect, links to the same <code>/projects/{"{slug}"}</code>.
               </p>
             </div>
           </div>
