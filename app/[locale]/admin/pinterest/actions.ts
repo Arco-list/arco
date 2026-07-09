@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { createBoard } from "@/lib/pinterest/client"
+import { createBoard, listBoards } from "@/lib/pinterest/client"
 
 /** Guard used by every action here. Throws → server action returns 500. */
 async function assertAdmin(): Promise<void> {
@@ -105,6 +105,7 @@ export async function enqueueBackfillAction(): Promise<{
 export async function createMissingBoardsAction(): Promise<{
   success: boolean
   created: number
+  adopted: number
   skipped: number
   failures: { name: string; reason: string }[]
   error?: string
@@ -118,9 +119,23 @@ export async function createMissingBoardsAction(): Promise<{
     .is("board_id", null)
     .eq("is_active", true)
     .order("board_name")
-  if (error) return { success: false, created: 0, skipped: 0, failures: [], error: error.message }
+  if (error) return { success: false, created: 0, adopted: 0, skipped: 0, failures: [], error: error.message }
+
+  // Fetch every existing board on the account first so we can adopt
+  // matches by name and skip a doomed POST for boards that already
+  // exist (Pinterest 400 "Try a different name" is the common case
+  // when someone had created a few boards manually before running this).
+  let existingByName: Map<string, string>
+  try {
+    const existing = await listBoards()
+    existingByName = new Map(existing.map((b) => [b.name.trim().toLowerCase(), b.boardId]))
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { success: false, created: 0, adopted: 0, skipped: 0, failures: [], error: `List existing boards failed: ${message}` }
+  }
 
   let created = 0
+  let adopted = 0
   let skipped = 0
   const failures: { name: string; reason: string }[] = []
   for (const row of rows ?? []) {
@@ -131,6 +146,20 @@ export async function createMissingBoardsAction(): Promise<{
       skipped++
       continue
     }
+
+    // Adopt: same account already has a board by this name.
+    const existingId = existingByName.get(displayName.trim().toLowerCase())
+    if (existingId) {
+      const { error: upErr } = await supabase
+        .from("pinterest_boards")
+        .update({ board_id: existingId, board_name: displayName })
+        .eq("id", row.id)
+      if (upErr) failures.push({ name: displayName, reason: upErr.message })
+      else adopted++
+      continue
+    }
+
+    // Otherwise create fresh.
     try {
       const result = await createBoard({
         name: displayName,
@@ -141,22 +170,16 @@ export async function createMissingBoardsAction(): Promise<{
         .from("pinterest_boards")
         .update({ board_id: result.boardId, board_name: result.name })
         .eq("id", row.id)
-      if (upErr) {
-        failures.push({ name: displayName, reason: upErr.message })
-      } else {
-        created++
-      }
+      if (upErr) failures.push({ name: displayName, reason: upErr.message })
+      else created++
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      // Pinterest returns 409 when a board with the same name already
-      // exists on this account. Surface as a friendly note rather than a
-      // hard failure so the admin can paste the existing id manually.
       failures.push({ name: displayName, reason: message })
     }
   }
 
   revalidatePath("/[locale]/admin/pinterest", "page")
-  return { success: true, created, skipped, failures }
+  return { success: true, created, adopted, skipped, failures }
 }
 
 // ── Disconnect ───────────────────────────────────────────────────────────

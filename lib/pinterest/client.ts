@@ -264,6 +264,27 @@ export interface CreateBoardOutput {
   name: string
 }
 
+/** Paginate through every board on the connected account. Pinterest
+ *  caps page_size at 250; the loop follows the `bookmark` cursor until
+ *  the response omits it. */
+export async function listBoards(): Promise<CreateBoardOutput[]> {
+  const out: CreateBoardOutput[] = []
+  let bookmark: string | undefined
+  do {
+    const qs = new URLSearchParams({ page_size: "250" })
+    if (bookmark) qs.set("bookmark", bookmark)
+    const res = await callPinterest<{ items: { id: string; name: string }[]; bookmark?: string }>(
+      "GET",
+      `/boards?${qs.toString()}`,
+    )
+    for (const item of res.items ?? []) {
+      out.push({ boardId: item.id, name: item.name })
+    }
+    bookmark = res.bookmark
+  } while (bookmark)
+  return out
+}
+
 export async function createBoard(input: CreateBoardInput): Promise<CreateBoardOutput> {
   const body = {
     name: input.name,

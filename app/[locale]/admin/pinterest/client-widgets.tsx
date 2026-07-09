@@ -86,11 +86,12 @@ export function CreateMissingBoardsButton() {
             toast.error(res.error ?? "Board creation failed")
             return
           }
+          const summary = `Created ${res.created}, adopted ${res.adopted}, skipped ${res.skipped}`
           if (res.failures.length > 0) {
             const firstFew = res.failures.slice(0, 3).map((f) => `${f.name}: ${f.reason}`).join(" · ")
-            toast.warning(`Created ${res.created}, skipped ${res.skipped}, ${res.failures.length} failed. ${firstFew}`)
+            toast.warning(`${summary}, ${res.failures.length} failed. ${firstFew}`)
           } else {
-            toast.success(`Created ${res.created} board(s)`)
+            toast.success(summary)
           }
         })
       }}
