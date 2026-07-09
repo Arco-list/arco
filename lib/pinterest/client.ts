@@ -20,7 +20,12 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
  * attached. The worker's try/catch decides transient vs. permanent.
  */
 
-const PINTEREST_API_BASE = "https://api.pinterest.com/v5"
+// Production host by default. Override via env for the Sandbox host
+// (https://api-sandbox.pinterest.com) — required while the Pinterest
+// developer app is in Trial access mode. Once the app is granted
+// Standard access, unset the env and calls flow to production again.
+const PINTEREST_API_BASE =
+  (process.env.PINTEREST_API_BASE?.trim() || "https://api.pinterest.com") + "/v5"
 const REFRESH_SKEW_SECONDS = 60
 
 // ── Types ────────────────────────────────────────────────────────────────
