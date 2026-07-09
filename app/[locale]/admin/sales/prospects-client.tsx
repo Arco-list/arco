@@ -1784,7 +1784,7 @@ export function ProspectsClient({
             </div>
 
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-              <strong>Flow:</strong> Prospect → Contacted → Visitor → Signup → Draft → Listed
+              <strong>Flow:</strong> Prospect → Contacted → Visitor → Signup → Created → Listed
               <br />
               <strong>Aggregation:</strong> Each row shows the highest stage any contact at the company has reached. Channel column shows every distinct entry point (Showcase, Invite, Outreach).
             </div>

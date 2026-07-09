@@ -1611,7 +1611,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
   const isFiltered = columnFilters.length > 0 || table.getState().globalFilter
 
-  // Status funnel: Added → Showcased → Draft → Listed → Unlisted, with
+  // Status funnel: Added → Showcased → Created → Listed → Unlisted, with
   // Deactivated as the off-path leak (analogous to Rejected on the projects
   // funnel). Invited is excluded from CR math — invited companies come in
   // via project credits, not the sales funnel.
@@ -1739,10 +1739,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               {[
                 { dot: "bg-[#7c3aed]", label: "Listed", desc: "Claimed and visible to homeowners on the platform.", specs: "Owner assigned · Public profile · Discoverable" },
                 { dot: "bg-[#a1a1a0]", label: "Unlisted", desc: "Claimed but hidden from public directories. Only accessible via direct link.", specs: "Owner assigned · Hidden from search" },
-                { dot: "bg-[#2563eb]", label: "Draft", desc: "Company has been claimed. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
+                { dot: "bg-[#2563eb]", label: "Created", desc: "Company has been claimed but never listed yet. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
                 { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
                 { dot: "bg-[#f59e0b]", label: "Showcased", desc: "Live showcase page on the marketplace, awaiting claim by the pro. Public and in the sales funnel.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
-                { dot: "bg-[#dc2626]", label: "Added", desc: "Catalogued — Apollo bulk import, manual add, or photographer import. No outreach yet. Awaiting promotion to a showcase (→ Showcased) or claim (→ Draft).", specs: "No owner · Not visible · Awaiting outreach or claim" },
+                { dot: "bg-[#dc2626]", label: "Added", desc: "Catalogued — Apollo bulk import, manual add, or photographer import. No outreach yet. Awaiting promotion to a showcase (→ Showcased) or claim (→ Created).", specs: "No owner · Not visible · Awaiting outreach or claim" },
                 { dot: "bg-[#dc2626]", label: "Deactivated", desc: "Suspended and hidden from the platform.", specs: "Hidden · No access" },
               ].map((s) => (
                 <div key={s.label} style={{ display: "flex", gap: 12 }}>
@@ -1756,7 +1756,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               ))}
             </div>
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-              <strong>Flow:</strong> Added → Showcased (sales emails) → Draft (claimed) → Listed (live)
+              <strong>Flow:</strong> Added → Showcased (sales emails) → Created (claimed) → Listed (live)
               <br />
               <strong>Constraints:</strong> Companies without an owner cannot be set to Listed or Unlisted. Claimed companies cannot be set to Invited, Showcased or Added.
             </div>
@@ -1767,16 +1767,16 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       <AdminAddCompanyModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
 
       {/* Status funnel — same visual pattern as /admin/projects, plus a
-          bypass line from Draft → Listed (survival rate, skipping the
+          bypass line from Created → Listed (survival rate, skipping the
           Deactivated leak). */}
       <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
         {(() => {
           const cols = COMPANY_FUNNEL.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
           const CARD_WIDTH = 132
 
-          // Bypass rate: Prospected → Draft, skipping the Invited column
-          // since Invited is a parallel entry point (credit path) rather
-          // than a sequential stop in the sales funnel.
+          // Bypass rate: Prospected → Created, skipping the Invited
+          // column since Invited is a parallel entry point (credit
+          // path) rather than a sequential stop in the sales funnel.
           const prospectedToDraft = companyConversionRate(
             companyCohortFor("prospected"),
             companyCohortFor("draft"),
