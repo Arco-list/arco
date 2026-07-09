@@ -4207,7 +4207,7 @@ export default function ListingEditorPage() {
           .edit-specs-bar { grid-template-columns: repeat(2, 1fr) !important; gap: 84px 16px !important; padding: 36px 0 !important; }
           .spec-item-edit::before { inset: -36px -8px; }
           .spec-item-edit .ec-badge { top: -44px; }
-          .credits-grid { grid-template-columns: repeat(2, 1fr); }
+          .credits-grid { grid-template-columns: 1fr; }
           .edit-details-header { padding-left: 24px !important; padding-right: 24px !important; padding-top: 48px !important; padding-bottom: 48px !important; }
           .setup-nav-cta { font-size: 12px !important; padding: 6px 12px !important; white-space: nowrap; }
         }
@@ -4374,7 +4374,11 @@ export default function ListingEditorPage() {
                 {t("select_cover_description")}
               </p>
               <div style={{ overflowY: "auto", maxHeight: "60vh" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                {/* Responsive grid: minmax(150px, 1fr) auto-fits 3
+                     columns on the desktop popup (max-width 640) and
+                     2 on a phone-width popup (~340–380px). No JS or
+                     media query needed. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
                   {uploadedPhotos.map(photo => {
                     const isCurrent = photo.url === coverPhotoUrl
                     return (
@@ -5529,7 +5533,12 @@ export default function ListingEditorPage() {
 
       {/* ── Delete project ─────────────────────────────────────── */}
       {!isAdminReview && (
-        <section className="wrap" style={{ padding: "0 60px 60px" }}>
+        // `padding: 0 60px 60px` used to override the .wrap horizontal
+        // padding, so on mobile the <hr> stopped short of the content
+        // edges. Dropping the inline horizontal override lets .wrap's
+        // responsive padding (60px desktop / 20px mobile) apply and
+        // the divider now spans the full content width on any device.
+        <section className="wrap" style={{ paddingBottom: 60 }}>
           <hr style={{ border: "none", borderTop: "1px solid var(--arco-rule)", margin: "0 0 24px" }} />
           <button
             onClick={() => setShowDeleteConfirm(true)}

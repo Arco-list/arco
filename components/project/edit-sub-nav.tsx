@@ -126,7 +126,10 @@ export function EditSubNav({
 
             <div className="sub-nav-mobile-divider" aria-hidden="true" />
 
-            {/* Section links */}
+            {/* Section links — hidden on mobile via a media query on
+                 .sub-nav-links itself (globals.css). The sections stack
+                 vertically on mobile and are reachable by scrolling;
+                 the anchor row otherwise crowds the small sub-nav. */}
             <div className="sub-nav-links" style={{ paddingRight: 0, marginRight: 0 }}>
               <a href="#details" onClick={(e) => handleClick(e, "details")} className={getLinkClass("details")}>
                 {t("details")}

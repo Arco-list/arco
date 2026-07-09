@@ -1622,10 +1622,11 @@ a.arco-nav-text.nav-transparent:hover {
   }
 
   .sub-nav-links {
-    padding-right: 0;
-    margin-right: 0;
-    gap: 20px;
-    flex-shrink: 0;
+    /* Section anchors (Details / Photos / Professionals) are hidden on
+       mobile — the sections stack vertically and are trivially
+       reachable by scrolling, and the row otherwise crowds the tiny
+       sub-nav between the back button and the CTA on the right. */
+    display: none;
   }
 
   .sub-nav-mobile-divider {
