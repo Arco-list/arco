@@ -66,7 +66,9 @@ export default async function PinterestAdminPage({ params, searchParams }: PageP
   const spaceBoards = (boards ?? []).filter((b) => b.space_id)
 
   return (
-    <div className="wrap" style={{ padding: "40px 24px", maxWidth: 1200 }}>
+    <div className="discover-page-title">
+      <div className="wrap">
+        <div style={{ maxWidth: 1200 }}>
       <h1 className="arco-page-title" style={{ marginBottom: 8 }}>Pinterest</h1>
       <p className="arco-body-text" style={{ marginBottom: 40, maxWidth: 720 }}>
         Auto-publishes branded pins for every published project — one on the
@@ -173,6 +175,8 @@ export default async function PinterestAdminPage({ params, searchParams }: PageP
           </table>
         </div>
       </section>
+        </div>
+      </div>
     </div>
   )
 }
