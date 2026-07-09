@@ -11,7 +11,6 @@ import { useTranslations, useLocale } from "next-intl";
 import { signOutAction } from "@/app/(auth)/actions";
 import { useAuth } from "@/contexts/auth-context";
 import { useLoginModal } from "@/contexts/login-modal-context";
-import { useCreateCompanyModal } from "@/contexts/create-company-modal-context";
 // CompanySwitcher functionality is now integrated into the dropdown menu
 import { getUserCompaniesAction, switchCompanyAction } from "@/app/dashboard/company/actions";
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
@@ -180,7 +179,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const searchParamQuery = searchParams.get("search") ?? "";
   const { profile, user } = useAuth();
   const { openLoginModal } = useLoginModal();
-  const { openCreateCompanyModal } = useCreateCompanyModal();
 
   const defaultNavLinks: NavItem[] = [
     { href: "/projects", label: t("projects") },
@@ -768,16 +766,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
                               {t("for_professionals")}
                             </Link>
-                            {isLoggedIn && companies.length === 0 && (
-                              <button
-                                type="button"
-                                className="flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal text-primary hover:opacity-70 transition-colors w-full text-left"
-                                onClick={() => { setIsAccountMenuOpen(false); openCreateCompanyModal() }}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                                {t("create_your_company")}
-                              </button>
-                            )}
+                            {/* "Create your company" removed — the header
+                                already shows "List with us" for signed-in
+                                users without a company (links to
+                                /businesses/architects, where the CTA
+                                opens the create-company modal). Keeping
+                                it here duplicated the same action. */}
                           </div>
                           <div className="border-t border-border mx-4" />
                         </>
