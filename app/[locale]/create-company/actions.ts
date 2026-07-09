@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server";
@@ -503,14 +504,18 @@ export async function sendDomainVerificationAction(input: {
 }): Promise<SendVerificationResult> {
   const { domain, email, companyName } = input
 
+  // Localised at the request's URL locale — the client shows these strings
+  // verbatim in the verify-domain popup, so they need to match the UI.
+  const tErr = await getTranslations("verify_domain.errors")
+
   const supabase = await createServerActionSupabaseClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { success: false, error: "You must be signed in." }
+  if (authError || !user) return { success: false, error: tErr("not_signed_in") }
 
   // Validate that the email belongs to the claimed domain
   const emailDomain = email.split("@")[1]?.toLowerCase()
   if (!emailDomain || emailDomain !== domain.toLowerCase()) {
-    return { success: false, error: "Email must belong to the company domain." }
+    return { success: false, error: tErr("domain_mismatch") }
   }
 
   // Rate limit: 3 codes per 15 minutes
@@ -520,13 +525,13 @@ export async function sendDomainVerificationAction(input: {
     prefix: "@arco/domain-verify",
   })
   if (!rl.success) {
-    return { success: false, error: "Too many attempts. Please wait a few minutes." }
+    return { success: false, error: tErr("rate_limited") }
   }
 
   const code = generateVerificationCode()
   const stored = await storeVerificationCode(user.id, domain, code)
   if (!stored) {
-    return { success: false, error: "Unable to generate verification code." }
+    return { success: false, error: tErr("generate_failed") }
   }
 
   const { data: profile } = await supabase
@@ -542,7 +547,7 @@ export async function sendDomainVerificationAction(input: {
 
   if (!emailResult.success) {
     console.error("Domain verification email failed:", emailResult.message)
-    return { success: false, error: emailResult.message || "Unable to send verification email. Please try again." }
+    return { success: false, error: emailResult.message || tErr("send_failed") }
   }
 
   return { success: true }
@@ -625,6 +630,29 @@ export async function createCompanyFromPlacesAction(
 
   let companyId = existingCompany?.id ?? null
 
+  // Geocode once up front and share the result across all three write
+  // paths (claim / update / insert). Previously only the insert branch
+  // geocoded, so any pro whose row already existed (or was claimed from
+  // an ownerless domain match) landed with NULL lat/lng and silently
+  // dropped off the /professionals map.
+  let latitude: number | null = null
+  let longitude: number | null = null
+  if (input.formattedAddress) {
+    try {
+      const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (mapsKey) {
+        const geoRes = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.formattedAddress)}&key=${mapsKey}`
+        )
+        const geoData = await geoRes.json()
+        if (geoData?.results?.[0]?.geometry?.location) {
+          latitude = geoData.results[0].geometry.location.lat
+          longitude = geoData.results[0].geometry.location.lng
+        }
+      }
+    } catch {}
+  }
+
   // Check for ownerless company matching domain (claim flow)
   if (!existingCompany && input.domain) {
     const { data: unlistedMatch } = await supabase
@@ -651,6 +679,7 @@ export async function createCompanyFromPlacesAction(
           google_place_id: input.placeId,
           is_verified: true,
           status: "draft",
+          ...(latitude != null && longitude != null ? { latitude, longitude } : {}),
         })
         .eq("id", unlistedMatch.id)
 
@@ -678,6 +707,7 @@ export async function createCompanyFromPlacesAction(
         state_region: input.stateRegion,
         google_place_id: input.placeId,
         is_verified: true,
+        ...(latitude != null && longitude != null ? { latitude, longitude } : {}),
       })
       .eq("id", existingCompany.id)
 
@@ -686,25 +716,6 @@ export async function createCompanyFromPlacesAction(
       return { success: false, error: "Unable to update your company." }
     }
   } else if (!companyId) {
-    // Geocode address for map placement
-    let latitude: number | null = null
-    let longitude: number | null = null
-    if (input.formattedAddress) {
-      try {
-        const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-        if (mapsKey) {
-          const geoRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.formattedAddress)}&key=${mapsKey}`
-          )
-          const geoData = await geoRes.json()
-          if (geoData?.results?.[0]?.geometry?.location) {
-            latitude = geoData.results[0].geometry.location.lat
-            longitude = geoData.results[0].geometry.location.lng
-          }
-        }
-      } catch {}
-    }
-
     // Insert new company
     const { data: newCompany, error: insertError } = await supabase
       .from("companies")

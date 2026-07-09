@@ -647,12 +647,69 @@ export const signUpWithOtpAction = async (
 
     if (otpError) {
       logger.auth('signup-otp', 'Failed to send OTP after user creation', {
-        error: { message: otpError.message },
+        error: {
+          message: otpError.message,
+          code: (otpError as { code?: string }).code,
+          status: otpError.status,
+        },
       });
+
+      // "Account created but failed to send verification code" used to fire
+      // for every OTP failure, which was misleading — in most 422 paths no
+      // account was actually created. Route each cause to a truthful copy.
+
+      const userWasJustCreated = !createError;
+      const emailNormalized = email.toLowerCase().trim();
+
+      // 1) Rate limit — the user probably spammed the CTA.
+      const rateLimited =
+        otpError.status === 429 ||
+        otpError.message?.toLowerCase().includes('rate');
+      if (rateLimited) {
+        return {
+          error: {
+            message: 'Too many attempts. Please wait a minute and try again.',
+            code: 'RATE_LIMIT',
+          },
+        };
+      }
+
+      // 2) User was really created but Loops.so / Postmark didn't deliver.
+      //    Only surface this when we know createUser succeeded.
+      if (userWasJustCreated) {
+        return {
+          error: {
+            message: "We created your account but couldn't send the verification code. Please try again in a minute.",
+            code: 'OTP_SEND_FAILED',
+          },
+        };
+      }
+
+      // 3) createError fell through as "user exists". Verify that against
+      //    auth.users — a mismatch means the email is claimed only via an
+      //    OAuth identity (Google/Apple linked to another account).
+      const matchingUser = existingUsers?.find(
+        (u) => u.email?.toLowerCase() === emailNormalized
+      );
+
+      if (!matchingUser) {
+        return {
+          error: {
+            message:
+              'This email is registered with a Google or Apple sign-in. Please continue with that method to sign in.',
+            code: 'EMAIL_LINKED_TO_OAUTH',
+          },
+        };
+      }
+
+      // 4) User row genuinely exists but OTP send still failed — usually
+      //    means their email address has been suppressed by the transactional
+      //    provider (bounce/complaint) or the provider is degraded.
       return {
         error: {
-          message: 'Account created but failed to send verification code. Please try signing in.',
-          code: 'OTP_SEND_ERROR',
+          message:
+            "An account with this email already exists, but we couldn't send a sign-in code. Try signing in with your password instead.",
+          code: 'EMAIL_ALREADY_REGISTERED',
         },
       };
     }

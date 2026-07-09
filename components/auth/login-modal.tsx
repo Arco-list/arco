@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { useLoginModal } from "@/contexts/login-modal-context";
@@ -22,6 +22,7 @@ export function LoginModal() {
   const router = useRouter();
   const supabase = useMemo(() => getBrowserSupabaseClient(), []);
   const locale = useLocale();
+  const t = useTranslations("auth.login_modal");
   // Capture the URL locale at signup time as the user's preferred email
   // language. middleware.ts pre-resolves this from Accept-Language for
   // first-visit browsers, so by the time someone reaches signup the URL
@@ -96,7 +97,7 @@ export function LoginModal() {
     }
 
     // Existing user with name — proceed normally
-    toast.success("Signed in successfully");
+    toast.success(t("toast_signed_in"));
     if (destination) router.push(destination);
     router.refresh();
     handleClose();
@@ -108,7 +109,7 @@ export function LoginModal() {
     startSendOtp(async () => {
       const checkResult = await checkUserExistsAction(email);
       if (checkResult?.error) {
-        toast.error("Something went wrong", { description: checkResult.error.message });
+        toast.error(t("toast_something_went_wrong"), { description: checkResult.error.message });
         return;
       }
 
@@ -117,7 +118,7 @@ export function LoginModal() {
         setIsNewUser(false);
         const result = await signInWithOtpAction({ email, redirectTo: currentRedirectTo });
         if (result?.error) {
-          toast.error("Failed to send code", { description: result.error.message });
+          toast.error(t("toast_failed_send_code"), { description: result.error.message });
           return;
         }
         startCooldown();
@@ -143,7 +144,7 @@ export function LoginModal() {
         preferredLanguage,
       });
       if (result?.error) {
-        toast.error("Could not create account", { description: result.error.message });
+        toast.error(t("toast_could_not_create"), { description: result.error.message });
         return;
       }
       startCooldown();
@@ -182,7 +183,7 @@ export function LoginModal() {
     startVerify(async () => {
       const { error, data: otpData } = await supabase.auth.verifyOtp({ email, token, type: "email" });
       if (error) {
-        toast.error("Invalid or expired code", { description: error.message });
+        toast.error(t("toast_invalid_code"), { description: error.message });
         setOtp(["", "", "", "", "", ""]);
         setTimeout(() => inputRefs.current[0]?.focus(), 50);
         return;
@@ -200,12 +201,12 @@ export function LoginModal() {
       if (result?.error) {
         // Start cooldown on rate limit errors so user sees the countdown
         startCooldown();
-        toast.error("Failed to resend code", { description: result.error.message });
+        toast.error(t("toast_resend_failed"), { description: result.error.message });
         return;
       }
       startCooldown();
       setOtp(["", "", "", "", "", ""]);
-      toast.success("Code resent", { description: "Check your inbox for the new code." });
+      toast.success(t("toast_code_resent"), { description: t("toast_code_resent_desc") });
       setTimeout(() => inputRefs.current[0]?.focus(), 50);
     });
   };
@@ -217,7 +218,7 @@ export function LoginModal() {
       const safeRedirect = sanitizeRedirectPath(currentRedirectTo);
       const result = await signInWithPasswordAction({ email, password, redirectTo: safeRedirect });
       if (result?.error) {
-        toast.error("Sign in failed", { description: result.error.message });
+        toast.error(t("toast_signin_failed"), { description: result.error.message });
         return;
       }
       const userTypes = result.data?.userTypes ?? null;
@@ -233,11 +234,11 @@ export function LoginModal() {
     startSaveName(async () => {
       const result = await updateProfileNameAction({ firstName, lastName });
       if (result?.error) {
-        toast.error("Could not save your name", { description: result.error.message });
+        toast.error(t("toast_could_not_save_name"), { description: result.error.message });
         return;
       }
       await refreshSession();
-      toast.success("Welcome to Arco!");
+      toast.success(t("toast_welcome"));
       const destination = pendingRedirectRef.current;
       if (destination) router.push(destination);
       router.refresh();
@@ -254,18 +255,18 @@ export function LoginModal() {
       provider,
       options: { redirectTo: redirectUrl },
     });
-    if (error) toast.error(`Sign in with ${provider} failed`, { description: error.message });
+    if (error) toast.error(t("toast_signin_provider_failed", { provider }), { description: error.message });
   };
 
   if (!isOpen) return null;
 
   const screenTitle =
-    screen === "email" ? "Welcome to Arco" :
-    screen === "name-capture" ? "Create your account" :
-    screen === "otp" ? "Check your email" :
-    screen === "password" ? "Sign in" :
-    screen === "reset-sent" ? "Reset password" :
-    "Welcome to Arco";
+    screen === "email" ? t("title_email") :
+    screen === "name-capture" ? t("title_name_capture") :
+    screen === "otp" ? t("title_otp") :
+    screen === "password" ? t("title_password") :
+    screen === "reset-sent" ? t("title_reset_sent") :
+    t("title_email");
 
   const showBack = screen === "name-capture" || screen === "otp" || screen === "password";
 
@@ -299,7 +300,7 @@ export function LoginModal() {
             )}
             <h3 className="arco-section-title" style={{ margin: 0 }}>{screenTitle}</h3>
           </div>
-          <button type="button" className="popup-close" onClick={handleClose} aria-label="Close">
+          <button type="button" className="popup-close" onClick={handleClose} aria-label={t("close")}>
             ✕
           </button>
         </div>
@@ -310,21 +311,21 @@ export function LoginModal() {
           {/* ── Screen 1: Email ── */}
           {screen === "email" && (
             <div>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
-                Sign in or create an account to continue
+              <p className="arco-body-text" style={{ marginBottom: 24 }}>
+                {t("subtitle_email")}
               </p>
 
               <form onSubmit={handleEmailSubmit}>
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                    Email address
+                    {t("email_label")}
                   </label>
                   <input
                     type="email"
                     className="form-input"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your@email.com"
+                    placeholder={t("email_placeholder")}
                     autoComplete="email"
                     autoFocus
                     required
@@ -337,13 +338,13 @@ export function LoginModal() {
                   className="btn-primary"
                   style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                 >
-                  {isSendingOtp ? "Sending code..." : "Continue with Email"}
+                  {isSendingOtp ? t("cta_sending_code") : t("cta_continue_email")}
                 </button>
               </form>
 
               <div style={{ display: "flex", alignItems: "center", margin: "24px 0" }}>
                 <div style={{ flex: 1, height: 1, background: "var(--arco-rule)" }} />
-                <span style={{ padding: "0 16px", fontSize: 13, color: "var(--arco-mid-grey)" }}>or</span>
+                <span style={{ padding: "0 16px", fontSize: 13, color: "var(--arco-mid-grey)" }}>{t("or_divider")}</span>
                 <div style={{ flex: 1, height: 1, background: "var(--arco-rule)" }} />
               </div>
 
@@ -360,16 +361,20 @@ export function LoginModal() {
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                   </svg>
-                  Continue with Google
+                  {t("cta_continue_google")}
                 </button>
                 {/* Apple login hidden until operational */}
               </div>
 
               <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 20, lineHeight: 1.5 }}>
-                By continuing, you agree to our{" "}
-                <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</Link>
-                {" "}and{" "}
-                <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</Link>.
+                {t.rich("terms_prefix_continue", {
+                  terms: (chunks) => (
+                    <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                  ),
+                  privacy: (chunks) => (
+                    <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                  ),
+                })}
               </p>
             </div>
           )}
@@ -377,22 +382,27 @@ export function LoginModal() {
           {/* ── Screen 1.5: Name Capture (new users) ── */}
           {screen === "name-capture" && (
             <div>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
-                Enter your name to get started with <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{email}</strong>
+              <p className="arco-body-text" style={{ marginBottom: 24 }}>
+                {t.rich("subtitle_name_capture", {
+                  email,
+                  strong: (chunks) => (
+                    <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{chunks}</strong>
+                  ),
+                })}
               </p>
 
               <form onSubmit={handleNameCaptureSubmit}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
                   <div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                      First name
+                      {t("first_name_label")}
                     </label>
                     <input
                       type="text"
                       className="form-input"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="First name"
+                      placeholder={t("first_name_label")}
                       autoComplete="given-name"
                       autoFocus
                       required
@@ -401,14 +411,14 @@ export function LoginModal() {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                      Last name
+                      {t("last_name_label")}
                     </label>
                     <input
                       type="text"
                       className="form-input"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Last name"
+                      placeholder={t("last_name_label")}
                       autoComplete="family-name"
                       style={{ marginBottom: 0 }}
                     />
@@ -420,14 +430,18 @@ export function LoginModal() {
                   className="btn-primary"
                   style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                 >
-                  {isSendingOtp ? "Creating account..." : "Continue"}
+                  {isSendingOtp ? t("cta_creating_account") : t("cta_continue")}
                 </button>
 
                 <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 16, lineHeight: 1.5 }}>
-                  By creating an account, you agree to our{" "}
-                  <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</Link>
-                  {" "}and{" "}
-                  <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</Link>.
+                  {t.rich("terms_prefix_signup", {
+                    terms: (chunks) => (
+                      <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                    ),
+                    privacy: (chunks) => (
+                      <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                    ),
+                  })}
                 </p>
               </form>
             </div>
@@ -436,8 +450,13 @@ export function LoginModal() {
           {/* ── Screen 2: OTP ── */}
           {screen === "otp" && (
             <div>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
-                We sent a verification code to <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{email}</strong>. Enter the 6-digit code below.
+              <p className="arco-body-text" style={{ marginBottom: 24 }}>
+                {t.rich("subtitle_otp", {
+                  email,
+                  strong: (chunks) => (
+                    <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{chunks}</strong>
+                  ),
+                })}
               </p>
 
               <form onSubmit={handleOtpSubmit}>
@@ -470,13 +489,13 @@ export function LoginModal() {
                   className="btn-primary"
                   style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                 >
-                  {isVerifying ? "Verifying..." : "Verify Code"}
+                  {isVerifying ? t("cta_verifying") : t("cta_verify_code")}
                 </button>
               </form>
 
               <div style={{ display: "flex", alignItems: "center", margin: "24px 0" }}>
                 <div style={{ flex: 1, height: 1, background: "var(--arco-rule)" }} />
-                <span style={{ padding: "0 16px", fontSize: 13, color: "var(--arco-mid-grey)" }}>or</span>
+                <span style={{ padding: "0 16px", fontSize: 13, color: "var(--arco-mid-grey)" }}>{t("or_divider")}</span>
                 <div style={{ flex: 1, height: 1, background: "var(--arco-rule)" }} />
               </div>
 
@@ -486,14 +505,14 @@ export function LoginModal() {
                   onClick={() => setScreen("password")}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--arco-black)", textDecoration: "underline", fontSize: 13 }}
                 >
-                  Sign in with password instead
+                  {t("sign_in_with_password")}
                 </button>
               </p>
               <p style={{ textAlign: "center", fontSize: 13, color: "var(--arco-mid-grey)", marginTop: 12 }}>
-                Didn&apos;t receive the code?{" "}
+                {t("didnt_receive_code")}{" "}
                 {resendCooldown > 0 ? (
                   <span style={{ fontSize: 13, color: "var(--arco-mid-grey)" }}>
-                    Resend in {resendCooldown}s
+                    {t("resend_in", { seconds: resendCooldown })}
                   </span>
                 ) : (
                   <button
@@ -502,7 +521,7 @@ export function LoginModal() {
                     disabled={isSendingOtp}
                     style={{ background: "none", border: "none", cursor: "pointer", color: "var(--arco-black)", textDecoration: "underline", fontSize: 13 }}
                   >
-                    {isSendingOtp ? "Sending..." : "Resend"}
+                    {isSendingOtp ? t("sending") : t("resend")}
                   </button>
                 )}
               </p>
@@ -512,21 +531,26 @@ export function LoginModal() {
           {/* ── Screen 3: Password ── */}
           {screen === "password" && (
             <div>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
-                Enter your password for <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{email}</strong>
+              <p className="arco-body-text" style={{ marginBottom: 24 }}>
+                {t.rich("subtitle_password", {
+                  email,
+                  strong: (chunks) => (
+                    <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{chunks}</strong>
+                  ),
+                })}
               </p>
 
               <form onSubmit={handlePasswordSubmit}>
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                    Password
+                    {t("password_label")}
                   </label>
                   <input
                     type="password"
                     className="form-input"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
+                    placeholder={t("password_placeholder")}
                     autoComplete="current-password"
                     autoFocus
                     required
@@ -540,7 +564,7 @@ export function LoginModal() {
                   className="btn-primary"
                   style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                 >
-                  {isSigningIn ? "Signing in..." : "Sign in"}
+                  {isSigningIn ? t("cta_signing_in") : t("cta_sign_in")}
                 </button>
               </form>
 
@@ -552,7 +576,7 @@ export function LoginModal() {
                     startReset(async () => {
                       const result = await resetPasswordAction(email);
                       if (result?.error) {
-                        toast.error("Could not send reset email", { description: result.error.message });
+                        toast.error(t("toast_reset_failed"), { description: result.error.message });
                         return;
                       }
                       setScreen("reset-sent");
@@ -560,7 +584,7 @@ export function LoginModal() {
                   }}
                   style={{ fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                 >
-                  {isResetting ? "Sending..." : "Forgot your password?"}
+                  {isResetting ? t("sending") : t("forgot_your_password")}
                 </button>
               </p>
             </div>
@@ -569,8 +593,13 @@ export function LoginModal() {
           {/* ── Screen: Reset link sent ── */}
           {screen === "reset-sent" && (
             <div>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
-                We sent a reset link to <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{email}</strong>. Click the link in the email to set a new password.
+              <p className="arco-body-text" style={{ marginBottom: 24 }}>
+                {t.rich("subtitle_reset_sent", {
+                  email,
+                  strong: (chunks) => (
+                    <strong style={{ color: "var(--arco-black)", fontWeight: 500 }}>{chunks}</strong>
+                  ),
+                })}
               </p>
 
               <button
@@ -579,7 +608,7 @@ export function LoginModal() {
                 className="btn-primary"
                 style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
               >
-                Done
+                {t("cta_done")}
               </button>
             </div>
           )}
@@ -587,22 +616,22 @@ export function LoginModal() {
           {/* ── Screen 4: Welcome (name capture for new users) ── */}
           {screen === "welcome" && (
             <div>
-              <p className="arco-body-text" style={{ color: "var(--arco-mid-grey)", marginBottom: 24, textAlign: "center" }}>
-                What&apos;s your name?
+              <p className="arco-body-text" style={{ marginBottom: 24 }}>
+                {t("subtitle_welcome")}
               </p>
 
               <form onSubmit={handleWelcomeSubmit}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
                   <div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                      First name
+                      {t("first_name_label")}
                     </label>
                     <input
                       type="text"
                       className="form-input"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="First name"
+                      placeholder={t("first_name_label")}
                       autoComplete="given-name"
                       autoFocus
                       required
@@ -611,14 +640,14 @@ export function LoginModal() {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
-                      Last name
+                      {t("last_name_label")}
                     </label>
                     <input
                       type="text"
                       className="form-input"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Last name"
+                      placeholder={t("last_name_label")}
                       autoComplete="family-name"
                       style={{ marginBottom: 0 }}
                     />
@@ -630,7 +659,7 @@ export function LoginModal() {
                   className="btn-primary"
                   style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                 >
-                  {isSavingName ? "Saving..." : "Continue"}
+                  {isSavingName ? t("cta_saving") : t("cta_continue")}
                 </button>
               </form>
             </div>

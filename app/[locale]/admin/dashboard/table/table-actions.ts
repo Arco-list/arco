@@ -458,22 +458,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const makeDates = (items: any[], filter?: (item: any) => boolean) =>
     (filter ? items.filter(filter) : items).map((i: any) => new Date(i.created_at)).filter((d: Date) => d >= from)
 
-  // Helper to bucket by a named transition timestamp column. Use this
-  // when you want the moment a specific transition happened —
-  // onboarded_at, listed_at, seo_indexed_at, etc — so admin edits to
-  // unrelated columns don't move the date. Stamped by DB triggers on
-  // the actual transition; rows where the column is NULL are skipped.
-  const makeDatesByColumn = (items: any[], col: string, filter?: (item: any) => boolean) =>
-    (filter ? items.filter(filter) : items)
-      .filter((i: any) => i[col] != null)
-      .map((i: any) => new Date(i[col]))
-      .filter((d: Date) => d >= from)
-
-  // Backward-compatible shim — keep the old name for the onboarded_at
-  // call sites we already migrated.
-  const makeDatesByOnboarded = (items: any[], filter?: (item: any) => boolean) =>
-    makeDatesByColumn(items, "onboarded_at", filter)
-
   // Generate labels from first bucket call
   const labels = buckets.labels
 
@@ -678,24 +662,46 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // Total Projects — cumulative snapshot at each bucket end. Counts
   // every published project with published_at <= bucket end,
   // regardless of indexation. Denominator for "% Ranked Projects".
+  // 14/15 currently-indexed projects have published_at = NULL (early
+  // rows never got the timestamp stamped) — using strict published_at
+  // dropped them from the cumulative snapshot, and Ranked Projects
+  // read as "1" instead of the real 15. Fall back to created_at when
+  // published_at is missing so pre-stamp rows still land in a bucket.
+  const publishedTsForBucket = (p: any): Date | null => {
+    const iso = p.published_at ?? p.created_at ?? null
+    if (!iso) return null
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  // Same fallback shape for New Pros. `onboarded_at` is stamped by a
+  // trigger on the first draft→non-draft transition, but rows created
+  // directly at status='listed' (bypassing draft) miss that path and
+  // land here with a NULL onboarded_at. Fall back to listed_at, then
+  // created_at, so pre-stamp rows still bucket.
+  const onboardedTsForBucket = (c: any): Date | null => {
+    const iso = c.onboarded_at ?? c.listed_at ?? c.created_at ?? null
+    if (!iso) return null
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
   const totalPublishedSnapshotSeries = buckets.ends.map((bucketEnd) =>
-    projects.filter((p: any) =>
-      p.status === "published"
-      && p.published_at
-      && new Date(p.published_at) <= bucketEnd,
-    ).length,
+    projects.filter((p: any) => {
+      if (p.status !== "published") return false
+      const ts = publishedTsForBucket(p)
+      return ts !== null && ts <= bucketEnd
+    }).length,
   )
   const totalPublishedSnapshot = totalPublishedSnapshotSeries[totalPublishedSnapshotSeries.length - 1] ?? 0
 
   // Indexed published projects — same cumulative snapshot narrowed to
   // currently seo_indexed=true rows. Numerator for "% Ranked Projects".
   const indexedPublishedSnapshotSeries = buckets.ends.map((bucketEnd) =>
-    projects.filter((p: any) =>
-      p.status === "published"
-      && p.seo_indexed === true
-      && p.published_at
-      && new Date(p.published_at) <= bucketEnd,
-    ).length,
+    projects.filter((p: any) => {
+      if (p.status !== "published") return false
+      if (p.seo_indexed !== true) return false
+      const ts = publishedTsForBucket(p)
+      return ts !== null && ts <= bucketEnd
+    }).length,
   )
   const totalIndexedPublishedSnapshot = indexedPublishedSnapshotSeries[indexedPublishedSnapshotSeries.length - 1] ?? 0
 
@@ -1177,7 +1183,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // Previously bucketed by updated_at, which moved on every admin edit
   // and bunched recently-edited pros onto the current bucket.
   const onboardingCompleted = (c: any) => c.status !== "draft" && c.owner_id != null
-  const newProDates = makeDatesByOnboarded(companies, onboardingCompleted)
+  const newProDates = companies
+    .filter(onboardingCompleted)
+    .map(onboardedTsForBucket)
+    .filter((d): d is Date => d !== null && d >= from)
   const newPros = bucket8(newProDates, buckets)
 
   // ── Outbound metric ─────────────────────────────────────────────────
@@ -1269,8 +1278,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       if (!personId) return false
       return outboundDatesByPerson.has(personId)
     })
-    .map((c: any) => new Date(c.onboarded_at ?? c.created_at))
-    .filter((d) => !Number.isNaN(d.getTime()))
+    .map(onboardedTsForBucket)
+    .filter((d): d is Date => d !== null && d >= from)
   const newProsOutboundBucketed = bucket8(newProsOutboundDates, buckets)
 
   // Apollo channel: companies whose id is referenced by a prospect with an
@@ -1280,16 +1289,18 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       .filter((p: any) => p.apollo_contact_id && p.company_id)
       .map((p: any) => p.company_id as string),
   )
-  const apolloNewProDates = makeDatesByOnboarded(companies, (c: any) =>
-    onboardingCompleted(c) && apolloCompanyIds.has(c.id),
-  )
+  const apolloNewProDates = companies
+    .filter((c: any) => onboardingCompleted(c) && apolloCompanyIds.has(c.id))
+    .map(onboardedTsForBucket)
+    .filter((d): d is Date => d !== null && d >= from)
   const apolloNewPros = bucket8(apolloNewProDates, buckets)
 
   // "Other": all other channels (organic, invites, direct, social) — once
   // first-session attribution is wired into companies, this can split further.
-  const otherNewProDates = makeDatesByOnboarded(companies, (c: any) =>
-    onboardingCompleted(c) && !apolloCompanyIds.has(c.id),
-  )
+  const otherNewProDates = companies
+    .filter((c: any) => onboardingCompleted(c) && !apolloCompanyIds.has(c.id))
+    .map(onboardedTsForBucket)
+    .filter((d): d is Date => d !== null && d >= from)
   const otherNewPros = bucket8(otherNewProDates, buckets)
 
   // ── Per-source breakdowns from first_touch_source ───────────────
@@ -1357,7 +1368,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // New pros by source — bucketed by companies.onboarded_at.
   const newProsBySource = bucketBySource(
     companies,
-    (c) => c.onboarded_at ? new Date(c.onboarded_at) : null,
+    onboardedTsForBucket,
     onboardingCompleted,
   )
 

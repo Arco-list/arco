@@ -63,8 +63,14 @@ export function CreateCompanyModal() {
   const [verifyOtp, setVerifyOtp] = useState(["", "", "", "", "", ""])
   const [codeSent, setCodeSent] = useState(false)
   const [manualWebsite, setManualWebsite] = useState("")
-  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendCooldown])
 
   const [isPending, startTransition] = useTransition()
 
@@ -81,6 +87,7 @@ export function CreateCompanyModal() {
     setVerifyOtp(["", "", "", "", "", ""])
     setCodeSent(false)
     setManualWebsite("")
+    setResendCooldown(0)
     googleService.current = null
   }, [])
 
@@ -342,7 +349,7 @@ export function CreateCompanyModal() {
 
     startTransition(async () => {
       const result = await sendDomainVerificationAction({ domain: targetDomain, email: verifyEmail, companyName: placeData.name })
-      if (result.success) { setCodeSent(true); toast.success(t("verification_code_sent")) }
+      if (result.success) { setCodeSent(true); setResendCooldown(60); toast.success(t("verification_code_sent")) }
       else { setError(result.error ?? t("failed_create")) }
     })
   }
@@ -575,26 +582,21 @@ export function CreateCompanyModal() {
                         {t("email_matches", { email: user?.email, domain: companyDomain })}
                       </p>
                     </div>
-                    {/*
-                      The OTP branches further down also gate Continue on a
-                      terms checkbox. Auto-verified used to skip it because
-                      no extra step was needed, but legally we still need
-                      explicit consent before claiming a company. Same
-                      checkbox shape as the OTP branches for consistency.
-                    */}
-                    <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--arco-mid-grey)", cursor: "pointer", marginBottom: 16 }}>
-                      <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#016D75" }} />
-                      <span>I agree to the <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</a> and <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</a></span>
-                    </label>
                     <button
                       type="button"
                       className="btn-primary"
                       onClick={() => handleCreateCompany()}
-                      disabled={isPending || !termsAccepted}
+                      disabled={isPending}
                       style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
                     >
                       {isPending ? tc("creating") : tc("continue")}
                     </button>
+                    <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 16, lineHeight: 1.5 }}>
+                      {t.rich("terms_prefix_claim", {
+                        terms: (chunks) => <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</a>,
+                        privacy: (chunks) => <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</a>,
+                      })}
+                    </p>
                   </div>
                 )}
 
@@ -653,29 +655,36 @@ export function CreateCompanyModal() {
                             />
                           ))}
                         </div>
-                        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--arco-mid-grey)", cursor: "pointer" }}>
-                          <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#016D75" }} />
-                          <span>I agree to the <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</a> and <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</a></span>
-                        </label>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <button
-                            type="button"
-                            onClick={handleSendCode}
-                            disabled={isPending}
-                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline" }}
-                          >
-                            {t("resend_code")}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-primary"
-                            onClick={handleVerifyCode}
-                            disabled={isPending || verifyOtp.join("").length !== 6 || !termsAccepted}
-                            style={{ fontSize: 14, padding: "10px 20px" }}
-                          >
-                            {isPending ? t("verifying") : "Claim company"}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={handleVerifyCode}
+                          disabled={isPending || verifyOtp.join("").length !== 6}
+                          style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
+                        >
+                          {isPending ? t("verifying") : t("claim_company")}
+                        </button>
+                        <p style={{ textAlign: "center", fontSize: 13, color: "var(--arco-mid-grey)", margin: 0 }}>
+                          {t("didnt_receive_code")}{" "}
+                          {resendCooldown > 0 ? (
+                            <span>{t("resend_in", { seconds: resendCooldown })}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleSendCode}
+                              disabled={isPending}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--arco-black)", textDecoration: "underline", fontSize: 13 }}
+                            >
+                              {isPending ? t("sending") : t("resend")}
+                            </button>
+                          )}
+                        </p>
+                        <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", lineHeight: 1.5, margin: 0 }}>
+                          {t.rich("terms_prefix_claim", {
+                            terms: (chunks) => <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</a>,
+                            privacy: (chunks) => <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</a>,
+                          })}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -750,29 +759,36 @@ export function CreateCompanyModal() {
                                 />
                               ))}
                             </div>
-                            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "var(--arco-mid-grey)", cursor: "pointer" }}>
-                              <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: 2, accentColor: "#016D75" }} />
-                              <span>I agree to the <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Terms of Service</a> and <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>Privacy Policy</a></span>
-                            </label>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                              <button
-                                type="button"
-                                onClick={handleSendCode}
-                                disabled={isPending}
-                                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline" }}
-                              >
-                                {t("resend_code")}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-primary"
-                                onClick={handleVerifyCode}
-                                disabled={isPending || verifyOtp.join("").length !== 6 || !termsAccepted}
-                                style={{ fontSize: 14, padding: "10px 20px" }}
-                              >
-                                {isPending ? t("verifying") : "Claim company"}
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              onClick={handleVerifyCode}
+                              disabled={isPending || verifyOtp.join("").length !== 6}
+                              style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
+                            >
+                              {isPending ? t("verifying") : t("claim_company")}
+                            </button>
+                            <p style={{ textAlign: "center", fontSize: 13, color: "var(--arco-mid-grey)", margin: 0 }}>
+                              {t("didnt_receive_code")}{" "}
+                              {resendCooldown > 0 ? (
+                                <span>{t("resend_in", { seconds: resendCooldown })}</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={handleSendCode}
+                                  disabled={isPending}
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--arco-black)", textDecoration: "underline", fontSize: 13 }}
+                                >
+                                  {isPending ? t("sending") : t("resend")}
+                                </button>
+                              )}
+                            </p>
+                            <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", lineHeight: 1.5, margin: 0 }}>
+                              {t.rich("terms_prefix_claim", {
+                                terms: (chunks) => <a href="/terms" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</a>,
+                                privacy: (chunks) => <a href="/privacy" target="_blank" style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</a>,
+                              })}
+                            </p>
                           </div>
                         )}
                       </div>

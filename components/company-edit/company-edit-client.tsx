@@ -33,6 +33,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { CompanyEditSubNav } from "@/components/company-edit/company-edit-sub-nav"
+import { CompanyEditTour, type TourStep } from "@/components/company-edit/company-edit-tour"
 import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_DOT_CLASS,
@@ -155,6 +156,12 @@ const EditBadge = () => (
   </span>
 )
 
+const TOUR_STEPS: TourStep[] = [
+  { anchor: "logo",           titleKey: "logo_title",     bodyKey: "logo_body" },
+  { anchor: "details",        titleKey: "details_title",  bodyKey: "details_body" },
+  { anchor: "search-preview", titleKey: "search_title",   bodyKey: "search_body" },
+]
+
 // ── Component ──
 
 export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId }: CompanyEditClientProps) {
@@ -162,6 +169,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
   const t = useTranslations("company_edit")
+  const tc = useTranslations("common")
+  const tNav = useTranslations("nav")
   const tStatus = useTranslations("project_status")
   const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
   const contributorStatusOptions = useMemo(() => buildContributorStatusOptions((k) => tStatus(k)), [tStatus])
@@ -285,17 +294,32 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const descRef = useRef<HTMLParagraphElement>(null)
   const autoGenerateTriggered = useRef(false)
 
-  // Sync company listed status on load (corrects stale status)
+  // Auto-unlist on mount if the company is Listed but has no live
+  // credited projects — protects the marketplace from empty listings.
+  // Deliberately NOT auto-listing: syncCompanyListedStatus would also
+  // flip an unlisted-with-projects company back to Listed, which
+  // silently clobbered the owner's "set to Unlisted" choice on every
+  // reload. The auto-list path stays where it belongs — the admin
+  // project status change and listings status change flows already
+  // call syncCompanyListedStatus at the actual moment a credit lands.
   useEffect(() => {
-    syncCompanyListedStatus(company.id).then(() => {
-      // Refresh the page status if it changed
-      supabaseClient.from("companies").select("status").eq("id", company.id).maybeSingle().then(({ data }) => {
-        if (data?.status && data.status !== companyStatus) {
-          setCompanyStatus(data.status as CompanyStatus)
-          setSelectedStatus(data.status as CompanyStatus)
+    if (companyStatus !== "listed") return
+    supabaseClient
+      .from("project_professionals")
+      .select("id, projects!inner(status)")
+      .eq("company_id", company.id)
+      .in("status", ["listed", "live_on_page"])
+      .eq("projects.status", "published")
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length === 0) {
+          // Listed but no active credits — degrade to unlisted.
+          supabaseClient.from("companies").update({ status: "unlisted" }).eq("id", company.id).then(() => {
+            setCompanyStatus("unlisted")
+            setSelectedStatus("unlisted")
+          })
         }
       })
-    })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-generate description on load for new companies without a description
@@ -331,9 +355,10 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [setupBannerDismissed, setSetupBannerDismissed] = useState(false)
   const [importedBannerDismissed, setImportedBannerDismissed] = useState(false)
   const [goLiveListCompany, setGoLiveListCompany] = useState(true)
-  const [goLiveListProjects, setGoLiveListProjects] = useState(true)
   const [isCompletingSetup, setIsCompletingSetup] = useState(false)
-  const [publishPopupOpen, setPublishPopupOpen] = useState(false)
+  const [firstProjectPopupOpen, setFirstProjectPopupOpen] = useState(false)
+  const [firstProjectUrl, setFirstProjectUrl] = useState("")
+  const [importInitialUrl, setImportInitialUrl] = useState<string | undefined>(undefined)
   const [importFirstProjectOpen, setImportFirstProjectOpen] = useState(false)
   const [highlightMissing, setHighlightMissing] = useState(false)
 
@@ -362,44 +387,15 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     if (allRequiredComplete && highlightMissing) setHighlightMissing(false)
   }, [allRequiredComplete, highlightMissing])
 
-  const handleCompleteSetup = useCallback(() => {
-    if (!allRequiredComplete) {
-      setHighlightMissing(true)
-      setSetupBannerDismissed(false)
-      return
-    }
-
-    if (importedProjectId) {
-      // Came from /businesses/architects with a project → go straight to project edit
-      completeCompanySetupAction({ listCompany: false, listProjectIds: [] }).then((result) => {
-        if (result.success) {
-          router.push(`/dashboard/edit/${importedProjectId}`)
-        } else {
-          toast.error(result.error ?? t("something_wrong"))
-        }
-      })
-      return
-    }
-
-    // Photographers auto-list on completion — skip the publish popup, no
-    // explicit "list now / list later" choice. The architect endorsement is
-    // the trust signal that already vetted them.
-    if (isPhotographer) {
-      completeCompanySetupAction({ listCompany: true, listProjectIds: [] }).then((result) => {
-        if (result.success) {
-          toast.success("Your photographer page is now live!")
-          router.refresh()
-        } else {
-          toast.error(result.error ?? t("something_wrong"))
-        }
-      })
-      return
-    }
-
-    // Homeowner-facing companies see the popup so they can opt into listing
-    // versus staying unlisted.
-    setPublishPopupOpen(true)
-  }, [allRequiredComplete, importedProjectId, isPhotographer, router, t])
+  // On landing in setup mode, open Select services as the first step
+  // instead of the old "Create your company page" checklist popup.
+  // Mount-only — closing the popup does not re-trigger.
+  useEffect(() => {
+    if (!isSetupMode || allRequiredComplete) return
+    servicesSnapshotRef.current = [...servicesOffered]
+    setServicePopupOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Project card handlers ──
   const userId = user?.id ?? null
@@ -554,9 +550,16 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       ? orderedServiceNames.join(" · ")
       : `${orderedServiceNames.slice(0, 3).join(" · ")} · +${orderedServiceNames.length - 3} more`
     : t("add_services")
-  const statusLabelMap: Record<string, string> = { listed: t("status_listed"), unlisted: t("status_unlisted"), deactivated: t("status_deactivated") }
+  const statusLabelMap: Record<string, string> = {
+    listed: t("status_listed"),
+    unlisted: t("status_unlisted"),
+    deactivated: t("status_deactivated"),
+    // 'draft' is the internal enum value; UI labels it as "Created" — the
+    // company was claimed but hasn't been eligible for listing yet.
+    draft: t("status_created"),
+  }
   const statusLabel = statusLabelMap[companyStatus] ?? t("status_unlisted")
-  const statusIndicator = STATUS_INDICATOR[companyStatus]
+  const statusIndicator = STATUS_INDICATOR[companyStatus] ?? "bg-muted-foreground"
 
   // A company needs at least one visible published project to be listed
   const hasPublishedProjects = companyProjects.some((p) => {
@@ -571,6 +574,58 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     const isPublished = p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"
     return isPublished && (ppStatus === "invited" || ppStatus === "listed" || ppStatus === "live_on_page")
   })
+
+  // ── First-project popup segment + finalisation ──────────────────────
+  //
+  // After the tour finishes (or is skipped), we surface a segment-specific
+  // popup asking the user to take the *next* action — publish a project,
+  // complete a draft, or share their profile so architects can invite them.
+  // This replaces the old "Bedrijf afronden" confirmation, which said
+  // nothing the user could act on right now.
+
+  const draftProject = useMemo(() => (
+    companyProjects.find(
+      (p) => p.rawProjectStatus === "draft" || p.rawProjectStatus === "in_progress"
+    ) ?? null
+  ), [companyProjects])
+
+  type FirstProjectSegment = "invitee" | "complete_draft" | "new_publisher"
+  const firstProjectSegment: FirstProjectSegment =
+    !canPublishProjects ? "invitee" :
+    draftProject ? "complete_draft" :
+    "new_publisher"
+
+  const markSetupComplete = useCallback(async () => {
+    return completeCompanySetupAction({
+      // Photographers/suppliers who've been credited on a published project
+      // auto-list on completion (the credit was the trust signal). Everyone
+      // else stays draft/unlisted until a project actually goes live.
+      listCompany: hasListableProjects,
+      listProjectIds: hasListableProjects && pendingProjects.length > 0
+        ? pendingProjects.map((p) => p.id)
+        : [],
+    })
+  }, [hasListableProjects, pendingProjects])
+
+  // Post-setup nudge: user came back to their company page after
+  // setup, but the page isn't live yet AND there's a draft project
+  // sitting unsubmitted. Open the same first-project popup so its
+  // complete_draft segment can point them at it — the project card
+  // + "Complete project" navigation is exactly what they need to
+  // click through to Submit-for-review and unblock listing.
+  //
+  // Fires once per mount (no localStorage): if the user closes it
+  // and doesn't act, a page reload will surface it again. Cheap
+  // reminder without being sticky across days.
+  const nudgeFiredRef = useRef(false)
+  useEffect(() => {
+    if (nudgeFiredRef.current) return
+    if (isSetupMode) return
+    if (companyStatus === "listed") return
+    if (!draftProject) return
+    nudgeFiredRef.current = true
+    setFirstProjectPopupOpen(true)
+  }, [isSetupMode, companyStatus, draftProject])
 
   // ── Helpers ──
 
@@ -1074,15 +1129,27 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       `}</style>
 
       <Header navLinks={[
-        { href: `/dashboard/listings?company_id=${company.id}`, label: "Listings" },
-        { href: `/dashboard/company?company_id=${company.id}`, label: "Company" },
+        { href: `/dashboard/listings?company_id=${company.id}`, label: tNav("listings") },
+        { href: `/dashboard/company?company_id=${company.id}`, label: tNav("company") },
         // Photographers are typically solo — Team management is hidden for
         // audience='pro' companies. Filter rather than spread-conditional so
         // the nav order stays stable.
-        ...(isPhotographer ? [] : [{ href: `/dashboard/team?company_id=${company.id}`, label: "Team" }]),
-        { href: "/dashboard/inbox", label: "Messages" },
-        { href: "/dashboard/pricing", label: "Plans" },
+        ...(isPhotographer ? [] : [{ href: `/dashboard/team?company_id=${company.id}`, label: tNav("team") }]),
+        { href: "/dashboard/inbox", label: tNav("messages") },
+        { href: "/dashboard/pricing", label: tNav("plans") },
       ]} />
+
+      <CompanyEditTour
+        companyId={company.id}
+        enabled={isSetupMode && !servicePopupOpen}
+        steps={TOUR_STEPS}
+        onFinish={() => {
+          // Only chain the next onboarding step when we're actually in
+          // setup mode. Post-setup, the tour never re-triggers, and
+          // onFinish shouldn't drag a stale popup into view.
+          if (isSetupMode) setFirstProjectPopupOpen(true)
+        }}
+      />
 
       <CompanyEditSubNav
         statusIndicatorClass={statusIndicator}
@@ -1092,12 +1159,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         companyId={company.id}
         onStatusClick={() => setStatusDialogOpen(true)}
         onSearchPreviewClick={() => setSearchPreviewOpen(true)}
-        isSetupMode={isSetupMode}
-        onCompleteSetup={handleCompleteSetup}
       />
 
       {/* ════════════════════ SETUP POPUP (OVERLAY) ════════════════════ */}
-      {isSetupMode && !setupBannerDismissed && !allRequiredComplete && (
+      {/* Landing case is now handled by auto-opening the Select services
+          popup on mount. This checklist only surfaces when the user tries
+          to publish with missing fields (highlightMissing). */}
+      {isSetupMode && highlightMissing && !setupBannerDismissed && !allRequiredComplete && (
         <div className="setup-popup-overlay">
           <div className="popup-card">
             <div className="popup-header">
@@ -1113,9 +1181,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               </button>
             </div>
             <p className="arco-body-text" style={{ marginBottom: 20 }}>
-              {highlightMissing
-                ? "Complete the highlighted fields below to publish your company page."
-                : "Showcase your best work and let clients discover you. Complete these details to build a stunning company page."}
+              {highlightMissing ? t("setup_intro_complete") : t("setup_intro_create")}
             </p>
             <div className="setup-popup-checklist">
               {([
@@ -1171,6 +1237,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           {/* Logo */}
           <div
             className="company-icon"
+            data-tour="logo"
             onClick={() => logoInputRef.current?.click()}
             style={{ display: "inline-block", cursor: "pointer" }}
           >
@@ -1265,7 +1332,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         </section>
 
         {/* ════════════════════ SPECS BAR ════════════════════ */}
-        <div className="edit-specs-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
+        <div className="edit-specs-bar" data-tour="details" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
           {/* Location — read-only, clicks scroll to Office Location */}
           <div
             className="spec-item-edit"
@@ -1825,84 +1892,145 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         </div>
       </section>
 
-      {/* ════════════════════ PUBLISH POPUP ════════════════════ */}
-      {publishPopupOpen && (
-        <div className="setup-popup-overlay" onClick={() => setPublishPopupOpen(false)}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()}>
-            <div className="popup-header">
-              <h3 className="arco-section-title">
-                {hasListableProjects ? t("list_company") : t("complete_company")}
-              </h3>
+      {/* ════════════════════ FIRST PROJECT POPUP ════════════════════ */}
+      {/* Segment-specific hand-off after the tour: publish, complete a
+          draft, or share invite link. Any dismissal path also marks the
+          company's setup as complete. */}
+      {firstProjectPopupOpen && (() => {
+        const tFP = (key: string) => t(`first_project.${key}`)
+        const isPrimaryDisabled =
+          isCompletingSetup ||
+          (firstProjectSegment === "new_publisher" && !firstProjectUrl.trim().startsWith("http"))
+
+        const handlePrimary = async () => {
+          setIsCompletingSetup(true)
+          await markSetupComplete()
+          setFirstProjectPopupOpen(false)
+
+          if (firstProjectSegment === "complete_draft" && draftProject) {
+            router.push(`/dashboard/edit/${draftProject.id}`)
+          } else if (firstProjectSegment === "new_publisher") {
+            setImportInitialUrl(firstProjectUrl.trim())
+            setImportModalOpen(true)
+          } else {
+            const origin = typeof window !== "undefined" ? window.location.origin : ""
+            const url = `${origin}/professionals/${company.slug || company.id}`
+            try { await navigator.clipboard.writeText(url) } catch {}
+            toast.success(tFP("invite_link_copied"))
+          }
+          setIsCompletingSetup(false)
+        }
+
+        const handleLater = async () => {
+          setIsCompletingSetup(true)
+          await markSetupComplete()
+          setFirstProjectPopupOpen(false)
+          setIsCompletingSetup(false)
+        }
+
+        return (
+          <div className="setup-popup-overlay" onClick={handleLater}>
+            <div className="popup-card" onClick={(e) => e.stopPropagation()}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">
+                  {tFP(`title_${firstProjectSegment}`)}
+                </h3>
+                <button className="popup-close" onClick={handleLater} aria-label={tc("close")}>✕</button>
+              </div>
+
+              <p className="arco-body-text" style={{ marginBottom: 20 }}>
+                {tFP(`body_${firstProjectSegment}`)}
+              </p>
+
+              {firstProjectSegment === "complete_draft" && draftProject && (
+                // Same layout as the featured-projects grid card so the
+                // draft in the popup reads like the one on the page. The
+                // kebab / status pill / hover-pill are intentionally
+                // omitted here — the popup's primary CTA is the action.
+                <div
+                  className="discover-card"
+                  style={{ marginBottom: 20, cursor: "default" }}
+                >
+                  <div className="discover-card-image-wrap" style={{ position: "relative" }}>
+                    <div className="discover-card-image-layer">
+                      {draftProject.coverImage ? (
+                        <img src={draftProject.coverImage} alt={draftProject.title} />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8c8c6", background: "var(--arco-surface)" }}>
+                          <ImageIcon size={32} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status pill — top-left of the image. Read-only in
+                         this context; the popup CTA is the action. */}
+                    <div style={{ position: "absolute", top: 12, left: 12, zIndex: 2 }}>
+                      <div className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
+                        <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${draftProject.statusDotClass}`} />
+                        <span className="text-xs font-medium">{draftProject.statusLabel}</span>
+                      </div>
+                    </div>
+
+                    {/* Owner pill — bottom-left */}
+                    {draftProject.isOwner && (
+                      <span
+                        style={{
+                          position: "absolute", bottom: 10, left: 10, zIndex: 2,
+                          display: "inline-flex", alignItems: "center",
+                          fontSize: 11, fontWeight: 500, color: "#fff",
+                          background: "rgba(0,0,0,.45)", borderRadius: 100,
+                          padding: "4px 10px", letterSpacing: ".02em",
+                          backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                        }}
+                      >
+                        {t("owner_label")}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="discover-card-title">{draftProject.title}</h3>
+                  {draftProject.subtitle && <p className="discover-card-sub">{draftProject.subtitle}</p>}
+                </div>
+              )}
+
+              {firstProjectSegment === "new_publisher" && (
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder={tFP("url_placeholder")}
+                  value={firstProjectUrl}
+                  onChange={(e) => setFirstProjectUrl(e.target.value)}
+                  style={{ marginBottom: 16 }}
+                  autoFocus
+                />
+              )}
+
               <button
-                className="popup-close"
-                onClick={() => setPublishPopupOpen(false)}
-                aria-label="Close"
+                type="button"
+                className="btn-primary"
+                disabled={isPrimaryDisabled}
+                onClick={handlePrimary}
+                style={{ width: "100%", fontSize: 14, padding: "12px 20px", opacity: isPrimaryDisabled ? 0.5 : 1 }}
               >
-                ✕
+                {tFP(`cta_${firstProjectSegment}`)}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLater}
+                disabled={isCompletingSetup}
+                style={{
+                  display: "block", margin: "16px auto 0", padding: 0,
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline",
+                }}
+              >
+                {tFP("later")}
               </button>
             </div>
-
-            {!hasListableProjects && (
-              <>
-                <p className="arco-body-text" style={{ marginBottom: 20 }}>
-                  Your company page is ready. To go live on Arco, you need to be credited on a published project. Ask an architect to invite you, or publish your own.
-                </p>
-              </>
-            )}
-
-            {hasListableProjects && (
-              <>
-                <p className="arco-body-text" style={{ marginBottom: 20 }}>
-                  Your company and credited projects will be published on Arco. Invited projects will go live and your company page will be visible to homeowners.
-                </p>
-
-                {pendingProjects.length > 0 && (
-                  <div className="publish-popup-options">
-                    <label className="publish-popup-option">
-                      <input
-                        type="checkbox"
-                        checked={goLiveListProjects}
-                        onChange={(e) => setGoLiveListProjects(e.target.checked)}
-                      />
-                      <div>
-                        <p className="publish-popup-option-title">
-                          Publish credited projects ({pendingProjects.length})
-                        </p>
-                        <p className="publish-popup-option-desc">Your company will be shown on the project page</p>
-                      </div>
-                    </label>
-                  </div>
-                )}
-              </>
-            )}
-
-            <button
-              className="setup-popup-cta"
-              disabled={isCompletingSetup}
-              onClick={async () => {
-                setIsCompletingSetup(true)
-                const result = await completeCompanySetupAction({
-                  listCompany: hasListableProjects,
-                  listProjectIds: hasListableProjects && goLiveListProjects ? pendingProjects.map((p) => p.id) : [],
-                })
-                if (result.success) {
-                  setPublishPopupOpen(false)
-                  toast.success(hasListableProjects ? "Your company is now live!" : "Company page setup complete!")
-                  router.push("/dashboard/company")
-                } else {
-                  toast.error(result.error ?? t("something_wrong"))
-                  setIsCompletingSetup(false)
-                }
-              }}
-              style={{ opacity: isCompletingSetup ? 0.5 : 1 }}
-            >
-              {isCompletingSetup
-                ? (hasListableProjects ? t("listing_updated") + "…" : t("generating") )
-                : (hasListableProjects ? t("list_company_btn") : t("complete_company_btn"))}
-            </button>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ════════════════════ IMPORT FIRST PROJECT POPUP ════════════════════ */}
       {importFirstProjectOpen && (
@@ -2085,30 +2213,61 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
             {/* Sticky footer */}
             <div className="service-popup-footer">
-              <button
-                type="button"
-                className="btn-tertiary"
-                onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}
-                style={{ fontSize: 14, padding: "10px 20px" }}
-              >
-                {t("services_cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  if (servicesOffered.length === 0) {
-                    toast.error(t("select_service"))
-                    return
-                  }
-                  saveServices()
-                  setServicePopupOpen(false)
-                  setServiceSearch("")
-                }}
-                style={{ fontSize: 14, padding: "10px 20px" }}
-              >
-                {t("services_save")}
-              </button>
+              {isSetupMode ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={async () => {
+                    if (servicesOffered.length === 0) {
+                      toast.error(t("select_service"))
+                      return
+                    }
+                    await saveServices()
+                    setServicePopupOpen(false)
+                    setServiceSearch("")
+                    // Imported-project shortcut: user landed here from
+                    // /businesses/architects with a specific project to
+                    // publish — take them straight to project edit, skip
+                    // the tour + first-project popup. Otherwise the tour
+                    // opens automatically via its enabled effect, and
+                    // onFinish surfaces the first-project popup.
+                    if (importedProjectId) {
+                      await markSetupComplete()
+                      router.push(`/dashboard/edit/${importedProjectId}`)
+                    }
+                  }}
+                  style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
+                >
+                  {t("services_next")}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn-tertiary"
+                    onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}
+                    style={{ fontSize: 14, padding: "10px 20px" }}
+                  >
+                    {t("services_cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      if (servicesOffered.length === 0) {
+                        toast.error(t("select_service"))
+                        return
+                      }
+                      saveServices()
+                      setServicePopupOpen(false)
+                      setServiceSearch("")
+                    }}
+                    style={{ fontSize: 14, padding: "10px 20px" }}
+                  >
+                    {t("services_save")}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2278,69 +2437,93 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       )}
 
       {/* ════════════════════ STATUS DIALOG ════════════════════ */}
-      {statusDialogOpen && (
+      {statusDialogOpen && (() => {
+        // Save is only useful when the user can actually change state.
+        // Without a live credited project, Listed is unreachable → there's
+        // nothing to change, so we hide Save and show Cancel full-width.
+        // Unlisted stays interactive either way so a Listed company can
+        // always hide itself again.
+        const canReachListed = hasPublishedProjects
+        const canSave = selectedStatus !== companyStatus
+          && (selectedStatus !== "listed" || canReachListed)
+
+        return (
         <div className="popup-overlay" onClick={() => setStatusDialogOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Company visibility</h3>
-              <button className="popup-close" onClick={() => setStatusDialogOpen(false)} aria-label="Close">
+              <h3 className="arco-section-title">{t("company_visibility")}</h3>
+              <button className="popup-close" onClick={() => setStatusDialogOpen(false)} aria-label={tc("close")}>
                 ✕
               </button>
             </div>
 
             {!hasPublishedProjects && (
-              <div className="arco-alert arco-alert--info">
+              <div className="arco-alert arco-alert--info" style={{ marginBottom: 20 }}>
                 <AlertTriangle className="arco-alert-icon" />
                 <div>
-                  <p style={{ fontWeight: 500 }}>No live projects</p>
+                  <p style={{ fontWeight: 500 }}>{t("no_live_projects")}</p>
                   <p>
                     {canPublishProjects
-                      ? "Submit and publish at least one project to make your company visible on Arco."
-                      : "Get credited on a published project to make your company visible on Arco."}
+                      ? t("no_live_projects_publisher")
+                      : t("no_live_projects_invitee")}
                   </p>
                 </div>
               </div>
             )}
 
             <div className="status-modal-options">
+              {/* Listed requires a live credited project. Unlisted is
+                  always selectable — a Created company can preview the
+                  future Unlisted state, and a Listed company can flip to
+                  Unlisted from here. */}
               <button
                 type="button"
                 className={`status-modal-option${selectedStatus === "listed" ? " selected" : ""}`}
-                disabled={!hasPublishedProjects}
-                onClick={() => hasPublishedProjects && setSelectedStatus("listed")}
+                disabled={!canReachListed}
+                onClick={() => canReachListed && setSelectedStatus("listed")}
               >
                 <span className="status-modal-dot bg-emerald-500" />
                 <div className="status-modal-option-text">
-                  <span className="status-modal-option-label">Listed</span>
-                  <span className="status-modal-option-desc">Your company page is public and visible to homeowners.</span>
+                  <span className="status-modal-option-label">{t("status_listed")}</span>
+                  <span className="status-modal-option-desc">{t("listed_desc")}</span>
                 </div>
               </button>
 
               <button
                 type="button"
                 className={`status-modal-option${selectedStatus === "unlisted" ? " selected" : ""}`}
-                disabled={!hasPublishedProjects}
-                onClick={() => hasPublishedProjects && setSelectedStatus("unlisted")}
+                onClick={() => setSelectedStatus("unlisted")}
               >
                 <span className="status-modal-dot bg-muted-foreground" />
                 <div className="status-modal-option-text">
-                  <span className="status-modal-option-label">Unlisted</span>
-                  <span className="status-modal-option-desc">Hide your company page from search while keeping data ready.</span>
+                  <span className="status-modal-option-label">{t("status_unlisted")}</span>
+                  <span className="status-modal-option-desc">{t("unlisted_desc")}</span>
                 </div>
               </button>
             </div>
 
             <div className="popup-actions">
+              {/* When Listed is unreachable there's nothing meaningful for
+                  the user to save, so Cancel fills the width. Otherwise
+                  the standard two-button layout applies. */}
               <button className="btn-tertiary" onClick={() => setStatusDialogOpen(false)} style={{ flex: 1 }}>
-                Cancel
+                {tc("cancel")}
               </button>
-              <button className="btn-secondary" onClick={handleStatusSave} disabled={!hasPublishedProjects} style={{ flex: 1 }}>
-                Save
-              </button>
+              {canReachListed && (
+                <button
+                  className="btn-secondary"
+                  onClick={handleStatusSave}
+                  disabled={!canSave}
+                  style={{ flex: 1 }}
+                >
+                  {tc("save")}
+                </button>
+              )}
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* ════════════════════ DELETE DIALOG ════════════════════ */}
       {deleteDialogOpen && (
@@ -2442,11 +2625,15 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       {/* ════════════════════ IMPORT PROJECT MODAL ════════════════════ */}
       <ImportProjectModal
         open={importModalOpen}
-        onOpenChange={setImportModalOpen}
+        onOpenChange={(open) => {
+          setImportModalOpen(open)
+          if (!open) setImportInitialUrl(undefined)
+        }}
         userId={userId}
         companyId={company.id}
         professionalId={professionalId ?? null}
         adminCompanyId={adminCompanyId}
+        initialUrl={importInitialUrl}
       />
 
       {/* ════════════════════ PROJECT STATUS MODAL ════════════════════ */}

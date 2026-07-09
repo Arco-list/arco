@@ -477,23 +477,13 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     {(!isLoggedIn || companies.length === 0) && (
                       <>
                         <div className="my-1 border-t border-border mx-5" />
-                        {!isLoggedIn ? (
-                          <Link
-                            href="/businesses/architects"
-                            className="block px-5 py-2 text-sm font-normal text-primary hover:opacity-70 transition-colors"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                          >
-                            {t("list_with_us")}
-                          </Link>
-                        ) : (
-                          <button
-                            type="button"
-                            className="block w-full text-left px-5 py-2 text-sm font-normal text-primary hover:opacity-70 transition-colors"
-                            onClick={() => { setIsMobileMenuOpen(false); openCreateCompanyModal() }}
-                          >
-                            {t("create_your_company")}
-                          </button>
-                        )}
+                        <Link
+                          href="/businesses/architects"
+                          className="block px-5 py-2 text-sm font-normal text-primary hover:opacity-70 transition-colors"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          {t("list_with_us")}
+                        </Link>
                       </>
                     )}
                   </div>
@@ -595,8 +585,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
             {/* Right: List with us / Create your company + Language + Search + Menu */}
             <div className="relative flex items-center justify-end gap-3">
-              {/* List with us (logged out) / Create your company (logged in, no company) — desktop only */}
-              {!isLoggedIn ? (
+              {/* List with us — desktop only. Shown to logged-out visitors
+                  and to signed-in users without a company. Always routes to
+                  /businesses/architects; the CTA on that page owns opening
+                  the create-company popup. */}
+              {(!isLoggedIn || companies.length === 0) && (
                 <Link
                   href="/businesses/architects"
                   className={`hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
@@ -605,17 +598,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 >
                   {t("list_with_us")}
                 </Link>
-              ) : companies.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => openCreateCompanyModal()}
-                  className={`hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
-                    transparent && !isScrolled ? "text-white hover:text-white/80" : "text-primary hover:opacity-70"
-                  }`}
-                >
-                  {t("create_your_company")}
-                </button>
-              ) : null}
+              )}
               {/* Language Switcher */}
               <HeaderLanguageSwitcher isLight={transparent && !isScrolled} />
               {/* Search Icon */}
@@ -955,7 +938,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               onClick={() => { setIsAccountMenuOpen(false); openLoginModal(pathname ?? undefined) }}
                             >
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
-                              Sign up / Log in
+                              {t("sign_up_login")}
                             </button>
                           </>
                         )}

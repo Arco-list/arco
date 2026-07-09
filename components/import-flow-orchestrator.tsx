@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
@@ -31,6 +32,8 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
   const { user } = useAuth()
   const { openLoginModal } = useLoginModal()
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
+  const t = useTranslations("verify_domain")
+  const tc = useTranslations("common")
 
   const [phase, setPhase] = useState<Phase>("idle")
   const [domainResult, setDomainResult] = useState<DomainCheckResult | null>(null)
@@ -252,14 +255,17 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
       <div className="popup-overlay" onClick={handleClose}>
         <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
           <div className="popup-header">
-            <h3 className="arco-section-title">Domain already registered</h3>
-            <button type="button" className="popup-close" onClick={handleClose} aria-label="Close">✕</button>
+            <h3 className="arco-section-title">{t("claimed.title")}</h3>
+            <button type="button" className="popup-close" onClick={handleClose} aria-label={tc("close")}>✕</button>
           </div>
           <p className="arco-body-text" style={{ marginBottom: 24 }}>
-            This domain belongs to <strong>{domainResult.companyName}</strong>. Log in with your company account to import projects from this website.
+            {t.rich("claimed.body", {
+              company: domainResult.companyName ?? "",
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
           <div className="popup-actions">
-            <button className="btn-tertiary" onClick={handleClose} style={{ flex: 1 }}>Cancel</button>
+            <button className="btn-tertiary" onClick={handleClose} style={{ flex: 1 }}>{tc("cancel")}</button>
             <button
               className="btn-primary"
               onClick={() => {
@@ -268,7 +274,7 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
               }}
               style={{ flex: 1 }}
             >
-              Log in
+              {t("claimed.login")}
             </button>
           </div>
         </div>
@@ -304,11 +310,14 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
       <div className="popup-overlay" onClick={handleClose}>
         <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
           <div className="popup-header">
-            <h3 className="arco-section-title">Verify domain</h3>
-            <button type="button" className="popup-close" onClick={handleClose} aria-label="Close">✕</button>
+            <h3 className="arco-section-title">{t("title")}</h3>
+            <button type="button" className="popup-close" onClick={handleClose} aria-label={tc("close")}>✕</button>
           </div>
-          <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 20px" }}>
-            Verify ownership of <strong>{urlDomain}</strong> by entering a code sent to your company email.
+          <p className="arco-body-text" style={{ marginBottom: 20 }}>
+            {t.rich("prompt", {
+              domain: urlDomain ?? "",
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
 
           {verifyError && (
@@ -320,8 +329,8 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
 
           {!verifyCodeSent ? (
             <>
-              <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 400, color: "var(--arco-black)" }}>
-                Company email
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                {t("company_email")}
               </label>
               <input
                 type="email"
@@ -329,25 +338,26 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
                 value={verifyEmail}
                 onChange={(e) => setVerifyEmail(e.target.value)}
                 placeholder={`yourname@${urlDomain}`}
-                className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
+                className="form-input"
+                style={{ marginBottom: 16 }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSendVerificationCode() }}
               />
               <div className="popup-actions">
-                <button className="btn-tertiary" onClick={handleClose} style={{ flex: 1 }}>Cancel</button>
+                <button className="btn-tertiary" onClick={handleClose} style={{ flex: 1 }}>{tc("cancel")}</button>
                 <button
                   className="btn-primary"
                   disabled={isVerifying || !verifyEmail.includes("@")}
                   onClick={handleSendVerificationCode}
                   style={{ flex: 1 }}
                 >
-                  {isVerifying ? "Sending..." : "Send code"}
+                  {isVerifying ? t("sending") : t("send_code")}
                 </button>
               </div>
             </>
           ) : (
             <>
-              <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 400, color: "var(--arco-black)" }}>
-                Enter the 6-digit code sent to {verifyEmail}
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--arco-black)" }}>
+                {t("otp_prompt", { email: verifyEmail })}
               </label>
               <input
                 type="text"
@@ -357,8 +367,8 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
                 value={verifyCode}
                 onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
                 placeholder="000000"
-                className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-2 focus:outline-none focus:border-foreground tracking-widest text-center"
-                style={{ fontSize: 18, letterSpacing: "0.3em" }}
+                className="form-input"
+                style={{ marginBottom: 8, fontSize: 18, letterSpacing: "0.3em", textAlign: "center" }}
                 onKeyDown={(e) => { if (e.key === "Enter" && verifyCode.length === 6) handleVerifyCode() }}
               />
               <button
@@ -366,17 +376,17 @@ export function ImportFlowOrchestrator({ pendingUrl, onReset }: ImportFlowOrches
                 onClick={handleSendVerificationCode}
                 style={{ fontSize: 12, fontWeight: 300, color: "var(--arco-accent)", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 16 }}
               >
-                Resend code
+                {t("resend_code")}
               </button>
               <div className="popup-actions">
-                <button className="btn-tertiary" onClick={handleClose} style={{ flex: 1 }}>Cancel</button>
+                <button className="btn-tertiary" onClick={handleClose} style={{ flex: 1 }}>{tc("cancel")}</button>
                 <button
                   className="btn-primary"
                   disabled={isVerifying || verifyCode.length !== 6}
                   onClick={handleVerifyCode}
                   style={{ flex: 1 }}
                 >
-                  {isVerifying ? "Verifying..." : "Verify"}
+                  {isVerifying ? t("verifying") : t("verify")}
                 </button>
               </div>
             </>

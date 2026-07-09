@@ -66,6 +66,7 @@ import {
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { Header } from "@/components/header"
 import { EditSubNav } from "@/components/project/edit-sub-nav"
+import { CompanyEditTour, type TourStep } from "@/components/company-edit/company-edit-tour"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
@@ -128,6 +129,20 @@ type ProjectLocationUpdate = Pick<
   TablesUpdate<"projects">,
   "address_formatted" | "address_city" | "address_region" | "latitude" | "longitude" | "share_exact_location" | "location"
 >
+
+const PROJECT_TOUR_STEPS: TourStep[] = [
+  { anchor: "project-details",       titleKey: "details_title",       bodyKey: "details_body" },
+  { anchor: "project-photo-tile",    titleKey: "photos_title",        bodyKey: "photos_body", placement: "top" },
+  { anchor: "project-professionals", titleKey: "professionals_title", bodyKey: "professionals_body", placement: "top" },
+  { anchor: "project-cover",         titleKey: "cover_title",         bodyKey: "cover_body" },
+  { anchor: "project-submit",        titleKey: "submit_title",        bodyKey: "submit_body" },
+]
+
+// Position of the photo-tile step in PROJECT_TOUR_STEPS — parent uses
+// this to know when to auto-open the room selector on the highlighted
+// photo. Kept as a named constant so reordering the steps above stays
+// obvious.
+const PROJECT_TOUR_PHOTO_STEP = 1
 
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
 const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+-])+(?:\.(?:[a-zA-Z0-9_'^&+-])+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
@@ -3739,7 +3754,11 @@ export default function ListingEditorPage() {
             )
 
             return (
-              <div key={photo.id} className="photo-edit-thumb">
+              <div
+                key={photo.id}
+                className="photo-edit-thumb"
+                {...(photoIndex === 0 ? { "data-tour": "project-photo-tile", "data-photo-id": photo.id } : {})}
+              >
                 <img src={photo.url} alt="" />
                 {isSpaceCover && (
                   <div style={{ position: "absolute", left: 6, top: 6, background: "#016D75", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2 }}>
@@ -4325,6 +4344,7 @@ export default function ListingEditorPage() {
               <button
                 onClick={() => setShowCoverPicker(true)}
                 className="hero-cover-btn"
+                data-tour="project-cover"
               >
                 <ImageIcon size={14} />
                 {t("change_cover")}
@@ -4369,6 +4389,32 @@ export default function ListingEditorPage() {
             </div>
           </div>
         )}
+
+        {/* Guided project-setup tour — only fires while the project is
+             still a draft, and only once per project (localStorage flag).
+             onStepChange opens the room selector on the first photo while
+             the photo step is active, so the highlighted element does
+             something interesting for the user to see rather than just
+             sitting there. */}
+        <CompanyEditTour
+          companyId={projectId ?? ""}
+          enabled={!!projectId && projectStatus === "draft"}
+          namespace="project_edit.tour"
+          storagePrefix="arco.project-edit-tour.seen."
+          steps={PROJECT_TOUR_STEPS}
+          onStepChange={(idx) => {
+            if (idx === PROJECT_TOUR_PHOTO_STEP) {
+              const target = document.querySelector<HTMLElement>('[data-tour="project-photo-tile"]')
+              const photoId = target?.dataset.photoId ?? null
+              if (photoId) setPhotoMoveMenuId(photoId)
+            } else {
+              // Close the room selector when leaving the photo step or
+              // ending the tour, but only if it's still open — otherwise
+              // this would clobber user-initiated opens elsewhere.
+              setPhotoMoveMenuId((prev) => (prev != null ? null : prev))
+            }
+          }}
+        />
 
         {/* ── Sub-nav ────────────────────────────────────────────── */}
         <EditSubNav
@@ -4473,7 +4519,7 @@ export default function ListingEditorPage() {
 
         {/* ── Specs bar ──────────────────────────────────────────── */}
         <div className="wrap">
-          <div className="edit-specs-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
+          <div className="edit-specs-bar" data-tour="project-details" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
 
           {/* Location */}
           <div
@@ -4712,7 +4758,7 @@ export default function ListingEditorPage() {
         </div>
 
         {/* ── Photos ────────────────────────────────────────────────── */}
-        <section id="photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 0 }}>
+        <section id="photos" data-tour="project-photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 0 }}>
           <div style={{ marginBottom: 28 }}>
             <h2 className="arco-section-title">{tPhoto("title")}</h2>
             <p className="arco-body-text" style={{ marginTop: 6 }}>{tPhoto("description")}</p>
@@ -5414,6 +5460,7 @@ export default function ListingEditorPage() {
             {/* Add Professional card */}
             <div
               className="add-pro-tile"
+              data-tour="project-professionals"
               onClick={() => { if (!draftCard) setDraftCard({ serviceIds: [], serviceName: "", companyName: "", companyLogo: null, email: "" }) }}
               style={draftCard ? { opacity: 0.4, cursor: "default" } : undefined}
             >

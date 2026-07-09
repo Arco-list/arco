@@ -11,8 +11,6 @@ interface CompanyEditSubNavProps {
   companyId: string
   onStatusClick: () => void
   onSearchPreviewClick: () => void
-  isSetupMode?: boolean
-  onCompleteSetup?: () => void
 }
 
 const SECTION_IDS = ["header", "projects", "contact"] as const
@@ -25,8 +23,6 @@ export function CompanyEditSubNav({
   companyId,
   onStatusClick,
   onSearchPreviewClick,
-  isSetupMode,
-  onCompleteSetup,
 }: CompanyEditSubNavProps) {
   const t = useTranslations("company_edit")
   const [activeSection, setActiveSection] = useState<string | null>(null)
@@ -112,16 +108,14 @@ export function CompanyEditSubNav({
                 {isSaving ? t("saving_status") : t("saved_status")}
               </span>
             )}
-            {!isSetupMode && (
-              <button className="filter-pill" onClick={onStatusClick}>
-                <span
-                  className={`inline-block rounded-full ${statusIndicatorClass}`}
-                  style={{ width: 7, height: 7, flexShrink: 0 }}
-                />
-                {currentStatusLabel}
-              </button>
-            )}
-            <button className="filter-pill" onClick={onSearchPreviewClick}>
+            <button className="filter-pill" onClick={onStatusClick}>
+              <span
+                className={`inline-block rounded-full ${statusIndicatorClass}`}
+                style={{ width: 7, height: 7, flexShrink: 0 }}
+              />
+              {currentStatusLabel}
+            </button>
+            <button className="filter-pill" data-tour="search-preview" onClick={onSearchPreviewClick}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="7" cy="7" r="5" />
                 <path d="M14 14L10.5 10.5" />
@@ -140,11 +134,6 @@ export function CompanyEditSubNav({
               </svg>
               <span className="sub-nav-pill-label">{t("preview")}</span>
             </a>
-            {isSetupMode && onCompleteSetup && (
-              <button className="btn-primary setup-nav-cta" onClick={onCompleteSetup}>
-                {t("complete_company_btn")}
-              </button>
-            )}
           </div>
         </div>
       </div>

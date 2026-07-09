@@ -4970,7 +4970,9 @@ body.no-scroll {
 }
 
 .scrape-step-label--error {
-  color: #e03232;
+  /* Match .arco-alert--danger foreground so the failed step reads as
+     the same tone as the accompanying error banner. */
+  color: #991b1b;
 }
 
 .scrape-step-label--pending {
@@ -4992,7 +4994,7 @@ body.no-scroll {
 }
 
 .scrape-step-icon--error {
-  background: #e03232;
+  background: #991b1b;
 }
 
 .scrape-step-icon--active {

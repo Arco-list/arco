@@ -694,10 +694,16 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     // ── Primary: Firecrawl (handles JS rendering, anti-bot, lazy images) ──
     try {
       const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
+      // Fixed 3s wait — enough for most JS-heavy portfolio sites (Squarespace,
+      // WordPress, custom galleries) to hydrate their images while cutting
+      // 7s off the previous 10s baseline. Firecrawl's action API supports
+      // selector-based waits, but only *without* a millisecond cap — so a
+      // slow/broken site would stall the entire scrape. The <10 images
+      // fallback path below handles cases where 3s isn't enough.
       const result = await firecrawl.scrape(url.toString(), {
         formats: ["markdown", "html"],
         timeout: 45000,
-        waitFor: 10000,
+        waitFor: 3000,
       }) as any
 
       if (!result || (!result.markdown && !result.metadata)) {
@@ -1299,7 +1305,11 @@ async function autoTagPhotosWithSpaces(
           // Browser-style UA — bot UAs are sometimes blocked outright.
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
           ...(photoOrigin ? { Referer: photoOrigin } : {}),
-          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          // Only advertise formats jimp 1.6.1 can decode (BMP, GIF, JPEG,
+          // PNG, TIFF). If we listed webp/avif/apng here, negotiating
+          // CDNs like Squarespace would happily return webp — which
+          // jimp.read() then throws on, and every photo silently skips.
+          Accept: "image/jpeg,image/png,image/gif,image/bmp,image/tiff;q=0.9,image/*;q=0.5",
         },
       })
       clearTimeout(timeout)
@@ -1308,7 +1318,17 @@ async function autoTagPhotosWithSpaces(
         continue
       }
       const rawBuffer = Buffer.from(await imgRes.arrayBuffer())
-      const image = await Jimp.read(rawBuffer)
+      let image
+      try {
+        image = await Jimp.read(rawBuffer)
+      } catch (decodeErr) {
+        // Surface the actual reason (unknown MIME, corrupt bytes, etc.) —
+        // previously this fell into the generic download-error catch and
+        // read as "download failed" in logs, hiding a decode-side issue.
+        const ct = imgRes.headers.get("content-type") ?? "unknown"
+        console.log(`[autoTag] jimp could not decode photo #${photo.order_index} (content-type=${ct}):`, decodeErr instanceof Error ? decodeErr.message : decodeErr)
+        continue
+      }
       image.scaleToFit({ w: 768, h: 768 })
       const thumb = await image.getBuffer("image/jpeg", { quality: 75 })
       const base64 = thumb.toString("base64")

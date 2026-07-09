@@ -173,6 +173,7 @@ export function EditSubNav({
             {!isAdminReview && projectStatus === "draft" && onSubmitForReview && (
               <button
                 className="btn-primary setup-nav-cta"
+                data-tour="project-submit"
                 onClick={onSubmitForReview}
                 disabled={isSubmitting}
                 style={isSubmitting ? { opacity: 0.5 } : undefined}

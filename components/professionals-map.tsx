@@ -385,15 +385,16 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
 
     const currentIds = mappable.map((p) => p.companyId).sort().join(",")
 
-    // Skip if the set hasn't changed (including initial mount handled by map init)
+    // Skip if the set hasn't changed
     if (currentIds === prevMappableIdsRef.current) return
-    const isInitial = prevMappableIdsRef.current === ""
     prevMappableIdsRef.current = currentIds
 
-    // Don't auto-zoom on initial render — the map init effect handles that
-    if (isInitial) return
+    // Nothing to render or zoom to yet (map opened before the RPC returned)
+    if (mappable.length === 0) return
 
-    // Re-render markers immediately (don't wait for idle)
+    // Re-render markers immediately (don't wait for idle) — this covers
+    // both the first non-empty arrival (async fetch from the map hook)
+    // and subsequent filter-driven changes.
     renderMarkersRef.current()
 
     // Fit bounds to new set

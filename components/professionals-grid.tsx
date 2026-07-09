@@ -11,7 +11,7 @@ import { Footer } from "@/components/footer"
 import { useProfessionalFilters, PROFESSIONAL_SORT_OPTIONS } from "@/contexts/professional-filter-context"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
-import { useProfessionalsQuery } from "@/hooks/use-professionals-query"
+import { useProfessionalsForMap, useProfessionalsQuery } from "@/hooks/use-professionals-query"
 import { SortLinks } from "@/components/sort-links"
 
 // Map preview card: positioned via CSS order (3rd on desktop, 2nd on iPad, hidden on mobile)
@@ -42,7 +42,6 @@ export function ProfessionalsGrid({
 
   const {
     professionals: queryProfessionals,
-    allProfessionals,
     total,
     isLoading,
     isLoadingMore,
@@ -82,33 +81,12 @@ export function ProfessionalsGrid({
     return t("heading_in", { location: t("heading_default_location") })
   }, [selectedCategories, selectedCities, taxonomyLabelMap, t])
 
-  // Client-side filtered professionals for instant map updates
-  const mapProfessionals = useMemo(() => {
-    const searchLower = keyword.trim().toLowerCase()
-    return allProfessionals.filter((p) => {
-      // Category filter: check if any selected category matches specialty_parent_ids
-      if (selectedCategories.length > 0) {
-        const parentIds = p.specialtyParentIds ?? []
-        if (!selectedCategories.some((catId) => parentIds.includes(catId))) return false
-      }
-      // Service filter: check if any selected service matches specialty_ids
-      if (selectedServices.length > 0) {
-        const specIds = p.specialtyIds ?? []
-        if (!selectedServices.some((svcId) => specIds.includes(svcId))) return false
-      }
-      // City filter
-      if (selectedCities.length > 0) {
-        const lowerCities = selectedCities.map((c) => c.toLowerCase().trim())
-        if (!p.city || !lowerCities.includes(p.city)) return false
-      }
-      // Keyword filter
-      if (searchLower.length > 0) {
-        const haystack = `${p.name} ${p.profession} ${p.location} ${(p.specialties ?? []).join(" ")}`.toLowerCase()
-        if (!haystack.includes(searchLower)) return false
-      }
-      return true
-    })
-  }, [allProfessionals, selectedCategories, selectedServices, selectedCities, keyword])
+  // Full result set for the map — the list is paginated, so previously the
+  // map only saw whatever was already loaded (14 pros on first paint).
+  // This hook fetches the complete filter-matched set when the map opens
+  // and refetches whenever filters change while the map is open. Capped at
+  // MAP_MAX_MARKERS; see the note in use-professionals-query.ts.
+  const { mapProfessionals, isMapLoading } = useProfessionalsForMap(showMap)
 
   // Check if any professionals have map coordinates
   const hasMappable = sortedProfessionals.some(

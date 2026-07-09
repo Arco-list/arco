@@ -15,6 +15,11 @@ const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 // preserved as the user loads more.
 const FIRST_PAGE_SIZE = 14
 const PAGE_SIZE = 15
+// Hard cap on markers pulled for the full-screen map. At current scale
+// (tens of pros) this is never hit; kept as a guardrail so a runaway
+// query never streams megabytes to the client. When we approach this
+// cap in real usage, switch to a coords-only projection.
+export const MAP_MAX_MARKERS = 500
 
 type SearchProfessionalsRow = {
   id: string
@@ -297,4 +302,90 @@ export function useProfessionalsQuery(
     loadMore,
     refetch,
   }
+}
+
+// ─── Full-set fetch for the map view ────────────────────────────────
+//
+// The list uses paginated `search_professionals`; the map needs the
+// whole matching result set in one shot. Runs only while `enabled` is
+// true (i.e. the map overlay is open) and refetches whenever the
+// filters change so the markers stay in sync.
+//
+// Currently returns the full ProfessionalCard row shape — see
+// MAP_MAX_MARKERS above and the note in professionals-grid.tsx for
+// when to switch to a coords-only projection.
+export function useProfessionalsForMap(enabled: boolean): {
+  mapProfessionals: ProfessionalCard[]
+  isMapLoading: boolean
+} {
+  const locale = useLocale()
+  const {
+    selectedCategories,
+    selectedServices,
+    selectedCities,
+    keyword,
+    sortBy,
+  } = useProfessionalFilters()
+
+  const [mapProfessionals, setMapProfessionals] = useState<ProfessionalCard[]>([])
+  const [isMapLoading, setIsMapLoading] = useState(false)
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const controller = new AbortController()
+    setIsMapLoading(true)
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const isUuid = (v: string) => UUID_REGEX.test(v)
+    const validCategories = selectedCategories.filter(isUuid)
+    const validServices = selectedServices.filter(isUuid)
+
+    const filterParams = {
+      search_query: keyword.trim().length > 0 ? keyword.trim() : null,
+      country_filter: null,
+      state_filter: null,
+      city_filters: selectedCities.length > 0 ? selectedCities : null,
+      category_filters: validCategories.length > 0 ? validCategories : null,
+      service_filters: validServices.length > 0 ? validServices : null,
+      max_hourly_rate: null,
+      verified_only: false,
+    }
+
+    const supabase = getBrowserSupabaseClient()
+    ;(async () => {
+      try {
+        const { data, error: rpcError } = await supabase.rpc(
+          "search_professionals",
+          { ...filterParams, limit_count: MAP_MAX_MARKERS, offset_count: 0, sort_by: sortBy },
+          { signal: controller.signal },
+        )
+        if (controller.signal.aborted) return
+        if (rpcError) {
+          setMapProfessionals([])
+          return
+        }
+        const rows = Array.isArray(data) ? (data as SearchProfessionalsRow[]) : []
+        const mapped = rows
+          .map((row) => mapRowToCard(row, locale))
+          .filter((card): card is ProfessionalCard => card !== null)
+
+        if (mapped.length >= MAP_MAX_MARKERS) {
+          // Structural signal — first time this triggers in real usage,
+          // move the map to a coords-only projection.
+          console.warn(`[map] hit MAP_MAX_MARKERS (${MAP_MAX_MARKERS}); consider a coords-only projection`)
+        }
+        setMapProfessionals(mapped)
+      } catch {
+        if (controller.signal.aborted) return
+        setMapProfessionals([])
+      } finally {
+        if (!controller.signal.aborted) setIsMapLoading(false)
+      }
+    })()
+
+    return () => controller.abort()
+  }, [enabled, keyword, selectedCategories, selectedServices, selectedCities, sortBy, locale])
+
+  return { mapProfessionals, isMapLoading }
 }
