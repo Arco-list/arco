@@ -2105,12 +2105,21 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
       {/* ════════════════════ SERVICE SELECTION POPUP ════════════════════ */}
       {servicePopupOpen && (
-        <div className="service-popup-overlay" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}>
+        // In setup mode this popup is a required onboarding step:
+        // clicking the overlay backdrop must not close it, and the ✕
+        // is hidden altogether. Post-setup the popup is a regular
+        // editor and closes normally on either.
+        <div
+          className="service-popup-overlay"
+          onClick={isSetupMode ? undefined : () => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}
+        >
           <div className="service-popup" onClick={(e) => e.stopPropagation()}>
             {/* Header — grey background */}
             <div className="service-popup-header">
               <h3 className="arco-section-title" style={{ margin: 0 }}>{t("services_title")}</h3>
-              <button type="button" className="popup-close" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }} aria-label="Close">✕</button>
+              {!isSetupMode && (
+                <button type="button" className="popup-close" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }} aria-label={tc("close")}>✕</button>
+              )}
             </div>
 
             {/* Scrollable body */}
@@ -2218,6 +2227,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 <button
                   type="button"
                   className="btn-primary"
+                  disabled={servicesOffered.length === 0}
                   onClick={async () => {
                     if (servicesOffered.length === 0) {
                       toast.error(t("select_service"))
@@ -2237,9 +2247,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       router.push(`/dashboard/edit/${importedProjectId}`)
                     }
                   }}
-                  style={{ width: "100%", fontSize: 14, padding: "12px 20px" }}
+                  style={{ width: "100%", fontSize: 14, padding: "12px 20px", opacity: servicesOffered.length === 0 ? 0.5 : 1 }}
                 >
-                  {t("services_next")}
+                  {t("services_save_continue")}
                 </button>
               ) : (
                 <>

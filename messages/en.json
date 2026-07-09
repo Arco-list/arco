@@ -320,6 +320,7 @@
     "services_add": "Add services",
     "services_search": "Search services...",
     "services_next": "Next",
+    "services_save_continue": "Save & continue",
     "services_cancel": "Cancel",
     "services_save": "Save",
     "tour": {
