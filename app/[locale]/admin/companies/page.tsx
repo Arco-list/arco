@@ -441,12 +441,9 @@ export default async function AdminProfessionalsPage() {
   const { mergedRows, servicesOptions } = await loadAdminCompaniesData()
 
   return (
-    // overflow-x-clip stops the mobile status funnel's negative
-    // horizontal margin (-mx-4 on the row) from letting users scroll
-    // sideways past the viewport. Clip (not hidden) so descendant
-    // fixed/absolute elements — dropdowns, popovers — still overflow
-    // normally.
-    <div className="min-h-screen bg-white overflow-x-clip">
+    // Horizontal-overflow clip lives on the admin layout wrapper so
+    // every admin page inherits the same guard against mobile pan.
+    <div className="min-h-screen bg-white">
       <div className="discover-page-title">
         <div className="wrap">
           <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} />

@@ -665,7 +665,10 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   })
 
   return (
-    <div className="flex flex-col gap-6">
+    // min-w-0 + max-w-full + overflow-hidden matches the wrapper on
+    // /admin/projects and /admin/users so no wide descendant expands
+    // the page beyond the viewport on mobile.
+    <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h3 className="arco-section-title">Categories</h3>

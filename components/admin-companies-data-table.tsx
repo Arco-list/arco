@@ -1692,9 +1692,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    // min-w-0 + max-w-full + overflow-hidden mirrors the wrapper on
+    // /admin/projects and /admin/users — stops any wide descendant
+    // (funnel row, table, dropdown) from expanding the page beyond
+    // the viewport on mobile.
+    <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
+      {/* Header — stacks vertically on mobile so a wide right-side CTA
+           doesn't push the row beyond the viewport. */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-1">
           <h3 className="arco-section-title">Companies</h3>
         <p className="text-xs text-[#a1a1a0] mt-0.5">

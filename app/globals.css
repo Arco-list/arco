@@ -350,6 +350,17 @@
   }
 }
 
+/* Root-level width lock for mobile. `overflow-x: clip` above stops the
+   page from *scrolling* sideways, but a fixed-position header on iOS
+   Safari can still get its layout box measured against a viewport-wider
+   containing block if any descendant briefly overflows during hydration
+   (e.g. a wide table before its overflow-x: auto container mounts).
+   Clamping html + body to 100vw makes that impossible. Kept outside
+   the @layer base block so it always wins the cascade. */
+html, body {
+  max-width: 100vw;
+}
+
 
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

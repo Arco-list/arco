@@ -135,11 +135,17 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
   ])
 
   return (
-    <div className="min-h-screen">
+    // Root admin wrapper: overflow-x-clip on both the outer div and
+    // <main> so nothing an admin page renders (funnel bars with
+    // negative margins, wide tables) can push the body's horizontal
+    // scroll — this was letting mobile users pan sideways off the
+    // page on /admin/companies. `clip` (not `hidden`) preserves
+    // descendant fixed / portal escapes.
+    <div className="min-h-screen overflow-x-clip">
       <Header
         navLinks={buildAdminNavLinks({ outboundDueCount, inboxUnreadCount, projectsToReviewCount })}
       />
-      <main className="pt-[60px]">
+      <main className="pt-[60px] overflow-x-clip">
         {children}
       </main>
     </div>
