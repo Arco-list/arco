@@ -3,6 +3,7 @@ import { composeBrandedImage } from "@/lib/pinterest/composeBrandedImage"
 import {
   composeTypePinCopy,
   composeSpacePinCopy,
+  DESCRIPTION_PARAGRAPH_BREAK,
   type PinCopyInput,
 } from "@/lib/pinterest/compose"
 import {
@@ -253,7 +254,7 @@ export async function publishProjectPin(projectId: string): Promise<void> {
   }
   const copy = composeTypePinCopy(copyInput)
   const description = copy.hashtags.length > 0
-    ? `${copy.description}\n\n${copy.hashtags.join(" ")}`
+    ? `${copy.description}${DESCRIPTION_PARAGRAPH_BREAK}${copy.hashtags.join(" ")}`
     : copy.description
 
   const pin = await createPin({
@@ -318,7 +319,7 @@ export async function publishFeaturePin(featureId: string): Promise<void> {
   }
   const copy = composeSpacePinCopy(copyInput)
   const description = copy.hashtags.length > 0
-    ? `${copy.description}\n\n${copy.hashtags.join(" ")}`
+    ? `${copy.description}${DESCRIPTION_PARAGRAPH_BREAK}${copy.hashtags.join(" ")}`
     : copy.description
 
   const pin = await createPin({
@@ -409,7 +410,7 @@ export async function patchProjectPin(projectId: string): Promise<void> {
     scope: ctx.scope,
   })
   const description = copy.hashtags.length > 0
-    ? `${copy.description}\n\n${copy.hashtags.join(" ")}`
+    ? `${copy.description}${DESCRIPTION_PARAGRAPH_BREAK}${copy.hashtags.join(" ")}`
     : copy.description
 
   await patchPin({
@@ -455,7 +456,7 @@ export async function patchFeaturePin(featureId: string): Promise<void> {
     spaceSlug: feature.spaceSlug,
   })
   const description = copy.hashtags.length > 0
-    ? `${copy.description}\n\n${copy.hashtags.join(" ")}`
+    ? `${copy.description}${DESCRIPTION_PARAGRAPH_BREAK}${copy.hashtags.join(" ")}`
     : copy.description
 
   await patchPin({

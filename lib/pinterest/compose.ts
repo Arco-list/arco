@@ -93,14 +93,26 @@ function buildTitle(base: string, company: string | null | undefined): string {
 
 // ── Description ──────────────────────────────────────────────────────────
 
+// Paragraph separator between description blocks. Pinterest's pin-view
+// UI collapses ordinary "\n\n" whitespace when rendering — U+2029 is the
+// Unicode PARAGRAPH SEPARATOR (semantically distinct from generic
+// whitespace) which some clients respect as a hard break where "\n\n"
+// would render inline. Belt-and-braces: leading "\n" too, in case a
+// downstream renderer normalises the paragraph separator away.
+const PARAGRAPH_BREAK = "\n\u2029\n"
+
 function buildDescription(rawDescription: string | null): string {
   const body = rawDescription ? stripHtml(rawDescription) : ""
   const closing = CLOSING_TAGLINE
-  const room = DESCRIPTION_MAX - closing.length - 2 // "\n\n"
+  const room = DESCRIPTION_MAX - closing.length - PARAGRAPH_BREAK.length
   const trimmedBody = body.length > 0 ? truncate(body, Math.max(0, room)) : ""
-  const glue = trimmedBody ? "\n\n" : ""
+  const glue = trimmedBody ? PARAGRAPH_BREAK : ""
   return `${trimmedBody}${glue}${closing}`.slice(0, DESCRIPTION_MAX)
 }
+
+/** Re-exported so the pin-workflow layer can use the same separator
+ *  between description and hashtags. */
+export const DESCRIPTION_PARAGRAPH_BREAK = PARAGRAPH_BREAK
 
 // ── Hashtags ─────────────────────────────────────────────────────────────
 
