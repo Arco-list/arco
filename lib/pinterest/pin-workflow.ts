@@ -197,6 +197,19 @@ export async function publishProjectPin(projectId: string): Promise<void> {
   if (!ctx.coverPhotoUrl) throw permanentError(`project ${projectId} has no cover photo`)
   if (!ctx.categoryId) throw permanentError(`project ${projectId} has no project_type_category — no board mapping`)
 
+  // Idempotency guard: if the row already carries a pin id, tear the old
+  // pin down before creating a new one so a repeat backfill (or a
+  // trigger that fires twice) doesn't leave two live pins on Pinterest.
+  const { data: existing } = await supabase
+    .from("projects")
+    .select("pinterest_pin_id")
+    .eq("id", projectId)
+    .maybeSingle()
+  if (existing?.pinterest_pin_id) {
+    await tryDeleteExistingPin(existing.pinterest_pin_id)
+    await supabase.from("projects").update({ pinterest_pin_id: null }).eq("id", projectId)
+  }
+
   const boardId = await resolveBoardId({ categoryId: ctx.categoryId })
   if (!boardId) throw permanentError(`no active Pinterest board mapped to category ${ctx.categoryId}`)
 
@@ -253,6 +266,18 @@ export async function publishFeaturePin(featureId: string): Promise<void> {
   if (!feature.coverPhotoUrl) throw permanentError(`feature ${featureId} has no cover photo`)
   if (!feature.spaceId) throw permanentError(`feature ${featureId} has no space assignment`)
   if (feature.spaceSlug === "exterior") throw permanentError(`feature ${featureId} is on the exterior space — no board`)
+
+  // Same idempotency guard as publishProjectPin — repeat publishes for
+  // a feature that already has a live pin tear the old one down first.
+  const { data: existing } = await supabase
+    .from("project_features")
+    .select("pinterest_pin_id")
+    .eq("id", featureId)
+    .maybeSingle()
+  if (existing?.pinterest_pin_id) {
+    await tryDeleteExistingPin(existing.pinterest_pin_id)
+    await supabase.from("project_features").update({ pinterest_pin_id: null }).eq("id", featureId)
+  }
 
   const boardId = await resolveBoardId({ spaceId: feature.spaceId })
   if (!boardId) throw permanentError(`no active Pinterest board mapped to space ${feature.spaceSlug ?? feature.spaceId}`)
@@ -431,6 +456,19 @@ export async function patchFeaturePin(featureId: string): Promise<void> {
       pinterest_sync_error: null,
     })
     .eq("id", featureId)
+}
+
+// ── Idempotency helper ──────────────────────────────────────────────────
+// Delete a pin without treating 404 (already gone on Pinterest) as an
+// error. Any other failure bubbles so the worker retries.
+async function tryDeleteExistingPin(pinId: string): Promise<void> {
+  try {
+    await deletePin(pinId)
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status
+    if (status === 404) return
+    throw err
+  }
 }
 
 // ── Permanent-error marker ──────────────────────────────────────────────

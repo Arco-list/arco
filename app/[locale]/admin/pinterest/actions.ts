@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { createBoard, listBoards } from "@/lib/pinterest/client"
+import { createBoard, listBoards, listPins, deletePin } from "@/lib/pinterest/client"
 
 /** Guard used by every action here. Throws → server action returns 500. */
 async function assertAdmin(): Promise<void> {
@@ -180,6 +180,56 @@ export async function createMissingBoardsAction(): Promise<{
 
   revalidatePath("/[locale]/admin/pinterest", "page")
   return { success: true, created, adopted, skipped, failures }
+}
+
+// ── Reconcile orphan pins on Pinterest ──────────────────────────────────
+// Lists every pin on the connected account and deletes anything that
+// isn't referenced by projects.pinterest_pin_id or
+// project_features.pinterest_pin_id. Used after a duplicate-publish
+// bug leaves orphaned pins on Pinterest that our DB no longer knows
+// about (a repeat publish overwrote the stored id, but the old pin
+// stayed live on Pinterest).
+export async function reconcileOrphansAction(): Promise<{
+  success: boolean
+  pinterestPins: number
+  known: number
+  deleted: number
+  failures: number
+  error?: string
+}> {
+  await assertAdmin()
+  const supabase = createServiceRoleSupabaseClient()
+
+  const knownIds = new Set<string>()
+  const { data: projectPins } = await supabase
+    .from("projects").select("pinterest_pin_id").not("pinterest_pin_id", "is", null)
+  for (const row of projectPins ?? []) if (row.pinterest_pin_id) knownIds.add(row.pinterest_pin_id)
+  const { data: featurePins } = await supabase
+    .from("project_features").select("pinterest_pin_id").not("pinterest_pin_id", "is", null)
+  for (const row of featurePins ?? []) if (row.pinterest_pin_id) knownIds.add(row.pinterest_pin_id)
+
+  let pinterestPins: { pinId: string }[]
+  try {
+    pinterestPins = await listPins()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { success: false, pinterestPins: 0, known: knownIds.size, deleted: 0, failures: 0, error: message }
+  }
+
+  let deleted = 0
+  let failures = 0
+  for (const p of pinterestPins) {
+    if (knownIds.has(p.pinId)) continue
+    try {
+      await deletePin(p.pinId)
+      deleted++
+    } catch {
+      failures++
+    }
+  }
+
+  revalidatePath("/[locale]/admin/pinterest", "page")
+  return { success: true, pinterestPins: pinterestPins.length, known: knownIds.size, deleted, failures }
 }
 
 // ── Disconnect ───────────────────────────────────────────────────────────

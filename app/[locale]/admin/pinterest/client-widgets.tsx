@@ -7,6 +7,7 @@ import {
   enqueueBackfillAction,
   disconnectPinterestAction,
   createMissingBoardsAction,
+  reconcileOrphansAction,
 } from "./actions"
 
 // ── Shared branded confirm dialog ────────────────────────────────────────
@@ -304,6 +305,44 @@ function BoardTable({
         </table>
       </div>
     </div>
+  )
+}
+
+export function ReconcileOrphansButton() {
+  const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  return (
+    <>
+      <button
+        type="button"
+        className="btn-tertiary"
+        onClick={() => setOpen(true)}
+        disabled={isPending}
+      >
+        {isPending ? "Scanning…" : "Reconcile orphans"}
+      </button>
+      <ConfirmDialog
+        open={open}
+        title="Reconcile orphan pins"
+        body="Lists every pin on the Arco Pinterest account and permanently deletes any pin not tracked by our database. Use this after a duplicate-publish event has left orphaned pins on Pinterest. This can take a minute if the account has many pins."
+        confirmLabel="Scan & delete orphans"
+        confirmVariant="danger"
+        isPending={isPending}
+        onCancel={() => setOpen(false)}
+        onConfirm={() => {
+          startTransition(async () => {
+            const res = await reconcileOrphansAction()
+            setOpen(false)
+            if (!res.success) {
+              toast.error(res.error ?? "Reconcile failed")
+              return
+            }
+            const failed = res.failures > 0 ? `, ${res.failures} failed` : ""
+            toast.success(`Scanned ${res.pinterestPins} pin(s), ${res.known} tracked, ${res.deleted} orphan(s) deleted${failed}`)
+          })
+        }}
+      />
+    </>
   )
 }
 

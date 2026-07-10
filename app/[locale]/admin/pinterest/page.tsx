@@ -5,6 +5,7 @@ import {
   DisconnectButton,
   BoardMappingButton,
   CreateMissingBoardsButton,
+  ReconcileOrphansButton,
 } from "./client-widgets"
 
 export const dynamic = "force-dynamic"
@@ -135,6 +136,7 @@ export default async function PinterestAdminPage({ params, searchParams }: PageP
               spaceBoards={spaceBoards}
             />
             <CreateMissingBoardsButton />
+            <ReconcileOrphansButton />
             {isConnected && <DisconnectButton />}
           </div>
 

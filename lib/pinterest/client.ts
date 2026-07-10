@@ -313,6 +313,26 @@ export async function createBoard(input: CreateBoardInput): Promise<CreateBoardO
 }
 
 // ── Pin operations ───────────────────────────────────────────────────────
+/** Paginate every pin on the connected account. Used by the admin
+ *  reconcile action to detect and delete orphans. */
+export async function listPins(): Promise<{ pinId: string }[]> {
+  const out: { pinId: string }[] = []
+  let bookmark: string | undefined
+  do {
+    const qs = new URLSearchParams({ page_size: "250" })
+    if (bookmark) qs.set("bookmark", bookmark)
+    const res = await callPinterest<{ items: { id: string }[]; bookmark?: string }>(
+      "GET",
+      `/pins?${qs.toString()}`,
+    )
+    for (const item of res.items ?? []) {
+      out.push({ pinId: item.id })
+    }
+    bookmark = res.bookmark
+  } while (bookmark)
+  return out
+}
+
 export async function createPin(input: CreatePinInput): Promise<CreatePinOutput> {
   const body = {
     board_id: input.boardId,
