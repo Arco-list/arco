@@ -40,6 +40,7 @@ interface ProjectContext {
   description: string | null
   buildingType: string | null
   addressCity: string | null
+  scope: string | null
   style: string | null
   coverPhotoUrl: string | null
   ownerCompany: { name: string | null; slug: string | null } | null
@@ -50,7 +51,7 @@ async function loadProjectContext(projectId: string): Promise<ProjectContext | n
   const supabase = createServiceRoleSupabaseClient()
   const { data: project } = await supabase
     .from("projects")
-    .select("id, title, slug, description, building_type, address_city, style_preferences, project_type_category_id")
+    .select("id, title, slug, description, building_type, address_city, style_preferences, project_type_category_id, project_type")
     .eq("id", projectId)
     .maybeSingle()
   if (!project) return null
@@ -115,6 +116,7 @@ async function loadProjectContext(projectId: string): Promise<ProjectContext | n
     description: project.description ?? null,
     buildingType: project.building_type ?? null,
     addressCity: project.address_city ?? null,
+    scope: (project as { project_type?: string | null }).project_type ?? null,
     style,
     coverPhotoUrl,
     ownerCompany,
@@ -219,7 +221,7 @@ export async function publishProjectPin(projectId: string): Promise<void> {
     city: ctx.addressCity,
     style: ctx.style,
     buildingType: ctx.buildingType,
-    scope: null,
+    scope: ctx.scope,
   }
   const copy = composeTypePinCopy(copyInput)
   const description = copy.hashtags.length > 0
@@ -270,7 +272,7 @@ export async function publishFeaturePin(featureId: string): Promise<void> {
     city: project.addressCity,
     style: project.style,
     buildingType: project.buildingType,
-    scope: null,
+    scope: project.scope,
     spaceName: feature.spaceName,
     spaceSlug: feature.spaceSlug,
   }
@@ -364,7 +366,7 @@ export async function patchProjectPin(projectId: string): Promise<void> {
     city: ctx.addressCity,
     style: ctx.style,
     buildingType: ctx.buildingType,
-    scope: null,
+    scope: ctx.scope,
   })
   const description = copy.hashtags.length > 0
     ? `${copy.description}\n\n${copy.hashtags.join(" ")}`
@@ -408,7 +410,7 @@ export async function patchFeaturePin(featureId: string): Promise<void> {
     city: project.addressCity,
     style: project.style,
     buildingType: project.buildingType,
-    scope: null,
+    scope: project.scope,
     spaceName: feature.spaceName,
     spaceSlug: feature.spaceSlug,
   })

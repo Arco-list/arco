@@ -37,7 +37,15 @@ export interface PinCopy {
 // ── Constants ────────────────────────────────────────────────────────────
 const TITLE_MAX = 100
 const DESCRIPTION_MAX = 500
-const HASHTAGS_MAX = 5
+// Pinterest allows up to 20 but ranking value drops off around 7-8.
+// Our order is (room), type, scope, style, city, architect, brand.
+const HASHTAGS_MAX = 7
+// Brand tag is preserved verbatim (mixed case). #arco disambiguates from
+// the more crowded lowercase #arco (arco lamps/lighting, Spanish "arco")
+// only cosmetically — Pinterest hashtag matching is case-insensitive.
+// Keep the mixed-case spelling because it renders as the brand name in
+// the pin preview, not as the domain slug.
+const BRAND_HASHTAG = "#Arco"
 const CANONICAL_ORIGIN = "https://www.arcolist.com"
 const CLOSING_TAGLINE =
   "Seen on Arco — the curated platform for architecture & interior design."
@@ -98,23 +106,26 @@ function buildDescription(rawDescription: string | null): string {
 
 function buildHashtags(
   parts: {
-    buildingType?: string | null
     space?: string | null
+    buildingType?: string | null
     scope?: string | null
     style?: string | null
+    city?: string | null
     companySlug?: string | null
   },
 ): string[] {
-  // Order matters — first tag is the strongest topical signal (building
-  // type for type pins, space for space pins). arcolist always trails so
-  // it survives the 5-tag cap even when other signals populate.
+  // Order matters — first tag is the strongest topical signal. Room
+  // leads on space pins (Pinterest room-search dominates), building
+  // type next, then scope (renovation vs new-build is a high-intent
+  // search bucket), style, city, architect. #Arco always trails so it
+  // survives the cap even when other signals populate.
   const raw: (string | null | undefined)[] = [
-    parts.buildingType,
     parts.space,
+    parts.buildingType,
     parts.scope,
     parts.style,
+    parts.city,
     parts.companySlug,
-    "arcolist",
   ]
   const seen = new Set<string>()
   const out: string[] = []
@@ -124,7 +135,11 @@ function buildHashtags(
     if (seen.has(slug)) continue
     seen.add(slug)
     out.push(`#${slug}`)
-    if (out.length >= HASHTAGS_MAX) break
+    if (out.length >= HASHTAGS_MAX - 1) break // reserve last slot for brand
+  }
+  // Always trail with the brand tag (mixed case, verbatim).
+  if (!seen.has(BRAND_HASHTAG.toLowerCase().slice(1))) {
+    out.push(BRAND_HASHTAG)
   }
   return out
 }
@@ -143,6 +158,7 @@ export function composeTypePinCopy(input: PinCopyInput): PinCopy {
     buildingType: input.buildingType,
     scope: input.scope,
     style: input.style,
+    city: input.city,
     companySlug: input.companySlug,
   })
   return {
@@ -166,6 +182,7 @@ export function composeSpacePinCopy(input: PinCopyInput): PinCopy {
     buildingType: input.buildingType,
     scope: input.scope,
     style: input.style,
+    city: input.city,
     companySlug: input.companySlug,
   })
   return {

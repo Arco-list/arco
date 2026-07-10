@@ -60,7 +60,7 @@ const SOCIAL = { w: 1200, h: 630 } as const
 // Absolute badge width in the output. Kept constant across formats so the
 // brand mark reads at identical visual weight in Pinterest and social
 // previews alike.
-const BADGE_WIDTH = 130
+const BADGE_WIDTH = 150
 const BADGE_INSET_RATIO = 0.05
 
 // Corner radius of the top corners of the badge as a fraction of tile
