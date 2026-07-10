@@ -197,6 +197,116 @@ export function CreateMissingBoardsButton() {
   )
 }
 
+// ── Board mapping popup ─────────────────────────────────────────────────
+// Two tables (type + space boards) live behind one "Board mapping"
+// button. Same pattern as the Sales page's Status Guide popup.
+interface BoardRow {
+  id: string
+  board_id: string | null
+  board_name: string | null
+  is_active: boolean
+  spaces?: { name: string | null; slug: string | null } | null
+  categories?: { name: string | null; slug: string | null } | null
+}
+
+export function BoardMappingButton({
+  typeBoards,
+  spaceBoards,
+}: {
+  typeBoards: BoardRow[]
+  spaceBoards: BoardRow[]
+}) {
+  const [open, setOpen] = useState(false)
+  const unmapped = [...typeBoards, ...spaceBoards].filter((b) => !b.board_id).length
+  return (
+    <>
+      <button
+        type="button"
+        className="btn-tertiary"
+        onClick={() => setOpen(true)}
+      >
+        Board mapping{unmapped > 0 && ` · ${unmapped} unmapped`}
+      </button>
+      {open && (
+        <div className="popup-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="popup-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 780, maxHeight: "85vh", overflowY: "auto" }}
+          >
+            <div className="popup-header">
+              <h3 className="arco-section-title">Board mapping</h3>
+              <button type="button" className="popup-close" onClick={() => setOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <p className="text-xs text-[#6b6b68]" style={{ marginBottom: 20, lineHeight: 1.5 }}>
+              Paste the Pinterest board id for each board. Rows without an id are skipped by the cron.
+              Use the <strong>Create missing boards</strong> action to auto-populate this table.
+            </p>
+
+            <BoardTable title="Type boards" boards={typeBoards} labelKey="categories" />
+            <div style={{ marginTop: 24 }}>
+              <BoardTable title="Space boards" boards={spaceBoards} labelKey="spaces" />
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setOpen(false)}
+                className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function BoardTable({
+  title,
+  boards,
+  labelKey,
+}: {
+  title: string
+  boards: BoardRow[]
+  labelKey: "spaces" | "categories"
+}) {
+  return (
+    <div>
+      <h4 className="arco-label" style={{ marginBottom: 12 }}>{title}</h4>
+      <div className="arco-table-wrap">
+        <table className="arco-table">
+          <thead>
+            <tr>
+              <th style={{ width: "34%" }}>Board</th>
+              <th style={{ width: "22%" }}>Slug</th>
+              <th style={{ width: "36%" }}>Pinterest board id</th>
+              <th style={{ width: "8%" }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {boards.length === 0 && (
+              <tr><td colSpan={4} style={{ color: "var(--muted)", padding: 16 }}>No rows.</td></tr>
+            )}
+            {boards.map((b) => {
+              const target = labelKey === "spaces" ? b.spaces : b.categories
+              return (
+                <tr key={b.id}>
+                  <td>{b.board_name ?? target?.name ?? "—"}</td>
+                  <td><code style={{ fontSize: 11 }}>{target?.slug ?? "—"}</code></td>
+                  <td><BoardIdInput boardRowId={b.id} initialValue={b.board_id ?? ""} /></td>
+                  <td><RowActions boardRowId={b.id} initialValue={b.board_id ?? ""} /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export function DisconnectButton() {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()

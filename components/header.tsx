@@ -820,6 +820,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                 growthModel: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="M7 14l4-4 4 4 5-5" /></svg>,
                                 categories: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>,
                                 design: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>,
+                                pinterest: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M8 20l4-12" /><path d="M8 12a4 4 0 118 0c0 2.5-1.5 4-3.5 4S9 15 9 13" /></svg>,
                               }
                               const adminGroups: { key: string; label: string; items: { href: string; label: string; icon: React.ReactNode }[] }[] = [
                                 { key: "marketplace", label: t("admin_marketplace"), items: [
@@ -840,6 +841,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                 ]},
                                 { key: "platform", label: t("admin_platform"), items: [
                                   { href: "/admin/categories", label: t("admin_categories"), icon: adminIcons.categories },
+                                  { href: "/admin/pinterest", label: "Pinterest", icon: adminIcons.pinterest },
                                   { href: "/admin/design", label: t("admin_design"), icon: adminIcons.design },
                                 ]},
                               ]
