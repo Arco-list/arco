@@ -154,12 +154,27 @@ async function loadFeatureContext(featureId: string): Promise<FeatureContext | n
     spaceSlug = space?.slug ?? null
   }
 
+  // Prefer the explicit cover_photo_id; fall back to the first photo
+  // attached to this feature (via project_photos.feature_id). Most
+  // secondary spaces (pool, garden, terrace) never had a designer
+  // promote one photo as "cover" — but the photos themselves are on
+  // the feature, so first-order is a safe implicit choice.
   let coverPhotoUrl: string | null = null
   if (feature.cover_photo_id) {
     const { data: photo } = await supabase
       .from("project_photos")
       .select("url")
       .eq("id", feature.cover_photo_id)
+      .maybeSingle()
+    coverPhotoUrl = photo?.url ?? null
+  }
+  if (!coverPhotoUrl) {
+    const { data: photo } = await supabase
+      .from("project_photos")
+      .select("url")
+      .eq("feature_id", feature.id)
+      .order("order_index", { ascending: true })
+      .limit(1)
       .maybeSingle()
     coverPhotoUrl = photo?.url ?? null
   }

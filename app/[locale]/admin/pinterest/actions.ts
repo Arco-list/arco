@@ -72,18 +72,29 @@ export async function enqueueBackfillAction(): Promise<{
     if (!error) enqueued++
   }
 
-  // Fan out to features (non-Exterior, with a cover).
+  // Fan out to features (non-Exterior). Eligibility is "has any photo
+  // attached" — either an explicit cover_photo_id OR at least one row
+  // in project_photos linked via feature_id. The workflow falls back
+  // to first-order photo when no cover is set.
   const { data: features } = await supabase
     .from("project_features")
     .select("id, project_id, space_id, cover_photo_id, spaces(slug)")
     .in("project_id", projectIds)
-    .not("cover_photo_id", "is", null)
+  const featureIds = (features ?? []).map((f) => f.id)
+  const withPhotos = new Set<string>()
+  if (featureIds.length > 0) {
+    const { data: photos } = await supabase
+      .from("project_photos")
+      .select("feature_id")
+      .in("feature_id", featureIds)
+    for (const p of photos ?? []) if (p.feature_id) withPhotos.add(p.feature_id)
+  }
   for (const f of features ?? []) {
-    // Skip if project didn't select through published projects list.
     if (!projectIds.includes(f.project_id)) continue
-    // Skip exterior — no board.
     const slug = (f as { spaces?: { slug?: string | null } | null }).spaces?.slug
     if (slug === "exterior") continue
+    const hasAnyPhoto = f.cover_photo_id != null || withPhotos.has(f.id)
+    if (!hasAnyPhoto) continue
     const { error } = await supabase.rpc("pinterest_enqueue", {
       p_target_type: "feature",
       p_target_id: f.id,
