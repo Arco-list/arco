@@ -94,11 +94,19 @@ async function loadProjectContext(projectId: string): Promise<ProjectContext | n
     if (company) ownerCompany = { name: company.name, slug: company.slug }
   }
 
-  // Style — style_preferences is a text[] on projects; pick the first tag
-  // so it slots into "· {style} {building_type}" without turning the title
-  // into a bullet list. If empty, the title/hashtag builders drop the field.
-  const stylePref = (project as { style_preferences?: string[] | null }).style_preferences
-  const style = Array.isArray(stylePref) && stylePref.length > 0 ? stylePref[0] : null
+  // Style — style_preferences is a text[] of taxonomy option IDs, NOT
+  // display strings. Resolve the first one to its slug so hashtags read
+  // as `#modern` instead of `#3f5274a2...`. Silently drops empty inputs.
+  const stylePrefIds = (project as { style_preferences?: string[] | null }).style_preferences
+  let style: string | null = null
+  if (Array.isArray(stylePrefIds) && stylePrefIds.length > 0) {
+    const { data: opts } = await supabase
+      .from("project_taxonomy_options")
+      .select("id, slug")
+      .in("id", stylePrefIds)
+      .limit(1)
+    style = opts?.[0]?.slug ?? null
+  }
 
   return {
     id: project.id,

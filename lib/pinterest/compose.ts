@@ -76,43 +76,11 @@ function truncate(text: string, max: number): string {
 
 // ── Title builders ───────────────────────────────────────────────────────
 
-interface TitlePartsBase {
-  base: string
-  company?: string
-  style?: string
-  buildingType?: string
-  city?: string
-}
-
-/** Fit the title within TITLE_MAX by dropping optional parts in the doc's
- *  fallback order: {style} → {company} → in {city}. */
-function fitTitle(parts: TitlePartsBase): string {
-  const buildingBit = parts.buildingType ? ` ${parts.buildingType}` : ""
-
-  const attempts = [
-    () => `${parts.base}${parts.company ? ` by ${parts.company}` : ""}` +
-      (parts.style || buildingBit ? ` · ${(parts.style ?? "").trim()}${buildingBit}`.replace(/\s+/g, " ") : "") +
-      (parts.city ? ` in ${parts.city}` : ""),
-    // Drop style
-    () => `${parts.base}${parts.company ? ` by ${parts.company}` : ""}` +
-      (buildingBit ? ` ·${buildingBit}` : "") +
-      (parts.city ? ` in ${parts.city}` : ""),
-    // Drop company
-    () => `${parts.base}` +
-      (parts.style || buildingBit ? ` · ${(parts.style ?? "").trim()}${buildingBit}`.replace(/\s+/g, " ") : "") +
-      (parts.city ? ` in ${parts.city}` : ""),
-    // Drop city
-    () => `${parts.base}` +
-      (buildingBit ? ` ·${buildingBit}` : ""),
-    // Just base
-    () => parts.base,
-  ]
-
-  for (const build of attempts) {
-    const candidate = build().replace(/\s+/g, " ").trim()
-    if (candidate.length <= TITLE_MAX) return candidate
-  }
-  return truncate(parts.base, TITLE_MAX)
+/** Compose the title as `{base} by {company}` if we have a company,
+ *  otherwise just `{base}`. Truncated to TITLE_MAX. */
+function buildTitle(base: string, company: string | null | undefined): string {
+  const raw = company ? `${base} by ${company}` : base
+  return truncate(raw.replace(/\s+/g, " ").trim(), TITLE_MAX)
 }
 
 // ── Description ──────────────────────────────────────────────────────────
@@ -163,15 +131,13 @@ function buildHashtags(
 
 // ── Public builders ──────────────────────────────────────────────────────
 
-/** Type-board pin — one per project, using project cover. */
+/** Type-board pin — one per project, using project cover. Title is
+ *  intentionally simple ({project} by {company}) — the pin lives on the
+ *  Villa/Townhouse/etc board so building_type is implicit, and style/
+ *  city are surfaced via hashtags where a data glitch is less visible
+ *  than a UUID in the headline. */
 export function composeTypePinCopy(input: PinCopyInput): PinCopy {
-  const title = fitTitle({
-    base: input.projectTitle,
-    company: input.companyName ?? undefined,
-    style: input.style ?? undefined,
-    buildingType: input.buildingType ?? undefined,
-    city: input.city ?? undefined,
-  })
+  const title = buildTitle(input.projectTitle, input.companyName)
   const description = buildDescription(input.projectDescription)
   const hashtags = buildHashtags({
     buildingType: input.buildingType,
@@ -188,18 +154,12 @@ export function composeTypePinCopy(input: PinCopyInput): PinCopy {
 }
 
 /** Space-board pin — one per project_feature, using space cover. Space
- *  name leads the title so a viewer scrolling the Kitchen board sees the
- *  room the pin represents at a glance. */
+ *  name leads the title so a viewer scrolling the Kitchen board sees
+ *  the room the pin represents at a glance, and so the 4–5 space pins
+ *  from one project don't read as near-duplicates on Pinterest. */
 export function composeSpacePinCopy(input: PinCopyInput): PinCopy {
   const spaceLabel = input.spaceName?.trim() ?? "Space"
-  const title = fitTitle({
-    base: `${spaceLabel} of ${input.projectTitle}`,
-    company: input.companyName ?? undefined,
-    style: input.style ?? undefined,
-    // Building type intentionally omitted on space pins — the space label
-    // is already the strongest signal in the title.
-    city: input.city ?? undefined,
-  })
+  const title = buildTitle(`${spaceLabel} of ${input.projectTitle}`, input.companyName)
   const description = buildDescription(input.projectDescription)
   const hashtags = buildHashtags({
     space: input.spaceSlug ?? input.spaceName ?? undefined,
