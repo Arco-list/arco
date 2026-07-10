@@ -148,9 +148,18 @@ async function runOne(row: QueueRow): Promise<Outcome> {
     if (asErr.permanent) {
       return { ok: false, permanent: true, reason: message }
     }
-    // 4xx (except 429) is permanent — Pinterest is telling us the payload
-    // is bad or the pin has gone away; retrying won't help.
-    if (asErr.status && asErr.status >= 400 && asErr.status < 500 && asErr.status !== 429) {
+    // 4xx (except 401 and 429) is permanent — Pinterest is telling us the
+    // payload is bad or the pin has gone away; retrying won't help.
+    // 401 stays transient because the fix is usually operational (token
+    // refresh, env switch, re-auth) and we don't want a bad-auth window
+    // to cascade-cancel hundreds of rows.
+    if (
+      asErr.status &&
+      asErr.status >= 400 &&
+      asErr.status < 500 &&
+      asErr.status !== 429 &&
+      asErr.status !== 401
+    ) {
       return { ok: false, permanent: true, reason: message }
     }
     return { ok: false, permanent: false, reason: message }

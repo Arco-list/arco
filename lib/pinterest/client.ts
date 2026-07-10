@@ -24,8 +24,15 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 // (https://api-sandbox.pinterest.com) — required while the Pinterest
 // developer app is in Trial access mode. Once the app is granted
 // Standard access, unset the env and calls flow to production again.
-const PINTEREST_API_BASE =
-  (process.env.PINTEREST_API_BASE?.trim() || "https://api.pinterest.com") + "/v5"
+const PINTEREST_API_HOST = (process.env.PINTEREST_API_BASE?.trim() || "https://api.pinterest.com").replace(/\/+$/, "")
+const PINTEREST_API_BASE = `${PINTEREST_API_HOST}/v5`
+// Authorize URL must live in the SAME environment as the API host.
+// Sandbox → sandbox.pinterest.com; production → www.pinterest.com.
+// Deriving it from the API host means one env var switches the whole
+// stack — otherwise OAuth grants a production token that a sandbox API
+// call then rejects with 401.
+const IS_SANDBOX = /api-sandbox/i.test(PINTEREST_API_HOST)
+const PINTEREST_AUTHORIZE_HOST = IS_SANDBOX ? "https://sandbox.pinterest.com" : "https://www.pinterest.com"
 const REFRESH_SKEW_SECONDS = 60
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -227,6 +234,7 @@ async function callPinterest<T>(
   method: string,
   path: string,
   body?: unknown,
+  isRetry = false,
 ): Promise<T> {
   const token = await getAccessToken()
   const res = await fetch(`${PINTEREST_API_BASE}${path}`, {
@@ -237,6 +245,12 @@ async function callPinterest<T>(
     },
     body: body ? JSON.stringify(body) : undefined,
   })
+  // On 401 the cached token may be stale (Pinterest revoked mid-window,
+  // env switched, etc). Invalidate + retry once; if it fails again, bubble.
+  if (res.status === 401 && !isRetry) {
+    cachedToken = null
+    return callPinterest<T>(method, path, body, true)
+  }
   if (res.status === 204) return undefined as T
   const raw = await res.text()
   let json: unknown = null
@@ -351,5 +365,5 @@ export function buildAuthorizeUrl(input: {
     scope,
     state: input.state,
   })
-  return `https://www.pinterest.com/oauth/?${params.toString()}`
+  return `${PINTEREST_AUTHORIZE_HOST}/oauth/?${params.toString()}`
 }
