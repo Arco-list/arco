@@ -20,19 +20,17 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
  * attached. The worker's try/catch decides transient vs. permanent.
  */
 
-// Production host by default. Override via env for the Sandbox host
-// (https://api-sandbox.pinterest.com) — required while the Pinterest
-// developer app is in Trial access mode. Once the app is granted
-// Standard access, unset the env and calls flow to production again.
+// API host — production by default. Override via env for the Sandbox
+// host (https://api-sandbox.pinterest.com) while the app is in Trial
+// access mode. Once Standard access is granted, unset the env.
 const PINTEREST_API_HOST = (process.env.PINTEREST_API_BASE?.trim() || "https://api.pinterest.com").replace(/\/+$/, "")
 const PINTEREST_API_BASE = `${PINTEREST_API_HOST}/v5`
-// Authorize URL must live in the SAME environment as the API host.
-// Sandbox → sandbox.pinterest.com; production → www.pinterest.com.
-// Deriving it from the API host means one env var switches the whole
-// stack — otherwise OAuth grants a production token that a sandbox API
-// call then rejects with 401.
-const IS_SANDBOX = /api-sandbox/i.test(PINTEREST_API_HOST)
-const PINTEREST_AUTHORIZE_HOST = IS_SANDBOX ? "https://sandbox.pinterest.com" : "https://www.pinterest.com"
+// OAuth authorize URL. Pinterest reuses the production authorize URL
+// for both environments (www.pinterest.com/oauth) — only the API host
+// differs between prod and sandbox. Only override PINTEREST_AUTHORIZE_BASE
+// if you have a specific reason (e.g. Pinterest's docs change and split
+// the environments in the future).
+const PINTEREST_AUTHORIZE_HOST = (process.env.PINTEREST_AUTHORIZE_BASE?.trim() || "https://www.pinterest.com").replace(/\/+$/, "")
 const REFRESH_SKEW_SECONDS = 60
 
 // ── Types ────────────────────────────────────────────────────────────────
