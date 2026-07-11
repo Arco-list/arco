@@ -214,6 +214,13 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   const update: Record<string, unknown> = { status: parsedStatus.data }
   if (parsedStatus.data === "draft") update.setup_reset_at = new Date().toISOString()
 
+  // Mirror the dashboard flow: admin picking Unlisted is an explicit
+  // choice — flag it so sync_company_listed_status doesn't auto-relist
+  // when we re-publish the owned projects below. Picking Listed clears
+  // the flag. Every other status leaves it alone.
+  if (parsedStatus.data === "unlisted") update.manually_unlisted = true
+  else if (parsedStatus.data === "listed") update.manually_unlisted = false
+
   const { error: updateError } = await supabase
     .from("companies")
     .update(update)
