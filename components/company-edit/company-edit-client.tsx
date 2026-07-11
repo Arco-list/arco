@@ -1171,9 +1171,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         steps={TOUR_STEPS}
         onFinish={() => {
           // Only chain the next onboarding step when we're actually in
-          // setup mode. Post-setup, the tour never re-triggers, and
-          // onFinish shouldn't drag a stale popup into view.
-          if (isSetupMode) setFirstProjectPopupOpen(true)
+          // setup mode AND the company doesn't already have published
+          // credits. Admin-triggered rollback to Created re-runs the
+          // tour, but the "publish your first project" popup makes no
+          // sense for a company that already has 2 accepted projects
+          // credited to them — this happened to Studio Martijn Veldman.
+          if (isSetupMode && !hasPublishedProjects) setFirstProjectPopupOpen(true)
         }}
       />
 
