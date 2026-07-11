@@ -49,7 +49,7 @@ async function assertAdmin() {
   return { supabase, user, error: null }
 }
 
-const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "draft", "prospected", "unclaimed"])
+const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "draft", "prospected", "unclaimed", "added", "invited"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
   const idResult = uuidSchema.safeParse(inviteId)
