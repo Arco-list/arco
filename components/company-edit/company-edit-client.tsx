@@ -603,10 +603,20 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   // This replaces the old "Bedrijf afronden" confirmation, which said
   // nothing the user could act on right now.
 
+  // Only unsubmitted drafts qualify — once a project moves to
+  // in_progress it's sitting with the editors and the owner has
+  // nothing to do on it. Showing "Finish your first project" at that
+  // point implies work the owner has already completed.
   const draftProject = useMemo(() => (
-    companyProjects.find(
-      (p) => p.rawProjectStatus === "draft" || p.rawProjectStatus === "in_progress"
-    ) ?? null
+    companyProjects.find((p) => p.rawProjectStatus === "draft") ?? null
+  ), [companyProjects])
+
+  // Project submitted for editorial review — owner has already acted.
+  // The company will auto-list via sync_company_listed_status (migration
+  // 185) when the editor flips project.status to published, so no
+  // popup / nudge is needed here.
+  const inReviewProject = useMemo(() => (
+    companyProjects.find((p) => p.rawProjectStatus === "in_progress") ?? null
   ), [companyProjects])
 
   // Pending credit: an architect credited this company on a published
@@ -679,9 +689,12 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     if (isSetupMode) return
     if (companyStatus === "listed") return
     if (!draftProject) return
+    // Skip when there's an in-review project — the owner has already
+    // acted; auto-list on approval closes the loop.
+    if (inReviewProject) return
     nudgeFiredRef.current = true
     setFirstProjectPopupOpen(true)
-  }, [isSetupMode, companyStatus, draftProject])
+  }, [isSetupMode, companyStatus, draftProject, inReviewProject])
 
   // ── Helpers ──
 
@@ -1206,15 +1219,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         steps={TOUR_STEPS}
         onFinish={() => {
           // Only chain the next onboarding step when we're actually in
-          // setup mode AND the company doesn't already have published
-          // credits. Admin-triggered rollback to Created re-runs the
-          // tour, but the "publish your first project" popup makes no
-          // sense for a company that already has 2 accepted projects
-          // credited to them — this happened to Studio Martijn Veldman.
-          // Always fire in setup mode — the segment picker chooses the
-          // right message (list_company for users with an accepted
-          // credit; publish/complete/share-link for everyone else).
-          if (isSetupMode) setFirstProjectPopupOpen(true)
+          // setup mode AND the segment picker has something actionable
+          // to say. The tour still runs on entry (spotlight + intro),
+          // but we skip the follow-up popup when the user's project is
+          // sitting with the editors — they've already done their part
+          // and the company will auto-list on approval via the
+          // sync_company_listed_status trigger.
+          if (isSetupMode && !inReviewProject) setFirstProjectPopupOpen(true)
         }}
       />
 
