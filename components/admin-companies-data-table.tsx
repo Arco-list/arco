@@ -2561,7 +2561,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
               <div style={{ fontSize: 13, color: "#44403c", marginBottom: 16, lineHeight: 1.5 }}>
                 Only companies with completed information and at least one project can be set to Prospected.
-                A prospect email will be sent to each eligible company.
+                They&apos;ll appear on the Sales page — start the sequence there to send the outreach email.
               </div>
 
               {eligible.length > 0 && (
@@ -2609,7 +2609,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   disabled={isPending || eligible.length === 0}
                   style={{ flex: 1 }}
                 >
-                  {isPending ? "Sending…" : `Send ${eligible.length === 1 ? "email" : `${eligible.length} emails`} & update`}
+                  {isPending ? "Updating…" : `Move to Prospected`}
                 </button>
               </div>
             </div>
