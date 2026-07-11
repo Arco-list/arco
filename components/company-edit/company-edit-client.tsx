@@ -612,11 +612,26 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     ) ?? null
   ), [companyProjects])
 
-  type FirstProjectSegment = "accept_invite" | "invitee" | "complete_draft" | "new_publisher"
-  // Order matters: accept_invite wins over everything else because it
-  // takes the user live in one click — no drafting or waiting.
+  // Accepted credit already on the profile (listed or featured on a
+  // published project) — company just needs setup finalised for the
+  // page to go live. Same shape as pendingInviteProject so the popup
+  // card renderer can reuse it.
+  const listedProject = useMemo(() => (
+    companyProjects.find(
+      (p) => (p.projectProfessionalStatus === "listed" || p.projectProfessionalStatus === "live_on_page")
+        && (p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"),
+    ) ?? null
+  ), [companyProjects])
+
+  type FirstProjectSegment = "accept_invite" | "list_company" | "invitee" | "complete_draft" | "new_publisher"
+  // Order matters:
+  //   accept_invite  — 1-click flips pp → live_on_page + auto-lists.
+  //   list_company   — accepted credit already there; company just
+  //                    needs setup_completed + listed. No routing.
+  //   invitee/…      — no credited project yet, segment-specific nudge.
   const firstProjectSegment: FirstProjectSegment =
     pendingInviteProject ? "accept_invite" :
+    listedProject ? "list_company" :
     !canPublishProjects ? "invitee" :
     draftProject ? "complete_draft" :
     "new_publisher"
@@ -1181,7 +1196,10 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           // tour, but the "publish your first project" popup makes no
           // sense for a company that already has 2 accepted projects
           // credited to them — this happened to Studio Martijn Veldman.
-          if (isSetupMode && !hasPublishedProjects) setFirstProjectPopupOpen(true)
+          // Always fire in setup mode — the segment picker chooses the
+          // right message (list_company for users with an accepted
+          // credit; publish/complete/share-link for everyone else).
+          if (isSetupMode) setFirstProjectPopupOpen(true)
         }}
       />
 
@@ -1998,6 +2016,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           } else if (firstProjectSegment === "new_publisher") {
             setImportInitialUrl(firstProjectUrl.trim())
             setImportModalOpen(true)
+          } else if (firstProjectSegment === "list_company") {
+            // markSetupComplete already flipped status → listed via
+            // completeCompanySetupAction (hasListableProjects is true
+            // whenever this segment fires). Just surface the state
+            // change so the page reflects listed + setup_completed.
+            toast.success(tFP("list_company_success"))
+            router.refresh()
           } else {
             const origin = typeof window !== "undefined" ? window.location.origin : ""
             const url = `${origin}/professionals/${company.slug || company.id}`
@@ -2036,6 +2061,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 const cardProject =
                   firstProjectSegment === "complete_draft" ? draftProject :
                   firstProjectSegment === "accept_invite" ? pendingInviteProject :
+                  firstProjectSegment === "list_company" ? listedProject :
                   null
                 if (!cardProject) return null
                 return (

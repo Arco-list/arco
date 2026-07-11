@@ -363,6 +363,10 @@
       "cta_accept_invite": "Accept credit",
       "accept_invite_success": "Credit accepted — your company page is now live.",
       "accept_invite_error": "Could not accept the credit. Please try again.",
+      "title_list_company": "Publish your company page",
+      "body_list_company": "You're credited on a published project. Finish setup and your company page goes live on Arco — the project will be featured on your profile.",
+      "cta_list_company": "Publish company page",
+      "list_company_success": "Your company page is now live.",
       "later": "I'll do this later"
     }
   },
