@@ -1644,6 +1644,31 @@ export async function completeCompanySetupAction(input: {
       logger.db("update", "companies", "Failed to list company", { companyId }, statusErr)
       return { success: false, error: "Failed to list company" }
     }
+
+    // Mirror admin listed/unlisted behavior: un-archive any owned
+    // projects the admin rollback to Created had hidden. Without this
+    // the company goes live but its own portfolio stays empty. Uses
+    // the service client because auth-scoped update wouldn't touch
+    // rows where the RLS 'published' constraint applied earlier.
+    try {
+      const svc = createServiceRoleSupabaseClient()
+      const { data: ownedLinks } = await svc
+        .from("project_professionals")
+        .select("project_id")
+        .eq("company_id", companyId)
+        .eq("is_project_owner", true)
+      const projectIds = (ownedLinks ?? []).map((r) => r.project_id).filter(Boolean) as string[]
+      if (projectIds.length > 0) {
+        await svc
+          .from("projects")
+          .update({ status: "published" })
+          .in("id", projectIds)
+          .eq("status", "archived")
+        await svc.rpc("refresh_all_materialized_views")
+      }
+    } catch (err) {
+      logger.error("Failed to un-archive owned projects on setup completion", { companyId }, err as Error)
+    }
   } else {
     // Even if not listing, mark setup as completed and move from draft to unlisted
     await supabase

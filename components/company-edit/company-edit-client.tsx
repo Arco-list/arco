@@ -573,18 +573,26 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const statusLabel = statusLabelMap[companyStatus] ?? t("status_unlisted")
   const statusIndicator = STATUS_INDICATOR[companyStatus] ?? "bg-muted-foreground"
 
+  // Archived counts as "eligible" too: when an admin rolls the company
+  // back to Created, updateCompanyStatusAction archives owned projects.
+  // Those projects will be un-archived by completeCompanySetupAction
+  // when the owner lists the company, so we should still treat them as
+  // published for the purposes of segment picking / auto-list.
+  const isEligibleProjectStatus = (s: string | null | undefined) =>
+    s === "published" || s === "completed" || s === "archived"
+
   // A company needs at least one visible published project to be listed
   const hasPublishedProjects = companyProjects.some((p) => {
     const ppStatus = p.projectProfessionalStatus
-    const isPublished = p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"
-    return isPublished && (ppStatus === "listed" || ppStatus === "live_on_page")
+    return isEligibleProjectStatus(p.rawProjectStatus)
+      && (ppStatus === "listed" || ppStatus === "live_on_page")
   })
 
   // Has projects that are invited/listed/featured on published projects (eligible to go live)
   const hasListableProjects = companyProjects.some((p) => {
     const ppStatus = p.projectProfessionalStatus
-    const isPublished = p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"
-    return isPublished && (ppStatus === "invited" || ppStatus === "listed" || ppStatus === "live_on_page")
+    return isEligibleProjectStatus(p.rawProjectStatus)
+      && (ppStatus === "invited" || ppStatus === "listed" || ppStatus === "live_on_page")
   })
 
   // ── First-project popup segment + finalisation ──────────────────────
@@ -615,11 +623,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   // Accepted credit already on the profile (listed or featured on a
   // published project) — company just needs setup finalised for the
   // page to go live. Same shape as pendingInviteProject so the popup
-  // card renderer can reuse it.
+  // card renderer can reuse it. Archived counts because admin
+  // rollback to Created flips owned projects → archived and
+  // completeCompanySetupAction un-archives them on list.
   const listedProject = useMemo(() => (
     companyProjects.find(
       (p) => (p.projectProfessionalStatus === "listed" || p.projectProfessionalStatus === "live_on_page")
-        && (p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"),
+        && isEligibleProjectStatus(p.rawProjectStatus),
     ) ?? null
   ), [companyProjects])
 
