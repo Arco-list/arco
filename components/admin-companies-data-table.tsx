@@ -2479,7 +2479,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const isSelected = statusChange.selectedStatus === option.value
                 const isClaimed = !!statusChange.company.ownerName
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
-                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any) || option.value === ("invited" as any)) && isClaimed
+                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any)) && isClaimed
+                // Invited is a system-derived state: a company lands there
+                // only when another professional credits it on a project.
+                // Admins can never pick it manually — the option is shown
+                // for visibility but always disabled.
+                const isSystemDerived = option.value === ("invited" as any)
                 // Created / Listed / Unlisted all require an owner — you
                 // can't move an Added/Showcased company straight to Created
                 // via admin. Claim it first (via Showcased sequence or an
@@ -2489,7 +2494,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 // can't move directly to Unlisted — it stays in Created
                 // until its first Listed transition.
                 const needsFirstListing = option.value === "unlisted" && statusChange.company.listedAt == null
-                const isDisabled = needsPublishedProject || needsUnclaimed || needsClaimed || needsFirstListing
+                const isDisabled = needsPublishedProject || needsUnclaimed || isSystemDerived || needsClaimed || needsFirstListing
                 return (
                   <button
                     key={option.value}
@@ -2509,7 +2514,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                               : "Get invited to a published project to list this company page")
                             : needsUnclaimed
                               ? `Company already claimed by ${statusChange.company.ownerName}`
-                              : needsClaimed
+                              : isSystemDerived
+                                ? "Auto-applied when a professional credits this company on a project"
+                                : needsClaimed
                                 ? "Company must be claimed first"
                                 : needsFirstListing
                                   ? "Company has never been listed — must go Listed first before it can be Unlisted"
