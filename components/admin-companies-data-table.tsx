@@ -2509,7 +2509,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                             : needsUnclaimed
                               ? `Company already claimed by ${statusChange.company.ownerName}`
                               : needsClaimed
-                                ? "Company must be claimed first — use Showcased to list added companies"
+                                ? "Company must be claimed first"
                                 : needsFirstListing
                                   ? "Company has never been listed — must go Listed first before it can be Unlisted"
                                   : option.description}
