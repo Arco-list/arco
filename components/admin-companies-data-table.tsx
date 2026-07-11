@@ -2508,7 +2508,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                               ? "Publish your first project to list this company page"
                               : "Get invited to a published project to list this company page")
                             : needsUnclaimed
-                              ? `Company already claimed by ${statusChange.company.ownerName}`
+                              ? (option.value === ("added" as any)
+                                ? "Applied automatically when the last team member is removed"
+                                : `Company already claimed by ${statusChange.company.ownerName}`)
                               : needsClaimed
                                 ? "Company must be claimed first"
                                 : needsFirstListing
