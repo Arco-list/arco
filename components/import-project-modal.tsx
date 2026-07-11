@@ -49,6 +49,20 @@ export function ImportProjectModal({
   const [scrapeUrl, setScrapeUrl] = useState<string | null>(null)
   const [isCreatingBlank, setIsCreatingBlank] = useState(false)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  // Pin volatile deps in refs so useEffect isn't retriggered by parent
+  // re-renders while a scrape is in-flight. The parent passes
+  // onOpenChange as an inline arrow (new identity every render), which
+  // otherwise re-fires the effect and starts multiple scrape calls,
+  // each toasting "already_imported" when they hit the duplicate check.
+  const onOpenChangeRef = useRef(onOpenChange)
+  onOpenChangeRef.current = onOpenChange
+  const routerRef = useRef(router)
+  routerRef.current = router
+  const onSuccessRef = useRef(onSuccess)
+  onSuccessRef.current = onSuccess
+  // One-shot guard: which scrapeUrl has an in-flight scrapeAndCreateProject.
+  // Prevents the effect body from launching a second call for the same URL.
+  const scrapingUrlRef = useRef<string | null>(null)
 
   const supabase = getBrowserSupabaseClient()
 
@@ -65,9 +79,13 @@ export function ImportProjectModal({
     }
   }, [open])
 
-  // Run scraping when URL is submitted
+  // Run scraping when URL is submitted. Depends only on scrapeUrl —
+  // phase/router/onOpenChange are read via refs so a parent re-render
+  // during the in-flight scrape doesn't restart it.
   useEffect(() => {
-    if (!scrapeUrl || phase !== "processing") return
+    if (!scrapeUrl) return
+    if (scrapingUrlRef.current === scrapeUrl) return
+    scrapingUrlRef.current = scrapeUrl
 
     timersRef.current.forEach(clearTimeout)
     timersRef.current = []
@@ -84,6 +102,7 @@ export function ImportProjectModal({
     scrapeAndCreateProject(scrapeUrl, adminCompanyId ?? undefined).then((result) => {
       timersRef.current.forEach(clearTimeout)
       timersRef.current = []
+      scrapingUrlRef.current = null
 
       if ("error" in result) {
         setStatuses(["error", "pending", "pending"])
@@ -95,18 +114,18 @@ export function ImportProjectModal({
         setPhase("done")
         toast.info(t("already_imported"))
         setTimeout(() => {
-          onOpenChange(false)
-          router.push(`/dashboard/edit/${result.projectId}`)
+          onOpenChangeRef.current(false)
+          routerRef.current.push(`/dashboard/edit/${result.projectId}`)
         }, 600)
       } else {
         setStatuses(["done", "done", "done"])
         setPhase("done")
         setTimeout(() => {
-          onOpenChange(false)
-          if (onSuccess) {
-            onSuccess(result.projectId)
+          onOpenChangeRef.current(false)
+          if (onSuccessRef.current) {
+            onSuccessRef.current(result.projectId)
           } else {
-            router.push(`/dashboard/edit/${result.projectId}`)
+            routerRef.current.push(`/dashboard/edit/${result.projectId}`)
           }
         }, 600)
       }
@@ -116,7 +135,7 @@ export function ImportProjectModal({
       timersRef.current.forEach(clearTimeout)
       timersRef.current = []
     }
-  }, [scrapeUrl, phase, router, onOpenChange])
+  }, [scrapeUrl, adminCompanyId, t])
 
   const handleSubmitUrl = useCallback(async (url: string) => {
     let parsedUrl: URL
