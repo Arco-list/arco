@@ -623,17 +623,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     ) ?? null
   ), [companyProjects])
 
-  type FirstProjectSegment = "accept_invite" | "list_company" | "invitee" | "complete_draft" | "new_publisher"
+  type FirstProjectSegment = "accept_invite" | "invitee" | "complete_draft" | "list_company" | "new_publisher"
   // Order matters:
   //   accept_invite  — 1-click flips pp → live_on_page + auto-lists.
-  //   list_company   — accepted credit already there; company just
-  //                    needs setup_completed + listed. No routing.
-  //   invitee/…      — no credited project yet, segment-specific nudge.
+  //   invitee        — can't publish (photographer/supplier) — copy
+  //                    the invite link so an architect can credit them.
+  //   complete_draft — a draft project exists; finishing it is the
+  //                    fastest path to going live.
+  //   list_company   — accepted credit (owner or contributor) already
+  //                    on a published project; company just needs
+  //                    setup_completed + listed. No routing.
+  //   new_publisher  — default nudge: paste a URL to import.
   const firstProjectSegment: FirstProjectSegment =
     pendingInviteProject ? "accept_invite" :
-    listedProject ? "list_company" :
     !canPublishProjects ? "invitee" :
     draftProject ? "complete_draft" :
+    listedProject ? "list_company" :
     "new_publisher"
 
   const markSetupComplete = useCallback(async () => {
