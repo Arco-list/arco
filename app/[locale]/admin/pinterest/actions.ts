@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { createBoard, listBoards, listPins, deletePin } from "@/lib/pinterest/client"
+import { createBoard, listBoards, listPins, deletePin, updateBoardCover } from "@/lib/pinterest/client"
 
 /** Guard used by every action here. Throws → server action returns 500. */
 async function assertAdmin(): Promise<void> {
@@ -241,6 +241,108 @@ export async function reconcileOrphansAction(): Promise<{
 
   revalidatePath("/[locale]/admin/pinterest", "page")
   return { success: true, pinterestPins: pinterestPins.length, known: knownIds.size, deleted, failures }
+}
+
+// ── Refresh board covers ────────────────────────────────────────────────
+// For each mapped board:
+//   1. Fetch the composite cover image from /api/pinterest/board-cover/{id}
+//      (rendered by ImageResponse + Satori with the real Cormorant Garamond
+//      Hero font — see app/api/pinterest/board-cover/[boardId]/route.tsx)
+//   2. Upload the PNG to pinterest-media storage
+//   3. Create a new pin on the board using that image
+//   4. PATCH the board with cover_pin_id = the new pin
+//
+// `cover_pin_id` on PATCH /boards isn't officially documented — if Pinterest
+// silently ignores or 400s, the pin still lands on the board and step 4
+// fails per-board (rest of batch continues).
+import { createPin as pinterestCreatePin } from "@/lib/pinterest/client"
+import { getSiteUrl } from "@/lib/utils"
+
+export async function refreshBoardCoversAction(): Promise<{
+  success: boolean
+  attempted: number
+  updated: number
+  failures: { board: string; reason: string }[]
+  error?: string
+}> {
+  await assertAdmin()
+  const supabase = createServiceRoleSupabaseClient()
+
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    return { success: false, attempted: 0, updated: 0, failures: [], error: "CRON_SECRET not configured" }
+  }
+  const siteUrl = getSiteUrl()
+
+  const { data: boards, error } = await supabase
+    .from("pinterest_boards")
+    .select("id, board_id, board_name, space_id, category_id")
+    .not("board_id", "is", null)
+    .eq("is_active", true)
+  if (error) return { success: false, attempted: 0, updated: 0, failures: [], error: error.message }
+
+  const failures: { board: string; reason: string }[] = []
+  let updated = 0
+  let attempted = 0
+
+  for (const board of boards ?? []) {
+    if (!board.board_id) continue
+    attempted++
+    const label = board.board_name ?? board.board_id
+    try {
+      // 1. Fetch composite from our OG-image route (Satori + Cormorant).
+      const coverRes = await fetch(`${siteUrl}/api/pinterest/board-cover/${board.id}`, {
+        headers: { Authorization: `Bearer ${cronSecret}` },
+      })
+      if (!coverRes.ok) {
+        failures.push({ board: label, reason: `cover render failed: HTTP ${coverRes.status}` })
+        continue
+      }
+      const png = Buffer.from(await coverRes.arrayBuffer())
+
+      // 2. Upload to storage under a per-board key so re-runs overwrite.
+      const objectKey = `board-covers/${board.id}.jpg`
+      const { error: upErr } = await supabase.storage
+        .from("pinterest-media")
+        .upload(objectKey, png, {
+          contentType: "image/png",
+          upsert: true,
+          cacheControl: "public, max-age=3600",
+        })
+      if (upErr) {
+        failures.push({ board: label, reason: `storage upload failed: ${upErr.message}` })
+        continue
+      }
+      const { data: publicUrl } = supabase.storage.from("pinterest-media").getPublicUrl(objectKey)
+
+      // 3. Publish as a dedicated cover pin. Description empty — this pin
+      //    is chrome, not a content pin; the room name is on the image.
+      const pin = await pinterestCreatePin({
+        boardId: board.board_id,
+        title: `${label} · arcolist.com`,
+        description: "",
+        link: `https://www.arcolist.com/professionals`,
+        imageUrl: publicUrl.publicUrl,
+      })
+
+      // 4. PATCH board so the new pin becomes the cover.
+      try {
+        await updateBoardCover(board.board_id, pin.pinId)
+        updated++
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        // Pin published successfully even if cover PATCH failed — surface
+        // as a soft warning rather than eating the whole board.
+        failures.push({ board: label, reason: `pin published (${pin.pinId}) but PATCH cover_pin_id failed: ${message}` })
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      failures.push({ board: label, reason: message })
+    }
+  }
+
+  revalidatePath("/[locale]/admin/pinterest", "page")
+  return { success: true, attempted, updated, failures }
 }
 
 // ── Disconnect ───────────────────────────────────────────────────────────
