@@ -934,33 +934,11 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   const { data: company } = await supabase
     .from("companies")
-    .select("status, manually_unlisted, owner_id")
+    .select("status, manually_unlisted")
     .eq("id", companyId)
     .maybeSingle()
 
   if (!company) return
-  if (company.status === "deactivated") return
-
-  // Orphan check first — flip to 'added' only when BOTH representations
-  // of ownership agree the company has nobody: no team_contacts row
-  // AND owner_id is null. Prevents legacy companies whose ownership
-  // lives only in companies.owner_id (never backfilled to
-  // company_contacts) from being incorrectly demoted. See migration 188.
-  const { count: teamCount } = await supabase
-    .from("company_contacts")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId)
-    .in("role", ["owner", "admin", "member"])
-  if ((teamCount ?? 0) === 0 && company.owner_id == null) {
-    if (company.status !== "added") {
-      await supabase.from("companies").update({ status: "added" }).eq("id", companyId)
-      logger.info("admin-projects", "Company auto-added (orphaned)", { companyId })
-    }
-    return
-  }
-  // Legacy companies (team=0 but owner_id set) → leave alone, don't
-  // fall through to the credit-based rules either.
-  if ((teamCount ?? 0) === 0) return
 
   let statusChanged = false
   // Auto-list from both `unlisted` (previously listed, then hidden) and
