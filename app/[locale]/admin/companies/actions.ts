@@ -207,9 +207,16 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     }
   }
 
+  // When admin rolls the company back to Created (draft), stamp
+  // setup_reset_at so the tour-seen localStorage flag is invalidated
+  // and the ceremony re-runs for the owner. Companies transitioning to
+  // any other status leave setup_reset_at alone.
+  const update: Record<string, unknown> = { status: parsedStatus.data }
+  if (parsedStatus.data === "draft") update.setup_reset_at = new Date().toISOString()
+
   const { error: updateError } = await supabase
     .from("companies")
-    .update({ status: parsedStatus.data })
+    .update(update)
     .eq("id", parsedCompanyId.data)
 
   if (updateError) {

@@ -1168,6 +1168,11 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       <CompanyEditTour
         companyId={company.id}
         enabled={isSetupMode && !servicePopupOpen}
+        // Admin-triggered rollback to Created stamps setup_reset_at,
+        // which the tour splices into its localStorage key so the
+        // previous "seen" flag is invalidated and the ceremony runs
+        // again. Undefined for companies never rolled back.
+        resetKey={(company as { setup_reset_at?: string | null }).setup_reset_at ?? undefined}
         steps={TOUR_STEPS}
         onFinish={() => {
           // Only chain the next onboarding step when we're actually in

@@ -25,6 +25,11 @@ interface CompanyEditTourProps {
   /** Distinct storage-key prefix so the company + project tours don't
    *  share the same "seen" state. */
   storagePrefix?: string
+  /** Extra fragment appended to the storageKey. Bump this on the server
+   *  side to invalidate a user's previously-dismissed "seen" flag —
+   *  e.g. pass companies.setup_reset_at (or its epoch) when an admin
+   *  rolls a company back to Created so the tour re-runs. Default: none. */
+  resetKey?: string | number | null
   /** Fires once when the tour ends — via Finish, Skip, or a mount-time
    *  "already seen" bail-out. Parent uses this to trigger the next step
    *  in the onboarding flow (e.g. the first-project popup). Never fires
@@ -83,9 +88,12 @@ function measure(target: HTMLElement, prefer: "top" | "bottom" | undefined): Lay
   return { spot, card: { top: cardTop, left: cardLeft, placement } }
 }
 
-export function CompanyEditTour({ companyId, enabled, steps, namespace = "company_edit.tour", storagePrefix = DEFAULT_STORAGE_PREFIX, onFinish, onStepChange }: CompanyEditTourProps) {
+export function CompanyEditTour({ companyId, enabled, steps, namespace = "company_edit.tour", storagePrefix = DEFAULT_STORAGE_PREFIX, resetKey, onFinish, onStepChange }: CompanyEditTourProps) {
   const t = useTranslations(namespace)
-  const storageKey = useMemo(() => `${storagePrefix}${companyId}`, [storagePrefix, companyId])
+  const storageKey = useMemo(
+    () => `${storagePrefix}${companyId}${resetKey ? `:${resetKey}` : ""}`,
+    [storagePrefix, companyId, resetKey],
+  )
 
   const [mounted, setMounted] = useState(false)
   const [active, setActive] = useState(false)

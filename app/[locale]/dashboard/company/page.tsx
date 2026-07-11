@@ -40,7 +40,7 @@ export default async function CompanySettingsPage({
     logo_url, email, phone, domain, is_verified, address, city, country,
     services_offered, languages, certificates, specialties, primary_service_id, founded_year,
     team_size_min, team_size_max, hero_photo_url, hero_photo_project_id, owner_id,
-    setup_completed, translations, audience
+    setup_completed, setup_reset_at, translations, audience
   `
 
   let company = null

@@ -266,6 +266,7 @@ export type Database = {
           seo_synced_at: string | null
           services_offered: string[] | null
           setup_completed: boolean
+          setup_reset_at: string | null
           slug: string | null
           source: Database["public"]["Enums"]["company_source"]
           specialties: string[]
@@ -320,6 +321,7 @@ export type Database = {
           seo_synced_at?: string | null
           services_offered?: string[] | null
           setup_completed?: boolean
+          setup_reset_at?: string | null
           slug?: string | null
           source?: Database["public"]["Enums"]["company_source"]
           specialties?: string[]
@@ -374,6 +376,7 @@ export type Database = {
           seo_synced_at?: string | null
           services_offered?: string[] | null
           setup_completed?: boolean
+          setup_reset_at?: string | null
           slug?: string | null
           source?: Database["public"]["Enums"]["company_source"]
           specialties?: string[]
@@ -3994,6 +3997,7 @@ export type Database = {
         | "deactivated"
         | "prospected"
         | "added"
+        | "invited"
         | "unclaimed"
       outbound_kind: "call" | "meeting" | "email" | "linkedin" | "note"
       outbound_outcome: "positive" | "neutral" | "negative" | "no_answer"
@@ -4187,6 +4191,7 @@ export const Constants = {
         "deactivated",
         "prospected",
         "added",
+        "invited",
         "unclaimed",
       ],
       outbound_kind: ["call", "meeting", "email", "linkedin", "note"],
