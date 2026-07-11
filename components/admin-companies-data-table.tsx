@@ -2506,9 +2506,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <span className={`status-modal-dot ${option.dotColor}`} />
                     <div className="status-modal-option-text">
                       <span className="status-modal-option-label">{option.label}</span>
-                      {isDisabled && !isSystemDerived ? (
-                        <span className="status-modal-option-desc" style={{ color: "#92400e" }}>
-                          {needsPublishedProject
+                      <span className="status-modal-option-desc">
+                        {isDisabled && !isSystemDerived
+                          ? needsPublishedProject
                             ? (statusChange.company.canPublishProjects
                               ? "Publish your first project to list this company page"
                               : "Get invited to a published project to list this company page")
@@ -2518,11 +2518,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                                 ? "Company must be claimed first"
                                 : needsFirstListing
                                   ? "Company has never been listed — must go Listed first before it can be Unlisted"
-                                  : option.description}
-                        </span>
-                      ) : (
-                        <span className="status-modal-option-desc">{option.description}</span>
-                      )}
+                                  : option.description
+                          : option.description}
+                      </span>
                     </div>
                   </button>
                 )
