@@ -934,7 +934,7 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   const { data: company } = await supabase
     .from("companies")
-    .select("status")
+    .select("status, manually_unlisted")
     .eq("id", companyId)
     .maybeSingle()
 
@@ -942,11 +942,21 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   let statusChanged = false
   // Auto-list from both `unlisted` (previously listed, then hidden) and
-  // `draft` (Created — company claimed but never listed). Missing the
-  // draft case left photographers/suppliers stuck in Created after
-  // accepting a credit, which then re-triggered the setup chain on the
-  // company edit page because isSetupMode is derived from `status === "draft"`.
-  if (hasActiveProjects && (company.status === "unlisted" || company.status === "draft")) {
+  // `draft` (Created — company claimed but never listed) — UNLESS the
+  // owner explicitly toggled Unlisted from the visibility popup (in
+  // which case manually_unlisted = true and we respect their choice).
+  // See migration 185 for the mirroring DB-side trigger that keeps this
+  // consistent across every project-add code path, not just callers of
+  // this JS helper.
+  // Auto-list from any pre-live state — draft, unlisted, prospected,
+  // invited, unclaimed, added. Excluded: listed (already there),
+  // deactivated (admin intent, do not override).
+  const AUTO_LIST_ELIGIBLE = new Set(["draft", "unlisted", "prospected", "invited", "unclaimed", "added"])
+  if (
+    hasActiveProjects
+    && AUTO_LIST_ELIGIBLE.has(company.status as string)
+    && !company.manually_unlisted
+  ) {
     // Flip setup_completed when auto-listing from draft — this is the
     // moment the pro effectively "completed" onboarding without going
     // through the manual chain, and leaving it false keeps the popup
@@ -957,6 +967,9 @@ export async function syncCompanyListedStatus(companyId: string) {
     logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId, from: company.status })
     statusChanged = true
   } else if (!hasActiveProjects && company.status === "listed") {
+    // Auto-unlist: leave manually_unlisted alone. It's still false
+    // (the previous listed was auto or explicitly user-chosen), so a
+    // future active credit will auto-relist.
     await supabase.from("companies").update({ status: "unlisted" }).eq("id", companyId)
     logger.info("admin-projects", "Company auto-unlisted (no active projects)", { companyId })
     statusChanged = true

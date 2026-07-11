@@ -710,9 +710,16 @@ export async function changeCompanyStatusAction(input: z.infer<typeof statusSche
 
   const nextStatus = parsed.data.status
 
+  // Track owner-initiated Unlisted so the auto-relist trigger respects
+  // their choice. Any manual "Listed" flip clears the flag so future
+  // system auto-unlist → auto-relist works again.
+  const update: Record<string, unknown> = { status: nextStatus }
+  if (nextStatus === "unlisted") update.manually_unlisted = true
+  else if (nextStatus === "listed") update.manually_unlisted = false
+
   const { error: updateError } = await supabase
     .from("companies")
-    .update({ status: nextStatus })
+    .update(update)
     .eq("id", company!.id)
 
   if (updateError) {

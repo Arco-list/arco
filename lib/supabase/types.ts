@@ -249,6 +249,7 @@ export type Database = {
           listed_at: string | null
           logo_url: string | null
           longitude: number | null
+          manually_unlisted: boolean
           name: string
           onboarded_at: string | null
           owner_id: string | null
@@ -302,6 +303,7 @@ export type Database = {
           listed_at?: string | null
           logo_url?: string | null
           longitude?: number | null
+          manually_unlisted?: boolean
           name: string
           onboarded_at?: string | null
           owner_id?: string | null
@@ -355,6 +357,7 @@ export type Database = {
           listed_at?: string | null
           logo_url?: string | null
           longitude?: number | null
+          manually_unlisted?: boolean
           name?: string
           onboarded_at?: string | null
           owner_id?: string | null
@@ -3937,6 +3940,10 @@ export type Database = {
           p_photo_url: string
           p_project_id: string
         }
+        Returns: undefined
+      }
+      sync_company_listed_status: {
+        Args: { p_company_id: string }
         Returns: undefined
       }
       toggle_project_like: {
