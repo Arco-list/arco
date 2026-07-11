@@ -997,7 +997,7 @@ export default function DashboardListingsPage() {
         { href: `/dashboard/listings${companyId ? `?company_id=${companyId}` : ""}`, label: t("listings") },
         { href: `/dashboard/company${companyId ? `?company_id=${companyId}` : ""}`, label: t("company") },
         { href: `/dashboard/team${companyId ? `?company_id=${companyId}` : ""}`, label: t("team") },
-        { href: "/dashboard/inbox", label: t("messages") },
+        { href: "/dashboard/inbox", label: t("inbox") },
         { href: "/dashboard/pricing", label: t("plans") },
       ]} />
 

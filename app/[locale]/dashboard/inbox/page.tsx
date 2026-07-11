@@ -143,7 +143,7 @@ export default function CompanyMessagesPage() {
     { href: `/dashboard/listings${cq}`, label: tDash("listings") },
     { href: `/dashboard/company${cq}`, label: tDash("company") },
     { href: `/dashboard/team${cq}`, label: tDash("team") },
-    { href: "/dashboard/inbox", label: tDash("messages") },
+    { href: "/dashboard/inbox", label: tDash("inbox") },
     { href: "/dashboard/pricing", label: tDash("plans") },
   ]
 

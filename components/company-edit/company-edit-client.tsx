@@ -1161,7 +1161,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         // audience='pro' companies. Filter rather than spread-conditional so
         // the nav order stays stable.
         ...(isPhotographer ? [] : [{ href: `/dashboard/team?company_id=${company.id}`, label: tNav("team") }]),
-        { href: "/dashboard/inbox", label: tNav("messages") },
+        { href: "/dashboard/inbox", label: tNav("inbox") },
         { href: "/dashboard/pricing", label: tNav("plans") },
       ]} />
 
