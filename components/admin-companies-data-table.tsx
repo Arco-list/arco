@@ -316,7 +316,7 @@ const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
   { value: "draft", label: "Created", description: "Company claimed but never listed yet", dotColor: "bg-[#2563eb]" },
-  { value: "invited" as any, label: "Invited", description: "Credited by another professional on a project. Auto-created, not yet claimed.", dotColor: "bg-amber-500" },
+  { value: "invited" as any, label: "Invited", description: "Credited by another professional on a project", dotColor: "bg-amber-500" },
   { value: "prospected" as any, label: "Showcased", description: "Live showcase page, waiting to be claimed", dotColor: "bg-[#f59e0b]" },
   { value: "added" as any, label: "Added", description: "Apollo import, manual add, or photographer", dotColor: "bg-[#dc2626]" },
   { value: "deactivated", label: "Deactivated", description: "Suspended and hidden", dotColor: "bg-[#dc2626]" },
