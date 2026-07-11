@@ -2479,7 +2479,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const isClaimed = !!statusChange.company.ownerName
                 const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
                 const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any) || option.value === ("invited" as any)) && isClaimed
-                const needsClaimed = (option.value === "listed" || option.value === "unlisted") && !isClaimed
+                // Created / Listed / Unlisted all require an owner — you
+                // can't move an Added/Showcased company straight to Created
+                // via admin. Claim it first (via Showcased sequence or an
+                // invite) which lands the company at Created naturally.
+                const needsClaimed = (option.value === "listed" || option.value === "unlisted" || option.value === "draft") && !isClaimed
                 // Lifecycle rule: a company that has never been listed
                 // can't move directly to Unlisted — it stays in Created
                 // until its first Listed transition.
