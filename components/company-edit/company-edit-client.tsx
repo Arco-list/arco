@@ -644,22 +644,33 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   ), [companyProjects])
 
   type FirstProjectSegment = "accept_invite" | "invitee" | "complete_draft" | "list_company" | "new_publisher"
-  // Order matters:
+  // Order matters and diverges on canPublishProjects:
+  //
   //   accept_invite  — 1-click flips pp → live_on_page + auto-lists.
-  //   invitee        — can't publish (photographer/supplier) — copy
-  //                    the invite link so an architect can credit them.
-  //   complete_draft — a draft project exists; finishing it is the
-  //                    fastest path to going live.
-  //   list_company   — accepted credit (owner or contributor) already
-  //                    on a published project; company just needs
-  //                    setup_completed + listed. No routing.
-  //   new_publisher  — default nudge: paste a URL to import.
+  //                    Always wins when a pending invite exists.
+  //
+  //   For photographers / suppliers (!canPublishProjects):
+  //     list_company — accepted credit already on the profile → the
+  //                    setup-finalise step is the only thing left.
+  //                    MUST beat invitee here; a photographer with a
+  //                    featured project shouldn't see "Get credited"
+  //                    (this hit Isabel Bronts in prod).
+  //     invitee      — no credit yet, can't publish → share the
+  //                    invite link so an architect can credit them.
+  //
+  //   For architects (canPublishProjects):
+  //     complete_draft — draft/in_progress → finishing it is more
+  //                      useful than flipping the switch on a single
+  //                      credit; the user asked for this order.
+  //     list_company   — accepted credit and no draft → just list.
+  //     new_publisher  — default nudge: paste a URL to import.
   const firstProjectSegment: FirstProjectSegment =
     pendingInviteProject ? "accept_invite" :
-    !canPublishProjects ? "invitee" :
-    draftProject ? "complete_draft" :
-    listedProject ? "list_company" :
-    "new_publisher"
+    !canPublishProjects
+      ? (listedProject ? "list_company" : "invitee")
+      : draftProject ? "complete_draft" :
+        listedProject ? "list_company" :
+        "new_publisher"
 
   const markSetupComplete = useCallback(async () => {
     return completeCompanySetupAction({
