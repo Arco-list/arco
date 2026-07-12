@@ -1,6 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
-import type { ProfessionalProjectSummary, ProfessionalGalleryImage } from "@/lib/professionals/types"
+import type { ProfessionalCard, ProfessionalProjectSummary, ProfessionalGalleryImage } from "@/lib/professionals/types"
+
+const PLACEHOLDER_IMAGE = "/placeholder.svg?height=400&width=600"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const isUuid = (value?: string | null): value is string =>
@@ -229,6 +231,64 @@ export async function fetchPhotographerDetail(
     projects,
     status: (company as any).status as string,
   }
+}
+
+/**
+ * List photographer companies for the /businesses/photography landing
+ * page. Same output shape as fetchDiscoverProfessionals so we can drop
+ * the results straight into the ProfessionalCard grid.
+ *
+ * Photographers are gated by companies.audience='pro' (see migration
+ * 147). No filter/sort — the page renders a simple grid and Phase 1
+ * omits the filter bar entirely. Public-only status filter matches the
+ * detail page's PUBLIC_STATUSES set.
+ */
+export async function fetchDiscoverPhotographers(
+  limit: number = 60,
+): Promise<ProfessionalCard[]> {
+  const supabase = await createServerSupabaseClient()
+
+  const { data, error } = await supabase
+    .from("companies")
+    .select("id, slug, name, city, country, domain, logo_url, hero_photo_url, specialties, status, audience")
+    .eq("audience", "pro")
+    .in("status", ["listed", "prospected"])
+    .order("name", { ascending: true })
+    .limit(limit)
+
+  if (error) {
+    logger.error("Failed to load discover photographers", { supabaseError: error })
+    return []
+  }
+
+  return (data ?? [])
+    .map((row): ProfessionalCard | null => {
+      if (!row?.id) return null
+      const locationParts = [row.city, row.country].filter((v): v is string => Boolean(v))
+      const location = locationParts.length > 0 ? locationParts.join(", ") : "Location unavailable"
+      const specialties = Array.isArray(row.specialties)
+        ? row.specialties.filter((v): v is string => typeof v === "string" && v.length > 0)
+        : []
+      return {
+        id: row.id as string,
+        slug: (row.slug as string) || (row.id as string),
+        companyId: row.id as string,
+        // The Photographer page uses company-only rows (no professionals
+        // join), so there's no professional id. Reuse the company id so
+        // downstream code that keys on professionalId doesn't crash.
+        professionalId: row.id as string,
+        name: (row.name as string) || "Photographer",
+        profession: "Photographer",
+        location,
+        image: (row.hero_photo_url as string) || (row.logo_url as string) || PLACEHOLDER_IMAGE,
+        logoUrl: (row.logo_url as string) ?? null,
+        specialties,
+        isVerified: false,
+        domain: (row.domain as string) ?? null,
+        city: row.city ? (row.city as string).toLowerCase().trim() : null,
+      }
+    })
+    .filter((v): v is ProfessionalCard => v !== null)
 }
 
 export async function fetchPhotographerMetadata(slugOrId: string): Promise<{

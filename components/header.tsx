@@ -250,6 +250,13 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
     resolvedNavLinks.push({ href: "/products", label: "Products" })
   }
 
+  // Photography landing nav link — admin-only preview, same gate as
+  // Products. Flipped public once we have enough listed photographers
+  // to fill the grid.
+  if (hasAdminRole && !navLinks && !resolvedNavLinks.some(l => !isNavGroup(l) && l.href === "/businesses/photography")) {
+    resolvedNavLinks.push({ href: "/businesses/photography", label: "Photography" })
+  }
+
   // Badges by href — used by the account (avatar) dropdown's admin
   // section, which builds its own item list from translation keys and
   // can't consume the resolvedNavLinks tree directly. Also lets the

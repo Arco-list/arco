@@ -1182,6 +1182,11 @@
       "faq_5_q": "What kind of projects should I submit?",
       "faq_5_a": "Submit your best work — completed, professionally photographed, and based in the Netherlands. You can showcase international work once accepted."
     },
+    "photography": {
+      "hero_title": "Photographers who understand architecture.",
+      "hero_body": "Working with a photographer who reads a plan the way you drew it is the difference between a portfolio and a record. Every studio on this page has been credited on architecture projects on Arco.",
+      "empty_state": "No photographers listed yet."
+    },
     "professionals": {
       "hero_title": "Be recognised through the work you've delivered.",
       "hero_body": "Arco is a curated architecture network where professionals are credited on real projects. When architects tag you, clients see your work and can reach out directly.",
