@@ -3,24 +3,39 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-contact-by-email"
+import {
+  fetchProspectById,
+  fetchProspectEvents,
+  fetchProspectInboundEmails,
+  getProspectInviteContext,
+  getProspectSequence,
+  type Prospect,
+  type ProspectEvent,
+  type ProspectSequenceStep,
+  type ProspectInviteContext,
+  type InboundEmailForProspect,
+  type SalesContact,
+} from "@/app/admin/sales/actions"
+import { ContactDetailBody, type ContactDetailBundle } from "@/app/admin/sales/prospects-client"
 
 /**
- * Phase 1 shared Contact Card — right-anchored slide-over.
+ * Shared Contact Card — right-anchored slide-over. Phase 2a folds the
+ * detailed Lifecycle / Outreach Sequence / Activity sections into the
+ * card by reusing ContactDetailBody from prospects-client. The old
+ * center-modal path stays reachable from the +N-more menu on
+ * /admin/sales; we'll retire it once this rendering has proven out
+ * for a week (Phase 2b).
  *
- * Opens when the parent passes a truthy `email`; the parent is expected
- * to be reading that from the shared `?contact=<email>` URL param via
- * useContactParam(). Fetches getContactByEmail on open, renders a
- * read-only summary of every prospect / company_contact / profile row
- * we can link to the address.
+ * Data model still keyed on normalized email. Timeline sub-bundle is
+ * fetched for the FIRST prospect returned by getContactByEmail — same
+ * primary-contact behavior /admin/sales uses.
  *
- * Explicitly NOT in Phase 1:
- *   - Edit affordances (email, phone, role). Phase 2 introduces a
- *     single authoritative write path.
- *   - Lifecycle / Outreach Sequence / Activity timeline. Sales still
- *     opens the existing modal from the +N-more menu when the rep
- *     wants those; this card gives them the cross-company overview
- *     the modal has never shown.
- *   - Merge / relink UI for the email-1 vs email-2 case. Phase 3.
+ * Explicitly NOT here yet:
+ *   - Edit affordances (email, phone, role). Requires committing to
+ *     a single authoritative write path across profiles /
+ *     company_contacts / prospects.
+ *   - Merge / relink UI for the email-1 vs email-2 case.
+ *   - Reuse on /admin/companies or /admin/users.
  */
 
 type Props = {
@@ -150,6 +165,7 @@ export function ContactCard({ email, onClose }: Props) {
 function CardBody({ data }: { data: ContactByEmailData }) {
   const companies = groupByCompany(data)
   const linkedProfile = data.profile
+  const primaryProspect = data.prospects[0] ?? null
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -213,13 +229,130 @@ function CardBody({ data }: { data: ContactByEmailData }) {
       </Section>
 
       <Section label="Timeline">
-        <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
-          Detailed lifecycle, outreach sequence, and activity are still on the existing detail popup
-          (open via the +N-more menu). Phase 2 moves them here.
-        </p>
+        {primaryProspect ? (
+          <ProspectTimeline prospectId={primaryProspect.id} email={data.email} />
+        ) : (
+          <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
+            No prospect record on this email — nothing to time-line yet.
+          </p>
+        )}
       </Section>
     </div>
   )
+}
+
+/**
+ * Loads the same five parallel actions /admin/sales calls when it opens
+ * the row popup, then hands them to ContactDetailBody with a synthetic
+ * SalesContact. Only five fields on SalesContact are actually read by
+ * ContactDetailBody (source, email, createdAt, lastEmailSentAt,
+ * prospectId — verified by grep on the function body), so the rest are
+ * filled from the Prospect row with safe zeros where the Prospect
+ * type doesn't carry a value. The double-cast through unknown is the
+ * price of not building a public SalesContact factory yet — Phase 2b.
+ *
+ * onPreviewEmail is a no-op for now; the "Preview template" affordance
+ * is still reachable in the old modal via the +N-more menu. Same for
+ * onEditManualLog / onDeleteManualLog, which are optional.
+ */
+function ProspectTimeline({ prospectId, email }: { prospectId: string; email: string }) {
+  const [state, setState] = useState<
+    | { kind: "loading" }
+    | { kind: "error"; message: string }
+    | { kind: "ready"; contact: SalesContact; bundle: ContactDetailBundle }
+  >({ kind: "loading" })
+
+  useEffect(() => {
+    let cancelled = false
+    setState({ kind: "loading" })
+    Promise.all([
+      fetchProspectById(prospectId),
+      fetchProspectEvents(prospectId),
+      getProspectSequence(prospectId),
+      fetchProspectInboundEmails(prospectId),
+    ])
+      .then(async ([prospect, eventsResult, sequenceResult, inboundResult]) => {
+        if (cancelled) return
+        const inviteResult =
+          prospect && prospect.source === "invites"
+            ? await getProspectInviteContext(prospectId)
+            : ({ success: true, context: null } as const)
+        if (cancelled) return
+
+        const bundle: ContactDetailBundle = {
+          prospect,
+          events: eventsResult.events ?? [],
+          sequence: sequenceResult.success ? sequenceResult.steps ?? [] : [],
+          locale: sequenceResult.success ? sequenceResult.locale ?? null : null,
+          inviteContext: inviteResult.success ? inviteResult.context ?? null : null,
+          inboundEmails: inboundResult.emails ?? [],
+        }
+
+        const contact = synthesizeSalesContact(prospect, email, bundle.inboundEmails)
+        setState({ kind: "ready", contact, bundle })
+      })
+      .catch((err) => {
+        if (!cancelled) setState({ kind: "error", message: err?.message ?? "Failed to load timeline" })
+      })
+    return () => { cancelled = true }
+  }, [prospectId, email])
+
+  if (state.kind === "loading") {
+    return <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>Loading timeline…</p>
+  }
+  if (state.kind === "error") {
+    return <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{state.message}</p>
+  }
+  return (
+    <ContactDetailBody
+      contact={state.contact}
+      details={state.bundle}
+      onPreviewEmail={() => { /* no-op — still available in the +N-more modal */ }}
+    />
+  )
+}
+
+function synthesizeSalesContact(
+  prospect: Prospect | null,
+  fallbackEmail: string,
+  inboundEmails: InboundEmailForProspect[],
+): SalesContact {
+  // ContactDetailBody reads five fields off `contact`; every other
+  // SalesContact field flows through to child components that we know
+  // aren't wired for the card path yet, so populating them from the
+  // Prospect row (or safe zeros) is enough for the current render.
+  const p = prospect
+  const synthetic = {
+    prospectId: p?.id ?? "",
+    email: p?.email ?? fallbackEmail,
+    contactName: p?.contact_name ?? null,
+    source: (p?.source as SalesContact["source"]) ?? "apollo",
+    status: (p?.status as SalesContact["status"]) ?? "prospect",
+    sequenceStatus: (p?.sequence_status as SalesContact["sequenceStatus"]) ?? "not_started",
+    emailsSent: p?.emails_sent ?? 0,
+    emailsDelivered: p?.emails_delivered ?? 0,
+    emailsOpened: p?.emails_opened ?? 0,
+    emailsClicked: p?.emails_clicked ?? 0,
+    lastEmailSentAt: p?.last_email_sent_at ?? null,
+    lastEmailOpenedAt: p?.last_email_opened_at ?? null,
+    lastEmailClickedAt: p?.last_email_clicked_at ?? null,
+    unsubscribedAt: p?.unsubscribed_at ?? null,
+    bouncedAt: p?.bounced_at ?? null,
+    complainedAt: p?.complained_at ?? null,
+    createdAt: p?.created_at ?? new Date().toISOString(),
+    updatedAt: p?.updated_at ?? p?.created_at ?? new Date().toISOString(),
+    refCode: p?.ref_code ?? "",
+    resolvedContact: {
+      name: p?.contact_name ?? null,
+      email: p?.email ?? fallbackEmail,
+      avatarUrl: null,
+      userId: p?.user_id ?? null,
+    },
+    lastOutboundAt: ((p as unknown) as { last_outbound_at?: string | null })?.last_outbound_at ?? null,
+    nextFollowUpAt: ((p as unknown) as { next_follow_up_at?: string | null })?.next_follow_up_at ?? null,
+    hasInboundEmail: inboundEmails.length > 0,
+  }
+  return synthetic as unknown as SalesContact
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
