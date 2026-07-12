@@ -134,18 +134,22 @@ export async function fetchPhotographerDetail(
 
   let projects: ProfessionalProjectSummary[] = []
   if (projectIds.length > 0) {
+    // Always fetch project_photos when we have projects: even without
+    // any contributor-specific cover_photo_id overrides, the card grid
+    // still needs is_primary as its fallback image. The old
+    // `coverPhotoIdMap.size > 0` gate meant photographers without any
+    // per-credit cover config rendered a text-list of titles (no
+    // images), which is what Isabel Bronts showed on /photographers.
     const [projectsResult, coverPhotosResult] = await Promise.all([
       supabase
         .from("projects")
         .select("id, slug, title, address_city, project_year, project_type, project_type_category_id, style_preferences, likes_count, status")
         .in("id", projectIds)
         .eq("status", "published"),
-      coverPhotoIdMap.size > 0
-        ? supabase
-            .from("project_photos")
-            .select("id, url, project_id, is_primary, order_index")
-            .in("project_id", projectIds)
-        : Promise.resolve({ data: [] as any[] }),
+      supabase
+        .from("project_photos")
+        .select("id, url, project_id, is_primary, order_index")
+        .in("project_id", projectIds),
     ])
 
     const coverUrlByProject = new Map<string, string>()

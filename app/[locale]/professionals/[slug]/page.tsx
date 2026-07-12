@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer"
 import { ProfessionalSubNav } from "@/components/professional/professional-sub-nav"
 import { ProfessionalHeader } from "@/components/professional/professional-header"
 import { ProfessionalSpecs } from "@/components/professional/professional-specs"
+import { PhotographerSpecs } from "@/components/professional/photographer-specs"
 import { ProfessionalProjects } from "@/components/professional/professional-projects"
 import { ProfessionalContact } from "@/components/professional/professional-contact"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
@@ -90,21 +91,46 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
     permanentRedirect(`/${locale}/professionals/${slug}`)
   }
 
-  // Photographer routing. Companies flagged audience='pro' get a
-  // dedicated /photographers/[slug] route with a photographer-specific
-  // specs bar (Established / Specialismen / Talen / Samenwerkingen) and
-  // the "Gefotografeerde projecten" heading — the same content the
-  // owner sees on their edit page. Keeping /professionals/[slug]
-  // rendering ProfessionalSpecs for a photographer would surface Team
-  // size / Certificates instead, which don't apply. One-column lookup
-  // against the same slug the redirect check above just resolved.
+  // Photographer detection — swaps in the photographer-specific specs
+  // bar (Established / Specialismen / Talen / Samenwerkingen) and the
+  // "Gefotografeerde projecten" heading further down. Cheap one-column
+  // lookup against the just-resolved slug.
   const audienceRow = await supabase
     .from("companies")
-    .select("audience")
+    .select("id, audience, specialties")
     .eq("slug", slug)
     .maybeSingle()
-  if (audienceRow.data?.audience === "pro") {
-    permanentRedirect(`/${locale}/photographers/${slug}`)
+  const isPhotographer = audienceRow.data?.audience === "pro"
+  const photographerSpecialties = Array.isArray(audienceRow.data?.specialties)
+    ? (audienceRow.data!.specialties as string[]).filter((v): v is string => typeof v === "string" && v.length > 0)
+    : []
+
+  // Distinct project owners this photographer has been credited beside.
+  // Mirrors fetchPhotographerDetail's collaborationsCount so the specs
+  // bar matches "Samenwerkingen 1" on the edit page.
+  let photographerCollaborationsCount = 0
+  if (isPhotographer && audienceRow.data?.id) {
+    const { data: myLinks } = await supabase
+      .from("project_professionals")
+      .select("project_id")
+      .eq("company_id", audienceRow.data.id)
+      .in("status", ["listed", "live_on_page"])
+    const myProjectIds = Array.from(
+      new Set((myLinks ?? []).map((r) => r.project_id).filter((v): v is string => typeof v === "string")),
+    )
+    if (myProjectIds.length > 0) {
+      const { data: ownerRows } = await supabase
+        .from("project_professionals")
+        .select("company_id, project_id, is_project_owner, projects!inner(status)")
+        .in("project_id", myProjectIds)
+        .eq("is_project_owner", true)
+        .eq("projects.status", "published")
+      photographerCollaborationsCount = new Set(
+        (ownerRows ?? [])
+          .map((r) => r.company_id)
+          .filter((v): v is string => typeof v === "string"),
+      ).size
+    }
   }
 
   // First try normal fetch (listed companies)
@@ -218,18 +244,31 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           companyInitials={companyInitials}
         />
 
-        <ProfessionalSpecs
-          location={specs.location}
-          established={specs.established}
-          teamSize={specs.teamSize}
-          languages={specs.languages}
-          certificates={specs.certificates}
-        />
+        {isPhotographer ? (
+          <PhotographerSpecs
+            location={specs.location}
+            foundedYear={specs.established}
+            specialties={photographerSpecialties}
+            languages={specs.languages}
+            collaborationsCount={photographerCollaborationsCount}
+          />
+        ) : (
+          <ProfessionalSpecs
+            location={specs.location}
+            established={specs.established}
+            teamSize={specs.teamSize}
+            languages={specs.languages}
+            certificates={specs.certificates}
+          />
+        )}
       </div>
 
       {/* Only show projects section if there are projects */}
       {professional.projects.length > 0 && (
-        <ProfessionalProjects projects={professional.projects} />
+        <ProfessionalProjects
+          projects={professional.projects}
+          heading={isPhotographer ? t("photographed_projects") : undefined}
+        />
       )}
 
       <ProfessionalContact
