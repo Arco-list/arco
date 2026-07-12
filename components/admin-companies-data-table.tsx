@@ -912,10 +912,30 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const toggleSource = useCallback((s: CompanySource) => {
     setSourceFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
   }, [])
+
+  // Multi-select service filter — same shape as source. Matches on
+  // primaryServiceId OR any id in servicesOffered so a company that
+  // lists a service as secondary still surfaces when you pick that
+  // service. Empty selection = no filter.
+  const [serviceFilter, setServiceFilter] = useState<string[]>([])
+  const toggleService = useCallback((id: string) => {
+    setServiceFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }, [])
+
   const filteredData = useMemo(() => {
-    if (sourceFilter.length === 0) return data
-    return data.filter((row) => row.source !== null && sourceFilter.includes(row.source))
-  }, [data, sourceFilter])
+    let rows = data
+    if (sourceFilter.length > 0) {
+      rows = rows.filter((row) => row.source !== null && sourceFilter.includes(row.source))
+    }
+    if (serviceFilter.length > 0) {
+      const selected = new Set(serviceFilter)
+      rows = rows.filter((row) => {
+        if (row.primaryServiceId && selected.has(row.primaryServiceId)) return true
+        return row.servicesOffered.some((id) => selected.has(id))
+      })
+    }
+    return rows
+  }, [data, sourceFilter, serviceFilter])
 
   /** Pushes the array into TanStack Table's column filter. Empty = clear. */
   const applyStatusFilter = useCallback((next: CompanyStatusFilterValue[]) => {
@@ -2040,6 +2060,60 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   className="text-xs"
                 >
                   {SOURCE_LABEL[s]}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select service filter. Category list comes from
+              the categories table (only is_active=true is loaded on
+              the server). Matches on primary or any offered service. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
+                  serviceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {serviceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All services</span>
+                  ) : serviceFilter.length === 1 ? (
+                    <span className="truncate">
+                      {serviceOptions.find((s) => s.id === serviceFilter[0])?.name ?? "1 service"}
+                    </span>
+                  ) : (
+                    <span>{serviceFilter.length} services</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[220px] max-h-[360px] overflow-y-auto">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (serviceFilter.length > 0) setServiceFilter([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {serviceOptions.map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s.id}
+                  checked={serviceFilter.includes(s.id)}
+                  onCheckedChange={() => toggleService(s.id)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  {s.name}
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
