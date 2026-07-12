@@ -90,6 +90,23 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
     permanentRedirect(`/${locale}/professionals/${slug}`)
   }
 
+  // Photographer routing. Companies flagged audience='pro' get a
+  // dedicated /photographers/[slug] route with a photographer-specific
+  // specs bar (Established / Specialismen / Talen / Samenwerkingen) and
+  // the "Gefotografeerde projecten" heading — the same content the
+  // owner sees on their edit page. Keeping /professionals/[slug]
+  // rendering ProfessionalSpecs for a photographer would surface Team
+  // size / Certificates instead, which don't apply. One-column lookup
+  // against the same slug the redirect check above just resolved.
+  const audienceRow = await supabase
+    .from("companies")
+    .select("audience")
+    .eq("slug", slug)
+    .maybeSingle()
+  if (audienceRow.data?.audience === "pro") {
+    permanentRedirect(`/${locale}/photographers/${slug}`)
+  }
+
   // First try normal fetch (listed companies)
   let professional = await fetchProfessionalDetail(slug, { locale })
 
