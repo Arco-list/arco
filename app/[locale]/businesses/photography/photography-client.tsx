@@ -22,7 +22,7 @@ export function PhotographyClient({ photographers }: PhotographyClientProps) {
   const noop = useCallback(() => {}, [])
 
   return (
-    <>
+    <div className="min-h-screen bg-white">
       <Header />
 
       <HeroSection
@@ -59,6 +59,6 @@ export function PhotographyClient({ photographers }: PhotographyClientProps) {
       </section>
 
       <Footer />
-    </>
+    </div>
   )
 }

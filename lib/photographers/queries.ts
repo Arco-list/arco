@@ -252,7 +252,7 @@ export async function fetchDiscoverPhotographers(
 ): Promise<ProfessionalCard[]> {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
+  const { data: companyRows, error } = await supabase
     .from("companies")
     .select("id, slug, name, city, country, domain, logo_url, hero_photo_url, specialties, status, audience")
     .eq("audience", "pro")
@@ -265,7 +265,68 @@ export async function fetchDiscoverPhotographers(
     return []
   }
 
-  return (data ?? [])
+  const rows = companyRows ?? []
+  const companyIds = rows.map((r) => r.id).filter((v): v is string => typeof v === "string")
+
+  // Card preview image: the photographer's actual work beats their
+  // logo every time. For each company, take a live credit
+  // (pp.status in listed/live_on_page on a published project) and
+  // resolve the cover — contributor-specific pp.cover_photo_id if
+  // present, otherwise the project's is_primary photo. Falls back to
+  // hero_photo_url → logo_url → placeholder in the mapping stage.
+  const coverByCompany = new Map<string, string>()
+  if (companyIds.length > 0) {
+    const { data: credits } = await supabase
+      .from("project_professionals")
+      .select("company_id, project_id, cover_photo_id, projects!inner(status)")
+      .in("company_id", companyIds)
+      .in("status", ["listed", "live_on_page"])
+      .eq("projects.status", "published")
+
+    const creditRows = (credits ?? []) as Array<{
+      company_id: string | null
+      project_id: string | null
+      cover_photo_id: string | null
+    }>
+
+    const projectIds = Array.from(
+      new Set(creditRows.map((c) => c.project_id).filter((v): v is string => typeof v === "string")),
+    )
+
+    if (projectIds.length > 0) {
+      const { data: photos } = await supabase
+        .from("project_photos")
+        .select("id, project_id, url, is_primary, order_index")
+        .in("project_id", projectIds)
+
+      // Two lookups per project: contributor-specific override (by id)
+      // and the project-wide primary/first photo as fallback.
+      const photoById = new Map<string, string>()
+      const projectPrimaryUrl = new Map<string, string>()
+      const projectFirstUrl = new Map<string, string>()
+      for (const ph of (photos ?? []) as Array<{ id: string; project_id: string; url: string; is_primary: boolean | null; order_index: number | null }>) {
+        if (!ph?.url) continue
+        photoById.set(ph.id, ph.url)
+        if (ph.is_primary && !projectPrimaryUrl.has(ph.project_id)) {
+          projectPrimaryUrl.set(ph.project_id, ph.url)
+        }
+        if (!projectFirstUrl.has(ph.project_id)) {
+          projectFirstUrl.set(ph.project_id, ph.url)
+        }
+      }
+
+      for (const cr of creditRows) {
+        if (!cr.company_id || coverByCompany.has(cr.company_id)) continue
+        const contributorOverride = cr.cover_photo_id ? photoById.get(cr.cover_photo_id) : undefined
+        const primary = cr.project_id ? projectPrimaryUrl.get(cr.project_id) : undefined
+        const first = cr.project_id ? projectFirstUrl.get(cr.project_id) : undefined
+        const chosen = contributorOverride ?? primary ?? first
+        if (chosen) coverByCompany.set(cr.company_id, chosen)
+      }
+    }
+  }
+
+  return rows
     .map((row): ProfessionalCard | null => {
       if (!row?.id) return null
       const locationParts = [row.city, row.country].filter((v): v is string => Boolean(v))
@@ -273,6 +334,7 @@ export async function fetchDiscoverPhotographers(
       const specialties = Array.isArray(row.specialties)
         ? row.specialties.filter((v): v is string => typeof v === "string" && v.length > 0)
         : []
+      const projectCover = coverByCompany.get(row.id as string)
       return {
         id: row.id as string,
         slug: (row.slug as string) || (row.id as string),
@@ -284,7 +346,7 @@ export async function fetchDiscoverPhotographers(
         name: (row.name as string) || "Photographer",
         profession: "Photographer",
         location,
-        image: (row.hero_photo_url as string) || (row.logo_url as string) || PLACEHOLDER_IMAGE,
+        image: projectCover || (row.hero_photo_url as string) || (row.logo_url as string) || PLACEHOLDER_IMAGE,
         logoUrl: (row.logo_url as string) ?? null,
         specialties,
         isVerified: false,
