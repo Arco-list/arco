@@ -280,7 +280,10 @@ function validateProspectEligibility(company: AdminCompanyRow): ProspectCandidat
   const reasons: string[] = []
   if (company.ownerName) reasons.push("Company already claimed")
   if (!company.name?.trim()) reasons.push("Missing company name")
-  if (!company.contactEmail?.trim()) reasons.push("Missing contact email")
+  // Contact email is not required here — it can be captured on the
+  // Sales page (Add/Change contact) before the sequence is started.
+  // A prospect row with an empty email is still valid: sequence_status
+  // stays 'not_started' until the rep fills in the address.
   if (!company.logoUrl?.trim()) reasons.push("Missing logo")
   if (!company.city?.trim() && !company.country?.trim()) reasons.push("Missing location")
   if (company.projects.length === 0) reasons.push("No projects linked")
@@ -2553,15 +2556,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           <div className="popup-overlay" onClick={() => setProspectConfirm(null)}>
             <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
               <div className="popup-header">
-                <h3 className="arco-section-title">Set to Prospected</h3>
+                <h3 className="arco-section-title">Set to Showcased</h3>
                 <button type="button" className="popup-close" onClick={() => setProspectConfirm(null)} aria-label="Close">
                   ✕
                 </button>
               </div>
 
               <div style={{ fontSize: 13, color: "#44403c", marginBottom: 16, lineHeight: 1.5 }}>
-                Only companies with completed information and at least one project can be set to Prospected.
-                They&apos;ll appear on the Sales page — start the sequence there to send the outreach email.
+                Showcase sequence can be started on Sales.
               </div>
 
               {eligible.length > 0 && (
@@ -2609,7 +2611,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   disabled={isPending || eligible.length === 0}
                   style={{ flex: 1 }}
                 >
-                  {isPending ? "Updating…" : `Move to Prospected`}
+                  {isPending ? "Updating…" : `Move to Showcased`}
                 </button>
               </div>
             </div>
