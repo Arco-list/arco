@@ -46,6 +46,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
 import { LogOutboundModal, type LogOutboundInitialValues } from "./log-outbound-modal"
 import { deleteOutboundLog } from "./log-outbound-actions"
+import { ContactCard } from "@/components/contact-card/contact-card"
+import { useContactParam } from "@/hooks/use-contact-param"
 
 // -- Status config -----------------------------------------------------------
 
@@ -993,6 +995,12 @@ export function ProspectsClient({
     openContactPopup(row, contact)
   }, [companies, openContactPopup])
 
+  // Phase 1 shared Contact Card mount. URL-driven so the panel is
+  // deep-linkable and survives navigation. Primary row-click uses this;
+  // the +N-more menu keeps the timeline modal for now.
+  const contactParam = useContactParam()
+  const openContactCard = useCallback((email: string) => contactParam.open(email), [contactParam])
+
   // ── Per-contact actions ────────────────────────────────────────────────
   // Reuse the existing per-prospect server actions; the row aggregator will
   // re-derive Status / Sequence / Sources after each call via reload().
@@ -1550,6 +1558,7 @@ export function ProspectsClient({
                 selected={selectedRowIds.has(row.rowId)}
                 onToggleSelect={(v) => toggleRow(row.rowId, v)}
                 onOpenContactDetails={openContactDetails}
+                onOpenContactCard={openContactCard}
                 onContactAction={runContactAction}
                 onLogOutbound={(contact, companyName, companyPhone) =>
                   setLogOutboundTarget({
@@ -1872,6 +1881,10 @@ export function ProspectsClient({
         </div>
       )}
 
+      {/* Phase 1 shared Contact Card — mounted at page level so the
+          URL param drives visibility. Row click opens; timeline modal
+          (line 1588) is still reachable via the +N-more menu. */}
+      <ContactCard email={contactParam.email} onClose={contactParam.close} />
     </>
   )
 }
@@ -1900,6 +1913,7 @@ function CompanyRowView({
   selected,
   onToggleSelect,
   onOpenContactDetails,
+  onOpenContactCard,
   onContactAction,
   onLogOutbound,
 }: {
@@ -1907,6 +1921,10 @@ function CompanyRowView({
   selected: boolean
   onToggleSelect: (value: boolean) => void
   onOpenContactDetails: (prospectId: string) => void
+  /** Phase 1 shared Contact Card slide-over — email-keyed. Row-level
+   *  click uses this; +N-more menu still uses onOpenContactDetails so
+   *  the rep keeps one-click access to the timeline modal. */
+  onOpenContactCard: (email: string) => void
   onContactAction: ContactActionRunner
   onLogOutbound: (contact: SalesContact, companyName: string, companyPhone: string | null) => void
 }) {
@@ -1943,7 +1961,7 @@ function CompanyRowView({
 
   return (
     <tr
-      onClick={() => onOpenContactDetails(row.primaryContact.prospectId)}
+      onClick={() => onOpenContactCard(row.primaryContact.email)}
       style={{ cursor: "pointer" }}
       className="hover:bg-[#fafaf9]"
     >
