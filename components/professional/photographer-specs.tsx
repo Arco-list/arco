@@ -2,7 +2,9 @@ import { getTranslations } from "next-intl/server"
 
 interface PhotographerSpecsProps {
   location: string | null
-  /** Year the studio was founded — surfaced as "Active since". */
+  /** Year the studio was founded — surfaced as "Established" so the
+   *  detail page matches the label the owner sees on their company
+   *  edit specs bar (t("established") = "Opgericht"). */
   foundedYear: number | null
   /** Free-form specialty tags (Residential / Hospitality / Interior / etc.). */
   specialties: string[]
@@ -30,7 +32,7 @@ export async function PhotographerSpecs({
 
   const specs = [
     { label: t("location"), value: location },
-    { label: t("active_since"), value: foundedYear },
+    { label: t("established"), value: foundedYear },
     { label: t("specialties"), value: specialties.length > 0 ? specialties.join(" · ") : null },
     { label: t("languages"), value: languages.length > 0 ? languages.join(", ") : null },
     {
