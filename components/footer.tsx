@@ -48,6 +48,7 @@ export function Footer() {
                 <h4 className="arco-eyebrow text-white/35 mb-1.5">{t("businesses")}</h4>
                 <Link href="/businesses/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_architects")}</Link>
                 <Link href="/businesses/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_professionals")}</Link>
+                <Link href="/businesses/photography" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("photography")}</Link>
               </div>
 
               <div className="footer-col">

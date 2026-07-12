@@ -240,11 +240,15 @@ export async function fetchPhotographerDetail(
  *
  * Photographers are gated by companies.audience='pro' (see migration
  * 147). No filter/sort — the page renders a simple grid and Phase 1
- * omits the filter bar entirely. Public-only status filter matches the
- * detail page's PUBLIC_STATUSES set.
+ * omits the filter bar entirely.
+ *
+ * Status filter: none. Phase 1 is admin-only preview, so we want the
+ * full roster visible — including Added companies that have never
+ * been listed. Deactivated is the one status we DO exclude so we
+ * don't surface studios we've explicitly hidden.
  */
 export async function fetchDiscoverPhotographers(
-  limit: number = 60,
+  limit: number = 200,
 ): Promise<ProfessionalCard[]> {
   const supabase = await createServerSupabaseClient()
 
@@ -252,7 +256,7 @@ export async function fetchDiscoverPhotographers(
     .from("companies")
     .select("id, slug, name, city, country, domain, logo_url, hero_photo_url, specialties, status, audience")
     .eq("audience", "pro")
-    .in("status", ["listed", "prospected"])
+    .neq("status", "deactivated")
     .order("name", { ascending: true })
     .limit(limit)
 

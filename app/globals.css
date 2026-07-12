@@ -3548,6 +3548,20 @@ body.no-scroll {
   gap: 2px;
 }
 
+/* Same vertical slot as .audience-toggle above the hero title —
+   a flat text label with no pill background. Used on landings that
+   aren't part of the Architects/Professionals audience axis (e.g.
+   /businesses/photography) but still want a "mode-of-page" hint. */
+.landing-hero-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--arco-mid);
+  margin: 0 0 40px;
+  padding: 8px 0;
+}
+
 .toggle-seg {
   font-family: var(--font-sans);
   font-size: 14px;

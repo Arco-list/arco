@@ -4,6 +4,7 @@
     "professionals": "Professionals",
     "for_architects": "For Architects",
     "for_professionals": "For Professionals",
+    "photography": "Photography",
     "list_with_us": "List with us",
     "create_your_company": "Create your company",
     "listings": "Listings",
@@ -1183,8 +1184,10 @@
       "faq_5_a": "Submit your best work — completed, professionally photographed, and based in the Netherlands. You can showcase international work once accepted."
     },
     "photography": {
+      "eyebrow": "Photography",
       "hero_title": "Photographers who understand architecture.",
       "hero_body": "Working with a photographer who reads a plan the way you drew it is the difference between a portfolio and a record. Every studio on this page has been credited on architecture projects on Arco.",
+      "browse_heading": "Browse photographers",
       "empty_state": "No photographers listed yet."
     },
     "professionals": {

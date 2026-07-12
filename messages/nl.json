@@ -4,6 +4,7 @@
     "professionals": "Professionals",
     "for_architects": "Voor Architecten",
     "for_professionals": "Voor Professionals",
+    "photography": "Fotografie",
     "list_with_us": "Vermeld jouw bedrijf",
     "create_your_company": "Maak je bedrijf aan",
     "listings": "Listings",
@@ -1183,8 +1184,10 @@
       "faq_5_a": "Dien je beste werk in — voltooid, professioneel gefotografeerd en gevestigd in Nederland. Je kunt internationaal werk laten zien zodra je bent geaccepteerd."
     },
     "photography": {
+      "eyebrow": "Fotografie",
       "hero_title": "Fotografen die architectuur begrijpen.",
       "hero_body": "Werken met een fotograaf die een plattegrond leest zoals jij hem tekende, is het verschil tussen een portfolio en een archief. Elke studio op deze pagina is gecrediteerd op architectuurprojecten op Arco.",
+      "browse_heading": "Bekijk fotografen",
       "empty_state": "Nog geen fotografen vermeld."
     },
     "professionals": {

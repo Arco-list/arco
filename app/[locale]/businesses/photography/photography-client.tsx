@@ -30,10 +30,14 @@ export function PhotographyClient({ photographers }: PhotographyClientProps) {
         title={t("hero_title")}
         body={t("hero_body")}
         showToggle={false}
+        eyebrow={t("eyebrow")}
       />
 
-      <section className="discover-results">
+      <section className="discover-results" style={{ paddingTop: 96 }}>
         <div className="wrap">
+          <h2 className="arco-section-title" style={{ marginBottom: 24 }}>
+            {t("browse_heading")}
+          </h2>
           {photographers.length === 0 ? (
             <p className="arco-body-text" style={{ textAlign: "center", padding: "48px 0", color: "#a1a1a0" }}>
               {t("empty_state")}
