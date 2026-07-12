@@ -249,6 +249,8 @@ export type AdminCompanyRow = {
 type ServiceOption = {
   id: string
   name: string
+  parentId: string | null
+  sortOrder: number | null
 }
 
 type Props = {
@@ -920,6 +922,46 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [serviceFilter, setServiceFilter] = useState<string[]>([])
   const toggleService = useCallback((id: string) => {
     setServiceFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }, [])
+
+  // Group tree for the services dropdown. Parents (parentId=null)
+  // become section headers with a "select all in group" checkbox
+  // whose selected state reflects whether every child is picked.
+  // Children with no parent still render at the top under "Other".
+  const serviceGroups = useMemo(() => {
+    const sortByOrderName = (a: ServiceOption, b: ServiceOption) => {
+      const ao = a.sortOrder ?? Number.POSITIVE_INFINITY
+      const bo = b.sortOrder ?? Number.POSITIVE_INFINITY
+      return ao - bo || a.name.localeCompare(b.name)
+    }
+    const parents = serviceOptions
+      .filter((s) => s.parentId === null)
+      .slice()
+      .sort(sortByOrderName)
+    const childrenByParent = new Map<string, ServiceOption[]>()
+    const orphans: ServiceOption[] = []
+    for (const s of serviceOptions) {
+      if (s.parentId === null) continue
+      const arr = childrenByParent.get(s.parentId)
+      if (arr) arr.push(s)
+      else childrenByParent.set(s.parentId, [s])
+    }
+    for (const s of serviceOptions) {
+      if (s.parentId !== null && !parents.some((p) => p.id === s.parentId)) {
+        orphans.push(s)
+      }
+    }
+    for (const arr of childrenByParent.values()) arr.sort(sortByOrderName)
+    return { parents, childrenByParent, orphans: orphans.sort(sortByOrderName) }
+  }, [serviceOptions])
+
+  const setServicesForGroup = useCallback((childIds: string[], selectAll: boolean) => {
+    setServiceFilter((prev) => {
+      const set = new Set(prev)
+      if (selectAll) childIds.forEach((id) => set.add(id))
+      else childIds.forEach((id) => set.delete(id))
+      return Array.from(set)
+    })
   }, [])
 
   const filteredData = useMemo(() => {
@@ -2094,7 +2136,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 </svg>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[220px] max-h-[360px] overflow-y-auto">
+            <DropdownMenuContent align="start" className="min-w-[240px] max-h-[420px] overflow-y-auto">
               <DropdownMenuItem
                 onClick={(e) => {
                   e.preventDefault()
@@ -2105,17 +2147,53 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {serviceOptions.map((s) => (
-                <DropdownMenuCheckboxItem
-                  key={s.id}
-                  checked={serviceFilter.includes(s.id)}
-                  onCheckedChange={() => toggleService(s.id)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  {s.name}
-                </DropdownMenuCheckboxItem>
-              ))}
+              {serviceGroups.parents.map((group) => {
+                const children = serviceGroups.childrenByParent.get(group.id) ?? []
+                if (children.length === 0) return null
+                const childIds = children.map((c) => c.id)
+                const selectedCount = childIds.filter((id) => serviceFilter.includes(id)).length
+                const groupChecked: boolean | "indeterminate" =
+                  selectedCount === 0 ? false : selectedCount === childIds.length ? true : "indeterminate"
+                return (
+                  <div key={group.id} className="py-0.5">
+                    <DropdownMenuCheckboxItem
+                      checked={groupChecked}
+                      onCheckedChange={(next) => setServicesForGroup(childIds, next === true)}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-xs font-medium"
+                    >
+                      {group.name}
+                    </DropdownMenuCheckboxItem>
+                    {children.map((s) => (
+                      <DropdownMenuCheckboxItem
+                        key={s.id}
+                        checked={serviceFilter.includes(s.id)}
+                        onCheckedChange={() => toggleService(s.id)}
+                        onSelect={(e) => e.preventDefault()}
+                        className="text-xs pl-8"
+                      >
+                        {s.name}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </div>
+                )
+              })}
+              {serviceGroups.orphans.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  {serviceGroups.orphans.map((s) => (
+                    <DropdownMenuCheckboxItem
+                      key={s.id}
+                      checked={serviceFilter.includes(s.id)}
+                      onCheckedChange={() => toggleService(s.id)}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-xs"
+                    >
+                      {s.name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic"
 type ServiceOption = {
   id: string
   name: string
+  parentId: string | null
+  sortOrder: number | null
 }
 
 type AdminCompanyMetricsRow = {
@@ -37,7 +39,17 @@ async function loadAdminCompaniesData() {
       supabase
         .from("company_metrics")
         .select("company_id, professional_count, projects_linked"),
-      supabase.from("categories").select("id, name, can_publish_projects").eq("is_active", true).order("name", { ascending: true }),
+      // Professional categories only (Architect, Builder, etc.) — the
+      // Project category_type covers building types (Apartment,
+      // Bungalow) which don't belong in a service filter. parent_id +
+      // sort_order power the grouped dropdown ("Design & Planning" →
+      // Architect, Interior Designer, …).
+      supabase
+        .from("categories")
+        .select("id, name, can_publish_projects, parent_id, sort_order")
+        .eq("is_active", true)
+        .eq("category_type", "Professional")
+        .order("sort_order", { ascending: true, nullsFirst: false }),
       // All project_professionals with a company_id — get status + invited services + project details
       supabase
         .from("project_professionals")
@@ -97,7 +109,12 @@ async function loadAdminCompaniesData() {
   for (const service of servicesQuery.data ?? []) {
     if (service?.id && service?.name) {
       serviceNameMap.set(service.id, service.name)
-      servicesOptions.push({ id: service.id, name: service.name })
+      servicesOptions.push({
+        id: service.id,
+        name: service.name,
+        parentId: service.parent_id ?? null,
+        sortOrder: service.sort_order ?? null,
+      })
       if (service.can_publish_projects) {
         publishableCategoryIds.add(service.id)
       }
