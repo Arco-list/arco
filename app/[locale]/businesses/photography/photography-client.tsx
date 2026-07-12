@@ -1,11 +1,11 @@
 "use client"
 
-import { useCallback } from "react"
 import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { HeroSection } from "@/components/landing"
 import { ProfessionalCard } from "@/components/professional-card"
+import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard as ProfessionalCardData } from "@/lib/professionals/types"
 
 interface PhotographyClientProps {
@@ -15,11 +15,12 @@ interface PhotographyClientProps {
 export function PhotographyClient({ photographers }: PhotographyClientProps) {
   const t = useTranslations("business.photography")
 
-  // Save state isn't wired for Phase 1 — this landing is admin-only
-  // preview surface, and the /professionals grid already carries the
-  // authoritative saved-companies flow. Passing a no-op onToggleSave
-  // keeps the card visually consistent with the public list.
-  const noop = useCallback(() => {}, [])
+  // Same saved-companies context as /professionals — heart button
+  // writes to saved_companies keyed by company_id, so photographers
+  // land in the same Saved list once the RPC is extended (migration
+  // 196 in this commit).
+  const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } =
+    useSavedProfessionals()
 
   return (
     <div className="min-h-screen bg-white">
@@ -44,15 +45,23 @@ export function PhotographyClient({ photographers }: PhotographyClientProps) {
             </p>
           ) : (
             <div className="discover-grid">
-              {photographers.map((photographer) => (
-                <ProfessionalCard
-                  key={photographer.id}
-                  professional={photographer}
-                  isSaved={false}
-                  isMutating={false}
-                  onToggleSave={noop}
-                />
-              ))}
+              {photographers.map((photographer) => {
+                const id = photographer.id ?? ""
+                const isSaved = id ? savedProfessionalIds.has(id) : false
+                const isMutating = id ? mutatingProfessionalIds.has(id) : false
+                return (
+                  <ProfessionalCard
+                    key={photographer.id}
+                    professional={photographer}
+                    isSaved={isSaved}
+                    isMutating={isMutating}
+                    onToggleSave={(prof) => {
+                      if (isSaved) removeProfessional(id)
+                      else saveProfessional(prof)
+                    }}
+                  />
+                )
+              })}
             </div>
           )}
         </div>

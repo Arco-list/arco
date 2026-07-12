@@ -3555,9 +3555,9 @@ body.no-scroll {
 .landing-hero-eyebrow {
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.3;
-  color: var(--arco-mid);
+  color: var(--arco-black);
   margin: 0 0 40px;
   padding: 8px 0;
 }

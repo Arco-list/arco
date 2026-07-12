@@ -331,9 +331,12 @@ export async function fetchDiscoverPhotographers(
       if (!row?.id) return null
       const locationParts = [row.city, row.country].filter((v): v is string => Boolean(v))
       const location = locationParts.length > 0 ? locationParts.join(", ") : "Location unavailable"
-      const specialties = Array.isArray(row.specialties)
-        ? row.specialties.filter((v): v is string => typeof v === "string" && v.length > 0)
-        : []
+      // Specialties intentionally omitted on the photography landing —
+      // the "Residential / Hospitality"-style chips clutter the grid
+      // when every card is a photographer. ProfessionalCard shows the
+      // profession label ("Photographer") + city instead. Detail page
+      // still surfaces them.
+      const specialties: string[] = []
       const projectCover = coverByCompany.get(row.id as string)
       return {
         id: row.id as string,
