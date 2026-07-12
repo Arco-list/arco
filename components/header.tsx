@@ -448,9 +448,9 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                   {child.icon && <span className="flex h-4 w-4 items-center justify-center shrink-0">{child.icon}</span>}
-                                  <span className="flex-1">{child.label}</span>
+                                  <span>{child.label}</span>
                                   {child.badge != null && child.badge > 0 && (
-                                    <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                                    <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
                                       {child.badge}
                                     </span>
                                   )}
@@ -547,9 +547,9 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                     className={`flex items-center gap-2.5 px-5 py-2 text-sm font-normal transition-colors ${childActive ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
                                   >
                                     {child.icon && <span className="flex h-4 w-4 items-center justify-center shrink-0">{child.icon}</span>}
-                                    <span className="flex-1">{child.label}</span>
+                                    <span>{child.label}</span>
                                     {child.badge != null && child.badge > 0 && (
-                                      <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
+                                      <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full text-[10px] font-medium bg-primary text-white">
                                         {child.badge}
                                       </span>
                                     )}
