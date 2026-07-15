@@ -220,7 +220,7 @@ const TEMPLATE_NAMES: Record<string, string> = {
   "outreach-followup": "Outreach Follow-up",
   "outreach-final": "Outreach Final",
 }
-function templateDisplayName(template: string): string {
+export function templateDisplayName(template: string): string {
   if (TEMPLATE_NAMES[template]) return TEMPLATE_NAMES[template]
   return template
     .replace(/-/g, " ")

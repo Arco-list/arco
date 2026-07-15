@@ -16,35 +16,33 @@ import {
 } from "@/app/admin/sales/actions"
 import {
   EventHistoryRow,
-  SEQUENCE_CONFIG,
   STATUS_CONFIG,
   formatDateShort,
+  templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
 
 /**
  * Fused timeline for the shared Contact Card.
  *
- * Replaces the three stacked sections (Lifecycle / Outreach Sequence /
- * Activity) that ContactDetailBody renders in the old modal with a
- * single time-ordered stream:
+ * Structure inside the Timeline section:
  *
- *   1. Header pill row  — status, sequence, emails-sent/opened,
- *                          next-follow-up, suppression pills. Answers
- *                          "what's the state of this contact right now?"
- *                          at a glance.
- *   2. Sequence strip   — 3 dots for Intro / Follow / Final showing plan
- *                          state (sent / queued / paused / not_started).
- *                          Preserved as a separate strip because parts
- *                          of it live in the future ("queued") and don't
- *                          have a timestamp to belong in the stream.
- *   3. Merged stream    — every real event, newest first. Lifecycle
- *                          transitions become chapter-divider rows;
- *                          sequence sends become event rows; prospect
- *                          events + inbound emails + outbound logs
- *                          render via the existing EventHistoryRow.
+ *   1. PillsRow      — status, sequence (when != not_started), emails /
+ *                      opened count, next-follow-up date, red pills for
+ *                      the three suppression states.
+ *   2. TimelineStream — every real event newest-first:
+ *                        * lifecycle transitions as dashed dividers,
+ *                        * sequence sends as first-class rows with a
+ *                          clickable template, language pill, and one
+ *                          merged status-and-engagement pill,
+ *                        * prospect_events / inbound_emails / manual
+ *                          logs via the existing EventHistoryRow.
  *
- * ContactDetailBody stays untouched — the old +N-more modal path still
- * uses it. Once this render has proven out, retire the old path.
+ * SequenceStrip was dropped: the same sends now live in the stream as
+ * clickable rows, and queued / paused / not_started state is carried
+ * by the top pill row.
+ *
+ * ContactDetailBody stays untouched — the +N-more modal path still uses
+ * it. Retire once this render has proven out.
  */
 
 type Props = {
@@ -67,6 +65,7 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
     | { kind: "error"; message: string }
     | { kind: "ready"; bundle: Bundle }
   >({ kind: "loading" })
+  const [preview, setPreview] = useState<{ template: string; lang: "en" | "nl" } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -110,11 +109,24 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
   }
 
   const { bundle } = state
+  const guessedLang: "en" | "nl" = bundle.locale
+    ?? (email.toLowerCase().endsWith(".nl") || email.toLowerCase().endsWith(".be") ? "nl" : "en")
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <PillsRow bundle={bundle} />
-      <SequenceStrip steps={bundle.sequence} />
-      <TimelineStream bundle={bundle} />
+      <TimelineStream
+        bundle={bundle}
+        guessedLang={guessedLang}
+        onPreviewTemplate={(template) => setPreview({ template, lang: guessedLang })}
+      />
+      {preview && (
+        <TemplatePreviewModal
+          template={preview.template}
+          initialLang={preview.lang}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   )
 }
@@ -124,12 +136,20 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
 function PillsRow({ bundle }: { bundle: Bundle }) {
   const p = bundle.prospect
   const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] : null
-  const seqCfg = p?.sequence_status ? SEQUENCE_CONFIG[p.sequence_status] : null
 
   const pills: { key: string; label: string; dot?: string; tone?: "default" | "danger" }[] = []
   if (statusCfg) pills.push({ key: "status", label: statusCfg.label, dot: statusCfg.dot })
-  if (seqCfg && p?.sequence_status && p.sequence_status !== "not_started") {
-    pills.push({ key: "seq", label: seqCfg.label, dot: seqCfg.dot })
+  if (p?.sequence_status && p.sequence_status !== "not_started") {
+    const seqLabel = p.sequence_status.charAt(0).toUpperCase() + p.sequence_status.slice(1)
+    pills.push({
+      key: "seq",
+      label: `Sequence ${seqLabel.toLowerCase()}`,
+      dot:
+        p.sequence_status === "active" ? "bg-[#2563eb]"
+        : p.sequence_status === "paused" ? "bg-amber-400"
+        : p.sequence_status === "finished" ? "bg-emerald-500"
+        : "bg-[#a1a1a0]",
+    })
   }
   if (p && p.emails_sent > 0) {
     pills.push({
@@ -144,9 +164,9 @@ function PillsRow({ bundle }: { bundle: Bundle }) {
   if (nextFollowUp) {
     pills.push({ key: "followup", label: `Follow-up ${formatDateShort(nextFollowUp).split(" · ")[0]}` })
   }
-  if (p?.unsubscribed_at) pills.push({ key: "unsubscribed", label: "Unsubscribed", tone: "danger" })
-  if (p?.bounced_at) pills.push({ key: "bounced", label: "Bounced", tone: "danger" })
-  if (p?.complained_at) pills.push({ key: "complained", label: "Complained", tone: "danger" })
+  if (p?.unsubscribed_at) pills.push({ key: "unsubscribed", label: "unsubscribed", tone: "danger" })
+  if (p?.bounced_at) pills.push({ key: "bounced", label: "bounced", tone: "danger" })
+  if (p?.complained_at) pills.push({ key: "complained", label: "complained", tone: "danger" })
 
   if (pills.length === 0) return null
 
@@ -176,71 +196,28 @@ function PillsRow({ bundle }: { bundle: Bundle }) {
   )
 }
 
-// ── Sequence 3-slot strip ──────────────────────────────────────────────
-
-function SequenceStrip({ steps }: { steps: ProspectSequenceStep[] }) {
-  if (steps.length === 0) return null
-  const stepPill: Record<ProspectSequenceStep["status"], { dot: string; label: string }> = {
-    sent:      { dot: "bg-emerald-500", label: "sent" },
-    queued:    { dot: "bg-[#2563eb]",   label: "queued" },
-    paused:    { dot: "bg-amber-400",   label: "paused" },
-    finished:  { dot: "bg-emerald-500", label: "finished" },
-    cancelled: { dot: "bg-[#a1a1a0]",   label: "cancelled" },
-    failed:    { dot: "bg-red-500",     label: "retrying" },
-    missing:   { dot: "bg-[#e5e5e4]",   label: "not started" },
-  }
-  return (
-    <div>
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 500,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "#a1a1a0",
-        }}
-      >
-        Sequence
-      </span>
-      <div style={{ marginTop: 8, display: "flex", gap: 12, alignItems: "flex-start" }}>
-        {steps.map((step) => {
-          const pill = stepPill[step.status]
-          return (
-            <div key={step.template} style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${pill.dot}`} />
-                <span style={{ fontSize: 11, color: "#6b6b68" }}>{pill.label}</span>
-              </div>
-              <p style={{ fontSize: 12, color: "#1c1c1a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {step.label}
-              </p>
-              {step.timestamp && (
-                <p style={{ fontSize: 10, color: "#a1a1a0", margin: "2px 0 0" }}>
-                  {formatDateShort(step.timestamp).split(" · ")[0]}
-                </p>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ── Merged stream ──────────────────────────────────────────────────────
 
 type StreamRow =
   | { kind: "stage"; ts: string; label: string; dot: string; key: string }
+  | { kind: "sequence"; ts: string; step: ProspectSequenceStep; key: string }
   | { kind: "event"; ts: string; event: ProspectEvent; key: string }
 
-function TimelineStream({ bundle }: { bundle: Bundle }) {
+function TimelineStream({
+  bundle,
+  guessedLang,
+  onPreviewTemplate,
+}: {
+  bundle: Bundle
+  guessedLang: "en" | "nl"
+  onPreviewTemplate: (template: string) => void
+}) {
   const prospect = bundle.prospect
   const isInvite = prospect?.source === "invites"
 
-  // Lifecycle stages: replicated from ContactDetailBody, one row per
-  // reached stage. Fictional as "events" (they're derived from prospect
-  // columns, not the events table) but rendering them inline reads
-  // honestly as chapter dividers.
+  // Lifecycle stages become chapter dividers. Fictional as "events"
+  // (derived from prospect columns, not the events table) but the
+  // divider styling reads honestly.
   const initialStatus = (isInvite ? "contacted" : "prospect") as ProspectStatus
   const firstSentAt = bundle.sequence
     .filter((s) => s.status === "sent" && s.timestamp)
@@ -248,36 +225,33 @@ function TimelineStream({ bundle }: { bundle: Bundle }) {
     .sort()[0] ?? null
   const stageDefs: Array<{ label: string; ts: string | null; status: ProspectStatus }> = prospect
     ? [
-        { label: isInvite ? "Invited" : "Prospect", ts: prospect.created_at, status: initialStatus },
-        { label: "Contacted", ts: firstSentAt ?? prospect.last_email_sent_at, status: "contacted" },
-        { label: "Visitor", ts: prospect.landing_visited_at, status: "visitor" },
-        { label: "Signup", ts: prospect.signed_up_at, status: "signup" },
-        { label: "Created", ts: prospect.company_created_at, status: "company" },
-        { label: "Listed", ts: (prospect as any).converted_at, status: "active" },
+        { label: "prospect", ts: prospect.created_at, status: initialStatus },
+        { label: "contacted", ts: firstSentAt ?? prospect.last_email_sent_at, status: "contacted" },
+        { label: "visitor", ts: prospect.landing_visited_at, status: "visitor" },
+        { label: "signup", ts: prospect.signed_up_at, status: "signup" },
+        { label: "created", ts: prospect.company_created_at, status: "company" },
+        { label: "listed", ts: (prospect as any).converted_at, status: "active" },
       ]
     : []
+  if (isInvite && stageDefs.length > 0) stageDefs[0].label = "invited"
   const stageRows: StreamRow[] = stageDefs
     .filter((s): s is { label: string; ts: string; status: ProspectStatus } => Boolean(s.ts))
     .map((s) => ({ kind: "stage", ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status].dot, key: `stage-${s.status}` }))
 
-  // Sequence sends folded in as event rows via synthetic prospect_event
-  // shape. Only 'sent' steps have a real timestamp.
+  // Sequence sends folded in as their own row type so we can render a
+  // clickable template link + language pill + engagement pill instead
+  // of the generic event line.
   const sequenceRows: StreamRow[] = bundle.sequence
     .filter((s) => s.status === "sent" && s.timestamp)
     .map((s) => ({
-      kind: "event" as const,
+      kind: "sequence" as const,
       ts: s.timestamp as string,
       key: `seq-${s.template}`,
-      event: {
-        id: `synthetic-seq-${s.template}`,
-        prospect_id: prospect?.id ?? "",
-        event_type: "email.sent",
-        created_at: s.timestamp as string,
-        metadata: { template: s.template, label: s.label },
-      } as ProspectEvent,
+      step: s,
     }))
 
-  // Inbound emails folded in the same way ContactDetailBody does.
+  // Inbound emails render via EventHistoryRow (its email.received branch
+  // knows how to expand snippet + body).
   const inboundRows: StreamRow[] = bundle.inboundEmails.map((m) => ({
     kind: "event" as const,
     ts: m.received_at,
@@ -334,11 +308,16 @@ function TimelineStream({ bundle }: { bundle: Bundle }) {
     })
   }
 
-  // Drop `replied` (redundant with email.received) and hydrate
-  // admin_replied bodies — mirrors ContactDetailBody's cleanup.
+  // Cleanup on raw events, in one pass:
+  //   * `replied` — redundant with email.received rows above.
+  //   * `email_sent` / `email_resent` — fully covered by the sequence
+  //     row now (this was the "Email Sent" duplicate the rep saw
+  //     stacked under "Outreach Follow-up sent").
+  //   * `admin_replied` gets reply body hydrated from inbound_emails.
   const inboundById = new Map(bundle.inboundEmails.map((m) => [m.id, m]))
   const enrichedEvents = bundle.events
     .filter((ev) => ev.event_type !== "replied")
+    .filter((ev) => ev.event_type !== "email_sent" && ev.event_type !== "email_resent")
     .map((ev) => {
       if (ev.event_type !== "admin_replied") return ev
       const linkedId = typeof ev.metadata?.inbound_email_id === "string"
@@ -356,9 +335,8 @@ function TimelineStream({ bundle }: { bundle: Bundle }) {
       }
     })
 
-  // De-dupe the coarse status_changed rows that fire alongside the
-  // specific lifecycle events. Same rule ContactDetailBody uses (60s
-  // window).
+  // De-dupe the coarse status_changed rows against specific lifecycle
+  // events within a 60s window (same rule ContactDetailBody uses).
   const lifecycleTimes = new Set<number>()
   for (const ev of enrichedEvents) {
     if (ev.event_type === "prospect.signed_up" || ev.event_type === "prospect.company_created") {
@@ -394,6 +372,13 @@ function TimelineStream({ bundle }: { bundle: Bundle }) {
         {rows.map((row) =>
           row.kind === "stage" ? (
             <StageDivider key={row.key} label={row.label} ts={row.ts} dot={row.dot} />
+          ) : row.kind === "sequence" ? (
+            <SequenceRow
+              key={row.key}
+              step={row.step}
+              lang={guessedLang}
+              onPreview={onPreviewTemplate}
+            />
           ) : (
             <EventHistoryRow key={row.key} event={row.event} />
           ),
@@ -402,6 +387,146 @@ function TimelineStream({ bundle }: { bundle: Bundle }) {
     </div>
   )
 }
+
+// ── Sequence row (clickable, single engagement pill) ───────────────────
+
+function SequenceRow({
+  step,
+  lang,
+  onPreview,
+}: {
+  step: ProspectSequenceStep
+  lang: "en" | "nl"
+  onPreview: (template: string) => void
+}) {
+  // One pill per row. Delivery/engagement supersedes the raw send
+  // state — "opened" is a strictly stronger signal than "sent" for the
+  // rep, so we collapse the two into a single pill that reads at a
+  // glance.
+  const engagement = (() => {
+    if (step.clickedAt || step.lastEvent === "clicked") return { dot: "bg-purple-500", label: "clicked", tone: "default" as const }
+    if (step.openedAt || step.lastEvent === "opened") return { dot: "bg-blue-500", label: "opened", tone: "default" as const }
+    if (step.lastEvent === "delivered") return { dot: "bg-emerald-500", label: "delivered", tone: "default" as const }
+    if (step.lastEvent === "bounced") return { dot: "bg-red-500", label: "bounced", tone: "danger" as const }
+    if (step.lastEvent === "complained") return { dot: "bg-red-500", label: "complained", tone: "danger" as const }
+    // Fallback: raw send state. "sent" is the neutral default when no
+    // Resend engagement event has arrived (yet).
+    const s = step.status
+    if (s === "sent") return { dot: "bg-emerald-500", label: "sent", tone: "default" as const }
+    if (s === "queued") return { dot: "bg-[#2563eb]", label: "queued", tone: "default" as const }
+    if (s === "paused") return { dot: "bg-amber-400", label: "paused", tone: "default" as const }
+    if (s === "finished") return { dot: "bg-emerald-500", label: "finished", tone: "default" as const }
+    if (s === "failed") return { dot: "bg-red-500", label: "retrying", tone: "danger" as const }
+    return { dot: "bg-[#a1a1a0]", label: s, tone: "default" as const }
+  })()
+
+  const clickable = !step.template.startsWith("apollo-step-")
+  const name = templateDisplayName(step.template)
+
+  return (
+    <div
+      className="grid items-center gap-2 text-xs"
+      style={{ gridTemplateColumns: "90px 1fr auto" }}
+    >
+      <span className="text-[#a1a1a0] whitespace-nowrap">
+        {step.timestamp ? formatDateShort(step.timestamp) : "—"}
+      </span>
+      <span className="inline-flex items-center gap-2 min-w-0">
+        {clickable ? (
+          <button
+            type="button"
+            onClick={() => onPreview(step.template)}
+            className="text-[#016D75] hover:underline truncate cursor-pointer text-left"
+          >
+            {name}
+          </button>
+        ) : (
+          <span className="text-[#1c1c1a] truncate text-left">{step.label || name}</span>
+        )}
+        <span className="status-pill shrink-0">{lang.toUpperCase()}</span>
+      </span>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "2px 8px",
+          borderRadius: 999,
+          fontSize: 11,
+          fontWeight: 500,
+          background: engagement.tone === "danger" ? "#fef2f2" : "#f5f5f4",
+          color: engagement.tone === "danger" ? "#b91c1c" : "#1c1c1a",
+          border: engagement.tone === "danger" ? "1px solid #fecaca" : "1px solid transparent",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span className={`inline-block h-1.5 w-1.5 rounded-full ${engagement.dot}`} />
+        {engagement.label}
+      </span>
+    </div>
+  )
+}
+
+// ── Template preview modal ─────────────────────────────────────────────
+
+function TemplatePreviewModal({
+  template,
+  initialLang,
+  onClose,
+}: {
+  template: string
+  initialLang: "en" | "nl"
+  onClose: () => void
+}) {
+  const [lang, setLang] = useState<"en" | "nl">(initialLang)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  return (
+    <div className="popup-overlay" onClick={onClose} style={{ zIndex: 800 }}>
+      <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: "min(720px, 90vw)" }}>
+        <div className="popup-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h3 className="arco-section-title" style={{ margin: 0 }}>{templateDisplayName(template)}</h3>
+            <div style={{ display: "inline-flex", border: "1px solid #eeeeed", borderRadius: 999, padding: 2 }}>
+              {(["en", "nl"] as const).map((loc) => (
+                <button
+                  key={loc}
+                  type="button"
+                  onClick={() => setLang(loc)}
+                  style={{
+                    background: lang === loc ? "var(--arco-black)" : "transparent",
+                    color: lang === loc ? "#fff" : "var(--arco-mid-grey)",
+                    padding: "3px 12px",
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: lang === loc ? 500 : 400,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {loc.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button type="button" className="popup-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <iframe
+          src={`/admin/emails/preview?template=${template}&lang=${lang}`}
+          style={{ width: "100%", height: "70vh", border: "none", background: "#fff" }}
+          title={`${template} preview`}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ── Small shared helpers ───────────────────────────────────────────────
 
 function StageDivider({ label, ts, dot }: { label: string; ts: string; dot: string }) {
   return (
