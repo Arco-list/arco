@@ -53,6 +53,8 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { ContactCard } from "@/components/contact-card/contact-card"
+import { useContactParam } from "@/hooks/use-contact-param"
 
 export type AdminUserCompany = {
   id: string
@@ -147,6 +149,8 @@ const formatAbsolute = (value: string | null) => {
 
 export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTableProps) {
   const router = useRouter()
+  // Contact Card slide-over — email-keyed URL param, same instance /admin/sales uses.
+  const contactParam = useContactParam()
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -600,6 +604,10 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => contactParam.open(user.email)}>
+                  Details
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={user.isSelf || user.status === "invited" || isLoggingIn}
                   onClick={() => handleLoginAs(user)}
@@ -645,7 +653,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         enableHiding: false,
       },
     ]
-  }, [handleResetPassword, handleOpenDeleteDialog, handleLoginAs, isGeneratingReset, resettingUserId, loggingInAsUserId])
+  }, [handleResetPassword, handleOpenDeleteDialog, handleLoginAs, isGeneratingReset, resettingUserId, loggingInAsUserId, contactParam])
 
   const table = useReactTable({
     data,
@@ -852,12 +860,26 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           <tbody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
+                <tr
+                  key={row.id}
+                  onClick={() => contactParam.open(row.original.email)}
+                  style={{ cursor: "pointer" }}
+                  className="hover:bg-[#fafaf9]"
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    // Interactive cells stop the row-level click so the
+                    // checkbox and kebab don't also open the panel.
+                    const interactive = cell.column.id === "select" || cell.column.id === "actions" || cell.column.id === "companies"
+                    return (
+                      <td
+                        key={cell.id}
+                        onClick={interactive ? (e) => e.stopPropagation() : undefined}
+                        style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))
             ) : (
@@ -1198,6 +1220,11 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           </div>
         )
       })()}
+
+      {/* Shared Contact Card slide-over — URL-driven via ?contact=<email>.
+          Row click and the "Details" kebab item both call
+          contactParam.open(user.email). */}
+      <ContactCard email={contactParam.email} onClose={contactParam.close} />
     </div>
   )
 }
