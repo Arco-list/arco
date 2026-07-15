@@ -6437,6 +6437,12 @@ body.no-scroll {
 .arco-table-wrap {
   border: 1px solid var(--arco-rule);
   overflow-x: auto;
+  /* Flex children default to min-width:auto — the table's
+     min-width (800/1100/1200) then pushes this wrap wider than the
+     viewport instead of letting its own overflow-x scroll. min-width:0
+     lets the wrap shrink to its container so the horizontal scroll
+     stays inside the table box on mobile. */
+  min-width: 0;
 }
 
 .arco-table {
