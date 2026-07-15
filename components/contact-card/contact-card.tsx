@@ -189,7 +189,9 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
   const profile = data.profile
   const primaryProspect = data.prospects[0] ?? null
   const displayName = pickDisplayName(data)
-  const phone = profile?.phone ?? null
+  // Phone falls back to the prospect row so Sales-only contacts still
+  // see their number and can edit it via the prospect update path.
+  const phone = profile?.phone ?? primaryProspect?.phone ?? null
 
   const userTypePill = pickUserTypePill(data)
 
@@ -211,21 +213,17 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
   useEffect(() => { setDisplayNameLocal(displayName) }, [displayName])
   useEffect(() => { setPhoneLocal(phone) }, [phone])
 
-  const canEdit = Boolean(profile)  // profile row required to persist
+  // Editable whenever we have SOMETHING to write to. The server-side
+  // action picks the target: profile if the email has an auth account,
+  // else the primary prospect row.
+  const canEdit = Boolean(profile || primaryProspect)
 
   const saveName = useCallback(async (next: string) => {
     const trimmed = next.trim()
     if (trimmed === displayNameLocal.trim()) return
-    // Split first token → first_name, rest → last_name. Predictable
-    // for the common "Firstname Lastname" and "First Middle Last"
-    // shapes; single-word names land as first_name only.
-    const parts = trimmed.split(/\s+/)
-    const first = parts.shift() ?? ""
-    const last = parts.join(" ")
     const result = await updateProfileByEmail({
       email: data.email,
-      first_name: first || null,
-      last_name: last || null,
+      full_name: trimmed || null,
     })
     if (result.success) {
       setDisplayNameLocal(trimmed)
@@ -252,35 +250,15 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
   return (
     <Section label="Details">
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {userTypePill && (
-          <div
-            className="grid items-baseline gap-2"
-            style={{ gridTemplateColumns: "70px 1fr" }}
-          >
-            <span style={{ fontSize: 11, color: "#a1a1a0" }}>Role</span>
-            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "baseline",
-                  padding: "0 8px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  fontWeight: 500,
-                  background: "transparent",
-                  color: "#1c1c1a",
-                  border: "1px solid #e5e5e4",
-                }}
-              >
-                {capitalize(userTypePill.label)}
-              </span>
-              {profile?.is_active === false && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>· inactive</span>
-              )}
-            </span>
-          </div>
-        )}
+        <DetailField
+          label="Role"
+          value={userTypePill ? capitalize(userTypePill.label) : null}
+          suffix={
+            profile?.is_active === false ? (
+              <span style={{ fontSize: 12, color: "#b91c1c" }}>· inactive</span>
+            ) : null
+          }
+        />
         <DetailField
           label="Name"
           value={displayNameLocal}
@@ -298,10 +276,11 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
           onSave={savePhone}
           inputType="tel"
         />
-        {domain && <DetailField label="Domain" value={domain} />}
-        {primaryProspect?.source && (
-          <DetailField label="Source" value={primaryProspect.source} />
-        )}
+        <DetailField label="Domain" value={domain} />
+        <DetailField
+          label="Source"
+          value={primaryProspect?.source ? capitalize(primaryProspect.source) : null}
+        />
       </div>
     </Section>
   )
@@ -313,12 +292,16 @@ function DetailField({
   editable = false,
   onSave,
   inputType = "text",
+  suffix,
 }: {
   label: string
   value: string | null
   editable?: boolean
   onSave?: (next: string) => void | Promise<void>
   inputType?: "text" | "tel" | "email"
+  /** Rendered next to the value in read mode — used for
+   *  read-only annotations like "· inactive" on the Role row. */
+  suffix?: React.ReactNode
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? "")
@@ -382,6 +365,7 @@ function DetailField({
             }}
           >
             {value ?? "—"}
+            {suffix && <> {suffix}</>}
           </span>
         )}
         {editable && !editing && (

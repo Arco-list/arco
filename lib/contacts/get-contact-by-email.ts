@@ -50,6 +50,7 @@ export type ContactByEmailProspect = {
   company_name: string | null
   email: string
   contact_name: string | null
+  phone: string | null
   status: string
   sequence_status: string | null
   emails_sent: number | null
@@ -107,7 +108,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   const { data: prospectsRaw, error: prospectsErr } = await svc
     .from("prospects")
     .select(
-      "id, company_id, email, contact_name, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
+      "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
     )
     .ilike("email", email)
 
@@ -234,6 +235,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     company_name: p.company_id ? companyNames.get(p.company_id) ?? null : null,
     email: p.email,
     contact_name: p.contact_name,
+    phone: (p as { phone?: string | null }).phone ?? null,
     status: p.status,
     sequence_status: p.sequence_status,
     emails_sent: p.emails_sent,
