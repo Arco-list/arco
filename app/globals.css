@@ -6441,8 +6441,13 @@ body.no-scroll {
      min-width (800/1100/1200) then pushes this wrap wider than the
      viewport instead of letting its own overflow-x scroll. min-width:0
      lets the wrap shrink to its container so the horizontal scroll
-     stays inside the table box on mobile. */
+     stays inside the table box on mobile. max-width + width:100%
+     hard-clamp the wrap to the container's inline size so a stale
+     reflow (e.g. on hard reload before every ancestor's flex sizing
+     has settled) can't sneak the wrap out again. */
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 .arco-table {
