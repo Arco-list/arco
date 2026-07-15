@@ -125,24 +125,61 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   const primaryUserId = userIds[0] ?? null
 
   let profile: ContactByEmailProfile | null = null
-  if (primaryUserId) {
+  let resolvedUserId = primaryUserId
+  if (resolvedUserId) {
     const { data: p } = await svc
       .from("profiles")
       .select("id, first_name, last_name, phone, is_active, user_types, admin_role")
-      .eq("id", primaryUserId)
+      .eq("id", resolvedUserId)
       .maybeSingle()
     profile = p ?? null
   }
 
-  // company_contacts is only reachable via person_id, so a contact
-  // without a signed-up account contributes no rows here. That's fine
-  // for Phase 1 — the prospect record already carries the company link.
+  // Fallback discovery: when no prospect row linked us to a user_id,
+  // look the profile up via auth.users.email → profiles (migration 197).
+  // This is what makes the card on /admin/users useful for architects
+  // and professionals who signed up directly without ever being an
+  // outreach target.
+  if (!profile) {
+    // svc.rpc cast because lib/supabase/types.ts hasn't been
+    // regenerated for the new function yet; the RPC exists in the DB
+    // via migration 197. Row shape mirrors the RPC's RETURNS TABLE.
+    type ProfileByEmailRow = {
+      id: string
+      first_name: string | null
+      last_name: string | null
+      phone: string | null
+      is_active: boolean | null
+      user_types: string[] | null
+      admin_role: string | null
+    }
+    const { data: rpcRows } = await (svc.rpc as unknown as (
+      fn: string,
+      params: { p_email: string },
+    ) => Promise<{ data: ProfileByEmailRow[] | null }>)("get_profile_by_email", { p_email: email })
+    const row = rpcRows?.[0] ?? null
+    if (row?.id) {
+      resolvedUserId = row.id
+      profile = {
+        id: row.id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        phone: row.phone,
+        is_active: row.is_active,
+        user_types: row.user_types,
+        admin_role: row.admin_role,
+      }
+    }
+  }
+
+  // company_contacts via person_id — now reachable for the fallback
+  // path too, because we've resolved a user_id from the profile lookup.
   let companyContactsRaw: Array<{ id: string; company_id: string; role: string; created_at: string | null }> = []
-  if (primaryUserId) {
+  if (resolvedUserId) {
     const { data: cc } = await svc
       .from("company_contacts")
       .select("id, company_id, role, created_at")
-      .eq("person_id", primaryUserId)
+      .eq("person_id", resolvedUserId)
     companyContactsRaw = (cc ?? []) as typeof companyContactsRaw
   }
 
