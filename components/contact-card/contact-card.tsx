@@ -193,6 +193,15 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
 
   const userTypePill = pickUserTypePill(data)
 
+  // Domain of the first linked company. Preferred over the person's
+  // own email host — matches how /admin/companies surfaces the field.
+  const primaryCompanyId =
+    data.companyContacts[0]?.company_id ??
+    data.prospects.find((p) => p.company_id)?.company_id ??
+    null
+  const primaryCompany = primaryCompanyId ? data.companiesById[primaryCompanyId] : undefined
+  const domain = primaryCompany?.domain ?? null
+
   // Optimistic local copies of the two editable fields. On save we
   // call updateProfileByEmail; on success the local value stays,
   // on error we revert. Router doesn't need to refresh — the panel
@@ -242,21 +251,22 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
 
   return (
     <Section label="Details">
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {userTypePill && (
           <div
             className="grid items-baseline gap-2"
             style={{ gridTemplateColumns: "70px 1fr" }}
           >
             <span style={{ fontSize: 11, color: "#a1a1a0" }}>Role</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
               <span
                 style={{
                   display: "inline-flex",
-                  alignItems: "center",
-                  padding: "3px 10px",
+                  alignItems: "baseline",
+                  padding: "0 8px",
                   borderRadius: 999,
-                  fontSize: 11,
+                  fontSize: 12,
+                  lineHeight: 1.5,
                   fontWeight: 500,
                   background: "transparent",
                   color: "#1c1c1a",
@@ -266,7 +276,7 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
                 {capitalize(userTypePill.label)}
               </span>
               {profile?.is_active === false && (
-                <span style={{ fontSize: 11, color: "#b91c1c" }}>· inactive</span>
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>· inactive</span>
               )}
             </span>
           </div>
@@ -288,6 +298,7 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
           onSave={savePhone}
           inputType="tel"
         />
+        {domain && <DetailField label="Domain" value={domain} />}
         {primaryProspect?.source && (
           <DetailField label="Source" value={primaryProspect.source} />
         )}
