@@ -1,8 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { toast } from "sonner"
 import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-contact-by-email"
+import { updateProfileByEmail } from "@/lib/contacts/update-profile-by-email"
 import { ProspectTimelineFused } from "./prospect-timeline-fused"
 
 /**
@@ -66,7 +68,6 @@ export function ContactCard({ email, onClose }: Props) {
 
   const data = state.kind === "ready" ? state.data : undefined
   const displayName = pickDisplayName(data)
-  const primaryPhone = data?.profile?.phone ?? null
 
   return (
     <>
@@ -101,18 +102,11 @@ export function ContactCard({ email, onClose }: Props) {
         <header style={{ padding: "20px 24px 16px", borderBottom: "1px solid #eeeeed" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div style={{ minWidth: 0, flex: 1 }}>
+              {/* Email lives in the Details section below; used to
+                  double up as a subtitle here. */}
               <h3 className="arco-section-title" style={{ margin: 0, fontSize: 22, lineHeight: 1.2 }}>
                 {displayName}
               </h3>
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6b6b68", wordBreak: "break-all" }}>
-                {email}
-                {primaryPhone && (
-                  <>
-                    <span style={{ color: "#d4d4d3" }}> · </span>
-                    <span>{primaryPhone}</span>
-                  </>
-                )}
-              </p>
             </div>
             <button
               type="button"
@@ -199,56 +193,101 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
 
   const userTypePill = pickUserTypePill(data)
 
+  // Optimistic local copies of the two editable fields. On save we
+  // call updateProfileByEmail; on success the local value stays,
+  // on error we revert. Router doesn't need to refresh — the panel
+  // will re-hydrate the next time it's opened.
+  const [displayNameLocal, setDisplayNameLocal] = useState(displayName)
+  const [phoneLocal, setPhoneLocal] = useState<string | null>(phone)
+  useEffect(() => { setDisplayNameLocal(displayName) }, [displayName])
+  useEffect(() => { setPhoneLocal(phone) }, [phone])
+
+  const canEdit = Boolean(profile)  // profile row required to persist
+
+  const saveName = useCallback(async (next: string) => {
+    const trimmed = next.trim()
+    if (trimmed === displayNameLocal.trim()) return
+    // Split first token → first_name, rest → last_name. Predictable
+    // for the common "Firstname Lastname" and "First Middle Last"
+    // shapes; single-word names land as first_name only.
+    const parts = trimmed.split(/\s+/)
+    const first = parts.shift() ?? ""
+    const last = parts.join(" ")
+    const result = await updateProfileByEmail({
+      email: data.email,
+      first_name: first || null,
+      last_name: last || null,
+    })
+    if (result.success) {
+      setDisplayNameLocal(trimmed)
+      toast.success("Name updated")
+    } else {
+      setDisplayNameLocal(displayName)
+      toast.error(result.error)
+    }
+  }, [data.email, displayName, displayNameLocal])
+
+  const savePhone = useCallback(async (next: string | null) => {
+    const trimmed = next?.trim() || null
+    if ((trimmed ?? "") === (phoneLocal ?? "")) return
+    const result = await updateProfileByEmail({ email: data.email, phone: trimmed })
+    if (result.success) {
+      setPhoneLocal(trimmed)
+      toast.success("Phone updated")
+    } else {
+      setPhoneLocal(phone)
+      toast.error(result.error)
+    }
+  }, [data.email, phone, phoneLocal])
+
   return (
-    <Section
-      label="Details"
-      action={
-        <button
-          type="button"
-          disabled
-          title="Edit coming in Phase 2b"
-          style={{
-            fontSize: 11,
-            color: "#a1a1a0",
-            background: "transparent",
-            border: "1px solid #e5e5e4",
-            borderRadius: 4,
-            padding: "3px 10px",
-            cursor: "not-allowed",
-          }}
-        >
-          Edit
-        </button>
-      }
-    >
+    <Section label="Details">
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {userTypePill && (
-          <div>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "3px 10px",
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 500,
-                background: "transparent",
-                color: "#1c1c1a",
-                border: "1px solid #e5e5e4",
-              }}
-            >
-              <span className={`inline-block h-1.5 w-1.5 rounded-full ${userTypePill.dot}`} />
-              {userTypePill.label}
+          <div
+            className="grid items-baseline gap-2"
+            style={{ gridTemplateColumns: "70px 1fr" }}
+          >
+            <span style={{ fontSize: 11, color: "#a1a1a0" }}>Role</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  background: "transparent",
+                  color: "#1c1c1a",
+                  border: "1px solid #e5e5e4",
+                }}
+              >
+                {capitalize(userTypePill.label)}
+              </span>
+              {profile?.is_active === false && (
+                <span style={{ fontSize: 11, color: "#b91c1c" }}>· inactive</span>
+              )}
             </span>
-            {profile?.is_active === false && (
-              <span style={{ marginLeft: 8, fontSize: 11, color: "#b91c1c" }}>· inactive</span>
-            )}
           </div>
         )}
-        <DetailField label="Name" value={displayName} />
-        <DetailField label="Email" value={data.email} monospace />
-        <DetailField label="Phone" value={phone} />
+        <DetailField
+          label="Name"
+          value={displayNameLocal}
+          editable={canEdit}
+          onSave={saveName}
+        />
+        <DetailField
+          label="Email"
+          value={data.email}
+        />
+        <DetailField
+          label="Phone"
+          value={phoneLocal}
+          editable={canEdit}
+          onSave={savePhone}
+          inputType="tel"
+        />
         {primaryProspect?.source && (
           <DetailField label="Source" value={primaryProspect.source} />
         )}
@@ -257,25 +296,118 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
   )
 }
 
-function DetailField({ label, value, monospace }: { label: string; value: string | null; monospace?: boolean }) {
+function DetailField({
+  label,
+  value,
+  editable = false,
+  onSave,
+  inputType = "text",
+}: {
+  label: string
+  value: string | null
+  editable?: boolean
+  onSave?: (next: string) => void | Promise<void>
+  inputType?: "text" | "tel" | "email"
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value ?? "")
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => { setDraft(value ?? "") }, [value])
+  useEffect(() => {
+    if (editing) inputRef.current?.focus()
+  }, [editing])
+
+  const commit = useCallback(() => {
+    setEditing(false)
+    if (!onSave) return
+    if ((draft ?? "").trim() === (value ?? "").trim()) return
+    void onSave(draft)
+  }, [draft, onSave, value])
+
+  const cancel = useCallback(() => {
+    setDraft(value ?? "")
+    setEditing(false)
+  }, [value])
+
   return (
     <div
       className="grid items-baseline gap-2"
       style={{ gridTemplateColumns: "70px 1fr" }}
     >
       <span style={{ fontSize: 11, color: "#a1a1a0" }}>{label}</span>
-      <span
-        style={{
-          fontSize: 12,
-          color: value ? "#1c1c1a" : "#a1a1a0",
-          fontFamily: monospace ? "ui-monospace, SFMono-Regular, Menlo, monospace" : undefined,
-          wordBreak: "break-all",
-        }}
-      >
-        {value ?? "—"}
+      <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+        {editing ? (
+          <input
+            ref={inputRef}
+            type={inputType}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit()
+              if (e.key === "Escape") cancel()
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 12,
+              color: "#1c1c1a",
+              padding: "3px 6px",
+              border: "1px solid #1c1c1a",
+              borderRadius: 3,
+              background: "#fff",
+              outline: "none",
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 12,
+              color: value ? "#1c1c1a" : "#a1a1a0",
+              wordBreak: "break-all",
+            }}
+          >
+            {value ?? "—"}
+          </span>
+        )}
+        {editable && !editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label={`Edit ${label.toLowerCase()}`}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 2,
+              cursor: "pointer",
+              color: "#a1a1a0",
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            <PencilIcon />
+          </button>
+        )}
       </span>
     </div>
   )
+}
+
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  )
+}
+
+function capitalize(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 // ── Company row (styled like a mini profile card) ─────────────────────
