@@ -51,7 +51,7 @@ import { useContactParam } from "@/hooks/use-contact-param"
 
 // -- Status config -----------------------------------------------------------
 
-const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: string }> = {
+export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: string }> = {
   prospect: { label: "Prospect", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
   contacted: { label: "Contacted", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
   visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
@@ -70,7 +70,7 @@ const ALL_STATUSES: ProspectStatus[] = [
   "prospect", "contacted", "visitor", "signup", "company", "active",
 ]
 
-const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
+export const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
   not_started: { label: "Not started", dot: "bg-[#a1a1a0]" },
   active: { label: "Active", dot: "bg-[#2563eb]" },
   paused: { label: "Paused", dot: "bg-amber-400" },
@@ -177,7 +177,7 @@ function formatDate(dateStr: string | null) {
   } catch { return dateStr }
 }
 
-function formatDateShort(dateStr: string | null) {
+export function formatDateShort(dateStr: string | null) {
   if (!dateStr) return "—"
   try {
     const d = new Date(dateStr)
@@ -417,7 +417,7 @@ function ExpandChevron({ visible, open }: { visible: boolean; open: boolean }) {
   )
 }
 
-function EventHistoryRow({
+export function EventHistoryRow({
   event,
   onEditManualLog,
   onDeleteManualLog,
