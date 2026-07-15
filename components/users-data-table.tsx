@@ -681,10 +681,16 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const totalSuperAdmins = data.filter((row) => row.role === "super_admin").length
 
   return (
-    <div className="space-y-6 w-full">
+    // Fragment — mirrors ProspectsClient on /admin/sales. Any wrapper
+    // div here (flex-col, space-y, whatever) was collapsing to a
+    // narrow column on mobile hard-reload. Making the sections
+    // direct children of .wrap sidesteps every flex-child sizing
+    // path; block-flow with mb-* on each section gives the same
+    // visual spacing.
+    <>
       {/* Warning banner */}
       {singleActiveSuperAdmin && (
-        <div className="arco-alert arco-alert--warn">
+        <div className="arco-alert arco-alert--warn mb-6">
           <Shield className="arco-alert-icon" />
           <p>
             There is only one active super admin. Invite or promote another before demoting or deactivating the current one.
@@ -693,7 +699,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 mb-6">
         <h3 className="arco-section-title">Users</h3>
         <p className="text-xs text-[#a1a1a0] mt-0.5">
           {totalAdmins} total &middot; {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"}
@@ -701,7 +707,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-6">
         <div className="flex flex-1 items-center">
           <input
             type="text"
@@ -759,7 +765,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       {Object.keys(rowSelection).length > 0 && (() => {
         const selectedCount = Object.keys(rowSelection).length
         return (
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4]">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-[#f5f5f4] rounded-[3px] border border-[#e5e5e4] mb-6">
             <span className="text-xs text-[#6b6b68]">{selectedCount} selected</span>
             <div className="flex items-center gap-2">
               <button
@@ -1225,6 +1231,6 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
           Row click and the "Details" kebab item both call
           contactParam.open(user.email). */}
       <ContactCard email={contactParam.email} onClose={contactParam.close} />
-    </div>
+    </>
   )
 }
