@@ -30,6 +30,17 @@ export type ContactByEmailProfile = {
   last_name: string | null
   phone: string | null
   is_active: boolean | null
+  user_types: string[] | null
+  admin_role: string | null
+}
+
+export type ContactByEmailCompanySummary = {
+  id: string
+  name: string
+  slug: string | null
+  logo_url: string | null
+  city: string | null
+  primary_service_name: string | null
 }
 
 export type ContactByEmailProspect = {
@@ -61,6 +72,9 @@ export type ContactByEmailData = {
   profile: ContactByEmailProfile | null
   prospects: ContactByEmailProspect[]
   companyContacts: ContactByEmailCompanyContact[]
+  /** Enriched summary (logo, city, primary service) keyed by company_id.
+   *  Powers the Companies-section rendering — front-end joins by id. */
+  companiesById: Record<string, ContactByEmailCompanySummary>
 }
 
 export type ContactByEmailResult =
@@ -114,7 +128,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   if (primaryUserId) {
     const { data: p } = await svc
       .from("profiles")
-      .select("id, first_name, last_name, phone, is_active")
+      .select("id, first_name, last_name, phone, is_active, user_types, admin_role")
       .eq("id", primaryUserId)
       .maybeSingle()
     profile = p ?? null
@@ -146,13 +160,31 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   )
 
   const companyNames = new Map<string, string>()
+  const companiesById: Record<string, ContactByEmailCompanySummary> = {}
   if (companyIds.length > 0) {
     const { data: companies } = await svc
       .from("companies")
-      .select("id, name")
+      .select("id, name, slug, logo_url, city, primary_service:categories!companies_primary_service_id_fkey(name)")
       .in("id", companyIds)
-    for (const c of companies ?? []) {
-      if (c?.id && c?.name) companyNames.set(c.id, c.name)
+    for (const c of (companies ?? []) as Array<{
+      id: string
+      name: string | null
+      slug: string | null
+      logo_url: string | null
+      city: string | null
+      primary_service: { name: string | null } | null
+    }>) {
+      if (!c?.id) continue
+      const name = c.name ?? "(unnamed company)"
+      companyNames.set(c.id, name)
+      companiesById[c.id] = {
+        id: c.id,
+        name,
+        slug: c.slug ?? null,
+        logo_url: c.logo_url ?? null,
+        city: c.city ?? null,
+        primary_service_name: c.primary_service?.name ?? null,
+      }
     }
   }
 
@@ -182,6 +214,6 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
 
   return {
     success: true,
-    data: { email, profile, prospects, companyContacts },
+    data: { email, profile, prospects, companyContacts, companiesById },
   }
 }

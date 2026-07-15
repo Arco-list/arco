@@ -151,28 +151,11 @@ export function ContactCard({ email, onClose }: Props) {
 
 function CardBody({ data }: { data: ContactByEmailData }) {
   const companies = groupByCompany(data)
-  const linkedProfile = data.profile
   const primaryProspect = data.prospects[0] ?? null
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <Section label="Account">
-        {linkedProfile ? (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", fontSize: 12, color: "#1c1c1a" }}>
-            <li>
-              <strong>{[linkedProfile.first_name, linkedProfile.last_name].filter(Boolean).join(" ") || "—"}</strong>
-              {linkedProfile.is_active === false && (
-                <span style={{ marginLeft: 8, color: "#dc2626" }}>· inactive</span>
-              )}
-            </li>
-            <li style={{ marginTop: 4, color: "#6b6b68" }}>Profile: {linkedProfile.id}</li>
-          </ul>
-        ) : (
-          <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
-            No signed-up account linked to this email.
-          </p>
-        )}
-      </Section>
+      <DetailsSection data={data} />
 
       <Section label="Companies">
         {companies.length === 0 ? (
@@ -180,36 +163,9 @@ function CardBody({ data }: { data: ContactByEmailData }) {
             Not linked to any company yet.
           </p>
         ) : (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
             {companies.map((c) => (
-              <li
-                key={c.companyId ?? c.label}
-                style={{
-                  border: "1px solid #eeeeed",
-                  borderRadius: 6,
-                  padding: "10px 12px",
-                  fontSize: 12,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                  <strong style={{ color: "#1c1c1a" }}>
-                    {c.companyId ? (
-                      <Link
-                        href={`/admin/companies?company_id=${c.companyId}`}
-                        style={{ color: "inherit", textDecoration: "none" }}
-                      >
-                        {c.label}
-                      </Link>
-                    ) : (
-                      c.label
-                    )}
-                  </strong>
-                  {c.role && <span style={{ color: "#6b6b68" }}>{c.role}</span>}
-                </div>
-                {c.prospectSummary && (
-                  <p style={{ margin: "6px 0 0", color: "#6b6b68" }}>{c.prospectSummary}</p>
-                )}
-              </li>
+              <CompanyRow key={c.companyId ?? c.label} entry={c} data={data} />
             ))}
           </ul>
         )}
@@ -228,20 +184,203 @@ function CardBody({ data }: { data: ContactByEmailData }) {
   )
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+// ── Details section (was "Account") ───────────────────────────────────
+//
+// Renamed to Details because it now surfaces more than the linked auth
+// profile — the user-type pill and the editable name/email/phone list
+// apply whether or not this email has ever signed up. When there's no
+// linked profile the fields fall back to the prospect row.
+
+function DetailsSection({ data }: { data: ContactByEmailData }) {
+  const profile = data.profile
+  const primaryProspect = data.prospects[0] ?? null
+  const displayName = pickDisplayName(data)
+  const phone = profile?.phone ?? null
+
+  const userTypePill = pickUserTypePill(data)
+
   return (
-    <section>
+    <Section
+      label="Details"
+      action={
+        <button
+          type="button"
+          disabled
+          title="Edit coming in Phase 2b"
+          style={{
+            fontSize: 11,
+            color: "#a1a1a0",
+            background: "transparent",
+            border: "1px solid #e5e5e4",
+            borderRadius: 4,
+            padding: "3px 10px",
+            cursor: "not-allowed",
+          }}
+        >
+          Edit
+        </button>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {userTypePill && (
+          <div>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "3px 10px",
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 500,
+                background: "transparent",
+                color: "#1c1c1a",
+                border: "1px solid #e5e5e4",
+              }}
+            >
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${userTypePill.dot}`} />
+              {userTypePill.label}
+            </span>
+            {profile?.is_active === false && (
+              <span style={{ marginLeft: 8, fontSize: 11, color: "#b91c1c" }}>· inactive</span>
+            )}
+          </div>
+        )}
+        <DetailField label="Name" value={displayName} />
+        <DetailField label="Email" value={data.email} monospace />
+        <DetailField label="Phone" value={phone} />
+        {primaryProspect?.source && (
+          <DetailField label="Source" value={primaryProspect.source} />
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function DetailField({ label, value, monospace }: { label: string; value: string | null; monospace?: boolean }) {
+  return (
+    <div
+      className="grid items-baseline gap-2"
+      style={{ gridTemplateColumns: "70px 1fr" }}
+    >
+      <span style={{ fontSize: 11, color: "#a1a1a0" }}>{label}</span>
       <span
         style={{
-          fontSize: 10,
-          fontWeight: 500,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "#a1a1a0",
+          fontSize: 12,
+          color: value ? "#1c1c1a" : "#a1a1a0",
+          fontFamily: monospace ? "ui-monospace, SFMono-Regular, Menlo, monospace" : undefined,
+          wordBreak: "break-all",
         }}
       >
-        {label}
+        {value ?? "—"}
       </span>
+    </div>
+  )
+}
+
+// ── Company row (styled like a mini profile card) ─────────────────────
+
+function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEmailData }) {
+  const enriched = entry.companyId ? data.companiesById[entry.companyId] : undefined
+  const label = enriched?.name ?? entry.label
+  const logoUrl = enriched?.logo_url ?? null
+  const initial = label.charAt(0).toUpperCase() || "?"
+  const subtitleParts = [enriched?.primary_service_name ?? entry.role, enriched?.city].filter(Boolean)
+  const subtitle = subtitleParts.join(" · ")
+  const inner = (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+      <div
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: "50%",
+          background: "#f5f5f4",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          overflow: "hidden",
+        }}
+      >
+        {logoUrl ? (
+          <img src={logoUrl} alt="" width={34} height={34} style={{ objectFit: "cover", width: "100%", height: "100%" }} />
+        ) : (
+          <span style={{ fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>{initial}</span>
+        )}
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "#1c1c1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {label}
+        </div>
+        {subtitle && (
+          <div style={{ fontSize: 11, color: "#6b6b68", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+  return (
+    <li>
+      {entry.companyId ? (
+        <Link
+          href={`/admin/companies?company_id=${entry.companyId}`}
+          style={{ display: "block", padding: 8, borderRadius: 6, textDecoration: "none" }}
+        >
+          {inner}
+        </Link>
+      ) : (
+        <div style={{ padding: 8 }}>{inner}</div>
+      )}
+    </li>
+  )
+}
+
+// ── User-type derivation ──────────────────────────────────────────────
+
+function pickUserTypePill(data: ContactByEmailData): { label: string; dot: string } | null {
+  const profile = data.profile
+  const cc = data.companyContacts[0] ?? null
+  // profile.admin_role wins — it names the tier explicitly.
+  if (profile?.admin_role) {
+    return { label: profile.admin_role.replace(/_/g, " "), dot: "bg-[#7c3aed]" }
+  }
+  // Otherwise, the most specific company-scoped role.
+  if (cc?.role) {
+    if (cc.role === "owner") return { label: "owner", dot: "bg-[#2563eb]" }
+    if (cc.role === "admin") return { label: "company admin", dot: "bg-[#2563eb]" }
+    if (cc.role === "member") return { label: "team member", dot: "bg-[#2563eb]" }
+    if (cc.role === "contact") return { label: "contact", dot: "bg-[#f59e0b]" }
+  }
+  // No company role — if there's a profile at all they're at least a user.
+  if (profile) {
+    const types = profile.user_types ?? []
+    if (types.includes("professional")) return { label: "professional", dot: "bg-[#2563eb]" }
+    if (types.includes("client")) return { label: "homeowner", dot: "bg-[#2563eb]" }
+    return { label: "user", dot: "bg-[#2563eb]" }
+  }
+  // Prospect only — no auth account, not on any team.
+  if (data.prospects.length > 0) return { label: "prospect", dot: "bg-[#f59e0b]" }
+  return null
+}
+
+function Section({ label, children, action }: { label: string; children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <section>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#a1a1a0",
+          }}
+        >
+          {label}
+        </span>
+        {action}
+      </div>
       <div style={{ marginTop: 8 }}>{children}</div>
     </section>
   )

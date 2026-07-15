@@ -426,12 +426,12 @@ function SequenceRow({
   return (
     <div
       className="grid items-center gap-2 text-xs"
-      style={{ gridTemplateColumns: "90px 1fr auto" }}
+      style={{ gridTemplateColumns: "90px 1fr" }}
     >
       <span className="text-[#a1a1a0] whitespace-nowrap">
         {step.timestamp ? formatDateShort(step.timestamp) : "—"}
       </span>
-      <span className="inline-flex items-center gap-2 min-w-0">
+      <span className="inline-flex items-center gap-2 min-w-0 flex-wrap">
         {clickable ? (
           <button
             type="button"
@@ -444,24 +444,24 @@ function SequenceRow({
           <span className="text-[#1c1c1a] truncate text-left">{step.label || name}</span>
         )}
         <span className="status-pill shrink-0">{lang.toUpperCase()}</span>
-      </span>
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "2px 8px",
-          borderRadius: 999,
-          fontSize: 11,
-          fontWeight: 500,
-          background: engagement.tone === "danger" ? "#fef2f2" : "#f5f5f4",
-          color: engagement.tone === "danger" ? "#b91c1c" : "#1c1c1a",
-          border: engagement.tone === "danger" ? "1px solid #fecaca" : "1px solid transparent",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <span className={`inline-block h-1.5 w-1.5 rounded-full ${engagement.dot}`} />
-        {engagement.label}
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "2px 8px",
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 500,
+            background: "transparent",
+            color: engagement.tone === "danger" ? "#b91c1c" : "#1c1c1a",
+            border: `1px solid ${engagement.tone === "danger" ? "#fecaca" : "#e5e5e4"}`,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${engagement.dot}`} />
+          {engagement.label}
+        </span>
       </span>
     </div>
   )
