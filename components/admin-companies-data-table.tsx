@@ -1764,7 +1764,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     // the viewport instead of scrolling within its container.
     // admin/layout's `overflow-x-clip` on <main> still catches any
     // rogue overflow at the page level.
-    <div className="flex flex-col gap-6 min-w-0 w-full">
+    <div className="space-y-6 w-full">
       {/* Header — stacks vertically on mobile so a wide right-side CTA
            doesn't push the row beyond the viewport. */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

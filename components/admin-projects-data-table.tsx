@@ -764,7 +764,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
   }
 
   return (
-    <div className="flex flex-col gap-6 min-w-0 w-full">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h3 className="arco-section-title">Projects</h3>

@@ -681,7 +681,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const totalSuperAdmins = data.filter((row) => row.role === "super_admin").length
 
   return (
-    <div className="flex flex-col gap-6 min-w-0 w-full">
+    <div className="space-y-6 w-full">
       {/* Warning banner */}
       {singleActiveSuperAdmin && (
         <div className="arco-alert arco-alert--warn">
