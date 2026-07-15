@@ -988,6 +988,15 @@ a.arco-nav-text.nav-transparent:hover {
     padding: 0 20px;
   }
 
+  /* Admin surfaces (tables, funnels) want the whole viewport on
+     mobile — the 20px marketing/dashboard padding above wastes
+     horizontal space that data-dense views need. Applied via a class
+     on the admin layout root; 8px keeps enough breathing room that
+     cell text doesn't collide with the viewport edge. */
+  .admin-full-bleed .wrap {
+    padding: 0 8px;
+  }
+
   .section-header {
     margin-bottom: 20px;
   }

@@ -145,7 +145,12 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     // scroll — this was letting mobile users pan sideways off the
     // page on /admin/companies. `clip` (not `hidden`) preserves
     // descendant fixed / portal escapes.
-    <div className="min-h-screen overflow-x-clip">
+    //
+    // `admin-full-bleed` opts .wrap descendants into near-zero
+    // horizontal padding on mobile (globals.css). Marketing / dashboard
+    // pages keep the standard 20px mobile padding; admin surfaces
+    // (tables, funnels) want the whole viewport.
+    <div className="min-h-screen overflow-x-clip admin-full-bleed">
       <Header
         navLinks={buildAdminNavLinks({ outboundDueCount, inboxUnreadCount, projectsToReviewCount })}
       />
