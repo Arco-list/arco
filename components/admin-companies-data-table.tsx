@@ -1758,11 +1758,13 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   }
 
   return (
-    // min-w-0 + max-w-full + overflow-hidden mirrors the wrapper on
-    // /admin/projects and /admin/users — stops any wide descendant
-    // (funnel row, table, dropdown) from expanding the page beyond
-    // the viewport on mobile.
-    <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
+    // min-w-0 + max-w-full: correct flex shrinking. `overflow-hidden`
+    // was removed because it was suppressing .arco-table-wrap's own
+    // horizontal scroll on mobile — the table appeared to bleed off
+    // the viewport instead of scrolling within its container.
+    // admin/layout's `overflow-x-clip` on <main> still catches any
+    // rogue overflow at the page level.
+    <div className="flex flex-col gap-6 min-w-0 max-w-full">
       {/* Header — stacks vertically on mobile so a wide right-side CTA
            doesn't push the row beyond the viewport. */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
