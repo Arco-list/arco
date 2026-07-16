@@ -373,29 +373,36 @@ function DetailField({
               if (e.key === "Escape") cancel()
             }}
             /* Mirrors DomainCell on /admin/companies: teal underline,
-               transparent background, no border box. */
+               transparent background, no border box. Padding, line
+               height and border thickness are byte-for-byte the same
+               as the read state below so the row doesn't jump when
+               switching modes — only the border color changes. */
             style={{
               flex: 1,
               minWidth: 0,
               fontSize: 12,
               lineHeight: 1.5,
               color: "#1c1c1a",
-              padding: "1px 0",
+              padding: 0,
               border: "none",
               borderBottom: "1px solid #016D75",
               borderRadius: 0,
               background: "transparent",
               outline: "none",
+              boxSizing: "border-box",
+              fontFamily: "inherit",
             }}
           />
         ) : editable ? (
-          /* Value itself is the click target. Pencil stays as a
-             visual affordance so the row reads as editable at a
-             glance — same pattern as domain on /admin/companies. */
+          /* Read state carries a transparent border-bottom of the same
+             width so the box takes the same vertical space as the
+             edit input. On hover the border tints subtly to hint the
+             row is editable. */
           <button
             type="button"
             onClick={() => setEditing(true)}
             title={`Edit ${label.toLowerCase()}`}
+            className="contact-card-editable"
             style={{
               flex: 1,
               minWidth: 0,
@@ -404,6 +411,8 @@ function DetailField({
               gap: 6,
               background: "transparent",
               border: "none",
+              borderBottom: "1px solid transparent",
+              borderRadius: 0,
               padding: 0,
               margin: 0,
               cursor: "pointer",
@@ -413,6 +422,7 @@ function DetailField({
               color: value ? "#1c1c1a" : "#a1a1a0",
               wordBreak: "break-all",
               fontFamily: "inherit",
+              boxSizing: "border-box",
             }}
           >
             <span style={{ flex: 1, minWidth: 0 }}>
