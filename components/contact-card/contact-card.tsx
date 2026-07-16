@@ -5,6 +5,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-contact-by-email"
 import { updateProfileByEmail } from "@/lib/contacts/update-profile-by-email"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused } from "./prospect-timeline-fused"
 
 /**
@@ -247,6 +248,30 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
     }
   }, [data.email, phone, phoneLocal])
 
+  // Domain lives on the primary linked company. Same inline pattern
+  // /admin/companies uses in DomainCell — direct browser-client write
+  // via RLS, no dedicated server action needed.
+  const [domainLocal, setDomainLocal] = useState<string | null>(domain)
+  useEffect(() => { setDomainLocal(domain) }, [domain])
+  const canEditDomain = Boolean(primaryCompanyId)
+  const saveDomain = useCallback(async (next: string | null) => {
+    if (!primaryCompanyId) return
+    const trimmed = next?.trim().toLowerCase() || null
+    if ((trimmed ?? "") === (domainLocal ?? "")) return
+    const supabase = getBrowserSupabaseClient()
+    const { error } = await supabase
+      .from("companies")
+      .update({ domain: trimmed } as { domain: string | null })
+      .eq("id", primaryCompanyId)
+    if (error) {
+      setDomainLocal(domain)
+      toast.error(error.message)
+      return
+    }
+    setDomainLocal(trimmed)
+    toast.success("Domain updated")
+  }, [primaryCompanyId, domain, domainLocal])
+
   return (
     <Section label="Details">
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -276,7 +301,12 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
           onSave={savePhone}
           inputType="tel"
         />
-        <DetailField label="Domain" value={domain} />
+        <DetailField
+          label="Domain"
+          value={domainLocal}
+          editable={canEditDomain}
+          onSave={saveDomain}
+        />
         <DetailField
           label="Source"
           value={primaryProspect?.source ? capitalize(primaryProspect.source) : null}
@@ -342,24 +372,67 @@ function DetailField({
               if (e.key === "Enter") commit()
               if (e.key === "Escape") cancel()
             }}
+            /* Mirrors DomainCell on /admin/companies: teal underline,
+               transparent background, no border box. */
             style={{
               flex: 1,
               minWidth: 0,
               fontSize: 12,
+              lineHeight: 1.5,
               color: "#1c1c1a",
-              padding: "3px 6px",
-              border: "1px solid #1c1c1a",
-              borderRadius: 3,
-              background: "#fff",
+              padding: "1px 0",
+              border: "none",
+              borderBottom: "1px solid #016D75",
+              borderRadius: 0,
+              background: "transparent",
               outline: "none",
             }}
           />
+        ) : editable ? (
+          /* Value itself is the click target. Pencil stays as a
+             visual affordance so the row reads as editable at a
+             glance — same pattern as domain on /admin/companies. */
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            title={`Edit ${label.toLowerCase()}`}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "inline-flex",
+              alignItems: "baseline",
+              gap: 6,
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              cursor: "pointer",
+              textAlign: "left",
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: value ? "#1c1c1a" : "#a1a1a0",
+              wordBreak: "break-all",
+              fontFamily: "inherit",
+            }}
+          >
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {value ?? <span style={{ color: "#a1a1a0", fontStyle: "italic" }}>Add {label.toLowerCase()}…</span>}
+              {suffix && <> {suffix}</>}
+            </span>
+            <span
+              aria-hidden
+              style={{ color: "#a1a1a0", lineHeight: 1, flexShrink: 0, display: "inline-flex" }}
+            >
+              <PencilIcon />
+            </span>
+          </button>
         ) : (
           <span
             style={{
               flex: 1,
               minWidth: 0,
               fontSize: 12,
+              lineHeight: 1.5,
               color: value ? "#1c1c1a" : "#a1a1a0",
               wordBreak: "break-all",
             }}
@@ -367,24 +440,6 @@ function DetailField({
             {value ?? "—"}
             {suffix && <> {suffix}</>}
           </span>
-        )}
-        {editable && !editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            aria-label={`Edit ${label.toLowerCase()}`}
-            style={{
-              background: "transparent",
-              border: "none",
-              padding: 2,
-              cursor: "pointer",
-              color: "#a1a1a0",
-              lineHeight: 1,
-              flexShrink: 0,
-            }}
-          >
-            <PencilIcon />
-          </button>
         )}
       </span>
     </div>
