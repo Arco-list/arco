@@ -21,6 +21,7 @@ import {
   formatDateShort,
   templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
+import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
 
 /**
  * Fused timeline for the shared Contact Card.
@@ -49,6 +50,12 @@ import {
 type Props = {
   prospectId: string
   email: string
+  /** LogOutboundModal fields — passed through from the parent card
+   *  so we don't need a second server round-trip inside the timeline
+   *  component just for the modal's contact banner. */
+  contactLabel?: string
+  companyLabel?: string | null
+  contactPhone?: string | null
 }
 
 type Bundle = {
@@ -60,13 +67,18 @@ type Bundle = {
   inboundEmails: InboundEmailForProspect[]
 }
 
-export function ProspectTimelineFused({ prospectId, email }: Props) {
+export function ProspectTimelineFused({ prospectId, email, contactLabel, companyLabel, contactPhone }: Props) {
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "error"; message: string }
     | { kind: "ready"; bundle: Bundle }
   >({ kind: "loading" })
   const [preview, setPreview] = useState<{ template: string; lang: "en" | "nl" } | null>(null)
+  const [logOpen, setLogOpen] = useState(false)
+  // Bumped whenever the modal saves a new log — the outbound_contact_log
+  // trigger updates prospects.last_outbound_at, so re-firing the bundle
+  // fetch surfaces the new row in the Timeline stream immediately.
+  const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -100,7 +112,7 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
         if (!cancelled) setState({ kind: "error", message: err?.message ?? "Failed to load timeline" })
       })
     return () => { cancelled = true }
-  }, [prospectId, email])
+  }, [prospectId, email, reloadTick])
 
   if (state.kind === "loading") {
     return <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>Loading timeline…</p>
@@ -115,7 +127,7 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
 
   return (
     <>
-      <ActivitySection bundle={bundle} />
+      <ActivitySection bundle={bundle} onLogOutbound={() => setLogOpen(true)} />
       <div>
         <SectionLabel>Timeline</SectionLabel>
         <TimelineStream
@@ -131,13 +143,29 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
           onClose={() => setPreview(null)}
         />
       )}
+      {logOpen && (
+        <LogOutboundModal
+          open
+          onOpenChange={(open) => { if (!open) setLogOpen(false) }}
+          prospectId={prospectId}
+          contactLabel={contactLabel || email}
+          companyLabel={companyLabel ?? ""}
+          contactEmail={email}
+          contactPhone={contactPhone ?? null}
+          contactAvatarUrl={null}
+          onLogged={() => {
+            setLogOpen(false)
+            setReloadTick((n) => n + 1)
+          }}
+        />
+      )}
     </>
   )
 }
 
 // ── Activity section (status / channel / created, DetailField style) ──
 
-function ActivitySection({ bundle }: { bundle: Bundle }) {
+function ActivitySection({ bundle, onLogOutbound }: { bundle: Bundle; onLogOutbound?: () => void }) {
   const p = bundle.prospect
   const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] : null
 
@@ -160,7 +188,27 @@ function ActivitySection({ bundle }: { bundle: Bundle }) {
 
   return (
     <div>
-      <SectionLabel>Activity</SectionLabel>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <SectionLabel>Activity</SectionLabel>
+        {onLogOutbound && (
+          <button
+            type="button"
+            onClick={onLogOutbound}
+            style={{
+              fontSize: 11,
+              color: "#1c1c1a",
+              background: "transparent",
+              border: "1px solid #e5e5e4",
+              borderRadius: 4,
+              padding: "3px 10px",
+              cursor: "pointer",
+              lineHeight: 1.2,
+            }}
+          >
+            Log outbound
+          </button>
+        )}
+      </div>
       <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
         <Row label="Status">
           {statusCfg ? (

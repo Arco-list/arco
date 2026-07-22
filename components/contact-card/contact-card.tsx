@@ -169,7 +169,15 @@ function CardBody({ data }: { data: ContactByEmailData }) {
       {primaryProspect ? (
         // ProspectTimelineFused now emits its own Activity + Timeline
         // sections; contact-card just drops it into the body stream.
-        <ProspectTimelineFused prospectId={primaryProspect.id} email={data.email} />
+        // Pass contact + company + phone through so LogOutboundModal
+        // (rendered inside Fused) doesn't need to refetch them.
+        <ProspectTimelineFused
+          prospectId={primaryProspect.id}
+          email={data.email}
+          contactLabel={pickDisplayName(data)}
+          companyLabel={primaryProspect.company_name ?? data.companiesById[primaryProspect.company_id ?? ""]?.name ?? null}
+          contactPhone={data.profile?.phone ?? primaryProspect.phone ?? null}
+        />
       ) : (
         <Section label="Timeline">
           <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
