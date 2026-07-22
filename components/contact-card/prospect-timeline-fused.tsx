@@ -439,7 +439,7 @@ function SequenceRow({
       className="grid items-center gap-2 text-xs"
       style={{ gridTemplateColumns: "90px 1fr" }}
     >
-      <span className="text-[#a1a1a0] whitespace-nowrap">
+      <span className="text-[#a1a1a0] whitespace-nowrap" style={{ fontSize: 11 }}>
         {step.timestamp ? formatDateShort(step.timestamp) : "—"}
       </span>
       <span className="inline-flex items-center gap-2 min-w-0 flex-wrap">
