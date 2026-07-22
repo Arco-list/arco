@@ -16,6 +16,7 @@ import {
 } from "@/app/admin/sales/actions"
 import {
   EventHistoryRow,
+  SEQUENCE_CONFIG,
   STATUS_CONFIG,
   formatDateShort,
   templateDisplayName,
@@ -198,6 +199,25 @@ function ActivitySection({ bundle }: { bundle: Bundle }) {
             <span style={{ color: "#a1a1a0" }}>—</span>
           )}
         </Row>
+        {p?.sequence_status && (() => {
+          // Prefix the sequence status with the most recent channel
+          // ("Outreach · Finished") when we can — otherwise the
+          // rep sees just the state without knowing which sequence
+          // it applies to. Falls back to a bare status label.
+          const seqCfg = SEQUENCE_CONFIG[p.sequence_status]
+          const primaryChannel = channels[channels.length - 1] ?? null
+          return (
+            <Row label="Sequence">
+              <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
+                <span>
+                  {primaryChannel ? `${primaryChannel} · ` : ""}
+                  {seqCfg?.label ?? p.sequence_status}
+                </span>
+              </span>
+            </Row>
+          )
+        })()}
         <Row label="Created">
           {p?.created_at ? formatDateShort(p.created_at).split(" · ")[0] : (
             <span style={{ color: "#a1a1a0" }}>—</span>
@@ -392,7 +412,7 @@ function TimelineStream({
             onPreview={onPreviewTemplate}
           />
         ) : (
-          <EventHistoryRow key={row.key} event={row.event} />
+          <EventHistoryRow key={row.key} event={row.event} compact />
         ),
       )}
     </div>

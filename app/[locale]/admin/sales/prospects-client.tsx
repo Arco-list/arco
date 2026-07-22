@@ -421,12 +421,25 @@ export function EventHistoryRow({
   event,
   onEditManualLog,
   onDeleteManualLog,
+  compact = false,
 }: {
   event: ProspectEvent
   /** When provided AND the row is a manual outbound log, an actions
    *  kebab (⋯) appears on the right with Edit / Delete items. */
   onEditManualLog?: (logId: string) => void
   onDeleteManualLog?: (logId: string) => void
+  /** Card-view opt-in. Hides:
+   *  * the channel pill (Outreach / Showcase / Invite) at the end
+   *    of every row — redundant on the ContactCard where Channel is
+   *    already surfaced in the Activity section.
+   *  * the subject / snippet preview on admin_replied and
+   *    email.received rows — the panel is scoped to one contact so
+   *    "Re: Een podium…" doesn't add signal.
+   *  Also drops the date from text-xs (12px) down to 11px to match
+   *  the Activity "Status" label typography on the same panel.
+   *
+   *  Off by default so the /admin/sales popup renders unchanged. */
+  compact?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const isManual = event.event_type.startsWith("manual.")
@@ -444,8 +457,9 @@ export function EventHistoryRow({
   const expandable =
     (isCompanyInvited && Object.keys(event.metadata ?? {}).length > 0) || Boolean(manualBody)
 
+  const dateStyle = compact ? { fontSize: 11 } : undefined
   const channel = eventChannelLabel(event.event_type)
-  const channelPill = channel ? (
+  const channelPill = channel && !compact ? (
     <span className="status-pill shrink-0">{channel}</span>
   ) : null
 
@@ -468,11 +482,11 @@ export function EventHistoryRow({
           style={{ gridTemplateColumns: "90px 1fr" }}
           disabled={!canExpand}
         >
-          <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+          <span className="text-[#a1a1a0] whitespace-nowrap" style={dateStyle}>{formatDateShort(event.created_at)}</span>
           <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
             <ExpandChevron visible={canExpand} open={open} />
             <span>Email replied</span>
-            {originalSubject && (
+            {originalSubject && !compact && (
               <span className="text-[#6b6b68] truncate" title={originalSubject}>· Re: {originalSubject}</span>
             )}
             {channelPill}
@@ -500,11 +514,11 @@ export function EventHistoryRow({
           style={{ gridTemplateColumns: "90px 1fr" }}
           disabled={!canExpand}
         >
-          <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+          <span className="text-[#a1a1a0] whitespace-nowrap" style={dateStyle}>{formatDateShort(event.created_at)}</span>
           <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
             <ExpandChevron visible={canExpand} open={open} />
             <span>Email received</span>
-            {subject && <span className="text-[#6b6b68] truncate" title={subject}>· {subject}</span>}
+            {subject && !compact && <span className="text-[#6b6b68] truncate" title={subject}>· {subject}</span>}
             {channelPill}
           </span>
         </button>
@@ -532,7 +546,7 @@ export function EventHistoryRow({
           style={{ gridTemplateColumns: "90px 1fr" }}
           disabled={!expandable}
         >
-          <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+          <span className="text-[#a1a1a0] whitespace-nowrap" style={dateStyle}>{formatDateShort(event.created_at)}</span>
           <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
             <ExpandChevron visible={expandable} open={open} />
             <span>{kindLabel}</span>
@@ -607,7 +621,7 @@ export function EventHistoryRow({
   // (email.received) are handled by their own branch above and keep
   // the plain Email pill.
   const campaignLabel = eventCampaignLabel(event)
-  const campaignPill = campaignLabel ? (
+  const campaignPill = campaignLabel && !compact ? (
     <span className="status-pill shrink-0">{campaignLabel}</span>
   ) : null
   const trailingPill = campaignPill ?? channelPill
@@ -621,7 +635,7 @@ export function EventHistoryRow({
         style={{ gridTemplateColumns: "90px 1fr" }}
         disabled={!expandable}
       >
-        <span className="text-[#a1a1a0] whitespace-nowrap">{formatDateShort(event.created_at)}</span>
+        <span className="text-[#a1a1a0] whitespace-nowrap" style={dateStyle}>{formatDateShort(event.created_at)}</span>
         <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full">
           <ExpandChevron visible={expandable} open={open} />
           <span className="truncate">{formatEventLabel(event.event_type, event.metadata as Record<string, unknown> | null)}</span>
