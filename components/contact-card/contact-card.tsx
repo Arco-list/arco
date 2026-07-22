@@ -166,15 +166,17 @@ function CardBody({ data }: { data: ContactByEmailData }) {
         )}
       </Section>
 
-      <Section label="Timeline">
-        {primaryProspect ? (
-          <ProspectTimelineFused prospectId={primaryProspect.id} email={data.email} />
-        ) : (
+      {primaryProspect ? (
+        // ProspectTimelineFused now emits its own Activity + Timeline
+        // sections; contact-card just drops it into the body stream.
+        <ProspectTimelineFused prospectId={primaryProspect.id} email={data.email} />
+      ) : (
+        <Section label="Timeline">
           <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
             No prospect record on this email — nothing to time-line yet.
           </p>
-        )}
-      </Section>
+        </Section>
+      )}
     </div>
   )
 }

@@ -113,13 +113,16 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
     ?? (email.toLowerCase().endsWith(".nl") || email.toLowerCase().endsWith(".be") ? "nl" : "en")
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <PillsRow bundle={bundle} />
-      <TimelineStream
-        bundle={bundle}
-        guessedLang={guessedLang}
-        onPreviewTemplate={(template) => setPreview({ template, lang: guessedLang })}
-      />
+    <>
+      <ActivitySection bundle={bundle} />
+      <div>
+        <SectionLabel>Timeline</SectionLabel>
+        <TimelineStream
+          bundle={bundle}
+          guessedLang={guessedLang}
+          onPreviewTemplate={(template) => setPreview({ template, lang: guessedLang })}
+        />
+      </div>
       {preview && (
         <TemplatePreviewModal
           template={preview.template}
@@ -127,73 +130,104 @@ export function ProspectTimelineFused({ prospectId, email }: Props) {
           onClose={() => setPreview(null)}
         />
       )}
+    </>
+  )
+}
+
+// ── Activity section (status / channel / created, DetailField style) ──
+
+function ActivitySection({ bundle }: { bundle: Bundle }) {
+  const p = bundle.prospect
+  const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] : null
+
+  // Distinct campaign channels the sequence steps belong to. A contact
+  // can accumulate more than one channel over their lifetime (e.g.
+  // Showcase then Invite once they claim), so render as a set of
+  // outline pills — same visual as the language pill on sequence rows.
+  const channels = Array.from(
+    new Set(
+      bundle.sequence.map((s) => channelForTemplate(s.template)).filter((c): c is string => Boolean(c)),
+    ),
+  )
+
+  // Suppression state — rendered as an inline suffix on Status so a
+  // bounced/unsubscribed/complained prospect reads as red at a glance.
+  const suppression = p?.bounced_at ? "bounced"
+    : p?.complained_at ? "complained"
+    : p?.unsubscribed_at ? "unsubscribed"
+    : null
+
+  return (
+    <div>
+      <SectionLabel>Activity</SectionLabel>
+      <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+        <Row label="Status">
+          {statusCfg ? (
+            <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+              <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
+              <span>{statusCfg.label}</span>
+              {suppression && <span style={{ color: "#b91c1c" }}>· {suppression}</span>}
+            </span>
+          ) : (
+            <span style={{ color: "#a1a1a0" }}>—</span>
+          )}
+        </Row>
+        <Row label="Channel">
+          {channels.length > 0 ? (
+            <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6 }}>
+              {channels.map((c) => (
+                <span
+                  key={c}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "baseline",
+                    padding: "0 8px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    color: "#1c1c1a",
+                    border: "1px solid #e5e5e4",
+                    background: "transparent",
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span style={{ color: "#a1a1a0" }}>—</span>
+          )}
+        </Row>
+        <Row label="Created">
+          {p?.created_at ? formatDateShort(p.created_at).split(" · ")[0] : (
+            <span style={{ color: "#a1a1a0" }}>—</span>
+          )}
+        </Row>
+      </div>
     </div>
   )
 }
 
-// ── Header pills ───────────────────────────────────────────────────────
-
-function PillsRow({ bundle }: { bundle: Bundle }) {
-  const p = bundle.prospect
-  const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] : null
-
-  const pills: { key: string; label: string; dot?: string; tone?: "default" | "danger" }[] = []
-  if (statusCfg) pills.push({ key: "status", label: statusCfg.label, dot: statusCfg.dot })
-  if (p?.sequence_status && p.sequence_status !== "not_started") {
-    const seqLabel = p.sequence_status.charAt(0).toUpperCase() + p.sequence_status.slice(1)
-    pills.push({
-      key: "seq",
-      label: `Sequence ${seqLabel.toLowerCase()}`,
-      dot:
-        p.sequence_status === "active" ? "bg-[#2563eb]"
-        : p.sequence_status === "paused" ? "bg-amber-400"
-        : p.sequence_status === "finished" ? "bg-emerald-500"
-        : "bg-[#a1a1a0]",
-    })
-  }
-  if (p && p.emails_sent > 0) {
-    pills.push({
-      key: "emails",
-      label:
-        p.emails_opened > 0
-          ? `${p.emails_sent} email${p.emails_sent === 1 ? "" : "s"} · ${p.emails_opened} opened`
-          : `${p.emails_sent} email${p.emails_sent === 1 ? "" : "s"}`,
-    })
-  }
-  const nextFollowUp = ((p as unknown) as { next_follow_up_at?: string | null })?.next_follow_up_at
-  if (nextFollowUp) {
-    pills.push({ key: "followup", label: `Follow-up ${formatDateShort(nextFollowUp).split(" · ")[0]}` })
-  }
-  if (p?.unsubscribed_at) pills.push({ key: "unsubscribed", label: "unsubscribed", tone: "danger" })
-  if (p?.bounced_at) pills.push({ key: "bounced", label: "bounced", tone: "danger" })
-  if (p?.complained_at) pills.push({ key: "complained", label: "complained", tone: "danger" })
-
-  if (pills.length === 0) return null
-
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {pills.map((pill) => (
-        <span
-          key={pill.key}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "3px 10px",
-            borderRadius: 999,
-            fontSize: 11,
-            fontWeight: 500,
-            background: pill.tone === "danger" ? "#fef2f2" : "#f5f5f4",
-            color: pill.tone === "danger" ? "#b91c1c" : "#1c1c1a",
-            border: pill.tone === "danger" ? "1px solid #fecaca" : "1px solid transparent",
-          }}
-        >
-          {pill.dot && <span className={`inline-block h-1.5 w-1.5 rounded-full ${pill.dot}`} />}
-          {pill.label}
-        </span>
-      ))}
+    <div
+      className="grid items-baseline gap-2"
+      style={{ gridTemplateColumns: "70px 1fr" }}
+    >
+      <span style={{ fontSize: 11, color: "#a1a1a0" }}>{label}</span>
+      <span style={{ fontSize: 12, lineHeight: 1.5, color: "#1c1c1a", minWidth: 0 }}>
+        {children}
+      </span>
     </div>
   )
+}
+
+function channelForTemplate(template: string): string | null {
+  if (!template) return null
+  if (template.startsWith("prospect-")) return "Showcase"
+  if (template.startsWith("new-professional-")) return "Invite"
+  if (template.startsWith("outreach-")) return "Outreach"
+  return null
 }
 
 // ── Merged stream ──────────────────────────────────────────────────────
@@ -342,33 +376,25 @@ function TimelineStream({
     .sort((a, b) => b.ts.localeCompare(a.ts))
 
   if (rows.length === 0) {
-    return (
-      <div>
-        <SectionLabel>Activity</SectionLabel>
-        <p style={{ fontSize: 12, color: "#a1a1a0", margin: "8px 0 0" }}>No events yet.</p>
-      </div>
-    )
+    return <p style={{ fontSize: 12, color: "#a1a1a0", margin: "8px 0 0" }}>No events yet.</p>
   }
 
   return (
-    <div>
-      <SectionLabel>Activity</SectionLabel>
-      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map((row) =>
-          row.kind === "stage" ? (
-            <StageDivider key={row.key} label={row.label} ts={row.ts} dot={row.dot} />
-          ) : row.kind === "sequence" ? (
-            <SequenceRow
-              key={row.key}
-              step={row.step}
-              lang={guessedLang}
-              onPreview={onPreviewTemplate}
-            />
-          ) : (
-            <EventHistoryRow key={row.key} event={row.event} />
-          ),
-        )}
-      </div>
+    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+      {rows.map((row) =>
+        row.kind === "stage" ? (
+          <StageDivider key={row.key} label={row.label} ts={row.ts} dot={row.dot} />
+        ) : row.kind === "sequence" ? (
+          <SequenceRow
+            key={row.key}
+            step={row.step}
+            lang={guessedLang}
+            onPreview={onPreviewTemplate}
+          />
+        ) : (
+          <EventHistoryRow key={row.key} event={row.event} />
+        ),
+      )}
     </div>
   )
 }
