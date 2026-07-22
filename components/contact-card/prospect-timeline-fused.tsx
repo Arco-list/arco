@@ -273,51 +273,51 @@ function TimelineStream({
     } as ProspectEvent,
   }))
 
-  // Synthetic invited/listed events (parity with ContactDetailBody).
-  const syntheticRows: StreamRow[] = []
-  if (isInvite && bundle.inviteContext && (bundle.inviteContext.project || bundle.inviteContext.inviter) && prospect) {
-    syntheticRows.push({
-      kind: "event",
-      ts: prospect.created_at,
-      key: "synth-invited",
-      event: {
-        id: `synthetic-company-invited-${prospect.id}`,
-        prospect_id: prospect.id,
-        event_type: "company_invited",
-        created_at: prospect.created_at,
-        metadata: {
-          project: bundle.inviteContext.project,
-          inviter: bundle.inviteContext.inviter,
-        },
-      } as ProspectEvent,
-    })
-  }
-  const convertedAt = (prospect as any)?.converted_at as string | null | undefined
-  if (convertedAt && prospect) {
-    syntheticRows.push({
-      kind: "event",
-      ts: convertedAt,
-      key: "synth-listed",
-      event: {
-        id: `synthetic-prospect-listed-${prospect.id}`,
-        prospect_id: prospect.id,
-        event_type: "prospect.listed",
-        created_at: convertedAt,
-        metadata: {},
-      } as ProspectEvent,
-    })
-  }
+  // Chapter dividers already carry every lifecycle transition:
+  // stage row = "PROSPECT" / "CONTACTED" / "VISITOR" / "SIGNUP" /
+  // "CREATED" / "LISTED" at the correct timestamp. Drop every event
+  // row that would just repeat one of those transitions.
+  //
+  //   * prospect.landing_visited  -> "visitor" chapter
+  //   * prospect.signed_up        -> "signup" chapter
+  //   * prospect.company_created  -> "created" chapter
+  //   * prospect.listed           -> "listed" chapter (also the
+  //                                 synthetic listed row we used to
+  //                                 add from converted_at)
+  //   * user.signed_up            -> same as signup
+  //   * company_invited           -> "invited" chapter (also the
+  //                                 synthetic invited row we used to
+  //                                 add from inviteContext)
+  //   * status_changed / status_changed_to_* — the coarse "Status
+  //                                 changed" line, always redundant
+  //                                 with the specific chapter that
+  //                                 fires at the same time.
+  //
+  // Prior version added synthetic invited/listed rows and did a 60s-
+  // window dedup for status_changed — both are gone now. The chapter
+  // divider is the canonical row for every stage.
+  const CHAPTER_EVENT_TYPES = new Set([
+    "prospect.landing_visited",
+    "prospect.signed_up",
+    "prospect.company_created",
+    "prospect.listed",
+    "user.signed_up",
+    "company_invited",
+    "status_changed",
+  ])
 
   // Cleanup on raw events, in one pass:
   //   * `replied` — redundant with email.received rows above.
   //   * `email_sent` / `email_resent` — fully covered by the sequence
   //     row now (this was the "Email Sent" duplicate the rep saw
   //     stacked under "Outreach Follow-up sent").
+  //   * lifecycle-transition events — see CHAPTER_EVENT_TYPES above.
   //   * `admin_replied` gets reply body hydrated from inbound_emails.
   const inboundById = new Map(bundle.inboundEmails.map((m) => [m.id, m]))
   const enrichedEvents = bundle.events
     .filter((ev) => ev.event_type !== "replied")
     .filter((ev) => ev.event_type !== "email_sent" && ev.event_type !== "email_resent")
+    .filter((ev) => !CHAPTER_EVENT_TYPES.has(ev.event_type) && !ev.event_type.startsWith("status_changed_to_"))
     .map((ev) => {
       if (ev.event_type !== "admin_replied") return ev
       const linkedId = typeof ev.metadata?.inbound_email_id === "string"
@@ -335,25 +335,10 @@ function TimelineStream({
       }
     })
 
-  // De-dupe the coarse status_changed rows against specific lifecycle
-  // events within a 60s window (same rule ContactDetailBody uses).
-  const lifecycleTimes = new Set<number>()
-  for (const ev of enrichedEvents) {
-    if (ev.event_type === "prospect.signed_up" || ev.event_type === "prospect.company_created") {
-      lifecycleTimes.add(new Date(ev.created_at).getTime())
-    }
-  }
-  if (convertedAt) lifecycleTimes.add(new Date(convertedAt).getTime())
-  const nearLifecycle = (ts: string) => {
-    const t = new Date(ts).getTime()
-    for (const key of lifecycleTimes) if (Math.abs(t - key) < 60_000) return true
-    return false
-  }
   const eventRows: StreamRow[] = enrichedEvents
-    .filter((ev) => !(ev.event_type === "status_changed" && nearLifecycle(ev.created_at)))
     .map((ev) => ({ kind: "event" as const, ts: ev.created_at, key: ev.id, event: ev }))
 
-  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...inboundRows, ...syntheticRows, ...eventRows]
+  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...inboundRows, ...eventRows]
     .sort((a, b) => b.ts.localeCompare(a.ts))
 
   if (rows.length === 0) {
@@ -537,12 +522,17 @@ function StageDivider({ label, ts, dot }: { label: string; ts: string; dot: stri
       <span style={{ fontSize: 11, color: "#a1a1a0", whiteSpace: "nowrap" }}>{formatDateShort(ts)}</span>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
-        <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", color: "#1c1c1a" }}>
-          {label}
+        <span style={{ fontSize: 12, fontWeight: 500, color: "#1c1c1a" }}>
+          {capitalizeFirst(label)}
         </span>
       </span>
     </div>
   )
+}
+
+function capitalizeFirst(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
