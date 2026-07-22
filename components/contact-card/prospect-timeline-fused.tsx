@@ -551,7 +551,7 @@ function StageDivider({ label, ts, dot }: { label: string; ts: string; dot: stri
       <span style={{ fontSize: 11, color: "#a1a1a0", whiteSpace: "nowrap" }}>{formatDateShort(ts)}</span>
       <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} style={{ position: "relative", top: -1 }} />
-        <span style={{ fontSize: 12, lineHeight: 1.5, fontWeight: 500, color: "#1c1c1a" }}>
+        <span style={{ fontSize: 12, lineHeight: 1.5, color: "#1c1c1a" }}>
           {capitalizeFirst(label)}
         </span>
       </span>
