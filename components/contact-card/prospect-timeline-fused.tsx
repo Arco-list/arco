@@ -540,15 +540,18 @@ function TemplatePreviewModal({
 // ── Small shared helpers ───────────────────────────────────────────────
 
 function StageDivider({ label, ts, dot }: { label: string; ts: string; dot: string }) {
+  // Now visually indistinguishable from a regular event row — same
+  // grid columns, no top border, no extra vertical padding. The
+  // parent gap:8 (matching Details) is the only spacing between rows.
   return (
     <div
-      className="grid items-center gap-2"
-      style={{ gridTemplateColumns: "90px 1fr", padding: "6px 0", borderTop: "1px dashed #eeeeed" }}
+      className="grid items-baseline gap-2"
+      style={{ gridTemplateColumns: "90px 1fr" }}
     >
       <span style={{ fontSize: 11, color: "#a1a1a0", whiteSpace: "nowrap" }}>{formatDateShort(ts)}</span>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} />
-        <span style={{ fontSize: 12, fontWeight: 500, color: "#1c1c1a" }}>
+      <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
+        <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} style={{ position: "relative", top: -1 }} />
+        <span style={{ fontSize: 12, lineHeight: 1.5, fontWeight: 500, color: "#1c1c1a" }}>
           {capitalizeFirst(label)}
         </span>
       </span>
