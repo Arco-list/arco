@@ -309,6 +309,26 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
           editable={canEditDomain}
           onSave={saveDomain}
         />
+        {data.aliases.length > 0 && (
+          <div
+            className="grid items-baseline gap-2"
+            style={{ gridTemplateColumns: "70px 1fr" }}
+          >
+            <span style={{ fontSize: 11, color: "#a1a1a0" }}>Aliases</span>
+            <span style={{ fontSize: 12, lineHeight: 1.5, color: "#1c1c1a", minWidth: 0, display: "inline-flex", flexWrap: "wrap", gap: 6 }}>
+              {data.aliases.map((alias) => (
+                <a
+                  key={alias}
+                  href={`?contact=${encodeURIComponent(alias)}`}
+                  style={{ color: "#016D75", textDecoration: "none", wordBreak: "break-all" }}
+                  title={`Open card for ${alias}`}
+                >
+                  {alias}
+                </a>
+              ))}
+            </span>
+          </div>
+        )}
         <DetailField
           label="Source"
           value={primaryProspect?.source ? capitalize(primaryProspect.source) : null}

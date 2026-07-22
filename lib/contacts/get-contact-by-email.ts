@@ -77,6 +77,11 @@ export type ContactByEmailData = {
   /** Enriched summary (logo, city, primary service) keyed by company_id.
    *  Powers the Companies-section rendering — front-end joins by id. */
   companiesById: Record<string, ContactByEmailCompanySummary>
+  /** Other emails tied to the same signed-up account. Populated when
+   *  prospects.user_id links this email to a profile whose signup
+   *  email differs, or when the same user_id is targeted at multiple
+   *  outreach addresses. Empty when nothing else is linked. */
+  aliases: string[]
 }
 
 export type ContactByEmailResult =
@@ -105,7 +110,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
 
   // Prospects — case-insensitive so a manually-entered link with a
   // capital in the address still matches the row imported from Apollo.
-  const { data: prospectsRaw, error: prospectsErr } = await svc
+  const { data: prospectsQueryData, error: prospectsErr } = await svc
     .from("prospects")
     .select(
       "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
@@ -113,6 +118,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     .ilike("email", email)
 
   if (prospectsErr) return { success: false, error: prospectsErr.message }
+  const prospectsRaw: NonNullable<typeof prospectsQueryData> = prospectsQueryData ?? []
 
   // Any prospect that already linked to a signed-up user tells us the
   // profile id. Multiple prospects for the same email should point at
@@ -142,12 +148,17 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   // This is what makes the card on /admin/users useful for architects
   // and professionals who signed up directly without ever being an
   // outreach target.
+  //
+  // Also captures the signup email — needed later for the Aliases row
+  // when the signup address differs from any prospect address.
+  let signupEmail: string | null = null
   if (!profile) {
     // svc.rpc cast because lib/supabase/types.ts hasn't been
     // regenerated for the new function yet; the RPC exists in the DB
-    // via migration 197. Row shape mirrors the RPC's RETURNS TABLE.
+    // via migration 199. Row shape mirrors the RPC's RETURNS TABLE.
     type ProfileByEmailRow = {
       id: string
+      email: string | null
       first_name: string | null
       last_name: string | null
       phone: string | null
@@ -162,6 +173,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     const row = rpcRows?.[0] ?? null
     if (row?.id) {
       resolvedUserId = row.id
+      signupEmail = row.email
       profile = {
         id: row.id,
         first_name: row.first_name,
@@ -170,6 +182,36 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
         is_active: row.is_active,
         user_types: row.user_types,
         admin_role: row.admin_role,
+      }
+    }
+  } else if (resolvedUserId) {
+    // Profile came from a prospect's user_id — fetch the signup email
+    // separately so Aliases can flag a signup address that differs
+    // from the outreach one (the annebel@ → info@ case).
+    const { data: emailRow } = await (svc.rpc as unknown as (
+      fn: string,
+      params: { p_user_id: string },
+    ) => Promise<{ data: string | null }>)("get_profile_email_by_id", { p_user_id: resolvedUserId })
+    signupEmail = (emailRow ?? null) as string | null
+  }
+
+  // Symmetrical prospect discovery: if we resolved a user_id, also
+  // pull every prospects row that points at that user regardless of
+  // its own email. Covers "opened info@meetarchie.nl but annebel@ has
+  // the outreach history" — Annebel's prospect row shows up on the
+  // info@ card once user_id is stitched (migration 198).
+  if (resolvedUserId) {
+    const { data: extra } = await svc
+      .from("prospects")
+      .select(
+        "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
+      )
+      .eq("user_id", resolvedUserId)
+    const seen = new Set(prospectsRaw.map((p) => p.id))
+    for (const p of (extra ?? [])) {
+      if (!seen.has(p.id)) {
+        prospectsRaw.push(p)
+        seen.add(p.id)
       }
     }
   }
@@ -254,8 +296,23 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     created_at: c.created_at,
   }))
 
+  // Aliases: every distinct email tied to the same person that isn't
+  // the current queried address. Sources:
+  //   - signup email (auth.users.email via RPC)
+  //   - every other prospect row on the same user_id
+  // Lowercased + deduped; falsy values skipped.
+  const aliasSet = new Set<string>()
+  if (signupEmail && signupEmail.toLowerCase() !== email) {
+    aliasSet.add(signupEmail.toLowerCase())
+  }
+  for (const p of prospects) {
+    const pe = p.email?.toLowerCase()
+    if (pe && pe !== email) aliasSet.add(pe)
+  }
+  const aliases = Array.from(aliasSet)
+
   return {
     success: true,
-    data: { email, profile, prospects, companyContacts, companiesById },
+    data: { email, profile, prospects, companyContacts, companiesById, aliases },
   }
 }
