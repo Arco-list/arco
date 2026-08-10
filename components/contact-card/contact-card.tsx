@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-contact-by-email"
+import { getContactByProspectId } from "@/lib/contacts/get-contact-by-prospect"
 import { updateProfileByEmail } from "@/lib/contacts/update-profile-by-email"
+import { updateProspectById } from "@/lib/contacts/update-prospect-by-id"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused } from "./prospect-timeline-fused"
 
@@ -30,42 +32,57 @@ import { ProspectTimelineFused } from "./prospect-timeline-fused"
 
 type Props = {
   email: string | null
+  /** Alternative to email — opens the panel keyed on a prospect_id
+   *  when the row has no email yet (Sales rows for Showcase prospects
+   *  inserted with an empty-string email placeholder). Card lets the
+   *  rep add the address in place; on save, parent flips the URL. */
+  prospectId?: string | null
+  /** Called when the panel just wrote an email onto a prospect that
+   *  previously had none. Parent should swap the URL from
+   *  ?contact=prospect:<id> to ?contact=<newEmail> so the card
+   *  re-hydrates via the email discovery layer. */
+  onEmailAssigned?: (newEmail: string) => void
   onClose: () => void
 }
 
-export function ContactCard({ email, onClose }: Props) {
+export function ContactCard({ email, prospectId, onEmailAssigned, onClose }: Props) {
   const [state, setState] = useState<{
     kind: "idle" | "loading" | "error" | "ready"
     data?: ContactByEmailData
     error?: string
   }>({ kind: "idle" })
 
+  const isOpen = Boolean(email || prospectId)
+
   useEffect(() => {
-    if (!email) {
+    if (!isOpen) {
       setState({ kind: "idle" })
       return
     }
     let cancelled = false
     setState({ kind: "loading" })
-    getContactByEmail(email).then((result) => {
+    const load = email
+      ? getContactByEmail(email)
+      : getContactByProspectId(prospectId!)
+    load.then((result) => {
       if (cancelled) return
       if (result.success) setState({ kind: "ready", data: result.data })
       else setState({ kind: "error", error: result.error })
     })
     return () => { cancelled = true }
-  }, [email])
+  }, [email, prospectId, isOpen])
 
   // Esc closes; also traps double-close in prod. Registered only when
   // the panel is actually open so it doesn't fight with other keyboard
   // shortcuts on the underlying page.
   useEffect(() => {
-    if (!email) return
+    if (!isOpen) return
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [email, onClose])
+  }, [isOpen, onClose])
 
-  if (!email) return null
+  if (!isOpen) return null
 
   const data = state.kind === "ready" ? state.data : undefined
   const displayName = pickDisplayName(data)
@@ -85,7 +102,7 @@ export function ContactCard({ email, onClose }: Props) {
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label={`Contact ${email}`}
+        aria-label={`Contact ${email ?? prospectId ?? ""}`}
         style={{
           position: "fixed",
           top: 0,
@@ -137,20 +154,34 @@ export function ContactCard({ email, onClose }: Props) {
               Failed to load contact: {state.error}
             </p>
           )}
-          {state.kind === "ready" && data && <CardBody data={data} />}
+          {state.kind === "ready" && data && (
+            <CardBody data={data} prospectIdFromUrl={prospectId ?? null} onEmailAssigned={onEmailAssigned} />
+          )}
         </div>
       </aside>
     </>
   )
 }
 
-function CardBody({ data }: { data: ContactByEmailData }) {
+function CardBody({
+  data,
+  prospectIdFromUrl,
+  onEmailAssigned,
+}: {
+  data: ContactByEmailData
+  prospectIdFromUrl: string | null
+  onEmailAssigned?: (newEmail: string) => void
+}) {
   const companies = groupByCompany(data)
   const primaryProspect = data.prospects[0] ?? null
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <DetailsSection data={data} />
+      <DetailsSection
+        data={data}
+        prospectIdFromUrl={prospectIdFromUrl}
+        onEmailAssigned={onEmailAssigned}
+      />
 
       <Section label="Companies">
         {companies.length === 0 ? (
@@ -196,13 +227,50 @@ function CardBody({ data }: { data: ContactByEmailData }) {
 // apply whether or not this email has ever signed up. When there's no
 // linked profile the fields fall back to the prospect row.
 
-function DetailsSection({ data }: { data: ContactByEmailData }) {
+function DetailsSection({
+  data,
+  prospectIdFromUrl,
+  onEmailAssigned,
+}: {
+  data: ContactByEmailData
+  prospectIdFromUrl: string | null
+  onEmailAssigned?: (newEmail: string) => void
+}) {
   const profile = data.profile
   const primaryProspect = data.prospects[0] ?? null
   const displayName = pickDisplayName(data)
   // Phone falls back to the prospect row so Sales-only contacts still
   // see their number and can edit it via the prospect update path.
   const phone = profile?.phone ?? primaryProspect?.phone ?? null
+
+  // Email is editable only when the card was opened by prospect_id
+  // AND the prospect currently has no email — the "add contact for
+  // an empty Sales row" flow. Once saved, the parent flips the URL
+  // and the card re-hydrates.
+  const canEditEmail = Boolean(
+    prospectIdFromUrl && (!data.email || data.email.trim().length === 0),
+  )
+  const [emailLocal, setEmailLocal] = useState<string | null>(data.email || null)
+  useEffect(() => { setEmailLocal(data.email || null) }, [data.email])
+
+  const saveEmail = useCallback(async (next: string | null) => {
+    const trimmed = next?.trim().toLowerCase() || null
+    if ((trimmed ?? "") === (emailLocal ?? "").toLowerCase()) return
+    if (!trimmed) {
+      toast.error("Email required")
+      return
+    }
+    if (!prospectIdFromUrl) return
+    const result = await updateProspectById({ prospectId: prospectIdFromUrl, email: trimmed })
+    if (result.success) {
+      setEmailLocal(trimmed)
+      toast.success("Email saved")
+      onEmailAssigned?.(trimmed)
+    } else {
+      setEmailLocal(data.email || null)
+      toast.error(result.error)
+    }
+  }, [data.email, emailLocal, onEmailAssigned, prospectIdFromUrl])
 
   const userTypePill = pickUserTypePill(data)
 
@@ -302,7 +370,10 @@ function DetailsSection({ data }: { data: ContactByEmailData }) {
         />
         <DetailField
           label="Email"
-          value={data.email}
+          value={emailLocal}
+          editable={canEditEmail}
+          onSave={saveEmail}
+          inputType="email"
         />
         <DetailField
           label="Phone"

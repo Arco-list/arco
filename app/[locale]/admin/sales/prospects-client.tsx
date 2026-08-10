@@ -1013,7 +1013,15 @@ export function ProspectsClient({
   // deep-linkable and survives navigation. Primary row-click uses this;
   // the +N-more menu keeps the timeline modal for now.
   const contactParam = useContactParam()
-  const openContactCard = useCallback((email: string) => contactParam.open(email), [contactParam])
+  // Contact row → panel. If the contact has an email, key on email;
+  // otherwise fall back to prospect_id so the panel still opens (rep
+  // fills in the email in place, then the panel flips to the email
+  // key via onEmailAssigned below).
+  const openContactCard = useCallback((contact: SalesContact) => {
+    const email = contact.email?.trim()
+    if (email) contactParam.open(email)
+    else contactParam.openProspect(contact.prospectId)
+  }, [contactParam])
 
   // ── Per-contact actions ────────────────────────────────────────────────
   // Reuse the existing per-prospect server actions; the row aggregator will
@@ -1898,7 +1906,12 @@ export function ProspectsClient({
       {/* Phase 1 shared Contact Card — mounted at page level so the
           URL param drives visibility. Row click opens; timeline modal
           (line 1588) is still reachable via the +N-more menu. */}
-      <ContactCard email={contactParam.email} onClose={contactParam.close} />
+      <ContactCard
+        email={contactParam.email}
+        prospectId={contactParam.prospectId}
+        onEmailAssigned={(next) => contactParam.open(next)}
+        onClose={contactParam.close}
+      />
     </>
   )
 }
@@ -1938,7 +1951,7 @@ function CompanyRowView({
   /** Phase 1 shared Contact Card slide-over — email-keyed. Row-level
    *  click uses this; +N-more menu still uses onOpenContactDetails so
    *  the rep keeps one-click access to the timeline modal. */
-  onOpenContactCard: (email: string) => void
+  onOpenContactCard: (contact: SalesContact) => void
   onContactAction: ContactActionRunner
   onLogOutbound: (contact: SalesContact, companyName: string, companyPhone: string | null) => void
 }) {
@@ -1975,7 +1988,7 @@ function CompanyRowView({
 
   return (
     <tr
-      onClick={() => onOpenContactCard(row.primaryContact.email)}
+      onClick={() => onOpenContactCard(row.primaryContact)}
       style={{ cursor: "pointer" }}
       className="hover:bg-[#fafaf9]"
     >
