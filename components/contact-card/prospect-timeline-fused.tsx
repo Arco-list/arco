@@ -1,12 +1,17 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import {
   fetchProspectById,
   fetchProspectEvents,
   fetchProspectInboundEmails,
   getProspectInviteContext,
   getProspectSequence,
+  startProspectSequence,
+  pauseProspectSequence,
+  resumeProspectSequence,
+  restartProspectSequence,
   type Prospect,
   type ProspectEvent,
   type ProspectSequenceStep,
@@ -127,7 +132,12 @@ export function ProspectTimelineFused({ prospectId, email, contactLabel, company
 
   return (
     <>
-      <ActivitySection bundle={bundle} onLogOutbound={() => setLogOpen(true)} />
+      <ActivitySection
+        bundle={bundle}
+        prospectId={prospectId}
+        onLogOutbound={() => setLogOpen(true)}
+        onSequenceActionComplete={() => setReloadTick((n) => n + 1)}
+      />
       <div>
         <SectionLabel>Timeline</SectionLabel>
         <TimelineStream
@@ -165,7 +175,17 @@ export function ProspectTimelineFused({ prospectId, email, contactLabel, company
 
 // ── Activity section (status / channel / created, DetailField style) ──
 
-function ActivitySection({ bundle, onLogOutbound }: { bundle: Bundle; onLogOutbound?: () => void }) {
+function ActivitySection({
+  bundle,
+  prospectId,
+  onLogOutbound,
+  onSequenceActionComplete,
+}: {
+  bundle: Bundle
+  prospectId: string
+  onLogOutbound?: () => void
+  onSequenceActionComplete?: () => void
+}) {
   const p = bundle.prospect
   const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] : null
 
@@ -256,12 +276,19 @@ function ActivitySection({ bundle, onLogOutbound }: { bundle: Bundle; onLogOutbo
           const primaryChannel = channels[channels.length - 1] ?? null
           return (
             <Row label="Sequence">
-              <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
-                <span>
-                  {primaryChannel ? `${primaryChannel} · ` : ""}
-                  {seqCfg?.label ?? p.sequence_status}
+              <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
+                  <span>
+                    {primaryChannel ? `${primaryChannel} · ` : ""}
+                    {seqCfg?.label ?? p.sequence_status}
+                  </span>
                 </span>
+                <SequenceActionLink
+                  status={p.sequence_status}
+                  prospectId={prospectId}
+                  onComplete={onSequenceActionComplete}
+                />
               </span>
             </Row>
           )
@@ -624,6 +651,81 @@ function StageDivider({ label, ts, dot }: { label: string; ts: string; dot: stri
         </span>
       </span>
     </div>
+  )
+}
+
+/**
+ * Inline text link next to the Sequence label. Verb depends on the
+ * current sequence_status. Reuses the same server actions /admin/sales
+ * calls from its row dropdown, so behaviour is identical.
+ *
+ *   not_started -> Start        startProspectSequence
+ *   paused      -> Continue     resumeProspectSequence
+ *   active      -> Pause        pauseProspectSequence
+ *   finished    -> Restart      restartProspectSequence
+ *   cancelled   -> Restart      restartProspectSequence
+ *   failed      -> Restart      restartProspectSequence
+ */
+function SequenceActionLink({
+  status,
+  prospectId,
+  onComplete,
+}: {
+  status: string
+  prospectId: string
+  onComplete?: () => void
+}) {
+  const [pending, setPending] = useState(false)
+
+  const action = (() => {
+    switch (status) {
+      case "not_started": return { label: "Start", verb: "started", run: () => startProspectSequence(prospectId) }
+      case "paused":      return { label: "Continue", verb: "resumed", run: () => resumeProspectSequence(prospectId) }
+      case "active":      return { label: "Pause", verb: "paused", run: () => pauseProspectSequence(prospectId) }
+      case "finished":
+      case "cancelled":
+      case "failed":      return { label: "Restart", verb: "restarted", run: () => restartProspectSequence(prospectId) }
+      default:            return null
+    }
+  })()
+
+  if (!action) return null
+
+  const handleClick = async () => {
+    setPending(true)
+    try {
+      const result = await action.run() as { success: boolean; error?: string; warning?: string }
+      if (result.success) {
+        if (result.warning) toast.warning(result.warning)
+        else toast.success(`Sequence ${action.verb}`)
+        onComplete?.()
+      } else {
+        toast.error(result.error ?? `Failed to ${action.label.toLowerCase()} sequence`)
+      }
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={pending}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: 0,
+        color: "#016D75",
+        fontSize: 12,
+        lineHeight: 1.5,
+        cursor: pending ? "wait" : "pointer",
+        opacity: pending ? 0.5 : 1,
+        textDecoration: "underline",
+      }}
+    >
+      {pending ? "…" : action.label}
+    </button>
   )
 }
 
