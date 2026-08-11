@@ -207,6 +207,15 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     }
   }
 
+  // Old status — needed for the Showcased <-> Added funnel transitions
+  // below (direction matters, not just the target status).
+  const { data: beforeRow } = await supabase
+    .from("companies")
+    .select("status")
+    .eq("id", parsedCompanyId.data)
+    .maybeSingle()
+  const oldStatus = (beforeRow as { status?: string } | null)?.status ?? null
+
   // When admin rolls the company back to Created (draft), stamp
   // setup_reset_at so the tour-seen localStorage flag is invalidated
   // and the ceremony re-runs for the owner. Companies transitioning to
@@ -234,7 +243,64 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
     return { success: false, error: updateError.message }
   }
 
-  // Sync company status to Apollo account stage
+  // Funnel follows deliberate Showcase decisions (direction-sensitive):
+  //
+  //   Showcased -> Added   = "we're pulling this one": unpublishes the
+  //     page (status change above) AND exits its prospects from the
+  //     Sales funnel — status 'removed', sequences finished, pending
+  //     drip rows cancelled. Same semantic as the panel's Remove from
+  //     funnel.
+  //   Added -> Showcased   = re-entering: revive 'removed' prospects to
+  //     'prospect' so the company reappears on Sales. Sequence status
+  //     is left alone — the panel offers Start/Restart as appropriate.
+  //
+  // Companies that arrive at Added on the way IN (Apollo import, manual
+  // add) are untouched: their prospects were never removed.
+  try {
+    const svcFunnel = createServiceRoleSupabaseClient()
+    if (oldStatus === "prospected" && parsedStatus.data === "added") {
+      const { data: exited } = await (svcFunnel as any)
+        .from("prospects")
+        .update({ status: "removed", sequence_status: "finished" })
+        .eq("company_id", parsedCompanyId.data)
+        .neq("status", "removed")
+        .select("id, status")
+      const rows = (exited ?? []) as Array<{ id: string }>
+      if (rows.length > 0) {
+        await svcFunnel.from("prospect_events").insert(
+          rows.map((r) => ({
+            prospect_id: r.id,
+            event_type: "status_changed",
+            metadata: { new_status: "removed", trigger: "company_demoted_to_added" },
+          })),
+        )
+        const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+        await cancelPendingDripRows(svcFunnel, { companyId: parsedCompanyId.data, reason: "manual" })
+      }
+    } else if (oldStatus === "added" && parsedStatus.data === "prospected") {
+      const { data: revived } = await (svcFunnel as any)
+        .from("prospects")
+        .update({ status: "prospect" })
+        .eq("company_id", parsedCompanyId.data)
+        .eq("status", "removed")
+        .select("id")
+      const rows = (revived ?? []) as Array<{ id: string }>
+      if (rows.length > 0) {
+        await svcFunnel.from("prospect_events").insert(
+          rows.map((r) => ({
+            prospect_id: r.id,
+            event_type: "status_changed",
+            metadata: { new_status: "prospect", trigger: "company_reshowcased" },
+          })),
+        )
+      }
+    }
+  } catch (err) {
+    logger.error("admin-companies", "Failed to apply funnel transition", { companyId: parsedCompanyId.data }, err as Error)
+  }
+
+  // Sync company status to Apollo account stage (after the funnel
+  // transition above so the resolver sees the new prospect statuses)
   try {
     const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
     await syncCompanyToApollo(parsedCompanyId.data)
