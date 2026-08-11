@@ -115,12 +115,20 @@ function urlDomain(url: string): string {
   }
 }
 
+/** Outcome of one account-stage sync. `synced: false` + reason lets
+ *  callers (the reconcile route) distinguish real failures — Apollo's
+ *  plan caps accounts/update at 200/hour, and a 429 must not be
+ *  reported as success. */
+export type CompanyApolloSyncResult =
+  | { synced: true }
+  | { synced: false; reason: string }
+
 /**
  * Sync an Arco company to Apollo as an account stage (see module doc
  * for the resolution rules). Creates the Apollo account when the domain
  * has none yet; caches apollo_account_id on the companies table.
  */
-export async function syncCompanyToApollo(companyId: string): Promise<void> {
+export async function syncCompanyToApollo(companyId: string): Promise<CompanyApolloSyncResult> {
   const supabase = createServiceRoleSupabaseClient();
 
   const { data: company, error } = await supabase
@@ -131,7 +139,7 @@ export async function syncCompanyToApollo(companyId: string): Promise<void> {
 
   if (error || !company) {
     logger.error("[apollo-sync] Company not found", { companyId, error: error?.message });
-    return;
+    return { synced: false, reason: "company not found" };
   }
 
   // Funnel overlay input: every prospect status linked to this company.
@@ -159,11 +167,11 @@ export async function syncCompanyToApollo(companyId: string): Promise<void> {
 
     if (!domain) {
       logger.warn("[apollo-sync] No domain available", { companyId });
-      return;
+      return { synced: false, reason: "no domain" };
     }
     if (FREEMAIL_DOMAINS.has(domain)) {
       logger.warn("[apollo-sync] Freemail domain, skipping", { companyId, domain });
-      return;
+      return { synced: false, reason: "freemail domain" };
     }
 
     apolloAccountId = await findAccountByDomain(domain);
@@ -175,7 +183,7 @@ export async function syncCompanyToApollo(companyId: string): Promise<void> {
     }
     if (!apolloAccountId) {
       logger.warn("[apollo-sync] No Apollo account found or created", { companyId, domain });
-      return;
+      return { synced: false, reason: "no account found or created" };
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -188,7 +196,9 @@ export async function syncCompanyToApollo(companyId: string): Promise<void> {
   try {
     await updateAccountStageById(apolloAccountId, stageName);
     logger.info("[apollo-sync] Account stage synced", { companyId, apolloAccountId, status, stageName });
+    return { synced: true };
   } catch (err) {
     logger.error("[apollo-sync] Failed to update stage", { companyId, apolloAccountId }, err as Error);
+    return { synced: false, reason: (err as Error).message ?? "stage update failed" };
   }
 }

@@ -212,12 +212,21 @@ export async function POST(request: NextRequest) {
   if (recipientEmail) {
     const { data: prospect } = await supabase
       .from("prospects")
-      .select("id, emails_sent, emails_delivered, emails_opened, emails_clicked")
+      .select("id, status, company_id, apollo_contact_id, landing_visited_at, emails_sent, emails_delivered, emails_opened, emails_clicked")
       .eq("email", recipientEmail)
       .maybeSingle()
 
     if (prospect) {
       const updates: Record<string, unknown> = {}
+      // A click on an email link means the prospect landed on the site,
+      // even when the ref-code tracking misses them (other device,
+      // stripped params, forwarded mail). Promote Contacted -> Visitor
+      // so the funnel doesn't undercount. Known trade-off: security
+      // scanners (Outlook SafeLinks etc.) can auto-click and register a
+      // false visit — accepted, since ref-only tracking systematically
+      // loses real visitors. Never downgrades: only fires from
+      // 'contacted', so visitor/signup/company/active stay untouched.
+      let promotedToVisitor = false
 
       switch (type) {
         case "email.delivered":
@@ -230,11 +239,50 @@ export async function POST(request: NextRequest) {
         case "email.clicked":
           updates.emails_clicked = (prospect.emails_clicked ?? 0) + 1
           updates.last_email_clicked_at = now
+          if ((prospect as { status?: string }).status === "contacted") {
+            promotedToVisitor = true
+            updates.status = "visitor"
+            if (!(prospect as { landing_visited_at?: string | null }).landing_visited_at) {
+              updates.landing_visited_at = now
+            }
+          }
           break
       }
 
       if (Object.keys(updates).length > 0) {
         await supabase.from("prospects").update(updates).eq("id", prospect.id)
+      }
+
+      if (promotedToVisitor) {
+        await supabase.from("prospect_events").insert({
+          prospect_id: prospect.id,
+          event_type: "prospect.landing_visited",
+          event_source: "resend_webhook",
+          old_status: "contacted",
+          new_status: "visitor",
+          metadata: { via: "email_click", message_id: messageId ?? null },
+        } as never)
+
+        // Apollo: contact stage directly, account stage via the resolver
+        // (single owner of that field). Both non-blocking.
+        const apolloContactId = (prospect as { apollo_contact_id?: string | null }).apollo_contact_id
+        if (apolloContactId) {
+          try {
+            const { updateContactStage } = await import("@/lib/apollo-client")
+            await updateContactStage(apolloContactId, "Visitor")
+          } catch (err) {
+            console.error("[resend-webhook] Failed to sync Apollo contact stage on click-visit", err)
+          }
+        }
+        const companyId = (prospect as { company_id?: string | null }).company_id
+        if (companyId) {
+          try {
+            const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+            await syncCompanyToApollo(companyId)
+          } catch (err) {
+            console.error("[resend-webhook] Failed to sync Apollo account stage on click-visit", err)
+          }
+        }
       }
     }
   }

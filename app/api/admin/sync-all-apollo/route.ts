@@ -112,14 +112,28 @@ export async function GET(request: NextRequest) {
   let failed = 0
   const failures: Array<{ id: string; name: string | null; error: string }> = []
 
+  // Benign, permanent skip reasons — a freemail domain will never sync
+  // and shouldn't read as a failure on every run.
+  const SKIP_REASONS = new Set(["no domain", "freemail domain"])
+  let skipped = 0
+
   for (const c of rows) {
     if (Date.now() - startedAt > TIME_BUDGET_MS) break
     attempted++
     try {
-      // syncCompanyToApollo handles "no domain" and "no apollo match"
-      // cases gracefully — they log at debug level and return without
-      // throwing. Real failures (network, HTTP errors) do throw.
-      await syncCompanyToApollo(c.id)
+      const result = await syncCompanyToApollo(c.id)
+      if (!result.synced) {
+        if (SKIP_REASONS.has(result.reason)) {
+          skipped++
+        } else {
+          // Real failure — most commonly Apollo's accounts/update rate
+          // cap (200/hour on the current plan): a burst of passes 429s
+          // the tail and those accounts keep a stale stage.
+          failed++
+          failures.push({ id: c.id, name: c.name, error: result.reason })
+          logger.warn("sync-all-apollo: company failed", { companyId: c.id, name: c.name, error: result.reason })
+        }
+      }
     } catch (err) {
       failed++
       const msg = err instanceof Error ? err.message : String(err)
@@ -131,20 +145,22 @@ export async function GET(request: NextRequest) {
   }
 
   const remaining = rows.length - attempted
-  logger.info("sync-all-apollo: done", { total: rows.length, attempted, failed, remaining })
+  logger.info("sync-all-apollo: done", { total: rows.length, attempted, failed, skipped, remaining })
 
   return NextResponse.json({
     total: rows.length,
     attempted,
     failed,
+    skipped,
     remaining,
     failures,
     note:
       (remaining > 0
         ? `Time budget reached — ${remaining} companies not yet synced this pass. Re-run until remaining is 0. `
         : "") +
-      "Companies without a domain or without an Apollo account match are " +
-      "counted as successful — syncCompanyToApollo logs them at debug level " +
-      "and returns without pushing. Check logs for the full picture.",
+      (failed > 0
+        ? "Failures listed above — rate-cap (429) failures resolve by re-running after the hour window resets. "
+        : "") +
+      "Skipped = permanently unsyncable (no domain / freemail domain).",
   })
 }
