@@ -65,6 +65,33 @@ export async function createInvite(
       .select()
       .single()
 
+    // A project invite is a deliberate promotion out of the anonymous
+    // pool: a linked company still sitting in a pre-claim pool status
+    // (added / prospected / unclaimed) moves to 'invited'. Without this,
+    // apollo-sourced companies that get invited stay invisible on
+    // /admin/companies (its filter admits pre-claim rows only via
+    // source direct/manual/invited). Claimed statuses are untouched.
+    // Service-role client: the inviter is a regular user and companies
+    // has no broad UPDATE policy for them.
+    if (!error && inviteData.company_id && !inviteData.is_project_owner) {
+      try {
+        const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
+        const svc = createServiceRoleSupabaseClient()
+        const { data: promoted } = await (svc as any)
+          .from('companies')
+          .update({ status: 'invited' })
+          .eq('id', inviteData.company_id)
+          .in('status', ['added', 'prospected', 'unclaimed'])
+          .select('id')
+        if (Array.isArray(promoted) && promoted.length > 0) {
+          const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
+          await syncCompanyToApollo(inviteData.company_id)
+        }
+      } catch (promoteErr) {
+        console.error('[createInvite] company invited-status promotion failed', promoteErr)
+      }
+    }
+
     return { data, error }
   } catch (error) {
     return { data: null, error }

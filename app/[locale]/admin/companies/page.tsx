@@ -35,7 +35,7 @@ async function loadAdminCompaniesData() {
         .select(
           "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         )
-        .or("source.in.(direct,manual,invited),status.in.(created,listed,unlisted,deactivated)"),
+        .or("source.in.(direct,manual,invited),status.in.(invited,created,listed,unlisted,deactivated)"),
       supabase
         .from("company_metrics")
         .select("company_id, professional_count, projects_linked"),
