@@ -156,7 +156,7 @@ export default async function CompanySettingsPage({
   }
 
   // Setup mode: show complete button when setup not done OR company is still in draft
-  const isSetupMode = !company.setup_completed || company.status === "draft"
+  const isSetupMode = !company.setup_completed || company.status === "created"
 
   const [{ data: socialLinks }, { data: allCategories }, { data: professional }, { data: projectLinks }, { data: pendingProjectLinks }] = await Promise.all([
     supabase

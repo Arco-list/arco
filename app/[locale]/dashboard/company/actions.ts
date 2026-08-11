@@ -418,7 +418,7 @@ export async function updateCompanyProfileAction(input: { name: string; descript
     const status = (row as { status?: string } | null)?.status ?? null
     const desiredBase = slugifyCompanyName(normalizedName)
 
-    if (currentSlug && desiredBase && desiredBase !== currentSlug && status !== "draft") {
+    if (currentSlug && desiredBase && desiredBase !== currentSlug && status !== "created") {
       try {
         const newSlug = await ensureUniqueCompanySlug(desiredBase, supabase, company!.id)
         const { error: redirectErr } = await supabase
@@ -1675,7 +1675,7 @@ export async function completeCompanySetupAction(input: {
       .from("companies")
       .update({ setup_completed: true, status: "unlisted" })
       .eq("id", companyId)
-      .in("status", ["draft", "unlisted"])
+      .in("status", ["created", "unlisted"])
   }
 
   // Sync company status to Apollo account stage

@@ -58,7 +58,7 @@ export async function fetchMetricTimeSeries(
     case "client_signups":
       return query("profiles", "created_at, user_types", (p) => p.user_types?.includes("client") && !p.user_types?.includes("professional"))
     case "drafts":
-      return query("companies", "created_at, status", (c) => c.status === "draft")
+      return query("companies", "created_at, status", (c) => c.status === "created")
     case "actives":
       return query("companies", "created_at, status", (c) => c.status === "listed")
     case "publishers":

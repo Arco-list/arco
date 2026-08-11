@@ -138,7 +138,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
     driver: "acquisition",
     user: "professional",
     supabaseTable: "companies",
-    supabaseFilter: { status: "draft" },
+    supabaseFilter: { status: "created" },
     subs: [],
   },
   actives: {

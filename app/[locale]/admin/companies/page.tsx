@@ -35,7 +35,7 @@ async function loadAdminCompaniesData() {
         .select(
           "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         )
-        .or("source.in.(direct,manual,invited),status.in.(draft,listed,unlisted,deactivated)"),
+        .or("source.in.(direct,manual,invited),status.in.(created,listed,unlisted,deactivated)"),
       supabase
         .from("company_metrics")
         .select("company_id, professional_count, projects_linked"),
@@ -302,7 +302,7 @@ async function loadAdminCompaniesData() {
   const companyRows: AdminCompanyRow[] = companies.map((company) => {
     // Detect unclaimed companies: unlisted + no active team members
     // These were auto-created from project invites — owner_id is the project client, not the professional
-    const isUnclaimed = (company.status === "unlisted" || company.status === "draft") && !claimedCompanyIds.has(company.id) && !company.owner_id
+    const isUnclaimed = (company.status === "unlisted" || company.status === "created") && !claimedCompanyIds.has(company.id) && !company.owner_id
 
     // For claimed companies: use owner profile; for unclaimed: use invited email
     const ownerProfile = !isUnclaimed && company.owner_id ? ownerProfileMap.get(company.owner_id) : null

@@ -3991,7 +3991,7 @@ export type Database = {
         | "pinterest"
       company_source: "apollo" | "direct" | "manual" | "invited"
       company_status:
-        | "draft"
+        | "created"
         | "unlisted"
         | "listed"
         | "deactivated"

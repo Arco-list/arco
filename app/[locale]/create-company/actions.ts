@@ -136,7 +136,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
 
       if (unlistedMatch) {
         // Claim this unlisted company: transfer ownership and merge user-provided fields
-        // Keep status as "draft" until company signup is completed
+        // Keep status as "created" until company signup is completed
         const { error: claimError } = await supabase
           .from("companies")
           .update({
@@ -146,7 +146,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
             email,
             phone,
             primary_service_id: primaryServiceId || null,
-            status: "draft",
+            status: "created",
           })
           .eq("id", unlistedMatch.id)
 
@@ -390,7 +390,7 @@ export async function claimCompanyAction(input: {
   // completion.
   const isPhotographer = (company as any).audience === "pro"
   const photographerReady = isPhotographer && Boolean(company.name?.trim()) && Boolean((company as any).city?.trim())
-  const initialStatus = photographerReady ? "listed" : "draft"
+  const initialStatus = photographerReady ? "listed" : "created"
 
   const { error: claimError } = await supabase
     .from("companies")
@@ -678,7 +678,7 @@ export async function createCompanyFromPlacesAction(
           state_region: input.stateRegion,
           google_place_id: input.placeId,
           is_verified: true,
-          status: "draft",
+          status: "created",
           ...(latitude != null && longitude != null ? { latitude, longitude } : {}),
         })
         .eq("id", unlistedMatch.id)
@@ -731,7 +731,7 @@ export async function createCompanyFromPlacesAction(
         state_region: input.stateRegion,
         google_place_id: input.placeId,
         is_verified: true,
-        status: "draft",
+        status: "created",
         latitude,
         longitude,
       })

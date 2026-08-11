@@ -1176,13 +1176,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const allContactedVisitEvents = [...salesVisitEmailEvents, ...inviteVisitEvents]
   const contactedVisitorsSeries = bucketUniqueByEmail(allContactedVisitEvents)
 
-  // New Pros: companies that completed onboarding (left draft state) in
-  // the period, bucketed by companies.onboarded_at — a DB trigger
-  // stamps this on the first 'draft' → non-draft transition (with
+  // New Pros: companies that completed onboarding (left the Created
+  // state) in the period, bucketed by companies.onboarded_at — a DB
+  // trigger stamps this on the first 'created' → beyond transition (with
   // historical rows backfilled via LEAST(created_at, updated_at)).
   // Previously bucketed by updated_at, which moved on every admin edit
   // and bunched recently-edited pros onto the current bucket.
-  const onboardingCompleted = (c: any) => c.status !== "draft" && c.owner_id != null
+  const onboardingCompleted = (c: any) => c.status !== "created" && c.owner_id != null
   const newProDates = companies
     .filter(onboardingCompleted)
     .map(onboardedTsForBucket)
@@ -1452,12 +1452,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const clientSignupsBucketedDb = bucket8(clientSignupDates, buckets)
 
   // Open drafts (snapshot at each bucket end): companies created before
-  // bucket end that are still in 'draft' status today. Approximate — we
-  // don't track historical status, so a company that became draft → listed
-  // → draft would be miscounted. Acceptable for v1.
+  // bucket end that are still in 'created' status today. Approximate — we
+  // don't track historical status, so a company that went created → listed
+  // → created would be miscounted. Acceptable for v1.
   function bucketOpenDraftsAt(bucketEnd: Date): number {
     return companies.filter((c: any) =>
-      c.status === "draft" && c.owner_id != null && new Date(c.created_at) < bucketEnd,
+      c.status === "created" && c.owner_id != null && new Date(c.created_at) < bucketEnd,
     ).length
   }
   const openDraftsSeries = buckets.ends.map(bucketOpenDraftsAt)

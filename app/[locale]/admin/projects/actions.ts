@@ -951,7 +951,7 @@ export async function syncCompanyListedStatus(companyId: string) {
   // Auto-list from any pre-live state — draft, unlisted, prospected,
   // invited, unclaimed, added. Excluded: listed (already there),
   // deactivated (admin intent, do not override).
-  const AUTO_LIST_ELIGIBLE = new Set(["draft", "unlisted", "prospected", "invited", "unclaimed", "added"])
+  const AUTO_LIST_ELIGIBLE = new Set(["created", "unlisted", "prospected", "invited", "unclaimed", "added"])
   if (
     hasActiveProjects
     && AUTO_LIST_ELIGIBLE.has(company.status as string)
@@ -962,7 +962,7 @@ export async function syncCompanyListedStatus(companyId: string) {
     // through the manual chain, and leaving it false keeps the popup
     // + tour firing on subsequent loads.
     const update: Record<string, unknown> = { status: "listed" }
-    if (company.status === "draft") update.setup_completed = true
+    if (company.status === "created") update.setup_completed = true
     await supabase.from("companies").update(update).eq("id", companyId)
     logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId, from: company.status })
     statusChanged = true

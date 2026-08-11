@@ -7,7 +7,7 @@ import { logger } from "@/lib/logger"
  *
  * Pulls three target segments and upserts each into the Notion Call list DB:
  *   1. Apollo-sourced visitors (prospects table, landing_visited_at IS NOT NULL)
- *   2. Organic drafts (companies status='draft', not Apollo-sourced)
+ *   2. Organic drafts (companies status='created', not Apollo-sourced)
  *   3. Contacted invites (project_professionals invited_email, not yet accepted)
  *
  * One-way only. Manual rep-owned fields in Notion (Outbound status, Notes,

@@ -64,12 +64,12 @@ async function fetchOrganicDraftRows(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   apolloKeys: Set<string>,
 ): Promise<CallListRow[]> {
-  // Organic drafts: companies in 'draft' status with an owner, NOT already
+  // Organic drafts: companies in 'created' status with an owner, NOT already
   // sourced from Apollo (dedup by domain or name).
   const { data, error } = await supabase
     .from("companies")
     .select("name, slug, domain, website, phone, email, city, country, owner_id, created_at, profiles:profiles!owner_id(first_name, last_name, email)")
-    .eq("status", "draft")
+    .eq("status", "created")
     .not("owner_id", "is", null)
     .order("created_at", { ascending: false })
   if (error) throw new Error(`fetchOrganicDraftRows: ${error.message}`)

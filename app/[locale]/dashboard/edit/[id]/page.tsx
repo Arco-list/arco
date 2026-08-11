@@ -3159,7 +3159,7 @@ export default function ListingEditorPage() {
           .from("companies")
           .select("id, name, city, logo_url, email, owner_id, domain")
           .ilike("name", `%${query.trim()}%`)
-          .in("status", ["listed", "unlisted", "draft"])
+          .in("status", ["listed", "unlisted", "created"])
           .limit(6)
 
         const googlePromise = (async (): Promise<GooglePlaceResult[]> => {
