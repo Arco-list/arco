@@ -4,6 +4,30 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalOption } from "@/lib/new-project/invite-professionals"
 
+/** A project invite is a deliberate promotion out of the anonymous
+ *  pool: move a linked company still in a pre-claim pool status
+ *  (added / prospected / unclaimed) to 'invited' and re-resolve its
+ *  Apollo account stage. Server action because companies has no UPDATE
+ *  policy for regular users and the invite flow runs client-side. */
+export async function promoteInvitedCompanyAction(companyId: string): Promise<void> {
+  if (!companyId) return
+  try {
+    const svc = createServiceRoleSupabaseClient()
+    const { data: promoted } = await (svc as any)
+      .from("companies")
+      .update({ status: "invited" })
+      .eq("id", companyId)
+      .in("status", ["added", "prospected", "unclaimed"])
+      .select("id")
+    if (Array.isArray(promoted) && promoted.length > 0) {
+      const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+      await syncCompanyToApollo(companyId)
+    }
+  } catch (err) {
+    console.error("[promoteInvitedCompanyAction] failed", err)
+  }
+}
+
 /**
  * Get available professionals for invite flow
  * This replaces the broken client-side getAvailableProfessionals for admin users
