@@ -358,7 +358,7 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
   // Get all prospects with an Apollo contact ID that aren't terminal
   const { data: prospects, error } = await supabase
     .from("prospects")
-    .select("id, email, apollo_contact_id, status, emails_sent, company_id")
+    .select("id, email, apollo_contact_id, status, emails_sent, emails_delivered, sequence_status, company_id")
     .not("apollo_contact_id", "is", null)
     .not("status", "eq", "active")
     .order("updated_at", { ascending: true })
@@ -428,13 +428,26 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
         newStatus = "contacted"
       }
 
-      // Build update
+      // Build update.
+      //
+      // Apollo only knows about ITS OWN emailer campaigns. Arco-run
+      // drips (Showcase / Invite / Outreach series sent via Resend) are
+      // invisible to it — so when the contact has no Apollo campaign
+      // signal we must leave the Arco-managed sequence_status alone.
+      // The old unconditional write reset active Arco sequences to
+      // not_started on every cron run (surfaced by CROSS Architecture:
+      // intro sent + follow-ups queued, sequence showing Not started).
+      // Send counters use max() for the same reason: Apollo's view can
+      // only add to what Arco already counted, never regress it.
+      const hasApolloCampaignSignal = campaignStatuses.length > 0 || campaignIds.length > 0
       const updates: Record<string, any> = {
-        emails_sent: totalSent,
-        emails_delivered: delivered,
+        emails_sent: Math.max(prospect.emails_sent ?? 0, totalSent),
+        emails_delivered: Math.max(prospect.emails_delivered ?? 0, delivered),
         status: newStatus,
-        sequence_status: sequenceStatus,
         email_status: emailStatus,
+      }
+      if (hasApolloCampaignSignal) {
+        updates.sequence_status = sequenceStatus
       }
 
       if (sequenceId) updates.apollo_sequence_id = sequenceId
