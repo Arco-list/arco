@@ -84,15 +84,29 @@ function pickCompanyPhone(contact: ApolloContact): string | null {
 
 // ─── Sync contacts from an Apollo list ──────────────────────────────────────
 
-export async function syncApolloList(listId: string): Promise<{ synced: number; errorCount: number; lastError: string | null }> {
+export async function syncApolloList(
+  listId: string,
+  opts?: { startPage?: number; timeBudgetMs?: number },
+): Promise<{ synced: number; errorCount: number; lastError: string | null; nextPage: number | null }> {
   const supabase = createServiceRoleSupabaseClient()
-  let page = 1
+  // Resumable pagination: a 1000-contact list takes far longer than a
+  // single serverless invocation allows (~10 Apollo pages x ~5 DB writes
+  // per contact). Callers pass startPage and re-invoke while nextPage is
+  // non-null; the time budget stops us safely before the platform does.
+  let page = opts?.startPage && opts.startPage > 0 ? opts.startPage : 1
+  const timeBudgetMs = opts?.timeBudgetMs ?? 240_000
+  const startedAt = Date.now()
+  let nextPage: number | null = null
   let totalSynced = 0
   let errorCount = 0
   let lastError: string | null = null
   let hasMore = true
 
   while (hasMore) {
+    if (Date.now() - startedAt > timeBudgetMs) {
+      nextPage = page
+      break
+    }
     const data = await apolloRequest("/contacts/search", {
       method: "POST",
       body: JSON.stringify({
@@ -346,8 +360,8 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
     page++
   }
 
-  logger.info("Apollo list sync complete", { listId, totalSynced, errorCount })
-  return { synced: totalSynced, errorCount, lastError }
+  logger.info("Apollo list sync complete", { listId, totalSynced, errorCount, nextPage })
+  return { synced: totalSynced, errorCount, lastError, nextPage }
 }
 
 // ─── Sync email activity for all active prospects ───────────────────────────

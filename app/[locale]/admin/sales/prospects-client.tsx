@@ -892,18 +892,27 @@ export function ProspectsClient({
     setIsSyncing(true)
     setSyncResult(null)
     try {
-      const res = await fetch("/api/apollo-sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "sync_list", list_id: syncListId.trim() }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setSyncResult(`Imported ${data.synced} contacts`)
-        reload({ offset: 0 })
-      } else {
-        setSyncResult(`Error: ${data.error}`)
+      // Large lists span multiple invocations: the route stops before the
+      // 300s function ceiling and returns nextPage; keep calling until
+      // the list is exhausted, accumulating the running total.
+      let total = 0
+      let startPage: number | null = 1
+      while (startPage) {
+        const res: Response = await fetch("/api/apollo-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "sync_list", list_id: syncListId.trim(), start_page: startPage }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setSyncResult(`Error: ${data.error}`)
+          return
+        }
+        total += data.synced ?? 0
+        startPage = data.nextPage ?? null
+        setSyncResult(`Imported ${total} contacts${startPage ? "… continuing" : ""}`)
       }
+      reload({ offset: 0 })
     } catch {
       setSyncResult("Failed to import contacts")
     } finally {

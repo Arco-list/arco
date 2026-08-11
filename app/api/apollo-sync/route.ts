@@ -3,24 +3,38 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { isAdminUser } from "@/lib/auth-utils"
 import { syncApolloList, syncApolloActivity } from "@/lib/apollo-sync"
 
+// A full list import chews through Apollo pages + per-contact DB writes;
+// give the invocation the platform maximum and let syncApolloList's own
+// time budget stop it cleanly before this ceiling (resume via start_page).
+export const maxDuration = 300
+
 export async function POST(request: NextRequest) {
-  // Auth check — admin only
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // Auth: admin session (the Sales popup) OR CRON_SECRET bearer/query
+  // (operational runs from scripts — same pattern as /api/admin/sync-all-apollo).
+  const cronSecret = process.env.CRON_SECRET
+  const header = request.headers.get("authorization") ?? ""
+  const bearer = header.startsWith("Bearer ") ? header.slice(7) : ""
+  const queryToken = request.nextUrl.searchParams.get("secret") ?? ""
+  const secretOk = Boolean(cronSecret) && (bearer === cronSecret || queryToken === cronSecret)
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  if (!secretOk) {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-  // Check admin role from profiles
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("user_types, admin_role")
-    .eq("id", user.id)
-    .single()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-  if (!profile || !isAdminUser(profile.user_types, profile.admin_role)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Check admin role from profiles
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_types, admin_role")
+      .eq("id", user.id)
+      .single()
+
+    if (!profile || !isAdminUser(profile.user_types, profile.admin_role)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
   }
 
   const body = await request.json().catch(() => ({}))
@@ -81,7 +95,11 @@ export async function POST(request: NextRequest) {
     if (!listId) {
       return NextResponse.json({ error: "list_id is required" }, { status: 400 })
     }
-    const result = await recordRun("list", listId, () => syncApolloList(listId))
+    // Resumable: callers re-invoke with start_page = nextPage while the
+    // response carries a non-null nextPage (large lists span multiple
+    // invocations under the 300s function ceiling).
+    const startPage = typeof body.start_page === "number" && body.start_page > 0 ? body.start_page : 1
+    const result = await recordRun("list", listId, () => syncApolloList(listId, { startPage }))
     return NextResponse.json(result)
   }
 
