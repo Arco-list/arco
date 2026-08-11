@@ -353,13 +353,16 @@ function DetailsSection({
   // see their number and can edit it via the prospect update path.
   const phone = profile?.phone ?? primaryProspect?.phone ?? null
 
-  // Email is editable only when the card was opened by prospect_id
-  // AND the prospect currently has no email — the "add contact for
-  // an empty Sales row" flow. Once saved, the parent flips the URL
-  // and the card re-hydrates.
-  const canEditEmail = Boolean(
-    prospectIdFromUrl && (!data.email || data.email.trim().length === 0),
-  )
+  // Email is editable for prospect-only contacts: the add-in-place flow
+  // (opened by prospect_id, no email yet) AND correcting a wrong or
+  // bounced address on an existing prospect. Never editable once the
+  // contact has an auth profile — that email is their login identity.
+  // Saving a changed address clears the prospect's bounce stamp server-
+  // side (see updateProspectById), so the rep can correct + Restart the
+  // sequence in one motion. Once saved, the parent flips the URL and
+  // the card re-hydrates.
+  const editProspectId = primaryProspect?.id ?? prospectIdFromUrl
+  const canEditEmail = Boolean(editProspectId && !profile)
   const [emailLocal, setEmailLocal] = useState<string | null>(data.email || null)
   useEffect(() => { setEmailLocal(data.email || null) }, [data.email])
 
@@ -370,8 +373,8 @@ function DetailsSection({
       toast.error("Email required")
       return
     }
-    if (!prospectIdFromUrl) return
-    const result = await updateProspectById({ prospectId: prospectIdFromUrl, email: trimmed })
+    if (!editProspectId) return
+    const result = await updateProspectById({ prospectId: editProspectId, email: trimmed })
     if (result.success) {
       setEmailLocal(trimmed)
       toast.success("Email saved")
@@ -380,7 +383,7 @@ function DetailsSection({
       setEmailLocal(data.email || null)
       toast.error(result.error)
     }
-  }, [data.email, emailLocal, onEmailAssigned, prospectIdFromUrl])
+  }, [data.email, emailLocal, onEmailAssigned, editProspectId])
 
   const userTypePill = pickUserTypePill(data)
 
