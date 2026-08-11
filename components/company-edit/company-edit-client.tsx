@@ -566,9 +566,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     unlisted: t("status_unlisted"),
     deactivated: t("status_deactivated"),
     // On the owner side there are only two visible states: Listed and
-    // Unlisted. "Created" (the DB `draft` value) is admin-only — from
-    // the owner's perspective a not-yet-listed page reads as Unlisted.
-    draft: t("status_unlisted"),
+    // Unlisted. "Created" is admin-only — from the owner's perspective
+    // a not-yet-listed page reads as Unlisted.
+    created: t("status_unlisted"),
   }
   const statusLabel = statusLabelMap[companyStatus] ?? t("status_unlisted")
   const statusIndicator = STATUS_INDICATOR[companyStatus] ?? "bg-muted-foreground"

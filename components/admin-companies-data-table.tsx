@@ -282,7 +282,7 @@ function validateProspectEligibility(company: AdminCompanyRow): ProspectCandidat
 const STATUS_DOT: Record<string, string> = {
   added: "bg-[#dc2626]",
   unclaimed: "bg-[#dc2626]",
-  draft: "bg-[#2563eb]",
+  created: "bg-[#2563eb]",
   listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
   deactivated: "bg-[#dc2626]",
@@ -293,9 +293,7 @@ const STATUS_DOT: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   added: "Added",
   unclaimed: "Unclaimed",
-  // Renamed from "Draft" — the DB enum value stays `draft`, admin UI
-  // presents it as "Created" (company was claimed, never listed).
-  draft: "Created",
+  created: "Created",
   listed: "Listed",
   unlisted: "Unlisted",
   deactivated: "Deactivated",
@@ -1033,7 +1031,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         accessorKey: "status",
         header: "Status",
         sortingFn: (rowA, rowB) => {
-          const order: Record<string, number> = { listed: 0, unlisted: 1, draft: 2, invited: 3, deactivated: 4 }
+          const order: Record<string, number> = { listed: 0, unlisted: 1, created: 2, invited: 3, deactivated: 4 }
           return (order[rowA.original.status] ?? 4) - (order[rowB.original.status] ?? 4)
         },
         cell: ({ row }) => {

@@ -453,7 +453,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   const companyStatusToProspectStatus: Record<string, string> = {
     listed: "active",
     unlisted: "company",
-    draft: "company",
+    created: "company",
   }
   const mappedProspectStatus = companyStatusToProspectStatus[parsedStatus.data]
   if (mappedProspectStatus) {
