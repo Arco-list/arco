@@ -344,7 +344,10 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
   // Mirror ownership into the new company_contacts model. companyId is
   // set on every success path that reaches here (claim, update, insert).
   if (companyId) {
-    await ensureCompanyOwnerContact(supabase, companyId, user.id)
+    // Service-role client: company_contacts has no INSERT/UPDATE policy for
+    // regular users (locked down in migration 200), so the user-scoped
+    // client made this a silent no-op for every self-serve claimant.
+    await ensureCompanyOwnerContact(createServiceRoleSupabaseClient(), companyId, user.id)
   }
 
   revalidatePath("/dashboard");
@@ -476,7 +479,10 @@ export async function claimCompanyAction(input: {
   }
 
   // Mirror ownership into the new company_contacts model.
-  await ensureCompanyOwnerContact(supabase, companyId, user.id)
+  // Service-role client: company_contacts has no INSERT/UPDATE policy for
+    // regular users (locked down in migration 200), so the user-scoped
+    // client made this a silent no-op for every self-serve claimant.
+    await ensureCompanyOwnerContact(createServiceRoleSupabaseClient(), companyId, user.id)
 
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/company")
@@ -818,7 +824,10 @@ export async function createCompanyFromPlacesAction(
 
   // Mirror ownership into the new company_contacts model.
   if (companyId) {
-    await ensureCompanyOwnerContact(supabase, companyId, user.id)
+    // Service-role client: company_contacts has no INSERT/UPDATE policy for
+    // regular users (locked down in migration 200), so the user-scoped
+    // client made this a silent no-op for every self-serve claimant.
+    await ensureCompanyOwnerContact(createServiceRoleSupabaseClient(), companyId, user.id)
   }
 
   revalidatePath("/dashboard")

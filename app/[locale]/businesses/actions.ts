@@ -1,6 +1,6 @@
 "use server"
 
-import { createServerSupabaseClient, createServerActionSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ensureCompanyOwnerContact } from "@/lib/company-ownership"
 
 const stripWww = (h: string) => h.replace(/^www\./, "").toLowerCase()
@@ -177,7 +177,9 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
     }
 
     // Mirror ownership into company_contacts for the new model.
-    await ensureCompanyOwnerContact(supabase, claimableCompanyId, user.id)
+    // Service-role client — see note in create-company/actions: RLS makes
+    // the user-scoped client a silent no-op here.
+    await ensureCompanyOwnerContact(createServiceRoleSupabaseClient(), claimableCompanyId, user.id)
 
     return { success: true, companyId: claimableCompanyId, professionalId: newPro.id }
   }
@@ -346,7 +348,7 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
   }
 
   // Mirror ownership into company_contacts for the new model.
-  await ensureCompanyOwnerContact(supabase, newCompany.id, user.id)
+  await ensureCompanyOwnerContact(createServiceRoleSupabaseClient(), newCompany.id, user.id)
 
   return { success: true, companyId: newCompany.id, professionalId: newPro.id }
 }
