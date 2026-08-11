@@ -118,6 +118,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
         user_id: prospect.user_id,
       }],
       companyContacts: [],
+      memberships: [],
       companiesById,
       aliases: [],
     },

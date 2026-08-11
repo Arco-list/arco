@@ -27,6 +27,10 @@ import {
   templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
 import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import {
+  getTransactionalEmails,
+  type TransactionalEmailRow,
+} from "@/lib/contacts/get-transactional-emails"
 
 /**
  * Fused timeline for the shared Contact Card.
@@ -48,13 +52,17 @@ import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
  * clickable rows, and queued / paused / not_started state is carried
  * by the top pill row.
  *
- * ContactDetailBody stays untouched — the +N-more modal path still uses
- * it. Retire once this render has proven out.
+ * ContactDetailBody (the old center-modal renderer) has been retired —
+ * this is now the only detail surface across Sales / Users / Companies.
  */
 
 type Props = {
   prospectId: string
   email: string
+  /** Every known address for this contact (primary + aliases) —
+   *  transactional sends are looked up across all of them. Falls back
+   *  to [email] when omitted. */
+  emails?: string[]
   /** LogOutboundModal fields — passed through from the parent card
    *  so we don't need a second server round-trip inside the timeline
    *  component just for the modal's contact banner. */
@@ -70,9 +78,10 @@ type Bundle = {
   locale: "en" | "nl" | null
   inviteContext: ProspectInviteContext | null
   inboundEmails: InboundEmailForProspect[]
+  transactional: TransactionalEmailRow[]
 }
 
-export function ProspectTimelineFused({ prospectId, email, contactLabel, companyLabel, contactPhone }: Props) {
+export function ProspectTimelineFused({ prospectId, email, emails, contactLabel, companyLabel, contactPhone }: Props) {
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "error"; message: string }
@@ -85,6 +94,10 @@ export function ProspectTimelineFused({ prospectId, email, contactLabel, company
   // fetch surfaces the new row in the Timeline stream immediately.
   const [reloadTick, setReloadTick] = useState(0)
 
+  // Stable dependency key — the parent passes `emails` as an inline
+  // array, so depending on the array itself would refetch every render.
+  const emailsKey = (emails && emails.length > 0 ? emails : [email]).join("\n")
+
   useEffect(() => {
     let cancelled = false
     setState({ kind: "loading" })
@@ -93,8 +106,9 @@ export function ProspectTimelineFused({ prospectId, email, contactLabel, company
       fetchProspectEvents(prospectId),
       getProspectSequence(prospectId),
       fetchProspectInboundEmails(prospectId),
+      getTransactionalEmails(emailsKey.split("\n")),
     ])
-      .then(async ([prospect, eventsResult, sequenceResult, inboundResult]) => {
+      .then(async ([prospect, eventsResult, sequenceResult, inboundResult, transactionalResult]) => {
         if (cancelled) return
         const inviteResult =
           prospect && prospect.source === "invites"
@@ -110,6 +124,7 @@ export function ProspectTimelineFused({ prospectId, email, contactLabel, company
             locale: sequenceResult.success ? sequenceResult.locale ?? null : null,
             inviteContext: inviteResult.success ? inviteResult.context ?? null : null,
             inboundEmails: inboundResult.emails ?? [],
+            transactional: transactionalResult.success ? transactionalResult.emails : [],
           },
         })
       })
@@ -117,7 +132,7 @@ export function ProspectTimelineFused({ prospectId, email, contactLabel, company
         if (!cancelled) setState({ kind: "error", message: err?.message ?? "Failed to load timeline" })
       })
     return () => { cancelled = true }
-  }, [prospectId, email, reloadTick])
+  }, [prospectId, emailsKey, reloadTick])
 
   if (state.kind === "loading") {
     return <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>Loading timeline…</p>
@@ -331,6 +346,7 @@ type StreamRow =
   | { kind: "stage"; ts: string; label: string; dot: string; key: string }
   | { kind: "sequence"; ts: string; step: ProspectSequenceStep; key: string }
   | { kind: "event"; ts: string; event: ProspectEvent; key: string }
+  | { kind: "transactional"; ts: string; row: TransactionalEmailRow; key: string }
 
 function TimelineStream({
   bundle,
@@ -467,7 +483,18 @@ function TimelineStream({
   const eventRows: StreamRow[] = enrichedEvents
     .map((ev) => ({ kind: "event" as const, ts: ev.created_at, key: ev.id, event: ev }))
 
-  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...inboundRows, ...eventRows]
+  // Transactional sends (magic links, project status, welcome, domain
+  // verification…) from the unified email_events table. Sequence sends
+  // are campaign_kind sales_outbound/invite and excluded at the query,
+  // so nothing here duplicates a SequenceRow.
+  const transactionalRows: StreamRow[] = bundle.transactional.map((t) => ({
+    kind: "transactional" as const,
+    ts: t.occurred_at,
+    key: `txn-${t.id}`,
+    row: t,
+  }))
+
+  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...inboundRows, ...eventRows, ...transactionalRows]
     .sort((a, b) => b.ts.localeCompare(a.ts))
 
   if (rows.length === 0) {
@@ -486,6 +513,8 @@ function TimelineStream({
             lang={guessedLang}
             onPreview={onPreviewTemplate}
           />
+        ) : row.kind === "transactional" ? (
+          <TransactionalRow key={row.key} row={row.row} />
         ) : (
           <EventHistoryRow key={row.key} event={row.event} compact />
         ),
@@ -550,25 +579,111 @@ function SequenceRow({
           <span className="text-[#1c1c1a] truncate text-left">{step.label || name}</span>
         )}
         <span className="status-pill shrink-0">{lang.toUpperCase()}</span>
+        {/* Same pill design as the table "Featured" pill — status-pill
+            + 5px dot. Danger states keep red text for signal. */}
         <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "2px 8px",
-            borderRadius: 999,
-            fontSize: 11,
-            fontWeight: 500,
-            background: "transparent",
-            color: engagement.tone === "danger" ? "#b91c1c" : "#1c1c1a",
-            border: `1px solid ${engagement.tone === "danger" ? "#fecaca" : "#e5e5e4"}`,
-            whiteSpace: "nowrap",
-          }}
+          className="status-pill shrink-0"
+          style={engagement.tone === "danger" ? { color: "#b91c1c", borderColor: "#fecaca" } : undefined}
         >
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${engagement.dot}`} />
-          {engagement.label}
+          <span className={`status-pill-dot ${engagement.dot}`} />
+          {capitalizeFirst(engagement.label)}
         </span>
       </span>
+    </div>
+  )
+}
+
+// ── Transactional row (non-clickable, engagement pill) ────────────────
+
+function TransactionalRow({ row }: { row: TransactionalEmailRow }) {
+  const engagement = (() => {
+    if (row.engagement === "clicked") return { dot: "bg-purple-500", label: "clicked", danger: false }
+    if (row.engagement === "opened") return { dot: "bg-blue-500", label: "opened", danger: false }
+    if (row.engagement === "delivered") return { dot: "bg-emerald-500", label: "delivered", danger: false }
+    if (row.engagement === "bounced") return { dot: "bg-red-500", label: "bounced", danger: true }
+    if (row.engagement === "complained") return { dot: "bg-red-500", label: "complained", danger: true }
+    if (row.engagement === "failed") return { dot: "bg-red-500", label: "failed", danger: true }
+    return { dot: "bg-emerald-500", label: "sent", danger: false }
+  })()
+
+  // Template name when logged; subject as fallback for older rows that
+  // predate template logging.
+  const name = row.template
+    ? templateDisplayName(row.template)
+    : row.subject ?? "Email"
+
+  return (
+    <div
+      className="grid items-center gap-2 text-xs"
+      style={{ gridTemplateColumns: "90px 1fr" }}
+    >
+      <span className="text-[#a1a1a0] whitespace-nowrap" style={{ fontSize: 11 }}>
+        {formatDateShort(row.occurred_at)}
+      </span>
+      <span className="inline-flex items-center gap-2 min-w-0 flex-wrap">
+        <span className="text-[#1c1c1a] truncate text-left" title={row.subject ?? undefined}>
+          {name}
+        </span>
+        <span className="status-pill shrink-0">Transactional</span>
+        {/* Same pill design as the table "Featured" pill — status-pill
+            + 5px dot. Danger states keep red text for signal. */}
+        <span
+          className="status-pill shrink-0"
+          style={engagement.danger ? { color: "#b91c1c", borderColor: "#fecaca" } : undefined}
+        >
+          <span className={`status-pill-dot ${engagement.dot}`} />
+          {capitalizeFirst(engagement.label)}
+        </span>
+      </span>
+    </div>
+  )
+}
+
+/** Transactional-only timeline for contacts with no prospect record —
+ *  a signed-up user who never went through the funnel still gets their
+ *  magic links / project status / welcome emails shown. Rendered by
+ *  contact-card inside its own Timeline section. */
+export function TransactionalOnlyTimeline({ emails }: { emails: string[] }) {
+  const [state, setState] = useState<
+    | { kind: "loading" }
+    | { kind: "ready"; rows: TransactionalEmailRow[] }
+    | { kind: "error"; message: string }
+  >({ kind: "loading" })
+
+  const emailsKey = emails.join("\n")
+  useEffect(() => {
+    let cancelled = false
+    setState({ kind: "loading" })
+    getTransactionalEmails(emailsKey.split("\n"))
+      .then((result) => {
+        if (cancelled) return
+        if (result.success) setState({ kind: "ready", rows: result.emails })
+        else setState({ kind: "error", message: result.error })
+      })
+      .catch((err) => {
+        if (!cancelled) setState({ kind: "error", message: err?.message ?? "Failed to load emails" })
+      })
+    return () => { cancelled = true }
+  }, [emailsKey])
+
+  if (state.kind === "loading") {
+    return <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>Loading…</p>
+  }
+  if (state.kind === "error") {
+    return <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{state.message}</p>
+  }
+  if (state.rows.length === 0) {
+    return (
+      <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
+        No prospect record and no emails sent to this address yet.
+      </p>
+    )
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {state.rows.map((row) => (
+        <TransactionalRow key={row.id} row={row} />
+      ))}
     </div>
   )
 }

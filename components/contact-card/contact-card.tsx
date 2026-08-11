@@ -1,22 +1,22 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-contact-by-email"
 import { getContactByProspectId } from "@/lib/contacts/get-contact-by-prospect"
 import { updateProfileByEmail } from "@/lib/contacts/update-profile-by-email"
 import { updateProspectById } from "@/lib/contacts/update-prospect-by-id"
+import { removeProspectFromFunnel } from "@/app/admin/sales/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import { ProspectTimelineFused } from "./prospect-timeline-fused"
+import { ProspectTimelineFused, TransactionalOnlyTimeline } from "./prospect-timeline-fused"
 
 /**
- * Shared Contact Card — right-anchored slide-over. Phase 2a folds the
- * detailed Lifecycle / Outreach Sequence / Activity sections into the
- * card by reusing ContactDetailBody from prospects-client. The old
- * center-modal path stays reachable from the +N-more menu on
- * /admin/sales; we'll retire it once this rendering has proven out
- * for a week (Phase 2b).
+ * Shared Contact Card — right-anchored slide-over. The single detail
+ * surface for a contact on /admin/sales: row clicks, contact clicks
+ * and the +N-more picker all open this panel (the old center-modal
+ * was retired). Per-contact actions live here too: Log outbound,
+ * sequence transitions, and Remove from funnel (bottom link).
  *
  * Data model still keyed on normalized email. Timeline sub-bundle is
  * fetched for the FIRST prospect returned by getContactByEmail — same
@@ -42,10 +42,20 @@ type Props = {
    *  ?contact=prospect:<id> to ?contact=<newEmail> so the card
    *  re-hydrates via the email discovery layer. */
   onEmailAssigned?: (newEmail: string) => void
+  /** Called after the contact's prospect row was removed from the sales
+   *  funnel via the panel's bottom link. Parent should close the panel
+   *  and refresh its list so the row disappears. */
+  onRemoved?: () => void
+  /** When provided AND the contact has a linked auth profile, the
+   *  footer shows a "Delete user" link that hands the profile id back
+   *  to the host page — /admin/users passes its existing
+   *  check-requirements + confirm-dialog flow here. Deletion itself
+   *  never runs from inside the card. */
+  onDeleteUser?: (userId: string) => void
   onClose: () => void
 }
 
-export function ContactCard({ email, prospectId, onEmailAssigned, onClose }: Props) {
+export function ContactCard({ email, prospectId, onEmailAssigned, onRemoved, onDeleteUser, onClose }: Props) {
   const [state, setState] = useState<{
     kind: "idle" | "loading" | "error" | "ready"
     data?: ContactByEmailData
@@ -155,7 +165,13 @@ export function ContactCard({ email, prospectId, onEmailAssigned, onClose }: Pro
             </p>
           )}
           {state.kind === "ready" && data && (
-            <CardBody data={data} prospectIdFromUrl={prospectId ?? null} onEmailAssigned={onEmailAssigned} />
+            <CardBody
+              data={data}
+              prospectIdFromUrl={prospectId ?? null}
+              onEmailAssigned={onEmailAssigned}
+              onRemoved={onRemoved}
+              onDeleteUser={onDeleteUser}
+            />
           )}
         </div>
       </aside>
@@ -167,10 +183,14 @@ function CardBody({
   data,
   prospectIdFromUrl,
   onEmailAssigned,
+  onRemoved,
+  onDeleteUser,
 }: {
   data: ContactByEmailData
   prospectIdFromUrl: string | null
   onEmailAssigned?: (newEmail: string) => void
+  onRemoved?: () => void
+  onDeleteUser?: (userId: string) => void
 }) {
   const companies = groupByCompany(data)
   const primaryProspect = data.prospects[0] ?? null
@@ -205,16 +225,106 @@ function CardBody({
         <ProspectTimelineFused
           prospectId={primaryProspect.id}
           email={data.email}
+          emails={[data.email, ...data.aliases]}
           contactLabel={pickDisplayName(data)}
           companyLabel={primaryProspect.company_name ?? data.companiesById[primaryProspect.company_id ?? ""]?.name ?? null}
           contactPhone={data.profile?.phone ?? primaryProspect.phone ?? null}
         />
       ) : (
+        // No prospect record — still show transactional sends (magic
+        // links, project status, welcome…) so signed-up users who never
+        // went through the funnel get a timeline too.
         <Section label="Timeline">
-          <p style={{ fontSize: 12, color: "#a1a1a0", margin: 0 }}>
-            No prospect record on this email — nothing to time-line yet.
-          </p>
+          <TransactionalOnlyTimeline emails={[data.email, ...data.aliases]} />
         </Section>
+      )}
+
+      <CardFooter
+        prospectId={primaryProspect?.id ?? null}
+        profileId={data.profile?.id ?? null}
+        onRemoved={onRemoved}
+        onDeleteUser={onDeleteUser}
+      />
+    </div>
+  )
+}
+
+/** Role-specific removal footer.
+ *
+ *  Prospect in the sales funnel → "Remove from funnel": one-click soft
+ *  removal (prospect row → status removed; a linked auth profile is
+ *  untouched).
+ *
+ *  Linked auth profile → "Delete user": only rendered when the host
+ *  page supplies onDeleteUser. The link just hands the profile id back;
+ *  /admin/users runs its existing deletion-requirements check + confirm
+ *  dialog. Pages without that flow (Sales) don't pass the handler, so
+ *  the link doesn't render there. */
+function CardFooter({
+  prospectId,
+  profileId,
+  onRemoved,
+  onDeleteUser,
+}: {
+  prospectId: string | null
+  profileId: string | null
+  onRemoved?: () => void
+  onDeleteUser?: (userId: string) => void
+}) {
+  const [pending, setPending] = useState(false)
+  const showRemove = Boolean(prospectId)
+  const showDelete = Boolean(profileId && onDeleteUser)
+  if (!showRemove && !showDelete) return null
+
+  const linkStyle = (disabled: boolean): CSSProperties => ({
+    background: "none",
+    border: "none",
+    padding: 0,
+    fontSize: 12,
+    color: "#dc2626",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.6 : 1,
+  })
+
+  return (
+    <div
+      style={{
+        borderTop: "1px solid #eeeeed",
+        paddingTop: 16,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 10,
+      }}
+    >
+      {showRemove && prospectId && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={async () => {
+            setPending(true)
+            const result = await removeProspectFromFunnel(prospectId)
+            setPending(false)
+            if (result.success) {
+              toast.success("Contact removed from funnel")
+              onRemoved?.()
+            } else {
+              toast.error(result.error ?? "Failed to remove contact")
+            }
+          }}
+          style={linkStyle(pending)}
+        >
+          {pending ? "Removing…" : "Remove from funnel"}
+        </button>
+      )}
+      {showDelete && profileId && onDeleteUser && (
+        <button
+          type="button"
+          onClick={() => onDeleteUser(profileId)}
+          style={linkStyle(false)}
+        >
+          Delete user
+        </button>
       )}
     </div>
   )
@@ -611,6 +721,11 @@ function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEma
           </div>
         )}
       </div>
+      {entry.relationship && (
+        <span style={{ fontSize: 11, color: "#6b6b68", flexShrink: 0 }}>
+          {entry.relationship}
+        </span>
+      )}
     </div>
   )
   return (
@@ -695,26 +810,51 @@ type GroupedCompany = {
   companyId: string | null
   label: string
   role: string | null
+  /** How this person relates to the company — "Owner" / "Team member"
+   *  (real membership, what /admin/users shows) vs "Contact" /
+   *  "Prospect" (sales-side link only). Strongest relationship wins. */
+  relationship: string | null
   prospectSummary: string | null
 }
 
-// Merges prospect rows (may lack a companyId) and company_contacts
-// rows into a single per-company list. Untracked prospects (no
-// company_id) become their own entry so the rep still sees them.
+function contactRoleLabel(role: string): string {
+  if (role === "owner") return "Owner"
+  if (role === "admin") return "Company admin"
+  if (role === "member") return "Team member"
+  if (role === "contact") return "Contact"
+  return capitalize(role)
+}
+
+// Merges membership rows (professionals / owner_id), company_contacts
+// and prospect rows into a single per-company list. Membership is the
+// strongest relationship and wins the label; sales-side links only
+// label companies the person doesn't actually belong to. Untracked
+// prospects (no company_id) become their own entry so the rep still
+// sees them.
 function groupByCompany(data: ContactByEmailData): GroupedCompany[] {
   const byId = new Map<string, GroupedCompany>()
   const orphaned: GroupedCompany[] = []
 
+  for (const m of data.memberships) {
+    byId.set(m.company_id, {
+      companyId: m.company_id,
+      label: m.company_name ?? "(unnamed company)",
+      role: null,
+      relationship: m.kind === "owner" ? "Owner" : "Team member",
+      prospectSummary: null,
+    })
+  }
+
   for (const cc of data.companyContacts) {
     const key = cc.company_id
     const existing = byId.get(key)
-    const entry: GroupedCompany = {
+    byId.set(key, {
       companyId: key,
-      label: cc.company_name ?? "(unnamed company)",
+      label: existing?.label ?? cc.company_name ?? "(unnamed company)",
       role: existing?.role ?? cc.role,
+      relationship: existing?.relationship ?? contactRoleLabel(cc.role),
       prospectSummary: existing?.prospectSummary ?? null,
-    }
-    byId.set(key, entry)
+    })
   }
 
   for (const p of data.prospects) {
@@ -724,6 +864,7 @@ function groupByCompany(data: ContactByEmailData): GroupedCompany[] {
         companyId: null,
         label: p.contact_name?.trim() || "(prospect without company)",
         role: null,
+        relationship: "Prospect",
         prospectSummary: summary,
       })
       continue
@@ -731,8 +872,9 @@ function groupByCompany(data: ContactByEmailData): GroupedCompany[] {
     const existing = byId.get(p.company_id)
     byId.set(p.company_id, {
       companyId: p.company_id,
-      label: p.company_name ?? existing?.label ?? "(unnamed company)",
+      label: existing?.label ?? p.company_name ?? "(unnamed company)",
       role: existing?.role ?? null,
+      relationship: existing?.relationship ?? "Prospect",
       prospectSummary: existing?.prospectSummary
         ? `${existing.prospectSummary} · ${summary}`
         : summary,

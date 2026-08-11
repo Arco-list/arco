@@ -1229,8 +1229,21 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
 
       {/* Shared Contact Card slide-over — URL-driven via ?contact=<email>.
           Row click and the "Details" kebab item both call
-          contactParam.open(user.email). */}
-      <ContactCard email={contactParam.email} onClose={contactParam.close} />
+          contactParam.open(user.email). Delete user in the panel footer
+          hands off to the same check + confirm dialog as the kebab menu. */}
+      <ContactCard
+        email={contactParam.email}
+        onDeleteUser={(userId) => {
+          const row = data.find((u) => u.id === userId)
+          if (!row) {
+            toast.error("User not found in the current list")
+            return
+          }
+          contactParam.close()
+          void handleOpenDeleteDialog(row)
+        }}
+        onClose={contactParam.close}
+      />
     </>
   )
 }

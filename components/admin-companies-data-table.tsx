@@ -47,23 +47,9 @@ import {
   logOutboundForCompanyContactAction,
 } from "@/app/admin/companies/actions"
 import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
-import {
-  findProspectByEmail,
-  fetchSalesContactForProspect,
-  fetchProspectById,
-  fetchProspectEvents,
-  fetchProspectInboundEmails,
-  fetchCompanyLifecycleEvents,
-  getProspectSequence,
-  getProspectInviteContext,
-  type SalesContact,
-} from "@/app/admin/sales/actions"
-import {
-  ContactDetailBody,
-  type ContactDetailBundle,
-  type LifecycleStageOverride,
-} from "@/app/admin/sales/prospects-client"
 import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import { ContactCard } from "@/components/contact-card/contact-card"
+import { useContactParam } from "@/hooks/use-contact-param"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import {
   DropdownMenu,
@@ -320,7 +306,7 @@ const STATUS_LABEL: Record<string, string> = {
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
-  { value: "draft", label: "Created", description: "Company claimed but never listed yet", dotColor: "bg-[#2563eb]" },
+  { value: "created", label: "Created", description: "Company claimed but never listed yet", dotColor: "bg-[#2563eb]" },
   { value: "invited" as any, label: "Invited", description: "Credited by another professional on a project", dotColor: "bg-amber-500" },
   { value: "prospected" as any, label: "Showcased", description: "Live showcase page, waiting to be claimed", dotColor: "bg-[#f59e0b]" },
   { value: "added" as any, label: "Added", description: "Apollo import, manual add, or photographer", dotColor: "bg-[#dc2626]" },
@@ -514,7 +500,13 @@ function ContactsCell({
   onRefresh: () => void
 }) {
   const [logOutboundTarget, setLogOutboundTarget] = useState<AdminCompanyContact | null>(null)
-  const [detailsTarget, setDetailsTarget] = useState<AdminCompanyContact | null>(null)
+  // Details opens the shared Contact Card panel (URL-driven; mounted
+  // once at table level) instead of the old ContactDetailsDialog popup.
+  const contactParam = useContactParam()
+  const openDetails = (c: AdminCompanyContact) => {
+    if (c.email?.trim()) contactParam.open(c.email)
+    else toast.error("Contact has no email address")
+  }
   const primary = contacts[0]
   const overflow = contacts.slice(1)
   if (!primary) return null
@@ -536,7 +528,7 @@ function ContactsCell({
             companyId={companyId}
             companyName={companyName}
             onChangeOwner={onChangeOwner}
-            onDetails={(c) => setDetailsTarget(c)}
+            onDetails={openDetails}
             onRefresh={onRefresh}
             onLogOutbound={(c) => setLogOutboundTarget(c)}
           />
@@ -565,7 +557,7 @@ function ContactsCell({
                     companyId={companyId}
                     companyName={companyName}
                     onChangeOwner={onChangeOwner}
-                    onDetails={(target) => setDetailsTarget(target)}
+                    onDetails={openDetails}
                     onRefresh={onRefresh}
                     onLogOutbound={(target) => setLogOutboundTarget(target)}
                   />
@@ -575,15 +567,6 @@ function ContactsCell({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-
-      <ContactDetailsDialog
-        target={detailsTarget}
-        companyId={companyId}
-        companyName={companyName}
-        onOpenChange={(open) => {
-          if (!open) setDetailsTarget(null)
-        }}
-      />
 
       {logOutboundTarget && (
         <LogOutboundModal
@@ -622,204 +605,6 @@ const SOURCE_LABELS: Record<string, string> = {
   manual: "Manual",
   invited: "Invited",
 }
-
-// Contact details popup for a single company_contact — same rich
-// layout the /admin/sales popup uses (lifecycle + activity) so the rep
-// sees history across both pages. Outreach Sequence is hidden here on
-// purpose (Companies context; the drip is a Sales concern).
-//
-// Data flow: look up a prospect by the contact's email; if one exists,
-// hydrate the same bundle Sales renders. If nothing lines up (e.g. an
-// owner never went through the funnel), we still show the identity
-// header + a "No sales history" note.
-function ContactDetailsDialog({
-  target,
-  companyId,
-  companyName,
-  companyPhone,
-  onOpenChange,
-}: {
-  target: AdminCompanyContact | null
-  companyId: string
-  companyName: string
-  companyPhone?: string | null
-  onOpenChange: (open: boolean) => void
-}) {
-  const [loading, setLoading] = useState(false)
-  const [salesContact, setSalesContact] = useState<SalesContact | null>(null)
-  const [bundle, setBundle] = useState<ContactDetailBundle | null>(null)
-  const [lifecycleOverride, setLifecycleOverride] = useState<LifecycleStageOverride[]>([])
-
-  useEffect(() => {
-    if (!target) {
-      setSalesContact(null)
-      setBundle(null)
-      setLifecycleOverride([])
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    setSalesContact(null)
-    setBundle(null)
-    setLifecycleOverride([])
-    ;(async () => {
-      // Company lifecycle events (Draft / Signup / Listed / Unlisted /
-      // Deactivated + this user's own user.signed_up) always fetch,
-      // even when the person didn't come through Sales — they're
-      // properties of the company and this specific user's account,
-      // not sales-funnel state. Prospect lookup is independent; both
-      // paths run in parallel.
-      const [{ prospectId }, companyBundle] = await Promise.all([
-        findProspectByEmail(target.email),
-        fetchCompanyLifecycleEvents(companyId, target.authUserId ?? null),
-      ])
-      if (cancelled) return
-
-      // Build the Lifecycle-section override from the fetched company
-      // + user timestamps. Runs in every branch below since it's the
-      // same regardless of whether the person is also a prospect.
-      const ts = companyBundle.timestamps
-      const stages: LifecycleStageOverride[] = []
-      if (ts.userSignedUp) stages.push({ label: "Signup", ts: ts.userSignedUp, dotClass: "bg-[#2563eb]" })
-      if (ts.draft) stages.push({ label: "Created", ts: ts.draft, dotClass: "bg-[#2563eb]" })
-      if (ts.listed) stages.push({ label: "Listed", ts: ts.listed, dotClass: "bg-[#7c3aed]" })
-      if (ts.unlisted) stages.push({ label: "Unlisted", ts: ts.unlisted, dotClass: "bg-[#a1a1a0]" })
-      if (ts.deactivated) stages.push({ label: "Deactivated", ts: ts.deactivated, dotClass: "bg-red-500" })
-      setLifecycleOverride(stages)
-      const companyEvents = companyBundle.events
-
-      if (!prospectId) {
-        // No Sales history — synthesise a minimal SalesContact so
-        // ContactDetailBody still renders. `prospectId` stays empty
-        // (nothing to LogOutbound against for a non-prospect); the
-        // Activity feed carries only the company-level rows.
-        setSalesContact({
-          prospectId: "",
-          email: target.email,
-          contactName: target.name,
-          source: "direct",
-          status: "prospect",
-          sequenceStatus: "not_started",
-          emailsSent: 0,
-          emailsDelivered: 0,
-          emailsOpened: 0,
-          emailsClicked: 0,
-          lastEmailSentAt: null,
-          lastEmailOpenedAt: null,
-          lastEmailClickedAt: null,
-          unsubscribedAt: null,
-          bouncedAt: null,
-          complainedAt: null,
-          createdAt: target.lastContactedAt ?? new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          refCode: target.id,
-          resolvedContact: {
-            source: "signup",
-            name: target.name,
-            email: target.email,
-            avatarUrl: null,
-            userId: target.authUserId,
-          },
-          lastOutboundAt: null,
-          nextFollowUpAt: null,
-          hasInboundEmail: false,
-        })
-        setBundle({
-          prospect: null,
-          events: companyEvents,
-          sequence: [],
-          locale: null,
-          inviteContext: null,
-          inboundEmails: [],
-        })
-        setLoading(false)
-        return
-      }
-
-      const [contact, prospect, eventsRes, sequenceRes, inviteRes, inboundRes] = await Promise.all([
-        fetchSalesContactForProspect(prospectId),
-        fetchProspectById(prospectId),
-        fetchProspectEvents(prospectId),
-        getProspectSequence(prospectId),
-        getProspectInviteContext(prospectId),
-        fetchProspectInboundEmails(prospectId),
-      ])
-      if (cancelled) return
-      setSalesContact(contact)
-      setBundle({
-        prospect,
-        // Merge company events with prospect events — both are relevant
-        // and the sort in ContactDetailBody interleaves them by date.
-        events: [...eventsRes.events, ...companyEvents],
-        sequence: sequenceRes.success ? sequenceRes.steps ?? [] : [],
-        locale: sequenceRes.success ? sequenceRes.locale ?? null : null,
-        inviteContext: inviteRes.success ? inviteRes.context ?? null : null,
-        inboundEmails: inboundRes.emails ?? [],
-      })
-      setLoading(false)
-    })()
-    return () => { cancelled = true }
-  }, [target, companyId])
-
-  if (!target) return null
-  const displayName = target.name?.trim() || target.email
-  const phoneDisplay = target.phone
-    ? `${target.phoneCountryCode ? `+${target.phoneCountryCode} ` : ""}${target.phone}`
-    : null
-  const subtitleParts = [companyName, target.email, phoneDisplay ?? undefined].filter(Boolean) as string[]
-
-  return (
-    <div
-      className="popup-overlay"
-      onClick={() => onOpenChange(false)}
-    >
-      <div
-        className="popup-card"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 720, maxHeight: "90vh", overflowY: "auto" }}
-      >
-        <div className="popup-header">
-          <div className="min-w-0">
-            <h3 className="arco-section-title truncate">{displayName}</h3>
-            <div className="text-xs text-[#6b6b68] truncate">
-              {subtitleParts.map((part, i) => (
-                <span key={i}>
-                  {i > 0 && <span className="text-[#d4d4d3]"> · </span>}
-                  <span>{part}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="popup-close"
-            onClick={() => onOpenChange(false)}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="mt-3">
-          {loading ? (
-            <p className="text-xs text-[#a1a1a0]">Loading…</p>
-          ) : salesContact && bundle ? (
-            <ContactDetailBody
-              contact={salesContact}
-              details={bundle}
-              onPreviewEmail={() => { /* Companies context has no email preview target */ }}
-              showOutreachSequence={false}
-              lifecycleOverride={lifecycleOverride}
-            />
-          ) : (
-            <p className="text-xs text-[#a1a1a0]">Couldn&apos;t load contact history.</p>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 
 function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow; onVerify: () => void; onRefresh: () => void }) {
   const [editing, setEditing] = useState(false)
@@ -884,6 +669,10 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
 
 export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const router = useRouter()
+  // Shared Contact Card slide-over — URL-driven via ?contact=<email>.
+  // ContactsCell's "Details" items call contactParam.open(email); this
+  // top-level mount renders the panel.
+  const contactParam = useContactParam()
   const [showAddModal, setShowAddModal] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -1708,7 +1497,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     { status: "added" as CompanyStatus,       dotColor: "#dc2626", driver: "prospect" },
     { status: "prospected" as CompanyStatus,  dotColor: "#f59e0b", driver: "prospect" },
     { status: "invited",                       dotColor: "#f59e0b", driver: "prospect" },
-    { status: "draft",                         dotColor: "#2563eb", driver: "acquisition" },
+    { status: "created",                       dotColor: "#2563eb", driver: "acquisition" },
     { status: "listed",                        dotColor: "#7c3aed", driver: "retention" },
     { status: "unlisted",                      dotColor: "#a1a1a0", driver: null },
     { status: "deactivated",                   dotColor: "#dc2626", driver: null },
@@ -1716,7 +1505,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // Display label appears above the first card of each driver group.
   const DRIVER_LABEL_AT: Record<string, string> = {
     prospect: "added",
-    acquisition: "draft",
+    acquisition: "created",
     retention: "listed",
   }
   const DRIVER_COLORS: Record<string, string> = {
@@ -1731,13 +1520,13 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const companyCohortFor = (status: string): number => {
     switch (status) {
       case "added":
-        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
+        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("created") + companyCountAt("listed") + companyCountAt("unlisted")
       case "prospected":
-        return companyCountAt("prospected") + companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
+        return companyCountAt("prospected") + companyCountAt("created") + companyCountAt("listed") + companyCountAt("unlisted")
       case "invited":
         return companyCountAt("invited") + companyCountAt("listed") + companyCountAt("unlisted")
-      case "draft":
-        return companyCountAt("draft") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "created":
+        return companyCountAt("created") + companyCountAt("listed") + companyCountAt("unlisted")
       case "listed":
         return companyCountAt("listed") + companyCountAt("unlisted")
       case "unlisted":
@@ -1847,7 +1636,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           // path) rather than a sequential stop in the sales funnel.
           const prospectedToDraft = companyConversionRate(
             companyCohortFor("prospected"),
-            companyCohortFor("draft"),
+            companyCohortFor("created"),
           )
 
           // Grid columns (1-indexed, odd = card, even = connector):
@@ -1926,8 +1715,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   const prev = COMPANY_FUNNEL[i - 1].status
                   const show =
                     (prev === "added" && stage.status === "prospected") ||
-                    (prev === "invited" && stage.status === "draft") ||
-                    (prev === "draft" && stage.status === "listed")
+                    (prev === "invited" && stage.status === "created") ||
+                    (prev === "created" && stage.status === "listed")
                   if (show) {
                     rate = companyConversionRate(companyCohortFor(prev), companyCohortFor(stage.status))
                   }
@@ -2039,7 +1828,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {(["listed", "unlisted", "draft", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
+              {(["listed", "unlisted", "created", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
                 <DropdownMenuCheckboxItem
                   key={s}
                   checked={statusFilter.includes(s)}
@@ -2215,7 +2004,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="min-w-[160px]">
-                  {(["listed", "unlisted", "draft", "prospected", "added", "deactivated"] as const).map((s) => (
+                  {(["listed", "unlisted", "created", "prospected", "added", "deactivated"] as const).map((s) => (
                     <DropdownMenuItem
                       key={s}
                       className="text-xs cursor-pointer flex items-center gap-1.5"
@@ -2646,7 +2435,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 // can't move an Added/Showcased company straight to Created
                 // via admin. Claim it first (via Showcased sequence or an
                 // invite) which lands the company at Created naturally.
-                const needsClaimed = (option.value === "listed" || option.value === "unlisted" || option.value === "draft") && !isClaimed
+                const needsClaimed = (option.value === "listed" || option.value === "unlisted" || option.value === "created") && !isClaimed
                 // Lifecycle rule: a company that has never been listed
                 // can't move directly to Unlisted — it stays in Created
                 // until its first Listed transition.
@@ -2828,6 +2617,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         )
       })()}
 
+      <ContactCard email={contactParam.email} onClose={contactParam.close} />
     </div>
   )
 }

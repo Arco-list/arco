@@ -16,12 +16,12 @@ import { isAdminUser } from "@/lib/auth-utils"
  *
  * Discovery model:
  *   - prospects.email  → direct email match (all sources: arco, apollo, invites)
- *   - profiles         → hydrated from the first prospect that has user_id
- *   - company_contacts → filtered by person_id (that same user_id)
- *
- * Known Phase 1 limitation: a signed-up user whose auth.users.email
- * doesn't match ANY prospect row is currently invisible to this helper.
- * Phase 2 adds an auth.users lookup as a fallback discovery path.
+ *   - profiles         → hydrated from the first prospect that has user_id,
+ *                        falling back to auth.users.email (migration 197)
+ *   - company_contacts → via persons.auth_user_id → person_id
+ *   - memberships      → professionals.user_id + companies.owner_id, so the
+ *                        card mirrors what /admin/users shows as "their
+ *                        company" — not just sales-side links
  */
 
 export type ContactByEmailProfile = {
@@ -69,11 +69,23 @@ export type ContactByEmailCompanyContact = {
   created_at: string | null
 }
 
+/** Actual platform membership — the user owns the company or sits on
+ *  its team (professionals table). Distinct from prospects /
+ *  company_contacts, which are sales-side context. */
+export type ContactByEmailMembership = {
+  company_id: string
+  company_name: string | null
+  kind: "owner" | "team_member"
+}
+
 export type ContactByEmailData = {
   email: string
   profile: ContactByEmailProfile | null
   prospects: ContactByEmailProspect[]
   companyContacts: ContactByEmailCompanyContact[]
+  /** Companies the user actually owns or works at — what /admin/users
+   *  lists in its Company column. Empty for pure prospects. */
+  memberships: ContactByEmailMembership[]
   /** Enriched summary (logo, city, primary service) keyed by company_id.
    *  Powers the Companies-section rendering — front-end joins by id. */
   companiesById: Record<string, ContactByEmailCompanySummary>
@@ -216,19 +228,38 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     }
   }
 
-  // company_contacts via person_id — now reachable for the fallback
-  // path too, because we've resolved a user_id from the profile lookup.
+  // company_contacts — person_id references persons.id, NOT the auth
+  // user id, so resolve through persons.auth_user_id first. (Querying
+  // person_id = auth id directly silently returned nothing.)
   let companyContactsRaw: Array<{ id: string; company_id: string; role: string; created_at: string | null }> = []
+  // Memberships — what /admin/users shows in its Company column:
+  // team seats (professionals.user_id) and owned companies
+  // (companies.owner_id). Owner wins when both exist for a company.
+  const membershipKind = new Map<string, "owner" | "team_member">()
   if (resolvedUserId) {
-    const { data: cc } = await svc
-      .from("company_contacts")
-      .select("id, company_id, role, created_at")
-      .eq("person_id", resolvedUserId)
-    companyContactsRaw = (cc ?? []) as typeof companyContactsRaw
+    const [{ data: personRows }, { data: teamRows }, { data: ownedRows }] = await Promise.all([
+      svc.from("persons").select("id").eq("auth_user_id", resolvedUserId),
+      svc.from("professionals").select("company_id").eq("user_id", resolvedUserId),
+      svc.from("companies").select("id").eq("owner_id", resolvedUserId),
+    ])
+    const personIds = (personRows ?? []).map((r) => r.id).filter(Boolean)
+    if (personIds.length > 0) {
+      const { data: cc } = await svc
+        .from("company_contacts")
+        .select("id, company_id, role, created_at")
+        .in("person_id", personIds)
+      companyContactsRaw = (cc ?? []) as typeof companyContactsRaw
+    }
+    for (const t of teamRows ?? []) {
+      if (t.company_id) membershipKind.set(t.company_id, "team_member")
+    }
+    for (const o of ownedRows ?? []) {
+      if (o.id) membershipKind.set(o.id, "owner")
+    }
   }
 
-  // One trip for company names covering both prospect + company_contact
-  // company_ids.
+  // One trip for company names covering prospect + company_contact +
+  // membership company_ids.
   const companyIds = Array.from(
     new Set([
       ...(prospectsRaw ?? [])
@@ -237,6 +268,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
       ...companyContactsRaw
         .map((c) => c.company_id)
         .filter((v): v is string => typeof v === "string" && v.length > 0),
+      ...membershipKind.keys(),
     ]),
   )
 
@@ -296,6 +328,14 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     created_at: c.created_at,
   }))
 
+  const memberships: ContactByEmailMembership[] = Array.from(membershipKind.entries()).map(
+    ([companyId, kind]) => ({
+      company_id: companyId,
+      company_name: companyNames.get(companyId) ?? null,
+      kind,
+    }),
+  )
+
   // Aliases: every distinct email tied to the same person that isn't
   // the current queried address. Sources:
   //   - signup email (auth.users.email via RPC)
@@ -313,6 +353,6 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
 
   return {
     success: true,
-    data: { email, profile, prospects, companyContacts, companiesById, aliases },
+    data: { email, profile, prospects, companyContacts, memberships, companiesById, aliases },
   }
 }
