@@ -167,6 +167,11 @@ async function getStageMap(): Promise<Record<string, string>> {
   const stages = await getContactStages();
   stageMapCache = {};
   for (const s of stages) {
+    // Workspaces can contain a stage with a null name (observed in the
+    // Arco workspace as an unnamed "?" row). Guard it — an unguarded
+    // .toLowerCase() throws mid-loop, which failed the FIRST stage
+    // update of every cold lambda and left later calls on a partial map.
+    if (!s.name) continue;
     stageMapCache[s.name.toLowerCase()] = s.id;
   }
   return stageMapCache;
@@ -216,6 +221,8 @@ async function getAccountStageMap(): Promise<Record<string, string>> {
   const stages = await getAccountStages();
   accountStageMapCache = {};
   for (const s of stages) {
+    // Same null-name guard as getStageMap — see comment there.
+    if (!s.name) continue;
     accountStageMapCache[s.name.toLowerCase()] = s.id;
   }
   return accountStageMapCache;
