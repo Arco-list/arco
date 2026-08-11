@@ -230,7 +230,7 @@ function ActivitySection({
           <button
             type="button"
             onClick={onLogOutbound}
-            className="shrink-0 rounded-full bg-[#1c1c1a] text-white text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:opacity-80"
+            className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors"
             title="Log outbound"
           >
             Log

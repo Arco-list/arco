@@ -33,6 +33,12 @@ import { LogOutboundModal } from "./log-outbound-modal"
 import { ContactCard } from "@/components/contact-card/contact-card"
 import { useContactParam } from "@/hooks/use-contact-param"
 
+// Primary-outline action pill — shared by the row "Log" button, the
+// call-list "Skip" button and the panel's Activity "Log" (kept in sync
+// manually there). Deliberately quiet: outline + primary text.
+const ACTION_PILL_CLASS =
+  "shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors"
+
 // -- Status config -----------------------------------------------------------
 
 export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: string }> = {
@@ -1380,6 +1386,7 @@ export function ProspectsClient({
                 />
               </th>
               <th>Company</th>
+              {callListOnly && <th>Reason</th>}
               <th>Contacts</th>
               <th>Status</th>
               <th>Sequence</th>
@@ -1453,7 +1460,7 @@ export function ProspectsClient({
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={15} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={callListOnly ? 16 : 15} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found.
                 </td>
               </tr>
@@ -1475,6 +1482,7 @@ export function ProspectsClient({
                     contactAvatarUrl: contact.resolvedContact.avatarUrl ?? null,
                   })
                 }
+                showCallColumn={callListOnly}
                 onSkip={async () => {
                   const r = await skipCallListProspect(row.primaryContact.prospectId)
                   if (r.success) {
@@ -1676,6 +1684,7 @@ function CompanyRowView({
   onOpenContactCard,
   onLogOutbound,
   onSkip,
+  showCallColumn,
 }: {
   row: SalesCompanyRow
   selected: boolean
@@ -1689,6 +1698,8 @@ function CompanyRowView({
   onLogOutbound: (contact: SalesContact) => void
   /** Call-list mode only: snooze this row out of today's queue. */
   onSkip: () => void
+  /** True while the Call list toggle is active — renders the Reason column. */
+  showCallColumn: boolean
 }) {
   const claimed = row.claimedCompany
   const companyInitials = (row.companyName ?? "")
@@ -1766,24 +1777,31 @@ function CompanyRowView({
               <span className="arco-table-primary">{row.companyName}</span>
             )}
             {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
-            {row.callReason && (
-              <span className="flex items-center gap-2 mt-0.5" onClick={(e) => e.stopPropagation()}>
-                <span className="status-pill" style={{ color: "#016D75", borderColor: "#b8d8da" }}>
-                  {row.callReason}
-                </span>
-                <button
-                  type="button"
-                  onClick={onSkip}
-                  className="text-[11px] text-[#a1a1a0] hover:text-[#1c1c1a] cursor-pointer"
-                  title="Skip — resurfaces as a follow-up in a week"
-                >
-                  Skip
-                </button>
-              </span>
-            )}
           </div>
         </div>
       </td>
+
+      {/* Reason — call-list mode only. Plain text (the WHY) + a Skip
+          pill matching the Log pill's design. */}
+      {showCallColumn && (
+        <td onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2">
+            <span className="arco-table-primary" style={{ fontWeight: 400, whiteSpace: "nowrap" }}>
+              {row.callReason ?? "—"}
+            </span>
+            {row.callReason && (
+              <button
+                type="button"
+                onClick={onSkip}
+                className={ACTION_PILL_CLASS}
+                title="Skip — resurfaces as a follow-up in a week"
+              >
+                Skip
+              </button>
+            )}
+          </div>
+        </td>
+      )}
 
       {/* Contacts — own onClick handler stops the row's click bubble so
           the contact dropdown / +N more popover open without the row's
@@ -1889,24 +1907,17 @@ function ContactsCell({
   return (
     <div className="flex flex-col gap-0.5">
       {/* Primary contact — opens the Contact Card panel directly. The
-          black "Log" pill logs an outbound touch without the panel. */}
-      <span className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => onOpenContactCard(primary)}
-          className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
-        >
-          <ContactInline contact={primary} />
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onLogOutbound(primary) }}
-          className="shrink-0 rounded-full bg-[#1c1c1a] text-white text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:opacity-80"
-          title="Log outbound"
-        >
-          Log
-        </button>
-      </span>
+          quiet "Log" pill sits right after the name and logs an
+          outbound touch without opening the panel. Rendered as a span
+          (not <button>) because it lives inside the row's open-panel
+          button — nested buttons are invalid HTML. */}
+      <button
+        type="button"
+        onClick={() => onOpenContactCard(primary)}
+        className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
+      >
+        <ContactInline contact={primary} afterName={<LogPill onActivate={() => onLogOutbound(primary)} />} />
+      </button>
 
       {/* Overflow — dropdown is only a picker for WHICH contact; each
           item opens that contact's panel. */}
@@ -1928,7 +1939,7 @@ function ContactsCell({
                 className="text-xs cursor-pointer"
                 onClick={() => onOpenContactCard(c)}
               >
-                <ContactInline contact={c} />
+                <ContactInline contact={c} afterName={<LogPill onActivate={() => onLogOutbound(c)} />} />
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -1949,7 +1960,25 @@ function ContactsCell({
  *  Suppression states (bounced / complained / unsubscribed) override
  *  the row's Sequence column instead — keeping the source pill stable
  *  here so the admin can still identify the channel at a glance. */
-function ContactInline({ contact }: { contact: SalesContact }) {
+/** Quiet primary-outline "Log" pill. Span-based so it can nest inside
+ *  clickable rows / menu items without invalid button-in-button HTML;
+ *  stopPropagation keeps the outer open-panel click from firing. */
+function LogPill({ onActivate }: { onActivate: () => void }) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onActivate() }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onActivate() } }}
+      className={ACTION_PILL_CLASS}
+      title="Log outbound"
+    >
+      Log
+    </span>
+  )
+}
+
+function ContactInline({ contact, afterName }: { contact: SalesContact; afterName?: React.ReactNode }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
   const suppression = getSuppressionState(contact)
@@ -1960,6 +1989,7 @@ function ContactInline({ contact }: { contact: SalesContact }) {
         <span className={`arco-table-status-dot ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
         <span className="truncate max-w-[160px]">{displayName}</span>
       </span>
+      {afterName}
       <span className="status-pill">
         <span className={`status-pill-dot ${statusCfg.dot}`} />
         {statusCfg.label}
