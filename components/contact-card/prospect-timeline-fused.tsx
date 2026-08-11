@@ -287,7 +287,7 @@ function ActivitySection({
                 {suppression ? (
                   <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
                     <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-red-500" />
-                    <span style={{ color: "#b91c1c" }}>{capitalizeFirst(suppression)}</span>
+                    <span>{capitalizeFirst(suppression)}</span>
                   </span>
                 ) : (
                   <>
@@ -646,10 +646,7 @@ function SequenceRow({
         <span className="status-pill shrink-0">{lang.toUpperCase()}</span>
         {/* Same pill design as the table "Featured" pill — status-pill
             + 5px dot. Danger states keep red text for signal. */}
-        <span
-          className="status-pill shrink-0"
-          style={engagement.tone === "danger" ? { color: "#b91c1c", borderColor: "#fecaca" } : undefined}
-        >
+        <span className="status-pill shrink-0">
           <span className={`status-pill-dot ${engagement.dot}`} />
           {capitalizeFirst(engagement.label)}
         </span>
@@ -692,10 +689,7 @@ function TransactionalRow({ row }: { row: TransactionalEmailRow }) {
         <span className="status-pill shrink-0">Transactional</span>
         {/* Same pill design as the table "Featured" pill — status-pill
             + 5px dot. Danger states keep red text for signal. */}
-        <span
-          className="status-pill shrink-0"
-          style={engagement.danger ? { color: "#b91c1c", borderColor: "#fecaca" } : undefined}
-        >
+        <span className="status-pill shrink-0">
           <span className={`status-pill-dot ${engagement.dot}`} />
           {capitalizeFirst(engagement.label)}
         </span>
