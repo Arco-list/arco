@@ -63,12 +63,15 @@ const OUTCOME_OPTIONS: Array<{ value: OutboundOutcome; label: string }> = [
   { value: "no_answer", label: "No answer" },
 ]
 
-type FollowUpPreset = "tomorrow" | "in_3_days" | "in_1_week"
-const FOLLOW_UP_PRESETS: Array<{ value: FollowUpPreset; label: string; days: number }> = [
-  { value: "tomorrow", label: "Tomorrow", days: 1 },
-  { value: "in_3_days", label: "In 3 days", days: 3 },
-  { value: "in_1_week", label: "In 1 week", days: 7 },
-]
+// Follow-up is a yes/no decision — the SYSTEM picks the timing from the
+// call's outcome and the call list resurfaces the company as tier-1
+// "Follow-up due" when the date arrives. Warmer outcome = sooner.
+const FOLLOW_UP_DAYS_BY_OUTCOME: Record<OutboundOutcome, number> = {
+  no_answer: 1,
+  positive: 3,
+  neutral: 7,
+  negative: 14,
+}
 
 function toLocalInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0")
@@ -114,13 +117,9 @@ export function LogOutboundModal({
   const [whenIsNow, setWhenIsNow] = useState(true)
   const [whenValue, setWhenValue] = useState(() => toLocalInputValue(new Date()))
   const [body, setBody] = useState("")
-  const [nextFollowUp, setNextFollowUp] = useState("")
+  const [followUp, setFollowUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  // Tracks whether the current nextFollowUp value was set by the no_answer
-  // auto-prefill so the rep can override it by clicking another preset or
-  // typing a custom date without us re-applying it on next render.
-  const [autoPrefilled, setAutoPrefilled] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -134,49 +133,38 @@ export function LogOutboundModal({
       setWhenIsNow(false)
       setWhenValue(toLocalInputValue(new Date(initialValues.occurredAt)))
       setBody(initialValues.body ?? "")
-      setNextFollowUp(initialValues.nextFollowUpAt ? toDateInputValue(new Date(initialValues.nextFollowUpAt)) : "")
+      setFollowUp(Boolean(initialValues.nextFollowUpAt))
     } else {
       setKind("call")
       setOutcome("positive")
       setWhenIsNow(true)
       setWhenValue(toLocalInputValue(new Date()))
       setBody("")
-      setNextFollowUp("")
+      setFollowUp(false)
     }
-    setAutoPrefilled(false)
     setError(null)
     // initialValues intentionally excluded — the modal is remounted per
     // target via `open`, so we key off `open` transitioning true.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // no_answer auto-prefills next follow-up to tomorrow — but only when
-  // the rep hasn't already picked something themselves.
+  // No answer flips follow-up on automatically — a missed call is the
+  // clearest "try again" signal. The rep can still toggle it off.
   useEffect(() => {
     if (kind === "note") return
-    if (outcome !== "no_answer") return
-    if (nextFollowUp && !autoPrefilled) return
-    setNextFollowUp(daysFromNow(1))
-    setAutoPrefilled(true)
-  }, [outcome, kind, nextFollowUp, autoPrefilled])
+    if (outcome === "no_answer") setFollowUp(true)
+  }, [outcome, kind])
 
   const showOutcome = kind !== "note"
-  const selectedPreset = FOLLOW_UP_PRESETS.find((p) => nextFollowUp === daysFromNow(p.days))?.value
-
-  function setFollowUpPreset(p: FollowUpPreset | null) {
-    if (p === null) {
-      setNextFollowUp("")
-    } else {
-      const preset = FOLLOW_UP_PRESETS.find((x) => x.value === p)
-      if (preset) setNextFollowUp(daysFromNow(preset.days))
-    }
-    setAutoPrefilled(false)
-  }
 
   function onSubmit() {
     setError(null)
     const occurredAt = whenIsNow ? null : new Date(whenValue).toISOString()
-    const nextIso = nextFollowUp ? new Date(`${nextFollowUp}T09:00`).toISOString() : null
+    // Yes/no only — the timing comes from the outcome (warmer = sooner)
+    // and the call list decides when the company surfaces again.
+    const nextIso = followUp && kind !== "note"
+      ? new Date(`${daysFromNow(FOLLOW_UP_DAYS_BY_OUTCOME[outcome])}T09:00`).toISOString()
+      : null
 
     startTransition(async () => {
       // Route to the right create-side action based on which id we
@@ -348,40 +336,26 @@ export function LogOutboundModal({
             />
           </div>
 
-          {/* Follow-up — preset pills + custom date */}
-          <div className="flex flex-col gap-1.5">
-            <label className="arco-eyebrow">Follow-up</label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {FOLLOW_UP_PRESETS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setFollowUpPreset(p.value)}
-                  className={pillClass(selectedPreset === p.value)}
-                >
-                  {p.label}
+          {/* Follow-up — yes/no. Timing is system-owned: outcome decides
+              the resurface date and the call list does the rest. */}
+          {showOutcome && (
+            <div className="flex flex-col gap-1.5">
+              <label className="arco-eyebrow">Follow-up</label>
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setFollowUp(true)} className={pillClass(followUp)}>
+                  Yes
                 </button>
-              ))}
-              <input
-                type="date"
-                value={nextFollowUp}
-                onChange={(e) => {
-                  setNextFollowUp(e.target.value)
-                  setAutoPrefilled(false)
-                }}
-                className="h-7 rounded-full border border-[#e5e5e4] bg-white px-2.5 text-xs text-[#6b6b68] hover:border-[#a1a1a0]"
-              />
-              {nextFollowUp && (
-                <button
-                  type="button"
-                  onClick={() => setFollowUpPreset(null)}
-                  className="text-xs text-[#6b6b68] hover:text-[#1c1c1a]"
-                >
-                  Clear
+                <button type="button" onClick={() => setFollowUp(false)} className={pillClass(!followUp)}>
+                  No
                 </button>
-              )}
+                {followUp && (
+                  <span className="text-xs text-[#a1a1a0]">
+                    Resurfaces on the call list when it&apos;s time
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {error && <p className="text-xs text-[#c0392b]">{error}</p>}
         </div>
