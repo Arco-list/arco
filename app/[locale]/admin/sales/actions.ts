@@ -505,6 +505,26 @@ export type SalesSortBy =
   | "next_outbound_at"
 export type SalesSortDir = "asc" | "desc"
 
+/** Supabase/PostgREST caps every response at 1,000 rows no matter what
+ *  .limit() asks for. Anything that reads "all" rows of a growing table
+ *  must page — the Sales funnel silently lost every prospect older than
+ *  the newest 1,000 the day the 1,000-contact import landed. `build`
+ *  must return a FRESH query per call (range() mutates builders). */
+async function fetchAllPages<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+  hardCap = 50_000,
+): Promise<{ rows: T[]; error: { message?: string } | null }> {
+  const rows: T[] = []
+  for (let from = 0; from < hardCap; from += 1000) {
+    const { data, error } = await build(from, Math.min(from + 999, hardCap - 1))
+    if (error) return { rows, error }
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+    if (page.length < 1000) break
+  }
+  return { rows, error: null }
+}
+
 type FetchSalesCompaniesFilters = {
   /** Empty / undefined = no status filter (all statuses except 'removed'). */
   statuses?: ProspectStatus[]
@@ -573,30 +593,34 @@ async function loadEmailEventCounts(
   // Two queries (instead of one .or()) so each can use its index cleanly.
   // 50k cap is well above current sales volume; if we exceed that the
   // counts will silently undercount, which is preferable to timing out.
-  const queries: Promise<{ data: EmailEventRow[] | null }>[] = []
+  const queries: Promise<{ rows: EmailEventRow[]; error: { message?: string } | null }>[] = []
   if (emailList.length > 0) {
     queries.push(
-      (supabase as any)
-        .from("email_events")
-        .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
-        .in("recipient_email", emailList)
-        .limit(50000),
+      fetchAllPages<EmailEventRow>((from, to) =>
+        (supabase as any)
+          .from("email_events")
+          .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
+          .in("recipient_email", emailList)
+          .order("occurred_at", { ascending: false })
+          .range(from, to)),
     )
   }
   if (cidList.length > 0) {
     queries.push(
-      (supabase as any)
-        .from("email_events")
-        .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
-        .in("recipient_company_id", cidList)
-        .limit(50000),
+      fetchAllPages<EmailEventRow>((from, to) =>
+        (supabase as any)
+          .from("email_events")
+          .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
+          .in("recipient_company_id", cidList)
+          .order("occurred_at", { ascending: false })
+          .range(from, to)),
     )
   }
 
   const results = await Promise.all(queries)
   const evRows: EmailEventRow[] = []
   for (const r of results) {
-    if (r.data) evRows.push(...r.data)
+    evRows.push(...r.rows)
   }
 
   const counts = new Map<string, { sent: number; delivered: number; opened: number; clicked: number }>()
@@ -667,17 +691,17 @@ async function loadNextScheduledByGroup(
   if (emailList.length === 0) return new Map()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
-    .from("email_drip_queue")
-    .select("email, send_at, template")
-    .in("email", emailList)
-    .is("sent_at", null)
-    .is("cancelled_at", null)
-    .gte("send_at", new Date().toISOString())
-    .order("send_at", { ascending: true })
-    .limit(50000)
-
-  const rows = (data ?? []) as Array<{ email: string; send_at: string; template: string }>
+  const { rows } = await fetchAllPages<{ email: string; send_at: string; template: string }>(
+    (from, to) => (supabase as any)
+      .from("email_drip_queue")
+      .select("email, send_at, template")
+      .in("email", emailList)
+      .is("sent_at", null)
+      .is("cancelled_at", null)
+      .gte("send_at", new Date().toISOString())
+      .order("send_at", { ascending: true })
+      .range(from, to),
+  )
   const isSalesTemplate = (tpl: string): boolean =>
     SALES_TEMPLATE_PREFIXES.some((p) => tpl.startsWith(p))
     || SALES_TEMPLATES_EXACT.includes(tpl)
@@ -744,14 +768,17 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     "unsubscribed_at", "bounced_at", "complained_at",
     "last_outbound_at", "next_follow_up_at",
   ].join(", ")
-  const { data, error } = await supabase
-    .from("prospects")
-    .select(PROSPECT_COLUMNS)
-    // Cast — 'removed' is in the live enum (migration 152) but the auto-
-    // generated types lag behind.
-    .neq("status", "removed" as never)
-    .order("created_at", { ascending: false })
-    .limit(5000)
+  const { rows: data, error } = await fetchAllPages<Record<string, unknown>>(
+    (from, to) => supabase
+      .from("prospects")
+      .select(PROSPECT_COLUMNS)
+      // Cast — 'removed' is in the live enum (migration 152) but the
+      // auto-generated types lag behind.
+      .neq("status", "removed" as never)
+      .order("created_at", { ascending: false })
+      .range(from, to),
+    5000,
+  )
 
   if (error) {
     console.error("Failed to fetch prospects for sales aggregation", error)
@@ -770,12 +797,16 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const inboundProspectIds = new Set<string>()
   if (allProspectIds.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: inboundRows } = await (supabase as any)
-      .from("inbound_emails")
-      .select("prospect_id")
-      .in("prospect_id", allProspectIds)
-      .limit(10000)
-    for (const r of (inboundRows ?? []) as Array<{ prospect_id: string | null }>) {
+    const { rows: inboundRows } = await fetchAllPages<{ prospect_id: string | null }>(
+      (from, to) => (supabase as any)
+        .from("inbound_emails")
+        .select("prospect_id")
+        .in("prospect_id", allProspectIds)
+        .order("received_at", { ascending: false })
+        .range(from, to),
+      10000,
+    )
+    for (const r of inboundRows) {
       if (r.prospect_id) inboundProspectIds.add(r.prospect_id)
     }
   }

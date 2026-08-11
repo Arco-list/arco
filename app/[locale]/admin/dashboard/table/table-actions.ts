@@ -205,6 +205,26 @@ function bucket8(dates: Date[], buckets: { starts: Date[]; ends: Date[] }): { da
   return { datapoints, labels: [] } // labels are set from getBuckets
 }
 
+/** Supabase/PostgREST caps every response at 1,000 rows regardless of
+ *  .limit(). Every "read the whole table" query here must page or the
+ *  growth metrics silently undercount as tables grow past 1,000 rows
+ *  (first bitten by the 1,000-prospect Apollo import). Returns the
+ *  familiar { data } shape so call sites stay unchanged. */
+async function fetchAllRows<T = any>(
+  build: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+  hardCap = 50_000,
+): Promise<{ data: T[]; error: { message?: string } | null }> {
+  const rows: T[] = []
+  for (let from = 0; from < hardCap; from += 1000) {
+    const { data, error } = await build(from, Math.min(from + 999, hardCap - 1))
+    if (error) return { data: rows, error }
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+    if (page.length < 1000) break
+  }
+  return { data: rows, error: null }
+}
+
 export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise<{ rows: MetricRow[]; labels: string[] }> {
   const supabase = createServiceRoleSupabaseClient()
   const from = getRange(timeframe)
@@ -229,13 +249,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     outboundLogsResult,
     allContactsResult,
   ] = await Promise.all([
-    supabase.from("profiles").select("id, user_types, created_at, first_touch_source"),
-    supabase.from("companies").select("id, status, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id, seo_impressions_28d, seo_clicks_28d"),
-    supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed, seo_impressions_28d, seo_clicks_28d"),
-    supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at, invited_email, invited_at, landing_visited_at"),
-    supabase.from("saved_projects").select("user_id, project_id, created_at"),
-    supabase.from("saved_companies").select("user_id, company_id, created_at"),
-    supabase.from("prospects").select("id, email, company_id, apollo_contact_id"),
+    fetchAllRows((f, t) => supabase.from("profiles").select("id, user_types, created_at, first_touch_source").order("id").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("companies").select("id, status, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id, seo_impressions_28d, seo_clicks_28d").order("id").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed, seo_impressions_28d, seo_clicks_28d").order("id").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at, invited_email, invited_at, landing_visited_at").order("id").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("saved_projects").select("user_id, project_id, created_at").order("created_at").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("saved_companies").select("user_id, company_id, created_at").order("created_at").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("prospects").select("id, email, company_id, apollo_contact_id").order("id").range(f, t)),
     supabase.from("categories").select("id, slug").in("slug", PUBLISHABLE_SERVICE_SLUGS),
     // Outbound metric inputs — manual logs from admin/companies and the
     // Sales page. 'note' is excluded (observations, not outbound
@@ -244,12 +264,14 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     // EITHER company_contact_id (new admin/companies path) OR
     // prospect_id (Sales page legacy path); we resolve to person_id
     // downstream via whichever FK is present.
-    supabase.from("outbound_contact_log")
+    fetchAllRows((f, t) => supabase.from("outbound_contact_log")
       .select("created_at, kind, outcome, company_contact_id, prospect_id")
       .neq("kind", "note")
       .or("outcome.is.null,outcome.neq.no_answer")
-      .gte("created_at", from.toISOString()),
-    supabase.from("company_contacts").select("id, person_id, company_id"),
+      .gte("created_at", from.toISOString())
+      .order("created_at")
+      .range(f, t)),
+    fetchAllRows((f, t) => supabase.from("company_contacts").select("id, person_id, company_id").order("id").range(f, t)),
   ])
 
   const profiles = (profilesResult.data ?? []) as any[]
@@ -1042,12 +1064,14 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // last_email_sent_at limitation).
   type ContactEvent = { email: string; date: Date }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: salesEventsRaw } = await (supabase as any)
+  const { data: salesEventsRaw } = await fetchAllRows((f, t) => (supabase as any)
     .from("email_events")
     .select("recipient_email, occurred_at")
     .eq("event_type", "sent")
     .eq("campaign_kind", "sales_outbound")
     .gte("occurred_at", from.toISOString())
+    .order("occurred_at")
+    .range(f, t))
   const salesContactEvents: ContactEvent[] = (salesEventsRaw ?? [])
     .filter((r: any) => r.recipient_email && r.occurred_at)
     .map((r: any) => ({
@@ -1094,11 +1118,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // prospect_id, so it matches the email-keyed contacted denominator
   // and the ratio can never exceed 100%.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: salesVisitEventsRaw } = await (supabase as any)
+  const { data: salesVisitEventsRaw } = await fetchAllRows((f, t) => (supabase as any)
     .from("prospect_events")
     .select("prospect_id, created_at")
     .eq("event_type", "prospect.landing_visited")
     .gte("created_at", from.toISOString())
+    .order("created_at")
+    .range(f, t))
   type VisitEvent = { prospectId: string; date: Date }
   const salesVisitEvents: VisitEvent[] = (salesVisitEventsRaw ?? [])
     .filter((r: any) => r.prospect_id && r.created_at)
@@ -1203,9 +1229,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // Person lookups for outbound resolution. Logs reference EITHER
   // company_contact_id (new path) OR prospect_id (Sales page legacy
   // path). One persons fetch covers both: id, email, auth_user_id.
-  const { data: personsForOutbound } = await supabase
+  const { data: personsForOutbound } = await fetchAllRows((f, t) => supabase
     .from("persons")
     .select("id, email, auth_user_id")
+    .order("id")
+    .range(f, t))
   const personIdByEmail = new Map<string, string>()
   const personIdByAuthUserId = new Map<string, string>()
   for (const p of personsForOutbound ?? []) {
