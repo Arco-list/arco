@@ -3,12 +3,14 @@
 import { useState, useEffect, useTransition } from "react"
 import type { GrowthMetrics, Timeframe } from "./actions"
 import { fetchGrowthMetrics } from "./actions"
+import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
 import { MetricDetailModal } from "./metric-detail-modal"
 import { GrowthTableView } from "./table/table-view"
 import { fetchMetricTable, type MetricRow } from "./table/table-actions"
 
 interface Props {
   initialMetrics: GrowthMetrics
+  initialLastSynced?: string | null
 }
 
 const DRIVER = {
@@ -188,7 +190,7 @@ const TIMEFRAMES: { value: Timeframe; label: string; shortLabel: string }[] = [
   { value: "years", label: "Years", shortLabel: "Y" },
 ]
 
-export function GrowthClient({ initialMetrics }: Props) {
+export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props) {
   const [metrics, setMetrics] = useState(initialMetrics)
   const [timeframe, setTimeframe] = useState<Timeframe>(() => {
     if (typeof window !== "undefined") {
@@ -599,6 +601,7 @@ export function GrowthClient({ initialMetrics }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <GrowthSyncBadge initialLastSynced={initialLastSynced} />
           {/* View toggle */}
           <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
             <button

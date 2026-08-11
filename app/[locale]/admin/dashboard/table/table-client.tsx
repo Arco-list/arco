@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import type { GrowthMetrics, Timeframe } from "../actions"
 import { fetchMetricTable, type MetricRow } from "./table-actions"
+import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
 
 const TIMEFRAMES: { value: Timeframe; label: string }[] = [
   { value: "days", label: "Days" },
@@ -134,9 +135,10 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
 
 interface Props {
   initialMetrics: GrowthMetrics
+  initialLastSynced?: string | null
 }
 
-export function GrowthTableClient({ initialMetrics }: Props) {
+export function GrowthTableClient({ initialMetrics, initialLastSynced = null }: Props) {
   const [timeframe, setTimeframe] = useState<Timeframe>("months")
   const [rows, setRows] = useState<MetricRow[]>([])
   const [labels, setLabels] = useState<string[]>([])
@@ -173,7 +175,9 @@ export function GrowthTableClient({ initialMetrics }: Props) {
             <a href="/admin/model" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Model</a>
           </p>
         </div>
-        <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
+        <div className="flex items-center gap-3">
+          <GrowthSyncBadge initialLastSynced={initialLastSynced} />
+          <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
           {TIMEFRAMES.map((tf) => (
             <button
               key={tf.value}
@@ -185,6 +189,7 @@ export function GrowthTableClient({ initialMetrics }: Props) {
               {tf.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 

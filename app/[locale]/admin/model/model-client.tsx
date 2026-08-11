@@ -1,12 +1,9 @@
 "use client"
 
-import { Fragment, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { Fragment, useState } from "react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { MetricRow } from "../dashboard/table/table-actions"
-import { syncGrowthMetricsAction } from "./actions"
-import { backfillFirstTouchSource } from "./backfill-first-touch"
+import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
 
 // Lifecycle phase → dot color. Matches the Table view so the same
 // visual key applies across both pages.
@@ -584,54 +581,7 @@ interface Props {
   initialLastSynced: string | null
 }
 
-function formatRelativeSync(iso: string | null): string {
-  if (!iso) return "never synced"
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diffMs / 60_000)
-  if (mins < 1) return "synced just now"
-  if (mins < 60) return `synced ${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `synced ${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `synced ${days}d ago`
-}
-
 export function GrowthModelClient({ initialRows, initialLabels, initialLastSynced }: Props) {
-  const router = useRouter()
-  const [isSyncing, startSync] = useTransition()
-  const [isBackfilling, startBackfill] = useTransition()
-  const [lastSynced, setLastSynced] = useState(initialLastSynced)
-
-  const handleSync = () => {
-    startSync(async () => {
-      const result = await syncGrowthMetricsAction()
-      if (result.success) {
-        const seconds = (result.durationMs / 1000).toFixed(1)
-        toast.success(`Synced ${result.upserted} daily rows in ${seconds}s`)
-        setLastSynced(new Date().toISOString())
-        // Refresh the page so the cached metric counts pull through.
-        router.refresh()
-      } else {
-        toast.error(`Sync failed: ${result.errors.join("; ") || "unknown"}`)
-      }
-    })
-  }
-
-  const handleBackfill = () => {
-    startBackfill(async () => {
-      const result = await backfillFirstTouchSource()
-      if (result.error) {
-        toast.error(`Backfill failed: ${result.error}`)
-        return
-      }
-      toast.success(
-        `Stamped ${result.profilesUpdated} profile${result.profilesUpdated === 1 ? "" : "s"}` +
-        ` + ${result.companiesUpdated} compan${result.companiesUpdated === 1 ? "y" : "ies"}`,
-      )
-      router.refresh()
-    })
-  }
-
   // The Pros/Clients separator lives in the row stream as a synthetic
   // _sep row. Split here so each user-type section gets its own
   // sub-header inside the same table.
@@ -695,24 +645,11 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
             </a>
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[#a1a1a0]">{formatRelativeSync(lastSynced)}</span>
-          <button
-            onClick={handleBackfill}
-            disabled={isBackfilling}
-            className="h-8 px-3 text-[11px] font-medium border border-[#e5e5e4] rounded-[3px] text-[#1c1c1a] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
-            title="One-shot: stamp first_touch_source on profiles + companies from PostHog"
-          >
-            {isBackfilling ? "Backfilling…" : "Backfill"}
-          </button>
-          <button
-            onClick={handleSync}
-            disabled={isSyncing}
-            className="h-8 px-3 text-[11px] font-medium border border-[#e5e5e4] rounded-[3px] text-[#1c1c1a] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
-          >
-            {isSyncing ? "Syncing…" : "Sync"}
-          </button>
-        </div>
+        {/* Inbox/Sales-style sync badge — click to refresh. The old
+            Backfill button (one-shot first_touch_source stamper) is
+            retired from the header; the server action remains for rare
+            manual re-runs. */}
+        <GrowthSyncBadge initialLastSynced={initialLastSynced} />
       </div>
 
       {/* Phase legend — explains the dots without a dedicated grouping
