@@ -100,11 +100,20 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Sync loop ───────────────────────────────────────────────────────────
+  // Uncached companies cost up to 3 Apollo calls (search → create →
+  // stage update); a full catalog pass can exceed Vercel's maxDuration.
+  // Stop cleanly before the platform kills us and report how many
+  // companies remain — re-running resumes where this pass left off
+  // (cached apollo_account_ids make later passes much cheaper), so the
+  // operator just re-runs until remaining hits 0.
+  const TIME_BUDGET_MS = (maxDuration - 30) * 1000
+  const startedAt = Date.now()
   let attempted = 0
   let failed = 0
   const failures: Array<{ id: string; name: string | null; error: string }> = []
 
   for (const c of rows) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) break
     attempted++
     try {
       // syncCompanyToApollo handles "no domain" and "no apollo match"
@@ -121,14 +130,19 @@ export async function GET(request: NextRequest) {
     if (attempted < rows.length) await sleep(RATE_LIMIT_SLEEP_MS)
   }
 
-  logger.info("sync-all-apollo: done", { total: rows.length, attempted, failed })
+  const remaining = rows.length - attempted
+  logger.info("sync-all-apollo: done", { total: rows.length, attempted, failed, remaining })
 
   return NextResponse.json({
     total: rows.length,
     attempted,
     failed,
+    remaining,
     failures,
     note:
+      (remaining > 0
+        ? `Time budget reached — ${remaining} companies not yet synced this pass. Re-run until remaining is 0. `
+        : "") +
       "Companies without a domain or without an Apollo account match are " +
       "counted as successful — syncCompanyToApollo logs them at debug level " +
       "and returns without pushing. Check logs for the full picture.",
