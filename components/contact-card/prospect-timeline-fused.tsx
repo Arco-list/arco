@@ -276,21 +276,16 @@ function ActivitySection({
           )}
         </Row>
         {p?.sequence_status && (() => {
-          // Prefix the sequence status with the most recent channel
-          // ("Outreach · Finished") when we can — otherwise the
-          // rep sees just the state without knowing which sequence
-          // it applies to. Falls back to a bare status label.
           const seqCfg = SEQUENCE_CONFIG[p.sequence_status]
-          const primaryChannel = channels[channels.length - 1] ?? null
           return (
             <Row label="Sequence">
               <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                {/* Same rendering as the table's Sequence column: dot +
+                    status label only. The channel already has its own
+                    Activity row above. */}
                 <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
                   <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
-                  <span>
-                    {primaryChannel ? `${primaryChannel} · ` : ""}
-                    {seqCfg?.label ?? p.sequence_status}
-                  </span>
+                  <span>{seqCfg?.label ?? p.sequence_status}</span>
                 </span>
                 <SequenceActionLink
                   status={p.sequence_status}
@@ -887,17 +882,7 @@ function SequenceActionLink({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      style={{
-        background: "transparent",
-        border: "none",
-        padding: 0,
-        color: "#016D75",
-        fontSize: 12,
-        lineHeight: 1.5,
-        cursor: pending ? "wait" : "pointer",
-        opacity: pending ? 0.5 : 1,
-        textDecoration: "underline",
-      }}
+      className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors disabled:opacity-50 disabled:cursor-wait"
     >
       {pending ? "…" : action.label}
     </button>
