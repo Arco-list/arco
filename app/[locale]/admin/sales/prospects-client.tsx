@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState, useTransition, useCallback } fro
 import { toast } from "sonner"
 import {
   fetchSalesCompanies,
+  skipCallListProspect,
   startProspectSequence,
   pauseProspectSequence,
   removeProspectFromFunnel,
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
+import { LogOutboundModal } from "./log-outbound-modal"
 import { ContactCard } from "@/components/contact-card/contact-card"
 import { useContactParam } from "@/hooks/use-contact-param"
 
@@ -684,7 +686,7 @@ type Props = {
   initialTotalCompanies: number
   initialFunnel: SalesFunnel
   initialEmailsSent: number
-  initialOutboundDueCount: number
+  initialCallListCount: number
   currentApolloListId?: string | null
   apolloProspectsCount?: number
   /** Apollo connection badge (Inbox pattern) — key presence + newest
@@ -697,7 +699,7 @@ export function ProspectsClient({
   initialTotalCompanies,
   initialFunnel,
   initialEmailsSent,
-  initialOutboundDueCount,
+  initialCallListCount,
   currentApolloListId = null,
   apolloProspectsCount = 0,
   apolloSyncStatus = null,
@@ -711,10 +713,21 @@ export function ProspectsClient({
   const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
   // Toggle for the Outbound-due button: when true, the table only renders
   // companies with a next outbound today or in the past. Count next to the
-  // button stays global (initialOutboundDueCount) — it doesn't shrink to
+  // button stays global (initialCallListCount) — it doesn't shrink to
   // zero when the filter is active.
-  const [outboundDueOnly, setOutboundDueOnly] = useState(false)
-  const [outboundDueCount, setOutboundDueCount] = useState(initialOutboundDueCount)
+  const [callListOnly, setCallListOnly] = useState(false)
+  const [callListCount, setCallListCount] = useState(initialCallListCount)
+  // Log outbound modal target — opened from the black "Log" pill on a
+  // contact row. The panel has its own instance; this one serves the
+  // table without opening the panel first.
+  const [logOutboundTarget, setLogOutboundTarget] = useState<{
+    prospectId: string
+    contactLabel: string
+    companyLabel: string
+    contactEmail: string | null
+    contactPhone: string | null
+    contactAvatarUrl: string | null
+  } | null>(null)
   // Multi-select row state — mirrors the /admin/companies pattern. Keyed
   // on row.rowId; bulk actions iterate the underlying contacts of every
   // selected row. Cleared on successful bulk action or filter change.
@@ -744,7 +757,7 @@ export function ProspectsClient({
         sources: sourceFilter,
         sequences: sequenceFilter,
         search,
-        outboundDueOnly,
+        callListOnly,
         offset: off,
         limit: 50,
         sortBy,
@@ -761,11 +774,11 @@ export function ProspectsClient({
       }
       setTotalCompanies(result.totalCompanies)
       setFunnel(result.funnel)
-      setOutboundDueCount(result.outboundDueCount)
+      setCallListCount(result.callListCount)
       setOffset(off)
       setHasMore(result.totalCompanies > off + result.companies.length)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, outboundDueOnly, sortBy, sortDir])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
 
   // Resend email backfill — pulls open/click events the webhook may have
   // missed. Cheap (throttled to once/hour server-side); refresh the table
@@ -783,26 +796,26 @@ export function ProspectsClient({
     statuses?: ProspectStatus[]
     sources?: string[]
     sequences?: SequenceFilterValue[]
-    outboundDueOnly?: boolean
+    callListOnly?: boolean
   }) => {
     if (opts.statuses !== undefined) setStatusFilter(opts.statuses)
     if (opts.sources !== undefined) setSourceFilter(opts.sources)
     if (opts.sequences !== undefined) setSequenceFilter(opts.sequences)
-    if (opts.outboundDueOnly !== undefined) setOutboundDueOnly(opts.outboundDueOnly)
+    if (opts.callListOnly !== undefined) setCallListOnly(opts.callListOnly)
     const s = opts.statuses ?? statusFilter
     const src = opts.sources ?? sourceFilter
     const seq = opts.sequences ?? sequenceFilter
-    const due = opts.outboundDueOnly ?? outboundDueOnly
+    const due = opts.callListOnly ?? callListOnly
     startTransition(async () => {
       const result = await fetchSalesCompanies({
         statuses: s, sources: src, sequences: seq, search,
-        outboundDueOnly: due,
+        callListOnly: due,
         offset: 0, limit: 50, sortBy, sortDir,
       })
       setCompanies(result.companies)
       setTotalCompanies(result.totalCompanies)
       setFunnel(result.funnel)
-      setOutboundDueCount(result.outboundDueCount)
+      setCallListCount(result.callListCount)
       setTotalEmailsSent(result.companies.reduce((sum, c) => sum + c.emailsSent, 0))
       setOffset(0)
       setHasMore(result.totalCompanies > result.companies.length)
@@ -810,7 +823,7 @@ export function ProspectsClient({
       // hidden selected row would still be picked up by bulk actions.
       setSelectedRowIds(new Set())
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, outboundDueOnly, sortBy, sortDir])
+  }, [statusFilter, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
 
   const toggleStatus = useCallback((status: ProspectStatus) => {
     const next = statusFilter.includes(status)
@@ -1099,28 +1112,21 @@ export function ProspectsClient({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Outbound-due toggle — accent button sitting left of the Status
-              filter, mirroring the Review CTA on /admin/projects. Always
-              renders when the global count is > 0 so the rep can see how
-              many companies are due for outbound at a glance; clicking
-              toggles the table-level filter. */}
-          {outboundDueCount > 0 && (
-            <button
-              type="button"
-              onClick={() => handleFilterChange({ outboundDueOnly: !outboundDueOnly })}
-              className="btn-primary"
-              style={{
-                fontSize: 13,
-                padding: "6px 16px",
-                borderRadius: 3,
-                opacity: outboundDueOnly ? 1 : 0.92,
-                boxShadow: outboundDueOnly ? "inset 0 0 0 2px rgba(0,0,0,0.18)" : undefined,
-              }}
-              aria-pressed={outboundDueOnly}
-            >
-              Outbound ({outboundDueCount})
-            </button>
-          )}
+          {/* Call list toggle — today's ranked action queue (max 10).
+              Same design language as the filter buttons: black outline
+              when active, label in the primary color. */}
+          <button
+            type="button"
+            onClick={() => handleFilterChange({ callListOnly: !callListOnly })}
+            className={`h-9 px-3 text-xs border rounded-[3px] transition-colors font-medium text-[#016D75] ${
+              callListOnly
+                ? "border-[#1c1c1a] bg-[#fafaf9]"
+                : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+            }`}
+            aria-pressed={callListOnly}
+          >
+            Call list ({callListCount})
+          </button>
           {/* Multi-select status filter — empty selection = all statuses. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1459,6 +1465,25 @@ export function ProspectsClient({
                 selected={selectedRowIds.has(row.rowId)}
                 onToggleSelect={(v) => toggleRow(row.rowId, v)}
                 onOpenContactCard={openContactCard}
+                onLogOutbound={(contact) =>
+                  setLogOutboundTarget({
+                    prospectId: contact.prospectId,
+                    contactLabel: contact.resolvedContact.name?.trim() || contact.email || "Unnamed contact",
+                    companyLabel: row.companyName,
+                    contactEmail: contact.resolvedContact.email ?? contact.email ?? null,
+                    contactPhone: row.claimedCompany?.phone ?? null,
+                    contactAvatarUrl: contact.resolvedContact.avatarUrl ?? null,
+                  })
+                }
+                onSkip={async () => {
+                  const r = await skipCallListProspect(row.primaryContact.prospectId)
+                  if (r.success) {
+                    toast.success("Skipped — resurfaces as a follow-up in a week")
+                    reload({ offset: 0 })
+                  } else {
+                    toast.error(r.error)
+                  }
+                }}
               />
             ))}
           </tbody>
@@ -1599,6 +1624,25 @@ export function ProspectsClient({
       {/* Phase 1 shared Contact Card — mounted at page level so the
           URL param drives visibility. Row click opens; timeline modal
           (line 1588) is still reachable via the +N-more menu. */}
+      {/* Log outbound modal — opened from the black "Log" pill on rows */}
+      {logOutboundTarget && (
+        <LogOutboundModal
+          open
+          onOpenChange={(open) => { if (!open) setLogOutboundTarget(null) }}
+          prospectId={logOutboundTarget.prospectId}
+          contactLabel={logOutboundTarget.contactLabel}
+          companyLabel={logOutboundTarget.companyLabel}
+          contactEmail={logOutboundTarget.contactEmail}
+          contactPhone={logOutboundTarget.contactPhone}
+          contactAvatarUrl={logOutboundTarget.contactAvatarUrl}
+          initialValues={null}
+          onLogged={() => {
+            setLogOutboundTarget(null)
+            reload({ offset })
+          }}
+        />
+      )}
+
       <ContactCard
         email={contactParam.email}
         prospectId={contactParam.prospectId}
@@ -1630,6 +1674,8 @@ function CompanyRowView({
   selected,
   onToggleSelect,
   onOpenContactCard,
+  onLogOutbound,
+  onSkip,
 }: {
   row: SalesCompanyRow
   selected: boolean
@@ -1638,6 +1684,11 @@ function CompanyRowView({
    *  fallback for empty-email rows). Row click opens the primary
    *  contact; contact / +N-more clicks open that specific contact. */
   onOpenContactCard: (contact: SalesContact) => void
+  /** Black "Log" pill next to the contact name — opens the Log
+   *  outbound modal without opening the panel first. */
+  onLogOutbound: (contact: SalesContact) => void
+  /** Call-list mode only: snooze this row out of today's queue. */
+  onSkip: () => void
 }) {
   const claimed = row.claimedCompany
   const companyInitials = (row.companyName ?? "")
@@ -1715,6 +1766,21 @@ function CompanyRowView({
               <span className="arco-table-primary">{row.companyName}</span>
             )}
             {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
+            {row.callReason && (
+              <span className="flex items-center gap-2 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                <span className="status-pill" style={{ color: "#016D75", borderColor: "#b8d8da" }}>
+                  {row.callReason}
+                </span>
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  className="text-[11px] text-[#a1a1a0] hover:text-[#1c1c1a] cursor-pointer"
+                  title="Skip — resurfaces as a follow-up in a week"
+                >
+                  Skip
+                </button>
+              </span>
+            )}
           </div>
         </div>
       </td>
@@ -1723,7 +1789,7 @@ function CompanyRowView({
           the contact dropdown / +N more popover open without the row's
           Details popup also firing on top. */}
       <td onClick={(e) => e.stopPropagation()}>
-        <ContactsCell row={row} onOpenContactCard={onOpenContactCard} />
+        <ContactsCell row={row} onOpenContactCard={onOpenContactCard} onLogOutbound={onLogOutbound} />
       </td>
 
       {/* Status (aggregated) */}
@@ -1811,25 +1877,36 @@ function CompanyRowView({
 function ContactsCell({
   row,
   onOpenContactCard,
+  onLogOutbound,
 }: {
   row: SalesCompanyRow
   onOpenContactCard: (contact: SalesContact) => void
+  onLogOutbound: (contact: SalesContact) => void
 }) {
   const primary = row.primaryContact
   const overflow = row.contacts.length - 1
 
   return (
     <div className="flex flex-col gap-0.5">
-      {/* Primary contact — opens the Contact Card panel directly. All
-          per-contact actions (Log outbound, sequence transitions,
-          Remove from funnel) live inside the panel now. */}
-      <button
-        type="button"
-        onClick={() => onOpenContactCard(primary)}
-        className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
-      >
-        <ContactInline contact={primary} />
-      </button>
+      {/* Primary contact — opens the Contact Card panel directly. The
+          black "Log" pill logs an outbound touch without the panel. */}
+      <span className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onOpenContactCard(primary)}
+          className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
+        >
+          <ContactInline contact={primary} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onLogOutbound(primary) }}
+          className="shrink-0 rounded-full bg-[#1c1c1a] text-white text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:opacity-80"
+          title="Log outbound"
+        >
+          Log
+        </button>
+      </span>
 
       {/* Overflow — dropdown is only a picker for WHICH contact; each
           item opens that contact's panel. */}

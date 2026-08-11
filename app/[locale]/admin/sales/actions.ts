@@ -464,6 +464,10 @@ export type SalesCompanyRow = {
   hasEmailActivity: boolean
   /** Earliest createdAt across contacts (when this company entered the funnel). */
   createdAt: string
+  /** Call-list annotation — set only when fetched with callListOnly:
+   *  why this row is in today's queue ("Follow-up due", "Created — not
+   *  listed", …). Absent outside call-list mode. */
+  callReason?: string | null
 }
 
 export type SalesFunnel = {
@@ -517,10 +521,9 @@ type FetchSalesCompaniesFilters = {
   limit?: number
   sortBy?: SalesSortBy
   sortDir?: SalesSortDir
-  /** When true, only return rows with at least one contact whose
-   *  nextFollowUpAt is on or before end-of-today (the "Outbound due"
-   *  cohort). */
-  outboundDueOnly?: boolean
+  /** Call-list mode: ignore other filters and return today's ranked
+   *  call queue (max 10 rows, tier order). */
+  callListOnly?: boolean
 }
 
 type SalesGroupShape = {
@@ -707,12 +710,11 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   companies: SalesCompanyRow[]
   totalCompanies: number
   funnel: SalesFunnel
-  /** Total rows currently due for outbound (nextOutboundAt <= EOD today).
-   *  Counted across the full unfiltered dataset so the toolbar button is a
-   *  stable "global" signal — independent of status / source / sequence /
-   *  search narrowing. Powers both the Outbound toggle and the header
-   *  Sales badge. */
-  outboundDueCount: number
+  /** Size of today's call queue (max 10) — counted across the full
+   *  unfiltered dataset so the toolbar button is a stable "global"
+   *  signal, independent of status / source / sequence / search
+   *  narrowing. */
+  callListCount: number
   error?: string
 }> {
   const supabase = createServiceRoleSupabaseClient()
@@ -725,7 +727,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     limit = 50,
     sortBy = "last_contacted_at",
     sortDir = "desc",
-    outboundDueOnly = false,
+    callListOnly = false,
   } = filters
 
   // Explicit column list — SELECT * pulled ~40 columns per prospect
@@ -753,7 +755,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 
   if (error) {
     console.error("Failed to fetch prospects for sales aggregation", error)
-    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, outboundDueCount: 0, error: error.message }
+    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, callListCount: 0, error: error.message }
   }
 
   const rawRows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
@@ -1045,10 +1047,44 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     d.setHours(23, 59, 59, 999)
     return d.toISOString()
   })()
-  const outboundDueCount = rows.reduce(
-    (n, r) => (r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso ? n + 1 : n),
-    0,
-  )
+  // ── Call-list ranking — the daily action queue ─────────────────────
+  // Tiers (lower = call first):
+  //   1 follow-up due (next_follow_up_at <= EOD today)
+  //   2 company Created but not Listed — one call from going live
+  //   3 signed up, never claimed
+  //   4 visited, email sequence exhausted — phone is the only channel left
+  //   5 visited (sequence still running)
+  // Exclusions: suppressed primary contact; a FUTURE next_follow_up_at
+  // (deliberately scheduled / snoozed — Skip sets +7d); an outbound
+  // touch in the last 7 days (cooldown). Capped at 10 — it's a queue,
+  // not a backlog; #11 waits for tomorrow's ranking.
+  const CALL_COOLDOWN_MS = 7 * 86_400_000
+  const nowMs = Date.now()
+  const callTierFor = (r: SalesCompanyRow): { tier: number; reason: string } | null => {
+    const c = r.primaryContact
+    if (c.complainedAt || c.bouncedAt || c.unsubscribedAt) return null
+    if (r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso) return { tier: 1, reason: "Follow-up due" }
+    if (r.nextOutboundAt && r.nextOutboundAt > endOfTodayIso) return null
+    if (r.lastOutboundAt && nowMs - new Date(r.lastOutboundAt).getTime() < CALL_COOLDOWN_MS) return null
+    if (r.status === "company") return { tier: 2, reason: "Created — not listed" }
+    if (r.status === "signup") return { tier: 3, reason: "Signed up — no claim" }
+    // Row-level sequenceStatus aggregates to active/paused/finished/
+    // not_started; contact-level cancelled collapses into that set, so
+    // "finished" alone marks the emails-exhausted state here.
+    if (r.status === "visitor" && r.sequenceStatus === "finished") {
+      return { tier: 4, reason: "Visited — emails done" }
+    }
+    if (r.status === "visitor") return { tier: 5, reason: "Visited" }
+    return null
+  }
+  const rankedCallList = rows
+    .map((r) => ({ r, t: callTierFor(r) }))
+    .filter((x): x is { r: SalesCompanyRow; t: { tier: number; reason: string } } => x.t !== null)
+    .sort((a, b) =>
+      a.t.tier - b.t.tier
+      || (b.r.lastContactedAt ?? "").localeCompare(a.r.lastContactedAt ?? ""))
+    .slice(0, 10)
+  const callListCount = rankedCallList.length
 
   // Filter ordering matters for the funnel:
   //   - Source, sequence and search narrow the funnel (the user wants to
@@ -1119,8 +1155,16 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     rows = rows.filter((r) => set.has(r.status))
   }
 
-  if (outboundDueOnly) {
-    rows = rows.filter((r) => r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso)
+  // Call-list mode replaces the remaining filters + sort entirely: the
+  // ranked queue IS the view. Reason annotations travel on the rows.
+  if (callListOnly) {
+    const annotated = rankedCallList.map(({ r, t }) => ({ ...r, callReason: t.reason }))
+    return {
+      companies: annotated,
+      totalCompanies: annotated.length,
+      funnel,
+      callListCount,
+    }
   }
 
   // Sort. nulls go to the bottom regardless of direction so empty values
@@ -1145,7 +1189,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const totalCompanies = rows.length
   const paged = rows.slice(offset, offset + limit)
 
-  return { companies: paged, totalCompanies, funnel, outboundDueCount }
+  return { companies: paged, totalCompanies, funnel, callListCount }
 }
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
@@ -2003,6 +2047,38 @@ export async function startProspectSequence(prospectId: string) {
   }
 
   return { success: true, warning: result.warning }
+}
+
+/** Snooze a row out of today's call list: schedules the next outbound
+ *  a week out, which both removes it from the queue (future
+ *  next_follow_up_at = deliberately scheduled) and resurfaces it as
+ *  tier-1 "Follow-up due" when the date arrives. */
+export async function skipCallListProspect(prospectId: string) {
+  const supabase = createServiceRoleSupabaseClient()
+  const next = new Date(Date.now() + 7 * 86_400_000).toISOString()
+  const { error } = await supabase
+    .from("prospects")
+    .update({ next_follow_up_at: next } as never)
+    .eq("id", prospectId)
+  if (error) return { success: false as const, error: error.message }
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "call_list_skipped",
+    metadata: { next_follow_up_at: next },
+  })
+  return { success: true as const, nextFollowUpAt: next }
+}
+
+/** Set / clear a prospect's next outbound date directly (panel Activity
+ *  row). An ISO date string schedules; null clears. */
+export async function setProspectNextOutbound(prospectId: string, nextIso: string | null) {
+  const supabase = createServiceRoleSupabaseClient()
+  const { error } = await supabase
+    .from("prospects")
+    .update({ next_follow_up_at: nextIso } as never)
+    .eq("id", prospectId)
+  if (error) return { success: false as const, error: error.message }
+  return { success: true as const }
 }
 
 /**

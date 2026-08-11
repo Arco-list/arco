@@ -31,6 +31,7 @@ import {
   getTransactionalEmails,
   type TransactionalEmailRow,
 } from "@/lib/contacts/get-transactional-emails"
+import { setProspectNextOutbound } from "@/app/admin/sales/actions"
 
 /**
  * Fused timeline for the shared Contact Card.
@@ -229,18 +230,10 @@ function ActivitySection({
           <button
             type="button"
             onClick={onLogOutbound}
-            style={{
-              fontSize: 11,
-              color: "#1c1c1a",
-              background: "transparent",
-              border: "1px solid #e5e5e4",
-              borderRadius: 4,
-              padding: "3px 10px",
-              cursor: "pointer",
-              lineHeight: 1.2,
-            }}
+            className="shrink-0 rounded-full bg-[#1c1c1a] text-white text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:opacity-80"
+            title="Log outbound"
           >
-            Log outbound
+            Log
           </button>
         )}
       </div>
@@ -308,6 +301,13 @@ function ActivitySection({
             </Row>
           )
         })()}
+        <Row label="Next outbound">
+          <NextOutboundField
+            prospectId={prospectId}
+            value={(p as { next_follow_up_at?: string | null } | null)?.next_follow_up_at ?? null}
+            onSaved={onSequenceActionComplete}
+          />
+        </Row>
         <Row label="Created">
           {p?.created_at ? formatDateShort(p.created_at).split(" · ")[0] : (
             <span style={{ color: "#a1a1a0" }}>—</span>
@@ -315,6 +315,66 @@ function ActivitySection({
         </Row>
       </div>
     </div>
+  )
+}
+
+/** Editable next-outbound date — drives the call list's tier-1
+ *  ("Follow-up due") and the future-date snooze exclusion. Native date
+ *  input; clearing it removes the schedule. Saves are optimistic with
+ *  revert-on-error. */
+function NextOutboundField({
+  prospectId,
+  value,
+  onSaved,
+}: {
+  prospectId: string
+  value: string | null
+  onSaved?: () => void
+}) {
+  const [local, setLocal] = useState<string>(value ? value.slice(0, 10) : "")
+  useEffect(() => { setLocal(value ? value.slice(0, 10) : "") }, [value])
+
+  const save = async (dateStr: string) => {
+    const prev = local
+    setLocal(dateStr)
+    const iso = dateStr ? new Date(`${dateStr}T09:00:00`).toISOString() : null
+    const result = await setProspectNextOutbound(prospectId, iso)
+    if (result.success) {
+      toast.success(iso ? "Next outbound scheduled" : "Next outbound cleared")
+      onSaved?.()
+    } else {
+      setLocal(prev)
+      toast.error(result.error)
+    }
+  }
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <input
+        type="date"
+        value={local}
+        onChange={(e) => save(e.target.value)}
+        style={{
+          fontSize: 12,
+          color: local ? "#1c1c1a" : "#a1a1a0",
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      />
+      {local && (
+        <button
+          type="button"
+          onClick={() => save("")}
+          aria-label="Clear next outbound"
+          style={{ background: "none", border: "none", color: "#a1a1a0", cursor: "pointer", fontSize: 12, padding: 0 }}
+        >
+          ✕
+        </button>
+      )}
+    </span>
   )
 }
 
