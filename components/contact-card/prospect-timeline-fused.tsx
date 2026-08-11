@@ -243,7 +243,6 @@ function ActivitySection({
             <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
               <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
               <span>{statusCfg.label}</span>
-              {suppression && <span style={{ color: "#b91c1c" }}>· {suppression}</span>}
             </span>
           ) : (
             <span style={{ color: "#a1a1a0" }}>—</span>
@@ -276,22 +275,33 @@ function ActivitySection({
           )}
         </Row>
         {p?.sequence_status && (() => {
+          // Suppression overrides the sequence display, exactly like the
+          // table's Sequence column: a bounce/complaint/unsubscribe ends
+          // the sequence, so that's what this row reports. The action
+          // pill hides while suppressed — for a bounce, the path back is
+          // correcting the email (which clears the stamp) and Restart.
           const seqCfg = SEQUENCE_CONFIG[p.sequence_status]
           return (
             <Row label="Sequence">
               <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                {/* Same rendering as the table's Sequence column: dot +
-                    status label only. The channel already has its own
-                    Activity row above. */}
-                <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
-                  <span>{seqCfg?.label ?? p.sequence_status}</span>
-                </span>
-                <SequenceActionLink
-                  status={p.sequence_status}
-                  prospectId={prospectId}
-                  onComplete={onSequenceActionComplete}
-                />
+                {suppression ? (
+                  <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-red-500" />
+                    <span style={{ color: "#b91c1c" }}>{capitalizeFirst(suppression)}</span>
+                  </span>
+                ) : (
+                  <>
+                    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
+                      <span>{seqCfg?.label ?? p.sequence_status}</span>
+                    </span>
+                    <SequenceActionLink
+                      status={p.sequence_status}
+                      prospectId={prospectId}
+                      onComplete={onSequenceActionComplete}
+                    />
+                  </>
+                )}
               </span>
             </Row>
           )
