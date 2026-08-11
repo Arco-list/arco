@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { removeContactFromSequence, updateContactStage, updateAccountStage } from "@/lib/apollo-client";
+import { removeContactFromSequence, updateContactStage } from "@/lib/apollo-client";
+import { syncCompanyToApollo } from "@/lib/company-apollo-sync";
 import { logger } from "@/lib/logger";
 
 /**
@@ -64,24 +65,34 @@ const ARCO_TO_APOLLO_STAGE: Record<string, string> = {
   contacted: "Contacted",
   visitor: "Visitor",
   signup: "Signup",
-  company: "Draft",
+  company: "Created",
   active: "Listed",
 };
 
 /**
- * Sync Arco status to Apollo contact stage. Non-blocking — errors are logged but don't fail the caller.
+ * Sync Arco status to the Apollo CONTACT stage (per person). The
+ * ACCOUNT stage is owned by syncCompanyToApollo's resolver — callers
+ * with a company_id trigger that separately. Non-blocking — errors are
+ * logged but don't fail the caller.
  */
 async function syncApolloStage(apolloContactId: string | null, arcoStatus: string) {
   if (!apolloContactId) return;
   const stageName = ARCO_TO_APOLLO_STAGE[arcoStatus];
   if (!stageName) return;
   try {
-    await Promise.all([
-      updateContactStage(apolloContactId, stageName),
-      updateAccountStage(apolloContactId, stageName),
-    ]);
+    await updateContactStage(apolloContactId, stageName);
   } catch (err) {
-    logger.error("Failed to sync Apollo stages", { apolloContactId, arcoStatus }, err as Error);
+    logger.error("Failed to sync Apollo contact stage", { apolloContactId, arcoStatus }, err as Error);
+  }
+}
+
+/** Fire-and-log account-stage recompute for the prospect's company. */
+async function syncAccountStageForCompany(companyId: string | null | undefined) {
+  if (!companyId) return;
+  try {
+    await syncCompanyToApollo(companyId);
+  } catch (err) {
+    logger.error("Failed to sync Apollo account stage", { companyId }, err as Error);
   }
 }
 
@@ -105,7 +116,7 @@ export async function matchProspectOnSignup(
   if (prospectRef) {
     const { data: byEmail } = await supabase
       .from("prospects")
-      .select("id, status, apollo_contact_id, apollo_sequence_id")
+      .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
       .eq("email", prospectRef.toLowerCase())
       .maybeSingle();
     prospect = byEmail;
@@ -113,7 +124,7 @@ export async function matchProspectOnSignup(
     if (!prospect) {
       const { data: byRef } = await supabase
         .from("prospects")
-        .select("id, status, apollo_contact_id, apollo_sequence_id")
+        .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
         .eq("ref_code", prospectRef)
         .maybeSingle();
       prospect = byRef;
@@ -122,7 +133,7 @@ export async function matchProspectOnSignup(
     if (!prospect) {
       const { data: byApollo } = await supabase
         .from("prospects")
-        .select("id, status, apollo_contact_id, apollo_sequence_id")
+        .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
         .eq("apollo_contact_id", prospectRef)
         .maybeSingle();
       prospect = byApollo;
@@ -133,7 +144,7 @@ export async function matchProspectOnSignup(
   if (!prospect) {
     const { data: bySignupEmail } = await supabase
       .from("prospects")
-      .select("id, status, apollo_contact_id, apollo_sequence_id")
+      .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
       .eq("email", email.toLowerCase())
       .maybeSingle();
     prospect = bySignupEmail;
@@ -143,7 +154,7 @@ export async function matchProspectOnSignup(
   if (!prospect && claimCompanyId) {
     const { data: byCompany } = await supabase
       .from("prospects")
-      .select("id, status, apollo_contact_id, apollo_sequence_id")
+      .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
       .eq("company_id", claimCompanyId)
       .maybeSingle();
     prospect = byCompany;
@@ -204,6 +215,7 @@ export async function matchProspectOnSignup(
   }
 
   await syncApolloStage(apolloContactId, "signup");
+  await syncAccountStageForCompany((prospect as any).company_id);
 }
 
 /**
@@ -299,5 +311,6 @@ export async function matchProspectOnCompanyCreated(
   if (updates.status === "company") {
     await syncApolloStage((prospect as any).apollo_contact_id, "company");
   }
+  await syncAccountStageForCompany(companyId);
 }
 

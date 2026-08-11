@@ -1,5 +1,5 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { updateContactStage, updateAccountStage } from "@/lib/apollo-client"
+import { updateContactStage } from "@/lib/apollo-client"
 import { logger } from "@/lib/logger"
 
 const APOLLO_API_URL = "https://api.apollo.io/api/v1"
@@ -140,28 +140,46 @@ export async function syncApolloList(listId: string): Promise<{ synced: number; 
         .join(" ")
         .trim() || null
 
-      const { data: upserted, error } = await supabase
+      // Migration 195 turned the (email, source) UNIQUE constraint into
+      // a PARTIAL unique index (WHERE email <> '') so empty-email
+      // Showcase placeholders can coexist. PostgREST's onConflict can't
+      // carry that predicate, so `upsert(..., { onConflict: "email,source" })`
+      // generates ON CONFLICT (email, source) — which matches no index
+      // and errored EVERY imported row ("no unique or exclusion
+      // constraint matching the ON CONFLICT specification"). Manual
+      // find-then-write instead; Apollo contacts always carry a real
+      // email, so the (email, source) dedup semantics are unchanged.
+      const prospectPatch = {
+        email: contact.email.toLowerCase(),
+        contact_name: contactName,
+        company_name: contact.organization_name || null,
+        phone: contact.phone_numbers?.[0]?.raw_number || null,
+        city: contact.city || null,
+        country: contact.country || "Netherlands",
+        website: contact.website_url || null,
+        apollo_contact_id: contact.id,
+        apollo_list_id: listId,
+        source: "apollo",
+      }
+      const prospectCols = "id, sequence_status, status, company_id, contact_name, company_name, email"
+      const { data: existingProspect } = await supabase
         .from("prospects")
-        .upsert(
-          {
-            email: contact.email.toLowerCase(),
-            contact_name: contactName,
-            company_name: contact.organization_name || null,
-            phone: contact.phone_numbers?.[0]?.raw_number || null,
-            city: contact.city || null,
-            country: contact.country || "Netherlands",
-            website: contact.website_url || null,
-            apollo_contact_id: contact.id,
-            apollo_list_id: listId,
-            source: "apollo",
-          },
-          // Matches the prospects_email_source_key UNIQUE (email, source)
-          // constraint. A plain `email` key would collide with the arco
-          // and invites source rows that legitimately share the email.
-          { onConflict: "email,source" }
-        )
-        .select("id, sequence_status, status, company_id, contact_name, company_name, email")
+        .select("id")
+        .eq("email", prospectPatch.email)
+        .eq("source", "apollo")
         .maybeSingle()
+      const { data: upserted, error } = existingProspect?.id
+        ? await supabase
+            .from("prospects")
+            .update(prospectPatch)
+            .eq("id", existingProspect.id)
+            .select(prospectCols)
+            .maybeSingle()
+        : await supabase
+            .from("prospects")
+            .insert(prospectPatch)
+            .select(prospectCols)
+            .maybeSingle()
 
       if (error) {
         errorCount++
@@ -340,7 +358,7 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
   // Get all prospects with an Apollo contact ID that aren't terminal
   const { data: prospects, error } = await supabase
     .from("prospects")
-    .select("id, email, apollo_contact_id, status, emails_sent")
+    .select("id, email, apollo_contact_id, status, emails_sent, company_id")
     .not("apollo_contact_id", "is", null)
     .not("status", "eq", "active")
     .order("updated_at", { ascending: true })
@@ -446,20 +464,29 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
           })
         }
 
-        // Always sync current Arco status → Apollo stage (catches cases where Arco is ahead)
+        // Always sync current Arco status → Apollo CONTACT stage
+        // (catches cases where Arco is ahead). The ACCOUNT stage is
+        // owned by syncCompanyToApollo's resolver and only re-synced
+        // when this prospect actually advanced — every-iteration
+        // account syncs would burn the rate budget for nothing.
         const stageMap: Record<string, string> = {
           prospect: "Prospect", contacted: "Contacted", visitor: "Visitor",
-          signup: "Signup", company: "Draft", active: "Listed",
+          signup: "Signup", company: "Created", active: "Listed",
         }
         const stageName = stageMap[newStatus]
         if (stageName) {
           try {
-            await Promise.all([
-              updateContactStage(prospect.apollo_contact_id, stageName),
-              updateAccountStage(prospect.apollo_contact_id, stageName),
-            ])
+            await updateContactStage(prospect.apollo_contact_id, stageName)
           } catch (err) {
-            logger.error("Failed to sync Apollo stage during activity sync", { id: prospect.id }, err as Error)
+            logger.error("Failed to sync Apollo contact stage during activity sync", { id: prospect.id }, err as Error)
+          }
+        }
+        if (newStatus !== prospect.status && (prospect as { company_id?: string | null }).company_id) {
+          try {
+            const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+            await syncCompanyToApollo((prospect as { company_id: string }).company_id)
+          } catch (err) {
+            logger.error("Failed to sync Apollo account stage during activity sync", { id: prospect.id }, err as Error)
           }
         }
 

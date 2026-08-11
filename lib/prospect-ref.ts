@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
-import { updateContactStage, updateAccountStage } from "@/lib/apollo-client";
+import { updateContactStage } from "@/lib/apollo-client";
+import { syncCompanyToApollo } from "@/lib/company-apollo-sync";
 import { logger } from "@/lib/logger";
 
 /**
@@ -43,14 +44,14 @@ export async function trackProspectLandingVisit(
   // Try email first (from Apollo {{email}} variable), then ref_code, then apollo_contact_id
   let { data: prospect, error } = await supabase
     .from("prospects")
-    .select("id, status, landing_visited_at, apollo_contact_id")
+    .select("id, status, landing_visited_at, apollo_contact_id, company_id")
     .eq("email", refCode.toLowerCase())
     .maybeSingle();
 
   if (!prospect) {
     const result = await supabase
       .from("prospects")
-      .select("id, status, landing_visited_at, apollo_contact_id")
+      .select("id, status, landing_visited_at, apollo_contact_id, company_id")
       .eq("ref_code", refCode)
       .maybeSingle();
     prospect = result.data;
@@ -60,7 +61,7 @@ export async function trackProspectLandingVisit(
   if (!prospect) {
     const result = await supabase
       .from("prospects")
-      .select("id, status, landing_visited_at, apollo_contact_id")
+      .select("id, status, landing_visited_at, apollo_contact_id, company_id")
       .eq("apollo_contact_id", refCode)
       .maybeSingle();
     prospect = result.data;
@@ -120,17 +121,23 @@ export async function trackProspectLandingVisit(
     statusAdvanced: !!updates.status,
   });
 
-  // Sync Apollo stage if status advanced
+  // Sync Apollo stages if status advanced — contact stage directly,
+  // account stage via the resolver (single owner of that field).
   if (updates.status) {
     const apolloContactId = (prospect as any).apollo_contact_id;
     if (apolloContactId) {
       try {
-        await Promise.all([
-          updateContactStage(apolloContactId, "Visitor"),
-          updateAccountStage(apolloContactId, "Visitor"),
-        ]);
+        await updateContactStage(apolloContactId, "Visitor");
       } catch (err) {
-        logger.error("Failed to sync Apollo stage on landing visit", { apolloContactId }, err as Error);
+        logger.error("Failed to sync Apollo contact stage on landing visit", { apolloContactId }, err as Error);
+      }
+    }
+    const companyId = (prospect as any).company_id;
+    if (companyId) {
+      try {
+        await syncCompanyToApollo(companyId);
+      } catch (err) {
+        logger.error("Failed to sync Apollo account stage on landing visit", { companyId }, err as Error);
       }
     }
   }

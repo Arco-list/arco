@@ -1,14 +1,15 @@
 /**
- * One-shot: push every company's current status to Apollo as an account stage.
+ * One-shot: reconcile every company's Apollo account stage.
  *
  * Why this exists:
- *   syncCompanyToApollo() fires on status *changes* only (via the server
- *   actions in admin/companies and create-company). Companies whose
- *   status hasn't changed since the last Apollo mapping update sit at a
- *   stale stage in Apollo indefinitely. After renaming `added` → `unclaimed`
- *   in migration 128, any company previously mapped to the "Added" stage
- *   in Apollo needs to be moved to "Unclaimed". This endpoint reconciles
- *   all companies in one pass.
+ *   syncCompanyToApollo() fires on status *changes* only (company status
+ *   edits + prospect funnel transitions). Companies whose state hasn't
+ *   changed since the last resolver/mapping update sit at a stale stage
+ *   in Apollo indefinitely. This endpoint recomputes and pushes the
+ *   resolved stage (lifecycle + Sales-funnel overlay — see
+ *   lib/company-apollo-sync.ts) for all companies in one pass. With
+ *   create-on-miss in the sync, this run is also what backfills Apollo
+ *   accounts for organic companies (direct signups) into the mirror.
  *
  * How to run:
  *   curl -H "Authorization: Bearer $CRON_SECRET" \
@@ -19,9 +20,10 @@
  * Prerequisites:
  *   - CRON_SECRET set in Vercel env (already used by /api/cron/*)
  *   - APOLLO_API_KEY set
- *   - Every Apollo stage in COMPANY_STATUS_TO_APOLLO_STAGE must exist in
- *     the Apollo workspace (Settings → Account stages) — otherwise that
- *     row's sync silently no-ops.
+ *   - Every stage name the resolver can emit must exist in the Apollo
+ *     workspace picklist (Settings → Account stages): Prospect,
+ *     Contacted, Visitor, Signup, Invited, Created, Listed, Unlisted,
+ *     Deactivated — otherwise that row's sync silently no-ops.
  *
  * Rate limiting:
  *   Apollo's account update endpoint is ~60/min. We sleep 1.2s between

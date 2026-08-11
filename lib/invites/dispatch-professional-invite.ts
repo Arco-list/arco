@@ -353,5 +353,16 @@ export async function dispatchProfessionalInvite(
       ] as never)
   }
 
+  // Account stage: the intro send moves the funnel to Contacted; let the
+  // resolver recompute the Apollo account stage for the company.
+  if (introResult.success) {
+    try {
+      const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+      await syncCompanyToApollo(recipient.id)
+    } catch (err) {
+      console.error("Failed to sync Apollo account stage after invite dispatch", err)
+    }
+  }
+
   return { success: introResult.success, sequence: "drip" }
 }

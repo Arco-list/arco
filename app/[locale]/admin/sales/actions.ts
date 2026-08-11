@@ -2,7 +2,7 @@
 
 import { Resend } from "resend"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { updateContactStage, updateAccountStage } from "@/lib/apollo-client"
+import { updateContactStage } from "@/lib/apollo-client"
 
 export type ProspectStatus =
   | "prospect"
@@ -1195,7 +1195,7 @@ const STATUS_TO_APOLLO_STAGE: Record<string, string> = {
   contacted: "Contacted",
   visitor: "Visitor",
   signup: "Signup",
-  company: "Draft",
+  company: "Created",
   active: "Listed",
 }
 
@@ -1233,24 +1233,30 @@ export async function updateProspectStatus(id: string, newStatus: ProspectStatus
     metadata: { new_status: newStatus },
   })
 
-  // Sync Apollo contact stage
+  // Sync Apollo contact stage (per person). The ACCOUNT stage is owned
+  // by syncCompanyToApollo's resolver — company lifecycle + funnel
+  // overlay — so prospect writers never touch it directly.
   const stageName = STATUS_TO_APOLLO_STAGE[newStatus]
-  if (stageName) {
-    const { data: prospect } = await supabase
-      .from("prospects")
-      .select("apollo_contact_id")
-      .eq("id", id)
-      .single()
-    const apolloId = (prospect as any)?.apollo_contact_id
-    if (apolloId) {
-      try {
-        await Promise.all([
-          updateContactStage(apolloId, stageName),
-          updateAccountStage(apolloId, stageName),
-        ])
-      } catch (err) {
-        console.error("Failed to sync Apollo stage", err)
-      }
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("apollo_contact_id, company_id")
+    .eq("id", id)
+    .single()
+  const apolloId = (prospect as any)?.apollo_contact_id
+  if (stageName && apolloId) {
+    try {
+      await updateContactStage(apolloId, stageName)
+    } catch (err) {
+      console.error("Failed to sync Apollo contact stage", err)
+    }
+  }
+  const companyId = (prospect as any)?.company_id
+  if (companyId) {
+    try {
+      const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+      await syncCompanyToApollo(companyId)
+    } catch (err) {
+      console.error("Failed to sync Apollo account stage", err)
     }
   }
 
@@ -1947,6 +1953,14 @@ export async function startProspectSequence(prospectId: string) {
       event_type: "email_sent",
       metadata: { template: "outreach_intro", email: prospect.email },
     })
+    if (prospect.company_id) {
+      try {
+        const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+        await syncCompanyToApollo(prospect.company_id)
+      } catch (err) {
+        console.error("Failed to sync Apollo account stage after outreach start", err)
+      }
+    }
     return { success: true, warning: result.warning }
   }
 
@@ -1980,6 +1994,13 @@ export async function startProspectSequence(prospectId: string) {
     event_type: "email_sent",
     metadata: { template: "prospect_intro", email: prospect.email },
   })
+
+  try {
+    const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+    await syncCompanyToApollo(prospect.company_id)
+  } catch (err) {
+    console.error("Failed to sync Apollo account stage after showcase start", err)
+  }
 
   return { success: true, warning: result.warning }
 }

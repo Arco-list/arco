@@ -275,6 +275,28 @@ export async function findAccountByDomain(domain: string): Promise<string | null
 }
 
 /**
+ * Create an Apollo account (name + domain). Returns the new account ID.
+ * Used by the full-mirror company sync when a company's domain has no
+ * existing account in the workspace (organic signups like NEST that
+ * never went through Apollo prospecting).
+ */
+export async function createAccount(name: string, domain: string): Promise<string | null> {
+  try {
+    const data = await apolloRequest<{ account: { id: string } }>({
+      method: "POST",
+      path: "/api/v1/accounts",
+      body: { name, domain },
+    });
+    const id = data.account?.id ?? null;
+    logger.info("Created Apollo account", { name, domain, accountId: id });
+    return id;
+  } catch (err) {
+    logger.error("Failed to create Apollo account", { name, domain }, err as Error);
+    return null;
+  }
+}
+
+/**
  * Update an Apollo account's stage by account ID directly.
  */
 export async function updateAccountStageById(

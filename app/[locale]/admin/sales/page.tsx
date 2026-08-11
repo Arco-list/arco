@@ -33,6 +33,20 @@ export default async function ProspectsPage() {
     .select("id", { count: "exact", head: true })
     .eq("source", "apollo")
 
+  // Apollo connection badge (Inbox pattern): key presence = connected,
+  // newest apollo_sync_runs row = last sync time + error state.
+  const { data: lastRun } = await supabase
+    .from("apollo_sync_runs")
+    .select("started_at, error_count, last_error")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const apolloSyncStatus = {
+    connected: Boolean(process.env.APOLLO_API_KEY),
+    lastSyncAt: (lastRun as { started_at?: string } | null)?.started_at ?? null,
+    hadError: ((lastRun as { error_count?: number } | null)?.error_count ?? 0) > 0,
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <div className="discover-page-title">
@@ -45,6 +59,7 @@ export default async function ProspectsPage() {
             initialOutboundDueCount={outboundDueCount}
             currentApolloListId={currentApolloListId}
             apolloProspectsCount={apolloProspectsCount ?? 0}
+            apolloSyncStatus={apolloSyncStatus}
           />
         </div>
       </div>
