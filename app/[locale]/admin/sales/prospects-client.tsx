@@ -1443,24 +1443,12 @@ export function ProspectsClient({
                   )}
                 </span>
               </th>
-              <th
-                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                onClick={() => toggleSort("next_outbound_at")}
-                title="Sort by next outbound follow-up"
-              >
-                <span className="inline-flex items-center justify-end gap-1">
-                  Next outbound
-                  {sortBy === "next_outbound_at" && (
-                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
-                  )}
-                </span>
-              </th>
             </tr>
           </thead>
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={callListOnly ? 16 : 15} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={callListOnly ? 15 : 14} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found.
                 </td>
               </tr>
@@ -1866,18 +1854,6 @@ function CompanyRowView({
       </td>
       <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
         {row.lastOutboundAt ? formatDate(row.lastOutboundAt) : <span className="text-[#c4c4c2]">—</span>}
-      </td>
-      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
-        {row.nextOutboundAt ? (
-          <span className="inline-flex items-center gap-1.5">
-            {new Date(row.nextOutboundAt) < new Date() && (
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" title="Overdue" />
-            )}
-            {formatDate(row.nextOutboundAt)}
-          </span>
-        ) : (
-          <span className="text-[#c4c4c2]">—</span>
-        )}
       </td>
     </tr>
   )

@@ -2100,18 +2100,6 @@ export async function skipCallListProspect(prospectId: string) {
   return { success: true as const, nextFollowUpAt: next }
 }
 
-/** Set / clear a prospect's next outbound date directly (panel Activity
- *  row). An ISO date string schedules; null clears. */
-export async function setProspectNextOutbound(prospectId: string, nextIso: string | null) {
-  const supabase = createServiceRoleSupabaseClient()
-  const { error } = await supabase
-    .from("prospects")
-    .update({ next_follow_up_at: nextIso } as never)
-    .eq("id", prospectId)
-  if (error) return { success: false as const, error: error.message }
-  return { success: true as const }
-}
-
 /**
  * Update prospect email and sync to company record
  */
