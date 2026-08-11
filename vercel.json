@@ -26,6 +26,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/sync-apollo-activity",
+      "schedule": "30 * * * *"
+    },
+    {
       "path": "/api/cron/process-pinterest-queue",
       "schedule": "*/5 * * * *"
     }
