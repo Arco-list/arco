@@ -227,7 +227,16 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
       <ProfessionalSubNav
         companyId={professional.company.id}
         name={professional.name}
-        imageUrl={professional.gallery[0]?.url ?? professional.company.logoUrl ?? null}
+        imageUrl={
+          // Same cover chain as the discover card: company cover photo,
+          // else first project photo, else logo — so both share popups
+          // present the company identically.
+          professional.gallery.find((g) => g.isCover)?.url
+          ?? professional.gallery[0]?.url
+          ?? professional.projects[0]?.image
+          ?? professional.company.logoUrl
+          ?? null
+        }
         slug={slug}
         profession={servicesBadge}
         location={specs.location ?? undefined}

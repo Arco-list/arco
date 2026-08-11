@@ -133,7 +133,13 @@ export default async function PhotographerDetailPage({ params }: { params: Promi
       <ProfessionalSubNav
         companyId={photographer.id}
         name={photographer.name}
-        imageUrl={photographer.gallery[0]?.url ?? photographer.logoUrl ?? null}
+        imageUrl={
+          photographer.gallery.find((g) => g.isCover)?.url
+          ?? photographer.gallery[0]?.url
+          ?? photographer.projects[0]?.image
+          ?? photographer.logoUrl
+          ?? null
+        }
         slug={slug}
         profession={servicesBadge}
         location={locationLabel ?? undefined}

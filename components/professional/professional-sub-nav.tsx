@@ -187,7 +187,7 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
       isOpen={shareOpen}
       onClose={() => setShareOpen(false)}
       title={name}
-      subtitle={profession ?? ""}
+      subtitle={[profession?.split(" · ")[0], location].filter(Boolean).join(" · ")}
       imageUrl={imageUrl ?? "/placeholder.svg"}
       shareUrl={`/professionals/${slug}`}
     />
