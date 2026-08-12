@@ -11,6 +11,7 @@ import {
   FAQSection,
 } from "@/components/landing"
 import { EndorsementCarousel } from "@/components/ui/EndorsementCarousel"
+import { PricingSection } from "@/components/pricing-section"
 import { ProfessionalCarousel, type ProfessionalCarouselCard } from "@/components/landing/professional-carousel"
 import {
   getProfessionalBenefits,
@@ -103,6 +104,13 @@ export default function ProfessionalsLandingClient({
       <EndorsementCarousel
         endorsements={endorsements}
       />
+
+      {/* Pricing on the landing itself — this page is where invited
+          contributors arrive (inviteEmail flow), so the founding price
+          must be visible before they're asked to sign up. */}
+      <section style={{ paddingTop: 60 }}>
+        <PricingSection embedded />
+      </section>
 
       <FAQSection items={professionalFAQ} paddingTop={60} heading={tBusiness("faq_heading")} />
 

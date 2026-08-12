@@ -49,6 +49,7 @@ export function Footer() {
                 <Link href="/businesses/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_architects")}</Link>
                 <Link href="/businesses/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_professionals")}</Link>
                 <Link href="/businesses/photography" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("photography")}</Link>
+                <Link href="/pricing" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("pricing")}</Link>
               </div>
 
               <div className="footer-col">
