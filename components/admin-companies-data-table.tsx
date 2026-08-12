@@ -25,6 +25,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  ArrowUpRight,
   MoreHorizontal,
   Star,
 } from "lucide-react"
@@ -950,6 +951,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           const firstService = company.services[0] ?? null
           const extraCount = company.services.length - 1
 
+          const externalSiteRaw = company.website ?? company.domain ?? null
+          const externalHref = externalSiteRaw
+            ? /^https?:\/\//i.test(externalSiteRaw) ? externalSiteRaw : `https://${externalSiteRaw}`
+            : null
+
           return (
             <div className="flex items-center gap-2">
               <button
@@ -982,16 +988,30 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 </div>
               )}
               <div className="flex flex-col min-w-0">
-                {company.slug && company.type === "company" ? (
-                  <Link
-                    href={`/professionals/${company.slug}`}
-                    className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors"
-                  >
-                    {company.name}
-                  </Link>
-                ) : (
-                  <span className="arco-table-primary arco-table-primary--wrap">{company.name}</span>
-                )}
+                <span className="flex items-center gap-1 min-w-0">
+                  {company.slug && company.type === "company" ? (
+                    <Link
+                      href={`/professionals/${company.slug}`}
+                      className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors"
+                    >
+                      {company.name}
+                    </Link>
+                  ) : (
+                    <span className="arco-table-primary arco-table-primary--wrap">{company.name}</span>
+                  )}
+                  {externalHref && (
+                    <a
+                      href={externalHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 text-[#a2a29f] hover:text-[#016D75] transition-colors"
+                      title={externalHref}
+                    >
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </span>
                 {(firstService || company.city) && (
                   <span className="arco-table-secondary" style={{ display: "flex", alignItems: "center", gap: 0 }}>
                     {firstService && <span className="truncate">{firstService}</span>}

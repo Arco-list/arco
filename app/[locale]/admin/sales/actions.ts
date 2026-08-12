@@ -357,6 +357,7 @@ export type SalesContact = {
   prospectId: string
   email: string
   contactName: string | null
+  website: string | null
   source: string
   status: ProspectStatus
   sequenceStatus: SequenceStatus
@@ -413,6 +414,8 @@ export type SalesClaimedCompany = {
   ownerName: string | null
   ownerEmail: string | null
   ownerAvatarUrl: string | null
+  website: string | null
+  domain: string | null
 }
 
 export type SalesCompanyRow = {
@@ -764,7 +767,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     "source", "status", "sequence_status",
     "emails_sent", "emails_delivered", "emails_opened", "emails_clicked",
     "last_email_sent_at", "last_email_opened_at", "last_email_clicked_at",
-    "created_at", "updated_at", "ref_code", "user_id",
+    "created_at", "updated_at", "ref_code", "user_id", "website",
     "unsubscribed_at", "bounced_at", "complained_at",
     "last_outbound_at", "next_follow_up_at",
   ].join(", ")
@@ -816,6 +819,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     prospectId: p.id,
     email: p.email,
     contactName: p.contact_name,
+    website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
     sequenceStatus: p.sequence_status,
@@ -888,7 +892,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   if (companyIds.length > 0) {
     const { data: companies } = await supabase
       .from("companies")
-      .select("id, name, slug, logo_url, city, phone, owner_id, status, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .select("id, name, slug, logo_url, city, phone, owner_id, status, website, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
       .in("id", companyIds)
 
     const ownerIds = Array.from(
@@ -945,6 +949,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         ownerName,
         ownerEmail: cc.owner_id ? ownerEmailById.get(cc.owner_id) ?? null : null,
         ownerAvatarUrl: ownerProfile?.avatar_url ?? null,
+        website: cc.website ?? null,
+        domain: cc.domain ?? null,
       })
     }
   }
@@ -1485,6 +1491,7 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     prospectId: p.id,
     email: p.email,
     contactName: p.contact_name,
+    website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
     sequenceStatus: p.sequence_status,

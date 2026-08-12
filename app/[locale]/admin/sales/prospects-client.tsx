@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
+import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import {
   fetchSalesCompanies,
@@ -1699,6 +1700,18 @@ function CompanyRowView({
 
   const subtitle = [claimed?.primaryService, claimed?.city ?? row.city].filter(Boolean).join(" · ")
 
+  // External-website link for the arrow icon next to the name. Claimed
+  // companies use their own website/domain; prospect-only rows fall back
+  // to the Apollo-sourced website on any of the row's contacts.
+  const externalSiteRaw =
+    claimed?.website ??
+    claimed?.domain ??
+    row.contacts.find((c) => c.website)?.website ??
+    null
+  const externalHref = externalSiteRaw
+    ? /^https?:\/\//i.test(externalSiteRaw) ? externalSiteRaw : `https://${externalSiteRaw}`
+    : null
+
   // Email rate display — clamp delivered up so we never show delivered <
   // opened (Resend webhook latency between event types). Cap at sent so
   // duplicate webhook events can't push the rate past 100%.
@@ -1751,19 +1764,33 @@ function CompanyRowView({
             </div>
           )}
           <div className="flex flex-col min-w-0">
-            {claimed?.slug ? (
-              <a
-                href={`/professionals/${claimed.slug}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="arco-table-primary hover:underline"
-              >
-                {row.companyName}
-              </a>
-            ) : (
-              <span className="arco-table-primary">{row.companyName}</span>
-            )}
+            <span className="flex items-center gap-1 min-w-0">
+              {claimed?.slug ? (
+                <a
+                  href={`/professionals/${claimed.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="arco-table-primary hover:underline truncate"
+                >
+                  {row.companyName}
+                </a>
+              ) : (
+                <span className="arco-table-primary truncate">{row.companyName}</span>
+              )}
+              {externalHref && (
+                <a
+                  href={externalHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="shrink-0 text-[#a2a29f] hover:text-[#016D75] transition-colors"
+                  title={externalHref}
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </a>
+              )}
+            </span>
             {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
           </div>
         </div>
