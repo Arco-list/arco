@@ -384,25 +384,105 @@ export async function syncApolloList(
 export async function syncApolloActivity(): Promise<{ updated: number; total: number; errorCount: number; lastError: string | null }> {
   const supabase = createServiceRoleSupabaseClient()
 
-  // Get all prospects with an Apollo contact ID that aren't terminal
-  const { data: prospects, error } = await supabase
-    .from("prospects")
-    .select("id, email, apollo_contact_id, status, emails_sent, emails_delivered, sequence_status, company_id")
-    .not("apollo_contact_id", "is", null)
-    .not("status", "eq", "active")
-    .order("updated_at", { ascending: true })
-    .limit(100) // Process in batches to avoid rate limits
+  // ── Stage 1: bulk prefilter ─────────────────────────────────────────
+  // The old implementation blind-rotated 100 prospects per run through
+  // /contacts/show (1 call each). At 1,100+ imported contacts that's
+  // 2,400 calls/day against Apollo's 2,000/day cap for that endpoint —
+  // the cron spent the whole quota re-checking contacts with no campaign
+  // activity, then 429'd for the rest of the day.
+  //
+  // /contacts/search returns contact_campaign_statuses (status,
+  // failure_reason) at 1 call per 100 contacts, so a full sweep costs
+  // ~12 calls. What it does NOT return is current_step_position — the
+  // sent-step counter — so contacts whose sequence is progressing or
+  // whose state changed still need the per-contact detail call. That's
+  // the handful actually enrolled in sequences, not the whole list.
 
-  if (error || !prospects) {
-    logger.error("Failed to fetch prospects for activity sync", { error })
-    return { updated: 0, total: 0, errorCount: 1, lastError: error?.message ?? "fetch failed" }
+  // All prospects with an Apollo contact id — paged past PostgREST's
+  // 1,000-row response cap.
+  const prospects: any[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("prospects")
+      .select("id, email, apollo_contact_id, status, emails_sent, emails_delivered, sequence_status, company_id")
+      .not("apollo_contact_id", "is", null)
+      .not("status", "eq", "active")
+      .order("id")
+      .range(from, from + 999)
+    if (error) {
+      logger.error("Failed to fetch prospects for activity sync", { error })
+      return { updated: 0, total: 0, errorCount: 1, lastError: error.message }
+    }
+    prospects.push(...(data ?? []))
+    if (!data || data.length < 1000) break
   }
+  const byContactId = new Map(prospects.map((p: any) => [p.apollo_contact_id, p]))
 
   let updated = 0
   let errorCount = 0
   let lastError: string | null = null
 
-  for (const prospect of prospects as any[]) {
+  // Sweep every Apollo contact via search and pick the detail-worthy
+  // ones: a genuinely progressing sequence (active, or queued-not-yet-
+  // started), or a state that differs from what the prospect row has —
+  // using the same finished > active > not_started mapping the detail
+  // pass applies, so stable contacts don't re-trigger every run.
+  const needDetail: any[] = []
+  const seenContactIds = new Set<string>()
+  for (let searchPage = 1; searchPage <= 30; searchPage++) {
+    let searchData: any
+    try {
+      searchData = await apolloRequest("/contacts/search", {
+        method: "POST",
+        body: JSON.stringify({ per_page: 100, page: searchPage }),
+      })
+    } catch (err) {
+      errorCount++
+      lastError = err instanceof Error ? err.message : String(err)
+      logger.error("Apollo activity sync: contacts/search sweep failed", { page: searchPage, error: lastError })
+      break
+    }
+    const pageContacts: any[] = searchData?.contacts ?? []
+    if (pageContacts.length === 0) break
+    for (const c of pageContacts) {
+      const p = byContactId.get(c.id)
+      if (!p || seenContactIds.has(c.id)) continue
+      seenContactIds.add(c.id)
+      const statuses: any[] = c.contact_campaign_statuses ?? []
+      const campaignIds: string[] = c.emailer_campaign_ids ?? []
+      // No Apollo campaign signal at all → nothing this sync can add.
+      if (statuses.length === 0 && campaignIds.length === 0) continue
+      let derived = "not_started"
+      let progressing = false
+      for (const cs of statuses) {
+        if (cs.status === "finished") derived = "finished"
+        else if (cs.status === "active" || cs.status === "paused") {
+          if (derived !== "finished") derived = "active"
+          if (cs.status === "active") progressing = true
+        }
+      }
+      if (statuses.length === 0 && campaignIds.length > 0) {
+        derived = "active"
+        progressing = true // queued — will start sending
+      }
+      if (progressing || derived !== p.sequence_status) needDetail.push(p)
+    }
+    if (pageContacts.length < 100) break
+    // contacts/search has its own per-minute budget — pace lightly.
+    await new Promise((r) => setTimeout(r, 400))
+  }
+
+  // ── Stage 2: per-contact detail, capped ─────────────────────────────
+  // 75/run × 24 runs = 1,800 contacts/show calls/day worst case, under
+  // the 2,000/day cap even before the typical count (~a few dozen
+  // actively-sequenced contacts) is considered.
+  const MAX_DETAIL_CALLS = 75
+  const detailBatch = needDetail.slice(0, MAX_DETAIL_CALLS)
+  if (needDetail.length > detailBatch.length) {
+    logger.info("Apollo activity sync: detail backlog beyond cap", { needed: needDetail.length, cap: MAX_DETAIL_CALLS })
+  }
+
+  for (const prospect of detailBatch as any[]) {
     try {
       // Fetch contact details from Apollo (includes email activity)
       const data = await apolloRequest(`/contacts/${prospect.apollo_contact_id}`)
@@ -543,11 +623,19 @@ export async function syncApolloActivity(): Promise<{ updated: number; total: nu
       errorCount++
       lastError = err instanceof Error ? err.message : String(err)
       logger.error("Failed to sync activity for prospect", { id: prospect.id, error: err })
+      // 429 = the endpoint's minute/day budget is spent — every further
+      // call in this run would fail identically. Stop instead of burning
+      // the remaining batch into the same error (that pattern is what
+      // exhausted the daily cap in the first place).
+      if (lastError.includes("429")) {
+        logger.warn("Apollo activity sync: rate cap hit, aborting run", { processed: updated, remaining: detailBatch.length - updated - errorCount })
+        break
+      }
     }
   }
 
-  logger.info("Apollo activity sync complete", { updated, total: prospects.length, errorCount })
-  return { updated, total: prospects.length, errorCount, lastError }
+  logger.info("Apollo activity sync complete", { updated, total: detailBatch.length, candidates: needDetail.length, swept: seenContactIds.size, errorCount })
+  return { updated, total: detailBatch.length, errorCount, lastError }
 }
 
 // ─── Per-message email_events sync ─────────────────────────────────────────
