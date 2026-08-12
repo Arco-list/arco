@@ -34,6 +34,12 @@ export const metadata: Metadata = {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
       { url: "/icon.svg", type: "image/svg+xml" },
+      // Google's SERP favicon picker wants a raster icon that's a
+      // multiple of 48px declared via <link rel="icon">; without these
+      // it falls back to the 16/32px .ico and renders the logo as a
+      // tiny badge inside its circle instead of full-bleed.
+      { url: "/android-chrome-192x192.png", type: "image/png", sizes: "192x192" },
+      { url: "/android-chrome-512x512.png", type: "image/png", sizes: "512x512" },
     ],
     apple: "/apple-touch-icon.png",
   },

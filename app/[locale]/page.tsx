@@ -539,7 +539,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         "@id": `${siteUrl}#organization`,
         name: "Arco",
         url: siteUrl,
-        logo: `${siteUrl}/icon.svg`,
+        // Raster logo ≥112x112 per Google's Organization-logo guidance —
+        // the SVG here was ignored, keeping SERPs on the low-res favicon.
+        logo: `${siteUrl}/android-chrome-512x512.png`,
       },
     ],
   }
