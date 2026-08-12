@@ -53,6 +53,7 @@ interface ApolloContact {
     phone?: string | null
     sanitized_phone?: string | null
     primary_phone?: { number?: string | null; sanitized_number?: string | null } | null
+    website_url?: string | null
   }
   account?: {
     id?: string
@@ -61,7 +62,21 @@ interface ApolloContact {
     sanitized_phone?: string | null
     primary_phone?: { number?: string | null; sanitized_number?: string | null } | null
     phone_status?: string
+    website_url?: string | null
   }
+}
+
+// Apollo puts the company website on the organization/account object,
+// not on the contact — contact.website_url is essentially always empty
+// on list/search payloads. Walking the union here is what actually
+// populates prospects.website.
+function pickCompanyWebsite(contact: ApolloContact): string | null {
+  return (
+    contact.website_url ||
+    contact.organization?.website_url ||
+    contact.account?.website_url ||
+    null
+  )
 }
 
 function pickCompanyPhone(contact: ApolloContact): string | null {
@@ -170,7 +185,7 @@ export async function syncApolloList(
         phone: contact.phone_numbers?.[0]?.raw_number || null,
         city: contact.city || null,
         country: contact.country || "Netherlands",
-        website: contact.website_url || null,
+        website: pickCompanyWebsite(contact),
         apollo_contact_id: contact.id,
         apollo_list_id: listId,
         source: "apollo",
@@ -241,7 +256,7 @@ export async function syncApolloList(
       // until an actual conversion flips it to 'apollo'). Domain comes from
       // either Apollo's website_url or the email's host. Skip if neither.
       const rawDomain =
-        contact.website_url?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]?.toLowerCase()
+        pickCompanyWebsite(contact)?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]?.toLowerCase()
         || emailLc.split("@")[1]
       const companyDomain = rawDomain && rawDomain.includes(".") ? rawDomain : null
 
