@@ -890,10 +890,21 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   )
   const claimedById = new Map<string, SalesClaimedCompany>()
   if (companyIds.length > 0) {
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name, slug, logo_url, city, phone, owner_id, status, website, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
-      .in("id", companyIds)
+    // Chunked — since the 1,000-prospect Apollo import, every prospect
+    // carries a company_id, so this list is ~1,100+ ids. A single
+    // .in() both blows past PostgREST's 1,000-row response cap and
+    // produces a ~40KB query URL; either way rows silently lose their
+    // claimed-company metadata (no logo, no slug link, no status).
+    const CHUNK = 100
+    const chunkResults = await Promise.all(
+      Array.from({ length: Math.ceil(companyIds.length / CHUNK) }, (_, i) =>
+        supabase
+          .from("companies")
+          .select("id, name, slug, logo_url, city, phone, owner_id, status, website, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
+          .in("id", companyIds.slice(i * CHUNK, (i + 1) * CHUNK)),
+      ),
+    )
+    const companies = chunkResults.flatMap((r) => r.data ?? [])
 
     const ownerIds = Array.from(
       new Set((companies ?? []).map((c: any) => c.owner_id).filter((id: unknown): id is string => Boolean(id))),
