@@ -156,16 +156,16 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
       { key: "ranked_companies", label: "Ranked companies", definition: "% of companies created in the period whose page is ranked (≥1 GSC impression in 28d)", source: "supabase" },
     ],
   },
-  responders: {
-    key: "responders",
-    title: "Responders",
-    definition: "Professionals who responded to a client inquiry or lead. Not yet tracked.",
-    source: "posthog",
+  contributors_accepted: {
+    key: "contributors_accepted",
+    title: "Contributors accepted",
+    definition: "Invited professionals who responded and chose how to appear (unlisted, listed or live on the project page).",
+    source: "supabase",
     driver: "retention",
     user: "professional",
-    posthogEvent: "lead_responded",
+    supabaseTable: "project_professionals",
     subs: [
-      { key: "replies", label: "Replies", definition: "Total lead responses", source: "posthog" },
+      { key: "contributors_live", label: "Contributors live", definition: "Accepted contributors whose credit is visible on the project page (live_on_page)", source: "supabase" },
     ],
   },
   publishers: {

@@ -252,7 +252,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     fetchAllRows((f, t) => supabase.from("profiles").select("id, user_types, created_at, first_touch_source").order("id").range(f, t)),
     fetchAllRows((f, t) => supabase.from("companies").select("id, status, created_at, updated_at, owner_id, seo_indexed, onboarded_at, listed_at, seo_indexed_at, first_touch_source, primary_service_id, seo_impressions_28d, seo_clicks_28d").order("id").range(f, t)),
     fetchAllRows((f, t) => supabase.from("projects").select("id, status, client_id, created_at, updated_at, published_at, seo_indexed, seo_impressions_28d, seo_clicks_28d").order("id").range(f, t)),
-    fetchAllRows((f, t) => supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at, invited_email, invited_at, landing_visited_at").order("id").range(f, t)),
+    fetchAllRows((f, t) => supabase.from("project_professionals").select("id, professional_id, company_id, is_project_owner, project_id, created_at, invited_email, invited_at, landing_visited_at, status, responded_at, updated_at").order("id").range(f, t)),
     fetchAllRows((f, t) => supabase.from("saved_projects").select("user_id, project_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("saved_companies").select("user_id, company_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("prospects").select("id, email, company_id, apollo_contact_id").order("id").range(f, t)),
@@ -401,7 +401,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const projectSharesBucketed = bucketize("project_shares")
   const professionalSharesBucketed = bucketize("professional_shares")
   const contactersBucketed = bucketize("contacters")
-  const respondersBucketed = bucketize("responders")
   // Visitor source breakdowns — first-class sub-rows under the
   // Visitors leading metric.
   const clientVisitorsDirectBucketed = bucketize("client_visitors_direct")
@@ -863,6 +862,57 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     })
   }
   const totalInvitedSeries = bucketTotalInvited()
+
+  // % Unique under Invites/project — of the invites sent in each bucket,
+  // how many reached a distinct company. Duplicate tags of the same firm
+  // (e.g. the same builder credited on two projects in one month) drag
+  // this below 100%. Rows without a linked company dedupe on the invited
+  // email instead.
+  const uniqueInvitedSeries = buckets.starts.map((_, i) => {
+    const uniq = new Set<string>()
+    for (const pp of nonOwnerInvitesInPeriod) {
+      const d = new Date(pp.created_at)
+      if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
+      uniq.add(pp.company_id ?? (pp.invited_email ?? "").toLowerCase())
+    }
+    return uniq.size
+  })
+
+  // Contributors accepted — non-owner invite rows whose status moved past
+  // 'invited': the pro responded and picked how to appear (unlisted /
+  // listed / live_on_page). None of the accept flows stamp responded_at
+  // yet, so fall back to updated_at as the acceptance moment — imprecise
+  // if the row is edited later (e.g. cover photo changes), acceptable at
+  // current volumes.
+  const acceptanceDate = (pp: any): Date | null => {
+    const ts = pp.responded_at ?? pp.updated_at
+    return ts ? new Date(ts) : null
+  }
+  const acceptedRows = nonOwnerInvites.filter((pp: any) => pp.status && pp.status !== "invited")
+  const bucketByAcceptance = (rows: any[]): number[] =>
+    buckets.starts.map((_, i) => {
+      let n = 0
+      for (const pp of rows) {
+        const d = acceptanceDate(pp)
+        if (d && d >= buckets.starts[i] && d < buckets.ends[i]) n++
+      }
+      return n
+    })
+  const acceptedSeries = bucketByAcceptance(acceptedRows)
+  const totalAccepted = acceptedRows.filter((pp: any) => {
+    const d = acceptanceDate(pp)
+    return d && d >= from
+  }).length
+
+  // Contributors live — accepted rows whose credit is actually visible on
+  // the project page (status = live_on_page). NOT the same as the company
+  // being listed on /professionals.
+  const liveRows = acceptedRows.filter((pp: any) => pp.status === "live_on_page")
+  const liveSeries = bucketByAcceptance(liveRows)
+  const totalLive = liveRows.filter((pp: any) => {
+    const d = acceptanceDate(pp)
+    return d && d >= from
+  }).length
 
   // Plan tiers retired — no companies pass the subscription filter.
   const subscribers = bucket8([], buckets)
@@ -1779,21 +1829,40 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // sub) — invitation volume is the primary retention signal,
       // unique inviter count is supporting context. Same shape as the
       // Publishers→Published projects flip directly above.
-      key: "invited_pros", label: "Invited Pros", definition: "Total professionals invited in the period", source: "supabase" as MetricSource, driver: "retention",
+      // Contributor funnel step 1 — professionals tagged/invited on
+      // published projects. "% Accepted" (extraCRs) is the step-to-step
+      // rate into Contributors accepted below; the auto chain CR stays
+      // suppressed in model-client so this labelled one is the only CR.
+      key: "invited_pros", label: "Contributors invited", definition: "Professionals invited to be credited on a project in the period", source: "supabase" as MetricSource, driver: "retention",
       total: totalInvited, datapoints: totalInvitedSeries, labels: [] as string[],
+      extraCRs: [
+        { label: "% Accepted", numerator: acceptedSeries, denominator: totalInvitedSeries },
+      ],
       subs: [
         { key: "inviters", label: "Inviters", definition: "Unique companies that invited one or more professionals on a project", total: totalInvitersInWindow, datapoints: invitersBucketed },
-        { key: "invites_per_project", label: "Invites/project", definition: "Avg. professionals invited per inviting project", total: invitesPerProject, datapoints: invitesPerProjectSeries },
+        {
+          key: "invites_per_project", label: "Invites/project", definition: "Avg. professionals invited per inviting published project", total: invitesPerProject, datapoints: invitesPerProjectSeries,
+          // Of the invites sent this period, the share that reached a
+          // distinct company — repeat tags of the same firm dilute it.
+          customCR: { label: "% Unique", numerator: uniqueInvitedSeries, denominator: totalInvitedSeries },
+        },
       ],
     },
     {
-      key: "responders", label: "Responders", definition: "Unique companies that received an inquiry", source: "posthog" as MetricSource, driver: "retention",
-      total: respondersBucketed.total, datapoints: respondersBucketed.series, labels,
+      // Contributor funnel step 2 — invited pros who responded and chose
+      // how to appear. "% Live" narrows to the ones whose credit is
+      // visible on the project page; "% Paying" under Contributors live
+      // stays 0 until subscription billing is wired (numerator empty8).
+      key: "contributors_accepted", label: "Contributors accepted", definition: "Invited professionals who responded and chose how to appear (unlisted, listed or live on the project page)", source: "supabase" as MetricSource, driver: "retention",
+      total: totalAccepted, datapoints: acceptedSeries, labels,
+      extraCRs: [
+        { label: "% Live", numerator: liveSeries, denominator: acceptedSeries },
+      ],
       subs: [
-        // lead_responded event isn't wired in product yet — counts stay
-        // 0 until trackLeadResponded starts firing. Cache is ready when
-        // the event lands; no code change needed at that point.
-        { key: "replies", label: "Replies", definition: "Total replies sent to client inquiries", total: 0, datapoints: empty8 },
+        {
+          key: "contributors_live", label: "Contributors live", definition: "Accepted contributors whose credit is visible on the project page (status live_on_page)", total: totalLive, datapoints: liveSeries,
+          customCR: { label: "% Paying", numerator: empty8, denominator: liveSeries },
+        },
       ],
     },
     {

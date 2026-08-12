@@ -617,14 +617,16 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
     // "to Publishers" / "% Ranked Pros" CRs under Listed Pros (set
     // via extraCRs).
     "actives",
-    // Published Projects → Invited Pros: not a meaningful funnel
+    // Published Projects → Contributors invited: not a meaningful funnel
     // rate (the two are separate retention motions on the same pros,
     // not a sequential conversion).
     "published_projects",
-    // Invited Pros → Responders: same — invitations and responses
-    // operate on different actors (publishers invite; pros respond
-    // to client inquiries), so the chain CR isn't a real conversion.
+    // Contributors invited → Contributors accepted: replaced by the
+    // labelled "% Accepted" extraCR under Contributors invited.
     "invited_pros",
+    // Contributors accepted → Subscribers: monetization is expressed as
+    // "% Paying" under the Contributors live sub, not as a chain CR.
+    "contributors_accepted",
   ])
 
   return (

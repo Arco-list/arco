@@ -775,12 +775,13 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         {/* ── Professionals ───────────────────────────────────────────────── */}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: G, overflow: "visible", alignItems: "stretch", marginTop: 24 }}>
-          {/* Row 1: Responders only. Contacters lives in the Clients grid
-              (top, col 3 — same column as Subscribers below). Expanders /
-              Contractors removed — will be folded back as supporting
-              metrics on the Subscribers card. */}
+          {/* Row 1: Contributors accepted (was Responders — replaced by
+              the contributor funnel in the Model/Table views). Contacters
+              lives in the Clients grid (top, col 3 — same column as
+              Subscribers below). Expanders / Contractors removed — will be
+              folded back as supporting metrics on the Subscribers card. */}
           <Empty /><Empty />
-          <Card label="Responders" metricKey="responders" onCardClick={openDetail} value="—" driver="retention" connDown="" timeframe={timeframe} datapoints={dp("responders")} />
+          <Card label="Contributors accepted" metricKey="contributors_accepted" onCardClick={openDetail} value={(dp("contributors_accepted") ?? []).reduce((a, b) => a + b, 0)} driver="retention" connDown="" timeframe={timeframe} datapoints={dp("contributors_accepted")} />
           <Empty /><Empty /><Empty /><Empty />
 
           {/* Row 2: main flow. Renewers removed — Subscribers connects
