@@ -1,12 +1,15 @@
 "use client"
 
-import { useState } from "react"
-import { Check, Info } from "lucide-react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
+import { Check, Info, Lock } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { toast } from "sonner"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/contexts/auth-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
+import { trackPageView, trackUpgradeIntent } from "@/lib/tracking"
 
 // Billing toggle + Free/Pro cards + architects-are-free note, extracted
 // from the dashboard pricing page so public surfaces (the /pricing route,
@@ -22,6 +25,15 @@ const FEATURE_KEYS = [
   { labelKey: "pricing_feature_arco_approved", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_arco_approved_tooltip", tooltipTitleKey: "pricing_feature_arco_approved_tooltip_title" },
 ] as const
 
+// The Free card leads with unlimited publishing (the anchor-side story);
+// the Pro card leads with what the PAYING trade actually buys: unlimited
+// credits, their portfolio page, and the Arco Approved trust badge.
+// Published-projects drops to the bottom — a builder doesn't publish.
+const FREE_ORDER = ["pricing_feature_published", "pricing_feature_contributor", "pricing_feature_company_page", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_arco_approved"]
+const PRO_ORDER = ["pricing_feature_contributor", "pricing_feature_company_page", "pricing_feature_arco_approved", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_published"]
+const byOrder = (order: string[]) =>
+  order.map((k) => FEATURE_KEYS.find((f) => f.labelKey === k)!).filter(Boolean)
+
 export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   const t = useTranslations("dashboard")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
@@ -33,6 +45,12 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   const userTypes = profile?.user_types as string[] | null
   const hasProfessionalRole = userTypes?.includes("professional") ?? false
 
+  // Key pages get a manual pageview (autocapture is off). The same
+  // component serves /pricing and /dashboard/pricing — track the real path.
+  useEffect(() => {
+    if (typeof window !== "undefined") trackPageView(window.location.pathname.replace(/^\/(nl|en)(?=\/)/, ""))
+  }, [])
+
   const handleStartFree = () => {
     if (!user) {
       openLoginModal("/create-company")
@@ -43,6 +61,19 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
     } else {
       window.location.href = "/create-company"
     }
+  }
+
+  // Billing doesn't exist yet — the Pro CTA's job is to COLLECT the
+  // willingness-to-pay signal (upgrade_intent) and route into the same
+  // free claim flow. Logged-in professionals just get confirmation that
+  // their founding price is locked.
+  const handleClaimFounding = () => {
+    trackUpgradeIntent(typeof window !== "undefined" ? window.location.pathname : "pricing", billingCycle)
+    if (user && hasProfessionalRole) {
+      toast.success(t("pricing_founding_toast"))
+      return
+    }
+    handleStartFree()
   }
 
   return (
@@ -58,6 +89,17 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
         )}
         <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
           {t("pricing_subtitle")}
+        </p>
+      </div>
+
+      {/* Architect reassurance ABOVE the cards — an anchor scanning the
+          €39 card must never conclude they're being asked to pay. */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+        <p className="arco-small-text" style={{ textAlign: "center", background: "var(--arco-off-white)", borderRadius: 999, padding: "8px 18px" }}>
+          {t("pricing_architect_strip")}{" "}
+          <Link href="/businesses/architects" style={{ color: "var(--primary)", textDecoration: "underline" }}>
+            {t("pricing_architect_strip_link")}
+          </Link>
         </p>
       </div>
 
@@ -94,7 +136,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           <div className="pricing-card-features">
-            {FEATURE_KEYS.map((f) => {
+            {byOrder(FREE_ORDER).map((f) => {
               const included = f.freeBool
               const label = t(f.labelKey as any)
               const valueStr = f.freeKey ? t(f.freeKey as any) : null
@@ -158,11 +200,12 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
                 </span>
               )}
             </div>
+            <p style={{ fontSize: 11, color: "var(--arco-light)", marginTop: 2 }}>{t("pricing_ex_vat")}</p>
             <p className="arco-small-text" style={{ marginTop: 8 }}>{t("pricing_pro_desc")}</p>
           </div>
 
           <div className="pricing-card-features">
-            {FEATURE_KEYS.map((f) => {
+            {byOrder(PRO_ORDER).map((f) => {
               const label = t(f.labelKey as any)
               const valueStr = f.proKey ? t(f.proKey as any) : null
               return (
@@ -192,12 +235,47 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           <div className="pricing-card-footer">
-            <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "default" }}>
-              {t("pricing_upgrade")}
+            {/* Live CTA even though billing doesn't exist: clicks stamp an
+                upgrade_intent event (the pre-payments pay-rate signal) and
+                route into the same free claim flow. */}
+            <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
+              {t("pricing_claim_founding")}
             </button>
             <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8 }}>
               {t("pricing_coming_soon")}
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Credit example — the product is a credit on a photographed
+          project; SHOW it. Row 1 = a live (Pro) credit, row 2 = the
+          locked state an unpaid second credit will get. Selling by
+          preview: the free/paid difference becomes self-evident. */}
+      <div style={{ margin: "56px auto 0", maxWidth: 560 }}>
+        <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 6 }}>{t("pricing_credit_example_title")}</h3>
+        <p className="arco-small-text" style={{ textAlign: "center", marginBottom: 20 }}>{t("pricing_credit_example_caption")}</p>
+        <div style={{ border: "1px solid #e8e8e6", borderRadius: 8, padding: "20px 24px", background: "#ffffff" }}>
+          <p className="arco-eyebrow" style={{ marginBottom: 14 }}>{t("pricing_mock_team")}</p>
+          {/* Live credit */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f0f0ee" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 6, background: "#1c1c1a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 500, flexShrink: 0 }}>VD</div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 14, color: "var(--primary)", textDecoration: "underline", margin: 0 }}>Van Dijk Keukens</p>
+              <p className="arco-small-text" style={{ margin: 0 }}>{t("pricing_mock_role_kitchen")}</p>
+            </div>
+            <span className="status-pill" style={{ marginLeft: "auto", flexShrink: 0 }}>Arco Approved</span>
+          </div>
+          {/* Locked credit */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", opacity: 0.55 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 6, background: "#f5f5f4", color: "#a1a1a0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Lock size={15} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 14, color: "#6b6b68", margin: 0 }}>B&amp;W Zwembadbouw</p>
+              <p className="arco-small-text" style={{ margin: 0 }}>{t("pricing_mock_role_pool")}</p>
+            </div>
+            <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "3px 10px" }}>{t("pricing_mock_unlock")}</span>
           </div>
         </div>
       </div>

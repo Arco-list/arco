@@ -33,6 +33,13 @@ export function trackPageView(path: string, properties?: Record<string, any>) {
   capture("page_viewed", { path, ...properties })
 }
 
+/** Pro CTA clicked on the pricing page while billing doesn't exist yet —
+ *  the pre-payments willingness-to-pay signal. Feeds pay-rate research
+ *  a quarter before Stripe is wired. */
+export function trackUpgradeIntent(source: string, billingCycle: "monthly" | "yearly") {
+  capture("upgrade_intent", { source, billing_cycle: billingCycle })
+}
+
 /** User signed up */
 export function trackSignup(userId: string, method: "email" | "google" | "apple", userType: "professional" | "client") {
   identify(userId, { user_type: userType, signup_method: method })

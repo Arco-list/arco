@@ -39,8 +39,11 @@ export default function PricingPage() {
           heading={t("pricing_faq_title")}
           items={[
             { question: t("pricing_faq_q1"), answer: t("pricing_faq_a1") },
+            { question: t("pricing_faq_q4"), answer: t("pricing_faq_a4") },
             { question: t("pricing_faq_q2"), answer: t("pricing_faq_a2") },
             { question: t("pricing_faq_q3"), answer: t("pricing_faq_a3") },
+            { question: t("pricing_faq_q5"), answer: t("pricing_faq_a5") },
+            { question: t("pricing_faq_q6"), answer: t("pricing_faq_a6") },
           ]}
           paddingTop={56}
         />
