@@ -274,6 +274,27 @@ function approxDaysPerPeriod(granularity: Granularity): number {
   }
 }
 
+/** Align a date to the start of its bucket (UTC) — day boundary,
+ *  ISO Monday, first-of-month, or Jan 1. Mirrors the bucketFn
+ *  anchoring used in the HogQL queries. */
+function snapToBucketStart(d: Date, granularity: Granularity): Date {
+  const out = new Date(d)
+  out.setUTCHours(0, 0, 0, 0)
+  switch (granularity) {
+    case "day":
+      return out
+    case "week":
+      out.setUTCDate(out.getUTCDate() - ((out.getUTCDay() + 6) % 7))
+      return out
+    case "month":
+      out.setUTCDate(1)
+      return out
+    case "year":
+      out.setUTCMonth(0, 1)
+      return out
+  }
+}
+
 /**
  * HogQL: bucketed uniques per period for the requested metric +
  * granularity. The bucket-start function is chosen so the cache rows
@@ -287,7 +308,14 @@ async function queryPostHogPeriodicValues(
   granularity: Granularity,
   lookbackDays: number,
 ): Promise<Array<{ periodStart: string; value: number }>> {
-  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
+  // Snap the window start to the BEGINNING of its bucket. A raw
+  // day-offset (now − N×31d) lands mid-bucket, so the oldest bucket in
+  // every rolling refresh was recomputed as a PARTIAL period and
+  // overwrote the previously-complete row (e.g. May's monthly uniques
+  // rewritten as "uniques since May 13"). Boundary-aligned, every
+  // refreshed bucket covers its full period.
+  const raw = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
+  const since = snapToBucketStart(raw, granularity)
   const sinceIso = since.toISOString().slice(0, 10)
 
   const bucketFn: Record<Granularity, string> = {
