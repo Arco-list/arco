@@ -1158,7 +1158,8 @@
     "pricing_no_card": "Geen creditcard nodig.",
     "pricing_meta_yearly": "Jaarlijks gefactureerd: {amount} · excl. btw",
     "pricing_mock_projects_live": "6 projecten",
-    "pricing_founding_claimed": "Je staat op de founding-lijst"
+    "pricing_founding_claimed": "Je staat op de founding-lijst",
+    "inbox": "Inbox"
   },
   "business": {
     "for_architects": "Voor Architecten",
