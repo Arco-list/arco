@@ -344,7 +344,10 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
         </div>
       </div>
 
-      {/* Architect hero section */}
+      {/* Architect hero section — standalone /pricing only. On the
+          professionals landing the audience is contributors; the
+          architects-publish-free story lives on their own landing. */}
+      {!embedded && (
       <div style={{ margin: "56px 0 0", padding: "40px 32px", background: "var(--arco-off-white)", borderRadius: 8, textAlign: "center" }}>
         <p className="arco-eyebrow" style={{ marginBottom: 12 }}>
           {t("pricing_for_architects")}
@@ -357,6 +360,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           {t("pricing_architect_strip_link")} →
         </Link>
       </div>
+      )}
 
     </div>
   )
