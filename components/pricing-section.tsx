@@ -54,12 +54,12 @@ export function PricingContributorCta({ showLandingLink = true }: { showLandingL
       openLoginModal("/create-company")
       return
     }
-    if (hasProfessionalRole) {
-      window.location.href = "/dashboard/listings"
-      return
-    }
     openCreateCompanyModal()
   }
+
+  // Acquisition ask — pointless for logged-in professionals, who
+  // already have their company page (e.g. the dashboard pricing page).
+  if (user && hasProfessionalRole) return null
 
   return (
     <section className="how-section" style={{ marginTop: 56, textAlign: "center" }}>
