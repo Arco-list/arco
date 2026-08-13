@@ -808,16 +808,32 @@ function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEma
 // needs a prospect. Contacts opened from Users/Companies without one
 // (direct signups) log against their company_contacts row instead —
 // LogOutboundModal already supports that path.
+// Company lifecycle statuses → the same dots the Companies table uses.
+const COMPANY_STATUS_DOT: Record<string, string> = {
+  added: "#dc2626",
+  unclaimed: "#dc2626",
+  created: "#2563eb",
+  listed: "#7c3aed",
+  unlisted: "#a1a1a0",
+  deactivated: "#dc2626",
+  invited: "#f59e0b",
+  prospected: "#f59e0b",
+}
+
 function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
   const [logOpen, setLogOpen] = useState(false)
   const companyContact = data.companyContacts[0] ?? null
-  const companyName = companyContact
-    ? data.companiesById[companyContact.company_id]?.name ?? null
-    : null
+  const primaryCompanyId =
+    companyContact?.company_id ?? data.memberships[0]?.company_id ?? null
+  const primaryCompany = primaryCompanyId ? data.companiesById[primaryCompanyId] : undefined
+  const companyStatus = primaryCompany?.status ?? null
+  const createdAt = data.profile?.created_at ?? companyContact?.created_at ?? null
+  const rowStyle = { display: "grid", gridTemplateColumns: "70px 1fr", gap: 8, alignItems: "baseline" } as const
+  const labelStyle = { fontSize: 11, color: "#a1a1a0" } as const
   return (
     <>
       <Section
-        label="Timeline"
+        label="Activity"
         action={
           companyContact ? (
             <button
@@ -831,6 +847,29 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
           ) : undefined
         }
       >
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={rowStyle}>
+            <span style={labelStyle}>Status</span>
+            {companyStatus ? (
+              <span style={{ fontSize: 12, color: "#1c1c1a", display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: COMPANY_STATUS_DOT[companyStatus] ?? "#a1a1a0", flexShrink: 0 }} />
+                {companyStatus === "created" ? "Created" : companyStatus.charAt(0).toUpperCase() + companyStatus.slice(1)}
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, color: "#a1a1a0" }}>—</span>
+            )}
+          </div>
+          <div style={rowStyle}>
+            <span style={labelStyle}>Created</span>
+            <span style={{ fontSize: 12, color: createdAt ? "#1c1c1a" : "#a1a1a0" }}>
+              {createdAt
+                ? new Date(createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                : "—"}
+            </span>
+          </div>
+        </div>
+      </Section>
+      <Section label="Timeline">
         <TransactionalOnlyTimeline emails={[data.email, ...data.aliases]} />
       </Section>
       {companyContact && (
@@ -839,7 +878,7 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
           onOpenChange={setLogOpen}
           companyContactId={companyContact.id}
           contactLabel={pickDisplayName(data)}
-          companyLabel={companyName ?? ""}
+          companyLabel={primaryCompany?.name ?? ""}
           contactEmail={data.email}
           contactPhone={data.profile?.phone ?? null}
         />

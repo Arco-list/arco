@@ -32,6 +32,8 @@ export type ContactByEmailProfile = {
   is_active: boolean | null
   user_types: string[] | null
   admin_role: string | null
+  /** Signup date. Optional — the RPC fallback path doesn't return it. */
+  created_at?: string | null
 }
 
 export type ContactByEmailCompanySummary = {
@@ -42,6 +44,7 @@ export type ContactByEmailCompanySummary = {
   city: string | null
   domain: string | null
   website: string | null
+  status: string | null
   primary_service_name: string | null
 }
 
@@ -150,7 +153,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   if (resolvedUserId) {
     const { data: p } = await svc
       .from("profiles")
-      .select("id, first_name, last_name, phone, is_active, user_types, admin_role")
+      .select("id, first_name, last_name, phone, is_active, user_types, admin_role, created_at")
       .eq("id", resolvedUserId)
       .maybeSingle()
     profile = p ?? null
@@ -195,6 +198,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
         is_active: row.is_active,
         user_types: row.user_types,
         admin_role: row.admin_role,
+        created_at: null,
       }
     }
   } else if (resolvedUserId) {
@@ -278,7 +282,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   if (companyIds.length > 0) {
     const { data: companies } = await svc
       .from("companies")
-      .select("id, name, slug, logo_url, city, domain, website, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .select("id, name, slug, logo_url, city, domain, website, status, primary_service:categories!companies_primary_service_id_fkey(name)")
       .in("id", companyIds)
     for (const c of (companies ?? []) as Array<{
       id: string
@@ -288,6 +292,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
       city: string | null
       domain: string | null
       website: string | null
+      status: string | null
       primary_service: { name: string | null } | null
     }>) {
       if (!c?.id) continue
@@ -301,6 +306,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
         city: c.city ?? null,
         domain: c.domain ?? null,
         website: c.website ?? null,
+        status: c.status ?? null,
         primary_service_name: c.primary_service?.name ?? null,
       }
     }
