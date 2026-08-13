@@ -10,7 +10,7 @@ import {
   HowItWorks,
   FAQSection,
 } from "@/components/landing"
-import { PricingSection } from "@/components/pricing-section"
+import { PricingContributorCta, PricingSection } from "@/components/pricing-section"
 import { ProfessionalCarousel, type ProfessionalCarouselCard } from "@/components/landing/professional-carousel"
 import {
   getProfessionalBenefits,
@@ -107,6 +107,9 @@ export default function ProfessionalsLandingClient({
       </section>
 
       <FAQSection items={professionalFAQ} paddingTop={60} heading={tBusiness("faq_heading")} />
+
+      {/* Closing ask — after the FAQ has handled objections. */}
+      <PricingContributorCta showLandingLink={false} />
 
       <Footer />
     </>

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { FAQSection } from "@/components/landing"
-import { PricingSection } from "@/components/pricing-section"
+import { PricingContributorCta, PricingSection } from "@/components/pricing-section"
 import { useAuth } from "@/contexts/auth-context"
 
 export default function PricingPage() {
@@ -47,6 +47,9 @@ export default function PricingPage() {
           ]}
           paddingTop={56}
         />
+
+        {/* Closing ask — after the FAQ has handled objections. */}
+        <PricingContributorCta />
       </main>
 
       <Footer />

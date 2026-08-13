@@ -34,6 +34,55 @@ const FEATURE_ORDER = ["pricing_feature_contributor", "pricing_feature_published
 const orderedFeatures = () =>
   FEATURE_ORDER.map((k) => FEATURE_KEYS.find((f) => f.labelKey === k)!).filter(Boolean)
 
+/**
+ * Contributor claim CTA — full-width grey band (.how-section treatment).
+ * Rendered AFTER the FAQ as the page's closing ask: the FAQ resolves
+ * objections, this converts the reader who made it to the bottom.
+ * `showLandingLink` is off on /businesses/professionals where the link
+ * would be self-referential.
+ */
+export function PricingContributorCta({ showLandingLink = true }: { showLandingLink?: boolean }) {
+  const t = useTranslations("dashboard")
+  const { user, profile } = useAuth()
+  const { openLoginModal } = useLoginModal()
+  const { openCreateCompanyModal } = useCreateCompanyModal()
+  const userTypes = profile?.user_types as string[] | null
+  const hasProfessionalRole = userTypes?.includes("professional") ?? false
+
+  const handleStartFree = () => {
+    if (!user) {
+      openLoginModal("/create-company")
+      return
+    }
+    if (hasProfessionalRole) {
+      window.location.href = "/dashboard/listings"
+      return
+    }
+    openCreateCompanyModal()
+  }
+
+  return (
+    <section className="how-section" style={{ marginTop: 56, textAlign: "center" }}>
+      <div className="wrap" style={{ maxWidth: 860 }}>
+        <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_contrib_cta_title")}</h3>
+        <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 20px" }}>
+          {t("pricing_contrib_cta_body")}
+        </p>
+        <button onClick={handleStartFree} style={{ padding: "12px 28px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
+          {t("pricing_contrib_cta_button")}
+        </button>
+        {showLandingLink && (
+          <div style={{ marginTop: 14 }}>
+            <Link href="/businesses/professionals" className="text-link-plain">
+              {t("pricing_link_professionals")} →
+            </Link>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   const t = useTranslations("dashboard")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
@@ -323,30 +372,6 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
         </div>
       </div>
     </div>
-
-      {/* Contributor CTA — full-width grey band, same treatment as the
-          How-it-works section. The reader has just SEEN what a credit
-          looks like; let them act here. Same claim flow as the cards. */}
-      <section className="how-section" style={{ marginTop: 56, textAlign: "center" }}>
-        <div className="wrap" style={{ maxWidth: 860 }}>
-          <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_contrib_cta_title")}</h3>
-          <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 20px" }}>
-            {t("pricing_contrib_cta_body")}
-          </p>
-          <button onClick={handleStartFree} style={{ padding: "12px 28px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
-            {t("pricing_contrib_cta_button")}
-          </button>
-          {/* On the professionals landing (embedded) this link would be
-              self-referential — only show it on the standalone page. */}
-          {!embedded && (
-            <div style={{ marginTop: 14 }}>
-              <Link href="/businesses/professionals" className="text-link-plain">
-                {t("pricing_link_professionals")} →
-              </Link>
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* Architect hero section — standalone /pricing only. On the
           professionals landing the audience is contributors; the
