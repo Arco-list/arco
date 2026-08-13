@@ -160,9 +160,51 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
   )
 }
 
+// ─── Inline conversion row (mirrors the Model view's "to X" rows) ─────────────
+
+/** Same formatting rules as the Model view: dot when not computable or
+ *  zero, one decimal under 10%, whole numbers above. */
+function formatConversion(numerator: number, denominator: number): string {
+  if (!denominator) return "·"
+  const pct = (numerator / denominator) * 100
+  if (pct === 0) return "·"
+  if (pct < 10) return `${pct.toFixed(1)}%`
+  return `${Math.round(pct)}%`
+}
+
+/** Per-bucket conversion percentages, x-aligned with the sparkline dots
+ *  above (same padX/w math as TrendlineCell). */
+function InlineCRCell({ numerator, denominator }: { numerator: number[]; denominator: number[] }) {
+  const n = denominator.length
+  const padX = 6
+  const w = 100
+  return (
+    <div className="relative w-full" style={{ height: 18 }}>
+      {denominator.map((denom, i) => {
+        const x = padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)
+        return (
+          <span
+            key={i}
+            className="absolute text-[10px] font-medium whitespace-nowrap"
+            style={{ left: `${(x / w) * 100}%`, top: "50%", transform: "translate(-50%, -50%)", color: "var(--primary, #016D75)" }}
+          >
+            {formatConversion(numerator[i] ?? 0, denom)}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** A row can carry an inline funnel CR ("to Signups") rendered directly
+ *  beneath it — attached in GrowthTableView, not part of MetricRow. */
+type RowWithCR = MetricRow & {
+  inlineCR?: { label: string; numerator: number[]; denominator: number[] }
+}
+
 // ─── Metric Row ───────────────────────────────────────────────────────────────
 
-function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] }) {
+function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] }) {
   const [expanded, setExpanded] = useState(false)
   const color = DRIVER_COLORS[row.driver] ?? "#6b6b68"
   const hasSubs = row.subs.length > 0
@@ -208,6 +250,35 @@ function MetricRowComponent({ row, labels }: { row: MetricRow; labels: string[] 
           <TrendlineCell datapoints={row.datapoints} labels={labels} color={color} />
         </td>
       </tr>
+
+      {/* Inline conversion to the next funnel row — always visible,
+          directly under the parent, like the Model view's "to X" rows. */}
+      {row.inlineCR && (
+        <>
+          <tr className="hidden md:table-row" style={{ borderTop: "none" }}>
+            <td>
+              <div className="flex items-center pl-7">
+                <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                  {row.inlineCR.label}
+                </span>
+              </div>
+            </td>
+            <td>
+              <InlineCRCell numerator={row.inlineCR.numerator} denominator={row.inlineCR.denominator} />
+            </td>
+          </tr>
+          <tr className="md:hidden" style={{ borderTop: "none" }}>
+            <td colSpan={2}>
+              <div className="flex items-center pl-3 mb-0.5">
+                <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                  {row.inlineCR.label}
+                </span>
+              </div>
+              <InlineCRCell numerator={row.inlineCR.numerator} denominator={row.inlineCR.denominator} />
+            </td>
+          </tr>
+        </>
+      )}
 
       {/* Expanded sub-metrics */}
       {expanded && row.subs.map((sub) => (
@@ -329,11 +400,21 @@ export function GrowthTableView({
     return r
   })
   const clientRows = (sepIndex >= 0 ? rows.slice(sepIndex + 1) : []).map((r) => {
-    if (r.key === "client_visitors") return {
-      ...r,
-      total: clientVisitors ?? 0,
-      datapoints: pad8(clientVisitorsSeries),
-      subs: overrideSubs(r.subs, clientSources, clientSourceSeries),
+    if (r.key === "client_visitors") {
+      // Inline funnel CR under Visitors ("to Signups"), like the Model
+      // view. Denominator = the SAME series the row displays (the
+      // PostHog override), so the percentages match the numbers above.
+      const displayed = pad8(clientVisitorsSeries)
+      const signupsRow = rows.find((x) => x.key === "client_signups")
+      return {
+        ...r,
+        total: clientVisitors ?? 0,
+        datapoints: displayed,
+        subs: overrideSubs(r.subs, clientSources, clientSourceSeries),
+        inlineCR: signupsRow
+          ? { label: `to ${signupsRow.label}`, numerator: signupsRow.datapoints, denominator: displayed }
+          : undefined,
+      }
     }
     if (r.key === "sharers") {
       const sharesSubSeriesByKey: Record<string, number[]> = {
