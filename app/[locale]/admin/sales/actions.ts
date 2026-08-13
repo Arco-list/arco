@@ -693,17 +693,28 @@ async function loadNextScheduledByGroup(
   const emailList = Array.from(emailToRowKeys.keys()).filter(Boolean)
   if (emailList.length === 0) return new Map()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { rows } = await fetchAllPages<{ email: string; send_at: string; template: string }>(
-    (from, to) => (supabase as any)
-      .from("email_drip_queue")
-      .select("email, send_at, template")
-      .in("email", emailList)
-      .is("sent_at", null)
-      .is("cancelled_at", null)
-      .gte("send_at", new Date().toISOString())
-      .order("send_at", { ascending: true })
-      .range(from, to),
+  // Chunked — since the 1,000-prospect import the funnel holds ~1,200
+  // emails; a single .in() blows past PostgREST's URL/row limits and
+  // silently returns nothing, blanking the Next email column for every
+  // row (same failure mode as the claimed-company lookup).
+  const nowIso = new Date().toISOString()
+  const EMAIL_CHUNK = 100
+  const chunkResults = await Promise.all(
+    Array.from({ length: Math.ceil(emailList.length / EMAIL_CHUNK) }, (_, i) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
+        .from("email_drip_queue")
+        .select("email, send_at, template")
+        .in("email", emailList.slice(i * EMAIL_CHUNK, (i + 1) * EMAIL_CHUNK))
+        .is("sent_at", null)
+        .is("cancelled_at", null)
+        .gte("send_at", nowIso)
+        .order("send_at", { ascending: true })
+        .limit(1000),
+    ),
+  )
+  const rows = chunkResults.flatMap(
+    (r: { data: Array<{ email: string; send_at: string; template: string }> | null }) => r.data ?? [],
   )
   const isSalesTemplate = (tpl: string): boolean =>
     SALES_TEMPLATE_PREFIXES.some((p) => tpl.startsWith(p))
