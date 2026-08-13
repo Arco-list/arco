@@ -1897,34 +1897,37 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         // Each source sub carries its visitor volume (denominator) +
         // a crNumerator with source-attributed signups (numerator).
         // The model-client renders a per-source CR row underneath
-        // using these two series. Signup attribution comes from
-        // PostHog's $initial_referring_domain person property so a
-        // visitor who first arrived from Google and signed up two
-        // weeks later still credits Google.
+        // using these two series. Signup numerators come from the SAME
+        // Supabase profiles.first_touch_source breakdown the Signups
+        // row uses — previously they were a separate PostHog-cached
+        // series that could disagree with the parent total (a profile
+        // created without a matched PostHog signup event dropped out),
+        // making a sub's rate diverge from the parent's on identical
+        // denominators.
         {
           key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer",
           total: clientVisitorsDirectBucketed.total, datapoints: clientVisitorsDirectBucketed.series,
-          crNumerator: { total: clientSignupsDirectBucketed.total, datapoints: clientSignupsDirectBucketed.series },
+          crNumerator: { total: clientSignupsBySourceTotals.direct, datapoints: clientSignupsBySource.direct },
         },
         {
           key: "google", label: "SEO", definition: "Visitors from search engines (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage)",
           total: clientVisitorsGoogleBucketed.total, datapoints: clientVisitorsGoogleBucketed.series,
-          crNumerator: { total: clientSignupsGoogleBucketed.total, datapoints: clientSignupsGoogleBucketed.series },
+          crNumerator: { total: clientSignupsBySourceTotals.google, datapoints: clientSignupsBySource.google },
         },
         {
           key: "social", label: "Social", definition: "LinkedIn, Facebook, Instagram, X, Pinterest",
           total: clientVisitorsSocialBucketed.total, datapoints: clientVisitorsSocialBucketed.series,
-          crNumerator: { total: clientSignupsSocialBucketed.total, datapoints: clientSignupsSocialBucketed.series },
+          crNumerator: { total: clientSignupsBySourceTotals.social, datapoints: clientSignupsBySource.social },
         },
         {
           key: "email", label: "Email", definition: "Visitors from Arco client emails (utm_source=arco_client) OR other email clients (Gmail, Outlook web)",
           total: clientVisitorsEmailBucketed.total, datapoints: clientVisitorsEmailBucketed.series,
-          crNumerator: { total: clientSignupsEmailBucketed.total, datapoints: clientSignupsEmailBucketed.series },
+          crNumerator: { total: clientSignupsBySourceTotals.email, datapoints: clientSignupsBySource.email },
         },
         {
           key: "referral", label: "Referral", definition: "Other websites linking to Arco",
           total: clientVisitorsReferralBucketed.total, datapoints: clientVisitorsReferralBucketed.series,
-          crNumerator: { total: clientSignupsReferralBucketed.total, datapoints: clientSignupsReferralBucketed.series },
+          crNumerator: { total: clientSignupsBySourceTotals.referral, datapoints: clientSignupsBySource.referral },
         },
         // Shares — share-driven traffic regardless of channel. Sits
         // alongside the 5 channel categories rather than inside them
@@ -1936,7 +1939,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         {
           key: "share", label: "Shares", definition: "Visitors arriving from a tagged share URL (utm_source=share). Overlaps the channel categories above — a share visit also has a referrer.",
           total: clientVisitorsShareBucketed.total, datapoints: clientVisitorsShareBucketed.series,
-          crNumerator: { total: clientSignupsShareBucketed.total, datapoints: clientSignupsShareBucketed.series },
+          crNumerator: { total: clientSignupsBySourceTotals.shares, datapoints: clientSignupsBySource.shares },
         },
       ],
     },
