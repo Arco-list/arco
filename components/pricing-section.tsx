@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/contexts/auth-context"
+import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
 import { trackPageView, trackUpgradeIntent } from "@/lib/tracking"
 
@@ -37,6 +38,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
   const { user, profile } = useAuth()
   const { openLoginModal } = useLoginModal()
+  const { openCreateCompanyModal } = useCreateCompanyModal()
 
   const proPrice = billingCycle === "yearly" ? 39 : 49
 
@@ -56,9 +58,14 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
     }
     if (hasProfessionalRole) {
       window.location.href = "/dashboard/listings"
-    } else {
-      window.location.href = "/create-company"
+      return
     }
+    // Open the claim modal in place, like the businesses landing does.
+    // Navigating to /create-company here did a FULL page load; that
+    // page then opens the modal and router.back()s — but back() after a
+    // hard navigation restores pricing as a fresh document, discarding
+    // the tree holding the open-modal state (modal flashed, then gone).
+    openCreateCompanyModal()
   }
 
   // Billing doesn't exist yet — the Pro CTA's job is to COLLECT the
