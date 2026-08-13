@@ -213,7 +213,8 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
     <>
       {/* Desktop row */}
       <tr
-        className={`hidden md:table-row ${hasSubs ? "cursor-pointer" : ""}`}
+        className={`hidden md:table-row ${hasSubs ? "cursor-pointer" : ""} ${row.inlineCR ? "arco-cr-attached" : ""}`}
+        style={row.inlineCR ? { borderBottom: "none" } : undefined}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
         <td>
@@ -234,7 +235,8 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
       </tr>
       {/* Mobile row — single cell spanning full width */}
       <tr
-        className={`md:hidden ${hasSubs ? "cursor-pointer" : ""}`}
+        className={`md:hidden ${hasSubs ? "cursor-pointer" : ""} ${row.inlineCR ? "arco-cr-attached" : ""}`}
+        style={row.inlineCR ? { borderBottom: "none" } : undefined}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
         <td colSpan={2}>
@@ -255,7 +257,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
           directly under the parent, like the Model view's "to X" rows. */}
       {row.inlineCR && (
         <>
-          <tr className="hidden md:table-row" style={{ borderTop: "none" }}>
+          <tr className="hidden md:table-row arco-cr-row">
             <td>
               <div className="flex items-center pl-7">
                 <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
@@ -267,7 +269,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               <InlineCRCell numerator={row.inlineCR.numerator} denominator={row.inlineCR.denominator} />
             </td>
           </tr>
-          <tr className="md:hidden" style={{ borderTop: "none" }}>
+          <tr className="md:hidden arco-cr-row">
             <td colSpan={2}>
               <div className="flex items-center pl-3 mb-0.5">
                 <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
