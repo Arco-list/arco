@@ -616,33 +616,40 @@ function uniqueActorsQuery(bucketExpr: string, sinceIso: string, eventPredicate:
  *   share > sales > invites > email > direct > google > social > referral
  * Same as the TS helper so capture/backfill agree on edge cases.
  */
-const FIRST_TOUCH_CHANNEL_EXPR = `
+
+/** Channel classification evaluated against the person's ENTRY event of the bucket (their
+ *  first pageview in the period, via argMin) instead of the
+ *  person.$initial_* first-touch properties. The $initial_* props are
+ *  unreliable for anonymous traffic — visitors without a person
+ *  profile carry none, so search/social arrivals silently classified
+ *  as 'direct' (SEO showed ~0 while raw referrer data showed dozens).
+ *  Bucket-entry classification uses the event's own properties, which
+ *  every pageview carries. */
+const ENTRY_CHANNEL_EXPR = `
   multiIf(
-    person.properties.$initial_utm_source = 'share', 'share',
-    person.properties.$initial_current_url ILIKE '%/businesses/architects%'
-      AND (person.properties.$initial_current_url ILIKE '%ref=%' OR person.properties.$initial_current_url ILIKE '%inviteEmail=%'), 'sales',
-    person.properties.$initial_current_url ILIKE '%/businesses/professionals%'
-      AND person.properties.$initial_current_url ILIKE '%inviteEmail=%', 'invites',
-    person.properties.$initial_utm_source ILIKE 'arco_%'
-      OR person.properties.$initial_referring_domain ILIKE '%mail.%'
-      OR person.properties.$initial_referring_domain ILIKE '%outlook.%', 'email',
-    person.properties.$initial_referring_domain IS NULL
-      OR person.properties.$initial_referring_domain = ''
-      OR person.properties.$initial_referring_domain = '$direct', 'direct',
-    person.properties.$initial_referring_domain ILIKE '%google.%'
-      OR person.properties.$initial_referring_domain ILIKE '%bing.%'
-      OR person.properties.$initial_referring_domain ILIKE '%duckduckgo.%'
-      OR person.properties.$initial_referring_domain ILIKE '%yahoo.%'
-      OR person.properties.$initial_referring_domain ILIKE '%ecosia.%'
-      OR person.properties.$initial_referring_domain ILIKE '%brave.%'
-      OR person.properties.$initial_referring_domain ILIKE '%qwant.%'
-      OR person.properties.$initial_referring_domain ILIKE '%startpage.%', 'google',
-    person.properties.$initial_referring_domain ILIKE '%linkedin.%'
-      OR person.properties.$initial_referring_domain ILIKE '%facebook.%'
-      OR person.properties.$initial_referring_domain ILIKE '%instagram.%'
-      OR person.properties.$initial_referring_domain ILIKE '%twitter.%'
-      OR person.properties.$initial_referring_domain ILIKE '%x.com%'
-      OR person.properties.$initial_referring_domain ILIKE '%pinterest.%', 'social',
+    entry_utm = 'share', 'share',
+    entry_url ILIKE '%/businesses/architects%'
+      AND (entry_url ILIKE '%ref=%' OR entry_url ILIKE '%inviteEmail=%'), 'sales',
+    entry_url ILIKE '%/businesses/professionals%'
+      AND entry_url ILIKE '%inviteEmail=%', 'invites',
+    entry_utm ILIKE 'arco_%'
+      OR entry_ref ILIKE '%mail.%'
+      OR entry_ref ILIKE '%outlook.%', 'email',
+    entry_ref IS NULL OR entry_ref = '' OR entry_ref = '$direct', 'direct',
+    entry_ref ILIKE '%google.%'
+      OR entry_ref ILIKE '%bing.%'
+      OR entry_ref ILIKE '%duckduckgo.%'
+      OR entry_ref ILIKE '%yahoo.%'
+      OR entry_ref ILIKE '%ecosia.%'
+      OR entry_ref ILIKE '%brave.%'
+      OR entry_ref ILIKE '%qwant.%'
+      OR entry_ref ILIKE '%startpage.%', 'google',
+    entry_ref ILIKE '%linkedin.%'
+      OR entry_ref ILIKE '%facebook.%'
+      OR entry_ref ILIKE '%instagram.%'
+      OR entry_ref ILIKE '%twitter.%'
+      OR entry_ref ILIKE '%x.com%'
+      OR entry_ref ILIKE '%pinterest.%', 'social',
     'referral'
   )
 `
@@ -655,15 +662,22 @@ function firstTouchChannelQuery(
 ): string {
   const extra = extraPredicate ? `AND (${extraPredicate})` : ""
   return `
-    SELECT toString(${bucketExpr}) AS period,
-           count(DISTINCT person_id) AS value
-    FROM events
-    WHERE event = '$pageview'
-      AND timestamp >= toDateTime('${sinceIso}')
-      AND (${FIRST_TOUCH_CHANNEL_EXPR}) ${channelPredicate}
-      ${extra}
-      AND ${NOT_INTERNAL_TEAM}
-      AND ${NOT_SELF_REFERRAL}
+    SELECT period, count(DISTINCT person_id) AS value
+    FROM (
+      SELECT toString(${bucketExpr}) AS period,
+             person_id,
+             argMin(properties.$referring_domain, timestamp) AS entry_ref,
+             argMin(properties.$current_url, timestamp) AS entry_url,
+             argMin(properties.utm_source, timestamp) AS entry_utm
+      FROM events
+      WHERE event = '$pageview'
+        AND timestamp >= toDateTime('${sinceIso}')
+        ${extra}
+        AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_SELF_REFERRAL}
+      GROUP BY period, person_id
+    )
+    WHERE (${ENTRY_CHANNEL_EXPR}) ${channelPredicate}
     GROUP BY period
     ORDER BY period
   `
