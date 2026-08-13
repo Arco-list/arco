@@ -1159,7 +1159,8 @@
     "pricing_meta_yearly": "Jaarlijks gefactureerd: {amount} · excl. btw",
     "pricing_mock_projects_live": "6 projecten",
     "pricing_founding_claimed": "Je staat op de founding-lijst",
-    "inbox": "Inbox"
+    "inbox": "Inbox",
+    "pricing_link_professionals": "Zo werkt Arco voor professionals"
   },
   "business": {
     "for_architects": "Voor Architecten",

@@ -1159,7 +1159,8 @@
     "pricing_meta_yearly": "Billed annually: {amount} · excl. VAT",
     "pricing_mock_projects_live": "6 projects",
     "pricing_founding_claimed": "You're on the founding list",
-    "inbox": "Inbox"
+    "inbox": "Inbox",
+    "pricing_link_professionals": "How Arco works for professionals"
   },
   "business": {
     "for_architects": "For Architects",

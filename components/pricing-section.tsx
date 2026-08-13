@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Check, Info, Lock } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -316,6 +317,11 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
             <span style={{ fontSize: 12, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "4px 12px", display: "inline-block" }}>{t("pricing_mock_unlock")}</span>
           </div>
         </div>
+        <div style={{ textAlign: "center", marginTop: 28 }}>
+          <Link href="/businesses/professionals" className="text-link-plain">
+            {t("pricing_link_professionals")} →
+          </Link>
+        </div>
       </div>
 
       {/* Architect hero section */}
@@ -324,9 +330,12 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           {t("pricing_for_architects")}
         </p>
         <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_publishing_free")}</h3>
-        <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
+        <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto 16px" }}>
           {t("pricing_publishing_free_body")}
         </p>
+        <Link href="/businesses/architects" className="text-link-plain">
+          {t("pricing_architect_strip_link")} →
+        </Link>
       </div>
 
     </div>
