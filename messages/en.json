@@ -1158,9 +1158,10 @@
     "pricing_no_card": "No credit card needed.",
     "pricing_meta_yearly": "Billed annually: {amount} · excl. VAT",
     "pricing_mock_projects_live": "6 projects",
-    "pricing_founding_claimed": "You're on the founding list",
+    "pricing_founding_claimed": "Free during launch",
     "inbox": "Inbox",
-    "pricing_link_professionals": "How Arco works for professionals"
+    "pricing_link_professionals": "How Arco works for professionals",
+    "pricing_included_in_pro": "Included in Pro"
   },
   "business": {
     "for_architects": "For Architects",

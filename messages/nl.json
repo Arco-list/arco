@@ -1158,9 +1158,10 @@
     "pricing_no_card": "Geen creditcard nodig.",
     "pricing_meta_yearly": "Jaarlijks gefactureerd: {amount} · excl. btw",
     "pricing_mock_projects_live": "6 projecten",
-    "pricing_founding_claimed": "Je staat op de founding-lijst",
+    "pricing_founding_claimed": "Gratis tijdens de lancering",
     "inbox": "Inbox",
-    "pricing_link_professionals": "Zo werkt Arco voor professionals"
+    "pricing_link_professionals": "Zo werkt Arco voor professionals",
+    "pricing_included_in_pro": "Inbegrepen in Pro"
   },
   "business": {
     "for_architects": "Voor Architecten",

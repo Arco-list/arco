@@ -181,9 +181,12 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           <div className="pricing-card-footer">
+            {/* Once Pro (founding) is claimed, Pro is the current plan —
+                the Free card flips to "Included in Pro" instead of
+                wrongly claiming to be the current plan. */}
             {user && hasProfessionalRole ? (
               <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-light)", cursor: "default" }}>
-                {t("pricing_current_plan")}
+                {foundingClaimed ? t("pricing_included_in_pro") : t("pricing_current_plan")}
               </button>
             ) : (
               <button onClick={handleStartFree} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-black)", cursor: "pointer", transition: "border-color .15s" }}>
