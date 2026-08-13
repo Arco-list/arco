@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
 import { trackPageView, trackUpgradeIntent } from "@/lib/tracking"
+import { claimFoundingAccess, getFoundingClaimStatus } from "@/app/pricing/actions"
 
 // Billing toggle + Free/Pro cards + architects-are-free note, extracted
 // from the dashboard pricing page so public surfaces (the /pricing route,
@@ -67,13 +68,24 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
     openCreateCompanyModal()
   }
 
+  // Whether this professional's company already claimed founding access
+  // (persisted on companies.founding_claimed_at, so the button state
+  // survives reloads and other devices).
+  const [foundingClaimed, setFoundingClaimed] = useState(false)
+  useEffect(() => {
+    if (!user || !hasProfessionalRole) return
+    getFoundingClaimStatus().then((r) => setFoundingClaimed(r.claimed)).catch(() => {})
+  }, [user, hasProfessionalRole])
+
   // Billing doesn't exist yet — the Pro CTA's job is to COLLECT the
   // willingness-to-pay signal (upgrade_intent) and route into the same
-  // free claim flow. Logged-in professionals just get confirmation that
-  // their founding price is locked.
+  // free claim flow. Logged-in professionals get their claim stamped
+  // (durable counterpart of the PostHog event) + confirmation.
   const handleClaimFounding = () => {
     trackUpgradeIntent(typeof window !== "undefined" ? window.location.pathname : "pricing", billingCycle)
     if (user && hasProfessionalRole) {
+      setFoundingClaimed(true)
+      claimFoundingAccess().catch(() => {})
       toast.success(t("pricing_founding_toast"))
       return
     }
@@ -236,10 +248,18 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           <div className="pricing-card-footer">
             {/* Live CTA even though billing doesn't exist: clicks stamp an
                 upgrade_intent event (the pre-payments pay-rate signal) and
-                route into the same free claim flow. */}
-            <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
-              {t("pricing_claim_founding")}
-            </button>
+                route into the same free claim flow. Once claimed, the
+                button flips to a quiet confirmed state. */}
+            {foundingClaimed ? (
+              <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "#f0f7f6", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <Check size={16} />
+                {t("pricing_founding_claimed")}
+              </button>
+            ) : (
+              <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
+                {t("pricing_claim_founding")}
+              </button>
+            )}
             <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
               {t("pricing_coming_soon")}
             </p>
