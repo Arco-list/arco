@@ -249,33 +249,33 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       {/* Credit example — the product is a credit on a photographed
-          project; SHOW it. Row 1 = a live (Pro) credit, row 2 = the
-          locked state an unpaid second credit will get. Selling by
-          preview: the free/paid difference becomes self-evident. */}
+          project; SHOW it, using the exact card design from the project
+          detail page's "Vermelde professionals" section (credit-card /
+          credit-icon classes). Left = a live (Pro) credit, right = the
+          locked state an unpaid second credit will get. */}
       <div style={{ margin: "56px auto 0", maxWidth: 560 }}>
         <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 6 }}>{t("pricing_credit_example_title")}</h3>
-        <p className="arco-small-text" style={{ textAlign: "center", marginBottom: 20 }}>{t("pricing_credit_example_caption")}</p>
-        <div style={{ border: "1px solid #e8e8e6", borderRadius: 8, padding: "20px 24px", background: "#ffffff" }}>
-          <p className="arco-eyebrow" style={{ marginBottom: 14 }}>{t("pricing_mock_team")}</p>
-          {/* Live credit */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f0f0ee" }}>
-            <div style={{ width: 36, height: 36, borderRadius: 6, background: "#1c1c1a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 500, flexShrink: 0 }}>VD</div>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 14, color: "var(--primary)", textDecoration: "underline", margin: 0 }}>Van Dijk Keukens</p>
-              <p className="arco-small-text" style={{ margin: 0 }}>{t("pricing_mock_role_kitchen")}</p>
+        <p className="arco-small-text" style={{ textAlign: "center", marginBottom: 32 }}>{t("pricing_credit_example_caption")}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40 }}>
+          {/* Live credit — mirrors the real credit-card */}
+          <div className="credit-card">
+            <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>{t("pricing_mock_role_kitchen")}</span>
+            <div className="credit-icon">
+              <span className="credit-icon-initials">VD</span>
             </div>
-            <span className="status-pill" style={{ marginLeft: "auto", flexShrink: 0 }}>Arco Approved</span>
+            <h3 className="arco-label" style={{ marginBottom: 6 }}>Van Dijk Keukens</h3>
+            <p className="arco-card-subtitle" style={{ marginBottom: 12 }}>1 project</p>
+            <span className="text-link-plain">{t("pricing_mock_view_portfolio")} →</span>
           </div>
-          {/* Locked credit */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", opacity: 0.55 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 6, background: "#f5f5f4", color: "#a1a1a0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Lock size={15} />
+          {/* Locked credit — same card, diminished */}
+          <div className="credit-card" style={{ cursor: "default" }}>
+            <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center", opacity: 0.55 }}>{t("pricing_mock_role_pool")}</span>
+            <div className="credit-icon" style={{ opacity: 0.55 }}>
+              <Lock size={30} style={{ color: "var(--arco-mid, #a1a1a0)" }} />
             </div>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 14, color: "#6b6b68", margin: 0 }}>B&amp;W Zwembadbouw</p>
-              <p className="arco-small-text" style={{ margin: 0 }}>{t("pricing_mock_role_pool")}</p>
-            </div>
-            <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "3px 10px" }}>{t("pricing_mock_unlock")}</span>
+            <h3 className="arco-label" style={{ marginBottom: 6, color: "#a1a1a0" }}>B&amp;W Zwembadbouw</h3>
+            <p className="arco-card-subtitle" style={{ marginBottom: 12, opacity: 0.55 }}>1 project</p>
+            <span style={{ fontSize: 12, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "4px 12px", display: "inline-block" }}>{t("pricing_mock_unlock")}</span>
           </div>
         </div>
       </div>

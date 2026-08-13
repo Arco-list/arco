@@ -1152,7 +1152,8 @@
     "pricing_faq_q5": "What happens when the founding period ends?",
     "pricing_faq_a5": "Billing starts for new companies. Founding members — the first 100 — keep €39/month for as long as they stay subscribed. We'll announce the date well in advance.",
     "pricing_faq_q6": "Can I cancel anytime?",
-    "pricing_faq_a6": "Yes. Pro has no minimum term — monthly or annual, cancel whenever you want. Your published projects and your free credit always remain."
+    "pricing_faq_a6": "Yes. Pro has no minimum term — monthly or annual, cancel whenever you want. Your published projects and your free credit always remain.",
+    "pricing_mock_view_portfolio": "View portfolio"
   },
   "business": {
     "for_architects": "For Architects",
