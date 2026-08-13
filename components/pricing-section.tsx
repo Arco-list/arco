@@ -25,14 +25,12 @@ const FEATURE_KEYS = [
   { labelKey: "pricing_feature_arco_approved", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_arco_approved_tooltip", tooltipTitleKey: "pricing_feature_arco_approved_tooltip_title" },
 ] as const
 
-// The Free card leads with unlimited publishing (the anchor-side story);
-// the Pro card leads with what the PAYING trade actually buys: unlimited
-// credits, their portfolio page, and the Arco Approved trust badge.
-// Published-projects drops to the bottom — a builder doesn't publish.
-const FREE_ORDER = ["pricing_feature_published", "pricing_feature_contributor", "pricing_feature_company_page", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_arco_approved"]
-const PRO_ORDER = ["pricing_feature_contributor", "pricing_feature_company_page", "pricing_feature_arco_approved", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_published"]
-const byOrder = (order: string[]) =>
-  order.map((k) => FEATURE_KEYS.find((f) => f.labelKey === k)!).filter(Boolean)
+// One shared order on both cards so the rows align line-for-line —
+// contributor credits (the thing being sold) at the top, the Free
+// card's included features grouped above its dashes.
+const FEATURE_ORDER = ["pricing_feature_contributor", "pricing_feature_published", "pricing_feature_company_page", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_arco_approved"]
+const orderedFeatures = () =>
+  FEATURE_ORDER.map((k) => FEATURE_KEYS.find((f) => f.labelKey === k)!).filter(Boolean)
 
 export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   const t = useTranslations("dashboard")
@@ -140,7 +138,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           <div className="pricing-card-features">
-            {byOrder(FREE_ORDER).map((f) => {
+            {orderedFeatures().map((f) => {
               const included = f.freeBool
               const label = t(f.labelKey as any)
               const valueStr = f.freeKey ? t(f.freeKey as any) : null
@@ -211,7 +209,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           <div className="pricing-card-features">
-            {byOrder(PRO_ORDER).map((f) => {
+            {orderedFeatures().map((f) => {
               const label = t(f.labelKey as any)
               const valueStr = f.proKey ? t(f.proKey as any) : null
               return (
@@ -278,7 +276,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
               </svg>
             </div>
             <h3 className="arco-label" style={{ marginBottom: 6 }}>Van Dijk Keukens</h3>
-            <p className="arco-card-subtitle" style={{ marginBottom: 12 }}>1 project</p>
+            <p className="arco-card-subtitle" style={{ marginBottom: 12 }}>{t("pricing_mock_projects_live")}</p>
             <span className="text-link-plain">{t("pricing_mock_view_portfolio")} →</span>
           </div>
           {/* Locked credit — same card, diminished: greyed logo mark with

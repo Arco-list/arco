@@ -1000,13 +1000,13 @@
     "pricing_yearly": "Jaarlijks",
     "pricing_save_20": "Bespaar 20%",
     "pricing_free": "Gratis",
-    "pricing_free_desc": "Publiceer projecten en begin als professional",
+    "pricing_free_desc": "Publiceer je projecten en claim je eerste vermelding.",
     "pricing_current_plan": "Huidig abonnement",
     "pricing_get_started": "Aan de slag",
     "pricing_pro": "Pro",
     "pricing_per_month": "/maand",
     "pricing_billed_annually": "Gefactureerd voor {amount}/jaar",
-    "pricing_pro_desc": "Laat je beste werk zien en vergroot je zichtbaarheid",
+    "pricing_pro_desc": "Word vermeld op elk project dat je hebt helpen realiseren.",
     "pricing_upgrade": "Upgraden",
     "pricing_coming_soon": "Gratis tijdens de lanceringsperiode — de eerste 100 bedrijven behouden dit tarief.",
     "pricing_recommended": "Aanbevolen",
@@ -1156,7 +1156,8 @@
     "pricing_mock_view_portfolio": "Bekijk portfolio",
     "pricing_free_meta": "Voor altijd gratis",
     "pricing_no_card": "Geen creditcard nodig.",
-    "pricing_meta_yearly": "Jaarlijks gefactureerd: {amount} · excl. btw"
+    "pricing_meta_yearly": "Jaarlijks gefactureerd: {amount} · excl. btw",
+    "pricing_mock_projects_live": "6 projecten"
   },
   "business": {
     "for_architects": "Voor Architecten",

@@ -1000,13 +1000,13 @@
     "pricing_yearly": "Yearly",
     "pricing_save_20": "Save 20%",
     "pricing_free": "Free",
-    "pricing_free_desc": "Publish projects and get started as a professional",
+    "pricing_free_desc": "Publish your projects and claim your first credit.",
     "pricing_current_plan": "Current plan",
     "pricing_get_started": "Get started",
     "pricing_pro": "Pro",
     "pricing_per_month": "/month",
     "pricing_billed_annually": "Billed at {amount}/year",
-    "pricing_pro_desc": "Showcase your best work and grow your visibility",
+    "pricing_pro_desc": "Be credited on every project you helped realise.",
     "pricing_upgrade": "Upgrade",
     "pricing_coming_soon": "Free during the founding period — the first 100 companies keep this price.",
     "pricing_recommended": "Recommended",
@@ -1156,7 +1156,8 @@
     "pricing_mock_view_portfolio": "View portfolio",
     "pricing_free_meta": "Free forever",
     "pricing_no_card": "No credit card needed.",
-    "pricing_meta_yearly": "Billed annually: {amount} · excl. VAT"
+    "pricing_meta_yearly": "Billed annually: {amount} · excl. VAT",
+    "pricing_mock_projects_live": "6 projects"
   },
   "business": {
     "for_architects": "For Architects",
