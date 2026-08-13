@@ -320,10 +320,22 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
             <span style={{ fontSize: 12, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "4px 12px", display: "inline-block" }}>{t("pricing_mock_unlock")}</span>
           </div>
         </div>
-        <div style={{ textAlign: "center", marginTop: 28 }}>
-          <Link href="/businesses/professionals" className="text-link-plain">
-            {t("pricing_link_professionals")} →
-          </Link>
+        {/* Contributor CTA — the reader has just SEEN what a credit
+            looks like; let them act here instead of detouring via the
+            landing. Same claim flow as the plan cards; the landing link
+            demotes to a secondary line. */}
+        <div style={{ textAlign: "center", marginTop: 32 }}>
+          <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 16px" }}>
+            {t("pricing_contrib_cta_body")}
+          </p>
+          <button onClick={handleStartFree} style={{ padding: "12px 28px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
+            {t("pricing_contrib_cta_button")}
+          </button>
+          <div style={{ marginTop: 14 }}>
+            <Link href="/businesses/professionals" className="text-link-plain">
+              {t("pricing_link_professionals")} →
+            </Link>
+          </div>
         </div>
       </div>
 
