@@ -4,10 +4,15 @@ import Link from "next/link"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { useAuth } from "@/contexts/auth-context"
 
 export function Footer() {
   const t = useTranslations("footer")
   const tn = useTranslations("nav")
+  // Photography landing is admin-only for now — same user_types check
+  // the header uses for its admin-only nav items.
+  const { profile } = useAuth()
+  const hasAdminRole = (profile?.user_types as string[] | null)?.includes("admin") ?? false
 
   return (
     <>
@@ -48,7 +53,9 @@ export function Footer() {
                 <h4 className="arco-eyebrow text-white/35 mb-1.5">{t("businesses")}</h4>
                 <Link href="/businesses/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_architects")}</Link>
                 <Link href="/businesses/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_professionals")}</Link>
-                <Link href="/businesses/photography" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("photography")}</Link>
+                {hasAdminRole && (
+                  <Link href="/businesses/photography" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("photography")}</Link>
+                )}
                 <Link href="/pricing" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("pricing")}</Link>
               </div>
 
