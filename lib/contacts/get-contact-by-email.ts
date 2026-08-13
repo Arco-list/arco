@@ -41,6 +41,7 @@ export type ContactByEmailCompanySummary = {
   logo_url: string | null
   city: string | null
   domain: string | null
+  website: string | null
   primary_service_name: string | null
 }
 
@@ -277,7 +278,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   if (companyIds.length > 0) {
     const { data: companies } = await svc
       .from("companies")
-      .select("id, name, slug, logo_url, city, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .select("id, name, slug, logo_url, city, domain, website, primary_service:categories!companies_primary_service_id_fkey(name)")
       .in("id", companyIds)
     for (const c of (companies ?? []) as Array<{
       id: string
@@ -286,6 +287,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
       logo_url: string | null
       city: string | null
       domain: string | null
+      website: string | null
       primary_service: { name: string | null } | null
     }>) {
       if (!c?.id) continue
@@ -298,6 +300,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
         logo_url: c.logo_url ?? null,
         city: c.city ?? null,
         domain: c.domain ?? null,
+        website: c.website ?? null,
         primary_service_name: c.primary_service?.name ?? null,
       }
     }

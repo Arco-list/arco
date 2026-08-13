@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-contact-by-email"
 import { getContactByProspectId } from "@/lib/contacts/get-contact-by-prospect"
@@ -701,12 +703,20 @@ function capitalize(s: string): string {
 // ── Company row (styled like a mini profile card) ─────────────────────
 
 function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEmailData }) {
+  const router = useRouter()
   const enriched = entry.companyId ? data.companiesById[entry.companyId] : undefined
   const label = enriched?.name ?? entry.label
   const logoUrl = enriched?.logo_url ?? null
   const initial = label.charAt(0).toUpperCase() || "?"
   const subtitleParts = [enriched?.primary_service_name ?? entry.role, enriched?.city].filter(Boolean)
   const subtitle = subtitleParts.join(" · ")
+  // Same link logic as the Sales/Companies tables: name → Arco company
+  // page, arrow → external website (website first, domain fallback).
+  const slug = enriched?.slug ?? null
+  const externalRaw = enriched?.website ?? enriched?.domain ?? null
+  const externalHref = externalRaw
+    ? /^https?:\/\//i.test(externalRaw) ? externalRaw : `https://${externalRaw}`
+    : null
   const inner = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
       <div
@@ -729,8 +739,35 @@ function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEma
         )}
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "#1c1c1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+          {slug ? (
+            <a
+              href={`/professionals/${slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="hover:underline"
+              style={{ fontSize: 13, fontWeight: 500, color: "#1c1c1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "none" }}
+            >
+              {label}
+            </a>
+          ) : (
+            <span style={{ fontSize: 13, fontWeight: 500, color: "#1c1c1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {label}
+            </span>
+          )}
+          {externalHref && (
+            <a
+              href={externalHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title={externalHref}
+              className="shrink-0 text-[#a2a29f] hover:text-[#016D75] transition-colors"
+            >
+              <ArrowUpRight size={13} />
+            </a>
+          )}
         </div>
         {subtitle && (
           <div style={{ fontSize: 11, color: "#6b6b68", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -748,12 +785,17 @@ function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEma
   return (
     <li>
       {entry.companyId ? (
-        <Link
-          href={`/admin/companies?company_id=${entry.companyId}`}
-          style={{ display: "block", padding: 8, borderRadius: 6, textDecoration: "none" }}
+        // Click-div instead of a Link: the name and arrow inside are
+        // real anchors now, and anchors can't nest.
+        <div
+          role="link"
+          tabIndex={0}
+          onClick={() => router.push(`/admin/companies?company_id=${entry.companyId}`)}
+          onKeyDown={(e) => { if (e.key === "Enter") router.push(`/admin/companies?company_id=${entry.companyId}`) }}
+          style={{ display: "block", padding: 8, borderRadius: 6, cursor: "pointer" }}
         >
           {inner}
-        </Link>
+        </div>
       ) : (
         <div style={{ padding: 8 }}>{inner}</div>
       )}

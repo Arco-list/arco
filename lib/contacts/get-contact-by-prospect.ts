@@ -71,7 +71,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
   if (companyId) {
     const { data: c } = await svc
       .from("companies")
-      .select("id, name, slug, logo_url, city, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
+      .select("id, name, slug, logo_url, city, domain, website, primary_service:categories!companies_primary_service_id_fkey(name)")
       .eq("id", companyId)
       .maybeSingle()
     const row = c as unknown as {
@@ -81,6 +81,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
       logo_url: string | null
       city: string | null
       domain: string | null
+      website: string | null
       primary_service: { name: string | null } | null
     } | null
     if (row?.id) {
@@ -91,6 +92,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
         logo_url: row.logo_url ?? null,
         city: row.city ?? null,
         domain: row.domain ?? null,
+        website: row.website ?? null,
         primary_service_name: row.primary_service?.name ?? null,
       }
     }
