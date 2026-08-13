@@ -197,9 +197,10 @@ function InlineCRCell({ numerator, denominator }: { numerator: number[]; denomin
 }
 
 /** A row can carry an inline funnel CR ("to Signups") rendered directly
- *  beneath it — attached in GrowthTableView, not part of MetricRow. */
+ *  beneath it — attached in GrowthTableView, not part of MetricRow.
+ *  targetLabel feeds the per-source sub CRs ("to Signups from Direct"). */
 type RowWithCR = MetricRow & {
-  inlineCR?: { label: string; numerator: number[]; denominator: number[] }
+  inlineCR?: { label: string; targetLabel: string; numerator: number[]; denominator: number[] }
 }
 
 // ─── Metric Row ───────────────────────────────────────────────────────────────
@@ -282,11 +283,17 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
         </>
       )}
 
-      {/* Expanded sub-metrics */}
-      {expanded && row.subs.map((sub) => (
+      {/* Expanded sub-metrics — subs with a crNumerator get their own
+          attached per-source CR row ("to Signups from Direct"), same as
+          the Model view's PerSourceCRRow. */}
+      {expanded && row.subs.map((sub) => {
+        const subCR = sub.crNumerator && row.inlineCR
+          ? { label: `to ${row.inlineCR.targetLabel} from ${sub.label}`, numerator: sub.crNumerator.datapoints }
+          : null
+        return (
         <Fragment key={sub.key}>
           {/* Desktop sub-row */}
-          <tr className="hidden md:table-row">
+          <tr className={`hidden md:table-row ${subCR ? "arco-cr-attached" : ""}`} style={subCR ? { borderBottom: "none" } : undefined}>
             <td>
               <div className="flex items-center gap-2 pl-7">
                 <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
@@ -298,7 +305,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             </td>
           </tr>
           {/* Mobile sub-row */}
-          <tr className="md:hidden">
+          <tr className={`md:hidden ${subCR ? "arco-cr-attached" : ""}`} style={subCR ? { borderBottom: "none" } : undefined}>
             <td colSpan={2}>
               <div className="flex items-center gap-1.5 mb-0.5 pl-3">
                 <span className="text-[10px] text-[#6b6b68]">{sub.label}</span>
@@ -306,8 +313,35 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               <SubTrendlineCell datapoints={sub.datapoints} />
             </td>
           </tr>
+          {subCR && (
+            <>
+              <tr className="hidden md:table-row arco-cr-row">
+                <td>
+                  <div className="flex items-center pl-10">
+                    <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                      {subCR.label}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <InlineCRCell numerator={subCR.numerator} denominator={sub.datapoints} />
+                </td>
+              </tr>
+              <tr className="md:hidden arco-cr-row">
+                <td colSpan={2}>
+                  <div className="flex items-center pl-5 mb-0.5">
+                    <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                      {subCR.label}
+                    </span>
+                  </div>
+                  <InlineCRCell numerator={subCR.numerator} denominator={sub.datapoints} />
+                </td>
+              </tr>
+            </>
+          )}
         </Fragment>
-      ))}
+        )
+      })}
     </>
   )
 }
@@ -389,15 +423,24 @@ export function GrowthTableView({
 
   const sepIndex = rows.findIndex((r) => r.key === "_sep")
   const proRows = (sepIndex >= 0 ? rows.slice(0, sepIndex) : rows).map((r) => {
-    if (r.key === "pro_visitors") return {
-      ...r,
-      total: proVisitors ?? 0,
-      datapoints: pad8(proVisitorsSeries),
-      subs: overrideSubs(r.subs, proSources, {
-        sales_apollo: apolloVisitorsSeries ?? [],
-        invites: inviteVisitorsSeries ?? [],
-        ...(proSourceSeries ?? {}),
-      }),
+    if (r.key === "pro_visitors") {
+      // Same inline CR treatment as client Visitors: "to New Pros"
+      // under the parent, per-source CRs under each expanded sub.
+      const displayed = pad8(proVisitorsSeries)
+      const newProsRow = rows.find((x) => x.key === "new_pros")
+      return {
+        ...r,
+        total: proVisitors ?? 0,
+        datapoints: displayed,
+        subs: overrideSubs(r.subs, proSources, {
+          sales_apollo: apolloVisitorsSeries ?? [],
+          invites: inviteVisitorsSeries ?? [],
+          ...(proSourceSeries ?? {}),
+        }),
+        inlineCR: newProsRow
+          ? { label: `to ${newProsRow.label}`, targetLabel: newProsRow.label, numerator: newProsRow.datapoints, denominator: displayed }
+          : undefined,
+      }
     }
     return r
   })
@@ -414,7 +457,7 @@ export function GrowthTableView({
         datapoints: displayed,
         subs: overrideSubs(r.subs, clientSources, clientSourceSeries),
         inlineCR: signupsRow
-          ? { label: `to ${signupsRow.label}`, numerator: signupsRow.datapoints, denominator: displayed }
+          ? { label: `to ${signupsRow.label}`, targetLabel: signupsRow.label, numerator: signupsRow.datapoints, denominator: displayed }
           : undefined,
       }
     }
