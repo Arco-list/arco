@@ -127,12 +127,16 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
 
         {/* Free */}
         <div className="pricing-card pricing-card-subgrid">
+          {/* Header mirrors the Pro card's exact stack (label / price /
+              meta / desc) with matching heights, so the descriptions and
+              everything below them line up across the two cards. */}
           <div className="pricing-card-header">
             <p className="pricing-card-label">{t("pricing_free")}</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4, minHeight: 48 }}>
               <h2 className="pricing-card-price">€0</h2>
             </div>
-            <p className="arco-small-text" style={{ marginTop: 8 }}>{t("pricing_free_desc")}</p>
+            <p style={{ fontSize: 12, color: "var(--arco-light)", marginTop: 6, minHeight: 18 }}>{t("pricing_free_meta")}</p>
+            <p className="arco-small-text" style={{ marginTop: 8, minHeight: 42 }}>{t("pricing_free_desc")}</p>
           </div>
 
           <div className="pricing-card-features">
@@ -180,7 +184,11 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
                 {t("pricing_get_started")}
               </button>
             )}
-            <p style={{ textAlign: "center", fontSize: 12, color: "transparent", marginTop: 8, userSelect: "none" }}>&nbsp;</p>
+            {/* Same note height as the Pro footer (2 lines) so
+                margin-top:auto pins both buttons to the same y. */}
+            <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
+              {t("pricing_no_card")}
+            </p>
           </div>
         </div>
 
@@ -189,19 +197,17 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           <span className="pricing-card-badge">{t("pricing_recommended")}</span>
           <div className="pricing-card-header">
             <p className="pricing-card-label" style={{ color: "var(--primary)" }}>{t("pricing_pro")}</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <h2 className="pricing-card-price">€{proPrice}</h2>
-                <span style={{ fontSize: 14, color: "var(--arco-light)" }}>{t("pricing_per_month")}</span>
-              </div>
-              {billingCycle === "yearly" && (
-                <span className="status-pill" style={{ marginLeft: "auto" }}>
-                  {t("pricing_billed_annually", { amount: "€468" })}
-                </span>
-              )}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4, minHeight: 48 }}>
+              <h2 className="pricing-card-price">€{proPrice}</h2>
+              <span style={{ fontSize: 14, color: "var(--arco-light)" }}>{t("pricing_per_month")}</span>
             </div>
-            <p style={{ fontSize: 11, color: "var(--arco-light)", marginTop: 2 }}>{t("pricing_ex_vat")}</p>
-            <p className="arco-small-text" style={{ marginTop: 8 }}>{t("pricing_pro_desc")}</p>
+            {/* One quiet meta line replaces the bulky billed-annually pill
+                + separate VAT note. Same height slot as the Free card's
+                meta line, keeping both cards on the same grid. */}
+            <p style={{ fontSize: 12, color: "var(--arco-light)", marginTop: 6, minHeight: 18 }}>
+              {billingCycle === "yearly" ? t("pricing_meta_yearly", { amount: "€468" }) : t("pricing_ex_vat")}
+            </p>
+            <p className="arco-small-text" style={{ marginTop: 8, minHeight: 42 }}>{t("pricing_pro_desc")}</p>
           </div>
 
           <div className="pricing-card-features">
@@ -241,7 +247,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
             <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
               {t("pricing_claim_founding")}
             </button>
-            <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8 }}>
+            <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
               {t("pricing_coming_soon")}
             </p>
           </div>

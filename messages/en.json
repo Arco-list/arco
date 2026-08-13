@@ -1138,7 +1138,7 @@
     "project_categories_title": "Project categories",
     "pricing_architect_strip": "Architect or interior designer? Publishing is free, forever.",
     "pricing_architect_strip_link": "Learn more",
-    "pricing_claim_founding": "Lock in founding price",
+    "pricing_claim_founding": "Claim Pro for free",
     "pricing_founding_toast": "You're on the founding list — Pro stays free until payments launch, and your €39/month is locked in.",
     "pricing_ex_vat": "excl. VAT",
     "pricing_credit_example_title": "This is what a credit looks like",
@@ -1153,7 +1153,10 @@
     "pricing_faq_a5": "Billing starts for new companies. Founding members — the first 100 — keep €39/month for as long as they stay subscribed. We'll announce the date well in advance.",
     "pricing_faq_q6": "Can I cancel anytime?",
     "pricing_faq_a6": "Yes. Pro has no minimum term — monthly or annual, cancel whenever you want. Your published projects and your free credit always remain.",
-    "pricing_mock_view_portfolio": "View portfolio"
+    "pricing_mock_view_portfolio": "View portfolio",
+    "pricing_free_meta": "Free forever",
+    "pricing_no_card": "No credit card needed.",
+    "pricing_meta_yearly": "Billed annually: {amount} · excl. VAT"
   },
   "business": {
     "for_architects": "For Architects",
