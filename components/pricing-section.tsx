@@ -94,6 +94,7 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   }
 
   return (
+    <>
     <div className="wrap" style={{ maxWidth: 860 }}>
 
       {/* Header — page title on /pricing, section title when embedded
@@ -320,11 +321,14 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
             <span style={{ fontSize: 12, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "4px 12px", display: "inline-block" }}>{t("pricing_mock_unlock")}</span>
           </div>
         </div>
-        {/* Contributor CTA banner — the reader has just SEEN what a
-            credit looks like; let them act here instead of detouring via
-            the landing. Same grey-banner treatment as the architect
-            block below; same claim flow as the plan cards. */}
-        <div style={{ marginTop: 40, padding: "40px 32px", background: "var(--arco-off-white)", borderRadius: 8, textAlign: "center" }}>
+      </div>
+    </div>
+
+      {/* Contributor CTA — full-width grey band, same treatment as the
+          How-it-works section. The reader has just SEEN what a credit
+          looks like; let them act here. Same claim flow as the cards. */}
+      <section className="how-section" style={{ marginTop: 56, textAlign: "center" }}>
+        <div className="wrap" style={{ maxWidth: 860 }}>
           <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_contrib_cta_title")}</h3>
           <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 20px" }}>
             {t("pricing_contrib_cta_body")}
@@ -342,12 +346,13 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Architect hero section — standalone /pricing only. On the
           professionals landing the audience is contributors; the
           architects-publish-free story lives on their own landing. */}
       {!embedded && (
+      <div className="wrap" style={{ maxWidth: 860 }}>
       <div style={{ margin: "56px 0 0", padding: "40px 32px", background: "var(--arco-off-white)", borderRadius: 8, textAlign: "center" }}>
         <p className="arco-eyebrow" style={{ marginBottom: 12 }}>
           {t("pricing_for_architects")}
@@ -360,8 +365,8 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           {t("pricing_architect_strip_link")} →
         </Link>
       </div>
+      </div>
       )}
-
-    </div>
+    </>
   )
 }
