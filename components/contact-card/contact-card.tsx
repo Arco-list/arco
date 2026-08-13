@@ -12,6 +12,7 @@ import { updateProspectById } from "@/lib/contacts/update-prospect-by-id"
 import { removeProspectFromFunnel } from "@/app/admin/sales/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused, TransactionalOnlyTimeline } from "./prospect-timeline-fused"
+import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
 
 /**
  * Shared Contact Card — right-anchored slide-over. The single detail
@@ -235,10 +236,9 @@ function CardBody({
       ) : (
         // No prospect record — still show transactional sends (magic
         // links, project status, welcome…) so signed-up users who never
-        // went through the funnel get a timeline too.
-        <Section label="Timeline">
-          <TransactionalOnlyTimeline emails={[data.email, ...data.aliases]} />
-        </Section>
+        // went through the funnel get a timeline too. Log outbound stays
+        // available via the company-contact path when one exists.
+        <NoProspectTimeline data={data} />
       )}
 
       <CardFooter
@@ -800,6 +800,51 @@ function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEma
         <div style={{ padding: 8 }}>{inner}</div>
       )}
     </li>
+  )
+}
+
+// ── Timeline for contacts without a prospect record ───────────────────
+// The Log pill on Sales panels comes from ProspectTimelineFused, which
+// needs a prospect. Contacts opened from Users/Companies without one
+// (direct signups) log against their company_contacts row instead —
+// LogOutboundModal already supports that path.
+function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
+  const [logOpen, setLogOpen] = useState(false)
+  const companyContact = data.companyContacts[0] ?? null
+  const companyName = companyContact
+    ? data.companiesById[companyContact.company_id]?.name ?? null
+    : null
+  return (
+    <>
+      <Section
+        label="Timeline"
+        action={
+          companyContact ? (
+            <button
+              type="button"
+              onClick={() => setLogOpen(true)}
+              className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors"
+              title="Log outbound"
+            >
+              Log
+            </button>
+          ) : undefined
+        }
+      >
+        <TransactionalOnlyTimeline emails={[data.email, ...data.aliases]} />
+      </Section>
+      {companyContact && (
+        <LogOutboundModal
+          open={logOpen}
+          onOpenChange={setLogOpen}
+          companyContactId={companyContact.id}
+          contactLabel={pickDisplayName(data)}
+          companyLabel={companyName ?? ""}
+          contactEmail={data.email}
+          contactPhone={data.profile?.phone ?? null}
+        />
+      )}
+    </>
   )
 }
 
