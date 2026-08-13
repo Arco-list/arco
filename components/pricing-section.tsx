@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { Check, Info, Lock } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
@@ -94,17 +93,6 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
         )}
         <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
           {t("pricing_subtitle")}
-        </p>
-      </div>
-
-      {/* Architect reassurance ABOVE the cards — an anchor scanning the
-          €39 card must never conclude they're being asked to pay. */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-        <p className="arco-small-text" style={{ textAlign: "center", background: "var(--arco-off-white)", borderRadius: 999, padding: "8px 18px" }}>
-          {t("pricing_architect_strip")}{" "}
-          <Link href="/businesses/architects" style={{ color: "var(--primary)", textDecoration: "underline" }}>
-            {t("pricing_architect_strip_link")}
-          </Link>
         </p>
       </div>
 
@@ -265,8 +253,9 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           credit-icon classes). Left = a live (Pro) credit, right = the
           locked state an unpaid second credit will get. */}
       <div style={{ margin: "56px auto 0", maxWidth: 560 }}>
-        <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 6 }}>{t("pricing_credit_example_title")}</h3>
-        <p className="arco-small-text" style={{ textAlign: "center", marginBottom: 32 }}>{t("pricing_credit_example_caption")}</p>
+        <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 16 }}>{t("pricing_credit_example_title")}</h3>
+        {/* Same copy treatment as the body under the page header. */}
+        <p className="arco-body-text" style={{ textAlign: "center", maxWidth: 480, margin: "0 auto 32px" }}>{t("pricing_credit_example_caption")}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40 }}>
           {/* Live credit — mirrors the real credit-card. Dark circle with
               a white mark, like a real company logo tile. */}
