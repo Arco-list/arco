@@ -10,14 +10,12 @@ import {
   HowItWorks,
   FAQSection,
 } from "@/components/landing"
-import { EndorsementCarousel } from "@/components/ui/EndorsementCarousel"
 import { PricingSection } from "@/components/pricing-section"
 import { ProfessionalCarousel, type ProfessionalCarouselCard } from "@/components/landing/professional-carousel"
 import {
   getProfessionalBenefits,
   getProfessionalSteps,
   getProfessionalFAQ,
-  getEndorsements,
 } from "./data"
 import { useAuth } from "@/contexts/auth-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
@@ -57,7 +55,6 @@ export default function ProfessionalsLandingClient({
   const professionalBenefits = getProfessionalBenefits(t)
   const professionalSteps = getProfessionalSteps(t)
   const professionalFAQ = getProfessionalFAQ(t)
-  const endorsements = getEndorsements(t)
 
   // Build the redirect URL that preserves the inviteEmail param
   const selfUrl = inviteEmail
@@ -101,14 +98,11 @@ export default function ProfessionalsLandingClient({
       <BenefitsGrid benefits={professionalBenefits} />
       <HowItWorks steps={professionalSteps} heading={tBusiness("how_it_works")} />
 
-      <EndorsementCarousel
-        endorsements={endorsements}
-      />
-
       {/* Pricing on the landing itself — this page is where invited
           contributors arrive (inviteEmail flow), so the founding price
-          must be visible before they're asked to sign up. */}
-      <section style={{ paddingTop: 60 }}>
+          must be visible before they're asked to sign up. Explicit white
+          background so it never inherits a section tint. */}
+      <section style={{ paddingTop: 60, background: "#ffffff" }}>
         <PricingSection embedded />
       </section>
 

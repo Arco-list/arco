@@ -325,17 +325,22 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
             the landing. Same grey-banner treatment as the architect
             block below; same claim flow as the plan cards. */}
         <div style={{ marginTop: 40, padding: "40px 32px", background: "var(--arco-off-white)", borderRadius: 8, textAlign: "center" }}>
+          <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_contrib_cta_title")}</h3>
           <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 20px" }}>
             {t("pricing_contrib_cta_body")}
           </p>
           <button onClick={handleStartFree} style={{ padding: "12px 28px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
             {t("pricing_contrib_cta_button")}
           </button>
-          <div style={{ marginTop: 14 }}>
-            <Link href="/businesses/professionals" className="text-link-plain">
-              {t("pricing_link_professionals")} →
-            </Link>
-          </div>
+          {/* On the professionals landing (embedded) this link would be
+              self-referential — only show it on the standalone page. */}
+          {!embedded && (
+            <div style={{ marginTop: 14 }}>
+              <Link href="/businesses/professionals" className="text-link-plain">
+                {t("pricing_link_professionals")} →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
