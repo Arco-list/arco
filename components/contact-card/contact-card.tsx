@@ -494,6 +494,20 @@ function DetailsSection({
           editable={canEdit}
           onSave={savePhone}
           inputType="tel"
+          suffix={
+            phoneLocal ? (
+              // tel: on macOS hands off to FaceTime, which relays the
+              // call through a paired iPhone — one click from panel to
+              // dial tone. Strip everything but digits and the leading +.
+              <a
+                href={`tel:${phoneLocal.replace(/[^+\d]/g, "")}`}
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors no-underline"
+              >
+                Call
+              </a>
+            ) : null
+          }
         />
         <DetailField
           label="Domain"
