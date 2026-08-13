@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Check, ChefHat, Info, Lock, Waves } from "lucide-react"
+import { Check, Info, Lock } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -261,8 +261,15 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
               a white mark, like a real company logo tile. */}
           <div className="credit-card">
             <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>{t("pricing_mock_role_kitchen")}</span>
-            <div className="credit-icon" style={{ background: "#1c1c1a" }}>
-              <ChefHat size={40} strokeWidth={1.25} style={{ color: "#ffffff" }} />
+            {/* Dummy letterform logo — geometric "v" mark in a dark
+                roundel, same visual language as real company logos
+                (cf. Kraal architecten's "k" roundel). */}
+            <div className="credit-icon" style={{ background: "#22304e" }}>
+              <svg viewBox="0 0 100 100" width="100" height="100" aria-hidden="true">
+                <rect x="34" y="29" width="13" height="42" rx="6.5" fill="#f5f3ee" transform="rotate(-20 40.5 50)" />
+                <rect x="53" y="29" width="13" height="42" rx="6.5" fill="#f5f3ee" transform="rotate(20 59.5 50)" />
+                <circle cx="73" cy="31" r="6" fill="#f5f3ee" />
+              </svg>
             </div>
             <h3 className="arco-label" style={{ marginBottom: 6 }}>Van Dijk Keukens</h3>
             <p className="arco-card-subtitle" style={{ marginBottom: 12 }}>1 project</p>
@@ -273,8 +280,12 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
           <div className="credit-card" style={{ cursor: "default" }}>
             <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center", opacity: 0.55 }}>{t("pricing_mock_role_pool")}</span>
             <div style={{ position: "relative", width: 100, margin: "0 auto 16px" }}>
-              <div className="credit-icon" style={{ margin: 0, opacity: 0.55 }}>
-                <Waves size={40} strokeWidth={1.25} style={{ color: "var(--arco-mid, #a1a1a0)" }} />
+              {/* Dummy letterform logo — geometric "b" mark, greyed. */}
+              <div className="credit-icon" style={{ margin: 0, background: "#e8e8e6" }}>
+                <svg viewBox="0 0 100 100" width="100" height="100" aria-hidden="true">
+                  <rect x="34" y="26" width="13" height="48" rx="6.5" fill="#a1a1a0" />
+                  <circle cx="58" cy="59" r="14" fill="none" stroke="#a1a1a0" strokeWidth="10" />
+                </svg>
               </div>
               <div style={{ position: "absolute", right: 0, bottom: 0, width: 30, height: 30, borderRadius: "50%", background: "#ffffff", border: "1px solid #e8e8e6", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Lock size={14} style={{ color: "#6b6b68" }} />
