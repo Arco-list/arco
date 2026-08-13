@@ -90,7 +90,7 @@ function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; la
             </svg>
             <span
               className="absolute text-[11px] font-medium whitespace-nowrap"
-              style={{ bottom: 0, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
+              style={{ bottom: 5, left: "50%", transform: "translateX(-50%)", color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : "·"}
             </span>
@@ -149,7 +149,7 @@ function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
             </svg>
             <span
               className="absolute text-[10px] font-medium whitespace-nowrap"
-              style={{ bottom: 0, left: "50%", transform: "translate(-50%, -100%)", color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
+              style={{ bottom: 4, left: "50%", transform: "translateX(-50%)", color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
             >
               {p.v > 0 ? p.v : ""}
             </span>
@@ -179,7 +179,7 @@ function InlineCRCell({ numerator, denominator }: { numerator: number[]; denomin
   const padX = 6
   const w = 100
   return (
-    <div className="relative w-full" style={{ height: 18 }}>
+    <div className="relative w-full" style={{ height: 12, marginTop: -6 }}>
       {denominator.map((denom, i) => {
         const x = padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)
         return (
@@ -260,7 +260,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
         <>
           <tr className="hidden md:table-row arco-cr-row">
             <td>
-              <div className="flex items-center pl-7">
+              <div className="flex items-center" style={{ paddingLeft: 31 }}>
                 <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                   {row.inlineCR.label}
                 </span>
@@ -317,7 +317,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             <>
               <tr className="hidden md:table-row arco-cr-row">
                 <td>
-                  <div className="flex items-center pl-10">
+                  <div className="flex items-center pl-7">
                     <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                       {subCR.label}
                     </span>
