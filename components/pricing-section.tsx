@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Check, Info, Lock } from "lucide-react"
+import { Check, ChefHat, Info, Lock, Waves } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
@@ -257,21 +257,28 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
         <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 6 }}>{t("pricing_credit_example_title")}</h3>
         <p className="arco-small-text" style={{ textAlign: "center", marginBottom: 32 }}>{t("pricing_credit_example_caption")}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40 }}>
-          {/* Live credit — mirrors the real credit-card */}
+          {/* Live credit — mirrors the real credit-card. Dark circle with
+              a white mark, like a real company logo tile. */}
           <div className="credit-card">
             <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>{t("pricing_mock_role_kitchen")}</span>
-            <div className="credit-icon">
-              <span className="credit-icon-initials">VD</span>
+            <div className="credit-icon" style={{ background: "#1c1c1a" }}>
+              <ChefHat size={40} strokeWidth={1.25} style={{ color: "#ffffff" }} />
             </div>
             <h3 className="arco-label" style={{ marginBottom: 6 }}>Van Dijk Keukens</h3>
             <p className="arco-card-subtitle" style={{ marginBottom: 12 }}>1 project</p>
             <span className="text-link-plain">{t("pricing_mock_view_portfolio")} →</span>
           </div>
-          {/* Locked credit — same card, diminished */}
+          {/* Locked credit — same card, diminished: greyed logo mark with
+              a small lock badge on the circle. */}
           <div className="credit-card" style={{ cursor: "default" }}>
             <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center", opacity: 0.55 }}>{t("pricing_mock_role_pool")}</span>
-            <div className="credit-icon" style={{ opacity: 0.55 }}>
-              <Lock size={30} style={{ color: "var(--arco-mid, #a1a1a0)" }} />
+            <div style={{ position: "relative", width: 100, margin: "0 auto 16px" }}>
+              <div className="credit-icon" style={{ margin: 0, opacity: 0.55 }}>
+                <Waves size={40} strokeWidth={1.25} style={{ color: "var(--arco-mid, #a1a1a0)" }} />
+              </div>
+              <div style={{ position: "absolute", right: 0, bottom: 0, width: 30, height: 30, borderRadius: "50%", background: "#ffffff", border: "1px solid #e8e8e6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Lock size={14} style={{ color: "#6b6b68" }} />
+              </div>
             </div>
             <h3 className="arco-label" style={{ marginBottom: 6, color: "#a1a1a0" }}>B&amp;W Zwembadbouw</h3>
             <p className="arco-card-subtitle" style={{ marginBottom: 12, opacity: 0.55 }}>1 project</p>
