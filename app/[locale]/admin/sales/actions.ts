@@ -205,11 +205,15 @@ async function attachResolvedContacts(
   const companyIds = Array.from(new Set(rows.map((r) => r.company_id).filter((id): id is string => Boolean(id))))
   const companyOwnerById = new Map<string, string | null>()
   if (companyIds.length > 0) {
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, owner_id")
-      .in("id", companyIds)
-    for (const c of companies ?? []) companyOwnerById.set(c.id, c.owner_id ?? null)
+    const companies = await fetchAllPagesChunked<{ id: string; owner_id: string | null }>(
+      companyIds,
+      (chunk) => (from, to) => supabase
+        .from("companies")
+        .select("id, owner_id")
+        .in("id", chunk)
+        .range(from, to),
+    )
+    for (const c of companies) companyOwnerById.set(c.id, c.owner_id ?? null)
   }
 
   // Stage 2: collect every user id we need a profile for — signup users
@@ -528,6 +532,25 @@ async function fetchAllPages<T>(
   return { rows, error: null }
 }
 
+/** Run a paginated query once per chunk of `ids` (parallel) and flatten.
+ *  Every whole-funnel .in() must go through this: since the 1,000-
+ *  prospect import, single .in() calls with 1,000+ values exceed
+ *  PostgREST's URL limits and silently return nothing — that failure
+ *  mode has now blanked the company links, Next email, email-stats and
+ *  inbound-pill columns at various points. */
+async function fetchAllPagesChunked<T>(
+  ids: string[],
+  build: (chunk: string[]) => (from: number, to: number) => PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+  chunkSize = 100,
+): Promise<T[]> {
+  const results = await Promise.all(
+    Array.from({ length: Math.ceil(ids.length / chunkSize) }, (_, i) =>
+      fetchAllPages<T>(build(ids.slice(i * chunkSize, (i + 1) * chunkSize))),
+    ),
+  )
+  return results.flatMap((r) => r.rows)
+}
+
 type FetchSalesCompaniesFilters = {
   /** Empty / undefined = no status filter (all statuses except 'removed'). */
   statuses?: ProspectStatus[]
@@ -596,35 +619,38 @@ async function loadEmailEventCounts(
   // Two queries (instead of one .or()) so each can use its index cleanly.
   // 50k cap is well above current sales volume; if we exceed that the
   // counts will silently undercount, which is preferable to timing out.
-  const queries: Promise<{ rows: EmailEventRow[]; error: { message?: string } | null }>[] = []
+  const queries: Promise<EmailEventRow[]>[] = []
   if (emailList.length > 0) {
     queries.push(
-      fetchAllPages<EmailEventRow>((from, to) =>
-        (supabase as any)
-          .from("email_events")
-          .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
-          .in("recipient_email", emailList)
-          .order("occurred_at", { ascending: false })
-          .range(from, to)),
+      fetchAllPagesChunked<EmailEventRow>(
+        emailList,
+        (chunk) => (from, to) =>
+          (supabase as any)
+            .from("email_events")
+            .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
+            .in("recipient_email", chunk)
+            .order("occurred_at", { ascending: false })
+            .range(from, to),
+      ),
     )
   }
   if (cidList.length > 0) {
     queries.push(
-      fetchAllPages<EmailEventRow>((from, to) =>
-        (supabase as any)
-          .from("email_events")
-          .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
-          .in("recipient_company_id", cidList)
-          .order("occurred_at", { ascending: false })
-          .range(from, to)),
+      fetchAllPagesChunked<EmailEventRow>(
+        cidList,
+        (chunk) => (from, to) =>
+          (supabase as any)
+            .from("email_events")
+            .select("provider, provider_event_id, recipient_email, recipient_company_id, event_type")
+            .in("recipient_company_id", chunk)
+            .order("occurred_at", { ascending: false })
+            .range(from, to),
+      ),
     )
   }
 
   const results = await Promise.all(queries)
-  const evRows: EmailEventRow[] = []
-  for (const r of results) {
-    evRows.push(...r.rows)
-  }
+  const evRows: EmailEventRow[] = results.flat()
 
   const counts = new Map<string, { sent: number; delivered: number; opened: number; clicked: number }>()
   const seenIds = new Set<string>()
@@ -811,14 +837,14 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const inboundProspectIds = new Set<string>()
   if (allProspectIds.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { rows: inboundRows } = await fetchAllPages<{ prospect_id: string | null }>(
-      (from, to) => (supabase as any)
+    const inboundRows = await fetchAllPagesChunked<{ prospect_id: string | null }>(
+      allProspectIds,
+      (chunk) => (from, to) => (supabase as any)
         .from("inbound_emails")
         .select("prospect_id")
-        .in("prospect_id", allProspectIds)
+        .in("prospect_id", chunk)
         .order("received_at", { ascending: false })
         .range(from, to),
-      10000,
     )
     for (const r of inboundRows) {
       if (r.prospect_id) inboundProspectIds.add(r.prospect_id)
