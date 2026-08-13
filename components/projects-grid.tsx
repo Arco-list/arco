@@ -14,6 +14,7 @@ import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
 import type { DiscoverProject } from "@/lib/projects/queries"
 import { SORT_OPTIONS, type SortOption } from "@/components/filter-bar"
+import { pluralizeLabel } from "@/lib/pluralize-label"
 import { SortLinks } from "@/components/sort-links"
 
 interface ProjectsGridProps {
@@ -24,6 +25,7 @@ interface ProjectsGridProps {
 
 export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: ProjectsGridProps) {
   const t = useTranslations("projects")
+  const gridLocale = useLocale()
   const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap, clearAllFilters } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const { projects, total, isLoading, error, hasMore, loadMore, spacePhotoOverrides } = useProjectsQuery({
@@ -40,9 +42,13 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
 
   // ── heading ─────────────────────────────────────────────────────────────────
 
+  const displayCount = total > sortedProjects.length ? total : sortedProjects.length
+
   const headingText = useMemo(() => {
+    // Pluralize the type labels when the result count calls for it —
+    // "4 Bungalows in the Netherlands", not "4 Bungalow in ...".
     const typeLabels = selectedTypes
-      .map((id) => taxonomyLabelMap.get(id) ?? id)
+      .map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, displayCount, gridLocale))
       .filter(Boolean)
 
     const typePart =
@@ -63,7 +69,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
             ? `${selectedLocations[0]} & ${selectedLocations[1]}`
             : `${selectedLocations.slice(0, -1).join(", ")} & ${selectedLocations.at(-1)}`
     return `${typePart} in ${locationPart}`
-  }, [selectedTypes, selectedLocations, taxonomyLabelMap, t])
+  }, [selectedTypes, selectedLocations, taxonomyLabelMap, t, displayCount, gridLocale])
 
   // ── photo navigation ─────────────────────────────────────────────────────────
 

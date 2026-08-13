@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
 import { MapPreviewCard, ProfessionalsMap } from "@/components/professionals-map"
@@ -13,6 +13,7 @@ import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsForMap, useProfessionalsQuery } from "@/hooks/use-professionals-query"
 import { SortLinks } from "@/components/sort-links"
+import { pluralizeLabel } from "@/lib/pluralize-label"
 
 // Map preview card: positioned via CSS order (3rd on desktop, 2nd on iPad, hidden on mobile)
 
@@ -25,6 +26,7 @@ export function ProfessionalsGrid({
 }) {
   const [showMap, setShowMap] = useState(false)
   const t = useTranslations("professionals")
+  const gridLocale = useLocale()
 
   const {
     selectedCategories,
@@ -55,6 +57,8 @@ export function ProfessionalsGrid({
   // stable across "Load more". The grid just consumes the ordered list.
   const sortedProfessionals = queryProfessionals
 
+  const displayCount = total > sortedProfessionals.length ? total : sortedProfessionals.length
+
   const headingText = useMemo(() => {
     const locationLabel =
       selectedCities.length === 1
@@ -66,8 +70,10 @@ export function ProfessionalsGrid({
             : t("heading_default_location")
 
     if (selectedCategories.length > 0) {
+      // Pluralize when the count calls for it — "12 Architecten in
+      // Nederland", not "12 Architect in ...".
       const labels = selectedCategories
-        .map((id) => taxonomyLabelMap.get(id) ?? id)
+        .map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, displayCount, gridLocale))
         .filter(Boolean)
       const part =
         labels.length === 1
@@ -79,7 +85,7 @@ export function ProfessionalsGrid({
     }
     if (selectedCities.length > 0) return t("heading_in", { location: locationLabel })
     return t("heading_in", { location: t("heading_default_location") })
-  }, [selectedCategories, selectedCities, taxonomyLabelMap, t])
+  }, [selectedCategories, selectedCities, taxonomyLabelMap, t, displayCount, gridLocale])
 
   // Full result set for the map — the list is paginated, so previously the
   // map only saw whatever was already loaded (14 pros on first paint).
