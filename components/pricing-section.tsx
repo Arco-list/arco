@@ -62,7 +62,10 @@ export function PricingContributorCta({ showLandingLink = true }: { showLandingL
   if (user && hasProfessionalRole) return null
 
   return (
-    <section className="how-section" style={{ marginTop: 56, textAlign: "center" }}>
+    // No top margin — a margin here opens a gap between the (white) FAQ
+    // above and this grey band, exposing the page background as a stray
+    // strip. The FAQ's own bottom padding provides the whitespace.
+    <section className="how-section" style={{ textAlign: "center" }}>
       <div className="wrap" style={{ maxWidth: 860 }}>
         <h3 className="arco-section-title" style={{ marginBottom: 12 }}>{t("pricing_contrib_cta_title")}</h3>
         <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 20px" }}>
