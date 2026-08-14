@@ -173,13 +173,16 @@ function formatConversion(numerator: number, denominator: number): string {
 }
 
 /** Per-bucket conversion percentages, x-aligned with the sparkline dots
- *  above (same padX/w math as TrendlineCell). */
-function InlineCRCell({ numerator, denominator }: { numerator: number[]; denominator: number[] }) {
+ *  above (same padX/w math as TrendlineCell). `pull` lifts the row up
+ *  into the sparkline's empty bottom padding — larger for the first CR
+ *  row directly under a sparkline, small for CR rows that follow
+ *  another CR row (which have no slack above them). */
+function InlineCRCell({ numerator, denominator, pull = 6 }: { numerator: number[]; denominator: number[]; pull?: number }) {
   const n = denominator.length
   const padX = 6
   const w = 100
   return (
-    <div className="relative w-full" style={{ height: 12, marginTop: -6 }}>
+    <div className="relative w-full" style={{ height: 12, marginTop: -pull }}>
       {denominator.map((denom, i) => {
         const x = padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)
         return (
@@ -199,10 +202,11 @@ function InlineCRCell({ numerator, denominator }: { numerator: number[]; denomin
 /** Raw-value row at CR size, x-aligned with the sparkline dots — the
  *  table's counterpart of the Model view's ValueRow (SEO Impressions /
  *  CTR / Clicks under Ranked pros & Ranked projects). */
-function ValueCell({ values, tone = "muted", format = "integer" }: {
+function ValueCell({ values, tone = "muted", format = "integer", pull = 6 }: {
   values: number[]
   tone?: "muted" | "accent"
   format?: "integer" | "percent"
+  pull?: number
 }) {
   const color = tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
   const n = values.length
@@ -216,7 +220,7 @@ function ValueCell({ values, tone = "muted", format = "integer" }: {
     return String(v)
   }
   return (
-    <div className="relative w-full" style={{ height: 12, marginTop: -6 }}>
+    <div className="relative w-full" style={{ height: 12, marginTop: -pull }}>
       {values.map((v, i) => {
         const x = padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)
         return (
@@ -309,18 +313,22 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
           last row keeps it as the separator to the next metric. */}
       {parentCRs.map((cr, idx) => {
         const isLast = idx === parentCRs.length - 1
+        // First CR row sits directly under the sparkline, which carries
+        // ~19px of empty bottom padding — pull it up into that slack.
+        // Subsequent CR rows follow another CR row and have none.
+        const pull = idx === 0 ? 16 : 6
         return (
           <Fragment key={cr.label}>
             <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
               <td>
-                <div className="flex items-center" style={{ paddingLeft: 31 }}>
+                <div className="flex items-center" style={{ paddingLeft: 31, marginTop: -pull }}>
                   <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                     {cr.label}
                   </span>
                 </div>
               </td>
               <td>
-                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} />
               </td>
             </tr>
             <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
@@ -380,18 +388,21 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
           </tr>
           {subCRs.map((cr, idx) => {
             const isLast = idx === attachedCount - 1
+            // Sub sparklines carry ~10px of bottom slack — smaller pull
+            // than the parent rows, and only for the first attached row.
+            const pull = idx === 0 ? 10 : 6
             return (
               <Fragment key={cr.label}>
                 <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
                   <td>
-                    <div className="flex items-center pl-7">
+                    <div className="flex items-center pl-7" style={{ marginTop: -pull }}>
                       <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                         {cr.label}
                       </span>
                     </div>
                   </td>
                   <td>
-                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} />
                   </td>
                 </tr>
                 <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
@@ -409,19 +420,22 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
           })}
           {valueRows.map((vr, idx) => {
             const isLast = subCRs.length + idx === attachedCount - 1
+            // Only pull up when this is the first attached row under the
+            // sub's sparkline; rows following another CR row have no slack.
+            const pull = subCRs.length === 0 && idx === 0 ? 10 : 6
             const color = vr.tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
             return (
               <Fragment key={vr.label}>
                 <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
                   <td>
-                    <div className="flex items-center pl-7">
+                    <div className="flex items-center pl-7" style={{ marginTop: -pull }}>
                       <span className="text-[10px] font-medium" style={{ color }}>
                         {vr.label}
                       </span>
                     </div>
                   </td>
                   <td>
-                    <ValueCell values={vr.values} tone={vr.tone} format={vr.format} />
+                    <ValueCell values={vr.values} tone={vr.tone} format={vr.format} pull={pull} />
                   </td>
                 </tr>
                 <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
