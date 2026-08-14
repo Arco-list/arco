@@ -53,6 +53,10 @@ export async function POST(request: NextRequest) {
 
   console.log(`[resend-webhook] ${type} for ${messageId} (${recipientEmail})`)
 
+  // Whether this open is a machine prefetch (set below, used by both the
+  // event metadata and the prospect-counter guard).
+  let machineOpen = false
+
   // Mirror every engagement event into email_events as the unified source
   // of truth. Per-table cache writes below stay running unchanged — they
   // back the existing dashboards. New consumers (growth-table metrics,
@@ -78,6 +82,23 @@ export async function POST(request: NextRequest) {
       try {
         const occurredAt = event.created_at ?? now
         const subject = data?.subject ?? null
+        // Machine-open detection: gateways/Apple-MPP prefetch the open
+        // pixel while scanning — those "opens" land within seconds of
+        // the send. Flag them so read-side stats can exclude them; the
+        // raw event is still stored.
+        if (type === "email.opened") {
+          const { data: sentRow } = await (supabase as any)
+            .from("email_events")
+            .select("occurred_at")
+            .eq("provider", "resend")
+            .eq("provider_event_id", messageId)
+            .eq("event_type", "sent")
+            .maybeSingle()
+          if (sentRow?.occurred_at) {
+            const delta = new Date(occurredAt).getTime() - new Date(sentRow.occurred_at as string).getTime()
+            machineOpen = delta >= 0 && delta < 60_000
+          }
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from("email_events").upsert(
           {
@@ -87,7 +108,7 @@ export async function POST(request: NextRequest) {
             recipient_email: recipientEmail ?? "",
             subject,
             occurred_at: occurredAt,
-            metadata: { resend_message_id: messageId, raw_type: type },
+            metadata: { resend_message_id: messageId, raw_type: type, ...(machineOpen ? { machine: true } : {}) },
           },
           { onConflict: "provider,provider_event_id" },
         )
@@ -126,7 +147,7 @@ export async function POST(request: NextRequest) {
         // No specific field — delivery is implicit
         break
       case "email.opened":
-        updateData.opened_at = now
+        if (!machineOpen) updateData.opened_at = now
         break
       case "email.clicked":
         updateData.clicked_at = now
@@ -233,6 +254,9 @@ export async function POST(request: NextRequest) {
           updates.emails_delivered = (prospect.emails_delivered ?? 0) + 1
           break
         case "email.opened":
+          // Machine prefetch — recorded in email_events (flagged) but
+          // kept out of the prospect's engagement counters.
+          if (machineOpen) break
           updates.emails_opened = (prospect.emails_opened ?? 0) + 1
           updates.last_email_opened_at = now
           break

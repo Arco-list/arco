@@ -252,6 +252,19 @@ function resolveTemplate(subject: string, tags: unknown): { id: string; name: st
   return matchTemplate(subject)
 }
 
+// Machine-open filter: gateway scanners and Apple MPP prefetch the open
+// pixel within seconds of the send — those aren't humans reading. The
+// webhook flags new ones (metadata.machine); for historical rows the same
+// signature (open < 60s after the send) is applied at read time.
+const MACHINE_OPEN_WINDOW_MS = 60_000
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isMachineOpen(metadata: any, occurredAt: string | null | undefined, sentAt: string | null | undefined): boolean {
+  if (metadata?.machine === true) return true
+  if (!occurredAt || !sentAt) return false
+  const delta = new Date(occurredAt).getTime() - new Date(sentAt).getTime()
+  return delta >= 0 && delta < MACHINE_OPEN_WINDOW_MS
+}
+
 export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; error?: string }> {
   // Reads from the unified email_events table (one row per send + one per
   // engagement event). No more Resend-pagination ceiling, no more subject-
@@ -308,13 +321,18 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
       failed: 4,
       unsubscribed: 5,
     }
+    const sentAtByMsg = new Map<string, string>()
+    for (const s of sends) {
+      sentAtByMsg.set(s.provider_event_id as string, s.occurred_at as string)
+    }
     const latestByMsg = new Map<string, string>()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const r of (eventRows ?? []) as any[]) {
       const msgId = r.metadata?.resend_message_id as string | undefined
       if (!msgId) continue
-      const existing = latestByMsg.get(msgId) ?? "sent"
       const candidate = r.event_type as string
+      if (candidate === "opened" && isMachineOpen(r.metadata, r.occurred_at, sentAtByMsg.get(msgId))) continue
+      const existing = latestByMsg.get(msgId) ?? "sent"
       if ((STATE_RANK[candidate] ?? 0) >= (STATE_RANK[existing] ?? 0)) {
         latestByMsg.set(msgId, candidate)
       }
@@ -435,6 +453,12 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       failed: 4,
     }
     type MsgState = { template: string | null; subject: string | null; state: string }
+    // Pre-pass: sent time per message, so machine opens (pixel fired
+    // < 60s after send — scanner/MPP prefetch) can be excluded below.
+    const sentAtByMsg = new Map<string, string>()
+    for (const e of events) {
+      if (e.event_type === "sent") sentAtByMsg.set(e.provider_event_id as string, e.occurred_at as string)
+    }
     const byMsg = new Map<string, MsgState>()
     for (const e of events) {
       const msgId = e.event_type === "sent"
@@ -443,6 +467,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       if (!msgId) continue
 
       const candidateState = e.event_type as string
+      if (candidateState === "opened" && isMachineOpen(e.metadata, e.occurred_at, sentAtByMsg.get(msgId))) continue
       const candidateTemplate = (e.template as string | null) ?? null
       const candidateSubject = (e.subject as string | null) ?? null
       const existing = byMsg.get(msgId)

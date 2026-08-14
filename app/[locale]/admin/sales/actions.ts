@@ -3234,10 +3234,62 @@ export async function syncResendEmailStats() {
 
     if (allEmails.length === 0) return { synced: 0 }
 
+    const supabaseEvents = createServiceRoleSupabaseClient()
+
+    // Resend's `last_event` counts machine opens (scanner/MPP pixel
+    // prefetch < 60s after send) as "opened". Cross-check email_events:
+    // a message only counts as opened when it has at least one open
+    // that isn't flagged machine and didn't fire within the 60s window.
+    const openedMsgIds = allEmails
+      .filter((e) => (e.last_event ?? "") === "opened" && e.id)
+      .map((e) => e.id as string)
+    const realOpenMsgs = new Set<string>()
+    if (openedMsgIds.length > 0) {
+      const sentAtByMsg = new Map<string, string>()
+      for (const e of allEmails) {
+        if (e.id && e.created_at) sentAtByMsg.set(e.id as string, e.created_at as string)
+      }
+      const sentRows = await fetchAllPagesChunked<{ provider_event_id: string; occurred_at: string }>(
+        openedMsgIds,
+        (chunk) => (from, to) =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabaseEvents as any)
+            .from("email_events")
+            .select("provider_event_id, occurred_at")
+            .eq("event_type", "sent")
+            .in("provider_event_id", chunk)
+            .range(from, to),
+      )
+      for (const r of sentRows) sentAtByMsg.set(r.provider_event_id, r.occurred_at)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const openRows = await fetchAllPagesChunked<{ metadata: any; occurred_at: string }>(
+        openedMsgIds,
+        (chunk) => (from, to) =>
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabaseEvents as any)
+            .from("email_events")
+            .select("metadata, occurred_at")
+            .eq("event_type", "opened")
+            .in("metadata->>resend_message_id", chunk)
+            .range(from, to),
+      )
+      for (const r of openRows) {
+        const msgId = r.metadata?.resend_message_id as string | undefined
+        if (!msgId || r.metadata?.machine === true) continue
+        const sentAt = sentAtByMsg.get(msgId)
+        if (sentAt) {
+          const delta = new Date(r.occurred_at).getTime() - new Date(sentAt).getTime()
+          if (delta >= 0 && delta < 60_000) continue
+        }
+        realOpenMsgs.add(msgId)
+      }
+    }
+
     // Count per recipient: how many emails were sent, delivered, opened, clicked
     const recipientStats = new Map<string, { sent: number; delivered: number; opened: number; clicked: number }>()
     for (const email of allEmails) {
-      const event = email.last_event ?? "sent"
+      let event = email.last_event ?? "sent"
+      if (event === "opened" && !realOpenMsgs.has(email.id as string)) event = "delivered"
       const recipients: string[] = Array.isArray(email.to) ? email.to : [email.to]
       for (const to of recipients) {
         if (!to) continue
