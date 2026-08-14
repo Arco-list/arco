@@ -1064,6 +1064,17 @@ export function ProspectsClient({
                 const prevCohort = i > 0 ? cohorted[i - 1] : funnel.total
                 const thisCohort = cohorted[i]
                 const rate = i === 0 ? "" : conversionRate(prevCohort, thisCohort)
+                // Cumulative conversion from the connector's left stage all
+                // the way to Listed — rendered under the line, below the
+                // single-stage rate. One decimal below 10% (6/1000 would
+                // otherwise round to a misleading 1%). Skipped on the final
+                // connector, where it would duplicate the stage rate.
+                const listedCohort = cohorted[cohorted.length - 1]
+                const listedPct = prevCohort > 0 ? (listedCohort / prevCohort) * 100 : 0
+                const toListed =
+                  i > 0 && i < FUNNEL_STAGES.length - 1 && listedCohort > 0 && prevCohort > 0
+                    ? `${listedPct < 10 ? listedPct.toFixed(1) : Math.round(listedPct)}%`
+                    : ""
                 const color = DRIVER_COLORS[stage.driver]
                 const driverLabel = Object.entries(DRIVER_LABEL_AT).find(([, s]) => s === stage.status)?.[0]
                 return (
@@ -1073,6 +1084,11 @@ export function ProspectsClient({
                         <div className="w-full border-t border-[#d4d4d3]" />
                         {rate && (
                           <span className="absolute text-[10px] font-medium text-[#6b6b68]" style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{rate}</span>
+                        )}
+                        {toListed && (
+                          <span className="absolute text-[10px] font-medium" style={{ top: 4, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", color: "var(--primary, #016D75)" }} title="Cumulative conversion to Listed from the stage on the left">
+                            → Listed {toListed}
+                          </span>
                         )}
                       </div>
                     )}
