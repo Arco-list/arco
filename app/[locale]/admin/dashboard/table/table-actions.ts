@@ -1552,6 +1552,23 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const unlistedSnapshotSeries = buckets.ends.map(bucketUnlistedAt)
   const totalUnlistedSnapshot = unlistedSnapshotSeries[unlistedSnapshotSeries.length - 1] ?? 0
 
+  // Pro-visitor channel remainder — the parent is raw PostHog uniques
+  // (link-scanners included), while Sales/Invites deliberately use the
+  // clean server-side click logs. The difference used to vanish
+  // silently (Apr: subs summed 24 under a parent of 113). Surface it
+  // as an explicit "Other" sub so the mismatch is legible instead of
+  // looking like broken math.
+  const proVisitorSubSeries = [
+    salesVisitorsSeriesDb, inviteVisitorsSeriesDb,
+    proVisitorsEmailBucketed.series, proVisitorsDirectAdjustedSeries,
+    proVisitorsGoogleBucketed.series, proVisitorsSocialBucketed.series,
+    proVisitorsReferralBucketed.series, proVisitorsShareBucketed.series,
+  ]
+  const proVisitorsOtherSeries = proVisitorsBucketed.series.map((total, i) =>
+    Math.max(0, total - proVisitorSubSeries.reduce((sum, arr) => sum + (arr[i] ?? 0), 0)),
+  )
+  const proVisitorsOtherTotal = proVisitorsOtherSeries.reduce((a, b) => a + b, 0)
+
   const rows: MetricRow[] = [
     // ── Professionals ──────────────────────────────────────────────────
     {
@@ -1670,6 +1687,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "shares", label: "Shares", definition: "Pro visitors from a tagged share URL (utm_source=share)",
           total: proVisitorsShareBucketed.total, datapoints: proVisitorsShareBucketed.series,
           crNumerator: { total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares } },
+        { key: "other", label: "Other / unattributed", definition: "Parent total minus the attributed channels. Mostly link-scanner and bot traffic that PostHog counts as a unique /businesses visitor but no clean channel claims — plus measurement drift between server-side Sales/Invites click logs and PostHog uniques. A large value here means noise, not a hidden channel.",
+          total: proVisitorsOtherTotal, datapoints: proVisitorsOtherSeries },
         // Outbound moved to Pros contacted — it's an outreach signal
         // (we reached out), not a visit signal (they landed). See the
         // pros_contacted.subs[].outbound_contacted row above.

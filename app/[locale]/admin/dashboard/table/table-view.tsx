@@ -432,11 +432,12 @@ export function GrowthTableView({
         ...r,
         total: proVisitors ?? 0,
         datapoints: displayed,
-        subs: overrideSubs(r.subs, proSources, {
-          sales_apollo: apolloVisitorsSeries ?? [],
-          invites: inviteVisitorsSeries ?? [],
-          ...(proSourceSeries ?? {}),
-        }),
+        // Subs intentionally NOT overridden: table-actions' series are
+        // canonical (server-side Sales/Invites click logs + entry-
+        // classified channel caches + the Other remainder). The old
+        // override swapped Invites for the legacy invite_visitors cache
+        // and carried a dead 'sales_apollo' key, so displayed subs
+        // diverged from the Model view's.
         inlineCR: newProsRow
           ? { label: `to ${newProsRow.label}`, targetLabel: newProsRow.label, numerator: newProsRow.datapoints, denominator: displayed }
           : undefined,
