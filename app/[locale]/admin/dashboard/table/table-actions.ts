@@ -1495,14 +1495,17 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   }
 
   function bucketNewProsByClickSet(clickerIds: Set<string>): number[] {
+    // Bucket by the SAME fallback timestamp the parent New Pros row and
+    // its channel subs use (onboarded_at ?? listed_at ?? created_at).
+    // Requiring strict onboarded_at here dropped Sales conversions that
+    // skipped the draft→listed trigger (NULL onboarded_at): they showed
+    // in the parent + Direct sub but never under Sales / Invites.
     return buckets.starts.map((_, i) =>
-      companies.filter((c: any) =>
-        onboardingCompleted(c)
-        && c.onboarded_at
-        && clickerIds.has(String(c.id))
-        && new Date(c.onboarded_at) >= buckets.starts[i]
-        && new Date(c.onboarded_at) < buckets.ends[i],
-      ).length,
+      companies.filter((c: any) => {
+        if (!onboardingCompleted(c) || !clickerIds.has(String(c.id))) return false
+        const ts = onboardedTsForBucket(c)
+        return ts !== null && ts >= buckets.starts[i] && ts < buckets.ends[i]
+      }).length,
     )
   }
   const newProsSalesClickerSeries = bucketNewProsByClickSet(salesClickerCompanyIds)
