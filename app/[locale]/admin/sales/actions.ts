@@ -2021,6 +2021,13 @@ export async function startProspectSequence(prospectId: string) {
   // Set sequence to active up front; rolled back to not_started if the send fails.
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
+  // Exception-safety: a THROW inside a dispatch branch (network error,
+  // provider rejection surfaced as an exception rather than a
+  // success:false) previously left the optimistic 'active' stranded
+  // with nothing queued — the caller's catch saw the error but this
+  // function's rollback never ran (bas@ceipps.nl, Aug 13).
+  try {
+
   // ── Invite-source prospects: fire the new-professional sequence ──
   if (prospect.source === "invites") {
     if (!prospect.company_id) {
@@ -2133,6 +2140,10 @@ export async function startProspectSequence(prospectId: string) {
   }
 
   return { success: true, warning: result.warning }
+  } catch (err) {
+    await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /** Snooze a row out of today's call list: schedules the next outbound
@@ -3050,6 +3061,9 @@ export async function restartProspectSequence(prospectId: string) {
   const previousStatus = prospect.sequence_status ?? "not_started"
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
+  // Same exception-safety as startProspectSequence — see note there.
+  try {
+
   // ── Invite-source restart: dispatcher with project context ──
   if (prospect.source === "invites") {
     if (!prospect.company_id) {
@@ -3140,6 +3154,10 @@ export async function restartProspectSequence(prospectId: string) {
   })
 
   return { success: true, warning: result.warning }
+  } catch (err) {
+    await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /**
