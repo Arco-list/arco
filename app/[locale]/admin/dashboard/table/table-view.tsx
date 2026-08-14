@@ -196,6 +196,43 @@ function InlineCRCell({ numerator, denominator }: { numerator: number[]; denomin
   )
 }
 
+/** Raw-value row at CR size, x-aligned with the sparkline dots — the
+ *  table's counterpart of the Model view's ValueRow (SEO Impressions /
+ *  CTR / Clicks under Ranked pros & Ranked projects). */
+function ValueCell({ values, tone = "muted", format = "integer" }: {
+  values: number[]
+  tone?: "muted" | "accent"
+  format?: "integer" | "percent"
+}) {
+  const color = tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
+  const n = values.length
+  const padX = 6
+  const w = 100
+  const fmt = (v: number): string => {
+    if (v <= 0) return "·"
+    if (format === "percent") return `${v}%`
+    if (v >= 10000) return `${Math.round(v / 1000)}k`
+    if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
+    return String(v)
+  }
+  return (
+    <div className="relative w-full" style={{ height: 12, marginTop: -6 }}>
+      {values.map((v, i) => {
+        const x = padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)
+        return (
+          <span
+            key={i}
+            className="absolute text-[10px] font-medium whitespace-nowrap"
+            style={{ left: `${(x / w) * 100}%`, top: "50%", transform: "translate(-50%, -50%)", color }}
+          >
+            {fmt(v)}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 /** A row can carry an inline funnel CR ("to Signups") rendered directly
  *  beneath it — attached in GrowthTableView, not part of MetricRow.
  *  targetLabel feeds the per-source sub CRs ("to Signups from Direct"). */
@@ -210,12 +247,23 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
   const color = DRIVER_COLORS[row.driver] ?? "#6b6b68"
   const hasSubs = row.subs.length > 0
 
+  // Parent-level CR block: the funnel "to X" CR (if any) followed by the
+  // row's labelled extraCRs (% Accepted, % Sharers, …) — same order as
+  // the Model view. All render always-visible directly under the parent.
+  const parentCRs: Array<{ label: string; numerator: number[]; denominator: number[] }> = [
+    ...(row.inlineCR
+      ? [{ label: row.inlineCR.label, numerator: row.inlineCR.numerator, denominator: row.inlineCR.denominator }]
+      : []),
+    ...(row.extraCRs ?? []),
+  ]
+  const hasAttachedCR = parentCRs.length > 0
+
   return (
     <>
       {/* Desktop row */}
       <tr
-        className={`hidden md:table-row ${hasSubs ? "cursor-pointer" : ""} ${row.inlineCR ? "arco-cr-attached" : ""}`}
-        style={row.inlineCR ? { borderBottom: "none" } : undefined}
+        className={`hidden md:table-row ${hasSubs ? "cursor-pointer" : ""} ${hasAttachedCR ? "arco-cr-attached" : ""}`}
+        style={hasAttachedCR ? { borderBottom: "none" } : undefined}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
         <td>
@@ -236,8 +284,8 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
       </tr>
       {/* Mobile row — single cell spanning full width */}
       <tr
-        className={`md:hidden ${hasSubs ? "cursor-pointer" : ""} ${row.inlineCR ? "arco-cr-attached" : ""}`}
-        style={row.inlineCR ? { borderBottom: "none" } : undefined}
+        className={`md:hidden ${hasSubs ? "cursor-pointer" : ""} ${hasAttachedCR ? "arco-cr-attached" : ""}`}
+        style={hasAttachedCR ? { borderBottom: "none" } : undefined}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
       >
         <td colSpan={2}>
@@ -254,46 +302,63 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
         </td>
       </tr>
 
-      {/* Inline conversion to the next funnel row — always visible,
-          directly under the parent, like the Model view's "to X" rows. */}
-      {row.inlineCR && (
-        <>
-          <tr className="hidden md:table-row arco-cr-row">
-            <td>
-              <div className="flex items-center" style={{ paddingLeft: 31 }}>
-                <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
-                  {row.inlineCR.label}
-                </span>
-              </div>
-            </td>
-            <td>
-              <InlineCRCell numerator={row.inlineCR.numerator} denominator={row.inlineCR.denominator} />
-            </td>
-          </tr>
-          <tr className="md:hidden arco-cr-row">
-            <td colSpan={2}>
-              <div className="flex items-center pl-3 mb-0.5">
-                <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
-                  {row.inlineCR.label}
-                </span>
-              </div>
-              <InlineCRCell numerator={row.inlineCR.numerator} denominator={row.inlineCR.denominator} />
-            </td>
-          </tr>
-        </>
-      )}
+      {/* Parent-level CR block — the funnel "to X" CR plus any labelled
+          extraCRs (% Accepted, % Sharers, …), always visible directly
+          under the parent, like the Model view. Middle rows suppress
+          their bottom border so the block reads as one section; the
+          last row keeps it as the separator to the next metric. */}
+      {parentCRs.map((cr, idx) => {
+        const isLast = idx === parentCRs.length - 1
+        return (
+          <Fragment key={cr.label}>
+            <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+              <td>
+                <div className="flex items-center" style={{ paddingLeft: 31 }}>
+                  <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                    {cr.label}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+              </td>
+            </tr>
+            <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+              <td colSpan={2}>
+                <div className="flex items-center pl-3 mb-0.5">
+                  <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                    {cr.label}
+                  </span>
+                </div>
+                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+              </td>
+            </tr>
+          </Fragment>
+        )
+      })}
 
       {/* Expanded sub-metrics — subs with a crNumerator get their own
           attached per-source CR row ("to Signups from Direct"), same as
           the Model view's PerSourceCRRow. */}
       {expanded && row.subs.map((sub) => {
-        const subCR = sub.crNumerator && row.inlineCR
-          ? { label: `to ${row.inlineCR.targetLabel} from ${sub.label}`, numerator: sub.crNumerator.datapoints }
-          : null
+        // A sub can attach up to three kinds of CR-size rows, in Model
+        // order: the per-source funnel CR ("to New Pros from Sales"),
+        // its self-declared customCR ("% Unique", "% Retained", …), and
+        // raw valueRows (SEO Impressions / CTR / Clicks).
+        const subCRs: Array<{ label: string; numerator: number[]; denominator: number[] }> = []
+        if (sub.crNumerator && row.inlineCR) {
+          subCRs.push({ label: `to ${row.inlineCR.targetLabel} from ${sub.label}`, numerator: sub.crNumerator.datapoints, denominator: sub.datapoints })
+        }
+        if (sub.customCR) {
+          subCRs.push({ label: sub.customCR.label, numerator: sub.customCR.numerator, denominator: sub.customCR.denominator })
+        }
+        const valueRows = sub.valueRows ?? []
+        const attachedCount = subCRs.length + valueRows.length
+        const hasAttached = attachedCount > 0
         return (
         <Fragment key={sub.key}>
           {/* Desktop sub-row */}
-          <tr className={`hidden md:table-row ${subCR ? "arco-cr-attached" : ""}`} style={subCR ? { borderBottom: "none" } : undefined}>
+          <tr className={`hidden md:table-row ${hasAttached ? "arco-cr-attached" : ""}`} style={hasAttached ? { borderBottom: "none" } : undefined}>
             <td>
               <div className="flex items-center gap-2 pl-7">
                 <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
@@ -305,7 +370,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             </td>
           </tr>
           {/* Mobile sub-row */}
-          <tr className={`md:hidden ${subCR ? "arco-cr-attached" : ""}`} style={subCR ? { borderBottom: "none" } : undefined}>
+          <tr className={`md:hidden ${hasAttached ? "arco-cr-attached" : ""}`} style={hasAttached ? { borderBottom: "none" } : undefined}>
             <td colSpan={2}>
               <div className="flex items-center gap-1.5 mb-0.5 pl-3">
                 <span className="text-[10px] text-[#6b6b68]">{sub.label}</span>
@@ -313,32 +378,65 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               <SubTrendlineCell datapoints={sub.datapoints} />
             </td>
           </tr>
-          {subCR && (
-            <>
-              <tr className="hidden md:table-row arco-cr-row">
-                <td>
-                  <div className="flex items-center pl-7">
-                    <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
-                      {subCR.label}
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  <InlineCRCell numerator={subCR.numerator} denominator={sub.datapoints} />
-                </td>
-              </tr>
-              <tr className="md:hidden arco-cr-row">
-                <td colSpan={2}>
-                  <div className="flex items-center pl-5 mb-0.5">
-                    <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
-                      {subCR.label}
-                    </span>
-                  </div>
-                  <InlineCRCell numerator={subCR.numerator} denominator={sub.datapoints} />
-                </td>
-              </tr>
-            </>
-          )}
+          {subCRs.map((cr, idx) => {
+            const isLast = idx === attachedCount - 1
+            return (
+              <Fragment key={cr.label}>
+                <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                  <td>
+                    <div className="flex items-center pl-7">
+                      <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                        {cr.label}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+                  </td>
+                </tr>
+                <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                  <td colSpan={2}>
+                    <div className="flex items-center pl-5 mb-0.5">
+                      <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                        {cr.label}
+                      </span>
+                    </div>
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+                  </td>
+                </tr>
+              </Fragment>
+            )
+          })}
+          {valueRows.map((vr, idx) => {
+            const isLast = subCRs.length + idx === attachedCount - 1
+            const color = vr.tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
+            return (
+              <Fragment key={vr.label}>
+                <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                  <td>
+                    <div className="flex items-center pl-7">
+                      <span className="text-[10px] font-medium" style={{ color }}>
+                        {vr.label}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <ValueCell values={vr.values} tone={vr.tone} format={vr.format} />
+                  </td>
+                </tr>
+                <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                  <td colSpan={2}>
+                    <div className="flex items-center pl-5 mb-0.5">
+                      <span className="text-[10px] font-medium" style={{ color }}>
+                        {vr.label}
+                      </span>
+                    </div>
+                    <ValueCell values={vr.values} tone={vr.tone} format={vr.format} />
+                  </td>
+                </tr>
+              </Fragment>
+            )
+          })}
         </Fragment>
         )
       })}
@@ -423,6 +521,20 @@ export function GrowthTableView({
 
   const sepIndex = rows.findIndex((r) => r.key === "_sep")
   const proRows = (sepIndex >= 0 ? rows.slice(0, sepIndex) : rows).map((r) => {
+    if (r.key === "pros_contacted") {
+      // "to Pro visitors" — table-actions ships the cohort-honest
+      // numerator (Sales + Invites visitors, email-keyed) via
+      // inlineCRNumerator; the Model view renders it and now the table
+      // does too. Also unlocks the per-source sub CRs (Sales / Invites
+      // / Outbound each carry a crNumerator).
+      const target = rows.find((x) => x.key === "pro_visitors")
+      return {
+        ...r,
+        inlineCR: r.inlineCRNumerator && target
+          ? { label: `to ${target.label}`, targetLabel: target.label, numerator: r.inlineCRNumerator.datapoints, denominator: r.datapoints }
+          : undefined,
+      }
+    }
     if (r.key === "pro_visitors") {
       // Same inline CR treatment as client Visitors: "to New Pros"
       // under the parent, per-source CRs under each expanded sub.
