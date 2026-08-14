@@ -398,17 +398,29 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
   try {
     const supabase = createServiceRoleSupabaseClient()
 
-    let query = supabase
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .from("email_events" as any)
-      .select("provider_event_id, metadata, event_type, template, subject, occurred_at")
-      .eq("provider", "resend")
-    if (sinceDate) query = query.gte("occurred_at", sinceDate)
-
-    const { data: eventRows, error } = await query
-    if (error) return { stats: {}, error: error.message }
+    // Paginated — PostgREST caps every response at 1,000 rows, and
+    // email_events passed that in Aug 2026 (~1,500 rows). The previous
+    // single select silently truncated, so "All time" aggregated an
+    // arbitrary 1,000-event subset (Outreach Intro showed 10 sends
+    // instead of 104).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events = (eventRows ?? []) as any[]
+    const events: any[] = []
+    for (let from = 0; from < 50_000; from += 1000) {
+      let query = supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from("email_events" as any)
+        .select("provider_event_id, metadata, event_type, template, subject, occurred_at")
+        .eq("provider", "resend")
+        .order("occurred_at", { ascending: true })
+        .range(from, from + 999)
+      if (sinceDate) query = query.gte("occurred_at", sinceDate)
+      const { data: page, error } = await query
+      if (error) return { stats: {}, error: error.message }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = (page ?? []) as any[]
+      events.push(...rows)
+      if (rows.length < 1000) break
+    }
 
     // Group by Resend message id, find highest-state event per message.
     // For a 'sent' row the message id IS the provider_event_id; for an
