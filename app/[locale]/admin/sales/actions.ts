@@ -2970,6 +2970,33 @@ export async function resumeProspectSequence(prospectId: string) {
       if (lastRow?.sent_at) continue
       if (skipResumeDrip) continue
 
+      // Revive the cancelled row when one exists. The queue's unique
+      // index counts cancelled rows, so the fresh insert below 23505s
+      // against them and gets skipped as "already enrolled" — the old
+      // behaviour queued NOTHING on resume while still flipping the
+      // sequence to active (Johan @ silva.builders, Aug 11: paused at
+      // 12:37, "resumed" at 12:38, no follow-ups scheduled).
+      let cancelledQuery = supabase
+        .from("email_drip_queue")
+        .select("id")
+        .eq("template", template)
+        .not("cancelled_at", "is", null)
+        .is("sent_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+      cancelledQuery = prospect.company_id
+        ? cancelledQuery.eq("company_id", prospect.company_id)
+        : cancelledQuery.ilike("email", prospect.email)
+      const { data: cancelledRow } = await cancelledQuery.maybeSingle()
+      if (cancelledRow?.id) {
+        const { error: reviveError } = await supabase
+          .from("email_drip_queue")
+          .update({ cancelled_at: null, cancelled_reason: null, send_at: sendAt } as never)
+          .eq("id", cancelledRow.id)
+        if (!reviveError) continue
+        console.error("[resumeProspectSequence] Failed to revive cancelled row", template, reviveError)
+      }
+
       const { error: insertError } = await supabase
         .from("email_drip_queue")
         .insert({
