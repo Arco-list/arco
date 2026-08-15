@@ -1605,13 +1605,21 @@ a.arco-nav-text.nav-transparent:hover {
 }
 
 @media (max-width: 768px) {
+  /* The row itself no longer scrolls — the left half (back + section
+     links) is its own horizontal scroller, so the action pills on the
+     right stay pinned and the links slide away beneath them. */
   .sub-nav-content {
+    overflow: visible;
+  }
+
+  .sub-nav-left {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    min-width: 0;
   }
 
-  .sub-nav-content::-webkit-scrollbar {
+  .sub-nav-left::-webkit-scrollbar {
     display: none;
   }
 
@@ -1631,11 +1639,15 @@ a.arco-nav-text.nav-transparent:hover {
   }
 
   .sub-nav-links {
-    /* Section anchors (Details / Photos / Professionals) are hidden on
-       mobile — the sections stack vertically and are trivially
-       reachable by scrolling, and the row otherwise crowds the tiny
-       sub-nav between the back button and the CTA on the right. */
-    display: none;
+    display: flex;
+    flex: none;
+    gap: 24px;
+    padding-right: 16px;
+    margin-right: 0;
+  }
+
+  .sub-nav-links .sub-nav-link {
+    flex-shrink: 0;
   }
 
   .sub-nav-mobile-divider {
