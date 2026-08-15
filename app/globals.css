@@ -1659,6 +1659,11 @@ a.arco-nav-text.nav-transparent:hover {
 
   .sub-nav-actions .filter-pill {
     padding: 6px 10px;
+    /* Equalize pill heights: the icon-only pills measure 13px content
+       while the status pill's text line-height runs taller — pin all
+       three to the same box so the row reads as one set. */
+    height: 28px;
+    line-height: 1;
   }
 
   .sub-nav-actions .filter-pill > .sub-nav-pill-label {
