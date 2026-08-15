@@ -222,6 +222,8 @@ function CustomCRRow({
   denominator,
   columnCount,
   isLast,
+  definition,
+  immatureFromIndex,
 }: {
   label: string
   numerator: number[]
@@ -232,6 +234,11 @@ function CustomCRRow({
    *  follows visually separated. Suppressed otherwise so consecutive
    *  CR rows read as one section. */
   isLast?: boolean
+  /** Cohorted rates carry a method tooltip. */
+  definition?: string
+  /** Cohorted rates: columns from this index render muted — the cohort
+   *  is younger than its maturity window, so the rate still climbs. */
+  immatureFromIndex?: number
 }) {
   return (
     <tr
@@ -243,13 +250,15 @@ function CustomCRRow({
           <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
             {label}
           </span>
+          {definition && <InfoIcon definition={definition} />}
         </div>
       </td>
       {denominator.map((denom, i) => {
         const num = numerator[i] ?? 0
+        const immature = immatureFromIndex !== undefined && i >= immatureFromIndex
         return (
           <td key={i} className="arco-table-nowrap" style={{ textAlign: "right" }}>
-            <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+            <span className="text-[10px] font-medium" style={{ color: immature ? "#a1a1a0" : "var(--primary, #016D75)" }}>
               {formatConversion(num, denom)}
             </span>
             <GrowthGutter growth={null} />
@@ -396,11 +405,11 @@ function MetricRowComponent({
   // Inline-CR mode forces an expand chevron even when there are no
   // sub rows, since the CR row is now nested inside the expansion.
   // Same applies for extraCRs (parent→other-metric ratios).
-  const hasSubs = row.subs.length > 0 || !!inlineCRTo || (row.extraCRs?.length ?? 0) > 0
+  const hasSubs = row.subs.length > 0 || !!inlineCRTo || !!row.cohortInlineCR || (row.extraCRs?.length ?? 0) > 0
   // Either an inline CR or an extraCR attaches directly below the
   // parent row, so the row treats both the same way for visual
   // attachment (suppressed bottom border + tightened padding).
-  const hasAttachedCR = !!inlineCRTo || (row.extraCRs?.length ?? 0) > 0
+  const hasAttachedCR = !!inlineCRTo || !!row.cohortInlineCR || (row.extraCRs?.length ?? 0) > 0
   return (
     <>
       <tr
@@ -464,7 +473,17 @@ function MetricRowComponent({
               sub rows so the reader sees "Visitors → Signups: X%" before
               drilling into the per-source breakdown. Section-closing,
               so isLast=true keeps a line under it. */}
-          {inlineCRTo && (
+          {row.cohortInlineCR ? (
+            <CustomCRRow
+              label={row.cohortInlineCR.label}
+              numerator={row.cohortInlineCR.numerator}
+              denominator={row.cohortInlineCR.denominator}
+              definition={row.cohortInlineCR.definition}
+              immatureFromIndex={row.cohortInlineCR.immatureFromIndex}
+              columnCount={columnCount}
+              isLast
+            />
+          ) : inlineCRTo && (
             <ConversionRowComponent
               from={row}
               to={inlineCRTo}
@@ -487,6 +506,8 @@ function MetricRowComponent({
               label={cr.label}
               numerator={cr.numerator}
               denominator={cr.denominator}
+              definition={cr.definition}
+              immatureFromIndex={cr.immatureFromIndex}
               columnCount={columnCount}
               isLast={idx === (row.extraCRs?.length ?? 0) - 1}
             />
@@ -551,6 +572,8 @@ function MetricRowComponent({
                     label={sub.customCR!.label}
                     numerator={sub.customCR!.numerator}
                     denominator={sub.customCR!.denominator}
+                    definition={sub.customCR!.definition}
+                    immatureFromIndex={sub.customCR!.immatureFromIndex}
                     columnCount={columnCount}
                     isLast={!hasValueRows}
                   />
