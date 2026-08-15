@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useState, type CSSProperties } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { MetricRow } from "./table-actions"
 
@@ -251,6 +251,18 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
   const color = DRIVER_COLORS[row.driver] ?? "#6b6b68"
   const hasSubs = row.subs.length > 0
 
+  // Group hover: a metric and its attached CR rows are separate <tr>s,
+  // so the per-row CSS :hover only lights one at a time. Track the
+  // hovered group ("parent" or a sub key) and paint the whole block —
+  // sparkline row + conversion rows — with the same hover background.
+  const [hoverGroup, setHoverGroup] = useState<string | null>(null)
+  const groupProps = (g: string) => ({
+    onMouseEnter: () => setHoverGroup(g),
+    onMouseLeave: () => setHoverGroup((cur) => (cur === g ? null : cur)),
+  })
+  const groupBg = (g: string): CSSProperties | undefined =>
+    hoverGroup === g ? { background: "var(--arco-white)" } : undefined
+
   // Parent-level CR block: the funnel "to X" CR (if any) followed by the
   // row's labelled extraCRs (% Accepted, % Sharers, …) — same order as
   // the Model view. All render always-visible directly under the parent.
@@ -267,8 +279,9 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
       {/* Desktop row */}
       <tr
         className={`hidden md:table-row ${hasSubs ? "cursor-pointer" : ""} ${hasAttachedCR ? "arco-cr-attached" : ""}`}
-        style={hasAttachedCR ? { borderBottom: "none" } : undefined}
+        style={{ ...(hasAttachedCR ? { borderBottom: "none" } : {}), ...groupBg("parent") }}
         onClick={hasSubs ? () => setExpanded(!expanded) : undefined}
+        {...groupProps("parent")}
       >
         <td>
           <div className="flex items-center gap-2">
@@ -319,7 +332,11 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
         const pull = idx === 0 ? 16 : 6
         return (
           <Fragment key={cr.label}>
-            <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+            <tr
+              className="hidden md:table-row arco-cr-row"
+              style={{ ...(isLast ? {} : { borderBottom: "none" }), ...groupBg("parent") }}
+              {...groupProps("parent")}
+            >
               <td>
                 <div className="flex items-center" style={{ paddingLeft: 31, marginTop: -pull }}>
                   <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
@@ -366,7 +383,11 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
         return (
         <Fragment key={sub.key}>
           {/* Desktop sub-row */}
-          <tr className={`hidden md:table-row ${hasAttached ? "arco-cr-attached" : ""}`} style={hasAttached ? { borderBottom: "none" } : undefined}>
+          <tr
+            className={`hidden md:table-row ${hasAttached ? "arco-cr-attached" : ""}`}
+            style={{ ...(hasAttached ? { borderBottom: "none" } : {}), ...groupBg(sub.key) }}
+            {...groupProps(sub.key)}
+          >
             <td>
               <div className="flex items-center gap-2 pl-7">
                 <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
@@ -393,7 +414,11 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             const pull = idx === 0 ? 10 : 6
             return (
               <Fragment key={cr.label}>
-                <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                <tr
+                  className="hidden md:table-row arco-cr-row"
+                  style={{ ...(isLast ? {} : { borderBottom: "none" }), ...groupBg(sub.key) }}
+                  {...groupProps(sub.key)}
+                >
                   <td>
                     <div className="flex items-center pl-7" style={{ marginTop: -pull }}>
                       <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
@@ -426,7 +451,11 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             const color = vr.tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
             return (
               <Fragment key={vr.label}>
-                <tr className="hidden md:table-row arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                <tr
+                  className="hidden md:table-row arco-cr-row"
+                  style={{ ...(isLast ? {} : { borderBottom: "none" }), ...groupBg(sub.key) }}
+                  {...groupProps(sub.key)}
+                >
                   <td>
                     <div className="flex items-center pl-7" style={{ marginTop: -pull }}>
                       <span className="text-[10px] font-medium" style={{ color }}>
