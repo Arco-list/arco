@@ -1720,7 +1720,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // today without adding an outbound-attribution query param.
       inlineCRNumerator: { total: 0, datapoints: contactedVisitorsSeries },
       cohortInlineCR: {
-        label: "ever visited",
+        label: "to Pro visitors (ever)",
         numerator: contactedCohort.num,
         denominator: contactedCohort.denom,
         definition: "Of pros first contacted in this period (Sales, Invites or Outbound), the share that ever clicked through to a landing. Outbound touches have no click tracking, so this is a lower bound. " + COHORT_DEF,
@@ -1733,7 +1733,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           total: totalSalesContacted, datapoints: salesContactedSeries,
           // Cohorted: of pros first Sales-contacted in the bucket, the
           // share that ever clicked through to a landing.
-          customCR: { label: "ever visited · Sales", numerator: salesContactedCohort.num, denominator: salesContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          customCR: { label: "to Pro visitors (ever) from Sales", numerator: salesContactedCohort.num, denominator: salesContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
           key: "invites_contacted", label: "Invites", definition: "Unique pros invited via project invites",
@@ -1742,7 +1742,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           // Cohorted: of pros first invited in the bucket, the share
           // that ever hit their invite landing (landing_visited_at,
           // stamped server-side — scanner traffic can't inflate it).
-          customCR: { label: "ever visited · Invites", numerator: inviteContactedCohort.num, denominator: inviteContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          customCR: { label: "to Pro visitors (ever) from Invites", numerator: inviteContactedCohort.num, denominator: inviteContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
           key: "outbound_contacted", label: "Outbound",
@@ -1753,7 +1753,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           // cohort converts straight to "ever created" — of pros first
           // outbound-touched in the bucket, the share whose company
           // ever completed onboarding.
-          customCR: { label: "ever created · Outbound", numerator: outboundCohort.num, denominator: outboundCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          customCR: { label: "to New Pros (ever) from Outbound", numerator: outboundCohort.num, denominator: outboundCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
       ],
     },
@@ -1793,11 +1793,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "sales", label: "Sales", definition: "Pros who clicked through to a Sales landing (Outreach or Showcase). Sourced from prospect_events server-side, not PostHog first-touch — measures click-through, not initial acquisition channel.",
           source: "supabase" as MetricSource,
           total: salesVisitorsTotalDb, datapoints: salesVisitorsSeriesDb,
-          customCR: { label: "ever created · Sales", numerator: salesClickerCohort.num, denominator: salesClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
+          customCR: { label: "to New Pros (ever) from Sales", numerator: salesClickerCohort.num, denominator: salesClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
         { key: "invites", label: "Invites", definition: "Pros who clicked through to an invite landing. Sourced from project_professionals.landing_visited_at server-side.",
           source: "supabase" as MetricSource,
           total: inviteVisitorsTotalDb, datapoints: inviteVisitorsSeriesDb,
-          customCR: { label: "ever created · Invites", numerator: inviteClickerCohort.num, denominator: inviteClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
+          customCR: { label: "to New Pros (ever) from Invites", numerator: inviteClickerCohort.num, denominator: inviteClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
         { key: "email", label: "Email", definition: "Pro visitors from Arco transactional emails (project-live, team-invite, domain-verification, etc.)",
           total: proVisitorsEmailBucketed.total, datapoints: proVisitorsEmailBucketed.series,
           crNumerator: { total: newProsBySourceTotals.email, datapoints: newProsBySource.email } },
@@ -1834,7 +1834,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "new_pros", label: "New Pros", definition: "Unique pros that completed onboarding", source: "supabase" as MetricSource, driver: "acquisition",
       total: newProDates.length, ...newPros,
       extraCRs: [
-        { label: "% ever listed", numerator: newProsEverListedNum, denominator: newProsCohortDenom,
+        { label: "% Listed (ever)", numerator: newProsEverListedNum, denominator: newProsCohortDenom,
           definition: "Of pros that completed onboarding in this period, the share that has reached the listed state at any point since. " + COHORT_DEF,
           immatureFromIndex: cohortImmatureFromIndex },
       ],
@@ -1885,7 +1885,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // contractors / suppliers who can't publish anyway) understates
       // the real publishing motion.
       extraCRs: [
-        { label: "% ever published", numerator: listedEverPublishedNum, denominator: listedCohortDenom,
+        { label: "% Published (ever)", numerator: listedEverPublishedNum, denominator: listedCohortDenom,
           definition: "Of pros first listed in this period, the share that ever published a project. " + COHORT_DEF,
           immatureFromIndex: cohortImmatureFromIndex },
         { label: "% Ranked Pros", numerator: indexedListedSnapshotSeries, denominator: listedSnapshotSeries },
@@ -1999,7 +1999,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "invited_pros", label: "Contributors invited", definition: "Professionals invited to be credited on a project in the period", source: "supabase" as MetricSource, driver: "retention",
       total: totalInvited, datapoints: totalInvitedSeries, labels: [] as string[],
       extraCRs: [
-        { label: "% ever accepted", numerator: invitedEverAcceptedNum, denominator: invitedCohortDenom,
+        { label: "% Accepted (ever)", numerator: invitedEverAcceptedNum, denominator: invitedCohortDenom,
           definition: "Of contributor invites sent in this period, the share the invitee ever responded to (chose how to appear). " + COHORT_DEF,
           immatureFromIndex: cohortImmatureFromIndex },
       ],
@@ -2021,14 +2021,14 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "contributors_accepted", label: "Contributors accepted", definition: "Invited professionals who responded and chose how to appear (unlisted, listed or live on the project page)", source: "supabase" as MetricSource, driver: "retention",
       total: totalAccepted, datapoints: acceptedSeries, labels,
       extraCRs: [
-        { label: "% ever live", numerator: acceptedEverLiveNum, denominator: acceptedCohortDenom,
+        { label: "% Live (ever)", numerator: acceptedEverLiveNum, denominator: acceptedCohortDenom,
           definition: "Of contributors who accepted in this period, the share whose credit is now live on the project page. " + COHORT_DEF,
           immatureFromIndex: cohortImmatureFromIndex },
       ],
       subs: [
         {
           key: "contributors_live", label: "Contributors live", definition: "Accepted contributors whose credit is visible on the project page (status live_on_page)", total: totalLive, datapoints: liveSeries,
-          customCR: { label: "% ever paying", numerator: empty8, denominator: liveSeries },
+          customCR: { label: "% Paying (ever)", numerator: empty8, denominator: liveSeries },
         },
       ],
     },
