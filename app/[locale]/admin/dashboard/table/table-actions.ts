@@ -1272,7 +1272,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // historical rows backfilled via LEAST(created_at, updated_at)).
   // Previously bucketed by updated_at, which moved on every admin edit
   // and bunched recently-edited pros onto the current bucket.
-  const onboardingCompleted = (c: any) => c.status !== "created" && c.owner_id != null
+  // A company counts as a New Pro once a professional owns it. The
+  // separate "complete onboarding" step was removed from the product —
+  // the signup flow ends with a complete company page (status 'created'),
+  // which goes live when a project is approved. Drafts therefore count
+  // as New Pros; "% Listed (ever)" under the row shows how many made it
+  // to listed, which is the metric to push.
+  const onboardingCompleted = (c: any) => c.owner_id != null
   const newProDates = companies
     .filter(onboardingCompleted)
     .map(onboardedTsForBucket)
@@ -1831,11 +1837,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "new_pros", label: "New Pros", definition: "Unique pros that completed onboarding", source: "supabase" as MetricSource, driver: "acquisition",
+      key: "new_pros", label: "New Pros", definition: "Unique pros that created their company page (signup flow ends with a complete page; it goes live once a project is approved)", source: "supabase" as MetricSource, driver: "acquisition",
       total: newProDates.length, ...newPros,
       extraCRs: [
         { label: "% Listed (ever)", numerator: newProsEverListedNum, denominator: newProsCohortDenom,
-          definition: "Of pros that completed onboarding in this period, the share that has reached the listed state at any point since. " + COHORT_DEF,
+          definition: "Of pros whose company page was created in this period (drafts included), the share that has reached the listed state at any point since. " + COHORT_DEF,
           immatureFromIndex: cohortImmatureFromIndex },
       ],
       // Channel breakdown counts companies grouped by
@@ -1871,7 +1877,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "outbound", label: "Outbound", definition: "New pros who were successfully reached via outbound before signup. Overlaps with other channels.",
           source: "supabase" as MetricSource,
           total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0), datapoints: newProsOutboundBucketed.datapoints },
-        { key: "open_drafts", label: "Open drafts", definition: "Pros currently in draft — onboarding not yet completed", source: "supabase" as MetricSource, total: totalOpenDrafts, datapoints: openDraftsSeries },
       ],
     },
     {
