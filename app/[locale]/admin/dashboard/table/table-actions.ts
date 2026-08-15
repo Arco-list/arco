@@ -2003,16 +2003,15 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
       subs: [
         {
+          key: "new_active_clients", label: "New active clients",
+          definition: "First-time actives: clients active this period who weren't active last period and aren't re-engaged returns. Balancing item so MAU = Retained + New + Re-engaged.",
+          source: "posthog" as MetricSource, total: totalNewActiveClients, datapoints: newActiveClientsSeries,
+        },
+        {
           key: "retained_clients", label: "Retained clients",
           definition: "Clients active this period that were also active last period (MAU prior − Newly dormant)",
           source: "posthog" as MetricSource, total: totalRetainedClients, datapoints: retainedClientsSeries,
           customCR: { label: "% Retained", numerator: retainedClientsSeries, denominator: priorMACSeries },
-        },
-        {
-          key: "new_active_clients", label: "New active clients",
-          definition: "First-time actives: clients active this period who weren't active last period and aren't re-engaged returns. Balancing item so MAU = Retained + New + Re-engaged.",
-          source: "posthog" as MetricSource, total: totalNewActiveClients, datapoints: newActiveClientsSeries,
-          customCR: { label: "% New", numerator: newActiveClientsSeries, denominator: activeClientsSeries },
         },
         {
           key: "re_engaged_clients", label: "Re-engaged clients",
