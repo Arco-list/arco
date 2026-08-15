@@ -1079,6 +1079,16 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   )
   const totalRetainedClients = retainedClientsSeries[retainedClientsSeries.length - 1] ?? 0
 
+  // New actives — the balancing item that closes the identity above:
+  // clients active this period who weren't active last period and aren't
+  // re-engaged returns, i.e. first-time actives. Without this sub the
+  // visible rows (Retained + Re-engaged + Newly dormant) can't reconcile
+  // to the parent MAU number.
+  const newActiveClientsSeries = activeClientsSeries.map((v, i) =>
+    i === 0 ? 0 : Math.max(0, v - retainedClientsSeries[i] - reEngagedClientsSeries[i]),
+  )
+  const totalNewActiveClients = newActiveClientsSeries[newActiveClientsSeries.length - 1] ?? 0
+
   // Denominators for the inline accounting CRs:
   //   % Retained = Retained / MAU(t-1)
   //   % Churn    = NewlyDormant / MAU(t-1)
@@ -1997,6 +2007,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           definition: "Clients active this period that were also active last period (MAU prior − Newly dormant)",
           source: "posthog" as MetricSource, total: totalRetainedClients, datapoints: retainedClientsSeries,
           customCR: { label: "% Retained", numerator: retainedClientsSeries, denominator: priorMACSeries },
+        },
+        {
+          key: "new_active_clients", label: "New active clients",
+          definition: "First-time actives: clients active this period who weren't active last period and aren't re-engaged returns. Balancing item so MAU = Retained + New + Re-engaged.",
+          source: "posthog" as MetricSource, total: totalNewActiveClients, datapoints: newActiveClientsSeries,
+          customCR: { label: "% New", numerator: newActiveClientsSeries, denominator: activeClientsSeries },
         },
         {
           key: "re_engaged_clients", label: "Re-engaged clients",
