@@ -87,7 +87,11 @@ export type MetricRow = {
    *  expansion (above the subs). Unlike the auto-inline CR to the next
    *  funnel row, these declare their own label/numerator/denominator —
    *  used for parent→other-metric ratios like MAC → Sharers/Savers/Contacters. */
-  extraCRs?: Array<{ label: string; numerator: number[]; denominator: number[] }>
+  extraCRs?: Array<{ label: string; numerator: number[]; denominator: number[]; definition?: string; immatureFromIndex?: number }>
+  /** Cohorted replacement for the view-built inline CR: members bucketed
+   *  by first touch, numerator = ever converted. Table view renders this
+   *  instead of deriving "to <next row>" when present. */
+  cohortInlineCR?: { label: string; numerator: number[]; denominator: number[]; definition?: string; immatureFromIndex?: number }
   /** Optional numerator override for the auto-inline CR (parent → next
    *  funnel row). When present, the inline CR uses this series as the
    *  numerator instead of the next row's own datapoints. Used when the
@@ -119,7 +123,7 @@ export type MetricRow = {
      *  % Retained / % Churn / % Re-activated under MAU, where the
      *  denominator isn't `datapoints` and the row isn't a funnel
      *  conversion. */
-    customCR?: { label: string; numerator: number[]; denominator: number[] }
+    customCR?: { label: string; numerator: number[]; denominator: number[]; definition?: string; immatureFromIndex?: number }
     /** Optional set of absolute-value rows rendered underneath this sub
      *  at CR-row size (10px). Each row carries its own label, per-bucket
      *  values and a tone — "muted" reads as grey, "accent" as teal. Use
@@ -1582,6 +1586,127 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   )
   const proVisitorsOtherTotal = proVisitorsOtherSeries.reduce((a, b) => a + b, 0)
 
+  // ── Cohorted "ever" rates ────────────────────────────────────────────
+  // Cohort members bucket by their FIRST touch; the numerator counts
+  // members that ever converted (any time up to now). Numerator ⊆
+  // denominator, so rates can't exceed 100% and don't bleed across
+  // cohorts. Young cohorts under-read — buckets ending within the last
+  // 30 days are flagged immature and rendered grey by the table view.
+  const COHORT_DEF = "Cohorted: counted in the period of the first touch; conversions counted whenever they happen. Grey percentages = cohort still maturing (period ended less than 30 days ago)."
+  const cohortImmatureFromIndex = (() => {
+    const cutoff = Date.now() - 30 * DAY_MS
+    const idx = buckets.ends.findIndex((end) => end.getTime() > cutoff)
+    return idx === -1 ? buckets.ends.length : idx
+  })()
+  const bucketIndexOf = (d: Date): number => {
+    for (let i = 0; i < buckets.starts.length; i++) {
+      if (d >= buckets.starts[i] && d < buckets.ends[i]) return i
+    }
+    return -1
+  }
+  function cohortByFirstTouch(events: ContactEvent[], converted: Set<string>): { denom: number[]; num: number[] } {
+    const firstByKey = new Map<string, Date>()
+    for (const ev of events) {
+      const cur = firstByKey.get(ev.email)
+      if (!cur || ev.date < cur) firstByKey.set(ev.email, ev.date)
+    }
+    const denom = buckets.starts.map(() => 0)
+    const num = buckets.starts.map(() => 0)
+    firstByKey.forEach((d, key) => {
+      const i = bucketIndexOf(d)
+      if (i === -1) return
+      denom[i]++
+      if (converted.has(key)) num[i]++
+    })
+    return { denom, num }
+  }
+
+  // Ever-visited sets from the email-keyed server-side click logs.
+  const everVisitedSalesEmails = new Set(salesVisitEmailEvents.map((ev) => ev.email))
+  const everVisitedInviteEmails = new Set(inviteVisitEvents.map((ev) => ev.email))
+  const everVisitedEmails = new Set([...everVisitedSalesEmails, ...everVisitedInviteEmails])
+
+  // Pros contacted → ever visited (parent + per-channel cohorts).
+  const contactedCohort = cohortByFirstTouch(allContactEvents, everVisitedEmails)
+  const salesContactedCohort = cohortByFirstTouch(salesContactEvents, everVisitedSalesEmails)
+  const inviteContactedCohort = cohortByFirstTouch(inviteContactEvents, everVisitedInviteEmails)
+
+  // "Ever created" — the email's linked company (via prospects.company_id
+  // or the invite row's company_id) completed onboarding at any point.
+  const onboardedCompanyIds = new Set(companies.filter(onboardingCompleted).map((c: any) => String(c.id)))
+  const prospectEmailToCompanyId = new Map<string, string>()
+  for (const p of prospects) {
+    if (p.email && p.company_id) prospectEmailToCompanyId.set(String(p.email).toLowerCase(), String(p.company_id))
+  }
+  const inviteEmailToCompanyIds = new Map<string, string[]>()
+  for (const inv of invites as any[]) {
+    if (!inv.is_project_owner && inv.invited_email && inv.company_id) {
+      const em = String(inv.invited_email).toLowerCase()
+      const arr = inviteEmailToCompanyIds.get(em) ?? []
+      arr.push(String(inv.company_id))
+      inviteEmailToCompanyIds.set(em, arr)
+    }
+  }
+  const emailEverCreated = (em: string): boolean => {
+    const viaProspect = prospectEmailToCompanyId.get(em)
+    if (viaProspect && onboardedCompanyIds.has(viaProspect)) return true
+    return (inviteEmailToCompanyIds.get(em) ?? []).some((cid) => onboardedCompanyIds.has(cid))
+  }
+  const everCreatedSalesEmails = new Set([...everVisitedSalesEmails].filter(emailEverCreated))
+  const everCreatedInviteEmails = new Set([...everVisitedInviteEmails].filter(emailEverCreated))
+  const outboundEverCreatedEmails = new Set(outboundContactEvents.map((ev) => ev.email).filter(emailEverCreated))
+  const outboundCohort = cohortByFirstTouch(outboundContactEvents, outboundEverCreatedEmails)
+  // Clicker cohorts (bucketed by FIRST VISIT) → ever created.
+  const salesClickerCohort = cohortByFirstTouch(salesVisitEmailEvents, everCreatedSalesEmails)
+  const inviteClickerCohort = cohortByFirstTouch(inviteVisitEvents, everCreatedInviteEmails)
+
+  // Contributors invited → ever accepted (unit = invite row, cohort by
+  // invite date; matches the row's displayed per-bucket denominator).
+  const invitedCohortDenom = buckets.starts.map(() => 0)
+  const invitedEverAcceptedNum = buckets.starts.map(() => 0)
+  for (const pp of nonOwnerInvites as any[]) {
+    if (!pp.created_at) continue
+    const i = bucketIndexOf(new Date(pp.created_at))
+    if (i === -1) continue
+    invitedCohortDenom[i]++
+    if (pp.status && pp.status !== "invited") invitedEverAcceptedNum[i]++
+  }
+  // Contributors accepted → ever live (cohort by acceptance date).
+  const acceptedCohortDenom = buckets.starts.map(() => 0)
+  const acceptedEverLiveNum = buckets.starts.map(() => 0)
+  for (const pp of acceptedRows as any[]) {
+    const d = acceptanceDate(pp)
+    if (!d) continue
+    const i = bucketIndexOf(d)
+    if (i === -1) continue
+    acceptedCohortDenom[i]++
+    if (pp.status === "live_on_page") acceptedEverLiveNum[i]++
+  }
+  // New Pros → ever listed; Listed cohort → ever published.
+  const publisherCompanyIdsAllTime = new Set(publishedRows.map((r) => r.companyId))
+  const newProsCohortDenom = buckets.starts.map(() => 0)
+  const newProsEverListedNum = buckets.starts.map(() => 0)
+  const listedCohortDenom = buckets.starts.map(() => 0)
+  const listedEverPublishedNum = buckets.starts.map(() => 0)
+  for (const c of companies as any[]) {
+    if (!onboardingCompleted(c)) continue
+    const onboardTs = onboardedTsForBucket(c)
+    if (onboardTs) {
+      const i = bucketIndexOf(onboardTs)
+      if (i !== -1) {
+        newProsCohortDenom[i]++
+        if (c.listed_at != null) newProsEverListedNum[i]++
+      }
+    }
+    if (c.listed_at) {
+      const j = bucketIndexOf(new Date(c.listed_at))
+      if (j !== -1) {
+        listedCohortDenom[j]++
+        if (publisherCompanyIdsAllTime.has(String(c.id))) listedEverPublishedNum[j]++
+      }
+    }
+  }
+
   const rows: MetricRow[] = [
     // ── Professionals ──────────────────────────────────────────────────
     {
@@ -1594,43 +1719,41 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // driven visits. Still the most honest signal we can compute
       // today without adding an outbound-attribution query param.
       inlineCRNumerator: { total: 0, datapoints: contactedVisitorsSeries },
+      cohortInlineCR: {
+        label: "ever visited",
+        numerator: contactedCohort.num,
+        denominator: contactedCohort.denom,
+        definition: "Of pros first contacted in this period (Sales, Invites or Outbound), the share that ever clicked through to a landing. Outbound touches have no click tracking, so this is a lower bound. " + COHORT_DEF,
+        immatureFromIndex: cohortImmatureFromIndex,
+      },
       subs: [
         {
           key: "sales_contacted", label: "Sales", definition: "Unique pros contacted via Outreach (Apollo cold) or Showcase",
           source: "supabase" as MetricSource,
           total: totalSalesContacted, datapoints: salesContactedSeries,
-          // Numerator: Sales-attributed Pro visitors (Outreach + Showcase
-          // traffic). Denominator (sub.datapoints) is sales-contacted
-          // pros, giving "what fraction of pros we Sales-contacted
-          // actually clicked through to the site."
-          crNumerator: { total: salesVisitorsTotalDb, datapoints: salesVisitorsSeriesDb },
+          // Cohorted: of pros first Sales-contacted in the bucket, the
+          // share that ever clicked through to a landing.
+          customCR: { label: "ever visited · Sales", numerator: salesContactedCohort.num, denominator: salesContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
           key: "invites_contacted", label: "Invites", definition: "Unique pros invited via project invites",
           source: "supabase" as MetricSource,
           total: totalInviteContacted, datapoints: inviteContactedSeries,
-          // Invite-attributed visitors come from
-          // project_professionals.landing_visited_at, stamped server-side
-          // when the recipient hits /businesses/professionals with their
-          // inviteEmail. Email-keyed, so the ratio reconciles with the
-          // invited-pros denominator and link-scanner traffic can't
-          // inflate it past 100%.
-          crNumerator: { total: inviteVisitorsTotalDb, datapoints: inviteVisitorsSeriesDb },
+          // Cohorted: of pros first invited in the bucket, the share
+          // that ever hit their invite landing (landing_visited_at,
+          // stamped server-side — scanner traffic can't inflate it).
+          customCR: { label: "ever visited · Invites", numerator: inviteContactedCohort.num, denominator: inviteContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
           key: "outbound_contacted", label: "Outbound",
           definition: "Distinct pros reached via manual outbound activity (call, meeting, LinkedIn, manual email — excludes notes and no-answer attempts).",
           source: "supabase" as MetricSource,
           total: totalOutboundContacted, datapoints: outboundContactedSeries,
-          // No server-side "outbound visitor" event exists, so the sub-CR
-          // uses New Pros instead of Pro visitors — measures "of the
-          // pros we outbound-touched, how many became New Pros." Same
-          // shape as sales_contacted / invites_contacted's crNumerator,
-          // different target metric.
-          crNumerator: {
-            total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0),
-            datapoints: newProsOutboundBucketed.datapoints,
-          },
+          // No server-side "outbound visitor" event exists, so this
+          // cohort converts straight to "ever created" — of pros first
+          // outbound-touched in the bucket, the share whose company
+          // ever completed onboarding.
+          customCR: { label: "ever created · Outbound", numerator: outboundCohort.num, denominator: outboundCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
       ],
     },
@@ -1670,11 +1793,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "sales", label: "Sales", definition: "Pros who clicked through to a Sales landing (Outreach or Showcase). Sourced from prospect_events server-side, not PostHog first-touch — measures click-through, not initial acquisition channel.",
           source: "supabase" as MetricSource,
           total: salesVisitorsTotalDb, datapoints: salesVisitorsSeriesDb,
-          crNumerator: { total: newProsSalesClickerTotal, datapoints: newProsSalesClickerSeries } },
+          customCR: { label: "ever created · Sales", numerator: salesClickerCohort.num, denominator: salesClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
         { key: "invites", label: "Invites", definition: "Pros who clicked through to an invite landing. Sourced from project_professionals.landing_visited_at server-side.",
           source: "supabase" as MetricSource,
           total: inviteVisitorsTotalDb, datapoints: inviteVisitorsSeriesDb,
-          crNumerator: { total: newProsInvitesClickerTotal, datapoints: newProsInvitesClickerSeries } },
+          customCR: { label: "ever created · Invites", numerator: inviteClickerCohort.num, denominator: inviteClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
         { key: "email", label: "Email", definition: "Pro visitors from Arco transactional emails (project-live, team-invite, domain-verification, etc.)",
           total: proVisitorsEmailBucketed.total, datapoints: proVisitorsEmailBucketed.series,
           crNumerator: { total: newProsBySourceTotals.email, datapoints: newProsBySource.email } },
@@ -1710,6 +1833,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     {
       key: "new_pros", label: "New Pros", definition: "Unique pros that completed onboarding", source: "supabase" as MetricSource, driver: "acquisition",
       total: newProDates.length, ...newPros,
+      extraCRs: [
+        { label: "% ever listed", numerator: newProsEverListedNum, denominator: newProsCohortDenom,
+          definition: "Of pros that completed onboarding in this period, the share that has reached the listed state at any point since. " + COHORT_DEF,
+          immatureFromIndex: cohortImmatureFromIndex },
+      ],
       // Channel breakdown counts companies grouped by
       // companies.first_touch_source (inherited from the owner's
       // profile at onboarding). Channels and parent are now both
@@ -1757,6 +1885,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // contractors / suppliers who can't publish anyway) understates
       // the real publishing motion.
       extraCRs: [
+        { label: "% ever published", numerator: listedEverPublishedNum, denominator: listedCohortDenom,
+          definition: "Of pros first listed in this period, the share that ever published a project. " + COHORT_DEF,
+          immatureFromIndex: cohortImmatureFromIndex },
         { label: "% Ranked Pros", numerator: indexedListedSnapshotSeries, denominator: listedSnapshotSeries },
       ],
       subs: [
@@ -1868,7 +1999,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "invited_pros", label: "Contributors invited", definition: "Professionals invited to be credited on a project in the period", source: "supabase" as MetricSource, driver: "retention",
       total: totalInvited, datapoints: totalInvitedSeries, labels: [] as string[],
       extraCRs: [
-        { label: "% Accepted", numerator: acceptedSeries, denominator: totalInvitedSeries },
+        { label: "% ever accepted", numerator: invitedEverAcceptedNum, denominator: invitedCohortDenom,
+          definition: "Of contributor invites sent in this period, the share the invitee ever responded to (chose how to appear). " + COHORT_DEF,
+          immatureFromIndex: cohortImmatureFromIndex },
       ],
       subs: [
         { key: "inviters", label: "Inviters", definition: "Unique companies that invited one or more professionals on a project", total: totalInvitersInWindow, datapoints: invitersBucketed },
@@ -1888,12 +2021,14 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "contributors_accepted", label: "Contributors accepted", definition: "Invited professionals who responded and chose how to appear (unlisted, listed or live on the project page)", source: "supabase" as MetricSource, driver: "retention",
       total: totalAccepted, datapoints: acceptedSeries, labels,
       extraCRs: [
-        { label: "% Live", numerator: liveSeries, denominator: acceptedSeries },
+        { label: "% ever live", numerator: acceptedEverLiveNum, denominator: acceptedCohortDenom,
+          definition: "Of contributors who accepted in this period, the share whose credit is now live on the project page. " + COHORT_DEF,
+          immatureFromIndex: cohortImmatureFromIndex },
       ],
       subs: [
         {
           key: "contributors_live", label: "Contributors live", definition: "Accepted contributors whose credit is visible on the project page (status live_on_page)", total: totalLive, datapoints: liveSeries,
-          customCR: { label: "% Paying", numerator: empty8, denominator: liveSeries },
+          customCR: { label: "% ever paying", numerator: empty8, denominator: liveSeries },
         },
       ],
     },

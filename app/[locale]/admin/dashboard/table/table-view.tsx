@@ -177,7 +177,7 @@ function formatConversion(numerator: number, denominator: number): string {
  *  into the sparkline's empty bottom padding — larger for the first CR
  *  row directly under a sparkline, small for CR rows that follow
  *  another CR row (which have no slack above them). */
-function InlineCRCell({ numerator, denominator, pull = 6 }: { numerator: number[]; denominator: number[]; pull?: number }) {
+function InlineCRCell({ numerator, denominator, pull = 6, immatureFromIndex }: { numerator: number[]; denominator: number[]; pull?: number; immatureFromIndex?: number }) {
   const n = denominator.length
   const padX = 6
   const w = 100
@@ -185,11 +185,14 @@ function InlineCRCell({ numerator, denominator, pull = 6 }: { numerator: number[
     <div className="relative w-full" style={{ height: 12, marginTop: -pull }}>
       {denominator.map((denom, i) => {
         const x = padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)
+        // Cohorted rates: buckets whose cohort hasn't had time to fully
+        // convert render muted — "still maturing, will rise", not a dip.
+        const immature = immatureFromIndex !== undefined && i >= immatureFromIndex
         return (
           <span
             key={i}
             className="absolute text-[10px] font-medium whitespace-nowrap"
-            style={{ left: `${(x / w) * 100}%`, top: "50%", transform: "translate(-50%, -50%)", color: "var(--primary, #016D75)" }}
+            style={{ left: `${(x / w) * 100}%`, top: "50%", transform: "translate(-50%, -50%)", color: immature ? "#a1a1a0" : "var(--primary, #016D75)" }}
           >
             {formatConversion(numerator[i] ?? 0, denom)}
           </span>
@@ -241,7 +244,7 @@ function ValueCell({ values, tone = "muted", format = "integer", pull = 6 }: {
  *  beneath it — attached in GrowthTableView, not part of MetricRow.
  *  targetLabel feeds the per-source sub CRs ("to Signups from Direct"). */
 type RowWithCR = MetricRow & {
-  inlineCR?: { label: string; targetLabel: string; numerator: number[]; denominator: number[] }
+  inlineCR?: { label: string; targetLabel?: string; numerator: number[]; denominator: number[]; definition?: string; immatureFromIndex?: number }
 }
 
 // ─── Metric Row ───────────────────────────────────────────────────────────────
@@ -266,10 +269,9 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
   // Parent-level CR block: the funnel "to X" CR (if any) followed by the
   // row's labelled extraCRs (% Accepted, % Sharers, …) — same order as
   // the Model view. All render always-visible directly under the parent.
-  const parentCRs: Array<{ label: string; numerator: number[]; denominator: number[] }> = [
-    ...(row.inlineCR
-      ? [{ label: row.inlineCR.label, numerator: row.inlineCR.numerator, denominator: row.inlineCR.denominator }]
-      : []),
+  type CRSpec = { label: string; numerator: number[]; denominator: number[]; definition?: string; immatureFromIndex?: number }
+  const parentCRs: CRSpec[] = [
+    ...(row.inlineCR ? [row.inlineCR as CRSpec] : []),
     ...(row.extraCRs ?? []),
   ]
   const hasAttachedCR = parentCRs.length > 0
@@ -338,14 +340,15 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               {...groupProps("parent")}
             >
               <td>
-                <div className="flex items-center" style={{ paddingLeft: 31, marginTop: -pull }}>
+                <div className="flex items-center gap-1.5" style={{ paddingLeft: 31, marginTop: -pull }}>
                   <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                     {cr.label}
                   </span>
+                  {cr.definition && <InfoIcon definition={cr.definition} />}
                 </div>
               </td>
               <td>
-                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} />
+                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} immatureFromIndex={cr.immatureFromIndex} />
               </td>
             </tr>
             <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
@@ -355,7 +358,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
                     {cr.label}
                   </span>
                 </div>
-                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+                <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} immatureFromIndex={cr.immatureFromIndex} />
               </td>
             </tr>
           </Fragment>
@@ -370,12 +373,12 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
         // order: the per-source funnel CR ("to New Pros from Sales"),
         // its self-declared customCR ("% Unique", "% Retained", …), and
         // raw valueRows (SEO Impressions / CTR / Clicks).
-        const subCRs: Array<{ label: string; numerator: number[]; denominator: number[] }> = []
-        if (sub.crNumerator && row.inlineCR) {
+        const subCRs: CRSpec[] = []
+        if (sub.crNumerator && row.inlineCR?.targetLabel) {
           subCRs.push({ label: `to ${row.inlineCR.targetLabel} from ${sub.label}`, numerator: sub.crNumerator.datapoints, denominator: sub.datapoints })
         }
         if (sub.customCR) {
-          subCRs.push({ label: sub.customCR.label, numerator: sub.customCR.numerator, denominator: sub.customCR.denominator })
+          subCRs.push(sub.customCR)
         }
         const valueRows = sub.valueRows ?? []
         const attachedCount = subCRs.length + valueRows.length
@@ -420,14 +423,15 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
                   {...groupProps(sub.key)}
                 >
                   <td>
-                    <div className="flex items-center pl-7" style={{ marginTop: -pull }}>
+                    <div className="flex items-center gap-1.5 pl-7" style={{ marginTop: -pull }}>
                       <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                         {cr.label}
                       </span>
+                      {cr.definition && <InfoIcon definition={cr.definition} />}
                     </div>
                   </td>
                   <td>
-                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} />
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} immatureFromIndex={cr.immatureFromIndex} />
                   </td>
                 </tr>
                 <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
@@ -437,7 +441,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
                         {cr.label}
                       </span>
                     </div>
-                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} />
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} immatureFromIndex={cr.immatureFromIndex} />
                   </td>
                 </tr>
               </Fragment>
@@ -565,18 +569,10 @@ export function GrowthTableView({
   const sepIndex = rows.findIndex((r) => r.key === "_sep")
   const proRows = (sepIndex >= 0 ? rows.slice(0, sepIndex) : rows).map((r) => {
     if (r.key === "pros_contacted") {
-      // "to Pro visitors" — table-actions ships the cohort-honest
-      // numerator (Sales + Invites visitors, email-keyed) via
-      // inlineCRNumerator; the Model view renders it and now the table
-      // does too. Also unlocks the per-source sub CRs (Sales / Invites
-      // / Outbound each carry a crNumerator).
-      const target = rows.find((x) => x.key === "pro_visitors")
-      return {
-        ...r,
-        inlineCR: r.inlineCRNumerator && target
-          ? { label: `to ${target.label}`, targetLabel: target.label, numerator: r.inlineCRNumerator.datapoints, denominator: r.datapoints }
-          : undefined,
-      }
+      // Cohorted "ever visited" CR shipped ready-made by table-actions
+      // (first-contact cohorts, any-time conversions, immature buckets
+      // flagged). Sub CRs are cohorted customCRs on the subs themselves.
+      return { ...r, inlineCR: r.cohortInlineCR }
     }
     if (r.key === "pro_visitors") {
       // Same inline CR treatment as client Visitors: "to New Pros"
