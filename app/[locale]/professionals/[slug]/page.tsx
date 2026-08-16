@@ -16,7 +16,7 @@ import { CompanyStructuredData } from "@/components/company-structured-data"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
-import { locales } from "@/i18n/config"
+import { locales, defaultLocale } from "@/i18n/config"
 import { resolveCompanyRedirect } from "@/lib/company-slug"
 
 type PageParams = {
@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
   // canonical pointing at a redirect is ignored and both locale
   // variants index independently). x-default = default-locale URL.
   const canonical = `${baseUrl}/${locale}/professionals/${slug}`
-  const xDefault = `${baseUrl}/${locales[0]}/professionals/${slug}`
+  const xDefault = `${baseUrl}/${defaultLocale}/professionals/${slug}`
   const languages = Object.fromEntries(
     locales.map((l) => [l, `${baseUrl}/${l}/professionals/${slug}`])
   )

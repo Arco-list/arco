@@ -19,7 +19,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
-import { locales } from "@/i18n/config"
+import { locales, defaultLocale } from "@/i18n/config"
 
 const PREVIEW_PARAM = "preview"
 
@@ -113,7 +113,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // the same project shows twice in results. x-default points at the
   // default-locale URL (a real 200), matching the bare-URL redirect.
   const canonical = project.slug ? `${baseUrl}/${metaLocale}/projects/${project.slug}` : undefined
-  const xDefault = project.slug ? `${baseUrl}/${locales[0]}/projects/${project.slug}` : undefined
+  const xDefault = project.slug ? `${baseUrl}/${defaultLocale}/projects/${project.slug}` : undefined
   const languages = project.slug
     ? Object.fromEntries(
         locales.map((l) => [l, `${baseUrl}/${l}/projects/${project.slug}`])

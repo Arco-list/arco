@@ -14,7 +14,7 @@ import { TrackProfessionalView } from "@/components/track-view"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getSiteUrl } from "@/lib/utils"
-import { locales } from "@/i18n/config"
+import { locales, defaultLocale } from "@/i18n/config"
 
 type PageParams = {
   locale: string
@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
   const baseUrl = getSiteUrl()
   // Self-canonicalize per locale; see professionals/[slug] for rationale.
   const canonical = `${baseUrl}/${locale}/photographers/${slug}`
-  const xDefault = `${baseUrl}/${locales[0]}/photographers/${slug}`
+  const xDefault = `${baseUrl}/${defaultLocale}/photographers/${slug}`
   const languages = Object.fromEntries(
     locales.map((l) => [l, `${baseUrl}/${l}/photographers/${slug}`])
   )

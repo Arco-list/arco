@@ -8,7 +8,7 @@ import { fetchDiscoverProfessionals } from "@/lib/professionals/queries"
 import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
-import { locales } from "@/i18n/config"
+import { locales, defaultLocale } from "@/i18n/config"
 
 // SEO copy is intentionally inline (not via messages/*.json). See the matching
 // note in app/[locale]/projects/page.tsx for the rationale.
@@ -43,7 +43,7 @@ export async function generateMetadata({
     description: meta.description,
     alternates: {
       canonical,
-      languages: { ...languages, "x-default": `${baseUrl}/${locales[0]}/professionals` },
+      languages: { ...languages, "x-default": `${baseUrl}/${defaultLocale}/professionals` },
     },
     openGraph: {
       title: `${meta.title} | Arco`,

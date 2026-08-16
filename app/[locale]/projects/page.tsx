@@ -9,7 +9,7 @@ import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
-import { locales } from "@/i18n/config"
+import { locales, defaultLocale } from "@/i18n/config"
 
 // SEO copy is intentionally inline (not via messages/*.json) because it's the
 // most search-sensitive copy on the site and lives best in one reviewable place.
@@ -46,7 +46,7 @@ export async function generateMetadata({
     description: meta.description,
     alternates: {
       canonical,
-      languages: { ...languages, "x-default": `${baseUrl}/${locales[0]}/projects` },
+      languages: { ...languages, "x-default": `${baseUrl}/${defaultLocale}/projects` },
     },
     openGraph: {
       title: `${meta.title} | Arco`,

@@ -2,7 +2,7 @@
   import type { MetadataRoute } from "next"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getSiteUrl } from "@/lib/utils"
-import { locales } from "@/i18n/config"
+import { locales, defaultLocale } from "@/i18n/config"
 
 // Refresh the sitemap at most every hour
 export const revalidate = 3600
@@ -18,7 +18,7 @@ function localizedUrls(baseUrl: string, path: string): {
   )
   return {
     // Use the default locale URL as the canonical entry
-    url: `${baseUrl}/${locales[0]}${path}`,
+    url: `${baseUrl}/${defaultLocale}${path}`,
     alternates: { languages },
   }
 }
