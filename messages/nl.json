@@ -1727,6 +1727,7 @@
       "unavailable_title": "Voorbeeld niet beschikbaar",
       "unavailable_description": "Deze listing heeft nog geen openbare link."
     },
-    "status_set_status": "Status instellen"
+    "status_set_status": "Status instellen",
+    "tour_replay": "Rondleiding bekijken"
   }
 }

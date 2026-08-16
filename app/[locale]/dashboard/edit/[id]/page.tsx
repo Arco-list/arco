@@ -440,6 +440,8 @@ export default function ListingEditorPage() {
   const importToastFiredRef = useRef(false)
   const [activeSection, setActiveSection] = useState("location")
   const [showStatusModal, setShowStatusModal] = useState(false)
+  // Manual tour replay (teal link under the sub-nav) — increments to force a run.
+  const [tourForceRun, setTourForceRun] = useState(0)
   const [currentStatusValue, setCurrentStatusValue] = useState<ContributorStatus | "">("")
   const [selectedStatus, setSelectedStatus] = useState<ContributorStatus | "">("")
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
@@ -4439,6 +4441,7 @@ export default function ListingEditorPage() {
           // asynchronously; the tour won't auto-start until it's known.
           serverSeen={() => getTourSeen(`project-edit:${projectId ?? ""}`)}
           onMarkSeen={() => { if (projectId) void markTourSeen(`project-edit:${projectId}`) }}
+          forceRun={tourForceRun}
           steps={PROJECT_TOUR_STEPS}
           onStepChange={(idx) => {
             if (idx === PROJECT_TOUR_PHOTO_STEP) {
@@ -4471,6 +4474,23 @@ export default function ListingEditorPage() {
           onReject={() => setShowRejectModal(true)}
           isApproving={isApproving}
         />
+
+        {/* Tour replay — same treatment as the company edit page: the
+            fixed header + sticky sub-nav cover this element's flow slot,
+            so a zero-height relative wrapper floats the teal link into
+            the visible gap without shifting page flow. Owners see it
+            while the project is a draft, admins always. */}
+        {(isAdmin || projectStatus === "draft") && (
+          <div className="wrap" style={{ position: "relative", height: 0 }}>
+            <button
+              onClick={() => setTourForceRun((n) => n + 1)}
+              className="absolute right-5 md:right-[60px] text-[12px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
+              style={{ top: 76 }}
+            >
+              {t("tour_replay")}
+            </button>
+          </div>
+        )}
 
         {/* ── Project header (editable title + description) ─────── */}
         <section

@@ -1727,6 +1727,7 @@
       "unavailable_title": "Preview unavailable",
       "unavailable_description": "This listing does not have a public link yet."
     },
-    "status_set_status": "Set status"
+    "status_set_status": "Set status",
+    "tour_replay": "View tour"
   }
 }
