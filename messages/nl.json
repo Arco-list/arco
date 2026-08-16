@@ -1733,6 +1733,7 @@
     "tour_replay": "Rondleiding bekijken",
     "body_edit_badge": "Bewerken",
     "body_placeholder": "Uitgebreide projecttekst (verschijnt achter 'Lees meer')…",
-    "body_divider": "Achter 'Lees meer'"
+    "body_divider": "Achter 'Lees meer'",
+    "word_count": "{count} / {max} woorden"
   }
 }
