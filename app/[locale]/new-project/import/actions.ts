@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { isAdminUser } from "@/lib/auth-utils"
 
 const LOCALE_NAMES: Record<string, string> = { nl: "Dutch", en: "English", de: "German", fr: "French" }
 async function getDescriptionLocale(): Promise<string> {
@@ -1658,13 +1659,23 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Not authenticated." }
 
+  // Admins may regenerate any project (the edit page grants them access);
+  // everyone else stays scoped to their own projects via client_id.
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("user_types, admin_role")
+    .eq("id", user.id)
+    .maybeSingle()
+  const isAdmin = !!(profileRow && isAdminUser(profileRow.user_types, profileRow.admin_role))
+  const db = isAdmin ? createServiceRoleSupabaseClient() : supabase
+
   // Fetch current project state
-  const { data: proj } = await supabase
+  let projQuery = db
     .from("projects")
     .select("title, description, building_year, location, building_type, project_type, address_city, style_preferences")
     .eq("id", projectId)
-    .eq("client_id", user.id)
-    .single()
+  if (!isAdmin) projQuery = projQuery.eq("client_id", user.id)
+  const { data: proj } = await projQuery.single()
 
   if (!proj) return { error: "Project not found." }
 
@@ -1673,7 +1684,7 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
   }
 
   // Fetch project photos for visual context (up to 6)
-  const { data: photos } = await supabase
+  const { data: photos } = await db
     .from("project_photos")
     .select("url")
     .eq("project_id", projectId)
@@ -1707,19 +1718,23 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
 
     content.push({
       type: "text",
-      text: `Write a short description of this architecture/interior design project for a professional portfolio. 3-4 sentences, 60-80 words. Third-person tone, professional and warm. Capture the project's character, context, and one or two key design decisions based on the photos and metadata.
+      text: `Write copy for this architecture/interior design project on a curated Dutch architecture platform, based on the photos and metadata.
+
+1. "description" — a short intro: 3-4 sentences, 60-80 words. Third-person tone, professional and warm. Capture the project's character, context, and one or two key design decisions.
+2. "body" — a continuation shown behind a "Read more" link after the intro: 140-200 words in 2-3 short paragraphs separated by blank lines. Quiet, magazine-like tone; no superlatives, no marketing filler. Only facts visible in the photos or listed in the metadata — never invent materials, dimensions or client details. Do not repeat the intro's sentences.
 
 Also translate the project title to both English and Dutch.
 
-Return a JSON object with "en" and "nl" keys, each containing "description" and "title" in that language. Example: {"en": {"title": "English title", "description": "English description..."}, "nl": {"title": "Dutch title", "description": "Dutch description..."}}
+Return a JSON object with "en" and "nl" keys, each containing "title", "description" and "body" in that language.
 Return ONLY the JSON, no markdown code fences or other text.
 
 ${context}`,
     })
 
     const message = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 500,
+      model: "claude-sonnet-5",
+      // Bilingual intro + 140-200-word body + titles, JSON-escaped.
+      max_tokens: 3000,
       messages: [{ role: "user", content }],
     })
 
@@ -1731,6 +1746,8 @@ ${context}`,
     let nlDesc = ""
     let enTitle = ""
     let nlTitle = ""
+    let enBody = ""
+    let nlBody = ""
     try {
       const cleaned = rawText.replace(/```json\s*|```\s*/g, "").trim()
       const parsed = JSON.parse(cleaned)
@@ -1740,6 +1757,8 @@ ${context}`,
         nlDesc = (parsed.nl?.description ?? "").slice(0, 750)
         enTitle = (parsed.en?.title ?? "").slice(0, 120)
         nlTitle = (parsed.nl?.title ?? "").slice(0, 120)
+        enBody = (parsed.en?.body ?? "").slice(0, 2500)
+        nlBody = (parsed.nl?.body ?? "").slice(0, 2500)
       } else {
         enDesc = (parsed.en ?? "").slice(0, 750)
         nlDesc = (parsed.nl ?? "").slice(0, 750)
@@ -1754,10 +1773,14 @@ ${context}`,
     const description = userLocale === "Dutch" ? nlDesc : enDesc
 
     // Fetch existing translations to merge
-    const { data: existing } = await supabase.from("projects").select("translations, title").eq("id", projectId).single()
+    const { data: existing } = await db.from("projects").select("translations, title").eq("id", projectId).single()
     const translations = (existing?.translations as Record<string, any>) ?? {}
     translations.en = { ...(translations.en ?? {}), description: enDesc }
     translations.nl = { ...(translations.nl ?? {}), description: nlDesc }
+    // Expanded editorial body — rendered behind "Read more" on the
+    // project page (same field the batch generate-seo-body route fills).
+    if (enBody.trim()) translations.en.seo_body = enBody.trim()
+    if (nlBody.trim()) translations.nl.seo_body = nlBody.trim()
 
     // Add title translations (use existing title as EN fallback)
     if (enTitle) translations.en.title = enTitle
@@ -1771,7 +1794,7 @@ ${context}`,
     }
 
     // Save to DB
-    await supabase.from("projects").update(titleUpdate).eq("id", projectId)
+    await db.from("projects").update(titleUpdate).eq("id", projectId)
 
     return { description }
   } catch (err) {
