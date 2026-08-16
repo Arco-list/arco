@@ -4475,17 +4475,18 @@ export default function ListingEditorPage() {
           isApproving={isApproving}
         />
 
-        {/* Tour replay — same treatment as the company edit page: the
-            fixed header + sticky sub-nav cover this element's flow slot,
-            so a zero-height relative wrapper floats the teal link into
-            the visible gap without shifting page flow. Owners see it
-            while the project is a draft, admins always. */}
+        {/* Tour replay — same treatment as the company edit page: a
+            zero-height relative wrapper floats the teal link without
+            shifting page flow. Unlike company edit, this wrapper's flow
+            slot already sits below the sub-nav divider, so only a small
+            offset is needed. Owners see it while the project is a draft,
+            admins always. */}
         {(isAdmin || projectStatus === "draft") && (
           <div className="wrap" style={{ position: "relative", height: 0 }}>
             <button
               onClick={() => setTourForceRun((n) => n + 1)}
               className="absolute right-5 md:right-[60px] text-[12px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
-              style={{ top: 76 }}
+              style={{ top: 12 }}
             >
               {t("tour_replay")}
             </button>
