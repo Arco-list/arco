@@ -442,6 +442,9 @@ export default function ListingEditorPage() {
   const [showStatusModal, setShowStatusModal] = useState(false)
   // Manual tour replay (teal link under the sub-nav) — increments to force a run.
   const [tourForceRun, setTourForceRun] = useState(0)
+  // Expanded editorial body (translations.<locale>.seo_body) — rendered
+  // behind "Read more" on the public page, editable below the intro here.
+  const [seoBodyText, setSeoBodyText] = useState("")
   const [currentStatusValue, setCurrentStatusValue] = useState<ContributorStatus | "">("")
   const [selectedStatus, setSelectedStatus] = useState<ContributorStatus | "">("")
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
@@ -884,6 +887,7 @@ export default function ListingEditorPage() {
       }
 
       if (!cancelled) {
+        setSeoBodyText(getProjectTranslation(project, "seo_body", locale))
         setProjectSlug(project.slug ?? null)
         const status = (project.status as ProjectStatus | null) ?? null
         setProjectStatus(status)
@@ -1327,6 +1331,7 @@ export default function ListingEditorPage() {
           descEditRef.current.textContent = result.description
         }
         setDescCharCount(result.description.length)
+        if (result.body) setSeoBodyText(result.body)
         toast.success(tToast("description_generated"))
       } else if ("error" in result) {
         toast.error(result.error)
@@ -4573,6 +4578,35 @@ export default function ListingEditorPage() {
                 </span>
               )}
             </div>
+          </div>
+
+          {/* Expanded editorial body — shows behind "Read more" on the
+              public page. Editable like the description; saving also
+              auto-translates the other locale. */}
+          <div className="ec" style={{ display: "block", marginTop: 28 }}>
+            <span className="ec-badge">
+              <span className="ec-ico">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: "inline-block", flexShrink: 0 }}>
+                  <path d="M11.5 1.5l3 3L5 14H2v-3z" />
+                </svg>
+              </span>
+              <span className="ec-txt">{t("body_edit_badge")}</span>
+            </span>
+            <p
+              className="arco-body-text"
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                const val = (e.currentTarget.textContent ?? "").trim()
+                if (val === seoBodyText.trim()) return
+                setSeoBodyText(val)
+                if (projectId) void saveProjectTranslatedField(projectId, "seo_body", val, locale)
+              }}
+              style={{ cursor: "text", minHeight: "1.7em", textAlign: "center", outline: "none", whiteSpace: "pre-wrap", color: "#6b6b68" }}
+              data-placeholder={t("body_placeholder")}
+            >
+              {seoBodyText || ""}
+            </p>
           </div>
         </section>
 

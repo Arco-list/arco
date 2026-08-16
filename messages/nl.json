@@ -1730,6 +1730,8 @@
       "unavailable_description": "Deze listing heeft nog geen openbare link."
     },
     "status_set_status": "Status instellen",
-    "tour_replay": "Rondleiding bekijken"
+    "tour_replay": "Rondleiding bekijken",
+    "body_edit_badge": "Bewerken",
+    "body_placeholder": "Uitgebreide projecttekst (verschijnt achter 'Lees meer')…"
   }
 }

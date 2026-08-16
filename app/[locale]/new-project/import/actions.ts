@@ -1651,7 +1651,7 @@ Return ONLY this JSON:
   }
 }
 
-export type RegenerateResult = { description: string } | { error: string }
+export type RegenerateResult = { description: string; body?: string } | { error: string }
 
 export async function regenerateDescription(projectId: string): Promise<RegenerateResult> {
   // Auth
@@ -1769,8 +1769,9 @@ ${context}`,
       nlDesc = rawText.slice(0, 750)
     }
 
-    // Use the user's locale as the primary description
+    // Use the user's locale as the primary description / body
     const description = userLocale === "Dutch" ? nlDesc : enDesc
+    const localizedBody = userLocale === "Dutch" ? nlBody : enBody
 
     // Fetch existing translations to merge
     const { data: existing } = await db.from("projects").select("translations, title").eq("id", projectId).single()
@@ -1796,7 +1797,7 @@ ${context}`,
     // Save to DB
     await db.from("projects").update(titleUpdate).eq("id", projectId)
 
-    return { description }
+    return { description, body: localizedBody }
   } catch (err) {
     logger.error("regenerateDescription failed", { projectId }, err as Error)
     return { error: "Generation failed. Please try again." }
@@ -1809,7 +1810,7 @@ ${context}`,
  */
 export async function saveProjectTranslatedField(
   projectId: string,
-  field: "title" | "description",
+  field: "title" | "description" | "seo_body",
   value: string,
   locale: string
 ): Promise<{ success: boolean; error?: string }> {
@@ -1829,8 +1830,11 @@ export async function saveProjectTranslatedField(
   if (!translations[locale]) translations[locale] = {}
   translations[locale][field] = value
 
-  // Update the main column + translations
-  const update: Record<string, any> = { [field]: value, translations }
+  // Update the main column + translations. seo_body has no main column —
+  // it lives only in the translations JSONB.
+  const update: Record<string, any> = field === "seo_body"
+    ? { translations }
+    : { [field]: value, translations }
   await supabase.from("projects").update(update).eq("id", projectId)
 
   // Auto-translate to the other language in the background
@@ -1843,16 +1847,17 @@ export async function saveProjectTranslatedField(
       const client = new Anthropic()
       const msg = await client.messages.create({
         model: "claude-haiku-4-5",
-        max_tokens: 300,
+        // seo_body runs to ~200 words; titles/descriptions stay short.
+        max_tokens: field === "seo_body" ? 1000 : 300,
         messages: [{
           role: "user",
-          content: `Translate the following ${field === "title" ? "project title" : "project description"} to ${otherLang}. Keep the same tone and style. Return only the translated text, no quotes or labels.\n\n${value}`,
+          content: `Translate the following ${field === "title" ? "project title" : field === "seo_body" ? "project body text (keep the paragraph breaks)" : "project description"} to ${otherLang}. Keep the same tone and style. Return only the translated text, no quotes or labels.\n\n${value}`,
         }],
       })
       const translated = msg.content.find((b) => b.type === "text")?.text?.trim()
       if (translated) {
         if (!translations[otherLocale]) translations[otherLocale] = {}
-        translations[otherLocale][field] = translated.slice(0, 750)
+        translations[otherLocale][field] = translated.slice(0, field === "seo_body" ? 2500 : 750)
         await supabase.from("projects").update({ translations }).eq("id", projectId)
       }
     } catch {

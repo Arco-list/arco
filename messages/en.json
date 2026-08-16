@@ -1730,6 +1730,8 @@
       "unavailable_description": "This listing does not have a public link yet."
     },
     "status_set_status": "Set status",
-    "tour_replay": "View tour"
+    "tour_replay": "View tour",
+    "body_edit_badge": "Edit",
+    "body_placeholder": "Extended project text (shown behind 'Read more')…"
   }
 }
