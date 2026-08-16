@@ -370,7 +370,8 @@
       "cta_list_company": "Publish company page",
       "list_company_success": "Your company page is now live.",
       "later": "I'll do this later"
-    }
+    },
+    "tour_replay": "Replay the tour"
   },
   "verify_domain": {
     "title": "Verify domain",

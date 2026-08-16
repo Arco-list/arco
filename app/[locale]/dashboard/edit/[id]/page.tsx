@@ -68,6 +68,7 @@ import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { Header } from "@/components/header"
 import { EditSubNav } from "@/components/project/edit-sub-nav"
 import { CompanyEditTour, type TourStep } from "@/components/company-edit/company-edit-tour"
+import { markTourSeen, getTourSeen } from "@/lib/tours/actions"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
 import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
@@ -4434,6 +4435,10 @@ export default function ListingEditorPage() {
           enabled={!!projectId && projectStatus === "draft"}
           namespace="project_edit.tour"
           storagePrefix="arco.project-edit-tour.seen."
+          // Client-only page: resolve the account-level flag (ui_tour_seen)
+          // asynchronously; the tour won't auto-start until it's known.
+          serverSeen={() => getTourSeen(`project-edit:${projectId ?? ""}`)}
+          onMarkSeen={() => { if (projectId) void markTourSeen(`project-edit:${projectId}`) }}
           steps={PROJECT_TOUR_STEPS}
           onStepChange={(idx) => {
             if (idx === PROJECT_TOUR_PHOTO_STEP) {

@@ -11,6 +11,9 @@ interface CompanyEditSubNavProps {
   companyId: string
   onStatusClick: () => void
   onSearchPreviewClick: () => void
+  /** Replays the onboarding tour on demand — available to everyone,
+   *  including admins (who never get the auto-run). */
+  onTourClick?: () => void
 }
 
 const SECTION_IDS = ["header", "projects", "contact"] as const
@@ -23,6 +26,7 @@ export function CompanyEditSubNav({
   companyId,
   onStatusClick,
   onSearchPreviewClick,
+  onTourClick,
 }: CompanyEditSubNavProps) {
   const t = useTranslations("company_edit")
   const [activeSection, setActiveSection] = useState<string | null>(null)
@@ -134,6 +138,20 @@ export function CompanyEditSubNav({
               </svg>
               <span className="sub-nav-pill-label">{t("preview")}</span>
             </a>
+            {onTourClick && (
+              <button
+                className="filter-pill"
+                onClick={onTourClick}
+                aria-label={t("tour_replay")}
+                title={t("tour_replay")}
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="8" cy="8" r="6.25" />
+                  <path d="M6.2 6.2a1.8 1.8 0 1 1 2.7 1.56c-.55.32-.9.63-.9 1.24" />
+                  <circle cx="8" cy="11.3" r="0.4" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

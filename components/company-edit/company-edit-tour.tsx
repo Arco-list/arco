@@ -41,6 +41,18 @@ interface CompanyEditTourProps {
    *  while the tour points at it. `null` means the tour is no longer
    *  visible (finished or not yet active). */
   onStepChange?: (stepIndex: number | null) => void
+  /** Account-level seen flag (ui_tour_seen). Pass a boolean when the
+   *  parent already knows (server-component data), or an async resolver
+   *  for client-only pages. Until it resolves the tour won't auto-start;
+   *  localStorage remains a fast-path cache on top. Omit for legacy
+   *  localStorage-only behaviour. */
+  serverSeen?: boolean | (() => Promise<boolean>)
+  /** Called when the tour ends via Finish or Skip — parent persists the
+   *  account-level flag (markTourSeen server action). */
+  onMarkSeen?: () => void
+  /** Increment to replay the tour manually, regardless of seen state.
+   *  A forced replay does not re-fire onFinish's onboarding chain. */
+  forceRun?: number
 }
 
 const DEFAULT_STORAGE_PREFIX = "arco.company-edit-tour.seen."
@@ -88,7 +100,7 @@ function measure(target: HTMLElement, prefer: "top" | "bottom" | undefined): Lay
   return { spot, card: { top: cardTop, left: cardLeft, placement } }
 }
 
-export function CompanyEditTour({ companyId, enabled, steps, namespace = "company_edit.tour", storagePrefix = DEFAULT_STORAGE_PREFIX, resetKey, onFinish, onStepChange }: CompanyEditTourProps) {
+export function CompanyEditTour({ companyId, enabled, steps, namespace = "company_edit.tour", storagePrefix = DEFAULT_STORAGE_PREFIX, resetKey, onFinish, onStepChange, serverSeen, onMarkSeen, forceRun = 0 }: CompanyEditTourProps) {
   const t = useTranslations(namespace)
   const storageKey = useMemo(
     () => `${storagePrefix}${companyId}${resetKey ? `:${resetKey}` : ""}`,
@@ -119,6 +131,39 @@ export function CompanyEditTour({ companyId, enabled, steps, namespace = "compan
     setMounted(true)
   }, [])
 
+  // Account-level seen flag: true/false once known, null while a
+  // resolver is still in flight. Legacy callers (no serverSeen prop)
+  // resolve to false immediately and fall back to localStorage alone.
+  const [resolvedServerSeen, setResolvedServerSeen] = useState<boolean | null>(
+    typeof serverSeen === "boolean" ? serverSeen : typeof serverSeen === "function" ? null : false,
+  )
+  const serverSeenRef = useRef(serverSeen)
+  useEffect(() => {
+    const current = serverSeenRef.current
+    if (typeof current !== "function") return
+    let cancelled = false
+    current().then((seen) => {
+      if (!cancelled) setResolvedServerSeen(seen)
+    }).catch(() => {
+      if (!cancelled) setResolvedServerSeen(false)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Manual replay: incrementing forceRun starts the tour regardless of
+  // any seen flag. finishedRef stays as-is so a forced replay doesn't
+  // re-fire the onboarding chain (first-project popup).
+  const lastForceRunRef = useRef(forceRun)
+  const forcedRef = useRef(false)
+  useEffect(() => {
+    if (forceRun > lastForceRunRef.current) {
+      lastForceRunRef.current = forceRun
+      forcedRef.current = true
+      setStepIndex(0)
+      setActive(true)
+    }
+  }, [forceRun])
+
   // Kick off the tour once per company. Waits a beat so any auto-opened
   // Services popup can render + settle first — we don't want the tour to
   // paint underneath a modal. When the tour has already been seen for
@@ -127,7 +172,8 @@ export function CompanyEditTour({ companyId, enabled, steps, namespace = "compan
   useEffect(() => {
     if (!enabled || !mounted) return
     if (typeof window === "undefined") return
-    if (window.localStorage.getItem(storageKey)) {
+    if (resolvedServerSeen === null) return // account flag still resolving
+    if (resolvedServerSeen || window.localStorage.getItem(storageKey)) {
       if (!finishedRef.current) {
         finishedRef.current = true
         onFinishRef.current?.()
@@ -136,7 +182,7 @@ export function CompanyEditTour({ companyId, enabled, steps, namespace = "compan
     }
     const timer = setTimeout(() => setActive(true), 400)
     return () => clearTimeout(timer)
-  }, [enabled, mounted, storageKey])
+  }, [enabled, mounted, storageKey, resolvedServerSeen])
 
   const currentStep = active ? steps[stepIndex] : null
 
@@ -175,10 +221,16 @@ export function CompanyEditTour({ companyId, enabled, steps, namespace = "compan
     }
   }, [currentStep, findTarget])
 
+  const onMarkSeenRef = useRef(onMarkSeen)
+  onMarkSeenRef.current = onMarkSeen
   const finish = useCallback(() => {
     if (typeof window !== "undefined") {
       try { window.localStorage.setItem(storageKey, "1") } catch {}
     }
+    // Persist the account-level flag; skip for forced replays (already
+    // seen — the upsert would be a no-op, but don't waste the request).
+    if (!forcedRef.current) onMarkSeenRef.current?.()
+    forcedRef.current = false
     setActive(false)
     setStepIndex(0)
     if (!finishedRef.current) {

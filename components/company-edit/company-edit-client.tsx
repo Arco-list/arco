@@ -35,6 +35,7 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { CompanyEditSubNav } from "@/components/company-edit/company-edit-sub-nav"
 import { CompanyEditTour, type TourStep } from "@/components/company-edit/company-edit-tour"
+import { markTourSeen } from "@/lib/tours/actions"
 import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_DOT_CLASS,
@@ -125,6 +126,9 @@ export interface CompanyEditClientProps {
   showImportedBanner?: boolean
   importedProjectId?: string | null
   adminCompanyId?: string
+  /** Account-level tour key + seen flag (ui_tour_seen), loaded server-side. */
+  tourKey?: string
+  tourSeen?: boolean
 }
 
 // ── Constants ──
@@ -165,7 +169,7 @@ const TOUR_STEPS: TourStep[] = [
 
 // ── Component ──
 
-export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId }: CompanyEditClientProps) {
+export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId, tourKey, tourSeen }: CompanyEditClientProps) {
   const router = useRouter()
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
@@ -349,6 +353,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── Service popup state ──
   const [servicePopupOpen, setServicePopupOpen] = useState(false)
+  // Manual tour replay (sub-nav "?" pill) — increments to force a run.
+  const [tourForceRun, setTourForceRun] = useState(0)
   const [serviceSearch, setServiceSearch] = useState("")
   const dragItemRef = useRef<number | null>(null)
   const servicesSnapshotRef = useRef<string[]>([])
@@ -1212,12 +1218,18 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
       <CompanyEditTour
         companyId={company.id}
-        enabled={isSetupMode && !servicePopupOpen}
+        // Admins viewing a company never get the auto-tour — it's the
+        // owner's onboarding ceremony, and the admin's dismissal must
+        // not consume it. The sub-nav "?" pill replays it on demand.
+        enabled={isSetupMode && !servicePopupOpen && !adminCompanyId}
         // Admin-triggered rollback to Created stamps setup_reset_at,
         // which the tour splices into its localStorage key so the
         // previous "seen" flag is invalidated and the ceremony runs
         // again. Undefined for companies never rolled back.
         resetKey={(company as { setup_reset_at?: string | null }).setup_reset_at ?? undefined}
+        serverSeen={tourSeen}
+        onMarkSeen={() => { if (tourKey) void markTourSeen(tourKey) }}
+        forceRun={tourForceRun}
         steps={TOUR_STEPS}
         onFinish={() => {
           // Only chain the next onboarding step when we're actually in
@@ -1239,6 +1251,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         companyId={company.id}
         onStatusClick={() => setStatusDialogOpen(true)}
         onSearchPreviewClick={() => setSearchPreviewOpen(true)}
+        onTourClick={() => setTourForceRun((n) => n + 1)}
       />
 
       {/* ════════════════════ SETUP POPUP (OVERLAY) ════════════════════ */}

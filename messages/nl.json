@@ -370,7 +370,8 @@
       "cta_list_company": "Bedrijfspagina publiceren",
       "list_company_success": "Je bedrijfspagina is nu live.",
       "later": "Ik doe dit later"
-    }
+    },
+    "tour_replay": "Rondleiding opnieuw bekijken"
   },
   "verify_domain": {
     "title": "Domein verifiëren",

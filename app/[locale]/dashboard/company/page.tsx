@@ -158,6 +158,19 @@ export default async function CompanySettingsPage({
   // Setup mode: show complete button when setup not done OR company is still in draft
   const isSetupMode = !company.setup_completed || company.status === "created"
 
+  // Account-level tour flag (ui_tour_seen) — the key embeds the company
+  // id plus the setup_reset_at fragment so an admin rollback re-arms it.
+  const setupResetAt = (company as { setup_reset_at?: string | null }).setup_reset_at ?? null
+  const tourKey = `company-edit:${company.id}${setupResetAt ? `:${setupResetAt}` : ""}`
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: tourSeenRow } = await (supabase as any)
+    .from("ui_tour_seen")
+    .select("tour_key")
+    .eq("user_id", user.id)
+    .eq("tour_key", tourKey)
+    .maybeSingle()
+  const tourSeen = Boolean(tourSeenRow)
+
   const [{ data: socialLinks }, { data: allCategories }, { data: professional }, { data: projectLinks }, { data: pendingProjectLinks }] = await Promise.all([
     supabase
       .from("company_social_links")
@@ -338,6 +351,8 @@ export default async function CompanySettingsPage({
       showImportedBanner={imported === "1"}
       importedProjectId={importedProjectId ?? null}
       adminCompanyId={isAdmin ? company.id : undefined}
+      tourKey={tourKey}
+      tourSeen={tourSeen}
     />
   )
 }
