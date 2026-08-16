@@ -4600,12 +4600,16 @@ export default function ListingEditorPage() {
               {seoBodyText || ""}
             </p>
 
-            <div className="flex items-center justify-center" style={{ position: "relative", marginTop: 12 }}>
+            <div className="flex items-center justify-center" style={{ position: "relative", marginTop: 16 }}>
               <button
                 type="button"
                 className="ec-generate-link"
                 onClick={(e) => { e.stopPropagation(); handleGenerateProjectDescription() }}
                 disabled={generatingDesc}
+                // .ec-generate-link ships margin-top:10px, which pushes the
+                // button below the row box and leaves the absolutely-centered
+                // counter sitting high. The row provides the spacing instead.
+                style={{ marginTop: 0 }}
               >
                 {generatingDesc ? (
                   <>
