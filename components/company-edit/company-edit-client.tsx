@@ -1266,7 +1266,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <div className="wrap" style={{ position: "relative", height: 0 }}>
           <button
             onClick={() => setTourForceRun((n) => n + 1)}
-            className="absolute right-5 md:right-[60px] text-[12px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors underline underline-offset-2 bg-transparent border-none cursor-pointer p-0"
+            className="absolute right-5 md:right-[60px] text-[12px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
             style={{ top: 76 }}
           >
             {t("tour_replay")}
