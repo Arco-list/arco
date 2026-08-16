@@ -1,14 +1,18 @@
 import Link from "next/link"
 import { getTranslations } from "next-intl/server"
+import { ReadMoreBody } from "@/components/project/read-more-body"
 
 interface ProjectHeaderProps {
   title: string
   architectName: string | null
   architectSlug: string | null
   description: string | null
+  /** Expanded editorial body (translations.<locale>.seo_body) rendered
+   *  behind a "Read more" toggle below the intro description. */
+  seoBody?: string | null
 }
 
-export async function ProjectHeader({ title, architectName, architectSlug, description }: ProjectHeaderProps) {
+export async function ProjectHeader({ title, architectName, architectSlug, description, seoBody }: ProjectHeaderProps) {
   const t = await getTranslations("project_detail")
   // Strip HTML tags from description
   const stripHtml = (html: string | null) => {
@@ -43,6 +47,23 @@ export async function ProjectHeader({ title, architectName, architectSlug, descr
           {paragraph}
         </p>
       ))}
+
+      {(() => {
+        // Split on blank lines BEFORE stripping tags — stripHtml collapses
+        // all whitespace, which would merge the paragraphs into one.
+        const bodyParagraphs = (seoBody ?? "")
+          .split(/\n\n+/)
+          .map((p) => p.replace(/<[^>]+>/g, " ").replace(/[ \t]+/g, " ").trim())
+          .filter((p) => p.length > 0)
+        if (bodyParagraphs.length === 0) return null
+        return (
+          <ReadMoreBody
+            paragraphs={bodyParagraphs}
+            moreLabel={t("read_more")}
+            lessLabel={t("read_less")}
+          />
+        )
+      })()}
     </section>
   )
 }

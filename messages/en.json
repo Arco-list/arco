@@ -467,7 +467,9 @@
     "back": "Back",
     "nav_details": "Details",
     "nav_photos": "Photos",
-    "nav_professionals": "Professionals"
+    "nav_professionals": "Professionals",
+    "read_more": "Read more",
+    "read_less": "Read less"
   },
   "professional_detail": {
     "projects": "Projects",

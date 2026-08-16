@@ -3,17 +3,22 @@
  * Falls back to the main column value if no translation exists.
  */
 export function getProjectTranslation(
-  project: { title?: string | null; description?: string | null; translations?: Record<string, any> | null },
-  field: "title" | "description",
+  // translations is the raw Supabase Json column — typed loose so callers
+  // can pass row objects without casting.
+  project: { title?: string | null; description?: string | null; translations?: unknown },
+  field: "title" | "description" | "seo_body",
   locale: string = "en"
 ): string {
-  const translations = project.translations
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const translations = project.translations as Record<string, any> | null | undefined
   const localeValue = translations?.[locale]?.[field]
   if (localeValue && typeof localeValue === "string" && localeValue.trim()) {
     return localeValue
   }
-  // Fallback to main column
-  return (project[field] ?? "") as string
+  // Fallback to main column. seo_body has no column — it lives only in
+  // translations (written by /api/admin/generate-seo-body), so absence
+  // simply returns "".
+  return ((project as Record<string, unknown>)[field] as string | null ?? "") as string
 }
 
 // ─── Scope vocabulary ──────────────────────────────────────────────────────

@@ -467,7 +467,9 @@
     "back": "Terug",
     "nav_details": "Details",
     "nav_photos": "Foto's",
-    "nav_professionals": "Professionals"
+    "nav_professionals": "Professionals",
+    "read_more": "Lees meer",
+    "read_less": "Lees minder"
   },
   "professional_detail": {
     "projects": "Projecten",

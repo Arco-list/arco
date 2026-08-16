@@ -182,6 +182,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const locale = resolvedParams.locale ?? "en"
   const localizedTitle = getProjectTranslation(project, "title", locale) || project.title
   const localizedDescription = getProjectTranslation(project, "description", locale) || project.description
+  const localizedSeoBody = getProjectTranslation(project, "seo_body", locale) || null
 
   // Check permissions
   const previewRequested = Boolean(resolvedSearchParams?.[PREVIEW_PARAM])
@@ -705,6 +706,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             architectName={projectOwner?.companyName ?? null}
             architectSlug={projectOwner?.companySlug ?? null}
             description={localizedDescription}
+            seoBody={localizedSeoBody}
           />
 
           <SpecificationsBar
