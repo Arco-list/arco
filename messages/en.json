@@ -1732,6 +1732,7 @@
     "status_set_status": "Set status",
     "tour_replay": "View tour",
     "body_edit_badge": "Edit",
-    "body_placeholder": "Extended project text (shown behind 'Read more')…"
+    "body_placeholder": "Extended project text (shown behind 'Read more')…",
+    "body_divider": "Behind 'Read more'"
   }
 }

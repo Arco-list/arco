@@ -4549,7 +4549,37 @@ export default function ListingEditorPage() {
             >
               {descriptionPlainText || ""}
             </p>
-            <div className="flex items-center justify-center" style={{ position: "relative" }}>
+            {/* Divider marking the public split: everything above shows
+                immediately on the project page, everything below sits
+                behind the "Lees meer" toggle. Because the split IS this
+                boundary, no sentence can ever be cut mid-way. */}
+            <div className="flex items-center justify-center" style={{ gap: 12, margin: "20px auto", maxWidth: 420 }}>
+              <div style={{ flex: 1, height: 1, background: "#e5e5e4" }} />
+              <span style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#a1a1a0", whiteSpace: "nowrap" }}>
+                {t("body_divider")}
+              </span>
+              <div style={{ flex: 1, height: 1, background: "#e5e5e4" }} />
+            </div>
+
+            {/* Expanded body — same container, muted to distinguish it
+                from the always-visible intro above the divider. */}
+            <p
+              className="arco-body-text"
+              contentEditable
+              suppressContentEditableWarning
+              onBlur={(e) => {
+                const val = (e.currentTarget.textContent ?? "").trim()
+                if (val === seoBodyText.trim()) return
+                setSeoBodyText(val)
+                if (projectId) void saveProjectTranslatedField(projectId, "seo_body", val, locale)
+              }}
+              style={{ cursor: "text", minHeight: "1.7em", textAlign: "center", outline: "none", whiteSpace: "pre-wrap", color: "#6b6b68" }}
+              data-placeholder={t("body_placeholder")}
+            >
+              {seoBodyText || ""}
+            </p>
+
+            <div className="flex items-center justify-center" style={{ position: "relative", marginTop: 12 }}>
               <button
                 type="button"
                 className="ec-generate-link"
@@ -4578,35 +4608,6 @@ export default function ListingEditorPage() {
                 </span>
               )}
             </div>
-          </div>
-
-          {/* Expanded editorial body — shows behind "Read more" on the
-              public page. Editable like the description; saving also
-              auto-translates the other locale. */}
-          <div className="ec" style={{ display: "block", marginTop: 28 }}>
-            <span className="ec-badge">
-              <span className="ec-ico">
-                <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: "inline-block", flexShrink: 0 }}>
-                  <path d="M11.5 1.5l3 3L5 14H2v-3z" />
-                </svg>
-              </span>
-              <span className="ec-txt">{t("body_edit_badge")}</span>
-            </span>
-            <p
-              className="arco-body-text"
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(e) => {
-                const val = (e.currentTarget.textContent ?? "").trim()
-                if (val === seoBodyText.trim()) return
-                setSeoBodyText(val)
-                if (projectId) void saveProjectTranslatedField(projectId, "seo_body", val, locale)
-              }}
-              style={{ cursor: "text", minHeight: "1.7em", textAlign: "center", outline: "none", whiteSpace: "pre-wrap", color: "#6b6b68" }}
-              data-placeholder={t("body_placeholder")}
-            >
-              {seoBodyText || ""}
-            </p>
           </div>
         </section>
 
