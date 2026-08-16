@@ -496,11 +496,22 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       .eq("status", "published")
       .not("slug", "is", null)
       .not("id", "in", `(${excludeProjectIds.join(",")})`)
-      .limit(12) // overshoot — we'll filter to non-same-owner in JS and slice to 6
+      .limit(24) // overshoot — we'll rank by city + filter same-owner in JS and slice to 6
     if (similarBuildingType) q = q.eq("project_type_category_id", similarBuildingType)
     if (similarCountry) q = q.eq("address_country", similarCountry)
     const { data } = await q
     similarProjects = (data ?? []) as typeof similarProjects
+    // Same-city projects first: more relevant to the visitor and gives
+    // internal links local anchor context ("also in Bussum") that the
+    // hub-page structure builds on.
+    const ownCity = (project.address_city ?? "").trim().toLowerCase()
+    if (ownCity) {
+      similarProjects.sort((a, b) => {
+        const aSame = (a.address_city ?? "").trim().toLowerCase() === ownCity ? 0 : 1
+        const bSame = (b.address_city ?? "").trim().toLowerCase() === ownCity ? 0 : 1
+        return aSame - bSame
+      })
+    }
   }
 
   // Filter out projects belonging to the same owning company (so this rail
@@ -519,7 +530,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
   similarProjects = similarProjects
     .filter((p) => ownerByProjectId.get(p.id) !== projectOwner?.companyId)
-    .slice(0, 3)
+    .slice(0, 6)
 
   // Get cover photos for both rails in one query
   const relatedProjectIds = relatedProjects?.map((r) => r.project_id).filter(Boolean) ?? []

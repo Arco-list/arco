@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
+import { Link } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
 import { FilterBar, type SortOption, DEFAULT_PROJECT_SORT } from "@/components/filter-bar"
 import { ProjectsGrid } from "@/components/projects-grid"

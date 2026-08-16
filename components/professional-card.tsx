@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { Link } from "@/i18n/navigation"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 

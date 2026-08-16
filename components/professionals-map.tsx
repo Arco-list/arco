@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
@@ -148,7 +148,7 @@ function getClusterIcon(count: number): google.maps.Icon {
 
 // ─── InfoWindow card content (rendered as HTML string) ──────────────
 
-function getInfoWindowContent(professional: ProfessionalCard) {
+function getInfoWindowContent(professional: ProfessionalCard, locale: string) {
   const city = professional.location?.split(",")[0]?.trim() || ""
   const service = professional.profession || "Professional services"
   const image = professional.image || PLACEHOLDER_IMAGE
@@ -178,7 +178,7 @@ function getInfoWindowContent(professional: ProfessionalCard) {
 
   return `
     <div class="map-card-wrapper">
-      <a href="/professionals/${professional.slug}" style="display:block;text-decoration:none;color:inherit;width:240px;">
+      <a href="/${locale}/professionals/${professional.slug}" style="display:block;text-decoration:none;color:inherit;width:240px;">
         <div style="position:relative;width:100%;height:140px;overflow:hidden;">
           <img src="${image}" alt="${professional.name}" style="width:100%;height:100%;object-fit:cover;display:block;" />
           ${actionsHtml}
@@ -205,6 +205,7 @@ interface ProfessionalsMapProps {
 }
 
 export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapProps) {
+  const locale = useLocale()
   const t = useTranslations("professionals")
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<HTMLDivElement>(null)
@@ -284,7 +285,7 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
 
         marker.addListener("click", () => {
           if (infoWindowRef.current) {
-            infoWindowRef.current.setContent(getInfoWindowContent(professional))
+            infoWindowRef.current.setContent(getInfoWindowContent(professional, locale))
             infoWindowRef.current.open(map, marker)
           }
         })

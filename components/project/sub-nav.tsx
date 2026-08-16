@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import Link from "next/link"
+import { Link } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { ShareModal } from "@/components/share-modal"
