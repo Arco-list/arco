@@ -651,13 +651,15 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   )
   const totalIndexedListedSnapshot = indexedListedSnapshotSeries[indexedListedSnapshotSeries.length - 1] ?? 0
 
-  // SEO supporting metrics — current 28-day rolling totals aggregated
-  // across listed + indexed pros. `seo_impressions_28d` / `seo_clicks_28d`
-  // are refreshed nightly per company by /api/cron/sync-gsc-indexation;
-  // we only have the latest 28d window stored, not per-bucket history,
-  // so these only populate the *last* bucket — earlier columns render
-  // as dots (formatNumber(0) → "·"). CTR is recomputed from the summed
-  // clicks ÷ impressions so it weights by traffic, not a flat average.
+  // SEO supporting metrics — 28-day rolling totals aggregated across
+  // listed + indexed pros. `seo_impressions_28d` / `seo_clicks_28d` are
+  // refreshed nightly per company by /api/cron/sync-gsc-indexation,
+  // which ALSO appends the aggregate to seo_metric_snapshots (one row
+  // per day per scope). Historical buckets read the snapshot nearest
+  // their bucket end; the rolling bucket uses the live per-row sums.
+  // Buckets before the first snapshot (pre Aug 2026) render as dots.
+  // CTR is recomputed from summed clicks ÷ impressions per bucket so
+  // it weights by traffic, not a flat average.
   const rankedPros = companies.filter((c: any) =>
     c.status === "listed" && claimedCompanies(c) && c.seo_indexed === true,
   )
@@ -670,11 +672,54 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const aggregateCtrPct = totalSeoImpressions > 0
     ? Math.round((totalSeoClicks / totalSeoImpressions) * 100)
     : 0
-  const lastBucketOnly = (value: number) =>
-    buckets.ends.map((_, i) => (i === buckets.ends.length - 1 ? value : 0))
-  const seoImpressionsSeries = lastBucketOnly(totalSeoImpressions)
-  const seoClicksSeries = lastBucketOnly(totalSeoClicks)
-  const seoCtrSeries = lastBucketOnly(aggregateCtrPct)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: seoSnapshotRows } = await (supabase as any)
+    .from("seo_metric_snapshots")
+    .select("snapshot_date, scope, impressions_28d, clicks_28d")
+    .order("snapshot_date")
+  const seoSnapshotSeries = (
+    scope: "projects" | "companies",
+    liveImpressions: number,
+    liveClicks: number,
+    liveCtr: number,
+  ): { impressions: number[]; clicks: number[]; ctr: number[] } => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = ((seoSnapshotRows ?? []) as any[])
+      .filter((r) => r.scope === scope)
+      .map((r) => ({
+        // End-of-day so a snapshot taken on the bucket's last day counts.
+        date: new Date(`${r.snapshot_date}T23:59:59Z`),
+        imp: Number(r.impressions_28d) || 0,
+        clicks: Number(r.clicks_28d) || 0,
+      }))
+    const lastIdx = buckets.ends.length - 1
+    const impressions: number[] = []
+    const clicks: number[] = []
+    const ctr: number[] = []
+    buckets.ends.forEach((end, i) => {
+      if (i === lastIdx) {
+        impressions.push(liveImpressions)
+        clicks.push(liveClicks)
+        ctr.push(liveCtr)
+        return
+      }
+      let latest: { imp: number; clicks: number } | null = null
+      for (const r of rows) {
+        if (r.date <= end) latest = r
+        else break
+      }
+      const imp = latest?.imp ?? 0
+      const clk = latest?.clicks ?? 0
+      impressions.push(imp)
+      clicks.push(clk)
+      ctr.push(imp > 0 ? Math.round((clk / imp) * 100) : 0)
+    })
+    return { impressions, clicks, ctr }
+  }
+  const prosSeoSeries = seoSnapshotSeries("companies", totalSeoImpressions, totalSeoClicks, aggregateCtrPct)
+  const seoImpressionsSeries = prosSeoSeries.impressions
+  const seoClicksSeries = prosSeoSeries.clicks
+  const seoCtrSeries = prosSeoSeries.ctr
 
   // Total published projects (published_at falls in the period). Different
   // from the Publishers metric, which counts unique COMPANIES.
@@ -730,10 +775,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   )
   const totalIndexedPublishedSnapshot = indexedPublishedSnapshotSeries[indexedPublishedSnapshotSeries.length - 1] ?? 0
 
-  // SEO supporting metrics for projects — current 28-day rolling totals
-  // aggregated across published + indexed projects. Same caveat as the
-  // pros version: GSC data is a rolling-window snapshot per project, so
-  // values only populate the last bucket.
+  // SEO supporting metrics for projects — same snapshot-backed series
+  // as the pros version (historical buckets from seo_metric_snapshots,
+  // live sums in the rolling bucket).
   const rankedProjects = projects.filter((p: any) =>
     p.status === "published" && p.seo_indexed === true,
   )
@@ -746,9 +790,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const projectAggregateCtrPct = totalProjectImpressions > 0
     ? Math.round((totalProjectClicks / totalProjectImpressions) * 100)
     : 0
-  const projectImpressionsSeries = lastBucketOnly(totalProjectImpressions)
-  const projectClicksSeries = lastBucketOnly(totalProjectClicks)
-  const projectCtrSeries = lastBucketOnly(projectAggregateCtrPct)
+  const projectsSeoSeries = seoSnapshotSeries("projects", totalProjectImpressions, totalProjectClicks, projectAggregateCtrPct)
+  const projectImpressionsSeries = projectsSeoSeries.impressions
+  const projectClicksSeries = projectsSeoSeries.clicks
+  const projectCtrSeries = projectsSeoSeries.ctr
 
   // Inviters: unique project-owner companies whose projects received any
   // non-owner project_professionals row created in the bucket window. The

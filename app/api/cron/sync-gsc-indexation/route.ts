@@ -49,6 +49,52 @@ export async function GET(request: NextRequest) {
   try {
     const result = await syncGscIndexation()
 
+    // ── Daily SEO snapshot ─────────────────────────────────────────
+    // The per-row seo_*_28d columns are rolling windows overwritten by
+    // every sync; append today's aggregate totals to
+    // seo_metric_snapshots so the growth dashboards can reconstruct
+    // history (one row per day per scope, idempotent on re-runs).
+    // Aggregation mirrors the dashboard's "ranked" definitions:
+    // projects = published + indexed; companies = listed + claimed +
+    // indexed.
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const [{ data: projRows }, { data: compRows }] = await Promise.all([
+        supabase
+          .from("projects")
+          .select("seo_indexed, seo_impressions_28d, seo_clicks_28d")
+          .eq("status", "published"),
+        supabase
+          .from("companies")
+          .select("seo_indexed, seo_impressions_28d, seo_clicks_28d, owner_id")
+          .eq("status", "listed"),
+      ])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aggregate = (rows: any[], eligible: (r: any) => boolean) => {
+        const all = rows ?? []
+        const indexed = all.filter((r) => eligible(r) && r.seo_indexed === true)
+        return {
+          impressions_28d: indexed.reduce((s, r) => s + (Number(r.seo_impressions_28d) || 0), 0),
+          clicks_28d: indexed.reduce((s, r) => s + (Number(r.seo_clicks_28d) || 0), 0),
+          indexed_count: indexed.length,
+          total_count: all.filter(eligible).length,
+        }
+      }
+      const projectAgg = aggregate(projRows ?? [], () => true)
+      const companyAgg = aggregate(compRows ?? [], (r) => r.owner_id != null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from("seo_metric_snapshots").upsert(
+        [
+          { snapshot_date: today, scope: "projects", ...projectAgg },
+          { snapshot_date: today, scope: "companies", ...companyAgg },
+        ],
+        { onConflict: "snapshot_date,scope" },
+      )
+    } catch (snapErr) {
+      // Snapshot failure must not fail the sync run itself.
+      logger.warn("seo_metric_snapshots write failed", { error: snapErr })
+    }
+
     if (runId) {
       await supabase
         .from("gsc_sync_runs")
