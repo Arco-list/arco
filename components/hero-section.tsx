@@ -91,7 +91,10 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
       )}
 
       {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
+      {/* Text-legibility scrim: shaded only where text actually sits —
+          nav at the top, headline at the bottom — with a near-clear
+          middle so the photo carries the section. */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/5 to-black/45" />
 
       {/* Desktop Content - Bottom Aligned */}
       <div className="hidden md:block absolute bottom-0 left-0 right-0 pb-12" style={{ zIndex: 20 }}>
