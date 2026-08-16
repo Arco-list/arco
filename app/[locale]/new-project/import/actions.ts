@@ -1726,7 +1726,7 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
 Also translate the project title to both English and Dutch.
 
 Return a JSON object with "en" and "nl" keys, each containing "title", "description" and "body" in that language.
-Return ONLY the JSON, no markdown code fences or other text.
+The JSON must be strictly valid: escape newlines inside strings as \\n (paragraph breaks in "body" become \\n\\n). Return ONLY the JSON, no markdown code fences or other text.
 
 ${context}`,
     })
@@ -1741,16 +1741,52 @@ ${context}`,
     const rawText = message.content.find((b) => b.type === "text")?.text?.trim() ?? ""
     if (!rawText) return { error: "Could not generate description. Try again." }
 
-    // Parse bilingual response
+    // Parse bilingual response. The model occasionally emits literal
+    // newlines inside JSON string values (invalid JSON) — repair by
+    // escaping control characters that occur inside string literals.
+    const escapeCtrlInJsonStrings = (src: string): string => {
+      let out = ""
+      let inStr = false
+      let esc = false
+      for (const ch of src) {
+        if (inStr) {
+          if (esc) { out += ch; esc = false; continue }
+          if (ch === "\\") { out += ch; esc = true; continue }
+          if (ch === '"') { inStr = false; out += ch; continue }
+          if (ch === "\n") { out += "\\n"; continue }
+          if (ch === "\r") { continue }
+          if (ch === "\t") { out += "\\t"; continue }
+          out += ch
+        } else {
+          if (ch === '"') inStr = true
+          out += ch
+        }
+      }
+      return out
+    }
     let enDesc = ""
     let nlDesc = ""
     let enTitle = ""
     let nlTitle = ""
     let enBody = ""
     let nlBody = ""
-    try {
+    {
       const cleaned = rawText.replace(/```json\s*|```\s*/g, "").trim()
-      const parsed = JSON.parse(cleaned)
+      const jsonStart = cleaned.indexOf("{")
+      const jsonEnd = cleaned.lastIndexOf("}")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parsed: any = null
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        const candidate = cleaned.slice(jsonStart, jsonEnd + 1)
+        try {
+          parsed = JSON.parse(candidate)
+        } catch {
+          try { parsed = JSON.parse(escapeCtrlInJsonStrings(candidate)) } catch { /* handled below */ }
+        }
+      }
+      // NEVER fall back to raw model text — a failed parse previously
+      // wrote the truncated JSON blob straight into the description.
+      if (!parsed) return { error: "Could not generate description. Try again." }
       // Support both flat {"en": "...", "nl": "..."} and nested {"en": {"title": "...", "description": "..."}}
       if (typeof parsed.en === "object") {
         enDesc = (parsed.en?.description ?? "").slice(0, 750)
@@ -1763,10 +1799,9 @@ ${context}`,
         enDesc = (parsed.en ?? "").slice(0, 750)
         nlDesc = (parsed.nl ?? "").slice(0, 750)
       }
-    } catch {
-      // Fallback: use raw text as the user's locale
-      enDesc = rawText.slice(0, 750)
-      nlDesc = rawText.slice(0, 750)
+    }
+    if (!enDesc.trim() && !nlDesc.trim()) {
+      return { error: "Could not generate description. Try again." }
     }
 
     // Use the user's locale as the primary description / body
